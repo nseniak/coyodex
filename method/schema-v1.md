@@ -1,6 +1,6 @@
 # Schema v1 — making the map a clean machine source
 
-`CODEBASE_ANALYSIS.md` is semi-structured markdown, but to drive diagrams and tooling
+`project-map.md` is semi-structured markdown, but to drive diagrams and tooling
 reliably it must obey a contract. Schema v1 is that contract: treat the table/ID/edge
 format as a real schema, not just a nice layout. A diagram is just another rendering of
 this same model — so the markdown stays the **single source**; any `model.json` is an
@@ -49,7 +49,7 @@ Path steps, in the step heading (`**GP1 — ...**`). An ID written anywhere else
 [`scripts/validate_analysis.py`](../scripts/validate_analysis.py) is stdlib-only:
 
 ```
-python3 scripts/validate_analysis.py CODEBASE_ANALYSIS.md
+python3 scripts/validate_analysis.py .coyodex/project-map.md
 ```
 
 It prints an element inventory and exits non-zero on: duplicate definitions, references to

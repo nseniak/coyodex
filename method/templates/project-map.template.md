@@ -108,5 +108,5 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ---
 
-*Generated with coyodex. Run `python3 scripts/validate_analysis.py CODEBASE_ANALYSIS.md`
+*Generated with coyodex. Run `python3 scripts/validate_analysis.py .coyodex/project-map.md`
 after each edit.*

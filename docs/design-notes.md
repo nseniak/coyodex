@@ -1,6 +1,6 @@
 # Design notes — the reasoning behind coyodex
 
-A decision log captured from the session where the method was designed. `METHOD.md` and the
+A decision log captured from the session where the method was designed. `method.md` and the
 other docs say *what* the method is; this file records *why*, and what was considered and
 rejected — so the rationale isn't lost.
 
@@ -78,9 +78,27 @@ Deletions need no tombstone — a diff shows removed blocks naturally. Rejected:
 snapshot). The change *narrative* lives at the top of the diff, never in the baseline.
 
 ### Accept = commit the map with the code
-Overwrite the baseline, bump the commit pin, save the dated diff, git-commit. The commit IS
-the acceptance, and it keeps baseline-commit aligned with code-commit. This alignment is what
-keeps the map trustworthy over time.
+Patch the baseline, bump the commit pin, commit it together with the (already-saved) dated
+diff. The commit IS the acceptance, and it keeps baseline-commit aligned with code-commit —
+the alignment that keeps the map trustworthy over time. The baseline updates **only** here,
+never during analysis; until accept it lags the code by exactly the un-accepted diff.
+
+### The change-impact report lives on disk as a draft (reversal)
+First designed as an ephemeral overlay shown only in chat. Challenged as fragile — and it is:
+a lost session loses it, you can't review it in an editor, and a **PR reviewer needs a file,
+not a chat message**. Fix: the report is written to disk at analysis time
+(`.coyodex/analysis-changes/<date>.md`), **uncommitted**; accept just commits it. This is
+git's own working-tree-vs-commit model, so the draft is not a third artifact — it's the
+un-accepted state of the same dated diff. The proliferation worry that motivated "ephemeral"
+dissolves once it's the same file in two states.
+
+### Accept is mechanical; the report is patch-complete
+All code reasoning happens in the analysis (step 2). Accept must do **no** new inference and
+re-read **no** code — otherwise what gets committed could differ from what you reviewed,
+breaking the review-then-accept contract and reintroducing wording drift. So the report must
+be **patch-complete**: it carries the exact `was → now` text for every element it touches,
+including the new text of *rippled* elements (not just "GP4 affected"). If accept finds itself
+inferring, the report was incomplete → regenerate it, don't invent at accept time.
 
 ### Diagrams are a rendering, and the markdown is the schema
 A diagram is another rendering of the same map. Initially this seemed to need a separate
@@ -98,5 +116,5 @@ demand. Diagram edges come from the verbed component edge list; T1 "Depends on" 
 ## Worked example
 
 The method was first run on a real repo (an MCP gateway), which produced an ID-based
-`CODEBASE_ANALYSIS.md`, a passing validator run, and the first Mermaid diagrams — validating
+`project-map.md`, a passing validator run, and the first Mermaid diagrams — validating
 that the schema is parseable and the diagrams render from it.

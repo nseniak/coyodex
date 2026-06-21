@@ -10,7 +10,7 @@ Two linked families:
 
 They join at **use case ↔ flow**.
 
-See also: [schema v1](docs/schema-v1.md) · [change-impact](docs/change-impact.md) · [diagrams](docs/diagrams.md).
+See also: [schema v1](method/schema-v1.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
 
 ---
 
@@ -149,10 +149,16 @@ synthesis → parallel trace.**
   agents return rows (structured output), not file dumps. The final reconcile (dedup
   names, verify cross-agent edges against code) is not delegated.
 
-**Output file.** Write the full analysis to `CODEBASE_ANALYSIS.md` (repo root or alongside
-docs), conform to [schema v1](docs/schema-v1.md), and at the end report the file's full
-absolute path. Run [`scripts/validate_analysis.py`](scripts/validate_analysis.py) after
-each generate/patch.
+**Output file.** Write the full analysis to `.coyodex/project-map.md` at the root of
+the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
+it was built at (the baseline pin). At the end, report the file's full absolute path. Run
+[`scripts/validate_analysis.py`](scripts/validate_analysis.py) after each generate/patch and
+fix the map until it passes.
+
+**Maintaining the map.** When code changes after a baseline exists, follow
+[change-impact](method/change-impact.md): report the impact against the map (modified /
+added / deleted), then accept: patch the map, bump the baseline pin, save the annotated diff
+under `.coyodex/analysis-changes/<date>.md`, and commit the map with the code.
 
 **How to apply.** Lead with the behavioral layer (T0 Goal → Glossary → Roles → Use cases →
 Golden Path), then structural Level 0 (T1–T3); generate the rest on demand as the reader

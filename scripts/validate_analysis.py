@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate CODEBASE_ANALYSIS.md against the schema-v1 conventions.
+"""Validate project-map.md against the schema-v1 conventions.
 
 Stdlib-only. Checks that the analysis file is a clean machine-parseable source
 for diagrams/tooling:
@@ -11,7 +11,7 @@ for diagrams/tooling:
 
 Exit 0 = clean, 1 = problems found.
 
-Usage:  python3 scripts/validate_analysis.py [CODEBASE_ANALYSIS.md]
+Usage:  python3 scripts/validate_analysis.py [.coyodex/project-map.md]
 """
 from __future__ import annotations
 
@@ -72,7 +72,7 @@ def check_gp_touches(text: str, gp_order: list[str]) -> list[str]:
 
 
 def main() -> int:
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else "CODEBASE_ANALYSIS.md")
+    path = Path(sys.argv[1] if len(sys.argv) > 1 else ".coyodex/project-map.md")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
@@ -99,7 +99,8 @@ def main() -> int:
     # Summary of the element inventory, by prefix.
     by_prefix: dict[str, list[str]] = {}
     for i in defined:
-        pre = re.match(r"[A-Z]+", i).group(0)
+        m = re.match(r"[A-Z]+", i)
+        pre = m.group(0) if m else i
         by_prefix.setdefault(pre, []).append(i)
     inventory = ", ".join(
         f"{pre}:{len(v)}" for pre, v in sorted(by_prefix.items())

@@ -1,80 +1,89 @@
+<div align="center">
+
 # coyodex
 
-> A living, drillable map of a codebase that stays in sync with the code — so you
-> never run off the cliff.
+<img src="assets/running-off-the-cliff.jpg" alt="Wile E. Coyote, having run past the edge of the cliff, hanging in mid-air just before he looks down" width="640">
 
-## The coyote effect
+### Vibe code without running off the cliff.
 
-When you vibe code, you accumulate code you haven't really understood. It feels
-fine — until the moment you need to understand it and discover there's nothing
-under your feet. Like Wile E. Coyote, you've run past the edge of the cliff and
-only now look down.
+</div>
 
-**coyodex fights the coyote effect.** It keeps a maintained understanding layer
-beside the code — a top-down, drillable map — and updates that map as the code
-changes, so you keep your footing without having to re-read everything.
+When your agent generates a lot of code for you, you sometimes end up with code
+you have completely lost track of. It runs fine until the day you actually
+need to understand it. And then you find there's nothing under your feet.
+This is the Coyote Effect.
 
-It is *not* a replacement for reading code. It shrinks how much you must read and
-tells you **where** to look. A trusted map is the whole point; a stale or
-confidently-wrong map is a new cliff — which is why the discipline pieces
-(the validator, the accept-cycle, committing the map *with* the code) are core,
-not optional.
+coyodex helps you get and stay on top of your project without having to read
+the code. It consists of a small number of prompts and tools you drive from
+your AI coding agent to:
 
-## What it produces
+- **build a baseline map**: an AI-annotated view of your whole project,
+  both functional and technical, drillable to `file:line`, committed next to the
+  code so the two don't drift apart.
+- **analyze a code diff** against it and generate a baseline-map overlay:
+  what each change adds, touches, and ripples to, in the project's own terms.
 
-For a project, coyodex maintains two artifact types:
+## How to use
 
-1. **`CODEBASE_ANALYSIS.md`** — a clean, current-state map. Behavioral layer first
-   (Goal → Glossary → Roles → Use cases → **Golden Path**), then the structural
-   machine (Components → Entry points / Model / Deps → Flows + a relationship edge
-   list). Every row is drillable down to `file:line`. ID-based so it's also a clean
-   source for diagrams and tooling ([schema v1](docs/schema-v1.md)).
-2. **`analysis-changes/<date>.md`** — one annotated baseline-diff per accepted
-   change cycle. The change report, the history, and the deletion record in one
-   file ([change-impact](docs/change-impact.md)).
+You drive coyodex with three prompts.
 
-Plus optional **diagrams** rendered from the same map ([diagrams](docs/diagrams.md)).
+> The prompts say `method.md`, which lives in this coyodex repo. Make it reachable
+> by the agent (e.g. clone coyodex next to your project) before running them.
+
+**1. Build the baseline.** Point the agent at the method and let it map the repo:
+
+```
+Read method.md and follow it to analyze this repo.
+```
+
+This writes `.coyodex/project-map.md`: a current-state map, behavioral layer
+first (Goal → Glossary → Roles → Use cases → **Golden Path**), then the structure
+(Components → Entry points / Model / Deps → Flows + a relationship edge list).
+Every row drills down to `file:line`, and stable IDs let the same map feed
+[diagrams](method/diagrams.md) and tooling ([schema v1](method/schema-v1.md)).
+
+**2. Analyze a diff.** After you change code, ask for the change-impact report:
+
+```
+I've changed code since the last analysis. Read method.md and follow it to
+report the change impact against the map.
+```
+
+This writes a change-impact report to `.coyodex/analysis-changes/<date>.md` — the
+change's adds, touches, and ripples, in the project's own terms. The file is left
+**uncommitted** so you can review it (in chat or an editor) first. The baseline
+itself isn't touched yet.
+
+**3. Accept the diff.** Once the report looks right, fold it into the baseline:
+
+```
+The report looks right. Read method.md and follow it to accept the change.
+```
+
+This patches `.coyodex/project-map.md` and commits it together with the report
+from step 2 — now the accepted `.coyodex/analysis-changes/<date>.md`: the change
+report, the history, and the deletion record in one file
+([change-impact](method/change-impact.md)). Accept is mechanical — it applies the
+report you reviewed, with no fresh analysis.
 
 ## The workflow
 
 ```
-analyze ──▶ CODEBASE_ANALYSIS.md (committed, commit-pinned)
+analyze ──▶ .coyodex/project-map.md (committed, commit-pinned)
    │
    ▼
 edit code
    │
    ▼
-change-impact ──▶ what's modified / added / deleted, grounded in the map you know
+change-impact ──▶ .coyodex/analysis-changes/<date>.md (report: modified / added / deleted, uncommitted)
    │
    ▼
-accept ──▶ patch the map, bump the commit pin, save the annotated diff, commit
+accept ──▶ patch the map, bump the commit pin, commit the map + the report
 ```
 
-The map is committed *with* the code, so "baseline commit" and "code commit" never
-drift.
-
-## Two best uses
-
-- **Stay oriented while building.** Keep understanding without stopping to read
-  everything; the change-impact report tells you what each edit did to the model.
-- **PR review.** Review against a maintained map: "this PR adds Golden-Path step X,
-  touches entities Y, ripples to Z" — semantic impact in the project's own terms,
-  not a raw diff read cold. Often the sharpest use.
-
-## How to use it (today)
-
-coyodex is a **method + small tooling**, driven by an AI coding agent:
-
-- [`METHOD.md`](METHOD.md) — the full method the agent follows.
-- [`docs/`](docs/) — schema, change-impact lifecycle, diagrams.
-- [`scripts/validate_analysis.py`](scripts/validate_analysis.py) — stdlib validator
-  that checks a `CODEBASE_ANALYSIS.md` against schema v1.
-- [`templates/CODEBASE_ANALYSIS.template.md`](templates/CODEBASE_ANALYSIS.template.md)
-  — the skeleton to fill.
-
-To analyze a repo, point the agent at `METHOD.md` and ask it to follow the method.
+The map is committed *with* the code, so the baseline commit and the code commit
+stay in step.
 
 ## Status
 
-Early. The method and validator are real and in use; the interactive diagram viewer
-is a planned tier (see [diagrams](docs/diagrams.md)).
+This project is experimental.
