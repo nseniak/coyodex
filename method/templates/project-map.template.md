@@ -65,11 +65,24 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ---
 
+## Subsystems (S) — the container altitude
+
+<!-- Optional; recommended above ~15 components. Components grouped into subsystems, optionally
+     nested. Membership is carried on each component (T1 `Subsystem` column); members +
+     inter-subsystem edges are derived. Omit this whole section on small maps — ungrouped
+     components are valid. -->
+
+| ID | Subsystem | Purpose | Parent | Anchor | Conf. |
+|---|---|---|---|---|---|
+| **S1** | <subsystem> | <one-line purpose> | <S-id or empty> | [dir/](path/) | inferred |
+
+---
+
 ## T1 — Components
 
-| ID | Component | Purpose | Entry point | Depends on |
-|---|---|---|---|---|
-| **C1** | <component> | <purpose> | [file](path#L1) | C2, C3 |
+| ID | Component | Subsystem | Purpose | Entry point | Depends on |
+|---|---|---|---|---|---|
+| **C1** | <component> | S1 | <purpose> | [file](path#L1) | C2, C3 |
 
 ### T1 backbone — component dependency edges (the diagram source)
 

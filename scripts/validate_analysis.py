@@ -4,10 +4,13 @@
 Stdlib-only. Checks that the analysis file is a clean machine-parseable source
 for diagrams/tooling:
 
-  1. Every element ID (UC/C/D/E/GP) is defined exactly once.
+  1. Every element ID (UC/C/D/E/S/GP) is defined exactly once.
   2. Every ID *reference* (Touches lines, traceability tables, edge list,
-     Depends-on, Used-in-GP) resolves to a defined ID.
+     Depends-on, Used-in-GP, Subsystem/Parent membership) resolves to a defined ID.
   3. Every Golden Path step (GPn heading) has a `Touches:` line.
+  4. Grouping, when present (no-op when absent): every Subsystem/Parent value
+     resolves to a defined `S`; at most one parent per element; no nesting
+     cycles; nesting depth <= MAX_DEPTH.
 
 Exit 0 = clean, 1 = problems found.
 
@@ -20,12 +23,17 @@ import sys
 from pathlib import Path
 
 # Prefix order matters: multi-letter prefixes (UC, GP) before single-letter C.
-ID_TOKEN = re.compile(r"\b(?:UC\d+|GP\d+|C\d+|D\d+|E\d+)\b")
+ID_TOKEN = re.compile(r"\b(?:UC\d+|GP\d+|C\d+|D\d+|E\d+|S\d+)\b")
 
 # Definition sites. A definition is the FIRST cell of a table row (`| **C1** | ...`)
 # — NOT an inline bold reference in prose (e.g. the coverage note).
-DEF_BOLD = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|E\d+)\*\*\s*\|")  # table-row id column
-DEF_GP = re.compile(r"^\*\*(GP\d+)\s+—")                            # `**GP1 — ...` headings
+DEF_BOLD = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|E\d+|S\d+)\*\*\s*\|")  # table-row id column
+DEF_GP = re.compile(r"^\*\*(GP\d+)\s+—")                                 # `**GP1 — ...` headings
+
+# Grouping (schema-v1 extension). Membership lives on the child as one parent
+# pointer: a component's `Subsystem` cell or a subsystem's `Parent` cell.
+PARENT_COLS = ("subsystem", "parent")
+MAX_DEPTH = 3  # max subsystem levels (parent-pointer hops) in any membership chain
 
 
 def collect_defined(text: str) -> tuple[dict[str, int], list[str]]:
@@ -86,6 +94,81 @@ def check_roles_kind(text: str) -> list[str]:
     return []
 
 
+def collect_parents(text: str) -> tuple[dict[str, str], list[str]]:
+    """child_id -> parent_id from any table column named Subsystem/Parent.
+
+    Returns the mapping plus problems for multi-parent cells. No-op (returns
+    ``({}, [])``) when no such column exists, so ungrouped maps are unaffected.
+    """
+    parents: dict[str, str] = {}
+    problems: list[str] = []
+    lines = text.splitlines()
+    i = 0
+    while i < len(lines):
+        if not lines[i].lstrip().startswith("|"):
+            i += 1
+            continue
+        block: list[str] = []
+        while i < len(lines) and lines[i].lstrip().startswith("|"):
+            block.append(lines[i])
+            i += 1
+        if len(block) < 2:
+            continue
+        headers = [c.strip().lower() for c in block[0].strip().strip("|").split("|")]
+        # The membership column. ``idx != 1`` skips the display-name column: the
+        # Subsystems table's *name* column is itself "Subsystem", which would
+        # otherwise be mistaken for T1's `Subsystem` membership column.
+        pcol = next(
+            (idx for idx, h in enumerate(headers) if h in PARENT_COLS and idx != 1),
+            None,
+        )
+        if pcol is None:
+            continue
+        for row in block[1:]:
+            if "-" in row and re.fullmatch(r"[\s|:-]+", row.strip()):
+                continue  # separator row
+            cm = DEF_BOLD.match(row)
+            if not cm:
+                continue
+            child = cm.group(1)
+            cells = [c.strip() for c in row.strip().strip("|").split("|")]
+            if pcol < len(cells):
+                ids = ID_TOKEN.findall(cells[pcol])
+                if len(ids) > 1:
+                    problems.append(f"{child} has multiple parents: {', '.join(ids)}")
+                elif ids:
+                    parents[child] = ids[0]
+    return parents, problems
+
+
+def check_hierarchy(parents: dict[str, str], defined: set[str]) -> list[str]:
+    """Parent must be a defined `S`; no nesting cycles; depth <= MAX_DEPTH."""
+    problems: list[str] = []
+    for child, par in parents.items():
+        if not par.startswith("S"):
+            problems.append(f"{child} parent {par} is not a subsystem (S…)")
+        elif par not in defined:
+            problems.append(f"{child} parent {par} is undefined")
+    # Walk only well-formed (S-valued) pointers, so a wrong-type parent reported above
+    # does not also surface as a spurious "cycle" line.
+    valid = {c: p for c, p in parents.items() if p.startswith("S")}
+    for start in valid:
+        chain, cur, depth = [start], start, 0
+        while cur in valid:
+            cur = valid[cur]
+            depth += 1
+            if cur in chain:
+                problems.append(f"Subsystem nesting cycle: {' -> '.join(chain)} -> {cur}")
+                break
+            chain.append(cur)
+            if depth > MAX_DEPTH:
+                problems.append(
+                    f"Subsystem nesting exceeds depth {MAX_DEPTH}: {' -> '.join(chain)}"
+                )
+                break
+    return problems
+
+
 def main() -> int:
     path = Path(sys.argv[1] if len(sys.argv) > 1 else ".coyodex/project-map.md")
     if not path.exists():
@@ -96,6 +179,10 @@ def main() -> int:
     defined_counts, gp_order = collect_defined(text)
     defined = set(defined_counts)
     referenced = collect_referenced(text)
+    parents, parent_problems = collect_parents(text)
+    # Grouping is "present" only if an S is defined or a membership column exists. When absent,
+    # ignore stray S-tokens (e.g. prose "S3" / AWS S3) so ungrouped maps stay byte-for-byte additive.
+    grouping_present = any(i.startswith("S") for i in defined) or bool(parents)
 
     problems: list[str] = []
 
@@ -103,7 +190,8 @@ def main() -> int:
     if duplicates:
         problems.append(f"Duplicate element definitions: {', '.join(duplicates)}")
 
-    unresolved = sorted(referenced - defined)
+    ref_to_check = referenced if grouping_present else {r for r in referenced if not r.startswith("S")}
+    unresolved = sorted(ref_to_check - defined)
     if unresolved:
         problems.append(f"References to undefined IDs: {', '.join(unresolved)}")
 
@@ -112,6 +200,10 @@ def main() -> int:
         problems.append(f"Golden Path steps missing a Touches: line: {', '.join(missing_touches)}")
 
     problems.extend(check_roles_kind(text))
+
+    # Grouping checks — additive, no-op when there is no Subsystem/Parent column.
+    problems.extend(parent_problems)
+    problems.extend(check_hierarchy(parents, defined))
 
     # Summary of the element inventory, by prefix.
     by_prefix: dict[str, list[str]] = {}

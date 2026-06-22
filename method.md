@@ -80,7 +80,12 @@ faces: outside = journey, inside = T6 flow + edges.
 ## Structural layer
 
 ### Level 0 (one screen, whole project)
-- **T1 Components**: `Component | Purpose | Entry point | Depends on`.
+- **Subsystems (S)** *(optional; recommended above ~15 components)*: `ID | Subsystem | Purpose |
+  Parent | Anchor | Conf.` — the Container altitude: components grouped into subsystems, optionally
+  nested. Membership is carried on the child (a `Subsystem` column on T1); the member list and the
+  inter-subsystem edges are *derived*, never authored. Present this first on large maps; drill into T1.
+- **T1 Components**: `Component | Subsystem | Purpose | Entry point | Depends on` (the `Subsystem`
+  cell is the component's one parent `S`, or empty = ungrouped).
 - **T2 External dependencies**: `Name | Type | Used for | Where configured`.
 - **T3 How to run/build/test**: `Action | Command | Source`.
 
@@ -144,8 +149,10 @@ traced, but the "user sees" register sometimes needs the running app, not just c
 
 **Build order (internal) ≠ present order.** Build bottom-up so each table's inputs exist
 first: T3 → harvest T4, T2, T5 (a full sweep — also the completeness checklist that
-catches side doors) → synthesize T1 → trace T6 + edge list. Nodes (T4/T5/T2) before the
-edges/flows that connect them. **Present** top-down (T1–T3 first). The "Depends on"
+catches side doors) → synthesize T1 → **cluster components into Subsystems** (large maps: by
+directory first, then dependency/behavioral cohesion; minimize inter-group edges; mark
+directory-derived = verified, cohesion-derived = inferred) → trace T6 + edge list. Nodes (T4/T5/T2)
+before the edges/flows that connect them. **Present** top-down (T1–T3 first). The "Depends on"
 columns and relationship rows harden last (they need tracing) — keep them inferred until
 traced. Drilling can correct an inferred upper row; upper tables get more accurate as the
 reader drills.
@@ -155,8 +162,10 @@ ones).** The build order maps to a fan-out workflow: **parallel harvest → barr
 synthesis → parallel trace.**
 - Phase 1 Harvest (fan out, one agent each): T4 entry points, T2 deps, T5 model, T3
   run/build, T0/Roles reader. Parallel harvest also improves completeness.
-- Phase 2 Synthesize (barrier, one agent): T1 clusters/dedups all harvest outputs.
-- Phase 3 Trace (fan out, one agent per use case/journey).
+- Phase 2 Synthesize (barrier, one agent): T1 clusters/dedups all harvest outputs, and (large
+  maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier.
+- Phase 3 Trace (fan out, one agent per use case/journey; large maps may instead fan out one agent
+  per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
 - Guardrails: all agents share the same schema + edge-verb vocabulary; Phase 1 produces
   the canonical node inventory FIRST (nodes before edges, agents reference nodes and
   never invent them); every agent keeps inferred-vs-verified labels + returns `file:line`;
