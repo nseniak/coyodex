@@ -38,9 +38,12 @@ Path steps, in the step heading (`**GP1 — ...**`). An ID written anywhere else
 
 ## Derived, not duplicated
 
-- **Diagram edges come from the verbed component edge list** (`From | Verb | To | Where`,
+- **Diagram edges come from the verbed component edge list** (`From | Verb | To | Why | Where`,
   IDs in From/To). T1's "Depends on" is a coarse *derived* summary of that edge list — the
-  edge list is the source of truth for arrows and their verbs.
+  edge list is the source of truth for arrows, their verbs, and **why each dependency exists**.
+- The edge **`Why`** is the **canonical relationship rationale** — distinct from a node's Purpose
+  (about the node) and from the Golden Path (the sequenced story). Narrative layers reference
+  edges instead of re-explaining them, so the `Why` lives in exactly one place.
 - The Golden Path `Touches:` lines and the traceability table are two views of the same
   `GP-step — touches → element` edges.
 
@@ -53,8 +56,9 @@ python3 scripts/validate_analysis.py .coyodex/project-map.md
 ```
 
 It prints an element inventory and exits non-zero on: duplicate definitions, references to
-undefined IDs, or a Golden Path step missing its `Touches:` line. It does **not** yet check
-table-cell pipe escaping or anchor existence — those are candidate additions.
+undefined IDs, a Golden Path step missing its `Touches:` line, or a Roles table missing the required
+`Kind` column. It does **not** yet check table-cell pipe escaping, anchor existence, or that edge
+tables carry the `Why` column — those are candidate additions.
 
 ## Source-link pinning
 

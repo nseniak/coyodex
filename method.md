@@ -21,7 +21,15 @@ See also: [schema v1](method/schema-v1.md) · [change-impact](method/change-impa
 - **Glossary** (default deliverable): `Term | Meaning | Defined/used in`. The ubiquitous
   language, produced up front and used to name things consistently across all tables
   (prevents the name-drift parallel mode otherwise risks).
-- **Roles (actors)**: `Role | What they want | Use cases they drive`.
+- **Roles (actors)**: `Role | Kind | What they want | Use cases they drive`. List ONLY the
+  **primary actors** — the parties who *initiate* a use case and drive the system. Do **not** list
+  external systems the project itself calls out to (IdPs, sandboxes, upstream services, third-party
+  APIs): they are not actors here. They belong in **T2 external dependencies** + the edge list, and
+  the context diagram draws them as *outbound* arrows (the system uses them), never inbound. **Kind**
+  (required, every role states one) = `human` or `service`, where `service` is a non-human *driver*
+  that initiates use cases (a service account, headless agent / bot, scheduled job) — NOT a system
+  the project depends on. This lets the context diagram draw people and machine-driven clients
+  differently. When the docs don't say, infer from naming and mark it inferred.
 - **Use cases**: `Use case | Actor | Trigger | Outcome`.
 
 ### Golden Path Narrative (default deliverable — the best top-level view)
@@ -112,10 +120,16 @@ gaps are the deliverable.
 T7 Component internals · T8 Config/env vars · T9 Data schema.
 
 ### Relationships (always included)
-- Backbone = a project-wide edge list: `From | Relationship | To | Where`. Uniform
+- Backbone = a project-wide edge list: `From | Verb | To | Why | Where`. Uniform
   `source — verb — target` so the reader drills from either end. Verb vocabulary:
   uses, calls, reads, writes, emits, listens-to, routes-to, enforces, persists, encrypts,
   extends, implements.
+- **`Why` = a short phrase: why `From` needs `To`** (e.g. "verify service tokens", "cache
+  refreshed OAuth tokens"). The edge list is the **canonical home for relationship rationale** —
+  the verb gives the category, `Why` gives the purpose the verb can't carry (especially the
+  catch-all `uses`). Prefer a sharper verb first; let `Why` say what the verb omits. Keep it a
+  terse phrase, not a sentence, so it stays cheap to re-verify. The Golden Path / T6 flows
+  **reference** edges rather than restating their `Why` — one source, derived views.
 - Convenience = inline "Uses" column on T6 (the most-used slice of the edge list).
 
 ---

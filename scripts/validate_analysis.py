@@ -71,6 +71,21 @@ def check_gp_touches(text: str, gp_order: list[str]) -> list[str]:
     return missing
 
 
+def check_roles_kind(text: str) -> list[str]:
+    """If a Roles table exists (header's first cell is 'Role'), it must carry a 'Kind' column.
+    No-op when there is no Roles table, so the check is additive."""
+    for line in text.splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        cells = [c.strip().lower() for c in s.strip("|").split("|")]
+        if cells and cells[0] == "role":  # the Roles table header row
+            if "kind" not in cells:
+                return ["Roles table is missing the required 'Kind' column (human/service)"]
+            return []
+    return []
+
+
 def main() -> int:
     path = Path(sys.argv[1] if len(sys.argv) > 1 else ".coyodex/project-map.md")
     if not path.exists():
@@ -95,6 +110,8 @@ def main() -> int:
     missing_touches = check_gp_touches(text, gp_order)
     if missing_touches:
         problems.append(f"Golden Path steps missing a Touches: line: {', '.join(missing_touches)}")
+
+    problems.extend(check_roles_kind(text))
 
     # Summary of the element inventory, by prefix.
     by_prefix: dict[str, list[str]] = {}

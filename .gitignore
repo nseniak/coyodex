@@ -1,2 +1,5 @@
 .claude/settings.json
 .DS_Store
+internal/
+.firecrawl/
+__pycache__/

@@ -27,9 +27,12 @@
 
 ## Roles (actors)
 
-| Role | What they want | Use cases they drive |
-|---|---|---|
-| **<Role>** | <goal> | UC1, UC2 |
+<!-- Primary actors only — the parties who INITIATE use cases. External systems the project calls
+     out to (IdPs, sandboxes, upstream services, third-party APIs) go in T2, not here. -->
+
+| Role | Kind | What they want | Use cases they drive |
+|---|---|---|---|
+| **<Role>** | human | <goal> | UC1, UC2 |
 
 ---
 
@@ -70,9 +73,9 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ### T1 backbone — component dependency edges (the diagram source)
 
-| From | Verb | To | Where |
-|---|---|---|---|
-| C1 | uses | C2 | [file](path#L1) |
+| From | Verb | To | Why | Where |
+|---|---|---|---|---|
+| C1 | uses | C2 | <why C1 needs C2 — terse> | [file](path#L1) |
 
 ---
 
@@ -102,9 +105,9 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ## Relationships — backbone edge list
 
-| From | Verb | To | Where |
-|---|---|---|---|
-| <source> | <verb> | <target> | [file](path#L1) |
+| From | Verb | To | Why | Where |
+|---|---|---|---|---|
+| <source> | <verb> | <target> | <why source needs target — terse> | [file](path#L1) |
 
 ---
 

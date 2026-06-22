@@ -17,6 +17,11 @@ graph; no separate persisted model is needed.
 Drill down = zoom one level in; step back = zoom out — the same "name a row to drill"
 navigation as the markdown, made visual.
 
+**Context-diagram direction.** Actors (from Roles) point *into* the system — they initiate use
+cases. External dependencies (from T2) point *out* — the system calls them. Keeping external
+systems in T2 (not Roles) is what makes those arrows render the right way: an IdP, sandbox, or
+upstream service is something the system *uses*, never an actor that uses the system.
+
 ## Diff as an overlay
 
 Recolor the baseline graph from the annotated baseline-diff: **green = added, amber =
