@@ -7,7 +7,9 @@ const MERMAID_CONTEXT = __MERMAID_CONTEXT__;
 const MERMAID_CONTAINER = __MERMAID_CONTAINER__;
 const MERMAID_BY_SUB = __MERMAID_BY_SUB__;        // subsystem neighbourhood: sid -> sub-diagram
 const MERMAID_EDGE_CARD = __MERMAID_EDGE_CARD__;  // edge pair: 'A>B' -> two-subsystem sub-diagram
+const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classDiagram
 const HAS_GROUPING = __HAS_GROUPING__;
+const HAS_DOMAIN = __HAS_DOMAIN__;
 const CONTEXT_EDGES = __CONTEXT_EDGES__;
 const HAS_DIFF = __HAS_DIFF__;
 const META = __META__;
@@ -103,18 +105,29 @@ function showNode(id) {
     // a subsystem's first field IS its name (already in the title) — don't repeat it
     .filter(([k]) => !(n.kind === 'subsystem' && k.toLowerCase() === 'subsystem'))
     .map(([k, v]) => `<dt>${k}</dt><dd>${stripMd(String(v))}</dd>`).join('');
+  // entity attributes (T5 domain cards): `type name` + any markers (PK/FK/unique/…)
+  const attrs = (n.attrs && n.attrs.length)
+    ? '<dt>Fields</dt><dd>' + n.attrs.map((a) =>
+        esc(((a.type ? a.type + ' ' : '') + (a.name || '') + (a.markers ? '  ·  ' + a.markers : '')).trim())
+      ).join('<br>') + '</dd>'
+    : '';
   const src = n.file ? `<div class="src">${n.file}${n.line ? ':' + n.line : ''}</div>` : '';
   panel.innerHTML = `<h2>${id} · ${n.name}</h2>`
     + `<div class="badges"><span class="badge kind">${n.kind}</span>${chg}</div>`
-    + `<dl>${rows}</dl>${src}`;
+    + `<dl>${rows}${attrs}</dl>${src}`;
 }
 
 function showEdge(e) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  // domain relations carry a kind (composition/…) + cardinality; component edges carry why/where.
+  const kindBadge = e.kind ? '<span class="badge kind">' + esc(e.kind) + '</span>' : '';
+  const card = (e.src_card || e.dst_card)
+    ? '<dt>Cardinality</dt><dd>' + esc((e.src_card || '') + ' → ' + (e.dst_card || '')) + '</dd>' : '';
   panel.innerHTML = '<h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
-    + '<div class="badges"><span class="badge edge">' + esc(e.verb) + '</span></div>'
+    + '<div class="badges"><span class="badge edge">' + esc(e.verb) + '</span>' + kindBadge + '</div>'
     + '<dl>'
     + (e.why ? '<dt>Why</dt><dd>' + esc(e.why) + '</dd>' : '')
+    + card
     + '<dt>From</dt><dd>' + e.src + ' · ' + esc(nm(e.src)) + '</dd>'
     + '<dt>To</dt><dd>' + e.dst + ' · ' + esc(nm(e.dst)) + '</dd>'
     + '</dl>'
@@ -390,12 +403,42 @@ function bindEdgePair() {  // both subsystems framed; arrows are component edges
   bindEdges(mainScene, resolveComponentEdge);
 }
 
+// classDiagram (the Domain view) emits a different SVG shape than flowchart, so it gets its own
+// node/edge finders. A class box's group id is `…-classId-E1-N` (resolved by idOf's id regex); a
+// relation path's id is `…-id_E1_E2_N` (endpoints encoded). classDiagram emits several `.edgeLabel`
+// per relation (verb twice + each cardinality), so index-pairing a label is unreliable — bind the
+// path only (its wide hit-area is clickable); the label just won't glow.
+function eachClassEdge(root, fn) {
+  for (const p of root.querySelectorAll('path.relation, .edgePaths path, g.edgePath path')) {
+    const m = (p.id || '').match(/[_-](E\d+)_(E\d+)(?:[_-]|$)/);
+    if (m) fn(p, null, m[1], m[2]);
+  }
+}
+function bindDomain() {
+  mainScene.root.querySelectorAll('g.node, g.classGroup').forEach((el) => {
+    const id = idOf(el);
+    if (!id || !GRAPH.nodes[id] || mainScene.nodeEls[id]) return;
+    mainScene.nodeEls[id] = el;
+    el.style.cursor = 'pointer';
+    el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
+    el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
+    el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); selectNode(mainScene, el, id); });
+  });
+  eachClassEdge(mainScene.root, (p, label, src, dst) => {
+    const arr = COMP_LOOKUP[src + '>' + dst];
+    if (!arr) return;
+    const e = arr[0];
+    bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showEdge(e));
+  });
+}
+
 // --- render ---------------------------------------------------------------------
 function mermaidFor(s) {
   if (s.kind === 'context') return MERMAID_CONTEXT;
   if (s.kind === 'container') return MERMAID_CONTAINER;
   if (s.kind === 'subsystem') return MERMAID_BY_SUB[s.sid];
   if (s.kind === 'edge') return MERMAID_EDGE_CARD[s.a + '>' + s.b];
+  if (s.kind === 'domain') return MERMAID_DOMAIN;
   return mode === 'diff' ? MERMAID_DIFF : MERMAID_BASE;  // component
 }
 function applyDefaultPanel(s) {
@@ -408,15 +451,18 @@ function bindFor(s) {
   else if (s.kind === 'container') bindContainer();
   else if (s.kind === 'subsystem') bindSubsystem(s.sid);
   else if (s.kind === 'edge') bindEdgePair();
+  else if (s.kind === 'domain') bindDomain();
   else bindComponent();
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
-  return kind === 'context' || kind === 'component' ? kind : 'container';
+  if (kind === 'context' || kind === 'component' || kind === 'domain') return kind;
+  return 'container';
 }
 function stateTitle(s) {
   if (s.kind === 'context') return 'Context';
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
+  if (s.kind === 'domain') return 'Domain';
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   if (s.kind === 'subsystem') return nm(s.sid);
   return nm(s.a) + ' → ' + nm(s.b);  // edge
@@ -472,6 +518,7 @@ document.addEventListener('keydown', (e) => {
 buildLegend();
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
   b.addEventListener('click', () => go({ kind: b.dataset.view }));
 });
 navback.addEventListener('click', back);

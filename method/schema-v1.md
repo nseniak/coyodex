@@ -20,9 +20,10 @@ Every element has a stable, unique ID by prefix:
 | `D` | External dependency (T2) |
 | `E` | Domain-model entity (T5) |
 
-Definitions live in the **first cell of a table row** (`| **C1** | ... |`) or, for Golden
-Path steps, in the step heading (`**GP1 — ...**`). An ID written anywhere else is a
-*reference*, not a definition.
+Definitions live in the **first cell of a table row** (`| **C1** | ... |`) or, for the two
+block formats, in a heading: Golden Path steps (`**GP1 — ...**`) and domain entities
+(`**E1 — ...**`, the T5 domain cards). An ID written anywhere else is a *reference*, not a
+definition.
 
 ## The 5 conventions
 
@@ -32,8 +33,11 @@ Path steps, in the step heading (`**GP1 — ...**`). An ID written anywhere else
    resolves to a defined ID, not a bare display name. Display text may accompany the ID
    (`C8 Upstream connectivity`) but the ID must be present.
 3. **No raw `|` inside table cells** — escape or avoid it; it silently breaks table parsing.
-4. **Golden Path micro-format** — each step is an `**GPn — title**` heading followed by
-   labeled lines: STORY, UNDER THE HOOD, and a `Touches:` line listing the IDs it touches.
+4. **Block micro-formats** — two tiers are blocks, not tables, each with a defining heading and
+   labeled lines: the **Golden Path** (`**GPn — title**` + STORY, UNDER THE HOOD, and a `Touches:`
+   line listing the IDs it touches) and the **T5 domain cards** (`**En — Name**` + FIELDS,
+   RELATIONS, MEANING, SOURCE — see [domain-cards.md](domain-cards.md)). In both, the heading
+   defines the ID and separators inside list lines are `·`, never raw `|`.
 5. **A validator** — checks ID uniqueness, that every reference resolves, that every GP step has
    a `Touches:` line, and that every table row carries its header's column count (catching
    malformed separators / dropped cells). Run it after each generate/patch.
@@ -84,7 +88,9 @@ actually a definition row that glued the name into the ID cell (`| **UC1** Searc
 `| **C8 Upstream** |`), the report names that specific cause. Content inside ```` ``` ```` code
 fences is ignored by both the validator and the diagram parser, so verbatim examples (Mermaid,
 shell, a sample table) never trip these checks. It does **not** yet check anchor existence or that
-edge tables carry the `Why` column — those remain candidate additions.
+edge tables carry the `Why` column — those remain candidate additions. The **T5 domain-card**
+checks (card-id uniqueness, `RELATIONS` targets resolve, single-side relations, field/cardinality
+well-formedness) are specified in [domain-cards.md](domain-cards.md) and pending implementation.
 
 ## Source-link pinning
 

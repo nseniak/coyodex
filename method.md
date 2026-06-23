@@ -10,7 +10,7 @@ Two linked families:
 
 They join at **use case ↔ flow**.
 
-See also: [schema v1](method/schema-v1.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
+See also: [schema v1](method/schema-v1.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
 
 ---
 
@@ -64,10 +64,12 @@ Deliver as:
 1. a Golden Path ↔ entity traceability table right after the narrative
    (`Step | T1 components | T2 deps | T5 entities` — an edge list, NOT a full grid);
 2. forward view = inline `Touches:` line per GP step;
-3. backward view = a `Used in GP` column added to T1/T2/T5.
+3. backward view = a `Used in GP` column added to T1/T2 (for **T5 the cards carry no extra
+   column** — the traceability table's `T5 entities` column already gives the backward edges).
 
-Give every GP step (`GP1`…) and every T1/T2/T5 row a stable ID/anchor so both link
-directions are clickable. Each touch inherits its flow's confidence.
+Give every GP step (`GP1`…), every T1/T2 row, and every T5 **card** a stable ID/anchor (the
+card heading + its `SOURCE` link) so both link directions are clickable. Each touch inherits its
+flow's confidence.
 
 ### Journeys — the drill-down of a use case (outside view)
 
@@ -91,7 +93,11 @@ faces: outside = journey, inside = T6 flow + edges.
 
 ### Level 1 (one Level-0 row expanded)
 - **T4 Entry points**: `Kind | Trigger | Code entity | Component`.
-- **T5 Domain model**: `Entity | Meaning | Defined in | Stored where`.
+- **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
+  `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (same micro-format as the Golden
+  Path). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).
+  Entity↔entity relations are authored on the source card only, never in the backbone edge list.
+  Full spec: [domain cards](method/domain-cards.md).
 - **T6 Use-case flows**: `Flow | steps | Uses (element + role) | Key files`.
 
 ### Operational dimensions — standard core four
@@ -186,9 +192,11 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 >
 > For every row give `file:line` evidence and a confidence tag (**verified** = read in code /
 > **inferred** = guessed). Use only the schema-v1 IDs and edge verbs; reference nodes, never
-> invent them. Return these sections as markdown tables: «the coyodex tables this slice fills —
-> e.g. COMPONENTS (T1), ENTRY POINTS (T4), DEPENDENCIES (T2), DOMAIN MODEL (T5), and any
-> operational rows (deployment / observability / security / config)».
+> invent them. Return each section in its schema shape: **markdown tables** for «the table slices
+> this agent fills — e.g. COMPONENTS (T1), ENTRY POINTS (T4), DEPENDENCIES (T2), and operational
+> rows (deployment / observability / security / config)»; and the **T5 DOMAIN MODEL as per-entity
+> cards, never a table** (`**En — Name**` + FIELDS / RELATIONS / MEANING / SOURCE — see
+> [domain-cards.md](method/domain-cards.md)).
 
 **Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
 root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit

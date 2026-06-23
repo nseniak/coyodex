@@ -181,7 +181,7 @@ becomes a nested `subgraph`; components are nodes inside. `subgraph` is core Mer
 renders on GitHub — no edge-id syntax, so it stays within the viewer's existing GitHub-safe rules.
 (See the worked example for the sketch.)
 
-**The C4 Container level = the Subsystems.** The [diagrams](../method/diagrams.md) drill-down table
+**The C4 Container level = the Subsystems.** The [diagrams](../../method/diagrams.md) drill-down table
 gains the subsystem as the logical Container view:
 
 ```

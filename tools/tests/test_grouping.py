@@ -11,6 +11,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 TOOLS = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(TOOLS))            # schema_v1, validate_analysis
@@ -230,6 +231,25 @@ def make_fenced_node_map() -> str:
     )
 
 
+def make_domain_map(cards: str | None = None) -> str:
+    """A minimal valid map whose T5 is domain CARDS. `cards` overrides the default two-entity body
+    (Order contains LineItem; LineItem uses a bullet-list FIELDS)."""
+    body = cards if cards is not None else (
+        "**E1 — Order** *(orders collection)*\n"
+        "MEANING: a purchase\n"
+        "FIELDS: id:ObjectId PK · status:string\n"
+        "RELATIONS: contains 1→* E2 LineItem\n"
+        "SOURCE: [order.py](order.py#L12)\n\n"
+        "**E2 — LineItem**\n"
+        "MEANING: a line\n"
+        "FIELDS:\n"
+        "  - sku: string\n"
+        "  - qty: int\n"
+        "SOURCE: [order.py](order.py#L58)\n"
+    )
+    return _VALID_HEAD + "## T5 — Domain model (domain cards)\n\n" + body
+
+
 def run_validator(md: str) -> tuple[int, str]:
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write(md)
@@ -429,6 +449,111 @@ def test_render_produces_self_contained_html() -> None:
         assert r.returncode == 0, r.stdout + r.stderr
         html = out.read_text(encoding="utf-8")
         assert 'integrity="sha384-' in html and "Front door" in html
+
+
+# --- domain cards (T5) ----------------------------------------------------------
+def test_parse_card_fields_markers() -> None:
+    fs = schema_v1.parse_card_fields(["id: ObjectId PK", "email: string unique", "note"])
+    assert (fs[0].name, fs[0].type, fs[0].markers) == ("id", "ObjectId", ["PK"])
+    assert fs[1].markers == ["unique"]
+    assert fs[2].type == ""   # missing type -> empty, so the validator can flag it
+
+
+def test_parse_card_relations_kinds_and_cardinality() -> None:
+    rels = schema_v1.parse_card_relations("contains 1→* E2 · isA E9 · uses *→1 E3 · 2..5→* E4")
+    assert [(r.verb, r.kind, r.target, r.ok) for r in rels[:3]] == [
+        ("contains", "composition", "E2", True),
+        ("isA", "inheritance", "E9", True),
+        ("uses", "association", "E3", True),
+    ]
+    assert rels[1].src_card is None and rels[1].dst_card is None  # isA: no cardinality
+    assert rels[3].ok is False   # `2..5` is not an allowed cardinality token
+
+
+def test_parser_domain_cards_nodes_attrs_edges() -> None:
+    g = parse_map(make_domain_map())
+    e1 = g["nodes"]["E1"]
+    assert e1["kind"] == "entity" and e1["name"] == "Order"
+    assert cast("dict[str, str]", e1["fields"])["Stored"] == "orders collection"
+    attrs1 = cast("list[dict[str, str]]", e1["attrs"])
+    assert any(a["name"] == "id" and a["type"] == "ObjectId" and a["markers"] == "PK" for a in attrs1)
+    attrs2 = cast("list[dict[str, str]]", g["nodes"]["E2"]["attrs"])
+    assert {a["name"] for a in attrs2} == {"sku", "qty"}   # bullet-list FIELDS
+    rel = [e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E2"]
+    assert rel and rel[0]["verb"] == "contains" and rel[0]["kind"] == "composition"
+    assert rel[0]["src_card"] == "1" and rel[0]["dst_card"] == "*"
+
+
+def test_gen_domain_mermaid_classdiagram() -> None:
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map()))
+    assert mm.startswith("classDiagram")
+    assert 'class E1["Order"]' in mm
+    assert "ObjectId id" in mm                          # attribute rendered in the box
+    assert 'E1 "1" *-- "*" E2 : contains' in mm         # composition arrow + cardinality
+
+
+def test_validator_domain_cards_clean() -> None:
+    code, out = run_validator(make_domain_map())
+    assert code == 0, out
+
+
+def test_validator_flags_malformed_card_heading() -> None:
+    # `**E1 — Order** (orders)` (plain parens, not *( )*) silently drops name+store — must fail loud.
+    cards = "**E1 — Order** (orders)\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "heading is malformed" in out, out
+
+
+def test_validator_flags_untyped_field() -> None:
+    cards = "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id\nSOURCE: [f](f#L1)\n"
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "has no type" in out, out
+
+
+def test_validator_flags_malformed_relation() -> None:
+    cards = (
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "RELATIONS: contains 2..5→* E2\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "malformed RELATIONS item" in out, out
+
+
+def test_validator_flags_both_sided_relation() -> None:
+    cards = (
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "RELATIONS: contains 1→* E2\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\n"
+        "RELATIONS: partOf *→1 E1\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "declared on both cards" in out, out
+
+
+def test_validator_flags_duplicate_relation_same_card() -> None:
+    cards = (
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "RELATIONS: refersTo 1→1 E2 · refersTo 1→1 E2\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "twice" in out, out
+
+
+def test_validator_flags_undefined_relation_target() -> None:
+    cards = "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nRELATIONS: contains 1→* E9\nSOURCE: [f](f#L1)\n"
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "E9" in out, out
+
+
+def test_validator_flags_duplicate_card_id() -> None:
+    cards = (
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
+        "**E1 — Dup**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "Duplicate" in out, out
 
 
 if __name__ == "__main__":

@@ -107,6 +107,21 @@ second source, tighten the markdown into a parseable contract (schema v1: IDs, I
 refs, no stray pipes, a Golden Path micro-format, a validator). One source, parsed on
 demand. Diagram edges come from the verbed component edge list; T1 "Depends on" is derived.
 
+### Domain model as cards (a class diagram), not tables
+T5 became **per-entity cards** rendering as a Mermaid `classDiagram` (boxes with attributes +
+typed, cardinal relations), specified in [domain-cards.md](../../method/domain-cards.md). A class
+view needs three things — entities, attributes, relations. Rejected: **three tables** (entity /
+attribute / relation) — splits one entity across three places you can't read together; and a
+**single wide table** — a cell with 30 fields is unreadable. The Golden Path already proved the
+pattern: an element with rich internal structure is a *block* with a dedicated parser, not a row.
+So an entity is a card with the same micro-format. Rejected **Mermaid-as-source** (author a literal
+`classDiagram`): code fences are stripped by the parser (invisible as source), and class names
+aren't `E` ids, so GP/T6/traceability cross-refs would break — cards keep the global `E` id, so
+only T5's internal shape changed, not its id contract. Render target is `classDiagram`, not
+`erDiagram` (which forces a lossy crow's-foot cardinality and has no methods). Cost accepted: a
+second non-table micro-format, justified exactly as the Golden Path's is. Relations are
+single-sourced on the card (one side), never in the backbone edge list.
+
 ### The interactive viewer (Tier B) was promoted from spike to `tools/`
 Tier B (an interactive HTML viewer) was deferred while Tier A (Mermaid-from-markdown) carried
 diagrams. It was then built as a gitignored spike (`internal/viewer/`) and validated on a real map

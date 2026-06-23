@@ -60,6 +60,10 @@ python3 -m http.server 8753 -d .coyodex   # → http://localhost:8753/project-ma
     shows the subsystem(s) you're on. **Navigate** with the header **◀ ▶** arrows, **⌘+←/→** or
     **⌥+←/→**, or by clicking a crumb in the breadcrumb trail below the header.
 - **Components** — every component + its verbed edges; click a node/edge for details + `file:line`.
+- **Domain** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
+  Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal
+  relations (composition/aggregation/inheritance/association). Click a class for its fields +
+  `file:line`; click a relation for its kind + cardinality.
 - **Diff overlay** — pass a change-impact report to recolor added/modified/deleted nodes and the
   elements they ripple to, with a baseline⇄diff toggle.
 

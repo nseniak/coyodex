@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import copy
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any, cast
@@ -31,6 +32,10 @@ _ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined in
 
 SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]')}
 DIAGRAM_KINDS = ("component", "dep")
+
+# Domain (T5) relationship kind -> Mermaid classDiagram arrow. The diamond/triangle sits at the
+# `src` (left) end, matching how the relation is authored on the source entity's card.
+CLASS_ARROW = {"inheritance": "--|>", "composition": "*--", "aggregation": "o--", "association": "-->"}
 
 
 def _safe_label(name: str) -> str:
@@ -116,6 +121,46 @@ def _top_subsystem(graph: GraphDict, nid: str) -> str | None:
 
 def has_grouping(graph: GraphDict) -> bool:
     return any(str(n.get("kind")) == "subsystem" for n in graph["nodes"].values())
+
+
+def has_domain(graph: GraphDict) -> bool:
+    return any(str(n.get("kind")) == "entity" for n in graph["nodes"].values())
+
+
+def _safe_member(s: str) -> str:
+    """Sanitize an attribute type/name for a classDiagram member line: `<>{}|"` and backticks break
+    member parsing (generics use `~`, not `<>`)."""
+    return re.sub(r'[<>{}|`"]', "", s).strip()
+
+
+def gen_domain_mermaid(graph: GraphDict) -> str:
+    """C4 Code altitude: the T5 domain model as a Mermaid `classDiagram` — each entity a class box
+    (id = its `E` id, label = its name) holding its attributes (`type name`), with typed, cardinal
+    relations between entities. Markers (PK/FK/…) live in the click->panel, since classDiagram boxes
+    carry no native key notation. Class id = the `E` id so the viewer's id bridge resolves a click."""
+    ents = [(nid, n) for nid, n in graph["nodes"].items() if str(n["kind"]) == "entity"]
+    ent_ids = {nid for nid, _ in ents}
+    lines = ["classDiagram"]
+    for nid, n in ents:
+        lines.append(f'  class {nid}["{_safe_label(str(n["name"]))}"] {{')
+        for a in cast("list[dict[str, str]]", n.get("attrs") or []):
+            member = f'{_safe_member(str(a.get("type", "")))} {_safe_member(str(a.get("name", "")))}'.strip()
+            if member:
+                lines.append(f"    {member}")
+        lines.append("  }")
+    for e in graph["edges"]:
+        s, d, kind = str(e["src"]), str(e["dst"]), e.get("kind")
+        if not (kind and s in ent_ids and d in ent_ids):
+            continue
+        arrow = CLASS_ARROW.get(str(kind), "-->")
+        verb = _safe_label(str(e["verb"]))
+        if kind == "inheritance":
+            lines.append(f"  {s} {arrow} {d} : {verb}")
+        else:
+            left = f'"{e["src_card"]}" ' if e.get("src_card") else ""
+            right = f' "{e["dst_card"]}"' if e.get("dst_card") else ""
+            lines.append(f"  {s} {left}{arrow}{right} {d} : {verb}")
+    return "\n".join(lines)
 
 
 def gen_container_mermaid(graph: GraphDict) -> str:
@@ -372,6 +417,7 @@ __STYLE__
     <button data-view="context">Context</button>
     <button data-view="container">Subsystems</button>
     <button data-view="component">Components</button>
+    <button data-view="domain">Domain</button>
   </span>
   <button id="toggle" style="display:none"></button>
 </header>
@@ -394,7 +440,7 @@ __SCRIPT__
 def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              context_edges: dict[str, dict[str, Any]], has_diff: bool, meta: str,
              diff_state: dict[str, str], container_mm: str, by_sub: dict[str, str],
-             edge_cards: dict[str, str], grouping: bool) -> str:
+             edge_cards: dict[str, str], grouping: bool, domain_mm: str, domain: bool) -> str:
     css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
     js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
     return (
@@ -407,9 +453,11 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_CONTAINER__", json.dumps(container_mm))
         .replace("__MERMAID_BY_SUB__", json.dumps(by_sub))
         .replace("__MERMAID_EDGE_CARD__", json.dumps(edge_cards))
+        .replace("__MERMAID_DOMAIN__", json.dumps(domain_mm))
         .replace("__CONTEXT_EDGES__", json.dumps(context_edges))
         .replace("__HAS_DIFF__", "true" if has_diff else "false")
         .replace("__HAS_GROUPING__", "true" if grouping else "false")
+        .replace("__HAS_DOMAIN__", "true" if domain else "false")
         .replace("__META__", json.dumps(meta))
         .replace("__DIFF_STATE__", json.dumps(diff_state))
     )
@@ -437,10 +485,12 @@ def main() -> int:
     container_mm = gen_container_mermaid(graph) if grouping else ""
     by_sub = subsystem_component_mermaids(graph) if grouping else {}
     edge_cards = edge_card_mermaids(graph) if grouping else {}
+    domain = has_domain(graph)
+    domain_mm = gen_domain_mermaid(graph) if domain else ""
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
-                    container_mm, by_sub, edge_cards, grouping)
+                    container_mm, by_sub, edge_cards, grouping, domain_mm, domain)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")
     return 0

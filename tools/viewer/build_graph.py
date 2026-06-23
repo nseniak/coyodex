@@ -22,6 +22,7 @@ from schema_v1 import (  # noqa: E402
     DEF_GP,
     DEF_ID_CELL,
     ID_TOKEN,
+    iter_domain_cards,
     membership_col,
     membership_ids,
     strip_fences,
@@ -42,6 +43,7 @@ class Node:
     line: int | None
     fields: dict[str, str]
     parent: str | None = None  # the one parent S-id (grouping); None = top-level / ungrouped
+    attrs: list[dict[str, str]] = field(default_factory=list)  # entity attributes (T5 cards only)
 
 
 @dataclass
@@ -51,6 +53,9 @@ class Edge:
     dst: str
     why: str | None
     where: str | None
+    kind: str | None = None       # domain-relation kind (association/composition/…); None = plain edge
+    src_card: str | None = None   # cardinality at the source end (domain relations only)
+    dst_card: str | None = None   # cardinality at the destination end
 
 
 @dataclass
@@ -214,6 +219,28 @@ def parse_gp(lines: list[str]) -> list[GPStep]:
     return steps
 
 
+def parse_domain(lines: list[str]) -> tuple[dict[str, Node], list[Edge]]:
+    """T5 domain cards -> entity nodes (with `attrs`) + their typed relation edges (with `kind` +
+    cardinality). Uses the shared `iter_domain_cards` grammar; malformed relations are skipped (the
+    validator is what flags them)."""
+    nodes: dict[str, Node] = {}
+    edges: list[Edge] = []
+    for card in iter_domain_cards(lines):
+        meta: dict[str, str] = {}
+        if card.meaning:
+            meta["Meaning"] = card.meaning
+        if card.store:
+            meta["Stored"] = card.store
+        attrs = [{"name": f.name, "type": f.type, "markers": " ".join(f.markers)} for f in card.fields]
+        nodes[card.id] = Node(id=card.id, kind="entity", name=card.name, file=card.source,
+                              line=_line_of(card.source), fields=meta, attrs=attrs)
+        for r in card.relations:
+            if r.ok:
+                edges.append(Edge(card.id, r.verb, r.target, None, None,
+                                  kind=r.kind, src_card=r.src_card, dst_card=r.dst_card))
+    return nodes, edges
+
+
 SERVICE_HINTS = re.compile(
     r"\b(agent|service|svc|server|system|external|idp|bot|daemon|cron|scheduler|worker|webhook|job)\b", re.I
 )
@@ -254,6 +281,9 @@ def build(md_path: Path) -> GraphDict:
     lines = text.splitlines()
     tables = _tables(lines)
     nodes, edges = parse_nodes_edges(tables)
+    dnodes, dedges = parse_domain(lines)  # T5 domain cards (entities + their relations)
+    nodes.update(dnodes)
+    edges.extend(dedges)
     gp = parse_gp(lines)
     commit_m = COMMIT.search(text)
     title_m = re.search(r"^#\s+(.+?)\s*$", text, re.M)

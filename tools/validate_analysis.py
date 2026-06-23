@@ -34,11 +34,13 @@ from pathlib import Path
 # Grammar (regexes, membership rule) lives in schema_v1, shared with the parser — one grammar.
 from schema_v1 import (
     DEF_BOLD,
+    DEF_ENTITY,
     DEF_GP,
     GLUED_DEF,
     GLUED_DEF_INNER,
     ID_TOKEN,
     MAX_DEPTH,
+    iter_domain_cards,
     membership_ids,
     strip_fences,
 )
@@ -72,6 +74,9 @@ def collect_defined(text: str) -> tuple[dict[str, int], list[str]]:
         if m:
             counts[m.group(1)] = counts.get(m.group(1), 0) + 1
             gp_order.append(m.group(1))
+        m = DEF_ENTITY.match(line)  # T5 domain cards define E ids in their heading, not a table row
+        if m:
+            counts[m.group(1)] = counts.get(m.group(1), 0) + 1
     return counts, gp_order
 
 
@@ -271,6 +276,44 @@ def check_edge_verbs(text: str) -> list[str]:
     return problems
 
 
+def check_domain_cards(text: str) -> list[str]:
+    """T5 domain-card checks (no-op when there are no cards): each card has MEANING / SOURCE /
+    FIELDS; every field has a type; every RELATIONS item is well-formed; a relation pair is declared
+    on one side only. Card-id uniqueness and target resolution ride the generic duplicate / undefined
+    reference checks in main(). See method/domain-cards.md."""
+    problems: list[str] = []
+    directed: set[tuple[str, str]] = set()
+    for c in iter_domain_cards(text.splitlines()):
+        # A heading that matches `**En —` but not the full shape silently drops the name + store
+        # (they fall back to the id) — catch it loudly instead of rendering `E1 · E1`.
+        if not c.heading_ok:
+            problems.append(f"Domain card {c.id} heading is malformed — expected `**{c.id} — Name** *(store)*`")
+        if not c.meaning:
+            problems.append(f"Domain card {c.id} is missing a MEANING line")
+        if not c.source:
+            problems.append(f"Domain card {c.id} is missing a SOURCE link")
+        if not c.fields:
+            problems.append(f"Domain card {c.id} has no FIELDS")
+        for f in c.fields:
+            if not f.type:
+                problems.append(f"Domain card {c.id} field '{f.name}' has no type")
+        seen_pairs: set[tuple[str, str]] = set()
+        for r in c.relations:
+            if not r.ok:
+                problems.append(f"Domain card {c.id} has a malformed RELATIONS item: '{r.raw}'")
+                continue
+            if (r.verb, r.target) in seen_pairs:
+                problems.append(f"Domain card {c.id} declares the relation '{r.verb} … {r.target}' twice")
+            seen_pairs.add((r.verb, r.target))
+            directed.add((c.id, r.target))
+    for a, b in directed:
+        if a < b and (b, a) in directed:
+            problems.append(
+                f"Relation between {a} and {b} is declared on both cards — author it on one side only"
+            )
+    return problems
+
+
 def main() -> int:
     path = Path(sys.argv[1] if len(sys.argv) > 1 else ".coyodex/project-map.md")
     if not path.exists():
@@ -316,6 +359,7 @@ def main() -> int:
     problems.extend(check_roles_kind(text))
     problems.extend(check_table_shape(text))
     problems.extend(check_edge_verbs(text))
+    problems.extend(check_domain_cards(text))
 
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column.
     problems.extend(parent_problems)

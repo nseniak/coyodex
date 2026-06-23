@@ -119,11 +119,23 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ---
 
-## T5 — Domain model
+## T5 — Domain model (domain cards)
 
-| ID | Entity | Meaning | Defined in | Stored where |
-|---|---|---|---|---|
-| **E1** | <Entity> | <meaning> | [file](path#L1) | <store> |
+<!-- Each entity is a CARD (a block), not a table row — same micro-format as the Golden Path. The
+     heading defines the E id; FIELDS = attributes, RELATIONS = typed E→E edges (authored on the
+     source side only, never in the backbone edge list). Renders as a Mermaid classDiagram.
+     Full spec: method/domain-cards.md. Separators are `·`, never raw `|`. -->
+
+**E1 — <Entity>** *(<stored where>)*
+MEANING: <one-line meaning>
+FIELDS: <name>:<type> PK · <name>:<type> · <name>:<type>
+RELATIONS: contains 1→* E2 <display>
+SOURCE: [file](path#L1)
+
+**E2 — <Entity>** *(<stored where>)*
+MEANING: <one-line meaning>
+FIELDS: <name>:<type> · <name>:<type>
+SOURCE: [file](path#L1)
 
 ---
 

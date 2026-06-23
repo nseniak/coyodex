@@ -39,7 +39,8 @@ their path **inside that clone** (e.g. `$COYODEX/tools/validate_analysis.py`).
 
 ## Build (baseline map)
 
-1. Read `method.md` fully (and `method/schema-v1.md` for the table/ID contract).
+1. Read `method.md` fully (and `method/schema-v1.md` for the table/ID contract, and
+   `method/domain-cards.md` for the T5 domain-model card format).
 2. **Copy the template** `method/templates/project-map.template.md` to the analyzed repo's
    `.coyodex/project-map.md` and fill cells in place. It already has every standard section with
    schema-correct shapes (each ID alone in its own first cell) — this is what makes the map pass

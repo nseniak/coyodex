@@ -11,7 +11,7 @@ graph; no separate persisted model is needed.
 | **Context** | the system, actors, external deps | T0 Goal · Roles · T2 |
 | **Container** | runtime pieces (services, datastores, sandboxes) | Deployment + components |
 | **Component** | T1 components + their verbed arrows | T1 + the edge list |
-| **Code** | entry points / classes → `file:line` | T4 / T5 anchors |
+| **Code** | entry points → `file:line`; the **domain model as a `classDiagram`** (entities with attributes + typed, cardinal relations) | T4 anchors · T5 [domain cards](domain-cards.md) |
 | **Behavioral overlay** | the Golden Path as a sequence that lights up the boxes each step touches | GP steps + traceability |
 
 Drill down = zoom one level in; step back = zoom out — the same "name a row to drill"
