@@ -119,6 +119,19 @@ grammar); CDN libs pinned + SRI; parser tests added; the membership rule made po
 The Python side stays stdlib-only — the only dependency is client-side JS. Diagram-is-a-rendering
 still holds: the viewer parses the committed markdown, never a second source.
 
+### Generated artifacts are standalone w.r.t. the coyodex repo
+**Every artifact the tooling generates — today the HTML viewer, and any future rendered output —
+must be completely standalone with respect to the coyodex repo.** It is committed *into the mapped
+project*, not into coyodex, so it has to open and render on a machine that has never seen coyodex.
+The generator therefore **inlines everything** (map data, diagram text, all CSS/JS) into the
+artifact — it carries no path back to `tools/` or any coyodex file. Reason: the map travels with the
+code it describes (PR review, offline reading), and any reference to the tooling repo would dangle
+the moment the artifact leaves this checkout. This is a hard goal for the generators, not a
+nice-to-have. Honest limit: "standalone w.r.t. coyodex" is **not** the same as "fully offline" — the
+viewer still loads Mermaid + svg-pan-zoom from a CDN (version-pinned + SRI, so no surprise upgrades
+and a tampered file is rejected, but it needs network at view time). Vendoring those two libs into
+the artifact would close that last gap; deferred, not rejected.
+
 ## What was deliberately deferred
 
 - A precomputed index / call-graph (revisit only at scale).
