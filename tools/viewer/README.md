@@ -11,10 +11,15 @@ committed markdown (no second source) and draws it; the markdown stays the singl
    │  build_graph.py             parser — uses the shared grammar in tools/schema_v1.py
    ▼
 graph.json                       ephemeral parse result (parser ↔ renderer interface)
-   │  gen_viewer.py              emits one self-contained HTML file (Mermaid + pan/zoom, pinned + SRI)
-   ▼
+   │  gen_viewer.py              inlines viewer.css + viewer.js → one self-contained HTML file
+   ▼                             (Mermaid + pan/zoom, pinned + SRI)
 project-map.html                 render · pan/zoom · click→panel · diff overlay
 ```
+
+The viewer's front-end lives in **`viewer.css`** and **`viewer.js`** (edited as normal CSS/JS);
+`gen_viewer.py` reads and **inlines** them at build time. The emitted HTML stays standalone — it
+carries no path back to this repo, so it can be committed with the mapped project and opened on a
+machine that has never seen coyodex (the only external load is the pinned + SRI CDN libs).
 
 ## Run
 

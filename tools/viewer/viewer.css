@@ -1,0 +1,38 @@
+* { box-sizing: border-box; }
+body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #111; }
+header { padding: 8px 14px; background: #1e1b4b; color: #fff; display: flex; gap: 12px; align-items: center; }
+header h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 0 0 auto; }
+header .meta { font-size: 12px; opacity: .8; flex: 1; }
+header button { font: inherit; font-size: 12px; padding: 4px 12px; border: 0; border-radius: 6px;
+                background: #6366f1; color: #fff; cursor: pointer; }
+header button:hover { background: #818cf8; }
+#viewsw { display: inline-flex; border: 1px solid #6366f1; border-radius: 6px; overflow: hidden; }
+#viewsw button { background: transparent; color: #c7d2fe; border-radius: 0; padding: 4px 10px; }
+#viewsw button:hover { background: #312e81; }
+#viewsw button.active { background: #6366f1; color: #fff; }
+main { display: flex; height: calc(100vh - 38px); }
+#stage { flex: 1; position: relative; overflow: hidden; background: #fafafa; }
+#diagram { width: 100%; height: 100%; }
+#diagram svg { width: 100%; height: 100%; }
+#panel { width: 340px; border-left: 1px solid #e5e7eb; padding: 16px; overflow-y: auto; background: #fff; }
+#panel .empty { color: #9ca3af; }
+#panel h2 { font-size: 16px; margin: 0 0 6px; }
+#panel .badges { margin-bottom: 12px; }
+#panel .badge { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+                padding: 1px 7px; border-radius: 10px; margin-right: 6px; }
+.badge.kind { background: #eef2ff; color: #3730a3; }
+.badge.edge { background: #e2e8f0; color: #334155; }
+.badge.added { background: #dafbe1; color: #1a7f37; }
+.badge.modified { background: #fff8c5; color: #9a6700; }
+.badge.deleted { background: #ffebe9; color: #cf222e; }
+#panel dl { margin: 0; }
+#panel dt { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; margin-top: 10px; }
+#panel dd { margin: 2px 0 0; }
+#panel .src { margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px; color: #2563eb; }
+.hint { padding: 6px 14px; font-size: 12px; color: #6b7280; background: #f3f4f6; }
+#crumb a { color: #2563eb; cursor: pointer; text-decoration: underline; }
+#legend { position: absolute; left: 12px; bottom: 12px; background: #fff; border: 1px solid #e5e7eb;
+          border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: none; }
+#legend.on { display: block; }
+#legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
+#legend svg { display: block; flex: 0 0 auto; }
