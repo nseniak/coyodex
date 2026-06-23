@@ -40,9 +40,10 @@ This writes `.coyodex/project-map.md`: a current-state map, behavioral layer
 first (Goal → Glossary → Roles → Use cases → **Golden Path**), then the structure
 (Components → Entry points / Model / Deps → Flows + a relationship edge list).
 Every row drills down to `file:line`, and stable IDs let the same map feed
-[diagrams](method/diagrams.md) and tooling ([schema v1](method/schema-v1.md)). For an
-interactive view, the [viewer](tools/viewer/) renders the map as drillable C4 diagrams
-(Context → Subsystems → Components → code).
+[diagrams](method/diagrams.md) and tooling ([schema v1](method/schema-v1.md)). It then renders
+`.coyodex/project-map.html` — the [interactive viewer](tools/viewer/): drillable C4 diagrams
+(Context → Subsystems → Components → code) — and finishes by giving you links to **both** the map
+and the diagram.
 
 **2. Analyze a diff.** After you change code, ask for the change-impact report:
 

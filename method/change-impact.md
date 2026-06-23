@@ -116,9 +116,11 @@ clean baseline.
 
 1. Apply the report's `was → now` blocks to `.coyodex/project-map.md` (mechanical).
 2. Bump its commit pin to the code commit it now describes.
-3. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).
-4. git-commit both — so baseline-commit stays aligned with code-commit. The commit IS the
-   acceptance.
+3. Re-render the diagram (`python3 tools/viewer/render.py .coyodex/project-map.md
+   .coyodex/project-map.html`) — a deterministic re-render of the patched map, no new inference.
+4. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).
+5. git-commit all (map + diagram + report) — so baseline-commit stays aligned with code-commit.
+   The commit IS the acceptance.
 
 ## Deliberately out of scope (for now)
 

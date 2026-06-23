@@ -18,15 +18,24 @@ project-map.html                 render · pan/zoom · click→panel · diff ove
 
 ## Run
 
+One step (what the method calls) — map straight to HTML; the `graph.json` interface stays in a
+temp file:
+
 ```bash
-# 1. validate the map (the shared grammar lives in tools/schema_v1.py)
-python3 tools/validate_analysis.py .coyodex/project-map.md
-# 2. parse the map → graph.json
-python3 tools/viewer/build_graph.py .coyodex/project-map.md build/graph.json
-# 3. graph.json → HTML (optionally pass a change-impact report for the diff overlay)
-python3 tools/viewer/gen_viewer.py build/graph.json build/project-map.html [analysis-changes/<date>.md]
-# 4. serve over http (file:// can't fetch the CDN libs cleanly), then open it
-python3 -m http.server 8753 -d build   # → http://localhost:8753/project-map.html
+python3 tools/viewer/render.py .coyodex/project-map.md .coyodex/project-map.html [analysis-changes/<date>.md]
+```
+
+Or the two stages explicitly (e.g. to inspect the parsed graph):
+
+```bash
+python3 tools/viewer/build_graph.py .coyodex/project-map.md build/graph.json   # parse → graph.json
+python3 tools/viewer/gen_viewer.py  build/graph.json build/project-map.html    # graph.json → HTML
+```
+
+To view, serve over http (file:// can't fetch the CDN libs cleanly):
+
+```bash
+python3 -m http.server 8753 -d .coyodex   # → http://localhost:8753/project-map.html
 ```
 
 ## What it shows — the C4 altitudes

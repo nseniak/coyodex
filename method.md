@@ -172,16 +172,27 @@ synthesis → parallel trace.**
   agents return rows (structured output), not file dumps. The final reconcile (dedup
   names, verify cross-agent edges against code) is not delegated.
 
-**Output file.** Write the full analysis to `.coyodex/project-map.md` at the root of
-the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
-it was built at (the baseline pin). At the end, report the file's full absolute path. Run
-[`tools/validate_analysis.py`](tools/validate_analysis.py) after each generate/patch and
-fix the map until it passes.
+**Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
+root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
+it was built at (the baseline pin). Run [`tools/validate_analysis.py`](tools/validate_analysis.py)
+after each generate/patch and fix the map until it passes. **Then render the diagrams** — once the
+map validates, generate the self-contained HTML viewer next to it:
+
+```
+python3 tools/viewer/render.py .coyodex/project-map.md .coyodex/project-map.html
+```
+
+The HTML is a *rendering* of the map (no second source) — commit it alongside the map so the two
+stay in step and a reviewer can open it. **Finish by reporting the full absolute paths of BOTH**
+the map (`.coyodex/project-map.md`) and the diagram HTML (`.coyodex/project-map.html`), as links,
+so the reader can open either. (Paths to `tools/...` are relative to the coyodex clone, like the
+validator above.)
 
 **Maintaining the map.** When code changes after a baseline exists, follow
 [change-impact](method/change-impact.md): report the impact against the map (modified /
-added / deleted), then accept: patch the map, bump the baseline pin, save the annotated diff
-under `.coyodex/analysis-changes/<date>.md`, and commit the map with the code.
+added / deleted), then accept: patch the map, bump the baseline pin, **re-render the diagram**
+(`tools/viewer/render.py`, so it tracks the patched map), save the annotated diff under
+`.coyodex/analysis-changes/<date>.md`, and commit the map + diagram with the code.
 
 **How to apply.** Lead with the behavioral layer (T0 Goal → Glossary → Roles → Use cases →
 Golden Path), then structural Level 0 (T1–T3); generate the rest on demand as the reader

@@ -160,6 +160,21 @@ def test_validator_catches_cycle() -> None:
     assert code == 1 and "cycle" in out.lower(), out
 
 
+def test_render_produces_self_contained_html() -> None:
+    # render.py: map -> HTML in one step, with the pinned+SRI libs inlined.
+    with tempfile.TemporaryDirectory() as d:
+        md = Path(d) / "project-map.md"
+        md.write_text(make_grouped_map("proper"), encoding="utf-8")
+        out = Path(d) / "project-map.html"
+        r = subprocess.run(
+            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 0, r.stdout + r.stderr
+        html = out.read_text(encoding="utf-8")
+        assert 'integrity="sha384-' in html and "Front door" in html
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0
