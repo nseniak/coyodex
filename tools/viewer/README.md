@@ -47,10 +47,12 @@ python3 -m http.server 8753 -d .coyodex   # → http://localhost:8753/project-ma
 
 - **Context** — the system, its actors (Roles, drawn human vs service), and external deps.
 - **Subsystems** *(when the map groups components)* — the Container altitude: subsystem boxes with
-  inter-subsystem edges **derived** from the component edge list (count-labelled). Click a box to
-  **expand it in place** into its components; the cross-edges re-derive at mixed altitude (an
-  `S→S` arrow explodes into the concrete `S→component` edges); click the frame to collapse. Click a
-  derived edge to see the underlying component edges it aggregates.
+  inter-subsystem edges **derived** from the component edge list (count-labelled). The map never
+  re-lays-out — drill-down opens in a floating **card** over the frozen map: click a box to see that
+  subsystem's components and their internal wiring; click an `S→S` arrow to see the two subsystems
+  framed with just the concrete component edges that cross between them. In-card arrows behave like
+  the Components view (click for `file:line`); the side panel shows the subsystem(s) you opened, with
+  the clicked box/arrow glowing on the map behind. Close with ×, Esc, or a click on the map.
 - **Components** — every component + its verbed edges; click a node/edge for details + `file:line`.
 - **Diff overlay** — pass a change-impact report to recolor added/modified/deleted nodes and the
   elements they ripple to, with a baseline⇄diff toggle.
@@ -68,7 +70,9 @@ python3 tools/tests/test_grouping.py     # stdlib runner; or: pytest tools/tests
   require vendoring the libs locally — not done.
 - **Source links** show as `file:line` text in the panel; turning them into clickable blob URLs
   pinned to the map's commit SHA is a follow-up.
-- **Subsystem expand reflows** the whole layout (Mermaid re-lays-out each toggle) rather than
-  growing one box in place — that smoothness would need a compound-graph renderer (Cytoscape/ELK).
+- **Subsystem drill-down opens a floating card** over the frozen base map (one card at a time)
+  rather than expanding boxes in place — so the Subsystems map never re-lays-out. The trade is that
+  a single subsystem's card shows it without its outside wiring; cross-subsystem wiring lives in the
+  edge cards, and full multi-hop tracing in the Components view.
 - The Python side (parser + validator) is **stdlib-only**; the only third-party dependency is the
   client-side JS above.

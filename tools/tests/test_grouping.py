@@ -17,6 +17,7 @@ sys.path.insert(0, str(TOOLS))            # schema_v1, validate_analysis
 sys.path.insert(0, str(TOOLS / "viewer"))  # build_graph
 
 import build_graph  # noqa: E402
+import gen_viewer  # noqa: E402
 import schema_v1  # noqa: E402
 
 VALIDATOR = TOOLS / "validate_analysis.py"
@@ -56,6 +57,52 @@ def make_grouped_map(layout: str = "proper") -> str:
         "| C1 | uses | C2 | reach engine | f |\n"
     )
     return s_table + t1 + edges
+
+
+def make_card_map() -> str:
+    """A grouped map exercising the card generators: S1 has two components wired internally
+    (C1->C3), both cross into S2's component C2, and C2 touches a dep D1. Lets the tests assert
+    a subsystem card keeps internal wiring + deps, while an edge card keeps ONLY the cross edges."""
+    return (
+        "## Subsystems (S)\n"
+        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **S1** | Edge | front | | a | V |\n"
+        "| **S2** | Core | brains | | a | V |\n\n"
+        "## Dependencies\n"
+        "| ID | Dependency | Purpose | Anchor |\n"
+        "|---|---|---|---|\n"
+        "| **D1** | Cache | speed | f |\n\n"
+        "## T1\n"
+        "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **C1** | Front door | S1 | x | f | C2 |\n"
+        "| **C3** | Router | S1 | x | f | C2 |\n"
+        "| **C2** | Engine | S2 | x | f | D1 |\n\n"
+        "### edges\n"
+        "| From | Verb | To | Why | Where |\n"
+        "|---|---|---|---|---|\n"
+        "| C1 | calls | C2 | reach engine | f |\n"
+        "| C1 | routes | C3 | dispatch | f |\n"
+        "| C3 | calls | C2 | reach engine | f |\n"
+        "| C2 | reads | D1 | cache | f |\n"
+    )
+
+
+def make_empty_verb_map() -> str:
+    """An edge row with a blank Verb cell — renders as `C1 -->|| C2`, which can drop the Mermaid
+    label and desync the viewer's positional path/label zip. The validator must reject it."""
+    return (
+        "## T1\n"
+        "| ID | Component | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|\n"
+        "| **C1** | A | x | f | C2 |\n"
+        "| **C2** | B | x | f |  |\n\n"
+        "### edges\n"
+        "| From | Verb | To | Why | Where |\n"
+        "|---|---|---|---|---|\n"
+        "| C1 |  | C2 | reason | f |\n"
+    )
 
 
 def make_ungrouped_map() -> str:
@@ -235,6 +282,48 @@ def test_parser_subsystem_nodes_and_edges() -> None:
     assert any(e["src"] == "C1" and e["dst"] == "C2" for e in g["edges"])
 
 
+# --- card generators (gen_viewer) -----------------------------------------------
+def test_subsystem_card_keeps_internal_wiring_and_deps() -> None:
+    # Q1=B: a subsystem card shows the subsystem's own components, their internal edges, and the
+    # deps they touch — but never a sibling subsystem's component.
+    by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_card_map()))
+    s1 = by_sub["S1"]
+    assert "C1" in s1 and "C3" in s1                    # both S1 components present
+    assert "C1 -->|routes| C3" in s1                    # internal wiring kept
+    assert "C2" not in s1                               # sibling-subsystem component excluded
+    s2 = by_sub["S2"]
+    assert "C2" in s2 and "D1" in s2                    # Q1=B keeps the dep the component touches
+    assert "C2 -->|reads| D1" in s2
+
+
+def test_edge_card_has_both_subsystems_and_only_cross_edges() -> None:
+    # Q2=A: an edge card frames BOTH subsystems with ALL their components, but draws ONLY the
+    # A->B component edges — no internal edges, no deps, no other-subsystem edges.
+    g = parse_map(make_card_map())
+    cards = gen_viewer.edge_card_mermaids(g)
+    assert set(cards) == {"S1>S2"}                      # only the direction that actually crosses
+    card = cards["S1>S2"]
+    assert "subgraph S1[" in card and "subgraph S2[" in card
+    assert "C1" in card and "C3" in card and "C2" in card   # all components of both (Q2=A)
+    assert "C1 -->|calls| C2" in card and "C3 -->|calls| C2" in card  # the cross edges
+    assert "routes" not in card                         # internal S1 edge dropped
+    assert "D1" not in card                             # no deps in an edge card
+
+
+def test_render_inlines_edge_card_data() -> None:
+    # The self-contained HTML must carry the edge-card diagrams for the client to open on click.
+    with tempfile.TemporaryDirectory() as d:
+        md = Path(d) / "project-map.md"
+        md.write_text(make_card_map(), encoding="utf-8")
+        out = Path(d) / "project-map.html"
+        r = subprocess.run(
+            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "S1>S2" in out.read_text(encoding="utf-8")
+
+
 # --- validator (end-to-end via the CLI) -----------------------------------------
 def test_validator_grouped_ok_both_layouts() -> None:
     for layout in ("proper", "agent"):
@@ -268,6 +357,12 @@ def test_validator_hints_glued_id_cell() -> None:
 def test_validator_catches_column_mismatch() -> None:
     code, out = run_validator(make_bad_columns_map())
     assert code == 1 and "columns" in out, out
+
+
+def test_validator_rejects_empty_verb() -> None:
+    # A blank Verb cell would render as `C1 -->|| C2` and desync the viewer's edge zip.
+    code, out = run_validator(make_empty_verb_map())
+    assert code == 1 and "empty Verb" in out, out
 
 
 def test_validator_clean_maps_pass_table_shape() -> None:

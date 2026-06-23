@@ -6,9 +6,10 @@ HTML file with the graph inlined and Mermaid + svg-pan-zoom loaded from a pinned
 The viewer's own CSS/JS are authored in viewer.css / viewer.js next to this module and inlined at
 build time, so the emitted HTML stays standalone — it carries no path back to this repo (see the
 "Generated artifacts are standalone w.r.t. the coyodex repo" design note).
-The viewer offers four altitudes — Context (C4) → Subsystems (expand-in-place) → Components → code
-links — wraps Mermaid's SVG with pan/zoom and a click->side-panel bridge, and a baseline<->diff
-toggle that recolors added/modified/deleted nodes and the elements they ripple to.
+The viewer offers four altitudes — Context (C4) → Subsystems (click a box/arrow to open a floating
+card) → Components → code links — wraps Mermaid's SVG with pan/zoom and a click->side-panel bridge,
+and a baseline<->diff toggle that recolors added/modified/deleted nodes and the elements they ripple
+to.
 
 Node labels are the element name only (no ID prefix) to keep them uncluttered;
 the ID still appears in the panel header and drives the bridge via the cy-<ID>
@@ -137,7 +138,8 @@ def gen_container_mermaid(graph: GraphDict) -> str:
 
 
 def subsystem_component_mermaids(graph: GraphDict) -> dict[str, str]:
-    """Per-subsystem drill-down: components inside each top-level subsystem (+ deps they touch)."""
+    """Subsystem card: components inside each top-level subsystem, their internal wiring, and the
+    deps they touch (Q1=B — the card shows the subsystem's full content, not just bare boxes)."""
     out: dict[str, str] = {}
     for nid, node in graph["nodes"].items():
         if str(node["kind"]) != "subsystem" or _parent_of(graph, nid) is not None:
@@ -146,6 +148,44 @@ def subsystem_component_mermaids(graph: GraphDict) -> dict[str, str]:
                    if str(n["kind"]) == "component" and _top_subsystem(graph, cid) == nid}
         out[nid] = gen_mermaid(graph, None, only=members)
     return out
+
+
+def _components_of(graph: GraphDict, sid: str) -> list[tuple[str, str]]:
+    """(id, name) of every component whose top-level subsystem is `sid`."""
+    return [(cid, str(n["name"])) for cid, n in graph["nodes"].items()
+            if str(n["kind"]) == "component" and _top_subsystem(graph, cid) == sid]
+
+
+def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
+    """Edge card: subsystems `a` and `b` as two subgraph frames holding ALL their components
+    (Q2=A), with ONLY the a->b component edges drawn — no internal edges, no deps, no edges to
+    other subsystems. Node ids + `src -->|verb| dst` match the component view, so the viewer's
+    edge bridge resolves an in-card arrow to its real component edge."""
+    open_b, close_b = SHAPE["component"]
+    lines = ["flowchart LR"]
+    for sid in (a, b):
+        lines.append(f'  subgraph {sid}["{_safe_label(str(graph["nodes"][sid]["name"]))}"]')
+        for cid, name in _components_of(graph, sid):
+            lines.append(f"    {cid}{open_b}{_safe_label(name)}{close_b}:::cy-{cid}")
+            lines.append(f"    class {cid} component")
+        lines.append("  end")
+    for e in graph["edges"]:
+        s, d = str(e["src"]), str(e["dst"])
+        if _top_subsystem(graph, s) == a and _top_subsystem(graph, d) == b:
+            lines.append(f"  {s} -->|{e['verb']}| {d}")
+    lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
+    return "\n".join(lines)
+
+
+def edge_card_mermaids(graph: GraphDict) -> dict[str, str]:
+    """One edge-card diagram per directed top-subsystem pair that has a crossing component edge,
+    keyed 'A>B' to match the rendered inter-subsystem arrow's endpoints."""
+    pairs: set[tuple[str, str]] = set()
+    for e in graph["edges"]:
+        sa, sb = _top_subsystem(graph, str(e["src"])), _top_subsystem(graph, str(e["dst"]))
+        if sa and sb and sa != sb:
+            pairs.add((sa, sb))
+    return {f"{a}>{b}": gen_edge_card_mermaid(graph, a, b) for a, b in sorted(pairs)}
 
 
 def compute_state(graph: GraphDict, diff: DiffDict | None) -> dict[str, str]:
@@ -302,7 +342,7 @@ __SCRIPT__
 def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              context_edges: dict[str, dict[str, Any]], has_diff: bool, meta: str,
              diff_state: dict[str, str], container_mm: str, by_sub: dict[str, str],
-             grouping: bool) -> str:
+             edge_cards: dict[str, str], grouping: bool) -> str:
     css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
     js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
     return (
@@ -314,6 +354,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_CONTEXT__", json.dumps(context_mm))
         .replace("__MERMAID_CONTAINER__", json.dumps(container_mm))
         .replace("__MERMAID_BY_SUB__", json.dumps(by_sub))
+        .replace("__MERMAID_EDGE_CARD__", json.dumps(edge_cards))
         .replace("__CONTEXT_EDGES__", json.dumps(context_edges))
         .replace("__HAS_DIFF__", "true" if has_diff else "false")
         .replace("__HAS_GROUPING__", "true" if grouping else "false")
@@ -343,10 +384,11 @@ def main() -> int:
     grouping = has_grouping(graph)
     container_mm = gen_container_mermaid(graph) if grouping else ""
     by_sub = subsystem_component_mermaids(graph) if grouping else {}
+    edge_cards = edge_card_mermaids(graph) if grouping else {}
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
-                    container_mm, by_sub, grouping)
+                    container_mm, by_sub, edge_cards, grouping)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")
     return 0

@@ -14,6 +14,8 @@ for diagrams/tooling:
   5. Table shape: every row of a markdown table (header / separator / data)
      carries the same column count — catches the malformed-separator / dropped-cell
      class that silently breaks parsing and diagram rendering.
+  6. Edge verbs: every edge row (From + To id) carries a non-empty Verb — a blank one
+     renders as `src -->|| dst`, dropping the Mermaid label and desyncing the viewer.
 
 When an id reads as undefined because its definition row glued extra text into the
 ID cell (`| **UC1** Search… |` instead of `| **UC1** | Search… |`), the report names
@@ -229,6 +231,46 @@ def check_table_shape(text: str) -> list[str]:
     return problems
 
 
+def check_edge_verbs(text: str) -> list[str]:
+    """Every edge row (one with a From and a To id) must carry a non-empty Verb. A blank Verb
+    renders as ``src -->|| dst``: Mermaid drops the edge's label element, which silently misaligns
+    the viewer's positional path/label pairing for every later edge in that diagram. Only edge
+    tables (header starts From | Verb | To) are inspected, so the check is additive."""
+    problems: list[str] = []
+    lines = text.splitlines()
+    i, n = 0, len(lines)
+    while i < n:
+        if not lines[i].lstrip().startswith("|"):
+            i += 1
+            continue
+        start = i
+        block: list[str] = []
+        while i < n and lines[i].lstrip().startswith("|"):
+            block.append(lines[i])
+            i += 1
+        if len(block) < 2 or not is_separator_row(block[1]):
+            continue  # not a real table
+        headers = [c.lower() for c in split_cells(block[0])]
+        if headers[:3] != ["from", "verb", "to"]:
+            continue
+        ci = {h: idx for idx, h in enumerate(headers)}
+        for offset, row in enumerate(block[2:], start=2):
+            if is_separator_row(row):
+                continue
+            cells = split_cells(row)
+            src = ID_TOKEN.search(cells[ci["from"]]) if ci["from"] < len(cells) else None
+            dst = ID_TOKEN.search(cells[ci["to"]]) if ci["to"] < len(cells) else None
+            if not (src and dst):  # not an edge row (matches what the parser would graph)
+                continue
+            verb = cells[ci["verb"]].strip() if ci["verb"] < len(cells) else ""
+            if not verb:
+                problems.append(
+                    f"Edge table at line {start + 1}: row (line {start + offset + 1}) "
+                    f"{src.group(0)} → {dst.group(0)} has an empty Verb"
+                )
+    return problems
+
+
 def main() -> int:
     path = Path(sys.argv[1] if len(sys.argv) > 1 else ".coyodex/project-map.md")
     if not path.exists():
@@ -273,6 +315,7 @@ def main() -> int:
 
     problems.extend(check_roles_kind(text))
     problems.extend(check_table_shape(text))
+    problems.extend(check_edge_verbs(text))
 
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column.
     problems.extend(parent_problems)

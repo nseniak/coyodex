@@ -75,7 +75,8 @@ python3 tools/validate_analysis.py .coyodex/project-map.md
 It prints an element inventory and exits non-zero on: duplicate definitions, references to
 undefined IDs, a Golden Path step missing its `Touches:` line, a Roles table missing the required
 `Kind` column, a table row whose column count differs from its header (malformed separator,
-dropped/extra cell, or an unescaped raw `|` — an escaped `\|` is fine), or — when grouping is
+dropped/extra cell, or an unescaped raw `|` — an escaped `\|` is fine), an edge row with an empty
+`Verb` cell (which would render as `src -->|| dst` and desync the diagram), or — when grouping is
 present — a `Subsystem`/`Parent`
 that doesn't resolve to a defined `S`, an element with more than one parent, a nesting cycle, or a
 membership chain more than `MAX_DEPTH` subsystem levels deep (default 3). When an undefined ID is
