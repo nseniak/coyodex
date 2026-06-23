@@ -342,6 +342,7 @@ const R = 10;
 const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'modified'],
                 deleted: ['#cf222e', '×', 'deleted'], rippled: ['#d97706', '≈', 'ripples to'] };
 const HILITE = 'drop-shadow(0 0 4px #2563eb) drop-shadow(0 0 2px #2563eb)';  // selection glow (nodes + edge labels)
+const HOVER = 'drop-shadow(0 0 3px #60a5fa)';  // softer hover glow: signals "clickable" without competing with HILITE
 
 mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default', flowchart: { curve: 'basis' } });
 
@@ -506,6 +507,8 @@ function bindClusters() {
     }
     if (!sid || !GRAPH.nodes[sid]) return;
     cl.style.cursor = 'pointer';
+    cl.addEventListener('mouseenter', () => { cl.style.filter = HOVER; });  // clusters never hold a selection
+    cl.addEventListener('mouseleave', () => { cl.style.filter = ''; });
     cl.addEventListener('click', (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
@@ -521,6 +524,9 @@ function bind() {
     if (!id || !GRAPH.nodes[id]) return;
     nodeEls[id] = el;
     el.style.cursor = 'pointer';
+    // Hover affordance — skip while this node is the active selection, so HILITE wins.
+    el.addEventListener('mouseenter', () => { if (selectedKey !== 'node:' + id) el.style.filter = HOVER; });
+    el.addEventListener('mouseleave', () => { if (selectedKey !== 'node:' + id) el.style.filter = ''; });
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;  // tail of a drag-pan, not a real click
       e.stopPropagation();
@@ -669,9 +675,13 @@ function bindEdges() {
         if (label) label.style.filter = '';
       };
     };
+    // Hover affordance — glow the visible line + its label; skip while this edge is selected.
+    const hoverOn = () => { if (selectedKey === selKey) return; p.style.filter = HOVER; if (label) label.style.filter = HOVER; };
+    const hoverOff = () => { if (selectedKey === selKey) return; p.style.filter = ''; if (label) label.style.filter = ''; };
     const onClick = (ev) => {
       if (isDrag(ev)) return;  // tail of a drag-pan, not a real click
       ev.stopPropagation();
+      hoverOff();  // drop the hover glow before (de)selecting, so it can't linger under HILITE
       if (selectedKey === selKey) { reset(); return; }  // click again = deselect
       selectedKey = selKey;
       showFn(); select(highlight); focusEdge(e);
@@ -687,12 +697,16 @@ function bindEdges() {
     hit.style.setProperty('marker-end', 'none', 'important');
     hit.style.pointerEvents = 'stroke'; hit.style.cursor = 'pointer';
     hit.addEventListener('click', onClick);
+    hit.addEventListener('mouseenter', hoverOn);
+    hit.addEventListener('mouseleave', hoverOff);
     p.parentNode.appendChild(hit);
 
     if (label) {
       label.style.cursor = 'pointer';
       label.style.setProperty('pointer-events', 'all', 'important');
       label.addEventListener('click', onClick);
+      label.addEventListener('mouseenter', hoverOn);
+      label.addEventListener('mouseleave', hoverOff);
     }
   });
 }
