@@ -107,11 +107,25 @@ second source, tighten the markdown into a parseable contract (schema v1: IDs, I
 refs, no stray pipes, a Golden Path micro-format, a validator). One source, parsed on
 demand. Diagram edges come from the verbed component edge list; T1 "Depends on" is derived.
 
+### The interactive viewer (Tier B) was promoted from spike to `tools/`
+Tier B (an interactive HTML viewer) was deferred while Tier A (Mermaid-from-markdown) carried
+diagrams. It was then built as a gitignored spike (`internal/viewer/`) and validated on a real map
+— it renders the C4 altitudes (Context → Subsystems → Components → code), expand-in-place grouping
+with derived inter-subsystem edges, and a diff overlay; the spike even surfaced a real validator
+bug (membership read by column position). Having earned it, the viewer was **un-deferred and merged
+into `tools/viewer/`**, gated on a promotion punch-list: the schema-v1 grammar extracted to a
+single shared module (`tools/schema_v1.py`, imported by validator and parser — no duplicate
+grammar); CDN libs pinned + SRI; parser tests added; the membership rule made position-independent.
+The Python side stays stdlib-only — the only dependency is client-side JS. Diagram-is-a-rendering
+still holds: the viewer parses the committed markdown, never a second source.
+
 ## What was deliberately deferred
 
 - A precomputed index / call-graph (revisit only at scale).
-- The interactive HTML diagram viewer (Tier B). Tier A = Mermaid generated from the markdown.
 - A cumulative cross-cycle changelog narrative (the dated diffs already are the history).
+
+(The interactive HTML viewer (Tier B) was on this list; it has since been promoted to
+`tools/viewer/` — see the decision above.)
 
 ## Worked example
 

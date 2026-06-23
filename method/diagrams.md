@@ -40,9 +40,11 @@ show/hide toggle. The element-keyed deltas are the data.
   level + a Golden Path sequence diagram, with `click`→source and diff via styled
   regeneration. Cheap, in-repo, version-controlled; "drill-down" is hyperlinked per-level
   diagrams rather than true zoom.
-- **Tier B — a small self-contained HTML viewer** (Cytoscape.js / React Flow) reading the
-  parsed graph. True zoom / step-back / overlay toggle / animated Golden Path; more build
-  effort.
+- **Tier B — a small self-contained HTML viewer**, available in [`tools/viewer/`](../tools/viewer/).
+  Parses the markdown (via the shared `tools/schema_v1.py` grammar) and renders the C4 altitudes —
+  Context → Subsystems (expand-in-place, derived inter-subsystem edges) → Components → code — with
+  pan/zoom, click→panel, and a baseline⇄diff overlay. Mermaid + svg-pan-zoom load from a pinned CDN
+  with Subresource-Integrity.
 
 Reference frame: the **C4 model**, **Structurizr**, **Sourcetrail** — all standard. The
 request to see architecture this way is not unusual.

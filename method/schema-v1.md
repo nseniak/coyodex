@@ -65,10 +65,10 @@ in their own table (`ID | Subsystem | Purpose | Parent | Anchor | Conf.`), optio
 
 ## The validator
 
-[`scripts/validate_analysis.py`](../scripts/validate_analysis.py) is stdlib-only:
+[`tools/validate_analysis.py`](../tools/validate_analysis.py) is stdlib-only:
 
 ```
-python3 scripts/validate_analysis.py .coyodex/project-map.md
+python3 tools/validate_analysis.py .coyodex/project-map.md
 ```
 
 It prints an element inventory and exits non-zero on: duplicate definitions, references to

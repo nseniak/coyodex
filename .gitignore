@@ -3,3 +3,5 @@
 internal/
 .firecrawl/
 __pycache__/
+.playwright-mcp/
+tools/viewer/build/

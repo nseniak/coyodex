@@ -410,7 +410,7 @@ cycles; nesting depth ≤ MAX_DEPTH (default 3).
 +| **C1** | <component> | S1 | <purpose> | [file](path#L1) | C2, C3 |
 ```
 
-### 4. `scripts/validate_analysis.py`
+### 4. `tools/validate_analysis.py`
 
 **Two regex additions:**
 

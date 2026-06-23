@@ -1,0 +1,329 @@
+#!/usr/bin/env python3
+"""Parse a schema-v1 project-map.md into a graph JSON (the parser/renderer interface).
+
+Reuses the schema-v1 grammar from tools/schema_v1.py by import — one grammar, shared with the
+validator. The JSON it emits is an ephemeral parse result, never a hand-maintained second source.
+
+Usage:  python3 build_graph.py [fixture/project-map.md] [build/graph.json]
+"""
+from __future__ import annotations
+
+import json
+import re
+import sys
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import TypedDict
+
+# Shared schema-v1 grammar lives in tools/schema_v1.py (one grammar for validator + parser). This
+# file sits in tools/viewer/, so put the sibling tools/ dir on the path to import it.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from schema_v1 import DEF_GP, DEF_ID_CELL, ID_TOKEN, membership_col, membership_ids  # noqa: E402
+
+LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href
+COMMIT = re.compile(r"\*\*Commit:\*\*\s*`([^`]+)`")
+
+KIND_BY_PREFIX = {"C": "component", "D": "dep", "E": "entity", "UC": "usecase", "S": "subsystem"}
+
+
+@dataclass
+class Node:
+    id: str
+    kind: str
+    name: str
+    file: str | None
+    line: int | None
+    fields: dict[str, str]
+    parent: str | None = None  # the one parent S-id (grouping); None = top-level / ungrouped
+
+
+@dataclass
+class Edge:
+    src: str
+    verb: str
+    dst: str
+    why: str | None
+    where: str | None
+
+
+@dataclass
+class GPStep:
+    id: str
+    title: str
+    story: str
+    under_the_hood: str
+    touches: list[str] = field(default_factory=list)
+
+
+class GraphDict(TypedDict):
+    commit: str | None
+    title: str | None
+    nodes: dict[str, dict[str, object]]
+    edges: list[dict[str, object]]
+    gp: list[dict[str, object]]
+    roles: list[dict[str, str]]
+
+
+class DiffChange(TypedDict):
+    id: str
+    change: str
+    name: str | None
+    kind: str | None
+    note: str
+
+
+class DiffDict(TypedDict):
+    base: str | None
+    new: str | None
+    changes: list[DiffChange]
+    new_edges: list[dict[str, str]]
+
+
+def _cells(line: str) -> list[str]:
+    """Split a markdown table row into trimmed cell strings."""
+    return [c.strip() for c in line.strip().strip("|").split("|")]
+
+
+def _is_separator(line: str) -> bool:
+    return bool(re.fullmatch(r"[\s|:-]+", line.strip())) and "-" in line
+
+
+def _kind_of(node_id: str) -> str:
+    m = re.match(r"[A-Z]+", node_id)
+    return KIND_BY_PREFIX.get(m.group(0) if m else "", "unknown")
+
+
+def _first_link(cells: list[str]) -> str | None:
+    for c in cells:
+        m = LINK.search(c)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _line_of(href: str | None) -> int | None:
+    if not href:
+        return None
+    m = re.search(r"#L(\d+)$", href) or re.search(r":(\d+)$", href)
+    return int(m.group(1)) if m else None
+
+
+def _first_id(cell: str) -> str | None:
+    m = ID_TOKEN.search(cell)
+    return m.group(0) if m else None
+
+
+def _tables(lines: list[str]) -> list[tuple[list[str], list[list[str]]]]:
+    """Group consecutive `|`-prefixed lines into (headers, rows) tables."""
+    tables: list[tuple[list[str], list[list[str]]]] = []
+    i = 0
+    while i < len(lines):
+        if lines[i].lstrip().startswith("|"):
+            block: list[str] = []
+            while i < len(lines) and lines[i].lstrip().startswith("|"):
+                block.append(lines[i])
+                i += 1
+            if len(block) >= 2:
+                headers = _cells(block[0])
+                rows = [_cells(b) for b in block[1:] if not _is_separator(b)]
+                tables.append((headers, rows))
+        else:
+            i += 1
+    return tables
+
+
+def parse_nodes_edges(tables: list[tuple[list[str], list[list[str]]]]) -> tuple[dict[str, Node], list[Edge]]:
+    nodes: dict[str, Node] = {}
+    edges: list[Edge] = []
+    seen_edges: set[tuple[str, str, str]] = set()
+    for headers, rows in tables:
+        hl = [h.lower() for h in headers]
+        is_edge_table = hl[:3] == ["from", "verb", "to"]
+        ci = {h: i for i, h in enumerate(hl)}
+        for row in rows:
+            if is_edge_table:
+                src, dst = _first_id(_col(row, ci, "from")), _first_id(_col(row, ci, "to"))
+                if src and dst:
+                    verb = _col(row, ci, "verb")
+                    key = (src, verb, dst)
+                    if key not in seen_edges:
+                        seen_edges.add(key)
+                        where_cell = _col(row, ci, "where")
+                        where = _first_link([where_cell]) or where_cell or None
+                        edges.append(Edge(src, verb, dst, _col(row, ci, "why") or None, where))
+                continue
+            if not row:
+                continue
+            m = DEF_ID_CELL.search(row[0])
+            if not m:
+                continue
+            node_id = m.group(1)
+            # Display name = the row's second cell, UNLESS that cell is the membership column
+            # (some layouts drop the separate name column and put Subsystem at index 1) or is a
+            # bare id — then fall back to the id, so a component is never mislabeled as its subsystem.
+            cand = row[1].strip() if len(row) > 1 else ""
+            name = cand if (cand and membership_col(hl, node_id) != 1
+                            and not re.fullmatch(r"(?:UC|GP|C|D|E|S)\d+", cand)) else node_id
+            href = _first_link(row)
+            fields = {h: row[idx] for idx, h in enumerate(headers) if idx < len(row) and idx != 0}
+            _parents = membership_ids(node_id, row, hl)
+            nodes[node_id] = Node(
+                id=node_id,
+                kind=_kind_of(node_id),
+                name=name,
+                file=href,
+                line=_line_of(href),
+                fields=fields,
+                parent=_parents[0] if _parents else None,
+            )
+    return nodes, edges
+
+
+def parse_gp(lines: list[str]) -> list[GPStep]:
+    steps: list[GPStep] = []
+    i = 0
+    while i < len(lines):
+        m = DEF_GP.match(lines[i])
+        if not m:
+            i += 1
+            continue
+        gp_id = m.group(1)
+        title = lines[i].split("—", 1)[1].strip() if "—" in lines[i] else ""
+        title = re.sub(r"\*\*|\*\([^)]*\)\*?", "", title).strip().rstrip("*").strip()
+        story = under = ""
+        touches: list[str] = []
+        j = i + 1
+        while j < len(lines) and not DEF_GP.match(lines[j]):
+            s = lines[j].strip()
+            if s.startswith("STORY:"):
+                story = s[len("STORY:"):].strip()
+            elif s.startswith("UNDER THE HOOD:"):
+                under = s[len("UNDER THE HOOD:"):].strip()
+            elif s.startswith("`Touches:`") or s.startswith("Touches:"):
+                touches = ID_TOKEN.findall(s)
+            j += 1
+        steps.append(GPStep(id=gp_id, title=title, story=story, under_the_hood=under, touches=touches))
+        i = j
+    return steps
+
+
+SERVICE_HINTS = re.compile(
+    r"\b(agent|service|svc|server|system|external|idp|bot|daemon|cron|scheduler|worker|webhook|job)\b", re.I
+)
+
+
+def _role_kind(name: str, explicit: str) -> str:
+    """Explicit 'human'/'service' (from a Kind column) wins; else infer 'service' from name hints."""
+    if explicit:
+        return "service" if explicit.strip().lower().startswith("s") else "human"
+    return "service" if SERVICE_HINTS.search(name) else "human"
+
+
+def parse_roles(tables: list[tuple[list[str], list[list[str]]]]) -> list[dict[str, str]]:
+    """Roles (actors) for the C4 context view: the first table whose first header is 'Role'.
+    Reads the required 'Kind' column (human/service); for maps that predate it, falls back to
+    inferring the kind from the role name."""
+    roles: list[dict[str, str]] = []
+    for headers, rows in tables:
+        hl = [h.strip().lower() for h in headers]
+        if not hl or hl[0] != "role":
+            continue
+        kind_idx = hl.index("kind") if "kind" in hl else -1
+        wants_idx = next((i for i, h in enumerate(hl) if "want" in h), 1)
+        for row in rows:
+            name = re.sub(r"\*+", "", row[0]).strip()
+            if not name:
+                continue
+            wants = row[wants_idx].strip() if 0 <= wants_idx < len(row) else ""
+            explicit = row[kind_idx].strip() if 0 <= kind_idx < len(row) else ""
+            roles.append({"name": name, "wants": wants, "kind": _role_kind(name, explicit)})
+        break
+    return roles
+
+
+def build(md_path: Path) -> GraphDict:
+    text = md_path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    tables = _tables(lines)
+    nodes, edges = parse_nodes_edges(tables)
+    gp = parse_gp(lines)
+    commit_m = COMMIT.search(text)
+    title_m = re.search(r"^#\s+(.+?)\s*$", text, re.M)
+    title = title_m.group(1).strip() if title_m else None
+    if title and " — " in title:
+        title = title.split(" — ")[0].strip()
+    return {
+        "commit": commit_m.group(1) if commit_m else None,
+        "title": title,
+        "nodes": {nid: asdict(n) for nid, n in nodes.items()},
+        "edges": [asdict(e) for e in edges],
+        "gp": [asdict(g) for g in gp],
+        "roles": parse_roles(tables),
+    }
+
+
+DIFF_HDR = re.compile(r"`?(\w+)`?\s*(?:→|->)\s*`?(\w+)`?")
+
+
+def _col(row: list[str], ci: dict[str, int], key: str) -> str:
+    i = ci.get(key, -1)
+    return row[i].strip() if 0 <= i < len(row) else ""
+
+
+def build_diff(md_path: Path) -> DiffDict:
+    """Parse a change-impact report into per-element classifications + new edges."""
+    text = md_path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    changes: list[DiffChange] = []
+    new_edges: list[dict[str, str]] = []
+    for headers, rows in _tables(lines):
+        hl = [h.lower() for h in headers]
+        if "change" in hl:
+            ci = {h: i for i, h in enumerate(hl)}
+            for row in rows:
+                eid = _first_id(row[0])
+                if not eid:
+                    continue
+                kind = _col(row, ci, "kind").lower()
+                changes.append(
+                    DiffChange(
+                        id=eid,
+                        change=_col(row, ci, "change").lower(),
+                        name=_col(row, ci, "name") or None,
+                        kind=kind or None,
+                        note=_col(row, ci, "note"),
+                    )
+                )
+        elif hl[:3] == ["from", "verb", "to"]:
+            for row in rows:
+                s, d = _first_id(row[0]), _first_id(row[2])
+                if s and d:
+                    new_edges.append({"src": s, "verb": row[1], "dst": d})
+    base = new = None
+    for line in lines:
+        if line.lstrip().startswith("#") and ("→" in line or "->" in line):
+            m = DIFF_HDR.search(line)
+            if m:
+                base, new = m.group(1), m.group(2)
+                break
+    return DiffDict(base=base, new=new, changes=changes, new_edges=new_edges)
+
+
+def main() -> int:
+    md = Path(sys.argv[1] if len(sys.argv) > 1 else "fixture/project-map.md")
+    out = Path(sys.argv[2] if len(sys.argv) > 2 else "build/graph.json")
+    if not md.exists():
+        print(f"ERROR: {md} not found", file=sys.stderr)
+        return 1
+    graph = build(md)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(graph, indent=2), encoding="utf-8")
+    print(
+        f"Parsed {len(graph['nodes'])} nodes, {len(graph['edges'])} edges, "
+        f"{len(graph['gp'])} GP steps -> {out}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

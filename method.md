@@ -175,7 +175,7 @@ synthesis → parallel trace.**
 **Output file.** Write the full analysis to `.coyodex/project-map.md` at the root of
 the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
 it was built at (the baseline pin). At the end, report the file's full absolute path. Run
-[`scripts/validate_analysis.py`](scripts/validate_analysis.py) after each generate/patch and
+[`tools/validate_analysis.py`](tools/validate_analysis.py) after each generate/patch and
 fix the map until it passes.
 
 **Maintaining the map.** When code changes after a baseline exists, follow

@@ -14,7 +14,7 @@ for diagrams/tooling:
 
 Exit 0 = clean, 1 = problems found.
 
-Usage:  python3 scripts/validate_analysis.py [.coyodex/project-map.md]
+Usage:  python3 tools/validate_analysis.py [.coyodex/project-map.md]
 """
 from __future__ import annotations
 
@@ -22,18 +22,8 @@ import re
 import sys
 from pathlib import Path
 
-# Prefix order matters: multi-letter prefixes (UC, GP) before single-letter C.
-ID_TOKEN = re.compile(r"\b(?:UC\d+|GP\d+|C\d+|D\d+|E\d+|S\d+)\b")
-
-# Definition sites. A definition is the FIRST cell of a table row (`| **C1** | ...`)
-# — NOT an inline bold reference in prose (e.g. the coverage note).
-DEF_BOLD = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|E\d+|S\d+)\*\*\s*\|")  # table-row id column
-DEF_GP = re.compile(r"^\*\*(GP\d+)\s+—")                                 # `**GP1 — ...` headings
-
-# Grouping (schema-v1 extension). Membership lives on the child as one parent
-# pointer: a component's `Subsystem` cell or a subsystem's `Parent` cell.
-PARENT_COLS = ("subsystem", "parent")
-MAX_DEPTH = 3  # max subsystem levels (parent-pointer hops) in any membership chain
+# Grammar (regexes, membership rule) lives in schema_v1, shared with the parser — one grammar.
+from schema_v1 import DEF_BOLD, DEF_GP, ID_TOKEN, MAX_DEPTH, membership_ids
 
 
 def collect_defined(text: str) -> tuple[dict[str, int], list[str]]:
@@ -95,9 +85,8 @@ def check_roles_kind(text: str) -> list[str]:
 
 
 def collect_parents(text: str) -> tuple[dict[str, str], list[str]]:
-    """child_id -> parent_id from any table column named Subsystem/Parent.
-
-    Returns the mapping plus problems for multi-parent cells. No-op (returns
+    """child_id -> parent_id from the membership column (Subsystem/Parent), via the shared
+    schema_v1 rule. Returns the mapping plus problems for multi-parent cells. No-op (returns
     ``({}, [])``) when no such column exists, so ungrouped maps are unaffected.
     """
     parents: dict[str, str] = {}
@@ -115,14 +104,7 @@ def collect_parents(text: str) -> tuple[dict[str, str], list[str]]:
         if len(block) < 2:
             continue
         headers = [c.strip().lower() for c in block[0].strip().strip("|").split("|")]
-        # The membership column. ``idx != 1`` skips the display-name column: the
-        # Subsystems table's *name* column is itself "Subsystem", which would
-        # otherwise be mistaken for T1's `Subsystem` membership column.
-        pcol = next(
-            (idx for idx, h in enumerate(headers) if h in PARENT_COLS and idx != 1),
-            None,
-        )
-        if pcol is None:
+        if "subsystem" not in headers and "parent" not in headers:
             continue
         for row in block[1:]:
             if "-" in row and re.fullmatch(r"[\s|:-]+", row.strip()):
@@ -132,12 +114,11 @@ def collect_parents(text: str) -> tuple[dict[str, str], list[str]]:
                 continue
             child = cm.group(1)
             cells = [c.strip() for c in row.strip().strip("|").split("|")]
-            if pcol < len(cells):
-                ids = ID_TOKEN.findall(cells[pcol])
-                if len(ids) > 1:
-                    problems.append(f"{child} has multiple parents: {', '.join(ids)}")
-                elif ids:
-                    parents[child] = ids[0]
+            ids = membership_ids(child, cells, headers)
+            if len(ids) > 1:
+                problems.append(f"{child} has multiple parents: {', '.join(ids)}")
+            elif ids:
+                parents[child] = ids[0]
     return parents, problems
 
 
@@ -204,6 +185,15 @@ def main() -> int:
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column.
     problems.extend(parent_problems)
     problems.extend(check_hierarchy(parents, defined))
+    # Loud guard against silent grouping failures: a Subsystems table with NO component actually
+    # assigned is almost always a missing/unreadable membership column (which renders disconnected
+    # subsystem boxes), not an intentional choice. Fail rather than pass green.
+    if (any(i.startswith("S") for i in defined) and any(i.startswith("C") for i in defined)
+            and not any(c.startswith("C") for c in parents)):
+        problems.append(
+            "Subsystems (S) defined but no component is assigned to one — the T1 'Subsystem' "
+            "membership column is missing or unreadable"
+        )
 
     # Summary of the element inventory, by prefix.
     by_prefix: dict[str, list[str]] = {}
