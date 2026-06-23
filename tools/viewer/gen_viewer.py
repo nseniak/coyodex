@@ -6,10 +6,10 @@ HTML file with the graph inlined and Mermaid + svg-pan-zoom loaded from a pinned
 The viewer's own CSS/JS are authored in viewer.css / viewer.js next to this module and inlined at
 build time, so the emitted HTML stays standalone — it carries no path back to this repo (see the
 "Generated artifacts are standalone w.r.t. the coyodex repo" design note).
-The viewer offers four altitudes — Context (C4) → Subsystems (click a box/arrow to open a floating
-card) → Components → code links — wraps Mermaid's SVG with pan/zoom and a click->side-panel bridge,
-and a baseline<->diff toggle that recolors added/modified/deleted nodes and the elements they ripple
-to.
+The viewer offers four altitudes — Context (C4) → Subsystems (click a box/arrow to drill in place) →
+Components → code links — navigated as a back/forward history within one frame, wraps Mermaid's SVG
+with pan/zoom and a click->side-panel bridge, and a baseline<->diff toggle that recolors
+added/modified/deleted nodes and the elements they ripple to.
 
 Node labels are the element name only (no ID prefix) to keep them uncluttered;
 the ID still appears in the panel header and drives the bridge via the cy-<ID>
@@ -364,6 +364,10 @@ __STYLE__
 <header>
   <h1>coyodex viewer</h1>
   <span class="meta" id="meta"></span>
+  <span id="nav">
+    <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
+    <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
+  </span>
   <span id="viewsw">
     <button data-view="context">Context</button>
     <button data-view="container">Subsystems</button>
@@ -371,7 +375,7 @@ __STYLE__
   </span>
   <button id="toggle" style="display:none"></button>
 </header>
-<div class="hint">Scroll to zoom · drag to pan · click a node for details.<span id="crumb"></span></div>
+<div class="hint"><span id="crumb"></span></div>
 <main>
   <div id="stage">
     <div id="diagram"></div>

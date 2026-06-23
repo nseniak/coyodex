@@ -42,8 +42,8 @@ show/hide toggle. The element-keyed deltas are the data.
   diagrams rather than true zoom.
 - **Tier B — a small self-contained HTML viewer**, available in [`tools/viewer/`](../tools/viewer/).
   Parses the markdown (via the shared `tools/schema_v1.py` grammar) and renders the C4 altitudes —
-  Context → Subsystems (click a box/arrow for a floating card, derived inter-subsystem edges) →
-  Components → code — with
+  Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges) →
+  Components → code — navigated as a back/forward history (header arrows, ⌘/⌥+←/→, breadcrumb) with
   pan/zoom, click→panel, and a baseline⇄diff overlay. Mermaid + svg-pan-zoom load from a pinned CDN
   with Subresource-Integrity.
 
