@@ -34,8 +34,9 @@ Path steps, in the step heading (`**GP1 — ...**`). An ID written anywhere else
 3. **No raw `|` inside table cells** — escape or avoid it; it silently breaks table parsing.
 4. **Golden Path micro-format** — each step is an `**GPn — title**` heading followed by
    labeled lines: STORY, UNDER THE HOOD, and a `Touches:` line listing the IDs it touches.
-5. **A validator** — checks ID uniqueness, that every reference resolves, and that every GP
-   step has a `Touches:` line. Run it after each generate/patch.
+5. **A validator** — checks ID uniqueness, that every reference resolves, that every GP step has
+   a `Touches:` line, and that every table row carries its header's column count (catching
+   malformed separators / dropped cells). Run it after each generate/patch.
 
 ## Derived, not duplicated
 
@@ -73,10 +74,16 @@ python3 tools/validate_analysis.py .coyodex/project-map.md
 
 It prints an element inventory and exits non-zero on: duplicate definitions, references to
 undefined IDs, a Golden Path step missing its `Touches:` line, a Roles table missing the required
-`Kind` column, or — when grouping is present — a `Subsystem`/`Parent` that doesn't resolve to a
-defined `S`, an element with more than one parent, a nesting cycle, or a membership chain more than
-`MAX_DEPTH` subsystem levels deep (default 3). It does **not** yet check table-cell pipe escaping,
-anchor existence, or that edge tables carry the `Why` column — those are candidate additions.
+`Kind` column, a table row whose column count differs from its header (malformed separator,
+dropped/extra cell, or an unescaped raw `|` — an escaped `\|` is fine), or — when grouping is
+present — a `Subsystem`/`Parent`
+that doesn't resolve to a defined `S`, an element with more than one parent, a nesting cycle, or a
+membership chain more than `MAX_DEPTH` subsystem levels deep (default 3). When an undefined ID is
+actually a definition row that glued the name into the ID cell (`| **UC1** Search… |` or
+`| **C8 Upstream** |`), the report names that specific cause. Content inside ```` ``` ```` code
+fences is ignored by both the validator and the diagram parser, so verbatim examples (Mermaid,
+shell, a sample table) never trip these checks. It does **not** yet check anchor existence or that
+edge tables carry the `Why` column — those remain candidate additions.
 
 ## Source-link pinning
 

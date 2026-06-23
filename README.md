@@ -69,6 +69,20 @@ report, the history, and the deletion record in one file
 ([change-impact](method/change-impact.md)). Accept is mechanical — it applies the
 report you reviewed, with no fresh analysis.
 
+### Optional shortcut: the `/coyodex` skill
+
+If you use Claude Code, install the bundled skill once so you can drive all three
+steps by intent (e.g. *"generate a project map with the coyodex method"*) instead
+of pasting the prompts above. It ships in [`skill/coyodex`](skill/coyodex) — symlink
+it into your personal skills directory:
+
+```
+ln -s "$(pwd)/skill/coyodex" ~/.claude/skills/coyodex
+```
+
+The skill locates this clone, picks Build / Analyze / Accept from what you asked,
+and then follows `method.md` — the method stays the single source of truth.
+
 ## The workflow
 
 ```

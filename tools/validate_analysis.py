@@ -11,6 +11,13 @@ for diagrams/tooling:
   4. Grouping, when present (no-op when absent): every Subsystem/Parent value
      resolves to a defined `S`; at most one parent per element; no nesting
      cycles; nesting depth <= MAX_DEPTH.
+  5. Table shape: every row of a markdown table (header / separator / data)
+     carries the same column count — catches the malformed-separator / dropped-cell
+     class that silently breaks parsing and diagram rendering.
+
+When an id reads as undefined because its definition row glued extra text into the
+ID cell (`| **UC1** Search… |` instead of `| **UC1** | Search… |`), the report names
+that specific cause instead of the generic "undefined ID".
 
 Exit 0 = clean, 1 = problems found.
 
@@ -23,7 +30,32 @@ import sys
 from pathlib import Path
 
 # Grammar (regexes, membership rule) lives in schema_v1, shared with the parser — one grammar.
-from schema_v1 import DEF_BOLD, DEF_GP, ID_TOKEN, MAX_DEPTH, membership_ids
+from schema_v1 import (
+    DEF_BOLD,
+    DEF_GP,
+    GLUED_DEF,
+    GLUED_DEF_INNER,
+    ID_TOKEN,
+    MAX_DEPTH,
+    membership_ids,
+    strip_fences,
+)
+
+
+def is_separator_row(row: str) -> bool:
+    """A markdown table separator like ``|---|:--:|`` — dashes/colons/pipes/space only."""
+    return "-" in row and bool(re.fullmatch(r"[\s|:\-]+", row.strip()))
+
+
+def split_cells(row: str) -> list[str]:
+    r"""Stripped cells of a table row. Escaped pipes (``\|`` — the schema's sanctioned way to put a
+    literal pipe inside a cell) are neutralised first so they don't read as column separators."""
+    return [c.strip() for c in row.replace(r"\|", "").strip().strip("|").split("|")]
+
+
+def n_columns(row: str) -> int:
+    """Cell count of a table row."""
+    return len(split_cells(row))
 
 
 def collect_defined(text: str) -> tuple[dict[str, int], list[str]]:
@@ -76,7 +108,7 @@ def check_roles_kind(text: str) -> list[str]:
         s = line.strip()
         if not s.startswith("|"):
             continue
-        cells = [c.strip().lower() for c in s.strip("|").split("|")]
+        cells = [c.lower() for c in split_cells(s)]
         if cells and cells[0] == "role":  # the Roles table header row
             if "kind" not in cells:
                 return ["Roles table is missing the required 'Kind' column (human/service)"]
@@ -103,17 +135,17 @@ def collect_parents(text: str) -> tuple[dict[str, str], list[str]]:
             i += 1
         if len(block) < 2:
             continue
-        headers = [c.strip().lower() for c in block[0].strip().strip("|").split("|")]
+        headers = [c.lower() for c in split_cells(block[0])]
         if "subsystem" not in headers and "parent" not in headers:
             continue
         for row in block[1:]:
-            if "-" in row and re.fullmatch(r"[\s|:-]+", row.strip()):
+            if is_separator_row(row):
                 continue  # separator row
             cm = DEF_BOLD.match(row)
             if not cm:
                 continue
             child = cm.group(1)
-            cells = [c.strip() for c in row.strip().strip("|").split("|")]
+            cells = split_cells(row)
             ids = membership_ids(child, cells, headers)
             if len(ids) > 1:
                 problems.append(f"{child} has multiple parents: {', '.join(ids)}")
@@ -150,12 +182,62 @@ def check_hierarchy(parents: dict[str, str], defined: set[str]) -> list[str]:
     return problems
 
 
+def find_glued_ids(text: str) -> set[str]:
+    """IDs whose definition row glued the name into the ID cell — either outside the bold
+    (`| **UC1** Search… |`) or inside it (`| **C8 Upstream** |`). Such a row is not a clean
+    definition, so the id reads as undefined elsewhere — this lets the report name the real
+    cause instead of the generic 'undefined ID'."""
+    out: set[str] = set()
+    for line in text.splitlines():
+        for pat in (GLUED_DEF, GLUED_DEF_INNER):
+            m = pat.match(line)
+            if m:
+                out.add(m.group(1))
+    return out
+
+
+def check_table_shape(text: str) -> list[str]:
+    """Every row of a markdown table must have the header's column count. A table = a run of
+    `|`-lines whose 2nd line is a separator; non-table pipe content is skipped (no false
+    positives). Catches malformed separators and dropped/extra cells that break parsing.
+    Note: a block with NO separator row is treated as non-table and skipped — so a *deleted*
+    separator is not caught here (markdown wouldn't render it as a table either); the check
+    catches a dropped/added cell in an otherwise-well-formed table. Run on fence-free text."""
+    problems: list[str] = []
+    lines = text.splitlines()
+    i, n = 0, len(lines)
+    while i < n:
+        if not lines[i].lstrip().startswith("|"):
+            i += 1
+            continue
+        start = i
+        block: list[str] = []
+        while i < n and lines[i].lstrip().startswith("|"):
+            block.append(lines[i])
+            i += 1
+        if len(block) < 2 or not is_separator_row(block[1]):
+            continue  # not a real table (no separator on the 2nd line)
+        expected = n_columns(block[0])
+        for offset, row in enumerate(block[1:], start=1):
+            got = n_columns(row)
+            if got != expected:
+                what = "separator" if offset == 1 else "row"
+                problems.append(
+                    f"Table at line {start + 1}: {what} (line {start + offset + 1}) has "
+                    f"{got} columns, header has {expected}"
+                )
+    return problems
+
+
 def main() -> int:
     path = Path(sys.argv[1] if len(sys.argv) > 1 else ".coyodex/project-map.md")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
-    text = path.read_text(encoding="utf-8")
+    # Parse from fence-free text: verbatim examples inside ``` code fences (Mermaid, shell, a
+    # teaching example of a malformed table) are not live content — don't read them as tables,
+    # definitions, or references.
+    text = strip_fences(path.read_text(encoding="utf-8"))
 
     defined_counts, gp_order = collect_defined(text)
     defined = set(defined_counts)
@@ -174,13 +256,23 @@ def main() -> int:
     ref_to_check = referenced if grouping_present else {r for r in referenced if not r.startswith("S")}
     unresolved = sorted(ref_to_check - defined)
     if unresolved:
-        problems.append(f"References to undefined IDs: {', '.join(unresolved)}")
+        glued = find_glued_ids(text)
+        glued_unresolved = [u for u in unresolved if u in glued]
+        truly_undefined = [u for u in unresolved if u not in glued]
+        if glued_unresolved:
+            problems.append(
+                "Definition rows with text glued into the ID cell — put the ID alone in the "
+                f"first cell (e.g. `| **UC1** | name… |`): {', '.join(glued_unresolved)}"
+            )
+        if truly_undefined:
+            problems.append(f"References to undefined IDs: {', '.join(truly_undefined)}")
 
     missing_touches = check_gp_touches(text, gp_order)
     if missing_touches:
         problems.append(f"Golden Path steps missing a Touches: line: {', '.join(missing_touches)}")
 
     problems.extend(check_roles_kind(text))
+    problems.extend(check_table_shape(text))
 
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column.
     problems.extend(parent_problems)

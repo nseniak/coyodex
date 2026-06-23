@@ -86,6 +86,103 @@ def make_cycle_map() -> str:
     )
 
 
+def make_glued_id_map() -> str:
+    """A Use-cases definition row with the id glued to the name (`| **UC1** Search… |`) — the
+    real regression from the mercatus build: the id reads as undefined, not actually missing."""
+    return (
+        "## Use cases\n"
+        "| ID | Use case | Actor | Trigger → Outcome |\n"
+        "|---|---|---|---|\n"
+        "| **UC1** Search a product | Shopper | types -> list |\n\n"
+        "## Golden Path\n"
+        "**GP1 — Search** *(UC1)*\n"
+        "STORY: x\n"
+        "`Touches:` UC1\n"
+    )
+
+
+def make_bad_columns_map() -> str:
+    """T1 whose separator has one more column than the header — the malformed-separator class."""
+    return (
+        "## T1\n"
+        "| ID | Component | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|---|\n"  # 6 separator cols vs 5 header cols
+        "| **C1** | App | x | f |  |\n"
+    )
+
+
+_VALID_HEAD = (
+    "## Use cases\n"
+    "| ID | Use case | Actor | Trigger → Outcome |\n"
+    "|---|---|---|---|\n"
+    "| **UC1** | Search | Shopper | types -> list |\n\n"
+    "## Golden Path\n"
+    "**GP1 — Search** *(UC1)*\n"
+    "STORY: x\n"
+    "`Touches:` UC1\n\n"
+)
+
+
+def make_fenced_ragged_table_map() -> str:
+    """A valid map plus a fenced block whose example table is ragged — must NOT be parsed."""
+    return _VALID_HEAD + (
+        "## Example output\n"
+        "```\n"
+        "| Name | Score |\n"
+        "|---|---|\n"
+        "| alice | 10 | extra |\n"   # 3 cols vs 2 — but it's inside a fence
+        "```\n"
+    )
+
+
+def make_fenced_dup_def_map() -> str:
+    """C1 defined once for real, shown a 2nd time inside a fence — not a duplicate (bug class)."""
+    return (
+        "## T1\n"
+        "| ID | Component | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|\n"
+        "| **C1** | App | x | f |  |\n\n"
+        "## How a row looks\n"
+        "```\n"
+        "| **C1** | App | x | f |  |\n"  # verbatim example, must be ignored
+        "```\n"
+    )
+
+
+def make_escaped_pipe_map() -> str:
+    r"""A cell uses the schema-sanctioned ``\|`` escape — must not inflate the column count."""
+    return (
+        "## T3\n"
+        "| Action | Command | Source |\n"
+        "|---|---|---|\n"
+        "| grep | `a \\| b` | [f](f) |\n"
+    )
+
+
+def make_glued_inner_map() -> str:
+    """Id and name share the bold (`**C8 Upstream**`) — the glued hint must still fire."""
+    return (
+        "## T1\n"
+        "| ID | Component | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|\n"
+        "| **C1** | App | x | f | C8 |\n\n"
+        "## Notes\n"
+        "The upstream is C8.\n"
+        "| **C8 Upstream** | the upstream | x | f |  |\n"
+    )
+
+
+def make_fenced_node_map() -> str:
+    """A real C1 plus a fenced example mentioning C9 — the parser must not graph C9."""
+    return (
+        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|---|\n| **C1** | Real | S1 | x | f |  |\n\n"
+        "## S\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n| **S1** | A | x |  | a | V |\n\n"
+        "## Example\n```\n| **C9** | Fake | S1 | x | f |  |\n```\n"
+    )
+
+
 def run_validator(md: str) -> tuple[int, str]:
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write(md)
@@ -158,6 +255,64 @@ def test_validator_guard_fires_on_missing_membership() -> None:
 def test_validator_catches_cycle() -> None:
     code, out = run_validator(make_cycle_map())
     assert code == 1 and "cycle" in out.lower(), out
+
+
+def test_validator_hints_glued_id_cell() -> None:
+    # The undefined id is reported as a glued-ID-cell mistake, not a generic "undefined ID".
+    code, out = run_validator(make_glued_id_map())
+    assert code == 1, out
+    assert "glued into the ID cell" in out, out
+    assert "References to undefined IDs" not in out, out  # not the generic message
+
+
+def test_validator_catches_column_mismatch() -> None:
+    code, out = run_validator(make_bad_columns_map())
+    assert code == 1 and "columns" in out, out
+
+
+def test_validator_clean_maps_pass_table_shape() -> None:
+    # The known-good maps must stay shape-clean (regression guard for false positives).
+    for md in (make_grouped_map("proper"), make_grouped_map("agent"), make_ungrouped_map()):
+        code, out = run_validator(md)
+        assert code == 0, out
+
+
+def test_validator_ignores_ragged_table_in_fence() -> None:
+    # A ragged example table inside a ``` fence must not trigger a column-count failure.
+    code, out = run_validator(make_fenced_ragged_table_map())
+    assert code == 0, out
+
+
+def test_validator_ignores_definition_in_fence() -> None:
+    # A definition row shown verbatim inside a fence is not a real (duplicate) definition.
+    code, out = run_validator(make_fenced_dup_def_map())
+    assert code == 0, out
+
+
+def test_validator_allows_escaped_pipe_in_cell() -> None:
+    # `\|` is the schema's sanctioned literal pipe; it must not count as a column separator.
+    code, out = run_validator(make_escaped_pipe_map())
+    assert code == 0, out
+
+
+def test_validator_hints_glued_id_inside_bold() -> None:
+    code, out = run_validator(make_glued_inner_map())
+    assert code == 1, out
+    assert "glued into the ID cell" in out, out
+
+
+def test_parser_ignores_fenced_nodes() -> None:
+    # The graph parser must also skip fenced examples — no phantom C9 node from the example.
+    g = parse_map(make_fenced_node_map())
+    assert "C1" in g["nodes"] and "C9" not in g["nodes"], list(g["nodes"])
+
+
+def test_template_validates_clean() -> None:
+    # The template is what the agent copies to start a map, so it must stay schema-correct
+    # (resolvable refs, ID-alone cells, consistent columns). Guards against template drift.
+    template = TOOLS.parent / "method" / "templates" / "project-map.template.md"
+    code, out = run_validator(template.read_text(encoding="utf-8"))
+    assert code == 0, out
 
 
 def test_render_produces_self_contained_html() -> None:

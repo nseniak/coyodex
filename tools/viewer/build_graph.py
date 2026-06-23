@@ -18,7 +18,14 @@ from typing import TypedDict
 # Shared schema-v1 grammar lives in tools/schema_v1.py (one grammar for validator + parser). This
 # file sits in tools/viewer/, so put the sibling tools/ dir on the path to import it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from schema_v1 import DEF_GP, DEF_ID_CELL, ID_TOKEN, membership_col, membership_ids  # noqa: E402
+from schema_v1 import (  # noqa: E402
+    DEF_GP,
+    DEF_ID_CELL,
+    ID_TOKEN,
+    membership_col,
+    membership_ids,
+    strip_fences,
+)
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href
 COMMIT = re.compile(r"\*\*Commit:\*\*\s*`([^`]+)`")
@@ -242,7 +249,8 @@ def parse_roles(tables: list[tuple[list[str], list[list[str]]]]) -> list[dict[st
 
 
 def build(md_path: Path) -> GraphDict:
-    text = md_path.read_text(encoding="utf-8")
+    # Ignore fenced code blocks (Mermaid / shell / teaching examples) — they are not live content.
+    text = strip_fences(md_path.read_text(encoding="utf-8"))
     lines = text.splitlines()
     tables = _tables(lines)
     nodes, edges = parse_nodes_edges(tables)
@@ -272,7 +280,7 @@ def _col(row: list[str], ci: dict[str, int], key: str) -> str:
 
 def build_diff(md_path: Path) -> DiffDict:
     """Parse a change-impact report into per-element classifications + new edges."""
-    text = md_path.read_text(encoding="utf-8")
+    text = strip_fences(md_path.read_text(encoding="utf-8"))
     lines = text.splitlines()
     changes: list[DiffChange] = []
     new_edges: list[dict[str, str]] = []

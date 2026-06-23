@@ -32,7 +32,7 @@
 
 | Role | Kind | What they want | Use cases they drive |
 |---|---|---|---|
-| **<Role>** | human | <goal> | UC1, UC2 |
+| **<Role>** | human | <goal> | UC1 |
 
 ---
 
@@ -55,13 +55,13 @@ mechanics are traced. Each step ends with a `Touches:` line.
 **GP1 — <title>** *(UC1)*
 STORY: <…>
 UNDER THE HOOD: <… [file](path#L1) …>
-`Touches:` C1, C2 · D1 · E1, E2
+`Touches:` C1, C2 · D1 · E1
 
 ### Golden Path ↔ entity traceability
 
 | Step | T1 components | T2 deps | T5 entities |
 |---|---|---|---|
-| GP1 <title> | C1, C2 | D1 | E1, E2 |
+| GP1 <title> | C1, C2 | D1 | E1 |
 
 ---
 
@@ -82,7 +82,8 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 | ID | Component | Subsystem | Purpose | Entry point | Depends on |
 |---|---|---|---|---|---|
-| **C1** | <component> | S1 | <purpose> | [file](path#L1) | C2, C3 |
+| **C1** | <component> | S1 | <purpose> | [file](path#L1) | C2 |
+| **C2** | <component> | S1 | <purpose> | [file](path#L1) |  |
 
 ### T1 backbone — component dependency edges (the diagram source)
 
@@ -108,6 +109,16 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ---
 
+## T4 — Entry points
+
+<!-- Every way the system is entered: HTTP route, CLI, cron, queue consumer, exported fn, boot. -->
+
+| Kind | Trigger | Code entity | Component |
+|---|---|---|---|
+| <kind> | <trigger> | [entity](path#L1) | C1 |
+
+---
+
 ## T5 — Domain model
 
 | ID | Entity | Meaning | Defined in | Stored where |
@@ -116,11 +127,69 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ---
 
+## T6 — Use-case flows
+
+<!-- The inside view of a use case (its outside view is the Journey). `Uses` = the elements +
+     role per step; it is the most-used slice of the backbone edge list (don't restate Why here). -->
+
+| Flow | Steps | Uses (element + role) | Key files |
+|---|---|---|---|
+| UC1 <flow> | <step → step → step> | C1, D1, E1 | [file](path#L1) |
+
+---
+
+## Operational dimensions — the standard core four
+
+### Deployment & topology
+
+| Unit | Runs on | Exposed as | Config source |
+|---|---|---|---|
+| <unit> | <host/runtime> | <port/route> | [file](path) |
+
+### Observability
+
+| Signal | Where emitted | Where viewed | Alerts |
+|---|---|---|---|
+| <signal> | [file](path#L1) | <dashboard/log> | <alert or —> |
+
+### Security & auth
+
+<!-- Trust boundaries are often inferred — flag them. -->
+
+| Surface | Who can reach | Auth check | Risk note |
+|---|---|---|---|
+| <surface> | <caller> | [check](path#L1) | <risk> |
+
+### Config & environments
+
+<!-- Secrets: name where they live, never the value. -->
+
+| Key | Purpose | Default | Per-env / secret? |
+|---|---|---|---|
+| <KEY> | <purpose> | <default> | <env / secret> |
+
+---
+
 ## Relationships — backbone edge list
 
 | From | Verb | To | Why | Where |
 |---|---|---|---|---|
 | <source> | <verb> | <target> | <why source needs target — terse> | [file](path#L1) |
+
+---
+
+## Test completeness — gaps against the map
+
+<!-- Measure against the MAP, not line %. Walk the inventory (use cases / journeys / T4 entry
+     points / failure modes / invariants / state transitions / critical branches) and ask "is
+     there a test that exercises it?". Lead with untested critical paths (money / auth / data-loss
+     / irreversible). Run the suite with a coverage tool (running beats reading); confidence
+     ladder: reading tests = inferred, running with coverage = verified, surviving mutation =
+     strongest. Output the risk-ranked gap table, NOT a single percentage. -->
+
+| Target | Tested? | Test(s) | Gap / risk | Confidence |
+|---|---|---|---|---|
+| UC1 <target> | yes / partial / no | [test](path#L1) | <gap or risk> | inferred / verified |
 
 ---
 

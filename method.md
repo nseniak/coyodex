@@ -172,10 +172,33 @@ synthesis → parallel trace.**
   agents return rows (structured output), not file dumps. The final reconcile (dedup
   names, verify cross-agent edges against code) is not delegated.
 
+**Harvest-prompt template (Phase 1).** Give every harvest agent the same prompt skeleton —
+only the file list and the background blurb change per agent. Reusing one contract is what makes
+each agent return the same row shapes with the same verified/inferred discipline, which keeps the
+barrier synthesis clean. Fill the «angle-bracket» parts:
+
+> You are harvesting «structural / operational / build» facts for a coyodex codebase map.
+> Read these files completely, then return ONLY the rows below — do **not** write any files.
+>
+> **Files:** «absolute paths this agent owns; list a directory first, then read each file».
+> **Background:** «what the main agent already learned about this slice, handed down so you
+> don't re-derive it».
+>
+> For every row give `file:line` evidence and a confidence tag (**verified** = read in code /
+> **inferred** = guessed). Use only the schema-v1 IDs and edge verbs; reference nodes, never
+> invent them. Return these sections as markdown tables: «the coyodex tables this slice fills —
+> e.g. COMPONENTS (T1), ENTRY POINTS (T4), DEPENDENCIES (T2), DOMAIN MODEL (T5), and any
+> operational rows (deployment / observability / security / config)».
+
 **Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
 root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
-it was built at (the baseline pin). Run [`tools/validate_analysis.py`](tools/validate_analysis.py)
-after each generate/patch and fix the map until it passes. **Then render the diagrams** — once the
+it was built at (the baseline pin). **Start from the template** —
+[`method/templates/project-map.template.md`](method/templates/project-map.template.md): copy it
+and fill the cells in place. It already carries every standard section with schema-correct table
+shapes (each definition's ID **alone in its own first cell**, `| **C1** | name… |`), so the map
+passes the validator on the first write instead of being reshaped afterward. Run
+[`tools/validate_analysis.py`](tools/validate_analysis.py) after each generate/patch and fix the
+map until it passes. **Then render the diagrams** — once the
 map validates, generate the self-contained HTML viewer next to it:
 
 ```

@@ -19,11 +19,37 @@ DEF_BOLD = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|E\d+|S\d+)\*\*\s*\|")
 # A bold id anywhere in a cell — a parser uses this to find a row's defining id.
 DEF_ID_CELL = re.compile(r"\*\*(UC\d+|C\d+|D\d+|E\d+|S\d+)\*\*")
 
+# A bold id at the START of a first cell but with extra text glued after it — i.e. NOT a clean
+# `| **C1** |` definition. Id and name sharing the cell is the most common reason an id reads as
+# "undefined"; the validator uses these to name that exact cause. Two glue forms:
+#   GLUED_DEF       — name OUTSIDE the bold:  `| **UC1** Search… |`
+#   GLUED_DEF_INNER — name INSIDE the bold:   `| **C8 Upstream** |`
+GLUED_DEF = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|E\d+|S\d+)\*\*\s+[^|]")
+GLUED_DEF_INNER = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|E\d+|S\d+)\s+[^*|]+\*\*")
+
 # A Golden Path step heading: `**GP1 — ...`.
 DEF_GP = re.compile(r"^\*\*(GP\d+)\s+—")
 
 # Grouping: membership is ONE parent pointer carried on the child.
 MAX_DEPTH = 3  # max subsystem levels (parent-pointer hops) in any membership chain
+
+
+def strip_fences(text: str) -> str:
+    """Blank out fenced code blocks (``` or ~~~), keeping the line COUNT so reported line numbers
+    stay accurate. Both consumers (validator, parser) read tables/IDs from prose; a verbatim
+    example inside a code fence (a Mermaid diagram, a shell snippet, a teaching example of a
+    *malformed* table) is not live content and must not be parsed as a table or as ID
+    definitions/references. Shared here so the two tools strip fences identically — one grammar."""
+    out: list[str] = []
+    in_fence = False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            out.append("")  # blank the fence marker line too
+            continue
+        out.append("" if in_fence else line)
+    return "\n".join(out)
 
 
 def membership_col(headers_lower: list[str], child_id: str) -> int | None:
