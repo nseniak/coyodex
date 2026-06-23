@@ -137,23 +137,78 @@ def gen_container_mermaid(graph: GraphDict) -> str:
     return "\n".join(lines)
 
 
-def subsystem_component_mermaids(graph: GraphDict) -> dict[str, str]:
-    """Subsystem card: components inside each top-level subsystem, their internal wiring, and the
-    deps they touch (Q1=B — the card shows the subsystem's full content, not just bare boxes)."""
-    out: dict[str, str] = {}
-    for nid, node in graph["nodes"].items():
-        if str(node["kind"]) != "subsystem" or _parent_of(graph, nid) is not None:
-            continue
-        members = {cid for cid, n in graph["nodes"].items()
-                   if str(n["kind"]) == "component" and _top_subsystem(graph, cid) == nid}
-        out[nid] = gen_mermaid(graph, None, only=members)
-    return out
-
-
 def _components_of(graph: GraphDict, sid: str) -> list[tuple[str, str]]:
     """(id, name) of every component whose top-level subsystem is `sid`."""
     return [(cid, str(n["name"])) for cid, n in graph["nodes"].items()
             if str(n["kind"]) == "component" and _top_subsystem(graph, cid) == sid]
+
+
+def _component_subgraph(graph: GraphDict, sid: str, indent: str = "  ") -> list[str]:
+    """Mermaid lines framing a subsystem's components as `subgraph <sid>["name"] … end`. Shared by
+    the subsystem card and the edge card so a subsystem always reads as a labelled frame (matching
+    the base-map subsystem boxes)."""
+    open_b, close_b = SHAPE["component"]
+    out = [f'{indent}subgraph {sid}["{_safe_label(str(graph["nodes"][sid]["name"]))}"]']
+    for cid, name in _components_of(graph, sid):
+        out.append(f"{indent}  {cid}{open_b}{_safe_label(name)}{close_b}:::cy-{cid}")
+        out.append(f"{indent}  class {cid} component")
+    out.append(f"{indent}end")
+    return out
+
+
+def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
+    """Subsystem card: `sid` drawn as a frame around its components (with their internal wiring),
+    the deps those components touch drawn outside the frame, AND the subsystem's neighbourhood —
+    every other subsystem its components link to/from is drawn as a collapsed box, with one
+    unlabelled arrow per (component, neighbour) pair (Q2-style aggregation, no count). A component
+    inside the frame points to the neighbour box (outbound) or is pointed at by it (inbound). The
+    viewer turns a click on such an arrow into the matching edge card, and a click on a neighbour
+    box into that subsystem's own card."""
+    members = {cid for cid, _ in _components_of(graph, sid)}
+    deps: set[str] = set()
+    neighbours: set[str] = set()
+    cross: set[tuple[str, str]] = set()  # rendered (src, dst): a component and a neighbour-subsystem box
+    for e in graph["edges"]:
+        s, d = str(e["src"]), str(e["dst"])
+        ks, kd = str(graph["nodes"].get(s, {}).get("kind")), str(graph["nodes"].get(d, {}).get("kind"))
+        if s in members and kd == "dep":
+            deps.add(d)
+        if d in members and ks == "dep":
+            deps.add(s)
+        if s in members and kd == "component":          # outbound: member -> component elsewhere
+            td = _top_subsystem(graph, d)
+            if td and td != sid:
+                neighbours.add(td)
+                cross.add((s, td))
+        if d in members and ks == "component":          # inbound: component elsewhere -> member
+            ts = _top_subsystem(graph, s)
+            if ts and ts != sid:
+                neighbours.add(ts)
+                cross.add((ts, d))
+    keep = members | deps  # the set whose internal (labelled) edges are drawn
+    lines = ["flowchart TB", *_component_subgraph(graph, sid)]
+    for nb in sorted(neighbours):  # collapsed neighbour-subsystem boxes
+        lines.append(f'  {nb}["{_safe_label(str(graph["nodes"][nb]["name"]))}"]:::cy-{nb}')
+        lines.append(f"  class {nb} subsystem")
+    open_b, close_b = SHAPE["dep"]
+    for did in sorted(deps):  # deps belong to no subsystem — draw them outside the frame
+        lines.append(f'  {did}{open_b}{_safe_label(str(graph["nodes"][did]["name"]))}{close_b}:::cy-{did}')
+        lines.append(f"  class {did} dep")
+    for src, verb, dst in _diagram_edges(graph, None, keep):  # internal + dep edges (labelled)
+        lines.append(f"  {src} -->|{verb}| {dst}")
+    for src, dst in sorted(cross):  # neighbourhood arrows (unlabelled; click -> edge card)
+        lines.append(f"  {src} --> {dst}")
+    lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
+    lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
+    lines.append("  classDef subsystem fill:#fef3c7,stroke:#b45309,color:#7c2d12;")
+    return "\n".join(lines)
+
+
+def subsystem_component_mermaids(graph: GraphDict) -> dict[str, str]:
+    """One subsystem-card diagram per top-level subsystem (see gen_subsystem_card_mermaid)."""
+    return {nid: gen_subsystem_card_mermaid(graph, nid)
+            for nid, node in graph["nodes"].items()
+            if str(node["kind"]) == "subsystem" and _parent_of(graph, nid) is None}
 
 
 def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
@@ -161,14 +216,7 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
     (Q2=A), with ONLY the a->b component edges drawn — no internal edges, no deps, no edges to
     other subsystems. Node ids + `src -->|verb| dst` match the component view, so the viewer's
     edge bridge resolves an in-card arrow to its real component edge."""
-    open_b, close_b = SHAPE["component"]
-    lines = ["flowchart LR"]
-    for sid in (a, b):
-        lines.append(f'  subgraph {sid}["{_safe_label(str(graph["nodes"][sid]["name"]))}"]')
-        for cid, name in _components_of(graph, sid):
-            lines.append(f"    {cid}{open_b}{_safe_label(name)}{close_b}:::cy-{cid}")
-            lines.append(f"    class {cid} component")
-        lines.append("  end")
+    lines = ["flowchart LR", *_component_subgraph(graph, a), *_component_subgraph(graph, b)]
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
         if _top_subsystem(graph, s) == a and _top_subsystem(graph, d) == b:

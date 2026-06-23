@@ -288,12 +288,18 @@ def test_subsystem_card_keeps_internal_wiring_and_deps() -> None:
     # deps they touch — but never a sibling subsystem's component.
     by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_card_map()))
     s1 = by_sub["S1"]
+    assert "subgraph S1[" in s1                         # the subsystem reads as a labelled frame
     assert "C1" in s1 and "C3" in s1                    # both S1 components present
     assert "C1 -->|routes| C3" in s1                    # internal wiring kept
-    assert "C2" not in s1                               # sibling-subsystem component excluded
+    assert "class S2 subsystem" in s1                   # the neighbour S2 drawn as a collapsed box
+    assert "C1 --> S2" in s1 and "C3 --> S2" in s1      # cross arrows: component -> neighbour box (no label)
+    assert "C2" not in s1                               # the sibling's component itself is NOT drawn
     s2 = by_sub["S2"]
+    assert "subgraph S2[" in s2
     assert "C2" in s2 and "D1" in s2                    # Q1=B keeps the dep the component touches
-    assert "C2 -->|reads| D1" in s2
+    assert "C2 -->|reads| D1" in s2                     # ...with its component->dep edge
+    assert "class S1 subsystem" in s2                   # the neighbour S1 box
+    assert "S1 --> C2" in s2                            # inbound cross arrow: neighbour box -> member
 
 
 def test_edge_card_has_both_subsystems_and_only_cross_edges() -> None:

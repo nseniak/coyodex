@@ -48,11 +48,17 @@ python3 -m http.server 8753 -d .coyodex   # → http://localhost:8753/project-ma
 - **Context** — the system, its actors (Roles, drawn human vs service), and external deps.
 - **Subsystems** *(when the map groups components)* — the Container altitude: subsystem boxes with
   inter-subsystem edges **derived** from the component edge list (count-labelled). The map never
-  re-lays-out — drill-down opens in a floating **card** over the frozen map: click a box to see that
-  subsystem's components and their internal wiring; click an `S→S` arrow to see the two subsystems
-  framed with just the concrete component edges that cross between them. In-card arrows behave like
-  the Components view (click for `file:line`); the side panel shows the subsystem(s) you opened, with
-  the clicked box/arrow glowing on the map behind. Close with ×, Esc, or a click on the map.
+  re-lays-out — drill-down opens in a floating **card** over the frozen map:
+  - Click a **box** → its *neighbourhood* card: the subsystem framed around its components (with
+    their internal wiring + the deps they touch outside the frame), and every other subsystem its
+    components link to/from drawn as a collapsed box, joined by unlabelled component→box arrows.
+    Click a neighbour box to re-center the card on it (walk the graph); click a cross arrow to open
+    that pair's edge card.
+  - Click an `S→S` **arrow** → its edge card: the two subsystems framed with just the concrete
+    component edges that cross between them.
+  - In-card component arrows behave like the Components view (click for `file:line`); the side panel
+    shows the subsystem(s) you opened, with the clicked box/arrow glowing on the map behind. Close
+    with ×, Esc, or a click on the map.
 - **Components** — every component + its verbed edges; click a node/edge for details + `file:line`.
 - **Diff overlay** — pass a change-impact report to recolor added/modified/deleted nodes and the
   elements they ripple to, with a baseline⇄diff toggle.
@@ -71,8 +77,8 @@ python3 tools/tests/test_grouping.py     # stdlib runner; or: pytest tools/tests
 - **Source links** show as `file:line` text in the panel; turning them into clickable blob URLs
   pinned to the map's commit SHA is a follow-up.
 - **Subsystem drill-down opens a floating card** over the frozen base map (one card at a time)
-  rather than expanding boxes in place — so the Subsystems map never re-lays-out. The trade is that
-  a single subsystem's card shows it without its outside wiring; cross-subsystem wiring lives in the
-  edge cards, and full multi-hop tracing in the Components view.
+  rather than expanding boxes in place — so the Subsystems map never re-lays-out. Neighbours are
+  shown collapsed (one box per subsystem, aggregated arrows), so a hub subsystem stays readable;
+  full multi-hop tracing still lives in the Components view.
 - The Python side (parser + validator) is **stdlib-only**; the only third-party dependency is the
   client-side JS above.

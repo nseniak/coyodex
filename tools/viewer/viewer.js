@@ -221,7 +221,9 @@ function bindNodes(scene, onActivate) {
   scene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id]) return;
-    scene.nodeEls[id] = el;
+    // Neighbour-subsystem boxes (only in a subsystem card) stay out of the focus set, so selecting a
+    // component dims the internal neighbourhood — not the external boxes. They're still clickable.
+    if (GRAPH.nodes[id].kind !== 'subsystem') scene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
     // Hover affordance — skip while this node is the active selection, so HILITE wins.
     el.addEventListener('mouseenter', () => { if (scene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
@@ -258,40 +260,48 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff) {
   }
 }
 
-// Edges in the select model: paths and labels are emitted in the same order, so zip them by index.
-// `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn } or null to skip.
-function bindEdges(scene, resolve) {
-  const paths = [...scene.root.querySelectorAll('.edgePaths path.flowchart-link')];
-  const labels = [...scene.root.querySelectorAll('.edgeLabels > g.edgeLabel')];
+// Iterate a diagram's edges, pairing each path with its label by index. Mermaid emits one label
+// element per edge in path order (an empty one for an unlabelled arrow), so the index pairing stays
+// aligned even when some arrows carry no label. `fn(path, label, match)` gets the L_<src>_<dst>_<i>.
+function eachEdge(root, fn) {
+  const paths = [...root.querySelectorAll('.edgePaths path.flowchart-link')];
+  const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
   paths.forEach((p, i) => {
     const m = p.id.match(/L_([^_]+)_([^_]+)_(\d+)$/);
-    if (!m) return;
+    if (m) fn(p, labels[i] || null, m);
+  });
+}
+
+// Wire one edge for the SELECT model (highlight + focus + panel) — context, components, in-card edges.
+function bindSelectEdge(scene, p, label, e, selKey, showFn) {
+  const hoverOn = () => { if (scene.selectedKey !== selKey) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
+  const hoverOff = () => { if (scene.selectedKey !== selKey) { p.style.filter = ''; if (label) label.style.filter = ''; } };
+  const onClick = (ev) => {
+    if (isDrag(ev)) return;  // tail of a drag-pan, not a real click
+    ev.stopPropagation();
+    hoverOff();  // drop the hover glow before (de)selecting, so it can't linger under HILITE
+    if (scene.selectedKey === selKey) { resetScene(scene); return; }  // click again = deselect
+    scene.selectedKey = selKey;
+    showFn(); sceneSelect(scene, () => glowEdge(p, label)); focusEdge(scene, e);
+  };
+  scene.edgeEls.push({ e, path: p, label });
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff);
+}
+
+// Wire one edge to OPEN a card on click (no in-scene selection) — base-map arrows + card cross arrows.
+// `isActive()` is true while the card this arrow opens is the current one (keeps the glow, skips hover).
+function bindOpenEdge(p, label, isActive, onOpen) {
+  const hoverOn = () => { if (!isActive()) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
+  const hoverOff = () => { if (!isActive()) { p.style.filter = ''; if (label) label.style.filter = ''; } };
+  const onClick = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); hoverOff(); onOpen(); };
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff);
+}
+
+// `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn } or null to skip.
+function bindEdges(scene, resolve) {
+  eachEdge(scene.root, (p, label, m) => {
     const r = resolve(m);
-    if (!r) return;
-    const { e, selKey, showFn } = r;
-    const label = labels[i] || null;
-    const highlight = () => {
-      p.style.setProperty('stroke', '#2563eb', 'important');
-      p.style.setProperty('stroke-width', '3px', 'important');
-      if (label) label.style.filter = HILITE;  // same glow as a selected component
-      return () => {
-        p.style.removeProperty('stroke'); p.style.removeProperty('stroke-width');
-        if (label) label.style.filter = '';
-      };
-    };
-    // Hover affordance — glow the visible line + its label; skip while this edge is selected.
-    const hoverOn = () => { if (scene.selectedKey === selKey) return; p.style.filter = HOVER; if (label) label.style.filter = HOVER; };
-    const hoverOff = () => { if (scene.selectedKey === selKey) return; p.style.filter = ''; if (label) label.style.filter = ''; };
-    const onClick = (ev) => {
-      if (isDrag(ev)) return;  // tail of a drag-pan, not a real click
-      ev.stopPropagation();
-      hoverOff();  // drop the hover glow before (de)selecting, so it can't linger under HILITE
-      if (scene.selectedKey === selKey) { resetScene(scene); return; }  // click again = deselect
-      scene.selectedKey = selKey;
-      showFn(); sceneSelect(scene, highlight); focusEdge(scene, e);
-    };
-    scene.edgeEls.push({ e, path: p, label });
-    attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff);
+    if (r) bindSelectEdge(scene, p, label, r.e, r.selKey, r.showFn);
   });
 }
 
@@ -331,34 +341,26 @@ function glowEdge(p, label) {
   };
 }
 
+let baseSubsystemEls = {};  // sid -> base-map subsystem box element (for the glow); rebuilt each container render
+
 function bindContainerBase() {
-  // subsystem boxes -> open/toggle their subsystem card
+  baseSubsystemEls = {};
+  // subsystem boxes -> open/toggle their subsystem card (remember the box so a re-center can glow it)
   diagram.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id] || GRAPH.nodes[id].kind !== 'subsystem') return;
+    baseSubsystemEls[id] = el;
     el.style.cursor = 'pointer';
     el.addEventListener('mouseenter', () => { if (openCardKey !== 'sub:' + id) el.style.filter = HOVER; });
     el.addEventListener('mouseleave', () => { if (openCardKey !== 'sub:' + id) el.style.filter = ''; });
-    el.addEventListener('click', (e) => {
-      if (isDrag(e)) return;
-      e.stopPropagation();
-      toggleSubsystemCard(id, el);
-    });
+    el.addEventListener('click', (e) => { if (isDrag(e)) return; e.stopPropagation(); toggleSubsystemCard(id); });
   });
   // inter-subsystem arrows -> open/toggle the A→B edge card
-  const paths = [...diagram.querySelectorAll('.edgePaths path.flowchart-link')];
-  const labels = [...diagram.querySelectorAll('.edgeLabels > g.edgeLabel')];
-  paths.forEach((p, i) => {
-    const m = p.id.match(/L_([^_]+)_([^_]+)_(\d+)$/);
-    if (!m) return;
+  eachEdge(diagram, (p, label, m) => {
     const a = m[1], b = m[2];
     if (!GRAPH.nodes[a] || !GRAPH.nodes[b]) return;
-    const label = labels[i] || null;
     const key = 'edge:' + a + '>' + b;
-    const hoverOn = () => { if (openCardKey !== key) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
-    const hoverOff = () => { if (openCardKey !== key) { p.style.filter = ''; if (label) label.style.filter = ''; } };
-    const onClick = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); hoverOff(); toggleEdgeCard(a, b, p, label); };
-    attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff);
+    bindOpenEdge(p, label, () => openCardKey === key, () => toggleEdgeCard(a, b, p, label));
   });
 }
 
@@ -373,9 +375,9 @@ function closeCard() {
   panel.innerHTML = EMPTY_PANEL;
 }
 
-// Render `mermaidText` into a floating card over the frozen base map. The card is its own scene
-// (Components-view interactions inside), with its own pan/zoom; `glowCleanup` un-glows the source.
-async function openCard(key, title, mermaidText, defaultPanel, glowCleanup) {
+// Render `mermaidText` into a floating card over the frozen base map. The card is its own scene with
+// its own pan/zoom; `bindScene(scene)` wires the card's interactions; `glowCleanup` un-glows the source.
+async function openCard(key, title, mermaidText, defaultPanel, glowCleanup, bindScene) {
   closeCard();
   openCardKey = key;
   baseGlowCleanup = glowCleanup;
@@ -394,8 +396,7 @@ async function openCard(key, title, mermaidText, defaultPanel, glowCleanup) {
   if (openCardKey !== key) return;
   body.innerHTML = svg;
   cardScene = makeScene(body, defaultPanel);
-  bindNodes(cardScene, (cid, cel) => selectNode(cardScene, cel, cid));
-  bindEdges(cardScene, resolveComponentEdge);  // in-card arrows behave like Components-view edges
+  bindScene(cardScene);
   defaultPanel();
   const svgEl = body.querySelector('svg');
   if (svgEl && window.svgPanZoom) {
@@ -405,21 +406,58 @@ async function openCard(key, title, mermaidText, defaultPanel, glowCleanup) {
   }
 }
 
-function toggleSubsystemCard(id, el) {
-  if (openCardKey === 'sub:' + id) { closeCard(); return; }
-  const mm = MERMAID_BY_SUB[id];
-  if (!mm) return;
-  const n = GRAPH.nodes[id];
-  openCard('sub:' + id, n.id + ' · ' + n.name, mm, () => showNode(id), glowNode(el));
+// Edge card: both subsystems framed with only the A→B component edges; in-card arrows = component edges.
+function showEdgeCard(a, b, glowCleanup) {
+  const mm = MERMAID_EDGE_CARD[a + '>' + b];
+  if (!mm) { if (glowCleanup) glowCleanup(); return; }
+  const title = GRAPH.nodes[a].name + ' → ' + GRAPH.nodes[b].name;
+  openCard('edge:' + a + '>' + b, title, mm, () => showTwoSubsystems(a, b), glowCleanup || (() => {}),
+    (scene) => {
+      bindNodes(scene, (cid, cel) => selectNode(scene, cel, cid));
+      bindEdges(scene, resolveComponentEdge);
+    });
+}
+function toggleEdgeCard(a, b, p, label) {
+  if (openCardKey === 'edge:' + a + '>' + b) { closeCard(); return; }
+  showEdgeCard(a, b, glowEdge(p, label));
 }
 
-function toggleEdgeCard(a, b, p, label) {
-  const key = 'edge:' + a + '>' + b;
-  if (openCardKey === key) { closeCard(); return; }
-  const mm = MERMAID_EDGE_CARD[a + '>' + b];
+// Subsystem card: the subsystem framed (components + internal wiring), neighbour subsystems as boxes,
+// deps outside. Component node -> its detail; neighbour box -> re-center on it; internal/dep edge ->
+// its detail; cross arrow (an endpoint is a neighbour subsystem) -> that pair's edge card.
+function openSubsystemCard(id) {
+  const mm = MERMAID_BY_SUB[id];
   if (!mm) return;
-  const title = GRAPH.nodes[a].name + ' → ' + GRAPH.nodes[b].name;
-  openCard(key, title, mm, () => showTwoSubsystems(a, b), glowEdge(p, label));
+  const el = baseSubsystemEls[id];
+  openCard('sub:' + id, GRAPH.nodes[id].name, mm, () => showNode(id), el ? glowNode(el) : (() => {}),
+    (scene) => {
+      bindNodes(scene, (nid, nel) => {
+        if (GRAPH.nodes[nid].kind === 'subsystem') toggleSubsystemCard(nid);  // walk to the neighbour
+        else selectNode(scene, nel, nid);
+      });
+      bindSubsystemCardEdges(scene, id);
+    });
+}
+function toggleSubsystemCard(id) {
+  if (openCardKey === 'sub:' + id) { closeCard(); return; }
+  openSubsystemCard(id);
+}
+
+// Edges inside a subsystem card: a cross arrow (one endpoint is a neighbour subsystem) opens that
+// pair's edge card, keeping direction; everything else is an internal/dep edge in the select model.
+function bindSubsystemCardEdges(scene, sid) {
+  eachEdge(scene.root, (p, label, m) => {
+    const a = m[1], b = m[2];
+    const aSub = GRAPH.nodes[a] && GRAPH.nodes[a].kind === 'subsystem';
+    const bSub = GRAPH.nodes[b] && GRAPH.nodes[b].kind === 'subsystem';
+    if (aSub || bSub) {
+      const pa = aSub ? a : sid, pb = bSub ? b : sid;
+      bindOpenEdge(p, label, () => false, () => showEdgeCard(pa, pb, null));
+    } else {
+      const r = resolveComponentEdge(m);
+      if (r) bindSelectEdge(scene, p, label, r.e, r.selKey, r.showFn);
+    }
+  });
 }
 
 // --- render ---------------------------------------------------------------------
