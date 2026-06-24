@@ -407,22 +407,28 @@ function resolveComponentEdge(m) {
 // --- navigation history ---------------------------------------------------------
 // A linear stack of view "states" (one per diagram-changing click); back/forward move the index.
 // Selecting a node/edge for details is NOT a navigation — it only updates the side panel.
-//   state = { kind: 'context' | 'container' | 'component' | 'subsystem' | 'edge', sid?, a?, b? }
+//   state = { kind: 'context' | 'container' | 'component' | 'subsystem' | 'edge', sid?, a?, b?, vp? }
+// vp = { zoom, pan } captured when we leave a view, so stepping back/forward through history
+// restores it exactly as it was (a fresh drill via go() has no vp yet — it fits/centers).
 let history = [];
 let hi = -1;  // index of the current state
 
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '');
 }
+function captureViewport() {  // stash the current pan/zoom on the entry we're about to leave
+  if (mainPz && hi >= 0 && history[hi]) history[hi].vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
+}
 function go(state) {
   if (hi >= 0 && stateKey(history[hi]) === stateKey(state)) return;  // already here
+  captureViewport();
   history = history.slice(0, hi + 1);  // a new branch drops any forward history
   history.push(state);
   hi = history.length - 1;
   render();
 }
-function back() { if (hi > 0) { hi -= 1; render(); } }
-function fwd() { if (hi < history.length - 1) { hi += 1; render(); } }
+function back() { if (hi > 0) { captureViewport(); hi -= 1; render(); } }
+function fwd() { if (hi < history.length - 1) { captureViewport(); hi += 1; render(); } }
 
 // --- per-state binding ----------------------------------------------------------
 function bindContext() {
@@ -587,6 +593,8 @@ async function render() {
       controlIcons: false, fit: true, center: true, minZoom: 0.01, maxZoom: 1000,
       onZoom: updateZoomLevel,
     });
+    // history revisit: restore the pan/zoom we left this view with (zoom first, then absolute pan)
+    if (s.vp) { mainPz.zoom(s.vp.zoom); mainPz.pan(s.vp.pan); }
     updateZoomLevel();
   }
   if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e)) resetScene(mainScene); });  // empty space deselects

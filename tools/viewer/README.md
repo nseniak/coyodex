@@ -52,7 +52,8 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
 - **Context** — the system, its actors (Roles, drawn human vs service), and external deps.
 - **Subsystems** *(when the map groups components)* — the Container altitude: subsystem boxes with
   inter-subsystem edges **derived** from the component edge list (count-labelled). Drilling replaces
-  the diagram **in place** (no popups) and is tracked as a back/forward **history**:
+  the diagram **in place** (no popups) and is tracked as a back/forward **history** (stepping back
+  or forward restores each view's pan/zoom as you left it):
   - Click a **box** → its *neighbourhood* view: the subsystem framed around its components (with
     their internal wiring + the deps they touch outside the frame), and every other subsystem its
     components link to/from drawn as a collapsed box, joined by unlabelled component→box arrows.
