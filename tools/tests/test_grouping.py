@@ -489,7 +489,32 @@ def test_gen_domain_mermaid_classdiagram() -> None:
     assert mm.startswith("classDiagram")
     assert 'class E1["Order"]' in mm
     assert "ObjectId id" in mm                          # attribute rendered in the box
-    assert 'E1 "1" *-- "*" E2 : contains' in mm         # composition arrow + cardinality
+    assert 'E1 "1" *-- "*" E2' in mm                    # composition arrow + cardinality
+    assert ": contains" not in mm                       # redundant structural verb is not drawn as a label
+
+
+def test_gen_domain_mermaid_resolves_embedded_entity_type() -> None:
+    # a field typed by an entity id (`mode:E2`) renders with the entity's NAME, not the raw id.
+    cards = (
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: mode:E2 · id:int\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — AuthMode**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    assert "AuthMode mode" in mm and "E2 mode" not in mm
+
+
+def test_gen_domain_mermaid_relation_labels() -> None:
+    # forward field -> plain name; reverse FK (FK→E1) -> "↩ field"; the redundant verb is dropped.
+    cards = (
+        "**E1 — Org** *(s)*\nMEANING: m\nFIELDS: id:string PK · subscription:E3\n"
+        "RELATIONS: has 1→* E2 Membership · contains 1→1 E3 Subscription\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — Membership**\nMEANING: m\nFIELDS: org_id:string FK→E1 · email:string\nSOURCE: [f](f#L2)\n\n"
+        "**E3 — Subscription**\nMEANING: m\nFIELDS: tier:string\nSOURCE: [f](f#L3)\n"
+    )
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    assert ": subscription" in mm     # forward: E1.subscription typed E3
+    assert ": ↩ org_id" in mm          # reverse: E2.org_id FK→E1
+    assert ": has" not in mm           # the redundant aggregation verb is not drawn
 
 
 def test_validator_domain_cards_clean() -> None:
@@ -539,6 +564,17 @@ def test_validator_flags_duplicate_relation_same_card() -> None:
     )
     code, out = run_validator(make_domain_map(cards))
     assert code == 1 and "twice" in out, out
+
+
+def test_validator_flags_noncanonical_relation_verb() -> None:
+    # `composedOf` is a non-canonical alias for composition — the validator demands `contains`.
+    cards = (
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "RELATIONS: composedOf 1→* E2\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "non-canonical" in out and "contains" in out, out
 
 
 def test_validator_flags_undefined_relation_target() -> None:

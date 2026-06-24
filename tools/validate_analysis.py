@@ -40,6 +40,7 @@ from schema_v1 import (
     GLUED_DEF_INNER,
     ID_TOKEN,
     MAX_DEPTH,
+    REL_ALIAS,
     iter_domain_cards,
     membership_ids,
     strip_fences,
@@ -302,6 +303,11 @@ def check_domain_cards(text: str) -> list[str]:
             if not r.ok:
                 problems.append(f"Domain card {c.id} has a malformed RELATIONS item: '{r.raw}'")
                 continue
+            if r.verb.lower() in REL_ALIAS:
+                problems.append(
+                    f"Domain card {c.id}: relation verb '{r.verb}' is a non-canonical alias — "
+                    f"use '{REL_ALIAS[r.verb.lower()]}'"
+                )
             if (r.verb, r.target) in seen_pairs:
                 problems.append(f"Domain card {c.id} declares the relation '{r.verb} … {r.target}' twice")
             seen_pairs.add((r.verb, r.target))

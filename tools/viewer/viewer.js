@@ -116,9 +116,10 @@ function showNode(id) {
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${mdInline(v)}</dd>`).join('');
   // entity attributes (T5 domain cards): `type name` + any markers (PK/FK/unique/…)
   const attrs = (n.attrs && n.attrs.length)
-    ? '<dt>Fields</dt><dd>' + n.attrs.map((a) =>
-        esc(((a.type ? a.type + ' ' : '') + (a.name || '') + (a.markers ? '  ·  ' + a.markers : '')).trim())
-      ).join('<br>') + '</dd>'
+    ? '<dt>Fields</dt><dd>' + n.attrs.map((a) => {
+        const ty = (a.type && GRAPH.nodes[a.type]) ? GRAPH.nodes[a.type].name : a.type;  // embedded entity id -> name
+        return esc(((ty ? ty + ' ' : '') + (a.name || '') + (a.markers ? '  ·  ' + a.markers : '')).trim());
+      }).join('<br>') + '</dd>'
     : '';
   const src = n.file ? `<div class="src">${n.file}${n.line ? ':' + n.line : ''}</div>` : '';
   panel.innerHTML = `<h2>${id} · ${n.name}</h2>`
@@ -474,16 +475,38 @@ function bindEdgePair() {  // both subsystems framed; arrows are component edges
 
 // classDiagram (the Domain view) emits a different SVG shape than flowchart, so it gets its own
 // node/edge finders. A class box's group id is `…-classId-E1-N` (resolved by idOf's id regex); a
-// relation path's id is `…-id_E1_E2_N` (endpoints encoded). classDiagram emits several `.edgeLabel`
-// per relation (verb twice + each cardinality), so index-pairing a label is unreliable — bind the
-// path only (its wide hit-area is clickable); the label just won't glow.
+// relation path's id is `…-id_E1_E2_N` (endpoints encoded). Its role label lives in
+// `.edgeLabels > g.edgeLabel`, one per relation in path order (empty when unlabelled) — same shape
+// as flowchart — so pair path[i] with label[i] by index (guarded by an equal-count check).
 function eachClassEdge(root, fn) {
-  for (const p of root.querySelectorAll('path.relation, .edgePaths path, g.edgePath path')) {
+  const paths = [...root.querySelectorAll('path.relation')];
+  const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
+  const aligned = labels.length === paths.length;
+  paths.forEach((p, i) => {
     const m = (p.id || '').match(/[_-](E\d+)_(E\d+)(?:[_-]|$)/);
-    if (m) fn(p, null, m[1], m[2]);
-  }
+    if (m) fn(p, aligned ? labels[i] || null : null, m[1], m[2]);
+  });
+}
+// Mermaid's classDiagram markers are oversized (an ~18-unit diamond/triangle on a 1px line) and
+// default to markerUnits="strokeWidth", so the selection highlight's 3px stroke scales them 3x.
+// Pin them to a fixed user-space size and shrink them, so they stay proportional AND steady on select.
+function fixDomainMarkers(root) {
+  const s = 0.55;
+  root.querySelectorAll('marker').forEach((m) => {
+    if (m.dataset.fixed) return;
+    m.setAttribute('refX', ((parseFloat(m.getAttribute('refX')) || 0) * s).toFixed(2));
+    m.setAttribute('refY', ((parseFloat(m.getAttribute('refY')) || 0) * s).toFixed(2));
+    m.setAttribute('markerUnits', 'userSpaceOnUse');
+    m.setAttribute('markerWidth', '11');
+    m.setAttribute('markerHeight', '11');
+    [...m.children].forEach((c) => {
+      c.setAttribute('transform', `scale(${s}) ${c.getAttribute('transform') || ''}`.trim());
+    });
+    m.dataset.fixed = '1';
+  });
 }
 function bindDomain() {
+  fixDomainMarkers(mainScene.root);
   mainScene.root.querySelectorAll('g.node, g.classGroup').forEach((el) => {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id] || mainScene.nodeEls[id]) return;

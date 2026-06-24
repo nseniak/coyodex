@@ -95,14 +95,32 @@ Parse one item with:
 - cardinality is optional (omit it for inheritance).
 - allowed cardinality tokens: `1`, `*`, `0..1`, `1..*`.
 
-**Verb → relationship kind → `classDiagram` arrow** (default map; verbs outside it are associations):
+**One canonical verb per relationship kind** — the verb selects the `classDiagram` arrow; use
+exactly the canonical verb (the validator rejects aliases). Association is free-form: any other
+verb, and it carries the meaning (the arrow has no marker to convey it).
 
-| verb keyword | kind | classDiagram arrow |
-|---|---|---|
-| `isA`, `extends` | inheritance | `E1 --|> E9` |
-| `contains`, `owns`, `composedOf` | composition | `E1 "1" *-- "*" E2` |
-| `aggregates`, `has` | aggregation | `E1 "1" o-- "*" E2` |
-| anything else | association | `E1 "1" --> "*" E2` |
+| kind | **canonical verb** | classDiagram arrow | meaning |
+|---|---|---|---|
+| inheritance | `isA` | `E1 --|> E9` | E1 is a kind of E9 |
+| composition | `contains` | `E1 "1" *-- "*" E2` | the part's lifecycle is bound to the whole |
+| aggregation | `has` | `E1 "1" o-- "*" E2` | the part can exist independently of the whole |
+| association | the domain verb (e.g. `placedBy`) | `E1 "1" --> "*" E2` | any other relationship |
+
+Aliases the validator rejects in favour of the canonical verb: `owns` / `composedOf` → `contains`,
+`aggregates` → `has`, `extends` → `isA`.
+
+**Arrow labels carry the role, not the verb** (the marker already conveys the kind, so the verb
+would be redundant):
+
+- **forward** — a field on the *source* typed by the target → that **field name** (`subscription`,
+  `mode`, `stdio`);
+- **reverse** — the target's foreign key back to the source (`FK→E1`) → **`↩ field`** (`↩ org_id`),
+  the `↩` flagging that the field lives on the far end;
+- **otherwise** — the **verb** for an association (it carries the meaning), **blank** for a
+  structural kind (the marker speaks).
+
+So mark a child's foreign key with its target — `org_id:string FK→E1` — to get the reverse label
+(and the back-reference then resolves in the validator too).
 
 ---
 

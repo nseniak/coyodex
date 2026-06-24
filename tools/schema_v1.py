@@ -89,12 +89,18 @@ _CARD = r"\*|\d+|0\.\.1|1\.\.\*"
 # One RELATIONS item: `verb [sc→dc] Eid [display]`. Cardinality pair is optional (omit for isA).
 RELATION_ITEM = re.compile(rf"^(?P<verb>[\w-]+)(?:\s+(?P<sc>{_CARD})→(?P<dc>{_CARD}))?\s+(?P<tgt>E\d+)\b")
 
+# Each structural kind has ONE canonical verb (association is free-form — any other verb).
+CANONICAL_VERB = {"composition": "contains", "aggregation": "has", "inheritance": "isA"}
 # verb -> classDiagram relationship kind; verbs outside the map render as plain associations.
+# Aliases are still recognised (so an un-canonicalised map renders with the right marker) but the
+# validator rejects them in favour of the canonical verb — see REL_ALIAS.
 REL_KIND = {
-    "isa": "inheritance", "extends": "inheritance",
     "contains": "composition", "owns": "composition", "composedof": "composition",
-    "aggregates": "aggregation", "has": "aggregation",
+    "has": "aggregation", "aggregates": "aggregation",
+    "isa": "inheritance", "extends": "inheritance",
 }
+# non-canonical structural verb -> the canonical verb to use instead (drives the validator hint).
+REL_ALIAS = {v: CANONICAL_VERB[k] for v, k in REL_KIND.items() if v != CANONICAL_VERB[k].lower()}
 
 _CARD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href (for SOURCE:)
 

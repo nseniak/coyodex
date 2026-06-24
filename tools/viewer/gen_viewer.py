@@ -133,6 +133,21 @@ def _safe_member(s: str) -> str:
     return re.sub(r'[<>{}|`"]', "", s).strip()
 
 
+def _relation_label(edge: dict[str, Any], src_node: dict[str, Any], tgt_node: dict[str, Any]) -> str:
+    """Arrow label — the role, not the verb (the marker already conveys composition/aggregation/…):
+    forward (a field on the SOURCE typed by the target) -> the field name (`subscription`);
+    reverse (a field on the TARGET marked `FK→source`) -> `↩ field` (`↩ org_id`);
+    else -> the verb for an association, blank for a structural kind."""
+    src, tgt = str(edge["src"]), str(edge["dst"])
+    for a in cast("list[dict[str, str]]", src_node.get("attrs") or []):
+        if str(a.get("type", "")) == tgt:
+            return _safe_label(str(a.get("name", "")))
+    for a in cast("list[dict[str, str]]", tgt_node.get("attrs") or []):
+        if f"FK→{src}" in str(a.get("markers", "")) or f"FK->{src}" in str(a.get("markers", "")):
+            return "↩ " + _safe_label(str(a.get("name", "")))
+    return "" if str(edge.get("kind")) != "association" else _safe_label(str(edge["verb"]))
+
+
 def gen_domain_mermaid(graph: GraphDict) -> str:
     """C4 Code altitude: the T5 domain model as a Mermaid `classDiagram` — each entity a class box
     (id = its `E` id, label = its name) holding its attributes (`type name`), with typed, cardinal
@@ -140,26 +155,32 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
     carry no native key notation. Class id = the `E` id so the viewer's id bridge resolves a click."""
     ents = [(nid, n) for nid, n in graph["nodes"].items() if str(n["kind"]) == "entity"]
     ent_ids = {nid for nid, _ in ents}
+    ent_names = {nid: str(n["name"]) for nid, n in ents}
     lines = ["classDiagram"]
     for nid, n in ents:
         lines.append(f'  class {nid}["{_safe_label(str(n["name"]))}"] {{')
         for a in cast("list[dict[str, str]]", n.get("attrs") or []):
-            member = f'{_safe_member(str(a.get("type", "")))} {_safe_member(str(a.get("name", "")))}'.strip()
+            # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
+            atype = ent_names.get(str(a.get("type", "")), str(a.get("type", "")))
+            member = f'{_safe_member(atype)} {_safe_member(str(a.get("name", "")))}'.strip()
             if member:
                 lines.append(f"    {member}")
         lines.append("  }")
+    nodes = graph["nodes"]
     for e in graph["edges"]:
         s, d, kind = str(e["src"]), str(e["dst"]), e.get("kind")
         if not (kind and s in ent_ids and d in ent_ids):
             continue
         arrow = CLASS_ARROW.get(str(kind), "-->")
-        verb = _safe_label(str(e["verb"]))
+        label = _relation_label(cast("dict[str, Any]", e), cast("dict[str, Any]", nodes[s]),
+                                cast("dict[str, Any]", nodes[d]))
+        suffix = f" : {label}" if label else ""
         if kind == "inheritance":
-            lines.append(f"  {s} {arrow} {d} : {verb}")
+            lines.append(f"  {s} {arrow} {d}{suffix}")
         else:
             left = f'"{e["src_card"]}" ' if e.get("src_card") else ""
             right = f' "{e["dst_card"]}"' if e.get("dst_card") else ""
-            lines.append(f"  {s} {left}{arrow}{right} {d} : {verb}")
+            lines.append(f"  {s} {left}{arrow}{right} {d}{suffix}")
     return "\n".join(lines)
 
 
