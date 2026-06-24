@@ -111,6 +111,10 @@ faces: outside = journey, inside = T6 flow + edges.
   modes, change hotspots (git churn), permissions matrix (Role × use case).
 
 ### Test completeness — measure against the MAP, not line %
+**Be honest about whether you ran it.** A gap table built by *reading* tests is **inferred**; only
+running the suite with coverage makes it **verified**. If you don't run it (the suite is slow or
+costs money — e.g. paid integration tests), state that above the table and mark every row inferred;
+never present a read-only table as if it were measured.
 Coverage % tells which lines ran, not which behaviors are tested. Start from the
 inventory (use cases/journeys, T4 entry points, failure modes, invariants, state
 transitions, critical-path branches) and ask "is there a test that exercises it?" —
@@ -167,7 +171,10 @@ reader drills.
 ones).** The build order maps to a fan-out workflow: **parallel harvest → barrier
 synthesis → parallel trace.**
 - Phase 1 Harvest (fan out, one agent each): T4 entry points, T2 deps, T5 model, T3
-  run/build, T0/Roles reader. Parallel harvest also improves completeness.
+  run/build, T0/Roles reader. Parallel harvest also improves completeness. **Launch the whole
+  harvest as one concurrent batch** (all agents in a single fan-out), not in waves — the slices are
+  disjoint and use pre-allocated ID ranges, so no agent needs another's output first, and they
+  return compact rows (not file dumps) so reading them together is cheap.
 - Phase 2 Synthesize (barrier, one agent): T1 clusters/dedups all harvest outputs, and (large
   maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier.
 - Phase 3 Trace (fan out, one agent per use case/journey; large maps may instead fan out one agent
@@ -201,8 +208,10 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 **Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
 root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
 it was built at (the baseline pin). **Start from the template** —
-[`method/templates/project-map.template.md`](method/templates/project-map.template.md): copy it
-and fill the cells in place. It already carries every standard section with schema-correct table
+[`method/templates/project-map.template.md`](method/templates/project-map.template.md): fill its cells and Write the filled map to `.coyodex/project-map.md` in one write — read the
+template, then write; don't shell-`cp` it into place and then overwrite it (the copy is wasted and
+overwriting a freshly-created file trips the read-before-write guard), and don't author the map from
+scratch (that throws the schema-correct shapes away). It already carries every standard section with schema-correct table
 shapes (each definition's ID **alone in its own first cell**, `| **C1** | name… |`), so the map
 passes the validator on the first write instead of being reshaped afterward. Run
 [`tools/validate_analysis.py`](tools/validate_analysis.py) after each generate/patch and fix the

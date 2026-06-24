@@ -192,6 +192,8 @@ SOURCE: [file](path#L1)
 
 ## Test completeness — gaps against the map
 
+> **Tests run for this table?** <yes, with coverage — rows verified / no, read-only — all rows inferred>
+
 <!-- Measure against the MAP, not line %. Walk the inventory (use cases / journeys / T4 entry
      points / failure modes / invariants / state transitions / critical branches) and ask "is
      there a test that exercises it?". Lead with untested critical paths (money / auth / data-loss

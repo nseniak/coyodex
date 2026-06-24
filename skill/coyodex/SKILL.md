@@ -41,15 +41,18 @@ their path **inside that clone** (e.g. `$COYODEX/tools/validate_analysis.py`).
 
 1. Read `method.md` fully (and `method/schema-v1.md` for the table/ID contract, and
    `method/domain-cards.md` for the T5 domain-model card format).
-2. **Copy the template** `method/templates/project-map.template.md` to the analyzed repo's
-   `.coyodex/project-map.md` and fill cells in place. It already has every standard section with
-   schema-correct shapes (each ID alone in its own first cell) — this is what makes the map pass
-   validation on the first write.
+2. **Start from the template** `method/templates/project-map.template.md`: read it, fill its cells,
+   and Write the filled map straight to the analyzed repo's `.coyodex/project-map.md` in **one
+   Write**. Don't `cp` it into place and then overwrite it — the copy is wasted and overwriting a
+   freshly-created file trips the read-before-write guard. It already has every standard section with
+   schema-correct shapes (each ID alone in its own first cell) — keeping those shapes (not authoring
+   from scratch) is what makes the map pass validation on the first write.
 3. Survey the repo and harvest the inputs, building bottom-up (T3 → T4/T2/T5 → T1 → subsystems →
    T6 + edges), presenting top-down. On a large repo use parallel mode (`method.md` → "Parallel
-   mode"): fan out one harvest agent per slice using the **harvest-prompt template** there; a
-   small repo is fine serial. Verify every `file:line` anchor against source; label verified vs
-   inferred.
+   mode"): fan out one harvest agent per slice using the **harvest-prompt template** there, and
+   **launch them all in one concurrent batch** (single message, many agents) — not in waves; the
+   slices are disjoint with pre-allocated ID ranges, so no agent needs another's output. A small
+   repo is fine serial. Verify every `file:line` anchor against source; label verified vs inferred.
 4. Record the build commit in the map (the baseline pin).
 5. Validate, fixing until clean:
    `python3 $COYODEX/tools/validate_analysis.py /path/to/repo/.coyodex/project-map.md`
