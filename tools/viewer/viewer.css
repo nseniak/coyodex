@@ -37,6 +37,9 @@ main { display: flex; height: calc(100vh - 38px); }
 #panel h3 { font-size: 14px; margin: 0 0 2px; }
 #panel hr { border: 0; border-top: 1px solid #e5e7eb; margin: 14px 0; }
 #panel .src { margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px; color: #2563eb; }
+/* inline `code` in prose fields (mdInline), light panel background */
+#panel code { font-family: ui-monospace, monospace; font-size: 12px; background: #f3f4f6;
+              padding: 0 3px; border-radius: 3px; color: #1f2937; }
 
 .hint { padding: 6px 14px; font-size: 12px; color: #6b7280; background: #f3f4f6; min-height: 28px; }
 /* breadcrumb: the structural nesting path down to the current view */
@@ -55,6 +58,8 @@ main { display: flex; height: calc(100vh - 38px); }
 #tip .tk { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .65; margin-bottom: 4px; }
 #tip .tm { opacity: .95; }
 #tip .tn { opacity: .55; font-style: italic; }
+#tip code { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(255,255,255,.16);
+            padding: 0 3px; border-radius: 3px; }
 
 #legend { position: absolute; left: 12px; bottom: 12px; background: #fff; border: 1px solid #e5e7eb;
           border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: none; }

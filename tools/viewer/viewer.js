@@ -39,8 +39,13 @@ const zoomin = document.getElementById('zoomin');
 const zoomout = document.getElementById('zoomout');
 const zoomlevel = document.getElementById('zoomlevel');
 document.getElementById('meta').innerHTML = META;
-const stripMd = (s) => (s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 const esc = (s) => (s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+// Inline markdown -> safe HTML for prose fields (Purpose / Why / Wants / …): a link collapses to its
+// text, then we ESCAPE, then wrap `code` and **bold** — escape-first so the only tags are the ones we
+// add. Pragmatic, not a full parser: `code` is wrapped before **bold**, so a code span matches first.
+const mdInline = (s) => esc(String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'))
+  .replace(/`([^`]+)`/g, '<code>$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
 let mode = 'base';
 let mainPz = null;     // svg-pan-zoom for the current diagram
@@ -108,7 +113,7 @@ function showNode(id) {
   const rows = Object.entries(n.fields || {})
     // a subsystem's first field IS its name (already in the title) — don't repeat it
     .filter(([k]) => !(n.kind === 'subsystem' && k.toLowerCase() === 'subsystem'))
-    .map(([k, v]) => `<dt>${k}</dt><dd>${stripMd(String(v))}</dd>`).join('');
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${mdInline(v)}</dd>`).join('');
   // entity attributes (T5 domain cards): `type name` + any markers (PK/FK/unique/…)
   const attrs = (n.attrs && n.attrs.length)
     ? '<dt>Fields</dt><dd>' + n.attrs.map((a) =>
@@ -130,7 +135,7 @@ function showEdge(e) {
   panel.innerHTML = '<h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
     + '<div class="badges"><span class="badge edge">' + esc(e.verb) + '</span>' + kindBadge + '</div>'
     + '<dl>'
-    + (e.why ? '<dt>Why</dt><dd>' + esc(e.why) + '</dd>' : '')
+    + (e.why ? '<dt>Why</dt><dd>' + mdInline(e.why) + '</dd>' : '')
     + card
     + '<dt>From</dt><dd>' + e.src + ' · ' + esc(nm(e.src)) + '</dd>'
     + '<dt>To</dt><dd>' + e.dst + ' · ' + esc(nm(e.dst)) + '</dd>'
@@ -143,11 +148,11 @@ function showEdge(e) {
 function showContextEdge(ce) {
   let body = '';
   if (ce.type === 'actor') {
-    body = ce.wants ? '<dt>Wants</dt><dd>' + esc(ce.wants) + '</dd>' : '';
+    body = ce.wants ? '<dt>Wants</dt><dd>' + mdInline(ce.wants) + '</dd>' : '';
   } else {
     const rows = (ce.realizedBy || []).map((r) =>
-      '<dd>• ' + esc(r.srcName) + ' — ' + esc(r.verb) + (r.why ? ' — ' + esc(r.why) : '') + '</dd>').join('');
-    body = (ce.usedFor ? '<dt>Used for</dt><dd>' + esc(ce.usedFor) + '</dd>' : '')
+      '<dd>• ' + esc(r.srcName) + ' — ' + esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : '') + '</dd>').join('');
+    body = (ce.usedFor ? '<dt>Used for</dt><dd>' + mdInline(ce.usedFor) + '</dd>' : '')
       + (rows ? '<dt>Realized by</dt>' + rows : '');
   }
   panel.innerHTML = '<h2>' + esc(ce.from) + ' → ' + esc(ce.to) + '</h2>'
@@ -162,7 +167,7 @@ function subsystemBlock(id) {
   if (!n) return '';
   const purpose = n.fields && (n.fields.Purpose || n.fields.purpose);
   return '<h3>' + esc(id) + ' · ' + esc(n.name) + '</h3>'
-    + (purpose ? '<dl><dt>Purpose</dt><dd>' + stripMd(String(purpose)) + '</dd></dl>' : '');
+    + (purpose ? '<dl><dt>Purpose</dt><dd>' + mdInline(purpose) + '</dd></dl>' : '');
 }
 function showTwoSubsystems(a, b) {
   panel.innerHTML = '<div class="badges"><span class="badge edge">connection</span></div>'
@@ -178,7 +183,7 @@ function meaningOf(n) {
   const f = n.fields || {};
   for (const want of MEANING_KEYS)
     for (const k in f)
-      if (k.toLowerCase() === want && String(f[k]).trim()) return stripMd(String(f[k]));
+      if (k.toLowerCase() === want && String(f[k]).trim()) return String(f[k]);  // raw; rendered by mdInline in the builder
   return null;
 }
 function tipNodeHtml(id) {
@@ -186,7 +191,7 @@ function tipNodeHtml(id) {
   if (!n) return '';
   const meaning = meaningOf(n);
   return '<div class="tt">' + esc(n.name) + '</div><div class="tk">' + esc(n.kind) + '</div>'
-    + (meaning ? '<div class="tm">' + esc(meaning) + '</div>'
+    + (meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
                : '<div class="tn">no description recorded</div>');
 }
 function tipEdgeHtml(e) {
@@ -195,13 +200,13 @@ function tipEdgeHtml(e) {
   if (e.type === 'actor' || e.type === 'dep') {
     const meaning = e.type === 'actor' ? e.wants : e.usedFor;
     return '<div class="tt">' + esc(e.from) + ' → ' + esc(e.to) + '</div><div class="tk">uses</div>'
-      + (meaning ? '<div class="tm">' + esc(meaning) + '</div>'
+      + (meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
                  : '<div class="tn">no description recorded</div>');
   }
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   return '<div class="tt">' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</div>'
     + '<div class="tk">' + esc(e.verb) + '</div>'
-    + (e.why ? '<div class="tm">' + esc(e.why) + '</div>'
+    + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
              : '<div class="tn">no why recorded</div>');
 }
 function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor if it would overflow the viewport
