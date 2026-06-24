@@ -614,6 +614,7 @@ async function render() {
     // diagram recoverable. The header zoom control (zoomctl) replaces the old overlay icons.
     mainPz = svgPanZoom(svgEl, {
       controlIcons: false, fit: true, center: true, minZoom: 0.01, maxZoom: 1000,
+      dblClickZoomEnabled: false,  // double-click is for selecting/reading nodes, not zooming
       onZoom: updateZoomLevel,
     });
     // history revisit: restore the pan/zoom we left this view with (zoom first, then absolute pan)
