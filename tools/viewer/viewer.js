@@ -34,6 +34,10 @@ const viewsw = document.getElementById('viewsw');
 const navback = document.getElementById('navback');
 const navfwd = document.getElementById('navfwd');
 const crumb = document.getElementById('crumb');
+const tip = document.getElementById('tip');
+const zoomin = document.getElementById('zoomin');
+const zoomout = document.getElementById('zoomout');
+const zoomlevel = document.getElementById('zoomlevel');
 document.getElementById('meta').innerHTML = META;
 const stripMd = (s) => (s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
 const esc = (s) => (s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
@@ -165,6 +169,58 @@ function showTwoSubsystems(a, b) {
     + subsystemBlock(a) + '<hr>' + subsystemBlock(b);
 }
 
+// --- hover tooltip --------------------------------------------------------------
+// A floating card that previews an element's MEANING on hover, so you can read it without
+// selecting (selecting is what fills the side panel). One reused <div id="tip">; pointer-events:none
+// in CSS so it never steals the hover or the click. All graph text goes through esc().
+const MEANING_KEYS = ['purpose', 'used for', 'meaning', 'wants'];  // the per-kind "meaning" column, by priority
+function meaningOf(n) {
+  const f = n.fields || {};
+  for (const want of MEANING_KEYS)
+    for (const k in f)
+      if (k.toLowerCase() === want && String(f[k]).trim()) return stripMd(String(f[k]));
+  return null;
+}
+function tipNodeHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n) return '';
+  const meaning = meaningOf(n);
+  return '<div class="tt">' + esc(n.name) + '</div><div class="tk">' + esc(n.kind) + '</div>'
+    + (meaning ? '<div class="tm">' + esc(meaning) + '</div>'
+               : '<div class="tn">no description recorded</div>');
+}
+function tipEdgeHtml(e) {
+  // context edges (actor→system / system→dep) carry from/to + wants/usedFor under the verb "uses";
+  // component/domain edges carry src/dst + verb + why.
+  if (e.type === 'actor' || e.type === 'dep') {
+    const meaning = e.type === 'actor' ? e.wants : e.usedFor;
+    return '<div class="tt">' + esc(e.from) + ' → ' + esc(e.to) + '</div><div class="tk">uses</div>'
+      + (meaning ? '<div class="tm">' + esc(meaning) + '</div>'
+                 : '<div class="tn">no description recorded</div>');
+  }
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  return '<div class="tt">' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</div>'
+    + '<div class="tk">' + esc(e.verb) + '</div>'
+    + (e.why ? '<div class="tm">' + esc(e.why) + '</div>'
+             : '<div class="tn">no why recorded</div>');
+}
+function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor if it would overflow the viewport
+  const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
+  let nx = x + pad, ny = y + pad;
+  if (nx + w > window.innerWidth - 6) nx = x - pad - w;
+  if (ny + h > window.innerHeight - 6) ny = y - pad - h;
+  tip.style.left = Math.max(6, nx) + 'px';
+  tip.style.top = Math.max(6, ny) + 'px';
+}
+function showTip(html, x, y) { if (!html) return; tip.innerHTML = html; tip.classList.add('on'); moveTip(x, y); }
+function hideTip() { tip.classList.remove('on'); }
+// Wire an element to preview `htmlFn()` while hovered — added alongside the existing glow handlers.
+function attachTip(el, htmlFn) {
+  el.addEventListener('mouseenter', (ev) => showTip(htmlFn(), ev.clientX, ev.clientY));
+  el.addEventListener('mousemove', (ev) => moveTip(ev.clientX, ev.clientY));
+  el.addEventListener('mouseleave', hideTip);
+}
+
 // --- diff badges + legend -------------------------------------------------------
 // One badge builder used by BOTH the diagram and the legend, so they're pixel-identical.
 // Inline !important is needed because Mermaid sets SVG text font/fill with !important.
@@ -241,6 +297,7 @@ function bindNodes(scene, onActivate) {
     // Hover affordance — skip while this node is the active selection, so HILITE wins.
     el.addEventListener('mouseenter', () => { if (scene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
     el.addEventListener('mouseleave', () => { if (scene.selectedKey !== 'node:' + id) el.style.filter = ''; });
+    attachTip(el, () => tipNodeHtml(id));  // hover -> meaning preview (no selection needed)
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;  // tail of a drag-pan, not a real click
       e.stopPropagation();
@@ -251,7 +308,8 @@ function bindNodes(scene, onActivate) {
 }
 
 // Give an edge's visible path a wide transparent hit-path + make its label clickable.
-function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff) {
+// `tipHtml` (optional) wires a hover meaning-preview on the same hit-area + label.
+function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml) {
   const hit = p.cloneNode(false);
   hit.removeAttribute('id'); hit.removeAttribute('marker-end'); hit.removeAttribute('class');
   hit.style.setProperty('stroke', 'transparent', 'important');
@@ -270,6 +328,7 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff) {
     label.addEventListener('mouseenter', hoverOn);
     label.addEventListener('mouseleave', hoverOff);
   }
+  if (tipHtml) { attachTip(hit, tipHtml); if (label) attachTip(label, tipHtml); }
 }
 
 // Iterate a diagram's edges, pairing each path with its label by index. Mermaid emits one label
@@ -308,7 +367,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn) {
     showFn(); sceneSelect(scene, () => glowEdge(p, label)); focusEdge(scene, e);
   };
   scene.edgeEls.push({ e, path: p, label });
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff);
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, () => tipEdgeHtml(e));
 }
 
 // Wire one edge to NAVIGATE on click (no in-scene selection) — subsystem-map arrows + cross arrows.
@@ -421,6 +480,7 @@ function bindDomain() {
     el.style.cursor = 'pointer';
     el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
     el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
+    attachTip(el, () => tipNodeHtml(id));  // hover -> meaning preview (no selection needed)
     el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); selectNode(mainScene, el, id); });
   });
   eachClassEdge(mainScene.root, (p, label, src, dst) => {
@@ -498,8 +558,13 @@ function renderChrome(s) {
   });
 }
 
+function updateZoomLevel() {  // reflect the current pan-zoom scale in the header control
+  if (zoomlevel) zoomlevel.textContent = mainPz ? Math.round(mainPz.getZoom() * 100) + '%' : '100%';
+}
+
 async function render() {
   const seq = ++renderSeq;
+  hideTip();  // a re-render replaces the diagram — drop any tooltip from the old one
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   const s = history[hi];
   const { svg } = await mermaid.render('coyodexGraph' + (rc++), mermaidFor(s));
@@ -511,7 +576,13 @@ async function render() {
   const svgEl = diagram.querySelector('svg');
   if (svgEl && window.svgPanZoom) {
     svgEl.removeAttribute('style');
-    mainPz = svgPanZoom(svgEl, { controlIcons: true, fit: true, center: true, minZoom: 0.3, maxZoom: 8 });
+    // No practical zoom cap: bounds are wide enough to act unbounded while still keeping the
+    // diagram recoverable. The header zoom control (zoomctl) replaces the old overlay icons.
+    mainPz = svgPanZoom(svgEl, {
+      controlIcons: false, fit: true, center: true, minZoom: 0.01, maxZoom: 1000,
+      onZoom: updateZoomLevel,
+    });
+    updateZoomLevel();
   }
   if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e)) resetScene(mainScene); });  // empty space deselects
   renderChrome(s);
@@ -533,6 +604,9 @@ viewsw.querySelectorAll('button').forEach((b) => {
 });
 navback.addEventListener('click', back);
 navfwd.addEventListener('click', fwd);
+zoomin.addEventListener('click', () => { if (mainPz) { mainPz.zoomIn(); updateZoomLevel(); } });
+zoomout.addEventListener('click', () => { if (mainPz) { mainPz.zoomOut(); updateZoomLevel(); } });
+zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); updateZoomLevel(); } });  // fit to screen
 if (HAS_DIFF) {
   toggle.addEventListener('click', () => { mode = mode === 'diff' ? 'base' : 'diff'; render(); });
 }

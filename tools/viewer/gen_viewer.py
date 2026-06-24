@@ -419,6 +419,11 @@ __STYLE__
     <button data-view="component">Components</button>
     <button data-view="domain">Domain</button>
   </span>
+  <span id="zoomctl">
+    <button id="zoomout" title="Zoom out">−</button>
+    <button id="zoomlevel" title="Fit to screen">100%</button>
+    <button id="zoomin" title="Zoom in">+</button>
+  </span>
   <button id="toggle" style="display:none"></button>
 </header>
 <div class="hint"><span id="crumb"></span></div>
@@ -429,6 +434,7 @@ __STYLE__
   </div>
   <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
 </main>
+<div id="tip"></div>
 <script type="module">
 __SCRIPT__
 </script>

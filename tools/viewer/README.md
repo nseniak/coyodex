@@ -45,6 +45,10 @@ python3 -m http.server 8753 -d .coyodex   # → http://localhost:8753/project-ma
 
 ## What it shows — the C4 altitudes
 
+**Hover preview** — hovering any node or edge pops a small tooltip with its *meaning* (a node's
+Purpose / Used for / Meaning / Wants, an edge's Why), so you can read the map without clicking.
+Clicking still opens the fuller side panel; the tooltip never changes the selection.
+
 - **Context** — the system, its actors (Roles, drawn human vs service), and external deps.
 - **Subsystems** *(when the map groups components)* — the Container altitude: subsystem boxes with
   inter-subsystem edges **derived** from the component edge list (count-labelled). Drilling replaces
