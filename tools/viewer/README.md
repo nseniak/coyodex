@@ -58,7 +58,8 @@ python3 -m http.server 8753 -d .coyodex   # → http://localhost:8753/project-ma
     component edges that cross between them.
   - Component nodes/arrows behave like the Components view (click for `file:line`); the side panel
     shows the subsystem(s) you're on. **Navigate** with the header **◀ ▶** arrows, **⌘+←/→** or
-    **⌥+←/→**, or by clicking a crumb in the breadcrumb trail below the header.
+    **⌥+←/→**, or by clicking an ancestor crumb in the breadcrumb (the structural nesting path,
+    e.g. Context › Subsystems › *this subsystem*) below the header.
 - **Components** — every component + its verbed edges; click a node/edge for details + `file:line`.
 - **Domain** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal

@@ -36,7 +36,7 @@ main { display: flex; height: calc(100vh - 38px); }
 #panel .src { margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px; color: #2563eb; }
 
 .hint { padding: 6px 14px; font-size: 12px; color: #6b7280; background: #f3f4f6; min-height: 28px; }
-/* breadcrumb: the trail of diagrams navigated to (history up to the current one) */
+/* breadcrumb: the structural nesting path down to the current view */
 #crumb .crumbseg { color: #2563eb; cursor: pointer; }
 #crumb .crumbseg:hover { text-decoration: underline; }
 #crumb .crumbseg.cur { color: #374151; font-weight: 600; cursor: default; }

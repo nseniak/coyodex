@@ -359,7 +359,6 @@ function go(state) {
 }
 function back() { if (hi > 0) { hi -= 1; render(); } }
 function fwd() { if (hi < history.length - 1) { hi += 1; render(); } }
-function jump(i) { if (i >= 0 && i < history.length && i !== hi) { hi = i; render(); } }
 
 // --- per-state binding ----------------------------------------------------------
 function bindContext() {
@@ -467,6 +466,16 @@ function stateTitle(s) {
   if (s.kind === 'subsystem') return nm(s.sid);
   return nm(s.a) + ' → ' + nm(s.b);  // edge
 }
+function ancestors(s) {  // structural nesting path (top → s), independent of the click history
+  if (s.kind === 'domain') return [{ kind: 'domain' }];   // a standalone behavioural lens, not nested in Context
+  const trail = [{ kind: 'context' }];                    // Context is the root of the structural zoom
+  if (s.kind === 'context') return trail;
+  if (s.kind === 'component') { trail.push({ kind: 'component' }); return trail; }
+  trail.push({ kind: 'container' });                      // Subsystems sit inside the Context
+  if (s.kind === 'subsystem') trail.push({ kind: 'subsystem', sid: s.sid });
+  else if (s.kind === 'edge') trail.push({ kind: 'edge', a: s.a, b: s.b });  // a pair lives beside the subsystems
+  return trail;
+}
 function renderChrome(s) {
   legend.classList.toggle('on', s.kind === 'component' && mode === 'diff');
   toggle.style.display = (HAS_DIFF && s.kind === 'component') ? '' : 'none';
@@ -475,17 +484,18 @@ function renderChrome(s) {
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
-  // breadcrumb: the trail taken to get here (history[0..hi]); each earlier crumb jumps back to it
+  // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it
   crumb.innerHTML = '';
-  for (let i = 0; i <= hi; i += 1) {
+  const chain = ancestors(s);
+  chain.forEach((node, i) => {
     if (i) crumb.appendChild(document.createTextNode(' › '));
-    const cur = i === hi;
+    const cur = i === chain.length - 1;
     const seg = document.createElement(cur ? 'span' : 'a');
     seg.className = 'crumbseg' + (cur ? ' cur' : '');
-    seg.textContent = stateTitle(history[i]);
-    if (!cur) seg.addEventListener('click', () => jump(i));
+    seg.textContent = stateTitle(node);
+    if (!cur) seg.addEventListener('click', () => go(node));
     crumb.appendChild(seg);
-  }
+  });
 }
 
 async function render() {
