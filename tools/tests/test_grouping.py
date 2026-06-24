@@ -250,6 +250,64 @@ def make_domain_map(cards: str | None = None) -> str:
     return _VALID_HEAD + "## T5 — Domain model (domain cards)\n\n" + body
 
 
+def make_gp_map() -> str:
+    """A two-step Golden Path: GP1 (UC1, actor Andy) touches C1+C2; GP2 (UC2, actor Adam) touches
+    C2+D1. Exercises the GP sequence (actors from UCs) and the per-step induced subgraph."""
+    return (
+        "## Use cases\n"
+        "| ID | Use case | Actor | Trigger → Outcome |\n"
+        "|---|---|---|---|\n"
+        "| **UC1** | Submit | Andy | submits -> stored |\n"
+        "| **UC2** | Approve | Adam | approves -> done |\n\n"
+        "## T1\n"
+        "| ID | Component | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|\n"
+        "| **C1** | Gateway | x | f | C2 |\n"
+        "| **C2** | Engine | x | f | D1 |\n\n"
+        "## T2\n"
+        "| ID | Name | Type | Used for | Where configured | Conf. |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **D1** | Cache | store | speed | env | V |\n\n"
+        "## Golden Path\n"
+        "**GP1 — Submit order** *(UC1)*\n"
+        "STORY: Andy submits.\n"
+        "UNDER THE HOOD: C1 calls C2.\n"
+        "`Touches:` C1, C2\n\n"
+        "**GP2 — Approve order** *(UC2)*\n"
+        "STORY: Adam approves.\n"
+        "`Touches:` C2, D1\n\n"
+        "### edges\n"
+        "| From | Verb | To | Why | Where |\n"
+        "|---|---|---|---|---|\n"
+        "| C1 | calls | C2 | reach engine | f |\n"
+        "| C2 | reads | D1 | cache | f |\n"
+    )
+
+
+def make_gp_explicit_actor_map(actor_line: str = "Actor: Org admin") -> str:
+    """GP1 bundles UC21 (End user) + UC22; without an Actor line the lane derives from the first UC
+    = 'End user'. The `Actor:` line overrides it. `actor_line` lets a test inject a bad/blank value
+    (mirrors the real mcpolis GP1, where the admin signs in via an end-user sign-in use case)."""
+    return (
+        "## Roles (actors)\n"
+        "| Role | Kind | What they want | Use cases they drive |\n"
+        "|---|---|---|---|\n"
+        "| **Org admin** | human | manage | UC22 |\n"
+        "| **End user** | human | use | UC21, UC22 |\n\n"
+        "## Use cases\n"
+        "| ID | Use case | Actor | Trigger → Outcome |\n"
+        "|---|---|---|---|\n"
+        "| **UC21** | Sign in | End user | a -> b |\n"
+        "| **UC22** | Create org | End user / Org admin | a -> b |\n\n"
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | A | x | f |  |\n\n"
+        "## Golden Path\n"
+        "**GP1 — Admin signs in and creates the org** *(UC21, UC22)*\n"
+        + (actor_line + "\n" if actor_line else "")
+        + "STORY: x\n`Touches:` C1\n"
+    )
+
+
 def run_validator(md: str) -> tuple[int, str]:
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write(md)
@@ -590,6 +648,123 @@ def test_validator_flags_duplicate_card_id() -> None:
     )
     code, out = run_validator(make_domain_map(cards))
     assert code == 1 and "Duplicate" in out, out
+
+
+# --- Golden Path (GP) -----------------------------------------------------------
+def test_parser_gp_captures_uc_and_touches() -> None:
+    g = parse_map(make_gp_map())
+    steps = {s["id"]: s for s in g["gp"]}
+    assert steps["GP1"]["uc"] == "UC1" and steps["GP2"]["uc"] == "UC2"
+    assert steps["GP1"]["touches"] == ["C1", "C2"]
+    assert steps["GP2"]["touches"] == ["C2", "D1"]
+
+
+def test_gen_gp_mermaid_black_box_sequence() -> None:
+    # Level 1: a sequenceDiagram whose lifelines are the actors derived from each step's UC, with one
+    # message per step carrying the GP id in its label (so a click resolves to the step).
+    mm = gen_viewer.gen_gp_mermaid(parse_map(make_gp_map()))
+    assert mm.startswith("sequenceDiagram")
+    assert "actor GPA0 as Andy" in mm and "actor GPA1 as Adam" in mm  # one lifeline per distinct actor
+    assert "participant GPSYS" in mm
+    assert "GPA0->>GPSYS: GP1 — Submit order" in mm
+    assert "GPA1->>GPSYS: GP2 — Approve order" in mm
+
+
+def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
+    # A GP step with no `*(UCn)*` tag falls back to a generic 'Actor' lifeline (no crash).
+    md = (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | A | x | f |  |\n\n"
+        "## Golden Path\n**GP1 — Do a thing**\nSTORY: x\n`Touches:` C1\n"
+    )
+    mm = gen_viewer.gen_gp_mermaid(parse_map(md))
+    assert "actor GPA0 as Actor" in mm and "GPA0->>GPSYS: GP1 — Do a thing" in mm
+
+
+def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
+    # A step tagged with several UCs (`*(UC1, UC2)*`) or trailing text (`*(UC3 follow-on)*`) must
+    # resolve to its FIRST UC — not fall back to a generic 'Actor' lifeline (the multi-UC regression).
+    md = (
+        "## Use cases\n"
+        "| ID | Use case | Actor | Trigger → Outcome |\n"
+        "|---|---|---|---|\n"
+        "| **UC1** | Sign in | Org admin | a -> b |\n"
+        "| **UC2** | Create | Org admin | a -> b |\n"
+        "| **UC3** | Renew | End user | a -> b |\n\n"
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | A | x | f |  |\n\n"
+        "## Golden Path\n"
+        "**GP1 — Sign in and create** *(UC1, UC2)*\nSTORY: x\n`Touches:` C1\n\n"
+        "**GP2 — Renewal flow** *(UC3 follow-on)*\nSTORY: x\n`Touches:` C1\n"
+    )
+    g = parse_map(md)
+    steps = {s["id"]: s for s in g["gp"]}
+    assert steps["GP1"]["uc"] == "UC1"           # first id of the multi-UC tag
+    assert steps["GP2"]["uc"] == "UC3"           # trailing text after the id is ignored
+    mm = gen_viewer.gen_gp_mermaid(g)
+    assert "actor GPA0 as Org admin" in mm and "actor GPA1 as End user" in mm  # real actors...
+    assert "as Actor" not in mm                  # ...not the generic fallback
+
+
+def test_gp_explicit_actor_overrides_first_uc() -> None:
+    # An `Actor:` line is the reliable signal for a multi-UC step: it wins over the first UC's actor.
+    g = parse_map(make_gp_explicit_actor_map("Actor: Org admin"))
+    step = g["gp"][0]
+    assert step["actor"] == "Org admin"
+    assert gen_viewer._gp_actor(g, step) == "Org admin"      # explicit wins over UC21's 'End user'
+    mm = gen_viewer.gen_gp_mermaid(g)
+    assert "actor GPA0 as Org admin" in mm and "End user" not in mm
+
+
+def test_gp_without_actor_falls_back_to_first_uc() -> None:
+    g = parse_map(make_gp_explicit_actor_map(""))            # no Actor line
+    assert g["gp"][0]["actor"] is None
+    assert gen_viewer._gp_actor(g, g["gp"][0]) == "End user"  # falls back to first UC (UC21)
+
+
+def test_validator_accepts_defined_role_actor() -> None:
+    code, out = run_validator(make_gp_explicit_actor_map("Actor: Org admin"))
+    assert code == 0, out
+
+
+def test_validator_rejects_undefined_role_actor() -> None:
+    code, out = run_validator(make_gp_explicit_actor_map("Actor: Sysadmin"))
+    assert code == 1 and "not a defined Role" in out, out
+
+
+def test_gen_gp_step_mermaid_induced_subgraph() -> None:
+    # Level 2: each step's diagram is the induced subgraph of the nodes it touches + the edges among
+    # them — and nothing the step does not touch.
+    steps = gen_viewer.gp_step_mermaids(parse_map(make_gp_map()))
+    s1 = steps["GP1"]
+    assert "flowchart" in s1
+    assert "class C1 component" in s1 and "class C2 component" in s1
+    assert "C1 -->|calls| C2" in s1                  # the intra-step edge is drawn
+    assert "D1" not in s1                            # GP1 does not touch the dep
+    s2 = steps["GP2"]
+    assert "class C2 component" in s2 and "class D1 dep" in s2
+    assert "C2 -->|reads| D1" in s2                  # component->dep edge, with the entity-style classDef present
+    assert "C1" not in s2                            # GP2 does not touch C1
+
+
+def test_validator_gp_map_clean() -> None:
+    code, out = run_validator(make_gp_map())
+    assert code == 0, out
+
+
+def test_render_inlines_gp_data() -> None:
+    # The self-contained HTML must carry the GP sequence + step diagrams so the client opens them.
+    with tempfile.TemporaryDirectory() as d:
+        md = Path(d) / "project-map.md"
+        md.write_text(make_gp_map(), encoding="utf-8")
+        out = Path(d) / "project-map.html"
+        r = subprocess.run(
+            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 0, r.stdout + r.stderr
+        html = out.read_text(encoding="utf-8")
+        assert "sequenceDiagram" in html and "Submit order" in html
 
 
 if __name__ == "__main__":

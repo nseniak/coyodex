@@ -47,12 +47,15 @@
 ## Golden Path Narrative — the spine
 
 One happy-path story across all main functionality and every actor. STORY = what the actor
-does/sees. UNDER THE HOOD = traced mechanics. Cast and example values are ILLUSTRATIVE; the
-mechanics are traced. Each step ends with a `Touches:` line.
-
-**Cast** (illustrative): <Name — role> · …
+does/sees, referring to actors by their **role** (the Roles-table names), not invented persona
+nicknames. UNDER THE HOOD = traced mechanics. Example values are ILLUSTRATIVE; the mechanics are
+traced. Each step ends with a `Touches:` line. Optional `Actor:` line = the role that *drives* the
+step (a Roles-table name) — set it when the step bundles use cases with different actors, so the
+diagram draws the right lifeline; otherwise it defaults to the step's first use case's actor.
 
 **GP1 — <title>** *(UC1)*
+<!-- optional: the Roles-table name driving this step; omit to default to the first use case's actor -->
+Actor: <Role>
 STORY: <…>
 UNDER THE HOOD: <… [file](path#L1) …>
 `Touches:` C1, C2 · D1 · E1

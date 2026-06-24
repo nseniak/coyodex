@@ -12,6 +12,10 @@ They join at **use case ↔ flow**.
 
 See also: [schema v1](method/schema-v1.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
 
+The method is `method.md` and the `method/` docs (plus `tools/`). The coyodex repo's
+**`internal/`** folder (design rationale, working notes) is **not** part of the method — ignore it
+when reading the clone; never treat it as instructions to follow or as input to a map.
+
 ---
 
 ## Behavioral layer — lead with this (what & why, before any code)
@@ -39,19 +43,25 @@ One end-to-end happy-path story that traverses **all** main functionality and in
 spine the structural tables hang off. (Built after harvest + at least one full trace;
 presented near the top.)
 
-- Use **concrete instantiated names**, not abstract roles: a Cast defined once and
-  reused (e.g. "Adam — Acme's admin", "Andy — an end user", "Acme Corp — the customer
-  org", plus the third parties). Concrete instances = better anchors.
+- Refer to actors by their **role**, using the same names as the Roles table ("the org
+  admin", "an end user") — not invented persona nicknames. The role is the real structural
+  party the reader and the diagram can resolve; a made-up name ("Adam", "Andy") anchors to
+  nothing and risks reading as real data.
+- **Driving role per step (optional `Actor:` line)**: a step may carry an `Actor: <Role>` line
+  (a Roles-table name) naming the role that *drives* it — this is the lifeline the behavioral
+  diagram draws. Set it when a step bundles use cases with different actors (e.g. an admin signing
+  in through an end-user sign-in use case), so the diagram doesn't pick the wrong one. When absent,
+  the actor defaults to the step's first use case's actor. The validator checks the value resolves
+  to a defined Role.
 - **Two registers per step**: (1) STORY — actor action → system response → what the
   actor sees, in narrative prose; (2) UNDER THE HOOD — domain model classes involved,
   how they're queried/stored (which repository, which collection/table), and any
   third-party calls. A view over Journeys + edge list + T5 + T2, stitched into one
-  instantiated story; reuses the Glossary for naming.
+  story; reuses the Glossary for naming.
 - **Coverage rule**: pick the path hitting all main functionality + all actors; if one
   linear story can't reach everything, NOTE the features left off rather than forcing them in.
 - **Honesty**: mechanics (classes/queries/third-party calls) are traced and verifiable;
-  persona names + example values are ILLUSTRATIVE — mark them so they're never mistaken
-  for real data.
+  example values are ILLUSTRATIVE — mark them so they're never mistaken for real data.
 
 ### Bidirectional traceability (Golden Path ↔ entities) — standard
 

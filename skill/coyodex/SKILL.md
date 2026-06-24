@@ -11,10 +11,9 @@ description: >
 
 # coyodex
 
-coyodex is a method (a set of prompts) plus tools that an agent drives to build and maintain a
-drillable map of a codebase. This skill is the entry point: it locates the method, then runs the
-right one of three modes. **The method docs are the source of truth — read them and follow them;
-this skill only sequences the work so you don't start cold.**
+coyodex is a method (prompts) + tools for building and maintaining a drillable map of a codebase.
+**This skill only bootstraps and routes — the method docs are the source of truth. Read the doc for
+your mode and follow it; don't restate it or work from memory.**
 
 ## Step 0 — locate the coyodex clone (always first)
 
@@ -26,55 +25,17 @@ for d in ~/Projects/coyodex ../coyodex ../../coyodex ~/coyodex; do
 done
 ```
 
-If none match, ask the user for the path to their coyodex clone. Everything below calls tools by
-their path **inside that clone** (e.g. `$COYODEX/tools/validate_analysis.py`).
+If none match, ask the user for the path. Call every tool by its path inside that clone
+(`$COYODEX/tools/...`). Ignore the clone's `internal/` folder — design rationale, not the method.
 
-## Pick the mode from what the user asked
+## Pick the mode, read its doc, follow it
 
-| The user wants | Mode | Read first |
+| The user wants | Mode | Read fully, then follow |
 |---|---|---|
-| a new map / "map this repo" / "build the baseline" | **Build** | `method.md` |
-| "I changed code, what's the impact?" | **Analyze** | `method.md` + `method/change-impact.md` |
+| new map / "map this repo" / "build the baseline" | **Build** | `method.md` (+ `method/schema-v1.md`, `method/domain-cards.md`); start from `method/templates/project-map.template.md` |
+| "I changed code, what's the impact?" | **Analyze** | `method/change-impact.md` |
 | "the report looks right, accept it" | **Accept** | `method/change-impact.md` |
 
-## Build (baseline map)
-
-1. Read `method.md` fully (and `method/schema-v1.md` for the table/ID contract, and
-   `method/domain-cards.md` for the T5 domain-model card format).
-2. **Start from the template** `method/templates/project-map.template.md`: read it, fill its cells,
-   and Write the filled map straight to the analyzed repo's `.coyodex/project-map.md` in **one
-   Write**. Don't `cp` it into place and then overwrite it — the copy is wasted and overwriting a
-   freshly-created file trips the read-before-write guard. It already has every standard section with
-   schema-correct shapes (each ID alone in its own first cell) — keeping those shapes (not authoring
-   from scratch) is what makes the map pass validation on the first write.
-3. Survey the repo and harvest the inputs, building bottom-up (T3 → T4/T2/T5 → T1 → subsystems →
-   T6 + edges), presenting top-down. On a large repo use parallel mode (`method.md` → "Parallel
-   mode"): fan out one harvest agent per slice using the **harvest-prompt template** there, and
-   **launch them all in one concurrent batch** (single message, many agents) — not in waves; the
-   slices are disjoint with pre-allocated ID ranges, so no agent needs another's output. A small
-   repo is fine serial. Verify every `file:line` anchor against source; label verified vs inferred.
-4. Record the build commit in the map (the baseline pin).
-5. Validate, fixing until clean:
-   `python3 $COYODEX/tools/validate_analysis.py /path/to/repo/.coyodex/project-map.md`
-6. Render the diagram (deterministic, no new analysis):
-   `python3 $COYODEX/tools/viewer/render.py …/.coyodex/project-map.md …/.coyodex/project-map.html`
-7. Report the absolute paths of **both** the map and the HTML as links.
-
-## Analyze (change-impact report)
-
-Follow `method/change-impact.md`: diff `git diff <baseline-pin>..HEAD -M`, trace OUTWARD from the
-changed code to the elements it reaches, and write a **patch-complete** report (every touched
-element carries its `was → now` text) to `.coyodex/analysis-changes/<date>.md`. Leave it
-**uncommitted** for review. Do not touch the baseline yet.
-
-## Accept (fold report into baseline)
-
-Mechanical, per `method/change-impact.md` — no new code reading: apply the report's `was → now`
-blocks to `.coyodex/project-map.md`, bump the commit pin, re-render the diagram, then commit the
-map + diagram + the now-accepted report together.
-
-## Always
-
-- Attach `file:line` to every element; label verified vs inferred.
-- After any write or patch of the map, re-validate then re-render — the HTML is a rendering of the
-  map, never a second source.
+Invariant: the map is the single source at the analyzed repo's `.coyodex/project-map.md`; after every
+write, validate (`$COYODEX/tools/validate_analysis.py`) then render
+(`$COYODEX/tools/viewer/render.py`) — the HTML is a rendering, never a second source.

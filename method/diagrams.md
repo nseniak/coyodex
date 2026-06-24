@@ -12,7 +12,7 @@ graph; no separate persisted model is needed.
 | **Container** | runtime pieces (services, datastores, sandboxes) | Deployment + components |
 | **Component** | T1 components + their verbed arrows | T1 + the edge list |
 | **Code** | entry points → `file:line`; the **domain model as a `classDiagram`** (entities with attributes + typed, cardinal relations) | T4 anchors · T5 [domain cards](domain-cards.md) |
-| **Behavioral overlay** | the Golden Path as a sequence that lights up the boxes each step touches | GP steps + traceability |
+| **Behavioral overlay** | the Golden Path as a black-box sequence of steps; drill a step into the subgraph of components it touches | GP steps + traceability |
 
 Drill down = zoom one level in; step back = zoom out — the same "name a row to drill"
 navigation as the markdown, made visual.
@@ -43,9 +43,11 @@ show/hide toggle. The element-keyed deltas are the data.
 - **Tier B — a small self-contained HTML viewer**, available in [`tools/viewer/`](../tools/viewer/).
   Parses the markdown (via the shared `tools/schema_v1.py` grammar) and renders the C4 altitudes —
   Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges) →
-  Components → code — navigated as a back/forward history (header arrows, ⌘/⌥+←/→, breadcrumb) with
-  pan/zoom, click→panel, and a baseline⇄diff overlay. Mermaid + svg-pan-zoom load from a pinned CDN
-  with Subresource-Integrity.
+  Components → code — plus the **Golden Path** as its own behavioural overlay (a black-box sequence
+  diagram of the steps; clicking a step drills into the induced subgraph of the components it
+  touches, with a link back to locate them in the full map). Navigated as a back/forward history
+  (header arrows, ⌘/⌥+←/→, breadcrumb) with pan/zoom, click→panel, and a baseline⇄diff overlay.
+  Mermaid + svg-pan-zoom load from a pinned CDN with Subresource-Integrity.
 
 Reference frame: the **C4 model**, **Structurizr**, **Sourcetrail** — all standard. The
 request to see architecture this way is not unusual.

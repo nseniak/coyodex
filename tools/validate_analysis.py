@@ -85,28 +85,77 @@ def collect_referenced(text: str) -> set[str]:
     return set(ID_TOKEN.findall(text))
 
 
-def check_gp_touches(text: str, gp_order: list[str]) -> list[str]:
-    """Each GPn heading must be followed by a `Touches:` line before the next GP."""
+def gp_bodies(text: str, gp_order: list[str]) -> list[tuple[str, list[str]]]:
+    """(gp_id, body_lines) per GP step — the labeled lines (STORY / Actor / Touches / …) between a
+    GPn heading and the next GP (capped at an 8-line window). One place defines the step window, so
+    every GP-body check reads the same slice."""
     lines = text.splitlines()
-    missing: list[str] = []
-    # index of each GP heading
-    heading_idx = {}
-    for i, line in enumerate(lines):
-        m = DEF_GP.match(line)
-        if m:
-            heading_idx[m.group(1)] = i
+    heading_idx = {m.group(1): i for i, line in enumerate(lines) if (m := DEF_GP.match(line))}
+    out: list[tuple[str, list[str]]] = []
     for gp in gp_order:
         start = heading_idx[gp]
-        found = False
+        body: list[str] = []
         for line in lines[start + 1 : start + 8]:
             if DEF_GP.match(line):
                 break
-            if line.strip().startswith("`Touches:`") or line.strip().startswith("Touches:"):
-                found = True
+            body.append(line)
+        out.append((gp, body))
+    return out
+
+
+def check_gp_touches(text: str, gp_order: list[str]) -> list[str]:
+    """Each GPn heading must be followed by a `Touches:` line before the next GP."""
+    return [gp for gp, body in gp_bodies(text, gp_order)
+            if not any(s.startswith("`Touches:`") or s.startswith("Touches:")
+                       for s in (ln.strip() for ln in body))]
+
+
+def collect_role_names(text: str) -> set[str]:
+    """Lowercased role display-names from the Roles table (first column, bold-stripped). Empty when
+    there is no Roles table — so the Actor check below is a no-op on maps without one."""
+    names: set[str] = set()
+    lines = text.splitlines()
+    i, n = 0, len(lines)
+    while i < n:
+        if not lines[i].lstrip().startswith("|"):
+            i += 1
+            continue
+        block: list[str] = []
+        while i < n and lines[i].lstrip().startswith("|"):
+            block.append(lines[i])
+            i += 1
+        if len(block) < 2 or not is_separator_row(block[1]):
+            continue
+        headers = [c.lower() for c in split_cells(block[0])]
+        if not headers or headers[0] != "role":
+            continue
+        for row in block[2:]:
+            if is_separator_row(row):
+                continue
+            cells = split_cells(row)
+            name = re.sub(r"\*+", "", cells[0]).strip() if cells else ""
+            if name:
+                names.add(name.lower())
+        break
+    return names
+
+
+def check_gp_actors(text: str, gp_order: list[str], role_names: set[str]) -> list[str]:
+    """A GP step's optional `Actor:` line must name a defined Role (it sets the diagram's lifeline).
+    No-op when no step carries an Actor line; also skipped when the map has no Roles table (nothing
+    to resolve against), so the check stays additive."""
+    if not role_names:
+        return []
+    problems: list[str] = []
+    for gp, body in gp_bodies(text, gp_order):
+        for ln in body:
+            s = ln.strip()
+            if s.startswith("Actor:"):
+                val = re.sub(r"[*`]", "", s[len("Actor:"):]).strip()
+                if val and val.lower() not in role_names:
+                    problems.append(f"{gp} Actor '{val}' is not a defined Role (Roles table)")
                 break
-        if not found:
-            missing.append(gp)
-    return missing
+    return problems
 
 
 def check_roles_kind(text: str) -> list[str]:
@@ -362,6 +411,7 @@ def main() -> int:
     if missing_touches:
         problems.append(f"Golden Path steps missing a Touches: line: {', '.join(missing_touches)}")
 
+    problems.extend(check_gp_actors(text, gp_order, collect_role_names(text)))
     problems.extend(check_roles_kind(text))
     problems.extend(check_table_shape(text))
     problems.extend(check_edge_verbs(text))

@@ -66,6 +66,14 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     **⌥+←/→**, or by clicking an ancestor crumb in the breadcrumb (the structural nesting path,
     e.g. Context › Subsystems › *this subsystem*) below the header.
 - **Components** — every component + its verbed edges; click a node/edge for details + `file:line`.
+- **Golden Path** *(when the map has a Golden Path)* — the behavioural overlay, in two levels:
+  - **Level 1** is the path as a black-box **sequence diagram** — each step a message from its actor
+    to the System, in order. The actor (lifeline) is the step's `Actor:` line if present, else the
+    actor of its first use case. Click a step to drill in.
+  - **Level 2** (a step) is its **components-used** diagram: the induced subgraph of the C/D/E nodes
+    that step `Touches:`, plus the verbed edges among them. Click a node/edge for `file:line`; the
+    **Locate in full map →** link in the panel jumps to the Components view with the step's nodes
+    spotlighted. Navigate back with the breadcrumb (Golden Path › *this step*) or the **◀ ▶** arrows.
 - **Domain** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal
   relations (composition/aggregation/inheritance/association). Click a class for its fields +

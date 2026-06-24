@@ -8,8 +8,11 @@ const MERMAID_CONTAINER = __MERMAID_CONTAINER__;
 const MERMAID_BY_SUB = __MERMAID_BY_SUB__;        // subsystem neighbourhood: sid -> sub-diagram
 const MERMAID_EDGE_CARD = __MERMAID_EDGE_CARD__;  // edge pair: 'A>B' -> two-subsystem sub-diagram
 const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classDiagram
+const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): black-box sequence diagram
+const MERMAID_GP_STEP = __MERMAID_GP_STEP__;      // GP step (Level 2): GP-id -> components-used sub-diagram
 const HAS_GROUPING = __HAS_GROUPING__;
 const HAS_DOMAIN = __HAS_DOMAIN__;
+const HAS_GP = __HAS_GP__;
 const CONTEXT_EDGES = __CONTEXT_EDGES__;
 const HAS_DIFF = __HAS_DIFF__;
 const META = __META__;
@@ -57,6 +60,14 @@ let downX = 0, downY = 0;  // last mousedown, to tell a real click from a drag-p
 // Components view and the drilled diagrams, so an arrow resolves to its real component edge.
 const COMP_LOOKUP = {};
 for (const e of GRAPH.edges || []) (COMP_LOOKUP[e.src + '>' + e.dst] ||= []).push(e);
+
+// Golden Path step lookup 'GP1' -> step record (id, title, story, under_the_hood, touches, uc).
+const GP_BY_ID = {};
+for (const s of GRAPH.gp || []) GP_BY_ID[s.id] = s;
+
+// When the GP-step panel's "Locate in full map" link navigates to the Components view, the set of ids
+// to spotlight there is stashed here and applied once that view has rendered (then cleared).
+let pendingFocus = null;
 
 // --- scene ----------------------------------------------------------------------
 // A "scene" wraps the diagram currently shown: its root, the bound node/edge elements, the active
@@ -175,6 +186,43 @@ function showTwoSubsystems(a, b) {
     + subsystemBlock(a) + '<hr>' + subsystemBlock(b);
 }
 
+// --- Golden Path panels ---------------------------------------------------------
+// The actor that drives a step: the `Actor` cell of its use case (UC node), or '' when unknown.
+function gpActor(s) {
+  const uc = s && s.uc && GRAPH.nodes[s.uc];
+  if (uc) for (const k in (uc.fields || {})) if (k.toLowerCase() === 'actor' && String(uc.fields[k]).trim()) return uc.fields[k];
+  return '';
+}
+// The C/D/E ids a step touches that actually exist as graph nodes — the Level-2 subgraph + spotlight set.
+function gpTouched(s) {
+  return new Set((s && s.touches || []).filter((t) => GRAPH.nodes[t]
+    && ['component', 'dep', 'entity'].includes(GRAPH.nodes[t].kind)));
+}
+// Level-1 default panel: the Golden Path at a glance; the diagram is where you click a step.
+function showGPOverview() {
+  const n = (GRAPH.gp || []).length;
+  panel.innerHTML = '<h2>Golden Path</h2>'
+    + '<div class="badges"><span class="badge kind">' + n + ' step' + (n === 1 ? '' : 's') + '</span></div>'
+    + '<p class="empty">Click a step to see the components it uses.</p>';
+}
+// Level-2 default panel: one step's narrative (actor · story · under the hood) + a link back to the
+// full Components map with this step's touched nodes spotlighted.
+function showGPStep(gpId) {
+  const s = GP_BY_ID[gpId];
+  if (!s) { panel.innerHTML = EMPTY_PANEL; return; }
+  const actor = gpActor(s);
+  panel.innerHTML = '<h2>' + esc(s.id) + ' · ' + esc(s.title) + '</h2>'
+    + '<div class="badges">' + (s.uc ? '<span class="badge kind">' + esc(s.uc) + '</span>' : '')
+      + (actor ? '<span class="badge edge">' + esc(actor.replace(/[*`]/g, '')) + '</span>' : '') + '</div>'
+    + '<dl>'
+    + (s.story ? '<dt>Story</dt><dd>' + mdInline(s.story) + '</dd>' : '')
+    + (s.under_the_hood ? '<dt>Under the hood</dt><dd>' + mdInline(s.under_the_hood) + '</dd>' : '')
+    + '</dl>'
+    + '<a class="locate" href="#">Locate in full map →</a>';
+  const link = panel.querySelector('.locate');
+  if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); pendingFocus = gpTouched(s); go({ kind: 'component' }); });
+}
+
 // --- hover tooltip --------------------------------------------------------------
 // A floating card that previews an element's MEANING on hover, so you can read it without
 // selecting (selecting is what fills the side panel). One reused <div id="tip">; pointer-events:none
@@ -209,6 +257,14 @@ function tipEdgeHtml(e) {
     + '<div class="tk">' + esc(e.verb) + '</div>'
     + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
              : '<div class="tn">no why recorded</div>');
+}
+function tipGPHtml(gpId) {  // hover a GP step (message) -> its title + story preview
+  const s = GP_BY_ID[gpId];
+  if (!s) return '';
+  return '<div class="tt">' + esc(s.id + (s.title ? ' — ' + s.title : '')) + '</div>'
+    + '<div class="tk">golden path step</div>'
+    + (s.story ? '<div class="tm">' + mdInline(s.story) + '</div>'
+               : '<div class="tn">no story recorded</div>');
 }
 function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor if it would overflow the viewport
   const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
@@ -415,7 +471,7 @@ let history = [];
 let hi = -1;  // index of the current state
 
 function stateKey(s) {
-  return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '');
+  return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '') + (s.gp ? ':' + s.gp : '');
 }
 function captureViewport() {  // stash the current pan/zoom on the entry we're about to leave
   if (mainPz && hi >= 0 && history[hi]) history[hi].vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
@@ -525,6 +581,34 @@ function bindDomain() {
   });
 }
 
+// Golden Path (Level 1) is a Mermaid sequenceDiagram, a different SVG shape again: each step is a
+// message whose label carries its GP id (`GP1 — …`). We bind every message text (and its arrow line,
+// paired by index when counts align) to drill into that step. The GP id is read FROM the label, so
+// binding stays correct even if Mermaid reorders or adds elements.
+function bindGP() {
+  const root = mainScene.root;
+  const texts = [...root.querySelectorAll('text.messageText')];
+  const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
+  const aligned = lines.length === texts.length;
+  texts.forEach((t, i) => {
+    const m = (t.textContent || '').match(/\b(GP\d+)\b/);
+    if (!m) return;
+    const gpId = m[1];
+    const drill = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); go({ kind: 'gpstep', gp: gpId }); };
+    const on = () => { t.style.filter = HOVER; };
+    const off = () => { t.style.filter = ''; };
+    for (const el of [t, aligned ? lines[i] : null]) {
+      if (!el) continue;
+      el.style.cursor = 'pointer';
+      el.style.setProperty('pointer-events', el === t ? 'all' : 'stroke', 'important');
+      el.addEventListener('click', drill);
+      el.addEventListener('mouseenter', on);
+      el.addEventListener('mouseleave', off);
+      attachTip(el, () => tipGPHtml(gpId));
+    }
+  });
+}
+
 // --- render ---------------------------------------------------------------------
 function mermaidFor(s) {
   if (s.kind === 'context') return MERMAID_CONTEXT;
@@ -532,11 +616,15 @@ function mermaidFor(s) {
   if (s.kind === 'subsystem') return MERMAID_BY_SUB[s.sid];
   if (s.kind === 'edge') return MERMAID_EDGE_CARD[s.a + '>' + s.b];
   if (s.kind === 'domain') return MERMAID_DOMAIN;
+  if (s.kind === 'gp') return MERMAID_GP;
+  if (s.kind === 'gpstep') return MERMAID_GP_STEP[s.gp];
   return mode === 'diff' ? MERMAID_DIFF : MERMAID_BASE;  // component
 }
 function applyDefaultPanel(s) {
   if (s.kind === 'subsystem') showNode(s.sid);
   else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
+  else if (s.kind === 'gp') showGPOverview();
+  else if (s.kind === 'gpstep') showGPStep(s.gp);
   else panel.innerHTML = EMPTY_PANEL;
 }
 function bindFor(s) {
@@ -545,23 +633,31 @@ function bindFor(s) {
   else if (s.kind === 'subsystem') bindSubsystem(s.sid);
   else if (s.kind === 'edge') bindEdgePair();
   else if (s.kind === 'domain') bindDomain();
+  else if (s.kind === 'gp') bindGP();
+  else if (s.kind === 'gpstep') bindComponent();  // step subgraph = a Components view scoped to the step
   else bindComponent();
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'context' || kind === 'component' || kind === 'domain') return kind;
+  if (kind === 'gp' || kind === 'gpstep') return 'gp';
   return 'container';
 }
+function gpTitle(gp) { const s = GP_BY_ID[gp]; return s ? s.id + (s.title ? ' — ' + s.title : '') : gp; }
 function stateTitle(s) {
   if (s.kind === 'context') return 'Context';
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Domain';
+  if (s.kind === 'gp') return 'Golden Path';
+  if (s.kind === 'gpstep') return gpTitle(s.gp);
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   if (s.kind === 'subsystem') return nm(s.sid);
   return nm(s.a) + ' → ' + nm(s.b);  // edge
 }
 function ancestors(s) {  // structural nesting path (top → s), independent of the click history
   if (s.kind === 'domain') return [{ kind: 'domain' }];   // a standalone behavioural lens, not nested in Context
+  if (s.kind === 'gp') return [{ kind: 'gp' }];           // the Golden Path is its own behavioural lens
+  if (s.kind === 'gpstep') return [{ kind: 'gp' }, { kind: 'gpstep', gp: s.gp }];  // step nested under it
   const trail = [{ kind: 'context' }];                    // Context is the root of the structural zoom
   if (s.kind === 'context') return trail;
   if (s.kind === 'component') { trail.push({ kind: 'component' }); return trail; }
@@ -607,6 +703,11 @@ async function render() {
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
   bindFor(s);
   applyDefaultPanel(s);
+  // "Locate in full map" arrived here: spotlight the GP step's touched nodes in the Components view.
+  if (pendingFocus && s.kind === 'component') {
+    const keep = pendingFocus; pendingFocus = null;
+    applyFocus(mainScene, (nid) => keep.has(nid), (e) => keep.has(e.src) && keep.has(e.dst));
+  }
   const svgEl = diagram.querySelector('svg');
   if (svgEl && window.svgPanZoom) {
     svgEl.removeAttribute('style');
@@ -637,6 +738,7 @@ buildLegend();
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'gp' && !HAS_GP) { b.style.display = 'none'; return; }
   b.addEventListener('click', () => go({ kind: b.dataset.view }));
 });
 navback.addEventListener('click', back);

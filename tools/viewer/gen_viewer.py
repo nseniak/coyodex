@@ -32,6 +32,9 @@ _ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined in
 
 SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]')}
 DIAGRAM_KINDS = ("component", "dep")
+# Golden-Path step view also draws entities (rounded box) alongside components/deps.
+GP_SHAPE = {**SHAPE, "entity": ('("', '")')}
+GP_STEP_KINDS = ("component", "dep", "entity")
 
 # Domain (T5) relationship kind -> Mermaid classDiagram arrow. The diamond/triangle sits at the
 # `src` (left) end, matching how the relation is authored on the source entity's card.
@@ -384,6 +387,87 @@ def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
     return ce
 
 
+def has_gp(graph: GraphDict) -> bool:
+    return bool(graph["gp"])
+
+
+def _safe_msg(s: str) -> str:
+    """Sanitize text for a Mermaid sequenceDiagram message / participant label: strip markdown links
+    and emphasis, drop the chars that break sequence parsing (`;#<>` + newlines), collapse runs of
+    whitespace. Colons are kept (only the FIRST colon delimits a message)."""
+    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", s)   # md link -> its text
+    s = re.sub(r"[`*]", "", s)
+    s = s.replace("\n", " ").replace(";", ",").replace("#", "").replace("<", "(").replace(">", ")")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _gp_actor(graph: GraphDict, step: dict[str, Any]) -> str:
+    """The actor that drives a GP step. An explicit `Actor:` line wins (the only reliable signal when
+    a step bundles several UCs with different actors); otherwise fall back to the `Actor` cell of the
+    step's FIRST use case, then to a generic 'Actor'."""
+    explicit = step.get("actor")
+    if isinstance(explicit, str) and explicit.strip():
+        return _safe_msg(explicit)
+    uc = step.get("uc")
+    node = graph["nodes"].get(uc) if isinstance(uc, str) else None
+    if node:
+        for k, v in cast("dict[str, str]", node.get("fields") or {}).items():
+            if k.strip().lower() == "actor" and str(v).strip():
+                return _safe_msg(str(v))
+    return "Actor"
+
+
+def gen_gp_mermaid(graph: GraphDict) -> str:
+    """C4 behavioural overlay, Level 1: the Golden Path as a black-box sequenceDiagram — each step a
+    message from its actor to the System, in order. The step id is embedded in every message label
+    (`GP1 — title`) so the viewer resolves a click on a message to that step's detail view; distinct
+    actors (derived per step from its UC) become the lifelines."""
+    steps = cast("list[dict[str, Any]]", graph["gp"])
+    title = _safe_msg(graph["title"] or "System")
+    actor_ids: dict[str, str] = {}  # actor name -> stable participant id, in first-appearance order
+    for st in steps:
+        actor_ids.setdefault(_gp_actor(graph, st), "GPA" + str(len(actor_ids)))
+    lines = ["sequenceDiagram"]
+    for name, aid in actor_ids.items():
+        lines.append(f"  actor {aid} as {name}")
+    lines.append(f"  participant GPSYS as {title}")
+    for st in steps:
+        aid = actor_ids[_gp_actor(graph, st)]
+        title_txt = _safe_msg(str(st["title"])) if st["title"] else ""
+        label = f"{st['id']} — {title_txt}" if title_txt else str(st["id"])
+        lines.append(f"  {aid}->>GPSYS: {label}")
+    return "\n".join(lines)
+
+
+def gen_gp_step_mermaid(graph: GraphDict, gp_id: str) -> str:
+    """Behavioural overlay, Level 2: the components-used diagram for one GP step — the induced
+    subgraph of the C/D/E nodes the step `Touches:`, plus the verbed edges among them. Same node ids
+    and `src -->|verb| dst` shape as the Components view, so the viewer's id/edge bridge resolves a
+    click to its node panel (-> file:line) or its real edge."""
+    step = next((s for s in graph["gp"] if s["id"] == gp_id), None)
+    touched = [t for t in cast("list[str]", step["touches"] if step else [])
+               if t in graph["nodes"] and str(graph["nodes"][t]["kind"]) in GP_STEP_KINDS]
+    ids = set(touched)
+    lines = ["flowchart LR"]
+    for nid in touched:
+        node = graph["nodes"][nid]
+        kind = str(node["kind"])
+        open_b, close_b = GP_SHAPE.get(kind, SHAPE["component"])
+        lines.append(f"  {nid}{open_b}{_safe_label(str(node['name']))}{close_b}:::cy-{nid}")
+        lines.append(f"  class {nid} {kind}")
+    for src, verb, dst in _diagram_edges(graph, None, ids):
+        lines.append(f"  {src} -->|{verb}| {dst}")
+    lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
+    lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
+    lines.append("  classDef entity fill:#fdf4ff,stroke:#86198f,color:#581c87;")
+    return "\n".join(lines)
+
+
+def gp_step_mermaids(graph: GraphDict) -> dict[str, str]:
+    """One step-detail diagram per GP step, keyed by GP id (see gen_gp_step_mermaid)."""
+    return {str(s["id"]): gen_gp_step_mermaid(graph, str(s["id"])) for s in graph["gp"]}
+
+
 def merged_graph(graph: GraphDict, diff: DiffDict | None) -> dict[str, Any]:
     """Graph + diff annotations (added nodes inserted, change status on nodes) for the panel."""
     g = cast("dict[str, Any]", copy.deepcopy(graph))
@@ -438,6 +522,7 @@ __STYLE__
     <button data-view="context">Context</button>
     <button data-view="container">Subsystems</button>
     <button data-view="component">Components</button>
+    <button data-view="gp">Golden Path</button>
     <button data-view="domain">Domain</button>
   </span>
   <span id="zoomctl">
@@ -467,7 +552,8 @@ __SCRIPT__
 def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              context_edges: dict[str, dict[str, Any]], has_diff: bool, meta: str,
              diff_state: dict[str, str], container_mm: str, by_sub: dict[str, str],
-             edge_cards: dict[str, str], grouping: bool, domain_mm: str, domain: bool) -> str:
+             edge_cards: dict[str, str], grouping: bool, domain_mm: str, domain: bool,
+             gp_mm: str, gp_steps: dict[str, str], gp: bool) -> str:
     css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
     js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
     return (
@@ -481,10 +567,13 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_BY_SUB__", json.dumps(by_sub))
         .replace("__MERMAID_EDGE_CARD__", json.dumps(edge_cards))
         .replace("__MERMAID_DOMAIN__", json.dumps(domain_mm))
+        .replace("__MERMAID_GP__", json.dumps(gp_mm))
+        .replace("__MERMAID_GP_STEP__", json.dumps(gp_steps))
         .replace("__CONTEXT_EDGES__", json.dumps(context_edges))
         .replace("__HAS_DIFF__", "true" if has_diff else "false")
         .replace("__HAS_GROUPING__", "true" if grouping else "false")
         .replace("__HAS_DOMAIN__", "true" if domain else "false")
+        .replace("__HAS_GP__", "true" if gp else "false")
         .replace("__META__", json.dumps(meta))
         .replace("__DIFF_STATE__", json.dumps(diff_state))
     )
@@ -514,10 +603,13 @@ def main() -> int:
     edge_cards = edge_card_mermaids(graph) if grouping else {}
     domain = has_domain(graph)
     domain_mm = gen_domain_mermaid(graph) if domain else ""
+    gp = has_gp(graph)
+    gp_mm = gen_gp_mermaid(graph) if gp else ""
+    gp_steps = gp_step_mermaids(graph) if gp else {}
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
-                    container_mm, by_sub, edge_cards, grouping, domain_mm, domain)
+                    container_mm, by_sub, edge_cards, grouping, domain_mm, domain, gp_mm, gp_steps, gp)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")
     return 0

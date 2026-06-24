@@ -65,6 +65,8 @@ class GPStep:
     story: str
     under_the_hood: str
     touches: list[str] = field(default_factory=list)
+    uc: str | None = None  # the use case the step realizes (from the `*(UCn)*` heading tag); fallback actor source
+    actor: str | None = None  # explicit driving role from an `Actor:` line; overrides the UC-derived actor
 
 
 class GraphDict(TypedDict):
@@ -200,9 +202,15 @@ def parse_gp(lines: list[str]) -> list[GPStep]:
             i += 1
             continue
         gp_id = m.group(1)
+        # First UC in the heading tag -> the step's (primary) use case. The tag may list several
+        # (`*(UC21, UC22)*`) or carry trailing text (`*(UC16 follow-on)*`); take the first id so a
+        # multi-UC step still resolves to a real actor instead of falling back to a generic one.
+        uc_m = re.search(r"UC\d+", lines[i])
+        uc = uc_m.group(0) if uc_m else None
         title = lines[i].split("—", 1)[1].strip() if "—" in lines[i] else ""
         title = re.sub(r"\*\*|\*\([^)]*\)\*?", "", title).strip().rstrip("*").strip()
         story = under = ""
+        actor: str | None = None
         touches: list[str] = []
         j = i + 1
         while j < len(lines) and not DEF_GP.match(lines[j]):
@@ -211,10 +219,13 @@ def parse_gp(lines: list[str]) -> list[GPStep]:
                 story = s[len("STORY:"):].strip()
             elif s.startswith("UNDER THE HOOD:"):
                 under = s[len("UNDER THE HOOD:"):].strip()
+            elif s.startswith("Actor:"):
+                actor = s[len("Actor:"):].strip() or None
             elif s.startswith("`Touches:`") or s.startswith("Touches:"):
                 touches = ID_TOKEN.findall(s)
             j += 1
-        steps.append(GPStep(id=gp_id, title=title, story=story, under_the_hood=under, touches=touches))
+        steps.append(GPStep(id=gp_id, title=title, story=story, under_the_hood=under,
+                            touches=touches, uc=uc, actor=actor))
         i = j
     return steps
 
