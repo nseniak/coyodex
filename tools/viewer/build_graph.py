@@ -22,9 +22,11 @@ from schema_v1 import (  # noqa: E402
     DEF_GP,
     DEF_ID_CELL,
     ID_TOKEN,
+    fk_targets,
     iter_domain_cards,
     membership_col,
     membership_ids,
+    resolve_backing,
     strip_fences,
 )
 
@@ -56,6 +58,9 @@ class Edge:
     kind: str | None = None       # domain-relation kind (association/composition/…); None = plain edge
     src_card: str | None = None   # cardinality at the source end (domain relations only)
     dst_card: str | None = None   # cardinality at the destination end
+    how: str | None = None        # plain-text note: how a field-less domain relation is implemented
+    fk_field: str | None = None   # the REAL field that backs the relation (drives the arrow label)
+    fk_side: str | None = None    # 'src' = field on the tail (forward), 'dst' = FK on the head (reverse)
 
 
 @dataclass
@@ -247,9 +252,23 @@ def parse_domain(lines: list[str]) -> tuple[dict[str, Node], list[Edge]]:
                               line=_line_of(card.source), fields=meta, attrs=attrs)
         for r in card.relations:
             if r.ok:
-                edges.append(Edge(card.id, r.verb, r.target, None, None,
-                                  kind=r.kind, src_card=r.src_card, dst_card=r.dst_card))
+                edges.append(Edge(card.id, r.verb, r.target, None, None, kind=r.kind,
+                                  src_card=r.src_card, dst_card=r.dst_card, how=r.how))
+    # Second pass (all entity nodes now exist, so forward references resolve): for each relation, find
+    # the REAL field that backs it — the single resolution that drives both the arrow label and the
+    # panel's "Implemented by" line. `isA` is a pure type relation, never field-backed, so skip it.
+    for e in edges:
+        # `e.src` is always a card id (added to `nodes` above); only `e.dst` can dangle (undefined
+        # target — the validator flags it), so guard the dst lookup.
+        if e.kind and e.kind != "inheritance" and e.dst in nodes:
+            e.fk_field, e.fk_side = resolve_backing(
+                e.src, e.dst, _backing_fields(nodes[e.src]), _backing_fields(nodes[e.dst]))
     return nodes, edges
+
+
+def _backing_fields(node: Node) -> list[tuple[str, str, set[str]]]:
+    """A node's entity attributes as `(name, type, fk_targets)` triples for `resolve_backing`."""
+    return [(a.get("name", ""), a.get("type", ""), fk_targets(a.get("markers", ""))) for a in node.attrs]
 
 
 SERVICE_HINTS = re.compile(

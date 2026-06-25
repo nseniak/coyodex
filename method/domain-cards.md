@@ -69,21 +69,26 @@ FIELDS:
 ```
 
 Parse: split on `·` (or take each `- ` bullet); split each item on the first `:` → `name`,
-`rest`; in `rest` the first token is `type`, the rest are markers.
+`rest`; in `rest` the first token is `type`, the rest are markers. The two **suffix** markers
+`[]` (collection) and `?` (nullable) may be written **spaced** (`tokens:E28 []`) **or glued** to
+the type (`tokens:E28[]`) — the parser peels them off, so the bare type still resolves either way.
+(Before this normalization, a glued `E28[]` silently failed: the box showed `E28` instead of the
+entity name, and the relation arrow rendered unlabelled.)
 
 - **type** — a scalar (`string int float bool money date ObjectId json` …) or an `E`-id for an
   embedded value object (`address: E7`). An `E`-typed field renders with the referenced entity's
   display name as its type (`Address address`); it does **not** auto-create a relation — draw the
   edge only by listing it in `RELATIONS` (keeps relationships single-sourced).
 - **markers** (small controlled set): `PK`, `FK` (optionally `FK→E3` to name the target),
-  `unique`, `?` (nullable), `[]` (collection).
+  `unique`, `?` (nullable), `[]` (collection). The two suffix markers (`?`, `[]`) may be glued to
+  the type; the rest are space-separated.
 
 ### RELATIONS micro-format
 
 Each relation, authored **on the source entity's card only** (one side — see "Single source"):
 
 ```
-<verb> <srcCard>→<dstCard> <target-Eid> [display] · …
+<verb> <srcCard>→<dstCard> <target-Eid> [display] [{how}] · …
 ```
 
 ```
@@ -101,6 +106,12 @@ Parse one item with:
 - the edge is `(this card's id) --verb--> tgt`, carrying cardinality `(sc, dc)` and a **kind**.
 - cardinality is optional (omit it for inheritance).
 - allowed cardinality tokens: `1`, `*`, `0..1`, `1..*`.
+- an optional trailing **`{how}` note** is a plain-text explanation of how a *field-less* relation is
+  implemented — `tracks *→1 E11 {keyed by (org_id, upstream_id) in the connection store}`. It is
+  peeled off before the grammar match and shown in the click-panel's **Implemented by** line (a `·`
+  may not appear inside it — it is the item separator). Use it for the indirect / key-composition
+  links that no single field backs; the validator warns on a field-less **association** that has
+  neither a backing FK nor a note (see "Arrow labels").
 
 **One canonical verb per relationship kind** — the verb selects the `classDiagram` arrow; use
 exactly the canonical verb (the validator rejects aliases). Association is free-form: any other
@@ -119,19 +130,31 @@ Aliases the validator rejects in favour of the canonical verb: `owns` / `compose
 
 **Arrow labels are REAL field names, never the verb.** The marker already conveys the kind, and an
 invented relationship verb (`authorizes`, `pinnedTo`, `identifies`) isn't grounded in the code — so
-a label is shown **only when it is a real field**:
+a label is shown **only when a real field backs the relation**. **One** resolution (in `build_graph`,
+`resolve_backing`) finds that field and feeds *both* the canvas label and the panel's **Implemented
+by** line, so the two never drift:
 
-- **forward** — a field on the *source* typed by the target → that **field name** (`subscription`,
-  `mode`, `stdio`);
-- **reverse** — the target's foreign key back to the source (`FK→E1`) → **`↩ field`** (`↩ org_id`),
-  the `↩` flagging that the field lives on the far end;
-- **otherwise → blank.** The marker + the target box convey the relationship; the verb stays in the
-  click-panel, off the canvas.
+- **forward** — a field on the *source* that is **typed by the target** (`subscription:E15`) **or
+  marked `FK→target`** (`role:string FK→E5`) → that **field name** (`subscription`, `role`);
+- **reverse** — the *target's* foreign key back to the source (`FK→source`) → **`↩ field`**
+  (`↩ org_id`), the `↩` flagging that the field lives on the far / arrow-head end;
+- **otherwise → blank**, and the relation should carry a **`{how}` note** (see RELATIONS
+  micro-format) — the marker + the target box convey the *kind*, but a field-less relation needs
+  prose to say *how* it is wired (it is keyed in a store, composed from two ids, …).
 
-To make a structural relation field-backed (and thus labelled), **type the field by its entity** —
-`auth:E7`, `clients:E17 []` — not `json`; the field name then becomes the label. And mark a child's
-foreign key with its target — `org_id:string FK→E1` — for the `↩` label (the back-reference also
-resolves in the validator).
+Forward wins over reverse when a field exists on both sides (show the near-side field). FK markers
+match the whole id token, so `FK→E1` never matches `E11`.
+
+> **Why symmetric forward/reverse.** A foreign key on the *source* (`role:string FK→E5`, the common
+> child→parent association) used to render **nothing**, while the same shape on the *target* rendered
+> `↩ field` — so of many FK relations only the rare reverse one was ever labelled, which read as
+> random. Matching `FK→` on *either* side makes a marked FK show its field whichever card authored
+> the relation; the `{how}` note covers the rest.
+
+To make a relation field-backed (and thus labelled), either **type the field by its entity** —
+`auth:E7`, `clients:E17 []`, not `json` — or **mark the foreign key with its target** —
+`org_id:string FK→E1`, `role:string FK→E5` — on whichever side the column actually lives. A relation
+that no single field implements (key-composition, a derived view) takes a `{how}` note instead.
 
 ---
 
@@ -160,7 +183,7 @@ Three cards:
 ```
 **E1 — Order** *(orders collection)*
 MEANING: a customer's purchase, from cart to fulfillment
-FIELDS: id:ObjectId PK · status:string · total:money · createdAt:date
+FIELDS: id:ObjectId PK · status:string · total:money · createdAt:date · customerId:ObjectId FK→E3
 RELATIONS: contains 1→* E2 LineItem · placedBy *→1 E3 Customer
 SOURCE: [order.py](domain/order.py#L12)
 
@@ -179,17 +202,19 @@ SOURCE: [customer.py](domain/customer.py#L9)
 Parse to nodes (with `attrs`) + edges (with `card` + `kind`):
 
 ```
-E1 Order    attrs=[id:ObjectId(PK), status:string, total:money, createdAt:date]  store="orders collection"
+E1 Order    attrs=[id:ObjectId(PK), status:string, total:money, createdAt:date, customerId:ObjectId(FK→E3)]
 E2 LineItem attrs=[sku:string, qty:int, unitPrice:money]
 E3 Customer attrs=[id:ObjectId(PK), email:string(unique), name:string]
 
-E1 --contains→ E2   card=(1,*)  kind=composition
-E1 --placedBy→ E3   card=(*,1)  kind=association
-E2 --refersTo→ E4   card=(*,1)  kind=association
+E1 --contains→ E2   card=(1,*)  kind=composition   backing: none (no field on E1 typed E2) → blank label
+E1 --placedBy→ E3   card=(*,1)  kind=association    backing: E1.customerId (FK→E3), forward → label "customerId"
+E2 --refersTo→ E4   card=(*,1)  kind=association    (E4 is defined elsewhere; not drawn in this 3-card slice)
 ```
 
 Render as `classDiagram` (the box shows `type name`; PK/FK/unique/nullable markers show in the
-viewer's click→panel, since `classDiagram` boxes have no native key notation):
+viewer's click→panel, since `classDiagram` boxes have no native key notation). The arrow carries the
+**backing field name**, never the verb — `placedBy` is implemented by `Order.customerId`, so the
+arrow reads `customerId`; the composition has no backing field, so it is unlabelled:
 
 ```mermaid
 classDiagram
@@ -209,8 +234,8 @@ classDiagram
     string email
     string name
   }
-  E1 "1" *-- "*" E2 : contains
-  E1 "*" --> "1" E3 : placedBy
+  E1 "1" *-- "*" E2
+  E1 "*" --> "1" E3 : customerId
 ```
 
 `classDiagram` is the render target (decided): it takes arbitrary `"1"`/`"*"` cardinality labels
@@ -231,6 +256,13 @@ The validator (when domain cards are implemented — see "Implementation status"
 - `MEANING` and `SOURCE` present (the `SOURCE` anchor drives the confidence label).
 - the relation verb is the canonical one for its kind (aliases rejected — see the verb table).
 - no raw `|` inside a card line.
+
+It also emits a **non-blocking warning** (printed, but the build still passes) for a completeness
+gap: an **association** that no field backs (no `FK→`/typed field on either side) **and** has no
+`{how}` note — such an arrow draws nothing on the canvas and explains nothing in the panel, so the
+reader can't tell how the link is wired. Fix it by marking the implementing field `FK→target` (or
+`FK→source` on the other card) or adding a `{how}` note. Structural kinds (composition / aggregation
+/ inheritance) are exempt — their marker already conveys the implementation.
 
 **Opt-in source check (`--check-sources`).** Reads each card's `SOURCE` file and rejects an entity
 whose name has no identifier token present there — catching **synthesized** entities (a name with no
@@ -267,17 +299,21 @@ cardinality).
 
 1. **`tools/schema_v1.py`** — `DEF_ENTITY` heading definition (`E` is card-defined, removed from the
    table-row patterns); shared `iter_domain_cards` / `parse_card_fields` / `parse_card_relations`
-   grammar (`RELATION_ITEM`, `ALLOWED_CARDINALITY`, `REL_KIND`).
+   grammar (`RELATION_ITEM`, `REL_HOW`, `ALLOWED_CARDINALITY`, `REL_KIND`); the shared relation
+   backing resolver `resolve_backing` + `fk_targets` (token-exact `FK→` matching).
 2. **`tools/validate_analysis.py`** — `check_domain_cards` (MEANING/SOURCE/FIELDS present, every
-   field typed, every relation well-formed, single-side); card ids ride the generic
-   duplicate/undefined-reference checks.
+   field typed, every relation well-formed, single-side); plus a non-blocking warning for a
+   field-less, note-less association. Card ids ride the generic duplicate/undefined-reference checks.
 3. **`tools/viewer/build_graph.py`** — `parse_domain` (modeled on `parse_gp`); `Node.attrs`,
-   `Edge.kind` / `src_card` / `dst_card`.
-4. **`tools/viewer/gen_viewer.py`** — `gen_domain_mermaid` emits the `classDiagram`; a **Domain**
-   view button (hidden when the map has no entities).
+   `Edge.kind` / `src_card` / `dst_card`; a second pass resolves each relation's backing field into
+   `Edge.fk_field` / `Edge.fk_side`, and carries the `{how}` note as `Edge.how`.
+4. **`tools/viewer/gen_viewer.py`** — `gen_domain_mermaid` emits the `classDiagram`; `_relation_label`
+   formats the resolved `fk_field` / `fk_side` into the arrow label (plain forward, `↩` reverse); a
+   **Domain** view button (hidden when the map has no entities).
 5. **`tools/viewer/viewer.js`** — a classDiagram click-bridge (`bindDomain` / `eachClassEdge`):
    class group id `…-classId-E1-N` resolves via the id regex, relation path id `…-id_E1_E2_N`
-   encodes its endpoints; the panel renders entity `attrs` and relation cardinality.
+   encodes its endpoints; the panel renders entity `attrs`, relation cardinality, and an **Implemented
+   by** line (the backing field, or the authored `{how}` note for a field-less relation).
 
 ## Migration
 

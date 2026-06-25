@@ -145,11 +145,19 @@ function showEdge(e) {
   const kindBadge = e.kind ? '<span class="badge kind">' + esc(e.kind) + '</span>' : '';
   const card = (e.src_card || e.dst_card)
     ? '<dt>Cardinality</dt><dd>' + esc((e.src_card || '') + ' → ' + (e.dst_card || '')) + '</dd>' : '';
+  // How the relation is implemented: the backing field (resolved in build_graph; `↩`-named when it
+  // lives on the target/head), else the authored `{how}` note for a field-less / indirect relation.
+  const impl = e.fk_field
+    ? esc((e.fk_side === 'dst' ? nm(e.dst) : nm(e.src)) + '.' + e.fk_field)
+      + (e.fk_side === 'dst' ? ' <span class="muted">(back-reference)</span>' : '')
+    : (e.how ? mdInline(e.how) : '');
+  const implRow = impl ? '<dt>Implemented by</dt><dd>' + impl + '</dd>' : '';
   panel.innerHTML = '<h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
     + '<div class="badges"><span class="badge edge">' + esc(e.verb) + '</span>' + kindBadge + '</div>'
     + '<dl>'
     + (e.why ? '<dt>Why</dt><dd>' + mdInline(e.why) + '</dd>' : '')
     + card
+    + implRow
     + '<dt>From</dt><dd>' + e.src + ' · ' + esc(nm(e.src)) + '</dd>'
     + '<dt>To</dt><dd>' + e.dst + ' · ' + esc(nm(e.dst)) + '</dd>'
     + '</dl>'

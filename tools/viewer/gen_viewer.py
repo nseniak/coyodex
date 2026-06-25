@@ -138,19 +138,17 @@ def _safe_member(s: str) -> str:
     return re.sub(r'[<>{}|`"]', "", s).strip()
 
 
-def _relation_label(edge: dict[str, Any], src_node: dict[str, Any], tgt_node: dict[str, Any]) -> str:
-    """Arrow label — a REAL field name only (an invented relationship verb isn't grounded in code):
-    forward (a field on the SOURCE typed by the target) -> the field name (`subscription`);
-    reverse (a field on the TARGET marked `FK→source`) -> `↩ field` (`↩ org_id`);
-    else -> blank (the marker + target box convey the relationship; the verb stays in the panel)."""
-    src, tgt = str(edge["src"]), str(edge["dst"])
-    for a in cast("list[dict[str, str]]", src_node.get("attrs") or []):
-        if str(a.get("type", "")) == tgt:
-            return _safe_label(str(a.get("name", "")))
-    for a in cast("list[dict[str, str]]", tgt_node.get("attrs") or []):
-        if f"FK→{src}" in str(a.get("markers", "")) or f"FK->{src}" in str(a.get("markers", "")):
-            return "↩ " + _safe_label(str(a.get("name", "")))
-    return ""  # no real field backs this relation — don't invent a label from the verb
+def _relation_label(edge: dict[str, Any]) -> str:
+    """Arrow label — a REAL field name only (an invented relationship verb isn't grounded in code).
+    The backing field is resolved once in build_graph (`fk_field` / `fk_side`); here we only format it:
+    forward (field on the source / arrow-tail) -> the field name (`subscription`, `org_id`);
+    reverse (FK on the target / arrow-head) -> `↩ field` (`↩ org_id`);
+    blank when no field backs the relation (the `{how}` note then explains it in the click-panel)."""
+    field = edge.get("fk_field")
+    if not field:
+        return ""
+    label = _safe_label(str(field))
+    return label if edge.get("fk_side") == "src" else "↩ " + label
 
 
 def gen_domain_mermaid(graph: GraphDict) -> str:
@@ -166,19 +164,22 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
         lines.append(f'  class {nid}["{_safe_label(str(n["name"]))}"] {{')
         for a in cast("list[dict[str, str]]", n.get("attrs") or []):
             # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
-            atype = ent_names.get(str(a.get("type", "")), str(a.get("type", "")))
-            member = f'{_safe_member(atype)} {_safe_member(str(a.get("name", "")))}'.strip()
+            atype = _safe_member(ent_names.get(str(a.get("type", "")), str(a.get("type", ""))))
+            # `[]` is part of the type's SHAPE (it makes the field multi-valued), so show it in the box
+            # — unlike PK/FK/?/unique (annotations), which stay in the click-panel. Otherwise a
+            # collection reads as single-valued in the box and the `*` lives only on the relation arrow.
+            if "[]" in str(a.get("markers", "")).split():
+                atype += "[]"
+            member = f'{atype} {_safe_member(str(a.get("name", "")))}'.strip()
             if member:
                 lines.append(f"    {member}")
         lines.append("  }")
-    nodes = graph["nodes"]
     for e in graph["edges"]:
         s, d, kind = str(e["src"]), str(e["dst"]), e.get("kind")
         if not (kind and s in ent_ids and d in ent_ids):
             continue
         arrow = CLASS_ARROW.get(str(kind), "-->")
-        label = _relation_label(cast("dict[str, Any]", e), cast("dict[str, Any]", nodes[s]),
-                                cast("dict[str, Any]", nodes[d]))
+        label = _relation_label(cast("dict[str, Any]", e))
         suffix = f" : {label}" if label else ""
         if kind == "inheritance":
             lines.append(f"  {s} {arrow} {d}{suffix}")

@@ -531,6 +531,36 @@ def test_parse_card_fields_markers() -> None:
     assert fs[2].type == ""   # missing type -> empty, so the validator can flag it
 
 
+def test_parse_card_fields_glued_suffix_markers() -> None:
+    """`[]` / `?` glued to the type (no space) must normalize to a bare type + marker, identical to
+    the spaced form — else an `E`-typed collection field's box type and its relation arrow label
+    both break silently. Regression for OAuthStateSnapshot.access_tokens:E28[]."""
+    glued = schema_v1.parse_card_fields(["access_tokens: E28[]", "expires_at: int?", "scopes: string[]"])
+    assert (glued[0].type, glued[0].markers) == ("E28", ["[]"])     # entity-typed collection
+    assert (glued[1].type, glued[1].markers) == ("int", ["?"])      # nullable scalar
+    assert (glued[2].type, glued[2].markers) == ("string", ["[]"])  # scalar collection
+    # glued and spaced forms parse identically
+    spaced = schema_v1.parse_card_fields(["access_tokens: E28 []"])
+    assert (spaced[0].type, spaced[0].markers) == ("E28", ["[]"])
+    # a glued marker followed by a normal marker still works
+    both = schema_v1.parse_card_fields(["tags: string[] unique"])
+    assert (both[0].type, both[0].markers) == ("string", ["[]", "unique"])
+
+
+def test_glued_collection_relation_is_labelled() -> None:
+    """An entity-typed collection field written glued (`tokens:E28[]`) must still BACK its relation,
+    so the composition arrow renders its real field name as the label (not blank)."""
+    cards = (
+        "**E1 — Snapshot** *(s)*\nMEANING: m\n"
+        "FIELDS: clients:json · access_tokens:E28[]\n"
+        "RELATIONS: contains 1→* E28 StoredAccessToken\nSOURCE: [f](f#L1)\n\n"
+        "**E28 — StoredAccessToken**\nMEANING: m\nFIELDS: token:string PK\nSOURCE: [f](f#L2)\n"
+    )
+    g = parse_map(cards)
+    rel = [e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E28"][0]
+    assert rel["fk_field"] == "access_tokens" and rel["fk_side"] == "src"
+
+
 def test_parse_card_relations_kinds_and_cardinality() -> None:
     rels = schema_v1.parse_card_relations("contains 1→* E2 · isA E9 · uses *→1 E3 · 2..5→* E4")
     assert [(r.verb, r.kind, r.target, r.ok) for r in rels[:3]] == [
@@ -575,6 +605,22 @@ def test_gen_domain_mermaid_resolves_embedded_entity_type() -> None:
     assert "AuthMode mode" in mm and "E2 mode" not in mm
 
 
+def test_gen_domain_mermaid_shows_collection_marker_in_box() -> None:
+    # a `[]` (collection) marker is part of the type SHAPE, so it renders in the box member —
+    # `StoredRefreshToken[] refresh_tokens`, not a single-valued-looking `StoredRefreshToken …`.
+    # `?`/PK/FK stay out of the box (annotations, panel-only).
+    cards = (
+        "**E1 — Snapshot** *(s)*\nMEANING: m\n"
+        "FIELDS: refresh_tokens:E2[] · expires_at:int ? · id:int PK\n"
+        "RELATIONS: contains 1→* E2 StoredRefreshToken\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — StoredRefreshToken**\nMEANING: m\nFIELDS: token:string\nSOURCE: [f](f#L2)\n"
+    )
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    assert "StoredRefreshToken[] refresh_tokens" in mm   # collection shown in the box
+    assert "int expires_at" in mm and "int? " not in mm  # nullable marker stays out of the box
+    assert "int id" in mm                                # PK stays out of the box
+
+
 def test_gen_domain_mermaid_relation_labels() -> None:
     # forward field -> plain name; reverse FK (FK→E1) -> "↩ field"; the redundant verb is dropped.
     cards = (
@@ -598,6 +644,52 @@ def test_gen_domain_mermaid_drops_ungrounded_verb() -> None:
     )
     mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
     assert "authorizes" not in mm     # ungrounded association verb is not drawn as a label
+
+
+def test_gen_domain_mermaid_forward_fk_label() -> None:
+    # A foreign key on the SOURCE (`role:string FK→E2`) labels the arrow with the field name — the
+    # symmetric counterpart of the reverse `↩` case, so a marked FK is represented whichever side
+    # authored the relation (the asymmetry that left all but one mcpolis FK arrow blank is gone).
+    cards = (
+        "**E1 — Membership** *(s)*\nMEANING: m\nFIELDS: email:string · role:string FK→E2\n"
+        "RELATIONS: assignedRole *→1 E2 RoleDefinition\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — RoleDefinition**\nMEANING: m\nFIELDS: name:string\nSOURCE: [f](f#L2)\n"
+    )
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    assert ": role" in mm                  # forward FK -> the plain field name
+    assert "↩" not in mm                   # not a back-reference (the field is on the source/tail)
+    assert ": assignedRole" not in mm      # the verb itself is never drawn as the label
+
+
+def test_fk_targets_token_exact() -> None:
+    # `FK→E1` must resolve to exactly {E1} — never match inside `E11` (the substring bug class).
+    assert schema_v1.fk_targets("FK→E1") == {"E1"}
+    assert schema_v1.fk_targets(["?", "FK->E5"]) == {"E5"}      # ascii arrow + nullable marker
+    assert "E1" not in schema_v1.fk_targets("FK→E11")
+
+
+def test_parse_card_relations_how_note() -> None:
+    rels = schema_v1.parse_card_relations(
+        "tracks *→1 E3 Token {keyed by (org, upstream)} · contains 1→* E2")
+    assert rels[0].how == "keyed by (org, upstream)" and rels[0].target == "E3" and rels[0].ok
+    assert rels[1].how is None                                  # no note -> None
+
+
+def test_parser_domain_edge_carries_backing_and_how() -> None:
+    # The resolved backing (fk_field/fk_side) and the authored {how} note ride the serialized edge,
+    # so the canvas label and the panel's "Implemented by" line come from one resolution.
+    cards = (
+        "**E1 — Org** *(s)*\nMEANING: m\nFIELDS: id:string PK\n"
+        "RELATIONS: contains 1→* E2 Membership · tracks *→1 E3 Token {keyed by (org, upstream)}\n"
+        "SOURCE: [f](f#L1)\n\n"
+        "**E2 — Membership**\nMEANING: m\nFIELDS: org_id:string FK→E1\nSOURCE: [f](f#L2)\n\n"
+        "**E3 — Token**\nMEANING: m\nFIELDS: value:string\nSOURCE: [f](f#L3)\n"
+    )
+    g = parse_map(make_domain_map(cards))
+    e12 = next(e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E2")
+    assert e12["fk_field"] == "org_id" and e12["fk_side"] == "dst"      # reverse FK on the target
+    e13 = next(e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E3")
+    assert e13["fk_field"] is None and e13["how"] == "keyed by (org, upstream)"  # indirect -> how-note
 
 
 def test_check_entity_sources_flags_synthesized() -> None:
@@ -711,6 +803,41 @@ def test_validator_flags_duplicate_card_id() -> None:
     )
     code, out = run_validator(make_domain_map(cards))
     assert code == 1 and "Duplicate" in out, out
+
+
+def test_validator_warns_unbacked_association() -> None:
+    # An association with no backing field and no {how} note draws nothing + explains nothing: warn
+    # (non-blocking — the build still passes) so the author marks the FK or writes a how-note.
+    cards = (
+        "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "RELATIONS: authorizes *→1 E2\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 0, out                                     # advisory only — does not fail the build
+    assert "WARNINGS" in out and "not backed by a field" in out, out
+
+
+def test_validator_how_note_silences_unbacked_warning() -> None:
+    # A {how} note is the author's explanation of how a field-less relation is implemented -> no warning.
+    cards = (
+        "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "RELATIONS: authorizes *→1 E2 {linked via an external id map}\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 0 and "not backed by a field" not in out, out
+
+
+def test_validator_forward_fk_not_flagged_unbacked() -> None:
+    # A marked forward FK (`role:string FK→E2`) IS a backing field — the completeness nudge stays quiet.
+    cards = (
+        "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int · role:string FK→E2\n"
+        "RELATIONS: assignedRole *→1 E2\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 0 and "not backed by a field" not in out, out
 
 
 # --- Golden Path (GP) -----------------------------------------------------------

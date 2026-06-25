@@ -8,6 +8,7 @@ Stdlib-only.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 # IDs by prefix. Multi-letter prefixes (UC, GP) must precede the single-letter ones. `E` (domain
@@ -88,6 +89,11 @@ ALLOWED_CARDINALITY = {"1", "*", "0..1", "1..*"}
 _CARD = r"\*|\d+|0\.\.1|1\.\.\*"
 # One RELATIONS item: `verb [sc→dc] Eid [display]`. Cardinality pair is optional (omit for isA).
 RELATION_ITEM = re.compile(rf"^(?P<verb>[\w-]+)(?:\s+(?P<sc>{_CARD})→(?P<dc>{_CARD}))?\s+(?P<tgt>E\d+)\b")
+# Optional trailing `{how}` note on a RELATIONS item — a plain-text explanation of how an
+# indirect / field-less relation is implemented (e.g. `… E20 {keyed by (org, upstream) in the store}`).
+REL_HOW = re.compile(r"\{(?P<how>[^}]*)\}\s*$")
+# A field's `FK→Ex` / `FK->Ex` marker, captured as a whole id token (so `FK→E1` never matches `E11`).
+FK_MARKER = re.compile(r"FK(?:→|->)(E\d+)")
 
 # Each structural kind has ONE canonical verb (association is free-form — any other verb).
 CANONICAL_VERB = {"composition": "contains", "aggregation": "has", "inheritance": "isA"}
@@ -121,6 +127,7 @@ class CardRelation:
     kind: str
     ok: bool          # False = the item did not match the grammar (validator flags, parser skips)
     raw: str
+    how: str | None = None  # plain-text `{how}` note: how a field-less relation is implemented
 
 
 @dataclass
@@ -136,9 +143,28 @@ class DomainCard:
     heading_ok: bool = True  # False = heading matched DEF_ENTITY but not the full `**En — Name** *(store)*`
 
 
+def _split_glued_markers(typ: str) -> tuple[str, list[str]]:
+    """Peel collection `[]` and nullable `?` markers glued to the type token into the marker list.
+    Authors may write a marker spaced (`access_tokens:E28 []`) or glued (`access_tokens:E28[]`); both
+    must normalize to type=`E28` + marker `[]`. A glued marker otherwise leaves the type as `E28[]`,
+    which silently fails to resolve to the entity's name in the box AND fails the relation-backing
+    match (so the arrow renders unlabelled) — with no validator error. Returns (bare_type, markers)."""
+    glued: list[str] = []
+    while True:
+        if typ.endswith("[]"):
+            glued.insert(0, "[]")
+            typ = typ[:-2]
+        elif typ.endswith("?"):
+            glued.insert(0, "?")
+            typ = typ[:-1]
+        else:
+            return typ, glued
+
+
 def parse_card_fields(items: list[str]) -> list[CardField]:
     """Parse FIELDS items (`name: type markers`, inline or as `- ` bullets). An empty/missing type
-    yields a CardField with ``type=''`` so the validator can flag it."""
+    yields a CardField with ``type=''`` so the validator can flag it. Markers (`PK`/`FK→Ex`/`unique`/
+    `?`/`[]`) may be space-separated OR glued to the type (`E28[]`); both normalize identically."""
     out: list[CardField] = []
     for item in items:
         item = item.strip()
@@ -148,26 +174,65 @@ def parse_card_fields(items: list[str]) -> list[CardField]:
             continue
         name, _, rest = item.partition(":")
         toks = rest.split()
-        out.append(CardField(name=name.strip(), type=(toks[0] if toks else ""), markers=toks[1:]))
+        typ, glued = _split_glued_markers(toks[0] if toks else "")
+        out.append(CardField(name=name.strip(), type=typ, markers=glued + toks[1:]))
     return out
 
 
 def parse_card_relations(spec: str) -> list[CardRelation]:
-    """Parse a RELATIONS line value (`verb sc→dc Eid display · …`). A `·`-item that doesn't match the
-    grammar yields ``ok=False`` (validator flags it as malformed; parser skips it)."""
+    """Parse a RELATIONS line value (`verb sc→dc Eid display [{how}] · …`). A single trailing `{…}` is
+    peeled off as the relation's how-note (a `·` may not appear inside it — it is the item separator;
+    a `·` inside braces splits the item, and the trailing fragment is then flagged ``ok=False``). A
+    `·`-item that doesn't match the grammar yields ``ok=False`` (validator flags it; parser skips it)."""
     out: list[CardRelation] = []
     for raw in spec.split("·"):
         raw = raw.strip()
         if not raw:
             continue
+        how: str | None = None
+        hm = REL_HOW.search(raw)
+        if hm:
+            how = hm.group("how").strip() or None
+            raw = raw[: hm.start()].strip()  # peel `{how}` before matching the grammar
         m = RELATION_ITEM.match(raw)
         if not m:
-            out.append(CardRelation("", "", None, None, "association", False, raw))
+            out.append(CardRelation("", "", None, None, "association", False, raw, how=how))
             continue
         kind = REL_KIND.get(m.group("verb").lower(), "association")
         out.append(CardRelation(m.group("verb"), m.group("tgt"), m.group("sc"), m.group("dc"),
-                                kind, True, raw))
+                                kind, True, raw, how=how))
     return out
+
+
+def fk_targets(markers: Iterable[str] | str) -> set[str]:
+    """Entity ids a field points at via an `FK→Ex` / `FK->Ex` marker — matched as a whole id token
+    (so `FK→E1` never matches `E11`). Accepts the marker list (``CardField.markers``) or a
+    space-joined string (the ``markers`` on a parsed ``Node.attrs`` entry)."""
+    text = markers if isinstance(markers, str) else " ".join(markers)
+    return set(FK_MARKER.findall(text))
+
+
+def resolve_backing(
+    src: str, dst: str,
+    src_fields: list[tuple[str, str, set[str]]],
+    dst_fields: list[tuple[str, str, set[str]]],
+) -> tuple[str | None, str | None]:
+    """Which REAL field implements a domain relation `src --> dst`, and on which side. Each field is a
+    `(name, type, fk_targets)` triple. Forward (the field lives on the source / arrow-tail) wins over
+    reverse, mirroring how the relation is authored on the source card:
+      - a SOURCE field typed by the target (`subscription:E15`) or marked `FK→dst` -> (name, 'src');
+      - else a TARGET field marked `FK→src` (the back-reference) -> (name, 'dst');
+      - else (None, None) — no field backs it (indirect / key-composition; carry a `{how}` note).
+    When several fields qualify (e.g. two source fields typed by the same target), the FIRST in
+    declaration order wins — arbitrary, but never wrong (every candidate points at the target).
+    The canvas label and the panel's "Implemented by" line both derive from this one resolution."""
+    for name, typ, fks in src_fields:
+        if typ == dst or dst in fks:
+            return name, "src"
+    for name, _typ, fks in dst_fields:
+        if src in fks:
+            return name, "dst"
+    return None, None
 
 
 def iter_domain_cards(lines: list[str]):

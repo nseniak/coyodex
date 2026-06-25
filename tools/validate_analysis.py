@@ -45,8 +45,10 @@ from schema_v1 import (
     ID_TOKEN,
     MAX_DEPTH,
     REL_ALIAS,
+    fk_targets,
     iter_domain_cards,
     membership_ids,
+    resolve_backing,
     strip_fences,
 )
 
@@ -330,14 +332,25 @@ def check_edge_verbs(text: str) -> list[str]:
     return problems
 
 
-def check_domain_cards(text: str) -> list[str]:
+def check_domain_cards(text: str) -> tuple[list[str], list[str]]:
     """T5 domain-card checks (no-op when there are no cards): each card has MEANING / SOURCE /
     FIELDS; every field has a type; every RELATIONS item is well-formed; a relation pair is declared
     on one side only. Card-id uniqueness and target resolution ride the generic duplicate / undefined
-    reference checks in main(). See method/domain-cards.md."""
+    reference checks in main(). See method/domain-cards.md.
+
+    Returns ``(problems, warnings)``. Problems fail the build; warnings are advisory — currently the
+    completeness nudge: an *association* with no backing field and no `{how}` note draws nothing on
+    the canvas and explains nothing in the panel, so it tells the reader nothing about how the link
+    is implemented. Author wants either an `FK→` marker on the implementing field or a `{how}` note."""
     problems: list[str] = []
+    warnings: list[str] = []
     directed: set[tuple[str, str]] = set()
-    for c in iter_domain_cards(text.splitlines()):
+    cards = list(iter_domain_cards(text.splitlines()))
+    # (name, type, fk_targets) per card id — so a relation's backing can be resolved across both cards.
+    backing: dict[str, list[tuple[str, str, set[str]]]] = {
+        c.id: [(f.name, f.type, fk_targets(f.markers)) for f in c.fields] for c in cards
+    }
+    for c in cards:
         # A heading that matches `**En —` but not the full shape silently drops the name + store
         # (they fall back to the id) — catch it loudly instead of rendering `E1 · E1`.
         if not c.heading_ok:
@@ -365,12 +378,22 @@ def check_domain_cards(text: str) -> list[str]:
                 problems.append(f"Domain card {c.id} declares the relation '{r.verb} … {r.target}' twice")
             seen_pairs.add((r.verb, r.target))
             directed.add((c.id, r.target))
+            # Completeness nudge — only for associations (a structural marker / embedding already
+            # conveys composition/aggregation/inheritance). A defined target is required to judge it.
+            if r.kind == "association" and r.target in backing and not r.how:
+                name, _side = resolve_backing(c.id, r.target, backing[c.id], backing[r.target])
+                if name is None:
+                    warnings.append(
+                        f"Domain card {c.id}: relation '{r.verb} … {r.target}' is not backed by a field "
+                        f"and has no {{…}} note — mark the implementing field `FK→{r.target}` "
+                        f"(or `FK→{c.id}` on {r.target}), or add a `{{how}}` note explaining the link"
+                    )
     for a, b in directed:
         if a < b and (b, a) in directed:
             problems.append(
                 f"Relation between {a} and {b} is declared on both cards — author it on one side only"
             )
-    return problems
+    return problems, warnings
 
 
 def check_entity_sources(text: str, map_path: Path) -> list[str]:
@@ -428,6 +451,7 @@ def main() -> int:
     grouping_present = any(i.startswith("S") for i in defined) or bool(parents)
 
     problems: list[str] = []
+    warnings: list[str] = []
 
     duplicates = sorted(i for i, n in defined_counts.items() if n > 1 and not i.startswith("GP"))
     if duplicates:
@@ -455,7 +479,9 @@ def main() -> int:
     problems.extend(check_roles_kind(text))
     problems.extend(check_table_shape(text))
     problems.extend(check_edge_verbs(text))
-    problems.extend(check_domain_cards(text))
+    domain_problems, domain_warnings = check_domain_cards(text)
+    problems.extend(domain_problems)
+    warnings.extend(domain_warnings)
     if check_sources:
         problems.extend(check_entity_sources(text, path))
 
@@ -482,6 +508,11 @@ def main() -> int:
         f"{pre}:{len(v)}" for pre, v in sorted(by_prefix.items())
     )
     print(f"Inventory — {inventory}")
+
+    if warnings:  # advisory only — printed whether or not the build passes; never changes the exit code
+        print("\nVALIDATION WARNINGS (non-blocking):")
+        for w in warnings:
+            print(f"  - {w}")
 
     if problems:
         print("\nVALIDATION FAILED:")
