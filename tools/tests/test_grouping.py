@@ -395,8 +395,20 @@ def test_edge_card_has_both_subsystems_and_only_cross_edges() -> None:
     assert "D1" not in card                             # no deps in an edge card
 
 
+def test_container_edges_list_crossing_component_edges() -> None:
+    # Each inter-subsystem arrow 'A>B' carries the underlying component->component edges (endpoints,
+    # names, verb, why) so the viewer lists their meanings in the arrow's hover tooltip.
+    ce = gen_viewer.gen_container_edges(parse_map(make_card_map()))
+    assert set(ce) == {"S1>S2"}                          # only the crossing direction
+    rows = ce["S1>S2"]
+    assert {(r["src"], r["dst"]) for r in rows} == {("C1", "C2"), ("C3", "C2")}
+    assert {r["srcName"] for r in rows} == {"Front door", "Router"}
+    assert all(r["verb"] == "calls" and r["why"] == "reach engine" for r in rows)
+
+
 def test_render_inlines_edge_card_data() -> None:
-    # The self-contained HTML must carry the edge-card diagrams for the client to open on click.
+    # The self-contained HTML must carry the edge-card diagrams AND the per-arrow component-edge
+    # lists for the client to open on click / preview on hover (placeholder fully substituted).
     with tempfile.TemporaryDirectory() as d:
         md = Path(d) / "project-map.md"
         md.write_text(make_card_map(), encoding="utf-8")
@@ -406,7 +418,8 @@ def test_render_inlines_edge_card_data() -> None:
             capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr
-        assert "S1>S2" in out.read_text(encoding="utf-8")
+        html = out.read_text(encoding="utf-8")
+        assert "S1>S2" in html and "__CONTAINER_EDGES__" not in html
 
 
 # --- validator (end-to-end via the CLI) -----------------------------------------

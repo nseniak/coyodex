@@ -61,6 +61,10 @@ main { display: flex; height: calc(100vh - 38px); }
 #tip .tk { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .65; margin-bottom: 4px; }
 #tip .tm { opacity: .95; }
 #tip .tn { opacity: .55; font-style: italic; }
+/* arrow tooltip (Subsystems view): one row per aggregated component→component edge */
+#tip .tr { margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,.14); }
+#tip .tr .tv { opacity: .7; font-style: italic; }
+#tip .tr .tw { opacity: .9; margin-top: 1px; }
 #tip code { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(255,255,255,.16);
             padding: 0 3px; border-radius: 3px; }
 

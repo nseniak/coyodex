@@ -6,10 +6,12 @@ HTML file with the graph inlined and Mermaid + svg-pan-zoom loaded from a pinned
 The viewer's own CSS/JS are authored in viewer.css / viewer.js next to this module and inlined at
 build time, so the emitted HTML stays standalone — it carries no path back to this repo (see the
 "Generated artifacts are standalone w.r.t. the coyodex repo" design note).
-The viewer offers four altitudes — Context (C4) → Subsystems (click a box/arrow to drill in place) →
-Components → code links — navigated as a back/forward history within one frame, wraps Mermaid's SVG
-with pan/zoom and a click->side-panel bridge, and a baseline<->diff toggle that recolors
-added/modified/deleted nodes and the elements they ripple to.
+The viewer offers four altitudes — Context (C4) → Subsystems (click a box to select it + its linked
+subsystems; hover a box for its "Open ▸" pill to drill in; click an arrow for the pair's edge card,
+hover it to preview the component edges it bundles) → Components → code links — navigated as a
+back/forward history within one frame, wraps Mermaid's SVG with pan/zoom and a click->side-panel
+bridge, and a baseline<->diff toggle that recolors added/modified/deleted nodes and the elements they
+ripple to.
 
 Node labels are the element name only (no ID prefix) to keep them uncluttered;
 the ID still appears in the panel header and drives the bridge via the cy-<ID>
@@ -204,6 +206,28 @@ def gen_container_mermaid(graph: GraphDict) -> str:
         lines.append(f"  {sa} -->|{c}| {sb}")
     lines.append("  classDef subsystem fill:#fef3c7,stroke:#b45309,color:#7c2d12;")
     return "\n".join(lines)
+
+
+def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """For each inter-subsystem arrow 'A>B' drawn in the Subsystems view, the underlying
+    component->component edges that cross from A to B (endpoints, names, verb, why) — the viewer
+    lists their meanings in the arrow's hover tooltip. Mirrors the crossing logic in
+    gen_container_mermaid, so each list's length equals that arrow's count label."""
+    out: dict[str, list[dict[str, str]]] = {}
+    for e in graph["edges"]:
+        s, d = str(e["src"]), str(e["dst"])
+        sa, sb = _top_subsystem(graph, s), _top_subsystem(graph, d)
+        if sa and sb and sa != sb:
+            sn, dn = graph["nodes"].get(s), graph["nodes"].get(d)
+            out.setdefault(f"{sa}>{sb}", []).append({
+                "src": s,
+                "dst": d,
+                "srcName": str(sn["name"]) if sn else s,
+                "dstName": str(dn["name"]) if dn else d,
+                "verb": str(e["verb"]),
+                "why": str(e["why"]) if e["why"] else "",
+            })
+    return out
 
 
 def _components_of(graph: GraphDict, sid: str) -> list[tuple[str, str]]:
@@ -552,7 +576,8 @@ __SCRIPT__
 def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              context_edges: dict[str, dict[str, Any]], has_diff: bool, meta: str,
              diff_state: dict[str, str], container_mm: str, by_sub: dict[str, str],
-             edge_cards: dict[str, str], grouping: bool, domain_mm: str, domain: bool,
+             edge_cards: dict[str, str], container_edges: dict[str, list[dict[str, str]]],
+             grouping: bool, domain_mm: str, domain: bool,
              gp_mm: str, gp_steps: dict[str, str], gp: bool) -> str:
     css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
     js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
@@ -566,6 +591,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_CONTAINER__", json.dumps(container_mm))
         .replace("__MERMAID_BY_SUB__", json.dumps(by_sub))
         .replace("__MERMAID_EDGE_CARD__", json.dumps(edge_cards))
+        .replace("__CONTAINER_EDGES__", json.dumps(container_edges))
         .replace("__MERMAID_DOMAIN__", json.dumps(domain_mm))
         .replace("__MERMAID_GP__", json.dumps(gp_mm))
         .replace("__MERMAID_GP_STEP__", json.dumps(gp_steps))
@@ -601,6 +627,7 @@ def main() -> int:
     container_mm = gen_container_mermaid(graph) if grouping else ""
     by_sub = subsystem_component_mermaids(graph) if grouping else {}
     edge_cards = edge_card_mermaids(graph) if grouping else {}
+    container_edges = gen_container_edges(graph) if grouping else {}
     domain = has_domain(graph)
     domain_mm = gen_domain_mermaid(graph) if domain else ""
     gp = has_gp(graph)
@@ -609,7 +636,8 @@ def main() -> int:
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
-                    container_mm, by_sub, edge_cards, grouping, domain_mm, domain, gp_mm, gp_steps, gp)
+                    container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
+                    gp_mm, gp_steps, gp)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")
     return 0

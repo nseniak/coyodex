@@ -7,6 +7,7 @@ const MERMAID_CONTEXT = __MERMAID_CONTEXT__;
 const MERMAID_CONTAINER = __MERMAID_CONTAINER__;
 const MERMAID_BY_SUB = __MERMAID_BY_SUB__;        // subsystem neighbourhood: sid -> sub-diagram
 const MERMAID_EDGE_CARD = __MERMAID_EDGE_CARD__;  // edge pair: 'A>B' -> two-subsystem sub-diagram
+const CONTAINER_EDGES = __CONTAINER_EDGES__;      // inter-subsystem arrow 'A>B' -> [crossing component edges]
 const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classDiagram
 const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): black-box sequence diagram
 const MERMAID_GP_STEP = __MERMAID_GP_STEP__;      // GP step (Level 2): GP-id -> components-used sub-diagram
@@ -258,6 +259,21 @@ function tipEdgeHtml(e) {
     + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
              : '<div class="tn">no why recorded</div>');
 }
+// Hover an inter-subsystem arrow (Subsystems view) -> the meaning of every component→component edge
+// it aggregates: each underlying arrow's `src verb dst` + its Why. Capped so a busy pair stays legible.
+const TIP_EDGE_CAP = 14;
+function tipContainerEdgeHtml(a, b) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const list = CONTAINER_EDGES[a + '>' + b] || [];
+  const rows = list.slice(0, TIP_EDGE_CAP).map((r) =>
+    '<div class="tr">' + esc(r.srcName) + ' <span class="tv">' + esc(r.verb) + '</span> ' + esc(r.dstName)
+    + (r.why ? '<div class="tw">' + mdInline(r.why) + '</div>' : '') + '</div>').join('');
+  const more = list.length > TIP_EDGE_CAP
+    ? '<div class="tn">+' + (list.length - TIP_EDGE_CAP) + ' more…</div>' : '';
+  return '<div class="tt">' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</div>'
+    + '<div class="tk">' + list.length + ' connection' + (list.length === 1 ? '' : 's') + '</div>'
+    + (rows || '<div class="tn">no connections recorded</div>') + more;
+}
 function tipGPHtml(gpId) {  // hover a GP step (message) -> its title + story preview
   const s = GP_BY_ID[gpId];
   if (!s) return '';
@@ -433,11 +449,12 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn) {
 }
 
 // Wire one edge to NAVIGATE on click (no in-scene selection) — subsystem-map arrows + cross arrows.
-function bindNavEdge(p, label, onNavigate) {
+// `tipHtml` (optional) previews the arrow's meaning(s) on hover, same as a select edge.
+function bindNavEdge(p, label, onNavigate, tipHtml) {
   const hoverOn = () => { p.style.filter = HOVER; if (label) label.style.filter = HOVER; };
   const hoverOff = () => { p.style.filter = ''; if (label) label.style.filter = ''; };
   const onClick = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); hoverOff(); onNavigate(); };
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff);
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml);
 }
 
 // `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn } or null to skip.
@@ -499,11 +516,71 @@ function bindComponent() {
   bindNodes(mainScene, (id, el) => selectNode(mainScene, el, id));
   bindEdges(mainScene, resolveComponentEdge);
 }
-function bindContainer() {  // subsystem boxes + inter-subsystem arrows both drill in
-  bindNodes(mainScene, (id) => go({ kind: 'subsystem', sid: id }));
-  eachEdge(diagram, (p, label, m) => {
+// The "Open ▸" pill: a button drawn IN the subsystem box's SVG group (so it pans/zooms anchored to
+// the box) that appears while the box is hovered and drills into that subsystem on click. Built in
+// SVG (not HTML) for the same reason badges are — it stays glued to the node under any pan/zoom.
+// Inline !important mirrors makeBadge: Mermaid sets SVG fill/font with !important.
+function makeOpenPill(boxEl, sid) {
+  const bb = boxEl.getBBox();
+  const w = 54, h = 21, m = 5;
+  const x = bb.x + bb.width - w - m, y = bb.y + m;  // tucked into the box's top-right corner
+  const g = document.createElementNS(SVGNS, 'g');
+  g.style.cursor = 'pointer';
+  const rect = document.createElementNS(SVGNS, 'rect');
+  rect.setAttribute('x', x); rect.setAttribute('y', y);
+  rect.setAttribute('width', w); rect.setAttribute('height', h); rect.setAttribute('rx', 10);
+  const fill = (c) => rect.style.setProperty('fill', c, 'important');
+  fill('#2563eb');
+  rect.style.setProperty('stroke', '#fff', 'important');
+  rect.style.setProperty('stroke-width', '1.25px', 'important');
+  const t = document.createElementNS(SVGNS, 'text');
+  t.setAttribute('x', x + w / 2); t.setAttribute('y', y + h / 2);
+  t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'central');
+  t.style.setProperty('fill', '#fff', 'important');
+  t.style.setProperty('font-family', '-apple-system, system-ui, sans-serif', 'important');
+  t.style.setProperty('font-size', '12px', 'important');
+  t.style.setProperty('font-weight', '600', 'important');
+  t.style.setProperty('pointer-events', 'none', 'important');  // clicks land on the rect, not the glyph
+  t.textContent = 'Open ▸';
+  g.appendChild(rect); g.appendChild(t);
+  g.addEventListener('mouseenter', () => fill('#1d4ed8'));  // brighten — it reads as a button
+  g.addEventListener('mouseleave', () => fill('#2563eb'));
+  g.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); go({ kind: 'subsystem', sid }); });
+  return g;
+}
+function bindContainer() {
+  // Subsystem boxes: a single click SELECTS the box + its linked subsystems (like selecting a
+  // component); an "Open ▸" pill fades in on hover (top-right corner of the box) and drills in on
+  // click. Register every box in the scene so focusNode can dim the non-linked ones.
+  mainScene.root.querySelectorAll('g.node').forEach((el) => {
+    const id = idOf(el);
+    if (!id || !GRAPH.nodes[id]) return;
+    mainScene.nodeEls[id] = el;
+    el.style.cursor = 'pointer';
+    let pill = null;  // lazily built on first hover, then shown/hidden by attach/detach
+    el.addEventListener('mouseenter', () => {
+      if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER;
+      if (!pill) pill = makeOpenPill(el, id);
+      el.appendChild(pill);  // last child => painted above the box; mouseleave won't fire moving onto it
+    });
+    el.addEventListener('mouseleave', () => {
+      if (mainScene.selectedKey !== 'node:' + id) el.style.filter = '';
+      if (pill && pill.parentNode === el) el.removeChild(pill);
+    });
+    attachTip(el, () => tipNodeHtml(id));
+    el.addEventListener('click', (e) => {
+      if (isDrag(e)) return;
+      e.stopPropagation();
+      selectNode(mainScene, el, id);
+    });
+  });
+  // Inter-subsystem arrows: register in the scene (so a selected box keeps its linked neighbours),
+  // hover previews the meanings of all the component edges they aggregate, click drills the pair.
+  eachEdge(mainScene.root, (p, label, m) => {
     const a = m[1], b = m[2];
-    if (GRAPH.nodes[a] && GRAPH.nodes[b]) bindNavEdge(p, label, () => go({ kind: 'edge', a, b }));
+    if (!(GRAPH.nodes[a] && GRAPH.nodes[b])) return;
+    mainScene.edgeEls.push({ e: { src: a, dst: b }, path: p, label });
+    bindNavEdge(p, label, () => go({ kind: 'edge', a, b }), () => tipContainerEdgeHtml(a, b));
   });
 }
 function bindSubsystem(sid) {  // neighbourhood: component -> detail; neighbour box / cross arrow -> drill
