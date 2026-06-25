@@ -46,6 +46,13 @@ SOURCE: [<file>](<path>#L<line>)
 - Separators inside `FIELDS` / `RELATIONS` are `·` — the same separator the `Touches:` line uses.
   **Never a raw `|`** (schema-v1 rule 3 — it breaks table parsing elsewhere in the file).
 
+**An entity is a REAL named type.** A card maps to an actual `class` / dataclass / enum / struct /
+typed-dict in the code, and its `SOURCE` anchors that **definition** (the `class X` / `@dataclass` /
+enum line — not a construction or use site). Do **not** synthesize an entity for a concept with no
+named type (an ad-hoc dict, a transient "state" that only lives inside a function): if `SOURCE`
+can't point at a definition, it isn't a domain class — leave it out. Synthesized boxes clutter the
+model with classes a reader can't open.
+
 ### FIELDS micro-format
 
 Each field is `<name>: <type> [markers]`. Items are `·`-separated **or** one per line as a
@@ -97,7 +104,8 @@ Parse one item with:
 
 **One canonical verb per relationship kind** — the verb selects the `classDiagram` arrow; use
 exactly the canonical verb (the validator rejects aliases). Association is free-form: any other
-verb, and it carries the meaning (the arrow has no marker to convey it).
+verb; it picks the plain arrow and shows in the click-panel, but is **never drawn as a label**
+(only real field names are — see "Arrow labels").
 
 | kind | **canonical verb** | classDiagram arrow | meaning |
 |---|---|---|---|
@@ -109,18 +117,21 @@ verb, and it carries the meaning (the arrow has no marker to convey it).
 Aliases the validator rejects in favour of the canonical verb: `owns` / `composedOf` → `contains`,
 `aggregates` → `has`, `extends` → `isA`.
 
-**Arrow labels carry the role, not the verb** (the marker already conveys the kind, so the verb
-would be redundant):
+**Arrow labels are REAL field names, never the verb.** The marker already conveys the kind, and an
+invented relationship verb (`authorizes`, `pinnedTo`, `identifies`) isn't grounded in the code — so
+a label is shown **only when it is a real field**:
 
 - **forward** — a field on the *source* typed by the target → that **field name** (`subscription`,
   `mode`, `stdio`);
 - **reverse** — the target's foreign key back to the source (`FK→E1`) → **`↩ field`** (`↩ org_id`),
   the `↩` flagging that the field lives on the far end;
-- **otherwise** — the **verb** for an association (it carries the meaning), **blank** for a
-  structural kind (the marker speaks).
+- **otherwise → blank.** The marker + the target box convey the relationship; the verb stays in the
+  click-panel, off the canvas.
 
-So mark a child's foreign key with its target — `org_id:string FK→E1` — to get the reverse label
-(and the back-reference then resolves in the validator too).
+To make a structural relation field-backed (and thus labelled), **type the field by its entity** —
+`auth:E7`, `clients:E17 []` — not `json`; the field name then becomes the label. And mark a child's
+foreign key with its target — `org_id:string FK→E1` — for the `↩` label (the back-reference also
+resolves in the validator).
 
 ---
 
@@ -218,7 +229,16 @@ The validator (when domain cards are implemented — see "Implementation status"
 - each relation pair `(a, b)` is declared on **one** side only → warn on both-sided duplicates.
 - each `FIELDS` item has a non-empty `type`; each cardinality token is in `{1, *, 0..1, 1..*}`.
 - `MEANING` and `SOURCE` present (the `SOURCE` anchor drives the confidence label).
+- the relation verb is the canonical one for its kind (aliases rejected — see the verb table).
 - no raw `|` inside a card line.
+
+**Opt-in source check (`--check-sources`).** Reads each card's `SOURCE` file and rejects an entity
+whose name has no identifier token present there — catching **synthesized** entities (a name with no
+real named type, e.g. `OAuthState`) and wrong anchors. Tokens are any identifier shape (CamelCase,
+`snake_case`, or lowercase), matched case-insensitively by *substring*, so an abbreviated
+(`ServiceToken` ⊂ `ServiceTokenRecord`), compound (`A / B`), or suffixed (`Settings (app env)`) name
+still passes. A departure from map-only validation (it reads the analyzed repo), so it's a flag the
+build passes, not a default check.
 
 ---
 

@@ -106,8 +106,9 @@ faces: outside = journey, inside = T6 flow + edges.
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (same micro-format as the Golden
   Path). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).
-  Entity↔entity relations are authored on the source card only, never in the backbone edge list.
-  Full spec: [domain cards](method/domain-cards.md).
+  Each entity is a **real named type** whose `SOURCE` anchors its definition (don't synthesize
+  unnamed concepts). Entity↔entity relations are authored on the source card only, never in the
+  backbone edge list. Full spec: [domain cards](method/domain-cards.md).
 - **T6 Use-case flows**: `Flow | steps | Uses (element + role) | Key files`.
 
 ### Operational dimensions — standard core four
@@ -213,7 +214,9 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > this agent fills — e.g. COMPONENTS (T1), ENTRY POINTS (T4), DEPENDENCIES (T2), and operational
 > rows (deployment / observability / security / config)»; and the **T5 DOMAIN MODEL as per-entity
 > cards, never a table** (`**En — Name**` + FIELDS / RELATIONS / MEANING / SOURCE — see
-> [domain-cards.md](method/domain-cards.md)).
+> [domain-cards.md](method/domain-cards.md)). Each card is a **real named type** (class / dataclass /
+> enum) whose `SOURCE` anchors its **definition** — do NOT synthesize an entity for an unnamed
+> concept; type embedded fields by their entity (`auth:E7`) so relations carry the field name.
 
 **Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
 root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
@@ -224,8 +227,9 @@ overwriting a freshly-created file trips the read-before-write guard), and don't
 scratch (that throws the schema-correct shapes away). It already carries every standard section with schema-correct table
 shapes (each definition's ID **alone in its own first cell**, `| **C1** | name… |`), so the map
 passes the validator on the first write instead of being reshaped afterward. Run
-[`tools/validate_analysis.py`](tools/validate_analysis.py) after each generate/patch and fix the
-map until it passes. **Then render the diagrams** — once the
+[`tools/validate_analysis.py`](tools/validate_analysis.py)` --check-sources` after each generate/patch
+and fix the map until it passes (the flag reads each domain card's `SOURCE` to reject synthesized
+entities — names with no real named type). **Then render the diagrams** — once the
 map validates, generate the self-contained HTML viewer next to it:
 
 ```

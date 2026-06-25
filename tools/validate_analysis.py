@@ -21,9 +21,13 @@ When an id reads as undefined because its definition row glued extra text into t
 ID cell (`| **UC1** Search… |` instead of `| **UC1** | Search… |`), the report names
 that specific cause instead of the generic "undefined ID".
 
+Opt-in (reads the analyzed repo's source, not just the map):
+  7. --check-sources: each domain card's entity NAME must appear in its SOURCE file — catches
+     synthesized entities (a name with no real named type) and wrong anchors.
+
 Exit 0 = clean, 1 = problems found.
 
-Usage:  python3 tools/validate_analysis.py [.coyodex/project-map.md]
+Usage:  python3 tools/validate_analysis.py [--check-sources] [.coyodex/project-map.md]
 """
 from __future__ import annotations
 
@@ -369,8 +373,44 @@ def check_domain_cards(text: str) -> list[str]:
     return problems
 
 
+def check_entity_sources(text: str, map_path: Path) -> list[str]:
+    """Flag a domain card whose entity name has NO identifier token present in its SOURCE file — a
+    strong signal it's synthesized (no real named type) or anchored to the wrong file. Tokens are any
+    identifier-shaped run (CamelCase, snake_case, or lowercase — not just CamelCase), matched
+    case-insensitively by *substring*, not whole-word, on purpose: it must tolerate an abbreviated
+    card name (`ServiceToken` ⊂ `class ServiceTokenRecord`), a compound card (`DiscoveredResource /
+    DiscoveredPrompt` — either token suffices), a descriptive suffix (`Settings (app env)` →
+    `class Settings`), and a non-CamelCase name (`oauth_state`), while still catching a name that
+    appears nowhere (`OAuthState`). The SOURCE path is resolved against the map's dir and its parent
+    (the repo root for a `.coyodex/` map); a card whose file can't be resolved is skipped, so this
+    stays safe on templates/fixtures. Opt-in (`--check-sources`) — it reads the analyzed repo's
+    source, a deliberate departure from map-only validation."""
+    problems: list[str] = []
+    roots = [map_path.resolve().parent, map_path.resolve().parent.parent]
+    for c in iter_domain_cards(text.splitlines()):
+        if not c.source or not c.heading_ok or c.name == c.id:
+            continue  # no anchor, or a malformed heading already flagged — nothing reliable to check
+        rel = c.source.split("#", 1)[0]
+        src = next((r / rel for r in roots if (r / rel).is_file()), None)
+        if src is None:
+            continue  # file not resolvable (placeholder / run outside the repo) — skip, don't false-flag
+        try:
+            code = src.read_text(encoding="utf-8", errors="ignore").lower()
+        except OSError:
+            continue
+        tokens = re.findall(r"[A-Za-z_]\w{2,}", c.name)  # identifier tokens (CamelCase / snake_case / lowercase)
+        if tokens and not any(tok.lower() in code for tok in tokens):
+            problems.append(
+                f"Domain card {c.id} '{c.name}' is not defined in its SOURCE ({rel}) — likely "
+                f"synthesized or a wrong anchor; entities must be real named types"
+            )
+    return problems
+
+
 def main() -> int:
-    path = Path(sys.argv[1] if len(sys.argv) > 1 else ".coyodex/project-map.md")
+    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    check_sources = "--check-sources" in sys.argv  # opt-in: read SOURCE files to flag synthesized entities
+    path = Path(args[0] if args else ".coyodex/project-map.md")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
@@ -416,6 +456,8 @@ def main() -> int:
     problems.extend(check_table_shape(text))
     problems.extend(check_edge_verbs(text))
     problems.extend(check_domain_cards(text))
+    if check_sources:
+        problems.extend(check_entity_sources(text, path))
 
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column.
     problems.extend(parent_problems)

@@ -137,10 +137,10 @@ def _safe_member(s: str) -> str:
 
 
 def _relation_label(edge: dict[str, Any], src_node: dict[str, Any], tgt_node: dict[str, Any]) -> str:
-    """Arrow label — the role, not the verb (the marker already conveys composition/aggregation/…):
+    """Arrow label — a REAL field name only (an invented relationship verb isn't grounded in code):
     forward (a field on the SOURCE typed by the target) -> the field name (`subscription`);
     reverse (a field on the TARGET marked `FK→source`) -> `↩ field` (`↩ org_id`);
-    else -> the verb for an association, blank for a structural kind."""
+    else -> blank (the marker + target box convey the relationship; the verb stays in the panel)."""
     src, tgt = str(edge["src"]), str(edge["dst"])
     for a in cast("list[dict[str, str]]", src_node.get("attrs") or []):
         if str(a.get("type", "")) == tgt:
@@ -148,7 +148,7 @@ def _relation_label(edge: dict[str, Any], src_node: dict[str, Any], tgt_node: di
     for a in cast("list[dict[str, str]]", tgt_node.get("attrs") or []):
         if f"FK→{src}" in str(a.get("markers", "")) or f"FK->{src}" in str(a.get("markers", "")):
             return "↩ " + _safe_label(str(a.get("name", "")))
-    return "" if str(edge.get("kind")) != "association" else _safe_label(str(edge["verb"]))
+    return ""  # no real field backs this relation — don't invent a label from the verb
 
 
 def gen_domain_mermaid(graph: GraphDict) -> str:

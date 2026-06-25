@@ -37,5 +37,6 @@ If none match, ask the user for the path. Call every tool by its path inside tha
 | "the report looks right, accept it" | **Accept** | `method/change-impact.md` |
 
 Invariant: the map is the single source at the analyzed repo's `.coyodex/project-map.md`; after every
-write, validate (`$COYODEX/tools/validate_analysis.py`) then render
+write, validate (`$COYODEX/tools/validate_analysis.py --check-sources` — the flag reads each domain
+card's SOURCE file to reject synthesized entities) then render
 (`$COYODEX/tools/viewer/render.py`) — the HTML is a rendering, never a second source.

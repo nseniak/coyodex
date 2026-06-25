@@ -20,6 +20,7 @@ sys.path.insert(0, str(TOOLS / "viewer"))  # build_graph
 import build_graph  # noqa: E402
 import gen_viewer  # noqa: E402
 import schema_v1  # noqa: E402
+import validate_analysis  # noqa: E402
 
 VALIDATOR = TOOLS / "validate_analysis.py"
 
@@ -573,6 +574,55 @@ def test_gen_domain_mermaid_relation_labels() -> None:
     assert ": subscription" in mm     # forward: E1.subscription typed E3
     assert ": ↩ org_id" in mm          # reverse: E2.org_id FK→E1
     assert ": has" not in mm           # the redundant aggregation verb is not drawn
+
+
+def test_gen_domain_mermaid_drops_ungrounded_verb() -> None:
+    # an association not backed by any field gets NO label — the verb is interpretive, not grounded.
+    cards = (
+        "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "RELATIONS: authorizes *→1 E2\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    assert "authorizes" not in mm     # ungrounded association verb is not drawn as a label
+
+
+def test_check_entity_sources_flags_synthesized() -> None:
+    # --check-sources reads each card's SOURCE file: an entity whose NAME isn't there is synthesized.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / ".coyodex").mkdir()
+        (root / "model.py").write_text(
+            "class Order:\n    pass\nclass ServiceTokenRecord:\n    pass\nclass Settings:\n    pass\n"
+            "user_profile = dict  # a non-CamelCase type alias\n",
+            encoding="utf-8",
+        )
+        map_path = root / ".coyodex" / "project-map.md"
+        text = (
+            "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [model.py](model.py#L1)\n\n"
+            "**E2 — OAuthState** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n\n"
+            "**E3 — ServiceToken** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n\n"
+            "**E4 — Settings (app env)** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n\n"
+            "**E5 — user_profile** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n\n"
+            "**E6 — ghost_state** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n"
+        )
+        map_path.write_text(text, encoding="utf-8")
+        problems = " ".join(validate_analysis.check_entity_sources(text, map_path))
+        assert "E2" in problems and "OAuthState" in problems   # absent entirely -> flagged
+        assert "E1" not in problems                            # Order defined -> not flagged
+        assert "E3" not in problems                            # ServiceToken ⊂ ServiceTokenRecord -> grounded
+        assert "E4" not in problems                            # 'Settings (app env)' -> token Settings present
+        assert "E5" not in problems                            # snake_case name present -> grounded
+        assert "E6" in problems                                # snake_case name absent -> synthesized
+
+
+def test_check_entity_sources_skips_unresolvable() -> None:
+    # template/fixture SOURCE paths don't resolve to real files -> no-op (never false-flag).
+    with tempfile.TemporaryDirectory() as d:
+        map_path = Path(d) / "project-map.md"
+        text = "**E1 — Ghost** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [x.py](x.py#L1)\n"
+        map_path.write_text(text, encoding="utf-8")
+        assert validate_analysis.check_entity_sources(text, map_path) == []
 
 
 def test_validator_domain_cards_clean() -> None:
