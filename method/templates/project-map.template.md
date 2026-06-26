@@ -98,9 +98,14 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ## T2 — External dependencies
 
-| ID | Name | Type | Used for | Where configured | Conf. |
-|---|---|---|---|---|---|
-| **D1** | <dep> | <type> | <used for> | <config> | verified |
+<!-- `Kind` (optional) is a CLOSED vocabulary that drives the Context view: external SYSTEMS the
+     project talks to across a boundary — datastore / messaging / service / platform — are drawn at
+     Context by name; in-process code — framework / library — folds into one collapsed "Libraries"
+     box. `Type` stays the free-text human label. When `Kind` is omitted it is inferred from `Type`. -->
+
+| ID | Name | Kind | Type | Used for | Where configured | Conf. |
+|---|---|---|---|---|---|---|
+| **D1** | <dep> | datastore | <type> | <used for> | <config> | verified |
 
 ---
 

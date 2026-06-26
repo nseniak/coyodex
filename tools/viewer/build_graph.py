@@ -22,6 +22,7 @@ from schema_v1 import (  # noqa: E402
     DEF_GP,
     DEF_ID_CELL,
     ID_TOKEN,
+    classify_dep,
     fk_targets,
     iter_domain_cards,
     membership_col,
@@ -46,6 +47,7 @@ class Node:
     fields: dict[str, str]
     parent: str | None = None  # the one parent S-id (grouping); None = top-level / ungrouped
     attrs: list[dict[str, str]] = field(default_factory=list)  # entity attributes (T5 cards only)
+    dep_kind: str | None = None  # T2 deps only: the Context Kind (datastore/messaging/service/…); see classify_dep
 
 
 @dataclass
@@ -186,14 +188,22 @@ def parse_nodes_edges(tables: list[tuple[list[str], list[list[str]]]]) -> tuple[
             href = _first_link(row)
             fields = {h: row[idx] for idx, h in enumerate(headers) if idx < len(row) and idx != 0}
             _parents = membership_ids(node_id, row, hl)
+            node_kind = _kind_of(node_id)
+            # T2 deps carry a Context Kind: an explicit (optional) `Kind` cell, else inferred from the
+            # `Type` text. Looked up case-insensitively so a `Kind`/`Type` header in any case resolves.
+            dep_kind: str | None = None
+            if node_kind == "dep":
+                fl = {k.lower(): v for k, v in fields.items()}
+                dep_kind = classify_dep(fl.get("kind", ""), fl.get("type", ""))
             nodes[node_id] = Node(
                 id=node_id,
-                kind=_kind_of(node_id),
+                kind=node_kind,
                 name=name,
                 file=href,
                 line=_line_of(href),
                 fields=fields,
                 parent=_parents[0] if _parents else None,
+                dep_kind=dep_kind,
             )
     return nodes, edges
 

@@ -6,7 +6,9 @@ HTML file with the graph inlined and Mermaid + svg-pan-zoom loaded from a pinned
 The viewer's own CSS/JS are authored in viewer.css / viewer.js next to this module and inlined at
 build time, so the emitted HTML stays standalone — it carries no path back to this repo (see the
 "Generated artifacts are standalone w.r.t. the coyodex repo" design note).
-The viewer offers four altitudes — Context (C4) → Subsystems (click a box to select it + its linked
+The viewer offers four altitudes — Context (C4; external SYSTEMS drawn by name, while in-process
+framework/library deps fold into one ⌘-clickable "Libraries" box that drills to the full list) →
+Subsystems (click a box to select it + its linked
 subsystems, or ⌘-click to drill in; click an arrow to select it — the side panel lists every
 component edge it bundles — or ⌘-click to drill into the pair's edge card; while ⌘ is held, drillable
 boxes/arrows show a drill-in cursor) → Components → code links — navigated as a
@@ -31,8 +33,15 @@ from pathlib import Path
 from typing import Any, cast
 
 from build_graph import DiffDict, GraphDict, build_diff
+from schema_v1 import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
 
 _ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined into the HTML at build time
+
+# Synthetic node id for the collapsed "Libraries" box in the Context view (folds framework + library
+# deps out of the C4 Context altitude). Not a real element id (no prefix+digits), so it never
+# collides; the viewer resolves it via its `cy-LIBS` class and the synthetic node added to the panel
+# graph. The viewer.js side uses the same literal — keep them in step.
+LIBS_ID = "LIBS"
 
 
 def _git(args: list[str], cwd: Path) -> str | None:
@@ -377,8 +386,42 @@ def compute_state(graph: GraphDict, diff: DiffDict | None) -> dict[str, str]:
     return state
 
 
-def gen_context_mermaid(graph: GraphDict) -> str:
-    """C4 Context: the system as one node, actors (Roles) using it, external deps it relies on."""
+def _field_ci(node: dict[str, Any], key: str) -> str:
+    """A node field looked up case-insensitively (table headers vary in case)."""
+    for k, v in cast("dict[str, object]", node.get("fields") or {}).items():
+        if k.strip().lower() == key:
+            return str(v)
+    return ""
+
+
+def _dep_kind(node: dict[str, Any]) -> str:
+    """A dep node's Context Kind, defaulting to 'library' (folds) when unset."""
+    return str(node.get("dep_kind") or "library")
+
+
+def folded_libs(graph: GraphDict) -> list[dict[str, str]]:
+    """(id, name, type) for the deps folded into the Context 'Libraries' box — those whose Kind is an
+    in-process one (framework / library). The C4 Context view shows external SYSTEMS by name and
+    collapses these, since libraries are an implementation concern, not a system the project talks to."""
+    out: list[dict[str, str]] = []
+    for nid, node in graph["nodes"].items():
+        if str(node["kind"]) == "dep" and _dep_kind(node) in DEP_KINDS_FOLDED:
+            out.append({"id": nid, "name": str(node["name"]), "type": _field_ci(node, "type")})
+    return out
+
+
+def _context_dep_lines(deps: list[tuple[str, str]]) -> list[str]:
+    """Mermaid lines drawing each (id, name) dep as a cylinder the System `uses`. Shared by the
+    Context view (external systems only) and the Libraries drill-down (the folded libs)."""
+    lines: list[str] = []
+    for nid, name in deps:
+        lines.append(f'  SYS -->|uses| {nid}[("{_safe_label(name)}")]:::cy-{nid}')
+        lines.append(f"  class {nid} dep")
+    return lines
+
+
+def _context_head(graph: GraphDict) -> list[str]:
+    """The System node + actor lifelines — the part of the Context view shared with its drill-downs."""
     title = _safe_label(graph["title"] or "System")
     lines = ["flowchart TB", f'  SYS["{title}"]:::cy-SYS', "  class SYS system"]
     for i, r in enumerate(graph["roles"]):
@@ -391,14 +434,47 @@ def gen_context_mermaid(graph: GraphDict) -> str:
             lines.append(f'  {rid}(["{label}"]):::cy-{rid}')        # stadium = human actor
             lines.append(f"  class {rid} human")
         lines.append(f"  {rid} -->|uses| SYS")
-    for nid, node in graph["nodes"].items():
-        if str(node["kind"]) == "dep":
-            lines.append(f'  SYS -->|uses| {nid}[("{_safe_label(str(node["name"]))}")]:::cy-{nid}')
-            lines.append(f"  class {nid} dep")
-    lines.append("  classDef system fill:#1e1b4b,stroke:#312e81,color:#fff;")
-    lines.append("  classDef human fill:#fff7ed,stroke:#c2410c,color:#7c2d12;")
-    lines.append("  classDef svc fill:#eef2ff,stroke:#4338ca,color:#312e81;")
-    lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
+    return lines
+
+
+CONTEXT_CLASSDEFS = [
+    "  classDef system fill:#1e1b4b,stroke:#312e81,color:#fff;",
+    "  classDef human fill:#fff7ed,stroke:#c2410c,color:#7c2d12;",
+    "  classDef svc fill:#eef2ff,stroke:#4338ca,color:#312e81;",
+    "  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;",
+    "  classDef libs fill:#f1f5f9,stroke:#475569,color:#1e293b;",
+]
+
+
+def gen_context_mermaid(graph: GraphDict) -> str:
+    """C4 Context: the system as one node, actors (Roles) using it, and the EXTERNAL SYSTEMS it relies
+    on drawn by name (datastore / messaging / service / platform). In-process deps (framework /
+    library) are collapsed into one `📚 Libraries (N)` box — drillable in the viewer — so the highest
+    altitude stays a clean C4 picture instead of a star of every imported library."""
+    lines = _context_head(graph)
+    shown = [(nid, str(node["name"])) for nid, node in graph["nodes"].items()
+             if str(node["kind"]) == "dep" and _dep_kind(node) not in DEP_KINDS_FOLDED]
+    lines += _context_dep_lines(shown)
+    n_folded = len(folded_libs(graph))
+    if n_folded:
+        lines.append(f'  {LIBS_ID}["📚 Libraries ({n_folded})"]:::cy-{LIBS_ID}')
+        lines.append(f"  class {LIBS_ID} libs")
+        lines.append(f"  SYS -->|bundles| {LIBS_ID}")
+    lines += CONTEXT_CLASSDEFS
+    return "\n".join(lines)
+
+
+def gen_libs_mermaid(graph: GraphDict) -> str:
+    """The Libraries drill-down (reached by drilling the Context 'Libraries' box): the System with
+    every folded in-process dep drawn by name. Same `SYS -->|uses| <id>` shape as the Context view, so
+    the viewer's context-edge bridge resolves each arrow to its 'Used for' detail and each box to its
+    panel. Empty string when nothing is folded (the box — hence this view — never appears)."""
+    libs = folded_libs(graph)
+    if not libs:
+        return ""
+    lines = _context_head(graph)
+    lines += _context_dep_lines([(d["id"], d["name"]) for d in libs])
+    lines += CONTEXT_CLASSDEFS
     return "\n".join(lines)
 
 
@@ -410,6 +486,11 @@ def add_context_nodes(g: dict[str, Any], graph: GraphDict) -> None:
         rid = "R" + str(i)
         g["nodes"][rid] = {"id": rid, "kind": r["kind"], "name": r["name"], "file": None, "line": None,
                            "fields": ({"Wants": r["wants"]} if r["wants"] else {})}
+    # The collapsed Libraries box is a synthetic node so bindNodes binds it (it skips ids absent from
+    # the graph) and the click bridge resolves it; its panel/tooltip are driven by FOLDED_LIBS, not fields.
+    if folded_libs(graph):
+        g["nodes"][LIBS_ID] = {"id": LIBS_ID, "kind": "libs", "name": "Libraries",
+                               "file": None, "line": None, "fields": {}}
 
 
 def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
@@ -666,6 +747,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              edge_cards: dict[str, str], container_edges: dict[str, list[dict[str, str]]],
              grouping: bool, domain_mm: str, domain: bool,
              gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool,
+             libs_mm: str, folded: list[dict[str, str]],
              repo_root: str, gh_repo: str | None, gh_commit: str | None) -> str:
     css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
     js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
@@ -687,6 +769,8 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_GP__", json.dumps(gp_mm))
         .replace("__MERMAID_GP_STEP__", json.dumps(gp_steps))
         .replace("__GP_ACTORS__", json.dumps(gp_actors_list))
+        .replace("__MERMAID_LIBS__", json.dumps(libs_mm))
+        .replace("__FOLDED_LIBS__", json.dumps(folded))
         .replace("__CONTEXT_EDGES__", json.dumps(context_edges))
         .replace("__HAS_DIFF__", "true" if has_diff else "false")
         .replace("__HAS_GROUPING__", "true" if grouping else "false")
@@ -726,6 +810,8 @@ def main() -> int:
     gp_mm = gen_gp_mermaid(graph) if gp else ""
     gp_steps = gp_step_mermaids(graph) if gp else {}
     gp_actors_list = gp_actors(graph) if gp else []
+    libs_mm = gen_libs_mermaid(graph)
+    folded = folded_libs(graph)
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     # Source-link config, derived at build time from the mapped repo (the output dir anchors it).
@@ -736,7 +822,7 @@ def main() -> int:
     gh_commit = graph["commit"]
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
-                    gp_mm, gp_steps, gp_actors_list, gp, repo_root, gh_repo, gh_commit)
+                    gp_mm, gp_steps, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")
     return 0

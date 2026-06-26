@@ -40,6 +40,7 @@ from schema_v1 import (
     DEF_BOLD,
     DEF_ENTITY,
     DEF_GP,
+    DEP_KINDS,
     GLUED_DEF,
     GLUED_DEF_INNER,
     ID_TOKEN,
@@ -177,6 +178,45 @@ def check_roles_kind(text: str) -> list[str]:
                 return ["Roles table is missing the required 'Kind' column (human/service)"]
             return []
     return []
+
+
+def check_dep_kinds(text: str) -> list[str]:
+    """If the T2 dependencies table carries the optional `Kind` column, every non-empty value must be
+    one of DEP_KINDS (datastore/messaging/service/platform/framework/library) — it drives how the C4
+    Context view treats the dep (external system drawn by name vs in-process lib folded away). No-op
+    when no D-defining table has a Kind column (Kind is then inferred from Type). Scoped to rows that
+    define a `D` id, so the Roles table's own human/service `Kind` column is never inspected."""
+    problems: list[str] = []
+    lines = text.splitlines()
+    i, n = 0, len(lines)
+    while i < n:
+        if not lines[i].lstrip().startswith("|"):
+            i += 1
+            continue
+        block: list[str] = []
+        while i < n and lines[i].lstrip().startswith("|"):
+            block.append(lines[i])
+            i += 1
+        if len(block) < 2 or not is_separator_row(block[1]):
+            continue  # not a real table
+        headers = [c.lower() for c in split_cells(block[0])]
+        if "kind" not in headers:
+            continue
+        kcol = headers.index("kind")
+        for row in block[2:]:
+            if is_separator_row(row):
+                continue
+            cm = DEF_BOLD.match(row)
+            if not cm or not cm.group(1).startswith("D"):
+                continue  # only T2 dep rows — never the Roles table's human/service Kind
+            cells = split_cells(row)
+            raw = cells[kcol].strip() if kcol < len(cells) else ""
+            if raw and raw.lower() not in DEP_KINDS:
+                problems.append(
+                    f"{cm.group(1)} has an invalid dependency Kind '{raw}' — "
+                    f"use one of: {', '.join(DEP_KINDS)}"
+                )
+    return problems
 
 
 def collect_parents(text: str) -> tuple[dict[str, str], list[str]]:
@@ -477,6 +517,7 @@ def main() -> int:
 
     problems.extend(check_gp_actors(text, gp_order, collect_role_names(text)))
     problems.extend(check_roles_kind(text))
+    problems.extend(check_dep_kinds(text))
     problems.extend(check_table_shape(text))
     problems.extend(check_edge_verbs(text))
     domain_problems, domain_warnings = check_domain_cards(text)

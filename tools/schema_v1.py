@@ -39,6 +39,58 @@ DEF_ENTITY = re.compile(r"^\*\*(E\d+)\s+—")
 # Grouping: membership is ONE parent pointer carried on the child.
 MAX_DEPTH = 3  # max subsystem levels (parent-pointer hops) in any membership chain
 
+# External-dependency Kind — a closed vocabulary that drives how the C4 Context view treats a dep.
+# The first four are EXTERNAL SYSTEMS the project talks to across a boundary (drawn at Context, by
+# name); framework + library are in-process code deps that FOLD into one collapsed "Libraries" box.
+# Authored in an OPTIONAL T2 `Kind` column; when absent, classify_dep() infers it from `Type`.
+DEP_KINDS = ("datastore", "messaging", "service", "platform", "framework", "library")
+DEP_KINDS_SHOWN = ("datastore", "messaging", "service", "platform")  # external systems — drawn at Context
+DEP_KINDS_FOLDED = ("framework", "library")                          # in-process — fold into "Libraries"
+# Display label per shown Kind, used for any per-kind grouping/headers in the viewer.
+DEP_KIND_LABEL = {"datastore": "Datastores", "messaging": "Messaging",
+                  "service": "External services", "platform": "Platform"}
+
+# Keyword signatures for the heuristic fallback, in PRIORITY order (first hit wins). Distinctive
+# categories precede broad ones so a multi-signal Type lands right: "AWS SQS" -> messaging (not
+# platform), "AWS S3 object storage" -> datastore (not platform). Matched case-insensitively as
+# substrings of the `Type` text. framework vs library need not be precise — both fold at Context.
+_DEP_KIND_SIGNATURES: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("messaging", ("queue", "broker", "message", "pub/sub", "pubsub", "pub-sub", "kafka", "rabbitmq",
+                   "rabbit", "amqp", "sqs", "sns", "nats", "event bus", "event stream", "kinesis",
+                   "mqtt", "celery")),
+    ("datastore", ("database", "datastore", "data store", "sql", "postgres", "mysql", "mariadb",
+                   "sqlite", "mongo", "redis", "cache", "memcache", "elasticsearch", "opensearch",
+                   "search index", "object storage", "blob storage", "bucket", "dynamodb",
+                   "cassandra", "warehouse", "bigquery", "snowflake", "neo4j", "key-value",
+                   "kv store", "vector store", "vector db")),
+    ("service", ("api", "saas", "third-party", "third party", "external service", "webhook", "idp",
+                 "identity provider", "oauth", "openid", "sso", "auth provider", "auth0", "okta",
+                 "payment", "stripe", "billing", "email", "smtp", "sendgrid", "mailgun", "sms",
+                 "twilio", "llm", "openai", "anthropic", "observability", "monitoring", "telemetry",
+                 "metrics", "tracing", "sentry", "datadog", "analytics", "geocoding")),
+    ("platform", ("cloud", "aws", "gcp", "azure", "kubernetes", "k8s", "docker", "container",
+                  "cdn", "secrets manager", "vault", "infrastructure", "serverless",
+                  "load balancer", "reverse proxy", "nginx", "terraform", "runtime")),
+    ("framework", ("framework", "orm", "fastapi", "flask", "django", "express", "react", "vue",
+                   "angular", "svelte", "spring", "rails", "laravel", "sqlalchemy", "prisma",
+                   "next.js", "nextjs")),
+)
+
+
+def classify_dep(kind_cell: str, type_cell: str) -> str:
+    """The dep's Kind (one of DEP_KINDS): an explicit, valid `Kind` cell wins; else infer from the
+    free-text `Type`. Falls back to 'library' (folds into the Context 'Libraries' box) when nothing
+    matches, so an un-tagged, unrecognised dep declutters rather than crowding Context. The authored
+    `Kind` column is the accurate path; this heuristic is the no-re-map fallback for older maps."""
+    explicit = (kind_cell or "").strip().lower()
+    if explicit in DEP_KINDS:
+        return explicit
+    t = (type_cell or "").lower()
+    for kind, needles in _DEP_KIND_SIGNATURES:
+        if any(needle in t for needle in needles):
+            return kind
+    return "library"
+
 
 def strip_fences(text: str) -> str:
     """Blank out fenced code blocks (``` or ~~~), keeping the line COUNT so reported line numbers

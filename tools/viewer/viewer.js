@@ -12,6 +12,9 @@ const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classD
 const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): black-box sequence diagram
 const MERMAID_GP_STEP = __MERMAID_GP_STEP__;      // GP step (Level 2): GP-id -> components-used sub-diagram
 const GP_ACTORS = __GP_ACTORS__;                  // Golden-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
+const MERMAID_LIBS = __MERMAID_LIBS__;            // Context "Libraries" drill: System + the folded in-process deps
+const FOLDED_LIBS = __FOLDED_LIBS__;              // [{id,name,type}] folded out of Context into the Libraries box
+const LIBS_ID = 'LIBS';                           // synthetic id of that collapsed box (matches gen_viewer.LIBS_ID)
 const HAS_GROUPING = __HAS_GROUPING__;
 const HAS_DOMAIN = __HAS_DOMAIN__;
 const HAS_GP = __HAS_GP__;
@@ -201,6 +204,18 @@ function showContextEdge(ce) {
     + '<dl>' + body + '</dl>';
 }
 
+// The collapsed "Libraries" box: a roster of the in-process deps (frameworks + libraries) folded out
+// of the C4 Context view, since they are an implementation concern, not a system the project talks to.
+// At-a-glance only — drilling the box is where each one selects to its own details.
+function showLibsFold() {
+  const items = FOLDED_LIBS.map((d) =>
+    '<dd>• ' + esc(d.name) + (d.type ? ' <span class="muted">— ' + esc(d.type) + '</span>' : '') + '</dd>').join('');
+  panel.innerHTML = '<h2>Libraries</h2>'
+    + '<div class="badges"><span class="badge kind">' + FOLDED_LIBS.length + ' in-process</span></div>'
+    + '<p class="empty">Frameworks &amp; libraries linked into the process — folded out of the Context view. ⌘-click to drill in.</p>'
+    + (items ? '<dl><dt>Bundled</dt>' + items + '</dl>' : '');
+}
+
 // Subsystems edge: the panel shows both subsystems (name + Purpose); the concrete A→B wiring is the
 // diagram itself (the edge view we navigated to).
 function subsystemBlock(id) {
@@ -285,7 +300,18 @@ function meaningOf(n) {
       if (k.toLowerCase() === want && String(f[k]).trim()) return String(f[k]);  // raw; rendered by mdInline in the builder
   return null;
 }
+// Hover the collapsed Libraries box -> the names it folds (capped), so you can read them without drilling.
+const TIP_LIBS_CAP = 16;
+function tipLibsHtml() {
+  if (!FOLDED_LIBS.length) return '<div class="tn">no libraries</div>';
+  const names = FOLDED_LIBS.map((d) => d.name);
+  const shown = names.slice(0, TIP_LIBS_CAP);
+  const more = names.length > TIP_LIBS_CAP
+    ? '<div class="tn">+' + (names.length - TIP_LIBS_CAP) + ' more…</div>' : '';
+  return '<ul class="tl">' + shown.map((nm) => '<li>' + esc(nm) + '</li>').join('') + '</ul>' + more;
+}
 function tipNodeHtml(id) {
+  if (id === LIBS_ID) return tipLibsHtml();  // the synthetic fold box has no fields — list its members
   const n = GRAPH.nodes[id];
   if (!n) return '';
   const meaning = meaningOf(n);
@@ -388,6 +414,8 @@ function actionTipNode(id) {
   if (srcNode(id)) return actionOpenSrcHtml(n);
   if (String(n.kind) === 'subsystem')
     return '<div class="tt">Open subsystem</div><div class="tm">' + esc(n.name) + '</div>';
+  if (id === LIBS_ID)
+    return '<div class="tt">Open Libraries</div><div class="tm">' + FOLDED_LIBS.length + ' bundled</div>';
   return null;
 }
 function actionTipEdge(a, b) {
@@ -464,6 +492,23 @@ function selectNode(scene, el, id) {
   // Dim to this node's neighbourhood only when the node is drawn in this scene; a box that isn't
   // registered (e.g. a neighbourhood's external subsystem) would otherwise dim everything around it.
   if (scene.nodeEls[id]) focusNode(scene, id); else clearFocus(scene);
+}
+
+// Select the collapsed Libraries box: highlight + show its roster (showLibsFold), no neighbourhood dim
+// (its only link is the un-bound SYS→box arrow). Reuses the node selKey so bindNodes' hover guard
+// matches and the selection glow isn't overwritten by a passing hover. Toggles off on re-click.
+function selectLibsFold(scene, el) {
+  const selKey = 'node:' + LIBS_ID;
+  if (scene.selectedKey === selKey) { resetScene(scene); return; }
+  scene.selectedKey = selKey;
+  showLibsFold();
+  sceneSelect(scene, () => { el.style.filter = HILITE; return () => { el.style.filter = ''; }; });
+  clearFocus(scene);
+}
+// Tag the Libraries box with the drill cursor (it ⌘-drills into the full list), like subsystem boxes.
+function markLibsDrill() {
+  const el = mainScene.nodeEls[LIBS_ID];
+  if (el) el.classList.add('drill');
 }
 
 function bindNodes(scene, onActivate) {
@@ -620,10 +665,22 @@ function fwd() { if (hi < history.length - 1) { captureViewport(); hi += 1; rend
 
 // --- per-state binding ----------------------------------------------------------
 function bindContext() {
-  bindNodes(mainScene, (id, el) => {
+  bindNodes(mainScene, (id, el, e) => {
     if (id === 'SYS') { go({ kind: HAS_GROUPING ? 'container' : 'component' }); return; }  // drill in
+    if (id === LIBS_ID) {  // collapsed Libraries box: ⌘-click drills to the full list, plain click previews it
+      if (isDrillClick(e)) { go({ kind: 'libs' }); return; }
+      selectLibsFold(mainScene, el);
+      return;
+    }
     selectNode(mainScene, el, id);
   });
+  bindEdges(mainScene, resolveContextEdge);
+  markLibsDrill();
+}
+// The Libraries drill-down: the System + every folded in-process dep, same shape as Context. SYS and
+// each dep simply select to their panel (no further drill); arrows resolve via the context-edge bridge.
+function bindLibs() {
+  bindNodes(mainScene, (id, el) => selectNode(mainScene, el, id));
   bindEdges(mainScene, resolveContextEdge);
 }
 function bindComponent() {
@@ -880,6 +937,7 @@ function mermaidFor(s) {
   if (s.kind === 'domain') return MERMAID_DOMAIN;
   if (s.kind === 'gp') return MERMAID_GP;
   if (s.kind === 'gpstep') return MERMAID_GP_STEP[s.gp];
+  if (s.kind === 'libs') return MERMAID_LIBS;
   return mode === 'diff' ? MERMAID_DIFF : MERMAID_BASE;  // component
 }
 function applyDefaultPanel(s) {
@@ -887,6 +945,7 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
   else if (s.kind === 'gp') showGPOverview();
   else if (s.kind === 'gpstep') showGPStep(s.gp);
+  else if (s.kind === 'libs') showLibsFold();
   else panel.innerHTML = EMPTY_PANEL;
 }
 function bindFor(s) {
@@ -897,11 +956,13 @@ function bindFor(s) {
   else if (s.kind === 'domain') bindDomain();
   else if (s.kind === 'gp') bindGP();
   else if (s.kind === 'gpstep') bindComponent();  // step subgraph = a Components view scoped to the step
+  else if (s.kind === 'libs') bindLibs();
   else bindComponent();
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'context' || kind === 'component' || kind === 'domain') return kind;
   if (kind === 'gp' || kind === 'gpstep') return 'gp';
+  if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
   return 'container';
 }
 function gpTitle(gp) { const s = GP_BY_ID[gp]; return s ? s.id + (s.title ? ' — ' + s.title : '') : gp; }
@@ -912,6 +973,7 @@ function stateTitle(s) {
   if (s.kind === 'domain') return 'Domain';
   if (s.kind === 'gp') return 'Golden Path';
   if (s.kind === 'gpstep') return gpTitle(s.gp);
+  if (s.kind === 'libs') return 'Libraries';
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   if (s.kind === 'subsystem') return nm(s.sid);
   return nm(s.a) + ' → ' + nm(s.b);  // edge
@@ -920,6 +982,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'domain') return [{ kind: 'domain' }];   // a standalone behavioural lens, not nested in Context
   if (s.kind === 'gp') return [{ kind: 'gp' }];           // the Golden Path is its own behavioural lens
   if (s.kind === 'gpstep') return [{ kind: 'gp' }, { kind: 'gpstep', gp: s.gp }];  // step nested under it
+  if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold drills out of Context
   const trail = [{ kind: 'context' }];                    // Context is the root of the structural zoom
   if (s.kind === 'context') return trail;
   if (s.kind === 'component') { trail.push({ kind: 'component' }); return trail; }

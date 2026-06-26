@@ -49,7 +49,11 @@ python3 -m http.server 8753 -d .coyodex   # → http://localhost:8753/project-ma
 Purpose / Used for / Meaning / Wants, an edge's Why), so you can read the map without clicking.
 Clicking still opens the fuller side panel; the tooltip never changes the selection.
 
-- **Context** — the system, its actors (Roles, drawn human vs service), and external deps.
+- **Context** — the system, its actors (Roles, drawn human vs service), and the external **systems**
+  it relies on, drawn by name (datastore / messaging / service / platform). In-process deps
+  (framework / library) collapse into one **📚 Libraries (N)** box — ⌘-click it to drill into the full
+  list (or plain-click to preview the names), so the top altitude stays a clean C4 picture instead of
+  a star of every imported library. The split is the T2 `Kind` column (inferred from `Type` when absent).
 - **Subsystems** *(when the map groups components)* — the Container altitude: subsystem boxes with
   inter-subsystem edges **derived** from the component edge list (count-labelled). Drilling replaces
   the diagram **in place** (no popups) and is tracked as a back/forward **history** (stepping back

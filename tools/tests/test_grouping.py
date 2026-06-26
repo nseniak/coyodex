@@ -981,6 +981,143 @@ def test_render_inlines_gp_data() -> None:
         assert "sequenceDiagram" in html and "Submit order" in html
 
 
+# --- external-dependency Kind (Context library-fold) ----------------------------
+def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> str:
+    """A map whose T2 exercises dep Kinds: D1 is explicit (param), the rest inferred from Type. D3
+    (library) + D4 (framework) are the in-process deps that fold into the Context 'Libraries' box; the
+    others are external systems drawn by name. `with_kind=False` drops the Kind column (heuristic-only)."""
+    deps = [
+        ("D1", "PostgreSQL", kind_d1, "Relational database", "store", "env"),
+        ("D2", "RabbitMQ", "", "Message broker", "queue", "env"),
+        ("D3", "pydantic", "", "Validation library", "validate", "dep"),
+        ("D4", "React", "", "UI framework", "ui", "dep"),
+        ("D5", "Stripe", "", "Payments API (SaaS)", "billing", "env"),
+        ("D7", "Docker", "", "Container runtime", "packaging", "dockerfile"),
+    ]
+    if with_kind:
+        hdr = ("| ID | Name | Kind | Type | Used for | Where configured | Conf. |\n"
+               "|---|---|---|---|---|---|---|\n")
+        rows = "".join(f"| **{i}** | {n} | {k} | {t} | {u} | {w} | V |\n" for i, n, k, t, u, w in deps)
+    else:
+        hdr = ("| ID | Name | Type | Used for | Where configured | Conf. |\n"
+               "|---|---|---|---|---|---|\n")
+        rows = "".join(f"| **{i}** | {n} | {t} | {u} | {w} | V |\n" for i, n, _k, t, u, w in deps)
+    edges = "".join(f"| C1 | uses | {d[0]} | x | f |\n" for d in deps)
+    return (
+        "## Roles (actors)\n"
+        "| Role | Kind | What they want | Use cases they drive |\n"
+        "|---|---|---|---|\n"
+        "| **User** | human | use it | UC1 |\n\n"
+        "## Use cases\n"
+        "| ID | Use case | Actor | Trigger → Outcome |\n"
+        "|---|---|---|---|\n"
+        "| **UC1** | Use | User | a -> b |\n\n"
+        "## T1\n"
+        "| ID | Component | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|\n"
+        "| **C1** | App | x | f | D1 |\n\n"
+        "## T2 — External dependencies\n" + hdr + rows + "\n"
+        "### edges\n"
+        "| From | Verb | To | Why | Where |\n"
+        "|---|---|---|---|---|\n" + edges
+    )
+
+
+def test_classify_dep_explicit_wins() -> None:
+    # A valid explicit Kind cell overrides whatever the Type text would infer (case/space-insensitive).
+    assert schema_v1.classify_dep("platform", "Relational database") == "platform"
+    assert schema_v1.classify_dep("  Service  ", "a plain library") == "service"
+
+
+def test_classify_dep_heuristic_per_kind() -> None:
+    assert schema_v1.classify_dep("", "Relational database") == "datastore"
+    assert schema_v1.classify_dep("", "Redis cache") == "datastore"
+    assert schema_v1.classify_dep("", "Message broker") == "messaging"
+    assert schema_v1.classify_dep("", "AWS SQS") == "messaging"          # distinctive beats platform 'aws'
+    assert schema_v1.classify_dep("", "Payments API (SaaS)") == "service"
+    assert schema_v1.classify_dep("", "Observability SaaS") == "service"
+    assert schema_v1.classify_dep("", "Container runtime") == "platform"
+    assert schema_v1.classify_dep("", "UI framework") == "framework"
+
+
+def test_classify_dep_falls_back_to_library() -> None:
+    # An unrecognised Type — and an INVALID explicit Kind — both fall back to 'library' (folds at Context).
+    assert schema_v1.classify_dep("", "some helper utility") == "library"
+    assert schema_v1.classify_dep("db", "totally unknown thing") == "library"
+
+
+def test_parser_sets_dep_kind() -> None:
+    g = parse_map(make_dep_kinds_map())
+    deps = {k: v for k, v in g["nodes"].items() if v["kind"] == "dep"}
+    assert deps["D1"]["dep_kind"] == "datastore"   # explicit
+    assert deps["D2"]["dep_kind"] == "messaging"   # inferred
+    assert deps["D3"]["dep_kind"] == "library"     # inferred -> folds
+    assert deps["D4"]["dep_kind"] == "framework"   # inferred -> folds
+
+
+def test_folded_libs_are_in_process_kinds_only() -> None:
+    libs = gen_viewer.folded_libs(parse_map(make_dep_kinds_map()))
+    assert {d["id"] for d in libs} == {"D3", "D4"}             # framework + library only
+    assert {d["name"] for d in libs} == {"pydantic", "React"}
+
+
+def test_context_folds_libraries_shows_systems_by_name() -> None:
+    # The Context view draws external SYSTEMS by name and collapses framework/library into one box.
+    mm = gen_viewer.gen_context_mermaid(parse_map(make_dep_kinds_map()))
+    for ext in ("PostgreSQL", "RabbitMQ", "Stripe", "Docker"):
+        assert ext in mm, ext                                 # external systems shown by name
+    assert "Libraries (2)" in mm                              # the two in-process deps fold into one box
+    assert "pydantic" not in mm and "React" not in mm         # ...and are NOT drawn individually
+    assert "SYS -->|bundles| LIBS" in mm                      # the System bundles the fold box
+
+
+def test_libs_drill_lists_folded_deps() -> None:
+    mm = gen_viewer.gen_libs_mermaid(parse_map(make_dep_kinds_map()))
+    assert "pydantic" in mm and "React" in mm                 # the drill-down lists every folded dep
+    assert "PostgreSQL" not in mm                             # external systems are not in the Libraries view
+
+
+def test_context_no_libraries_box_when_none_folded() -> None:
+    # All-external deps: no fold box drawn, and the Libraries drill diagram is empty (never reached).
+    md = make_dep_kinds_map().replace("Validation library", "Search index").replace("UI framework", "Object storage")
+    g = parse_map(md)
+    assert gen_viewer.folded_libs(g) == []
+    assert "Libraries" not in gen_viewer.gen_context_mermaid(g)
+    assert gen_viewer.gen_libs_mermaid(g) == ""
+
+
+def test_validator_dep_kinds_clean_and_invalid() -> None:
+    assert run_validator(make_dep_kinds_map())[0] == 0                  # valid explicit + inferred -> OK
+    code, out = run_validator(make_dep_kinds_map("nonsense"))
+    assert code == 1 and "invalid dependency Kind" in out, out
+
+
+def test_validator_dep_kind_column_optional() -> None:
+    # Dropping the Kind column entirely is a no-op for the validator (Kind is then inferred from Type).
+    code, out = run_validator(make_dep_kinds_map(with_kind=False))
+    assert code == 0, out
+    # ...and the heuristic still classifies, so the fold still happens.
+    assert gen_viewer.folded_libs(parse_map(make_dep_kinds_map(with_kind=False)))
+
+
+def test_render_inlines_libs_fold_data() -> None:
+    # The self-contained HTML must carry the Libraries drill diagram + the folded-dep list, fully
+    # substituted (no leftover placeholder), so the client can preview/drill the fold box.
+    with tempfile.TemporaryDirectory() as d:
+        md = Path(d) / "project-map.md"
+        md.write_text(make_dep_kinds_map(), encoding="utf-8")
+        out = Path(d) / "project-map.html"
+        r = subprocess.run(
+            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 0, r.stdout + r.stderr
+        html = out.read_text(encoding="utf-8")
+        assert "__MERMAID_LIBS__" not in html and "__FOLDED_LIBS__" not in html
+        # the emoji is JSON-escaped (📚) when inlined, so assert on the text after it
+        assert "pydantic" in html and "Libraries (2)" in html
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

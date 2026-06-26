@@ -98,7 +98,12 @@ faces: outside = journey, inside = T6 flow + edges.
   inter-subsystem edges are *derived*, never authored. Present this first on large maps; drill into T1.
 - **T1 Components**: `Component | Subsystem | Purpose | Entry point | Depends on` (the `Subsystem`
   cell is the component's one parent `S`, or empty = ungrouped).
-- **T2 External dependencies**: `Name | Type | Used for | Where configured`.
+- **T2 External dependencies**: `Name | Kind | Type | Used for | Where configured`. `Kind` (optional,
+  closed vocabulary) drives the Context view: external **systems** the project talks to across a
+  boundary — `datastore` / `messaging` / `service` (incl. IdP/auth, payments, observability SaaS) /
+  `platform` — are drawn at Context by name; in-process code — `framework` / `library` — folds into
+  one collapsed "Libraries" box. `Type` stays the free-text human label; when `Kind` is omitted it is
+  inferred from `Type`.
 - **T3 How to run/build/test**: `Action | Command | Source`.
 
 ### Level 1 (one Level-0 row expanded)

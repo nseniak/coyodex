@@ -68,6 +68,21 @@ in their own table (`ID | Subsystem | Purpose | Parent | Anchor | Conf.`), optio
 - Grouping is **optional and additive**: a map with no Subsystems table and no `Subsystem` column
   is fully valid (its components are simply ungrouped).
 
+### Dependency Kind drives the Context view (optional, additive)
+
+T2 deps may carry an optional `Kind` — a **closed vocabulary** that decides how the C4 Context view
+treats each dep, so the highest altitude stays a clean C4 picture instead of a star of every imported
+library:
+
+- **External systems are drawn at Context by name**: `datastore` (DB / cache / object store / search),
+  `messaging` (queue / broker / pub-sub / stream), `service` (third-party API / SaaS, incl. IdP/auth,
+  payments, observability), `platform` (runtime / cloud / CDN / secrets).
+- **In-process code folds into one "Libraries" box**: `framework` and `library`. The box is drillable
+  to the full list — nothing is lost, it is just one click below the Context altitude.
+- `Type` stays the **free-text** human label; `Kind` is the render-driving enum (same split as a Role's
+  free-text name vs its closed `Kind`). When `Kind` is omitted it is **inferred from `Type`**, so a map
+  with no `Kind` column is fully valid and still de-cluttered — the column only makes the call exact.
+
 ## The validator
 
 [`tools/validate_analysis.py`](../tools/validate_analysis.py) is stdlib-only:
@@ -78,7 +93,9 @@ python3 tools/validate_analysis.py .coyodex/project-map.md
 
 It prints an element inventory and exits non-zero on: duplicate definitions, references to
 undefined IDs, a Golden Path step missing its `Touches:` line, a Roles table missing the required
-`Kind` column, a table row whose column count differs from its header (malformed separator,
+`Kind` column, a T2 dependency whose **optional** `Kind` cell is not one of the closed set
+`datastore / messaging / service / platform / framework / library` (no-op when the column is absent),
+a table row whose column count differs from its header (malformed separator,
 dropped/extra cell, or an unescaped raw `|` — an escaped `\|` is fine), an edge row with an empty
 `Verb` cell (which would render as `src -->|| dst` and desync the diagram), or — when grouping is
 present — a `Subsystem`/`Parent`
