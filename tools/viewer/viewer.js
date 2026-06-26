@@ -282,13 +282,13 @@ function tipNodeHtml(id) {
   const n = GRAPH.nodes[id];
   if (!n) return '';
   const meaning = meaningOf(n);
-  // A subsystem box already prints its name, and you only hover one inside the Subsystems view,
-  // so the name + "subsystem" tag are redundant — show just the explanatory text (nothing if none).
+  // The box you're hovering already prints its name, and its kind reads from the shape/colour, so a
+  // name header + kind tag only restate what's on screen — show just the explanatory text.
+  // (Subsystems suppress the card entirely when there's nothing to explain.)
   if (n.kind === 'subsystem')
     return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>' : '';
-  return '<div class="tt">' + esc(n.name) + '</div><div class="tk">' + esc(n.kind) + '</div>'
-    + (meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
-               : '<div class="tn">no description recorded</div>');
+  return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
+                 : '<div class="tn">no description recorded</div>';
 }
 function tipEdgeHtml(e) {
   // context edges (actor→system / system→dep) carry from/to + wants/usedFor under the verb "uses";
