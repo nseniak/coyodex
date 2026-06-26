@@ -17,15 +17,20 @@ your mode and follow it; don't restate it or work from memory.**
 
 ## Step 0 — locate the coyodex clone (always first)
 
-The method lives in a separate `coyodex` repo, cloned next to the project. Find `method.md`:
+The method lives in a separate `coyodex` repo. `make install` writes its path to
+`~/.claude/skills/coyodex/.coyodex-home`, so read that first and only search if it is missing:
 
 ```
-for d in ~/Projects/coyodex ../coyodex ../../coyodex ~/coyodex; do
-  [ -f "$d/method.md" ] && echo "FOUND $d" && break
-done
+COYODEX="$(cat ~/.claude/skills/coyodex/.coyodex-home 2>/dev/null)"
+if [ -z "$COYODEX" ] || [ ! -f "$COYODEX/method.md" ]; then
+  for d in ~/Projects/coyodex ../coyodex ../../coyodex ~/coyodex; do
+    [ -f "$d/method.md" ] && COYODEX="$d" && break
+  done
+fi
+echo "$COYODEX"
 ```
 
-If none match, ask the user for the path. Call every tool by its path inside that clone
+If still empty, ask the user for the path. Call every tool by its path inside that clone
 (`$COYODEX/tools/...`). Ignore the clone's `internal/` folder — design rationale, not the method.
 
 ## Pick the mode, read its doc, follow it
