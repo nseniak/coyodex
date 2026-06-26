@@ -19,7 +19,7 @@ Every element has a stable, unique ID by prefix:
 | `S` | Subsystem — a group of components and/or nested subsystems (optional) |
 | `D` | External dependency (T2) |
 | `E` | Domain-model entity (T5) |
-| `CX` | Domain context — a group of T5 entities and/or nested contexts (optional) |
+| `SD` | Domain subdomain — a group of T5 entities and/or nested subdomains (optional) |
 
 Definitions live in the **first cell of a table row** (`| **C1** | ... |`) or, for the two
 block formats, in a heading: Golden Path steps (`**GP1 — ...**`) and domain entities
@@ -30,7 +30,7 @@ definition.
 
 1. **Stable column headers per table** — the headers are the schema; don't rename them.
 2. **ID-based cross-references** — every reference (T1 "Depends on", T1 `Subsystem`, the
-   Subsystems `Parent`, the card `CONTEXT:` / Contexts `Parent`, edge endpoints, GP `Touches:`,
+   Subsystems `Parent`, the card `SUBDOMAIN:` / Subdomains `Parent`, edge endpoints, GP `Touches:`,
    traceability tables, "Used in GP") resolves to a defined ID, not a bare display name. Display text
    may accompany the ID (`C8 Upstream connectivity`) but the ID must be present.
 3. **No raw `|` inside table cells** — escape or avoid it; it silently breaks table parsing.
@@ -71,21 +71,21 @@ in their own table (`ID | Subsystem | Purpose | Parent | Anchor | Conf.`), optio
 
 ### Domain grouping is the same machine, on the entity graph (optional, additive)
 
-T5 entities may be grouped into **contexts** (prefix `CX`) — bounded contexts / aggregates — defined
-in their own table (`ID | Context | Purpose | Parent | Anchor | Conf.`), optionally nested. This is the
+T5 entities may be grouped into **subdomains** (prefix `SD`) — bounded contexts / aggregates — defined
+in their own table (`ID | Subdomain | Purpose | Parent | Anchor | Conf.`), optionally nested. This is the
 *same* single-source/derived machinery as component subsystems, applied to the domain model:
 
 - **Membership lives on the child, once** — but on the **card**, not a table cell: each domain card
-  carries a `CONTEXT:` line holding **one** `CX` ID (the analog of a component's `Subsystem` cell). A
-  card with no `CONTEXT:` line is ungrouped (top-level). The Contexts table's own `Parent` cell nests
-  one context inside another.
+  carries a `SUBDOMAIN:` line holding **one** `SD` ID (the analog of a component's `Subsystem` cell). A
+  card with no `SUBDOMAIN:` line is ungrouped (top-level). The Subdomains table's own `Parent` cell nests
+  one subdomain inside another.
 - **Cluster entities like components** — directory first (the card's `SOURCE` location), then relation
   cohesion (the `RELATIONS` graph); minimise crossing relations. Directory-derived = verified,
   cohesion-derived = inferred.
-- **Three derived edge kinds, never authored**: `CX → CX` (a context relates to a context) is lifted
-  from the E→E `RELATIONS`; `S → CX` — the **bridge** — is lifted from the `C→E` edges (`persists` /
-  `writes` = the subsystem *owns* that context's data, `reads` = it *consumes* it).
-- **Optional and additive**: a map with no Contexts table and no `CONTEXT:` line is fully valid (its
+- **Three derived edge kinds, never authored**: `SD → SD` (a subdomain relates to a subdomain) is lifted
+  from the E→E `RELATIONS`; `S → SD` — the **bridge** — is lifted from the `C→E` edges (`persists` /
+  `writes` = the subsystem *owns* that subdomain's data, `reads` = it *consumes* it).
+- **Optional and additive**: a map with no Subdomains table and no `SUBDOMAIN:` line is fully valid (its
   entities are simply ungrouped).
 
 ### Dependency Kind drives the Context view (optional, additive)
@@ -121,9 +121,9 @@ dropped/extra cell, or an unescaped raw `|` — an escaped `\|` is fine), an edg
 present — a `Subsystem`/`Parent`
 that doesn't resolve to a defined `S`, an element with more than one parent, a nesting cycle, or a
 membership chain more than `MAX_DEPTH` subsystem levels deep (default 3). The **domain-grouping**
-checks mirror these when contexts are present: a card `CONTEXT:` / Contexts `Parent` that doesn't
-resolve to a defined `CX`, a wrong-kind parent (an entity/context whose parent isn't a `CX`), a
-context-nesting cycle or over-deep chain, a loud guard when a Contexts table is defined but no entity
+checks mirror these when subdomains are present: a card `SUBDOMAIN:` / Subdomains `Parent` that doesn't
+resolve to a defined `SD`, a wrong-kind parent (an entity/subdomain whose parent isn't a `SD`), a
+subdomain-nesting cycle or over-deep chain, a loud guard when a Subdomains table is defined but no entity
 is assigned, and a non-blocking warning listing ungrouped entities once some are grouped. When an
 undefined ID is
 actually a definition row that glued the name into the ID cell (`| **UC1** Search… |` or

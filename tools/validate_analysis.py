@@ -257,35 +257,45 @@ def collect_parents(text: str) -> tuple[dict[str, str], list[str]]:
     return parents, problems
 
 
-def collect_context_membership(text: str) -> dict[str, str]:
-    """child entity id -> its `CX` context id, from each domain card's `CONTEXT:` line. The
+def collect_subdomain_membership(text: str) -> dict[str, str]:
+    """child entity id -> its `SD` subdomain id, from each domain card's `SUBDOMAIN:` line. The
     domain-model analog of the table-based component->subsystem membership, but carried on the card
     (cards are blocks, not table rows), so it is collected here rather than in collect_parents. No-op
-    (returns ``{}``) when no card carries a CONTEXT line, so ungrouped domain models are unaffected."""
-    return {c.id: c.context for c in iter_domain_cards(text.splitlines()) if c.context}
+    (returns ``{}``) when no card carries a SUBDOMAIN line, so ungrouped domain models are unaffected."""
+    return {c.id: c.subdomain for c in iter_domain_cards(text.splitlines()) if c.subdomain}
 
 
-def _expected_parent_prefix(child: str) -> str:
-    """The id-prefix a child's parent must have: entities (`E`) and contexts (`CX`) nest under a
-    context (`CX`); components (`C`) and subsystems (`S`) nest under a subsystem (`S`)."""
-    return "CX" if child.startswith(("E", "CX")) else "S"
+def _is_subsystem_id(i: str) -> bool:  # an `S` id, never a subdomain (`SD1` also starts with "S")
+    return i.startswith("S") and not i.startswith("SD")
+
+
+def _expected_parent_kind(child: str) -> str:
+    """The KIND a child's parent must be: entities (`E`) and subdomains (`SD`) nest under a SUBDOMAIN;
+    components (`C`) and subsystems (`S`) nest under a SUBSYSTEM."""
+    return "subdomain" if child.startswith(("E", "SD")) else "subsystem"
+
+
+def _is_parent_kind(par: str, kind: str) -> bool:  # par's id-prefix matches the expected parent kind
+    return par.startswith("SD") if kind == "subdomain" else _is_subsystem_id(par)
 
 
 def check_hierarchy(parents: dict[str, str], defined: set[str]) -> list[str]:
-    """Parent must be the right KIND for the child (component/subsystem -> `S`; entity/context ->
-    `CX`) and defined; no nesting cycles; depth <= MAX_DEPTH. The two forests (component->S and
-    entity->CX) share one walk — their id spaces are disjoint, so a chain never crosses between them."""
+    """Parent must be the right KIND for the child (component/subsystem -> `S`; entity/subdomain ->
+    `SD`) and defined; no nesting cycles; depth <= MAX_DEPTH. The two forests (component->S and
+    entity->SD) share one walk — their id spaces are disjoint, so a chain never crosses between them.
+    The kind check is EXACT, not a bare prefix test: `SD` starts with `S`, so a component pointed at a
+    subdomain must still be flagged (the same collision class as `CX`/`C` before the rename)."""
     problems: list[str] = []
     for child, par in parents.items():
-        pfx = _expected_parent_prefix(child)
-        if not par.startswith(pfx):
-            kind = "context (CX…)" if pfx == "CX" else "subsystem (S…)"
-            problems.append(f"{child} parent {par} is not a {kind}")
+        want = _expected_parent_kind(child)
+        if not _is_parent_kind(par, want):
+            label = "subdomain (SD…)" if want == "subdomain" else "subsystem (S…)"
+            problems.append(f"{child} parent {par} is not a {label}")
         elif par not in defined:
             problems.append(f"{child} parent {par} is undefined")
     # Walk only well-formed (right-kind) pointers, so a wrong-type parent reported above does not
     # also surface as a spurious "cycle" line.
-    valid = {c: p for c, p in parents.items() if p.startswith(_expected_parent_prefix(c))}
+    valid = {c: p for c, p in parents.items() if _is_parent_kind(p, _expected_parent_kind(c))}
     for start in valid:
         chain, cur, depth = [start], start, 0
         while cur in valid:
@@ -501,15 +511,17 @@ def main() -> int:
     defined_counts, gp_order = collect_defined(text)
     defined = set(defined_counts)
     referenced = collect_referenced(text)
-    parents, parent_problems = collect_parents(text)            # table memberships: C->S, S->S, CX->CX
-    context_parents = collect_context_membership(text)          # card memberships: E->CX
-    all_parents = {**parents, **context_parents}                # one forest set for the hierarchy walk
-    # Grouping (subsystems) / contexts are "present" only if their element is defined OR some
-    # membership points at one. When absent, stray S-/CX-tokens (prose "S3" / AWS S3) are ignored, so
-    # an ungrouped map stays byte-for-byte additive. Checked by the parent KIND, never the child id —
-    # a context id `CX1` starts with "C" but is not a component.
-    grouping_present = any(i.startswith("S") for i in defined) or any(p.startswith("S") for p in all_parents.values())
-    contexts_present = any(i.startswith("CX") for i in defined) or any(p.startswith("CX") for p in all_parents.values())
+    parents, parent_problems = collect_parents(text)            # table memberships: C->S, S->S, SD->SD
+    subdomain_parents = collect_subdomain_membership(text)      # card memberships: E->SD
+    all_parents = {**parents, **subdomain_parents}              # one forest set for the hierarchy walk
+    # Grouping (subsystems) / subdomains are "present" only if their element is defined OR some
+    # membership points at one. When absent, stray S-/SD-tokens (prose "S3" / AWS S3) are ignored, so
+    # an ungrouped map stays byte-for-byte additive. `SD` starts with `S`, so subsystem checks use
+    # _is_subsystem_id to exclude subdomains — never a bare `startswith("S")` (it would catch `SD` too).
+    grouping_present = (any(_is_subsystem_id(i) for i in defined)
+                        or any(_is_subsystem_id(p) for p in all_parents.values()))
+    subdomains_present = (any(i.startswith("SD") for i in defined)
+                          or any(p.startswith("SD") for p in all_parents.values()))
 
     problems: list[str] = []
     warnings: list[str] = []
@@ -519,8 +531,8 @@ def main() -> int:
         problems.append(f"Duplicate element definitions: {', '.join(duplicates)}")
 
     def _suppress_ref(r: str) -> bool:
-        if r.startswith("CX"):  # checked before "S"/"C": CX is its own prefix
-            return not contexts_present
+        if r.startswith("SD"):  # checked BEFORE "S": a subdomain id starts with "S"
+            return not subdomains_present
         if r.startswith("S"):
             return not grouping_present
         return False
@@ -553,45 +565,46 @@ def main() -> int:
     if check_sources:
         problems.extend(check_entity_sources(text, path))
 
-    # Grouping checks — additive, no-op when there is no Subsystem/Parent column or CONTEXT line.
+    # Grouping checks — additive, no-op when there is no Subsystem/Parent column or SUBDOMAIN line.
     problems.extend(parent_problems)
     problems.extend(check_hierarchy(all_parents, defined))
 
-    def _is_component(i: str) -> bool:  # a component id, never a context (`CX1` also starts with "C")
-        return i.startswith("C") and not i.startswith("CX")
+    def _is_component(i: str) -> bool:  # a component id (no other prefix starts with "C" now)
+        return i.startswith("C")
 
     # Loud guard against silent grouping failures: a Subsystems table with NO component actually
     # assigned is almost always a missing/unreadable membership column (which renders disconnected
-    # subsystem boxes), not an intentional choice. Fail rather than pass green.
-    if (any(i.startswith("S") for i in defined) and any(_is_component(i) for i in defined)
-            and not any(_is_component(c) and p.startswith("S") for c, p in all_parents.items())):
+    # subsystem boxes), not an intentional choice. Fail rather than pass green. (`SD` starts with `S`,
+    # so subsystem membership is tested with _is_subsystem_id, never a bare `startswith("S")`.)
+    if (any(_is_subsystem_id(i) for i in defined) and any(_is_component(i) for i in defined)
+            and not any(_is_component(c) and _is_subsystem_id(p) for c, p in all_parents.items())):
         problems.append(
             "Subsystems (S) defined but no component is assigned to one — the T1 'Subsystem' "
             "membership column is missing or unreadable"
         )
-    # Same guard for the domain model: a Contexts table with NO entity assigned is almost always
-    # missing `CONTEXT:` lines (disconnected context boxes), not an intentional choice.
+    # Same guard for the domain model: a Subdomains table with NO entity assigned is almost always
+    # missing `SUBDOMAIN:` lines (disconnected subdomain boxes), not an intentional choice.
     entities_defined = any(i.startswith("E") for i in defined)
-    if (any(i.startswith("CX") for i in defined) and entities_defined
-            and not any(c.startswith("E") for c in context_parents)):
+    if (any(i.startswith("SD") for i in defined) and entities_defined
+            and not any(c.startswith("E") for c in subdomain_parents)):
         problems.append(
-            "Contexts (CX) defined but no entity is assigned to one — a domain card's `CONTEXT:` "
+            "Subdomains (SD) defined but no entity is assigned to one — a domain card's `SUBDOMAIN:` "
             "line is missing"
         )
-    # Non-blocking nudge: once SOME entities carry a context, list any that don't — they render
+    # Non-blocking nudge: once SOME entities carry a subdomain, list any that don't — they render
     # ungrouped / top-level (valid), like an ungrouped component.
-    if contexts_present and any(c.startswith("E") for c in context_parents):
-        ungrouped = sorted(i for i in defined if i.startswith("E") and i not in context_parents)
+    if subdomains_present and any(c.startswith("E") for c in subdomain_parents):
+        ungrouped = sorted(i for i in defined if i.startswith("E") and i not in subdomain_parents)
         if ungrouped:
-            warnings.append(f"Entities with no CONTEXT (ungrouped / top-level): {', '.join(ungrouped)}")
-    # Non-blocking nudge: a LEAF context with no member entities (not assigned any entity, and not a
-    # parent of another context) is empty — its per-context diagram shows only a placeholder. Usually a
-    # leftover or a typo'd `CONTEXT:` id. (Non-leaf parent contexts legitimately have no direct members.)
-    assigned_cx = set(context_parents.values())
-    parent_cx = {p for c, p in all_parents.items() if c.startswith("CX")}
-    empty_cx = sorted(i for i in defined if i.startswith("CX") and i not in assigned_cx and i not in parent_cx)
-    if empty_cx:
-        warnings.append(f"Contexts with no entities: {', '.join(empty_cx)}")
+            warnings.append(f"Entities with no SUBDOMAIN (ungrouped / top-level): {', '.join(ungrouped)}")
+    # Non-blocking nudge: a LEAF subdomain with no member entities (not assigned any entity, and not a
+    # parent of another subdomain) is empty — its diagram shows only a placeholder. Usually a leftover
+    # or a typo'd `SUBDOMAIN:` id. (Non-leaf parent subdomains legitimately have no direct members.)
+    assigned_sd = set(subdomain_parents.values())
+    parent_sd = {p for c, p in all_parents.items() if c.startswith("SD")}
+    empty_sd = sorted(i for i in defined if i.startswith("SD") and i not in assigned_sd and i not in parent_sd)
+    if empty_sd:
+        warnings.append(f"Subdomains with no entities: {', '.join(empty_sd)}")
 
     # Summary of the element inventory, by prefix.
     by_prefix: dict[str, list[str]] = {}

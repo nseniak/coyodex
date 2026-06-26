@@ -34,10 +34,10 @@ from schema_v1 import (  # noqa: E402
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href
 COMMIT = re.compile(r"\*\*Commit:\*\*\s*`([^`]+)`")
 
-# `CX` must resolve to "context" (a cluster of T5 entities); `_kind_of` extracts the full alpha
-# prefix, so "CX" is looked up whole and never collides with the single-letter "C" (component).
+# `SD` must resolve to "subdomain" (a cluster of T5 entities); `_kind_of` extracts the full alpha
+# prefix, so "SD" is looked up whole and never collides with the single-letter "S" (subsystem).
 KIND_BY_PREFIX = {"C": "component", "D": "dep", "E": "entity", "UC": "usecase", "S": "subsystem",
-                  "CX": "context"}
+                  "SD": "subdomain"}
 
 
 @dataclass
@@ -261,12 +261,12 @@ def parse_domain(lines: list[str]) -> tuple[dict[str, Node], list[Edge]]:
         if card.store:
             meta["Stored"] = card.store
         attrs = [{"name": f.name, "type": f.type, "markers": " ".join(f.markers)} for f in card.fields]
-        # `card.context` (the card's `CONTEXT:` line, a `CX` id) is the entity's one parent context —
-        # the domain-model analog of a component's `Subsystem`. Carried on `Node.parent` so the same
-        # parent-pointer machinery (top-ancestor walk, derived membership) works for entities too.
+        # `card.subdomain` (the card's `SUBDOMAIN:` line, a `SD` id) is the entity's one parent
+        # subdomain — the domain-model analog of a component's `Subsystem`. Carried on `Node.parent` so
+        # the same parent-pointer machinery (top-ancestor walk, derived membership) works for entities.
         nodes[card.id] = Node(id=card.id, kind="entity", name=card.name, file=card.source,
                               line=_line_of(card.source), fields=meta, attrs=attrs,
-                              parent=card.context)
+                              parent=card.subdomain)
         for r in card.relations:
             if r.ok:
                 edges.append(Edge(card.id, r.verb, r.target, None, None, kind=r.kind,

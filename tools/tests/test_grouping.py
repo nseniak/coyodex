@@ -841,48 +841,48 @@ def test_validator_forward_fk_not_flagged_unbacked() -> None:
     assert code == 0 and "not backed by a field" not in out, out
 
 
-# --- domain contexts (CX) -------------------------------------------------------
+# --- domain contexts (SD) -------------------------------------------------------
 def make_context_map(cards: str | None = None, contexts: str | None = None) -> str:
-    """A domain map with a Contexts (CX) table + `CONTEXT:` lines on the cards. Default: two contexts
-    (CX1 Ordering, CX2 Catalog); E1/E2 live in CX1, E4 in CX2; E1 contains E2 (intra-context) and
+    """A domain map with a Subdomains (SD) table + `SUBDOMAIN:` lines on the cards. Default: two contexts
+    (SD1 Ordering, SD2 Catalog); E1/E2 live in SD1, E4 in SD2; E1 contains E2 (intra-context) and
     refersTo E4 (the one CROSS-context relation), so the tests exercise membership + a crossing edge."""
     ctx = contexts if contexts is not None else (
-        "## Contexts (CX)\n"
-        "| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
+        "## Subdomains (SD)\n"
+        "| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
         "|---|---|---|---|---|---|\n"
-        "| **CX1** | Ordering | purchase lifecycle |  | [order.py](order.py#L1) | inferred |\n"
-        "| **CX2** | Catalog | products |  | [product.py](product.py#L1) | inferred |\n\n"
+        "| **SD1** | Ordering | purchase lifecycle |  | [order.py](order.py#L1) | inferred |\n"
+        "| **SD2** | Catalog | products |  | [product.py](product.py#L1) | inferred |\n\n"
     )
     body = cards if cards is not None else (
-        "**E1 — Order** *(orders)*\nCONTEXT: CX1\nMEANING: a purchase\n"
+        "**E1 — Order** *(orders)*\nSUBDOMAIN: SD1\nMEANING: a purchase\n"
         "FIELDS: id:ObjectId PK · product:E4\n"
         "RELATIONS: contains 1→* E2 LineItem · refersTo *→1 E4 Product\nSOURCE: [order.py](order.py#L12)\n\n"
-        "**E2 — LineItem**\nCONTEXT: CX1\nMEANING: a line\nFIELDS: sku:string\nSOURCE: [order.py](order.py#L58)\n\n"
-        "**E4 — Product**\nCONTEXT: CX2\nMEANING: a product\nFIELDS: name:string\nSOURCE: [product.py](product.py#L9)\n"
+        "**E2 — LineItem**\nSUBDOMAIN: SD1\nMEANING: a line\nFIELDS: sku:string\nSOURCE: [order.py](order.py#L58)\n\n"
+        "**E4 — Product**\nSUBDOMAIN: SD2\nMEANING: a product\nFIELDS: name:string\nSOURCE: [product.py](product.py#L9)\n"
     )
     return _VALID_HEAD + ctx + "## T5 — Domain model (domain cards)\n\n" + body
 
 
 def test_iter_domain_cards_parses_context() -> None:
     by_id = {c.id: c for c in schema_v1.iter_domain_cards(make_context_map().splitlines())}
-    assert by_id["E1"].context == "CX1" and by_id["E2"].context == "CX1" and by_id["E4"].context == "CX2"
+    assert by_id["E1"].subdomain == "SD1" and by_id["E2"].subdomain == "SD1" and by_id["E4"].subdomain == "SD2"
 
 
 def test_membership_picks_parent_for_context_rows() -> None:
-    # a Contexts-table row's 'Context' header is its NAME column; its parent pointer is 'parent'.
+    # a Subdomains-table row's 'Context' header is its NAME column; its parent pointer is 'parent'.
     assert schema_v1.membership_ids(
-        "CX2", ["**CX2**", "Catalog", "x", "CX1"], ["id", "context", "purpose", "parent"]) == ["CX1"]
+        "SD2", ["**SD2**", "Catalog", "x", "SD1"], ["id", "subdomain", "purpose", "parent"]) == ["SD1"]
 
 
 def test_parser_entity_gets_context_parent_and_context_nodes() -> None:
     g = parse_map(make_context_map())
-    assert g["nodes"]["E1"]["parent"] == "CX1" and g["nodes"]["E4"]["parent"] == "CX2"
-    ctx = {k: v for k, v in g["nodes"].items() if v["kind"] == "context"}
-    assert set(ctx) == {"CX1", "CX2"} and ctx["CX1"]["name"] == "Ordering"
+    assert g["nodes"]["E1"]["parent"] == "SD1" and g["nodes"]["E4"]["parent"] == "SD2"
+    ctx = {k: v for k, v in g["nodes"].items() if v["kind"] == "subdomain"}
+    assert set(ctx) == {"SD1", "SD2"} and ctx["SD1"]["name"] == "Ordering"
 
 
 def test_parser_entity_without_context_has_no_parent() -> None:
-    # An ungrouped domain model (no Contexts table, no CONTEXT line) leaves entities parent-less.
+    # An ungrouped domain model (no Subdomains table, no CONTEXT line) leaves entities parent-less.
     assert parse_map(make_domain_map())["nodes"]["E1"]["parent"] is None
 
 
@@ -892,17 +892,17 @@ def test_validator_context_map_clean() -> None:
 
 
 def test_validator_flags_undefined_context() -> None:
-    ctx = ("## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **CX1** | Ordering | x |  | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nCONTEXT: CX9\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
+    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+           "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n\n")
+    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD9\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
     code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
-    assert code == 1 and "CX9" in out, out
+    assert code == 1 and "SD9" in out, out
 
 
 def test_validator_contexts_guard_fires_on_missing_membership() -> None:
-    # A Contexts table with NO card assigned (no CONTEXT line) is the silent disconnected-boxes case.
-    ctx = ("## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **CX1** | Ordering | x |  | a | V |\n\n")
+    # A Subdomains table with NO card assigned (no CONTEXT line) is the silent disconnected-boxes case.
+    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+           "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n\n")
     cards = "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
     code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
     assert code == 1 and "no entity is assigned" in out, out
@@ -910,10 +910,10 @@ def test_validator_contexts_guard_fires_on_missing_membership() -> None:
 
 def test_validator_warns_ungrouped_entity() -> None:
     # Some entities carry a context, one doesn't -> non-blocking warning, build still passes.
-    ctx = ("## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **CX1** | Ordering | x |  | a | V |\n\n")
+    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+           "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n\n")
     cards = (
-        "**E1 — Order** *(s)*\nCONTEXT: CX1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
+        "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
         "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
     )
     code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
@@ -922,32 +922,32 @@ def test_validator_warns_ungrouped_entity() -> None:
 
 
 def test_validator_catches_context_cycle() -> None:
-    ctx = ("## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
+    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
            "|---|---|---|---|---|---|\n"
-           "| **CX1** | A | x | CX2 | a | V |\n| **CX2** | B | x | CX1 | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nCONTEXT: CX1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
+           "| **SD1** | A | x | SD2 | a | V |\n| **SD2** | B | x | SD1 | a | V |\n\n")
+    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
     code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
     assert code == 1 and "cycle" in out.lower(), out
 
 
 def test_validator_flags_context_parent_wrong_kind() -> None:
-    # A Contexts row whose Parent is a subsystem (S1), not another context — caught by the kind check.
+    # A Subdomains row whose Parent is a subsystem (S1), not another context — caught by the kind check.
     pre = (
         "## Subsystems\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
         "|---|---|---|---|---|---|\n| **S1** | Edge | x |  | a | V |\n\n"
-        "## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **CX1** | A | x | S1 | a | V |\n\n"
+        "## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n| **SD1** | A | x | S1 | a | V |\n\n"
         "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
         "|---|---|---|---|---|---|\n| **C1** | App | S1 | x | f |  |\n\n"
     )
-    cards = "**E1 — Order** *(s)*\nCONTEXT: CX1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
+    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
     code, out = run_validator(_VALID_HEAD + pre + "## T5\n\n" + cards)
-    assert code == 1 and "is not a context" in out, out
+    assert code == 1 and "is not a subdomain" in out, out
 
 
 def test_validator_ignores_prose_cx_without_contexts() -> None:
-    # No Contexts table / CONTEXT line: a stray "CX1" in prose is not treated as a reference (additive).
-    md = ("# X\nThe CX1 module is internal.\n"
+    # No Subdomains table / CONTEXT line: a stray "SD1" in prose is not treated as a reference (additive).
+    md = ("# X\nThe SD1 module is internal.\n"
           "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n"
           "|---|---|---|---|---|\n| **C1** | App | x | f |  |\n")
     code, out = run_validator(md)
@@ -955,71 +955,71 @@ def test_validator_ignores_prose_cx_without_contexts() -> None:
 
 
 def make_bridge_map() -> str:
-    """Subsystems S1/S2 + context CX1 with entity E1; C1 (S1) persists E1, C2 (S2) reads E1. Exercises
-    the S→CX bridge: the owning subsystem's card shows an `owns` arrow, the reader's a `reads` arrow."""
+    """Subsystems S1/S2 + context SD1 with entity E1; C1 (S1) persists E1, C2 (S2) reads E1. Exercises
+    the S→SD bridge: the owning subsystem's card shows an `owns` arrow, the reader's a `reads` arrow."""
     return (
         "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
         "|---|---|---|---|---|---|\n| **S1** | Edge | x |  | a | V |\n| **S2** | Core | x |  | a | V |\n\n"
-        "## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **CX1** | Ordering | x |  | a | V |\n\n"
+        "## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n\n"
         "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
         "|---|---|---|---|---|---|\n| **C1** | Writer | S1 | x | f |  |\n| **C2** | Reader | S2 | x | f |  |\n\n"
-        "## T5\n\n**E1 — Order** *(orders)*\nCONTEXT: CX1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
+        "## T5\n\n**E1 — Order** *(orders)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
         "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
         "| C1 | persists | E1 | store | f |\n| C2 | reads | E1 | load | f |\n"
     )
 
 
-def test_has_contexts() -> None:
-    assert gen_viewer.has_contexts(parse_map(make_context_map())) is True
-    assert gen_viewer.has_contexts(parse_map(make_domain_map())) is False   # domain model, but ungrouped
+def test_has_subdomains() -> None:
+    assert gen_viewer.has_subdomains(parse_map(make_context_map())) is True
+    assert gen_viewer.has_subdomains(parse_map(make_domain_map())) is False   # domain model, but ungrouped
 
 
 def test_gen_domain_container_mermaid_boxes_and_crossing_arrow() -> None:
-    # The bounded-contexts overview: one box per context labelled by entity count, with a CXa->CXb
-    # arrow DERIVED from a crossing E->E relation (E1 in CX1 refersTo E4 in CX2), labelled by count.
+    # The bounded-contexts overview: one box per context labelled by entity count, with a SDa->SDb
+    # arrow DERIVED from a crossing E->E relation (E1 in SD1 refersTo E4 in SD2), labelled by count.
     mm = gen_viewer.gen_domain_container_mermaid(parse_map(make_context_map()))
     assert mm.startswith("flowchart")
-    assert 'CX1["Ordering (2)"]' in mm and 'CX2["Catalog (1)"]' in mm   # count = #entities in the context
-    assert "class CX1 context" in mm
-    assert "CX1 -->|1| CX2" in mm                                       # the one crossing relation
+    assert 'SD1["Ordering (2)"]' in mm and 'SD2["Catalog (1)"]' in mm   # count = #entities in the context
+    assert "class SD1 subdomain" in mm
+    assert "SD1 -->|1| SD2" in mm                                       # the one crossing relation
 
 
 def test_gen_domain_container_edges_list_crossing_relations() -> None:
     ce = gen_viewer.gen_domain_container_edges(parse_map(make_context_map()))
-    assert set(ce) == {"CX1>CX2"}                                       # only the crossing direction
-    rows = ce["CX1>CX2"]
+    assert set(ce) == {"SD1>SD2"}                                       # only the crossing direction
+    rows = ce["SD1>SD2"]
     assert {(r["src"], r["dst"]) for r in rows} == {("E1", "E4")}
     assert rows[0]["srcName"] == "Order" and rows[0]["dstName"] == "Product" and rows[0]["verb"] == "refersTo"
 
 
-def test_gen_domain_context_card_members_full_neighbours_collapsed() -> None:
-    cards = gen_viewer.domain_context_mermaids(parse_map(make_context_map()))
-    assert set(cards) == {"CX1", "CX2"}
-    cx1 = cards["CX1"]
+def test_gen_domain_subdomain_card_members_full_neighbours_collapsed() -> None:
+    cards = gen_viewer.domain_subdomain_mermaids(parse_map(make_context_map()))
+    assert set(cards) == {"SD1", "SD2"}
+    cx1 = cards["SD1"]
     assert cx1.startswith("classDiagram")
     assert 'class E1["Order"] {' in cx1 and "ObjectId id" in cx1        # member entity, FULL box
     assert 'class E2["LineItem"] {' in cx1                              # the other member, full
     assert 'class E4["Product"]' in cx1 and 'class E4["Product"] {' not in cx1  # cross-context neighbour, COLLAPSED
     assert 'E1 "1" *-- "*" E2' in cx1                                   # intra-context composition
     assert ": product" in cx1                                          # the cross relation, labelled by its backing field
-    # in CX2's card the roles flip: E4 is full, E1 is the collapsed neighbour
-    cx2 = cards["CX2"]
+    # in SD2's card the roles flip: E4 is full, E1 is the collapsed neighbour
+    cx2 = cards["SD2"]
     assert 'class E4["Product"] {' in cx2 and 'class E1["Order"] {' not in cx2
 
 
 def test_subsystem_card_bridges_to_contexts_owns_and_reads() -> None:
     by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_bridge_map()))
     s1 = by_sub["S1"]
-    assert "class CX1 context" in s1 and "C1 -->|owns| CX1" in s1       # persists -> the subsystem OWNS the context
+    assert "class SD1 subdomain" in s1 and "C1 -->|owns| SD1" in s1       # persists -> the subsystem OWNS the context
     s2 = by_sub["S2"]
-    assert "class CX1 context" in s2 and "C2 -->|reads| CX1" in s2      # reads -> it merely CONSUMES it
+    assert "class SD1 subdomain" in s2 and "C2 -->|reads| SD1" in s2      # reads -> it merely CONSUMES it
 
 
 def test_subsystem_card_has_no_context_box_without_bridges() -> None:
-    # Regression: a map with no C->E edges draws no context box / classDef in the subsystem card.
+    # Regression: a map with no C->E edges draws no subdomain box / classDef in the subsystem card.
     s1 = gen_viewer.subsystem_component_mermaids(parse_map(make_card_map()))["S1"]
-    assert "context" not in s1
+    assert "subdomain" not in s1
 
 
 def test_render_inlines_context_data() -> None:
@@ -1035,15 +1035,15 @@ def test_render_inlines_context_data() -> None:
         )
         assert r.returncode == 0, r.stdout + r.stderr
         html = out.read_text(encoding="utf-8")
-        for ph in ("__MERMAID_DOMAIN_CONTAINER__", "__MERMAID_DOMAIN_CTX__",
-                   "__DOMAIN_CONTAINER_EDGES__", "__HAS_CONTEXTS__"):
+        for ph in ("__MERMAID_DOMAIN_CONTAINER__", "__MERMAID_DOMAIN_SUB__",
+                   "__DOMAIN_CONTAINER_EDGES__", "__HAS_SUBDOMAINS__"):
             assert ph not in html, ph
-        assert "const HAS_CONTEXTS = true;" in html
+        assert "const HAS_SUBDOMAINS = true;" in html
         assert "Ordering (2)" in html       # the bounded-contexts overview is inlined
 
 
 def test_render_no_context_data_when_ungrouped() -> None:
-    # A domain map with no Contexts table: HAS_CONTEXTS is false and the flat classDiagram still ships.
+    # A domain map with no Subdomains table: HAS_CONTEXTS is false and the flat classDiagram still ships.
     with tempfile.TemporaryDirectory() as d:
         md = Path(d) / "project-map.md"
         md.write_text(make_domain_map(), encoding="utf-8")
@@ -1054,61 +1054,61 @@ def test_render_no_context_data_when_ungrouped() -> None:
         )
         assert r.returncode == 0, r.stdout + r.stderr
         html = out.read_text(encoding="utf-8")
-        assert "const HAS_CONTEXTS = false;" in html and "__HAS_CONTEXTS__" not in html
+        assert "const HAS_SUBDOMAINS = false;" in html and "__HAS_SUBDOMAINS__" not in html
 
 
 def _two_context_map(cards_extra: str = "") -> str:
-    """CX1 (Ordering, has E1) + CX2 (Catalog, EMPTY — no card assigned to it)."""
-    ctx = ("## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **CX1** | Ordering | x |  | a | V |\n| **CX2** | Catalog | x |  | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nCONTEXT: CX1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n" + cards_extra
+    """SD1 (Ordering, has E1) + SD2 (Catalog, EMPTY — no card assigned to it)."""
+    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+           "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n| **SD2** | Catalog | x |  | a | V |\n\n")
+    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n" + cards_extra
     return _VALID_HEAD + ctx + "## T5\n\n" + cards
 
 
-def test_gen_domain_context_card_empty_context_is_valid_mermaid() -> None:
+def test_gen_domain_subdomain_card_empty_context_is_valid_mermaid() -> None:
     # A defined-but-empty context must still produce a VALID classDiagram — a body-less `classDiagram`
     # crashes Mermaid on drill (the F1 regression). It carries a self-explaining placeholder instead.
-    card = gen_viewer.gen_domain_context_card(parse_map(_two_context_map()), "CX2")
+    card = gen_viewer.gen_domain_subdomain_card(parse_map(_two_context_map()), "SD2")
     assert card.startswith("classDiagram") and card.strip() != "classDiagram"   # has a body
     assert "no entities" in card and "Catalog" in card
     # the placeholder id carries no prefix+digits, so the viewer's id bridge skips it (not clickable)
-    assert "EmptyContext" in card
+    assert "EmptySubdomain" in card
 
 
 def test_validator_warns_empty_context() -> None:
     # A leaf context with no member entities -> non-blocking warning (likely a leftover / typo'd id).
     code, out = run_validator(_two_context_map())
     assert code == 0, out                                          # advisory only
-    assert "Contexts with no entities" in out and "CX2" in out, out
+    assert "Subdomains with no entities" in out and "SD2" in out, out
 
 
 def test_validator_no_empty_warning_for_parent_context() -> None:
     # A non-leaf context (parent of another) with no DIRECT entities is NOT empty -> no false warning.
-    ctx = ("## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **CX1** | Domain | x |  | a | V |\n| **CX2** | Ordering | x | CX1 | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nCONTEXT: CX2\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
+    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+           "|---|---|---|---|---|---|\n| **SD1** | Domain | x |  | a | V |\n| **SD2** | Ordering | x | SD1 | a | V |\n\n")
+    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD2\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
     code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
     assert code == 0, out
-    assert "Contexts with no entities" not in out, out             # CX1 is a parent, not empty
+    assert "Subdomains with no entities" not in out, out             # SD1 is a parent, not empty
 
 
 def make_both_groupings_map() -> str:
     """A map with BOTH groupings + the cross-altitude edges that triggered the leak: S1{C1}, S2{C2};
-    CX1{E1,E2}, CX2{E3}; a C1->C2 component edge (S→S crossing), C1 persists E1 + C2 persists E3
-    (C→E bridge edges), and E1 refersTo E3 (an E→E relation crossing CX1→CX2). The Subsystems overview
-    must show ONLY S→S and never a CX box; the Domain overview ONLY CX→CX and never an S box."""
+    SD1{E1,E2}, SD2{E3}; a C1->C2 component edge (S→S crossing), C1 persists E1 + C2 persists E3
+    (C→E bridge edges), and E1 refersTo E3 (an E→E relation crossing SD1→SD2). The Subsystems overview
+    must show ONLY S→S and never a SD box; the Domain overview ONLY SD→SD and never an S box."""
     return (
         "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
         "|---|---|---|---|---|---|\n| **S1** | Edge | x |  | a | V |\n| **S2** | Core | x |  | a | V |\n\n"
-        "## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **CX1** | Ordering | x |  | a | V |\n| **CX2** | Catalog | x |  | a | V |\n\n"
+        "## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n| **SD2** | Catalog | x |  | a | V |\n\n"
         "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
         "|---|---|---|---|---|---|\n| **C1** | Front | S1 | x | f | C2 |\n| **C2** | Core | S2 | x | f |  |\n\n"
         "## T5\n\n"
-        "**E1 — Order** *(s)*\nCONTEXT: CX1\nMEANING: m\nFIELDS: id:int · product:E3\n"
+        "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int · product:E3\n"
         "RELATIONS: contains 1→* E2 Line · refersTo *→1 E3 Product\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nCONTEXT: CX1\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n\n"
-        "**E3 — Product**\nCONTEXT: CX2\nMEANING: m\nFIELDS: y:int\nSOURCE: [f](f#L3)\n\n"
+        "**E2 — Line**\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n\n"
+        "**E3 — Product**\nSUBDOMAIN: SD2\nMEANING: m\nFIELDS: y:int\nSOURCE: [f](f#L3)\n\n"
         "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
         "| C1 | calls | C2 | reach core | f |\n"
         "| C1 | persists | E1 | store order | f |\n"
@@ -1118,24 +1118,24 @@ def make_both_groupings_map() -> str:
 
 def test_container_overview_excludes_contexts() -> None:
     # The bug class: with C→E / E→E edges present, the Subsystems overview must NOT pick up entity
-    # endpoints (whose top group is a CONTEXT) and invent S→CX / CX→CX arrows that draw bare CX boxes.
+    # endpoints (whose top group is a CONTEXT) and invent S→SD / SD→SD arrows that draw bare SD boxes.
     g = parse_map(make_both_groupings_map())
     mm = gen_viewer.gen_container_mermaid(g)
-    assert "CX" not in mm                                  # no context box / arrow leaks in
+    assert "SD" not in mm                                  # no subdomain box / arrow leaks in
     assert "S1 -->|1| S2" in mm                            # the real S→S crossing (C1->C2), count 1 (not inflated by C→E)
     # the Domain overview is the mirror: contexts only, no subsystem leak
     dmm = gen_viewer.gen_domain_container_mermaid(g)
-    assert "CX1 -->|1| CX2" in dmm and "\n  S" not in dmm  # CX→CX present, no S box/arrow
+    assert "SD1 -->|1| SD2" in dmm and "S1" not in dmm and "S2" not in dmm  # SD→SD present, no subsystem box leaks in
 
 
 def test_container_edges_exclude_contexts() -> None:
     ce = gen_viewer.gen_container_edges(parse_map(make_both_groupings_map()))
-    assert set(ce) == {"S1>S2"}                            # only the real subsystem pair, no S>CX keys
+    assert set(ce) == {"S1>S2"}                            # only the real subsystem pair, no S>SD keys
 
 
 def test_edge_cards_exclude_contexts() -> None:
     cards = gen_viewer.edge_card_mermaids(parse_map(make_both_groupings_map()))
-    assert set(cards) == {"S1>S2"}                         # no spurious S>CX edge card
+    assert set(cards) == {"S1>S2"}                         # no spurious S>SD edge card
 
 
 # --- Golden Path (GP) -----------------------------------------------------------
