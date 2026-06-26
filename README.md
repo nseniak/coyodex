@@ -84,16 +84,16 @@ can read this repo.
 ## The workflow
 
 ```
-analyze ──▶ .coyodex/project-map.md (committed, commit-pinned)
+/coyodex build ──▶ .coyodex/project-map.md (committed, commit-pinned)
    │
    ▼
 edit code
    │
    ▼
-change-impact ──▶ .coyodex/analysis-changes/<date>.md (report: modified / added / deleted, uncommitted)
+/coyodex analyze ──▶ .coyodex/analysis-changes/<date>.md (report: modified / added / deleted, uncommitted)
    │
    ▼
-accept ──▶ patch the map, bump the commit pin, commit the map + the report
+/coyodex accept ──▶ patch the map, bump the commit pin, commit the map + the report
 ```
 
 The map is committed *with* the code, so the baseline commit and the code commit
