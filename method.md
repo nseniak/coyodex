@@ -160,6 +160,12 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   `source — verb — target` so the reader drills from either end. Verb vocabulary:
   uses, calls, reads, writes, emits, listens-to, routes-to, enforces, persists, encrypts,
   extends, implements.
+- **The edge list spans C↔C, C↔D, *and* C→E.** It is not only component↔component: a component's
+  link to the domain model is a backbone edge `C — persists/writes/reads → E` (its repository
+  `persists` the entity; a service/controller `reads` it — **direct** use only, never a transitive
+  edge). Author these alongside the component edges — they power the component↔class cross-links and
+  the subsystem→subdomain bridge. (Only E↔E relations stay off the backbone — those live on the
+  domain cards.)
 - **`Why` = a short phrase: why `From` needs `To`** (e.g. "verify service tokens", "cache
   refreshed OAuth tokens"). The edge list is the **canonical home for relationship rationale** —
   the verb gives the category, `Why` gives the purpose the verb can't carry (especially the
@@ -184,7 +190,8 @@ catches side doors) → synthesize T1 → **cluster components into Subsystems**
 directory first, then dependency/behavioral cohesion; minimize inter-group edges; mark
 directory-derived = verified, cohesion-derived = inferred) → **cluster entities into Subdomains**
 (large domain models: the same recipe on the entity graph — by `SOURCE` directory first, then
-`RELATIONS` cohesion) → trace T6 + edge list. Nodes (T4/T5/T2)
+`RELATIONS` cohesion) → trace T6 + edge list (**including the `C→E` edges**: which component
+persists/writes/reads each entity). Nodes (T4/T5/T2)
 before the edges/flows that connect them. **Present** top-down (T1–T3 first). The "Depends on"
 columns and relationship rows harden last (they need tracing) — keep them inferred until
 traced. Drilling can correct an inferred upper row; upper tables get more accurate as the
@@ -202,6 +209,9 @@ synthesis → parallel trace.**
   maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier.
 - Phase 3 Trace (fan out, one agent per use case/journey; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
+  Each trace agent also records the **`C→E` edges** for the components in its slice — the entities
+  they persist/write/read by **direct** use — so structural entity-usage is captured at component
+  granularity, not only behaviorally via GP `Touches:`.
 - Guardrails: all agents share the same schema + edge-verb vocabulary; Phase 1 produces
   the canonical node inventory FIRST (nodes before edges, agents reference nodes and
   never invent them); every agent keeps inferred-vs-verified labels + returns `file:line`;
@@ -229,6 +239,10 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > [domain-cards.md](method/domain-cards.md)). Each card is a **real named type** (class / dataclass /
 > enum) whose `SOURCE` anchors its **definition** — do NOT synthesize an entity for an unnamed
 > concept; type embedded fields by their entity (`auth:E7`) so relations carry the field name.
+> When a file you read **persists, writes, or reads** a domain entity (a repository / adapter / store,
+> or a service that uses the entity type **directly**), also return the **`C→E` edge** for it
+> (`From | Verb | To` = `Cn | persists/writes/reads | En`, with `file:line`) — direct use only, one
+> `persists`/`writes` owner per entity plus its direct `reads` consumers.
 
 **Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
 root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit

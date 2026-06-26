@@ -178,9 +178,16 @@ that no single field implements (key-composition, a derived view) takes a `{how}
   unchanged: the Golden Path `Touches:` line, the `Step | … | T5 entities` traceability column, and
   the T6 flow `Uses` column all still resolve to a card's `E` id. Only T5's *internal*
   representation changed (table → cards); its id contract did not.
-- **`C→E` edges** ("a component persists an entity") may still be authored in the backbone edge
-  list. They are not drawn in today's component view (entities aren't nodes there); they become the
-  natural drill link "component → the entities it owns" when that view is built.
+- **`C→E` edges are first-class — harvest them with the edge list.** A component's relationship to
+  the domain model is a backbone edge `C — persists/writes/reads → E` (persists/writes = the component
+  **owns** the entity, i.e. is its system of record — typically its repository; reads = it
+  **consumes** it). They live in the backbone edge list like every C-edge; only E↔E relations stay on
+  the cards. They already drive the **subsystem→subdomain bridge** (owns/reads) and the
+  component↔class cross-links — so they are no longer "optional, drawn later". Author **one
+  `persists`/`writes` owner per entity** (the repository) plus a `reads` edge from each component that
+  **directly** references the entity type — never a transitive one (a controller that merely calls a
+  service that reads `E` gets no `C→E` edge). An entity with no owner is an embedded value object or a
+  DTO — fine, just unowned.
 
 ---
 

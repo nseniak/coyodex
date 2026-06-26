@@ -1138,6 +1138,41 @@ def test_edge_cards_exclude_contexts() -> None:
     assert set(cards) == {"S1>S2"}                         # no spurious S>SD edge card
 
 
+# --- C->E ownership nudge --------------------------------------------------------
+def make_owner_map(e2_embedded: bool = False) -> str:
+    """C1 persists E1 (an owner). E2 has no owner; embedded in E1 (contains) only when e2_embedded."""
+    rel = "RELATIONS: contains 1→* E2 Line\n" if e2_embedded else ""
+    return (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | OrderRepo | x | f |  |\n\n"
+        "## T5\n\n"
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n" + rel + "SOURCE: [f](f#L1)\n\n"
+        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n\n"
+        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
+        "| C1 | persists | E1 | store | f |\n"
+    )
+
+
+def test_validator_warns_unowned_entity() -> None:
+    # E1 has an owner (C1 persists E1); E2 has none and isn't embedded -> non-blocking nudge lists E2.
+    code, out = run_validator(make_owner_map())
+    assert code == 0, out
+    assert "no owning component" in out and "E2" in out, out
+
+
+def test_validator_no_owner_warning_when_nothing_owned() -> None:
+    # No persists/writes C→E edge at all -> the map doesn't author ownership -> silent (don't nag).
+    md = make_owner_map().replace("| C1 | persists | E1 | store | f |\n", "")
+    code, out = run_validator(md)
+    assert code == 0 and "no owning component" not in out, out
+
+
+def test_validator_embedded_entity_exempt_from_owner_warning() -> None:
+    # E2 is embedded in E1 (contains) -> persisted via its container -> not flagged as unowned.
+    code, out = run_validator(make_owner_map(e2_embedded=True))
+    assert code == 0 and "no owning component" not in out, out
+
+
 # --- Golden Path (GP) -----------------------------------------------------------
 def test_parser_gp_captures_uc_and_touches() -> None:
     g = parse_map(make_gp_map())

@@ -496,6 +496,40 @@ def check_entity_sources(text: str, map_path: Path) -> list[str]:
     return problems
 
 
+def collect_owner_edges(text: str) -> set[str]:
+    """Entity ids that have an incoming `C → persists/writes → E` edge — an OWNING component. Scans the
+    backbone edge tables. Used only for the completeness nudge below: once a map authors *some* C→E
+    ownership, flag the aggregate-root entities the trace left unowned. No-op (``set()``) otherwise."""
+    owned: set[str] = set()
+    lines = text.splitlines()
+    i, n = 0, len(lines)
+    while i < n:
+        if not lines[i].lstrip().startswith("|"):
+            i += 1
+            continue
+        block: list[str] = []
+        while i < n and lines[i].lstrip().startswith("|"):
+            block.append(lines[i])
+            i += 1
+        if len(block) < 2 or not is_separator_row(block[1]):
+            continue
+        headers = [c.lower() for c in split_cells(block[0])]
+        if headers[:3] != ["from", "verb", "to"]:
+            continue
+        ci = {h: idx for idx, h in enumerate(headers)}
+        for row in block[2:]:
+            if is_separator_row(row):
+                continue
+            cells = split_cells(row)
+            src = ID_TOKEN.search(cells[ci["from"]]) if ci["from"] < len(cells) else None
+            dst = ID_TOKEN.search(cells[ci["to"]]) if ci["to"] < len(cells) else None
+            verb = cells[ci["verb"]].strip().lower() if ci["verb"] < len(cells) else ""
+            if (src and dst and src.group(0).startswith("C")
+                    and dst.group(0).startswith("E") and verb in ("persists", "writes")):
+                owned.add(dst.group(0))
+    return owned
+
+
 def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     check_sources = "--check-sources" in sys.argv  # opt-in: read SOURCE files to flag synthesized entities
@@ -605,6 +639,18 @@ def main() -> int:
     empty_sd = sorted(i for i in defined if i.startswith("SD") and i not in assigned_sd and i not in parent_sd)
     if empty_sd:
         warnings.append(f"Subdomains with no entities: {', '.join(empty_sd)}")
+    # Non-blocking nudge: once SOME entity has an owning component (a `persists`/`writes` C→E edge), the
+    # map is authoring structural ownership — so list aggregate-root entities that still have none, the
+    # owners the trace likely missed. Embedded value objects (the target of a contains/has relation,
+    # persisted via their container) are exempt. Silent when no C→E ownership is authored at all.
+    owned = collect_owner_edges(text)
+    if owned and entities_defined:
+        embedded = {r.target for c in iter_domain_cards(text.splitlines())
+                    for r in c.relations if r.ok and r.kind in ("composition", "aggregation")}
+        unowned = sorted(i for i in defined if i.startswith("E") and i not in owned and i not in embedded)
+        if unowned:
+            shown = ", ".join(unowned[:12]) + (f", +{len(unowned) - 12} more" if len(unowned) > 12 else "")
+            warnings.append(f"Entities with no owning component (no persists/writes C→E edge): {shown}")
 
     # Summary of the element inventory, by prefix.
     by_prefix: dict[str, list[str]] = {}
