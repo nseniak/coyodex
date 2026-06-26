@@ -73,15 +73,19 @@ report you reviewed, with no fresh analysis.
 
 If you use Claude Code, install the bundled skill once so you can drive all three
 steps by intent (e.g. *"generate a project map with the coyodex method"*) instead
-of pasting the prompts above. It ships in [`skill/coyodex`](skill/coyodex) — symlink
-it into your personal skills directory:
+of pasting the prompts above. It ships in [`skill/coyodex`](skill/coyodex). From the
+repo root (macOS/Linux):
 
 ```
-ln -s "$(pwd)/skill/coyodex" ~/.claude/skills/coyodex
+make install
 ```
 
-The skill locates this clone, picks Build / Analyze / Accept from what you asked,
-and then follows `method.md` — the method stays the single source of truth.
+This symlinks the skill into `~/.claude/skills/coyodex` and records this repo's path,
+so the skill points straight here instead of searching for the clone. Re-run it only
+if you move the repo; `make uninstall` removes it.
+
+The skill picks Build / Analyze / Accept from what you asked and then follows
+`method.md` — the method stays the single source of truth.
 
 ## The workflow
 
