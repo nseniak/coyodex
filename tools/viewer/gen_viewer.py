@@ -445,8 +445,8 @@ def _gp_actor(graph: GraphDict, step: dict[str, Any]) -> str:
 
 def gen_gp_mermaid(graph: GraphDict) -> str:
     """C4 behavioural overlay, Level 1: the Golden Path as a black-box sequenceDiagram — each step a
-    message from its actor to the System, in order. The step id is embedded in every message label
-    (`GP1 — title`) so the viewer resolves a click on a message to that step's detail view; distinct
+    message from its actor to the System, in order. Labels carry the step TITLE only (no `GPn` id —
+    that clutters the spine); the viewer pairs message[i] with step[i] by order instead. Distinct
     actors (derived per step from its UC) become the lifelines."""
     steps = cast("list[dict[str, Any]]", graph["gp"])
     title = _safe_msg(graph["title"] or "System")
@@ -460,9 +460,34 @@ def gen_gp_mermaid(graph: GraphDict) -> str:
     for st in steps:
         aid = actor_ids[_gp_actor(graph, st)]
         title_txt = _safe_msg(str(st["title"])) if st["title"] else ""
-        label = f"{st['id']} — {title_txt}" if title_txt else str(st["id"])
+        label = title_txt or str(st["id"])  # title only; id lives in the side panel, not the label
         lines.append(f"  {aid}->>GPSYS: {label}")
     return "\n".join(lines)
+
+
+def gp_actors(graph: GraphDict) -> list[dict[str, Any]]:
+    """Per-actor data for the Golden Path lifelines, in the SAME participant order/ids as
+    gen_gp_mermaid (so `GPAn` lines up with the rendered lifeline). Each actor links back to its
+    Roles-table entry by name to surface what it wants + its kind, plus the GP steps it drives —
+    `stepIdx` are the message positions the viewer highlights when the actor is selected."""
+    steps = cast("list[dict[str, Any]]", graph["gp"])
+    roles_by_name = {_safe_msg(r["name"]).strip().lower(): r for r in graph["roles"]}
+    order: dict[str, str] = {}  # actor name -> participant id, first-appearance order (matches gen_gp_mermaid)
+    for st in steps:
+        order.setdefault(_gp_actor(graph, st), "GPA" + str(len(order)))
+    out: list[dict[str, Any]] = []
+    for name, aid in order.items():
+        idxs = [i for i, st in enumerate(steps) if _gp_actor(graph, st) == name]
+        role = roles_by_name.get(name.strip().lower())
+        out.append({
+            "aid": aid,
+            "name": name,
+            "kind": str(role["kind"]) if role else "",
+            "wants": str(role["wants"]) if role else "",
+            "steps": [{"id": str(steps[i]["id"]), "title": str(steps[i]["title"] or "")} for i in idxs],
+            "stepIdx": idxs,
+        })
+    return out
 
 
 def gen_gp_step_mermaid(graph: GraphDict, gp_id: str) -> str:
@@ -546,11 +571,11 @@ __STYLE__
     <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
   </span>
   <span id="viewsw">
-    <button data-view="context">Context</button>
-    <button data-view="container">Subsystems</button>
-    <button data-view="component">Components</button>
     <button data-view="gp">Golden Path</button>
+    <button data-view="container">Subsystems</button>
     <button data-view="domain">Domain</button>
+    <button data-view="context">Context</button>
+    <button data-view="component">Components</button>
   </span>
   <span id="zoomctl">
     <button id="zoomout" title="Zoom out">−</button>
@@ -581,7 +606,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              diff_state: dict[str, str], container_mm: str, by_sub: dict[str, str],
              edge_cards: dict[str, str], container_edges: dict[str, list[dict[str, str]]],
              grouping: bool, domain_mm: str, domain: bool,
-             gp_mm: str, gp_steps: dict[str, str], gp: bool) -> str:
+             gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool) -> str:
     css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
     js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
     return (
@@ -598,6 +623,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_DOMAIN__", json.dumps(domain_mm))
         .replace("__MERMAID_GP__", json.dumps(gp_mm))
         .replace("__MERMAID_GP_STEP__", json.dumps(gp_steps))
+        .replace("__GP_ACTORS__", json.dumps(gp_actors_list))
         .replace("__CONTEXT_EDGES__", json.dumps(context_edges))
         .replace("__HAS_DIFF__", "true" if has_diff else "false")
         .replace("__HAS_GROUPING__", "true" if grouping else "false")
@@ -636,11 +662,12 @@ def main() -> int:
     gp = has_gp(graph)
     gp_mm = gen_gp_mermaid(graph) if gp else ""
     gp_steps = gp_step_mermaids(graph) if gp else {}
+    gp_actors_list = gp_actors(graph) if gp else []
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
-                    gp_mm, gp_steps, gp)
+                    gp_mm, gp_steps, gp_actors_list, gp)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")
     return 0

@@ -851,13 +851,14 @@ def test_parser_gp_captures_uc_and_touches() -> None:
 
 def test_gen_gp_mermaid_black_box_sequence() -> None:
     # Level 1: a sequenceDiagram whose lifelines are the actors derived from each step's UC, with one
-    # message per step carrying the GP id in its label (so a click resolves to the step).
+    # message per step. The label is the step TITLE only — no `GPn` id (the viewer pairs by order).
     mm = gen_viewer.gen_gp_mermaid(parse_map(make_gp_map()))
     assert mm.startswith("sequenceDiagram")
     assert "actor GPA0 as Andy" in mm and "actor GPA1 as Adam" in mm  # one lifeline per distinct actor
     assert "participant GPSYS" in mm
-    assert "GPA0->>GPSYS: GP1 — Submit order" in mm
-    assert "GPA1->>GPSYS: GP2 — Approve order" in mm
+    assert "GPA0->>GPSYS: Submit order" in mm
+    assert "GPA1->>GPSYS: Approve order" in mm
+    assert "GP1" not in mm and "GP2" not in mm  # step ids no longer leak into the message labels
 
 
 def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
@@ -868,7 +869,30 @@ def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
         "## Golden Path\n**GP1 — Do a thing**\nSTORY: x\n`Touches:` C1\n"
     )
     mm = gen_viewer.gen_gp_mermaid(parse_map(md))
-    assert "actor GPA0 as Actor" in mm and "GPA0->>GPSYS: GP1 — Do a thing" in mm
+    assert "actor GPA0 as Actor" in mm and "GPA0->>GPSYS: Do a thing" in mm
+
+
+def test_gp_actors_links_roles_and_steps() -> None:
+    # gp_actors mirrors the diagram's participant order/ids and joins each actor to its Roles-table
+    # entry (wants + kind) and the steps it drives (stepIdx = the message positions to highlight).
+    g = parse_map(make_gp_explicit_actor_map("Actor: Org admin"))
+    actors = gen_viewer.gp_actors(g)
+    assert len(actors) == 1
+    a = actors[0]
+    assert a["aid"] == "GPA0" and a["name"] == "Org admin"
+    assert a["kind"] == "human" and a["wants"] == "manage"   # joined from the Roles table by name
+    assert a["stepIdx"] == [0]
+    assert a["steps"] == [{"id": "GP1", "title": "Admin signs in and creates the org"}]
+
+
+def test_gp_actors_without_matching_role_has_blank_wants() -> None:
+    # An actor derived from a UC with no matching Roles row still appears, just without wants/kind;
+    # ids follow first-appearance order and stepIdx points at each actor's messages.
+    actors = gen_viewer.gp_actors(parse_map(make_gp_map()))
+    by_name = {a["name"]: a for a in actors}
+    assert by_name["Andy"]["aid"] == "GPA0" and by_name["Adam"]["aid"] == "GPA1"
+    assert by_name["Andy"]["wants"] == "" and by_name["Andy"]["kind"] == ""
+    assert by_name["Andy"]["stepIdx"] == [0] and by_name["Adam"]["stepIdx"] == [1]
 
 
 def test_parser_gp_captures_first_uc_of_multi_tag() -> None:

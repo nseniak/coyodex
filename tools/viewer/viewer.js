@@ -11,6 +11,7 @@ const CONTAINER_EDGES = __CONTAINER_EDGES__;      // inter-subsystem arrow 'A>B'
 const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classDiagram
 const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): black-box sequence diagram
 const MERMAID_GP_STEP = __MERMAID_GP_STEP__;      // GP step (Level 2): GP-id -> components-used sub-diagram
+const GP_ACTORS = __GP_ACTORS__;                  // Golden-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
 const HAS_GROUPING = __HAS_GROUPING__;
 const HAS_DOMAIN = __HAS_DOMAIN__;
 const HAS_GP = __HAS_GP__;
@@ -24,6 +25,7 @@ const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'mo
                 deleted: ['#cf222e', '×', 'deleted'], rippled: ['#d97706', '≈', 'ripples to'] };
 const HILITE = 'drop-shadow(0 0 4px #2563eb) drop-shadow(0 0 2px #2563eb)';  // selection glow (nodes + edge labels)
 const HOVER = 'drop-shadow(0 0 3px #60a5fa)';  // softer hover glow: signals "clickable" without competing with HILITE
+const GP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Golden-Path selection: just a touch stronger than HOVER (not the heavy HILITE)
 const DIM = '0.15';  // opacity for non-focused elements
 const EMPTY_PANEL = '<p class="empty">Click a node or edge to see details.</p>';
 
@@ -66,6 +68,11 @@ for (const e of GRAPH.edges || []) (COMP_LOOKUP[e.src + '>' + e.dst] ||= []).pus
 // Golden Path step lookup 'GP1' -> step record (id, title, story, under_the_hood, touches, uc).
 const GP_BY_ID = {};
 for (const s of GRAPH.gp || []) GP_BY_ID[s.id] = s;
+// Golden Path actor lookups: by participant id (GPA0) and by the step it drives (GP1 -> actor record).
+const GP_ACTOR_BY_AID = {};
+for (const a of GP_ACTORS) GP_ACTOR_BY_AID[a.aid] = a;
+const GP_ACTOR_OF_STEP = {};
+for (const a of GP_ACTORS) for (const st of a.steps) GP_ACTOR_OF_STEP[st.id] = a;
 
 // When the GP-step panel's "Locate in full map" link navigates to the Components view, the set of ids
 // to spotlight there is stashed here and applied once that view has rendered (then cleared).
@@ -78,7 +85,9 @@ let pendingFocus = null;
 let mainScene = null;
 
 function makeScene(root, defaultPanel) {
-  return { root, nodeEls: {}, edgeEls: [], selectedKey: null, clearHighlight: null, defaultPanel };
+  // dimEls: a flat list of extra focusable elements (the Golden Path's actor figures, lifelines and
+  // message text/lines) that the standard node/edge focus model doesn't cover — dimmed/restored together.
+  return { root, nodeEls: {}, edgeEls: [], dimEls: [], gpLit: new Set(), selectedKey: null, clearHighlight: null, defaultPanel };
 }
 function sceneSelect(scene, applyFn) {  // one highlight at a time within a scene
   if (scene.clearHighlight) scene.clearHighlight();
@@ -106,6 +115,7 @@ function focusEdge(scene, e0) {
 function clearFocus(scene) {
   for (const nid in scene.nodeEls) scene.nodeEls[nid].style.opacity = '';
   for (const x of scene.edgeEls) { x.path.style.opacity = ''; if (x.label) x.label.style.opacity = ''; }
+  for (const el of scene.dimEls) el.style.opacity = '';
 }
 function resetScene(scene) {  // clear selection + focus, restore the scene's default panel
   clearFocus(scene);
@@ -212,12 +222,6 @@ function showContainerEdge(a, b) {
 }
 
 // --- Golden Path panels ---------------------------------------------------------
-// The actor that drives a step: the `Actor` cell of its use case (UC node), or '' when unknown.
-function gpActor(s) {
-  const uc = s && s.uc && GRAPH.nodes[s.uc];
-  if (uc) for (const k in (uc.fields || {})) if (k.toLowerCase() === 'actor' && String(uc.fields[k]).trim()) return uc.fields[k];
-  return '';
-}
 // The C/D/E ids a step touches that actually exist as graph nodes — the Level-2 subgraph + spotlight set.
 function gpTouched(s) {
   return new Set((s && s.touches || []).filter((t) => GRAPH.nodes[t]
@@ -230,15 +234,17 @@ function showGPOverview() {
     + '<div class="badges"><span class="badge kind">' + n + ' step' + (n === 1 ? '' : 's') + '</span></div>'
     + '<p class="empty">Click a step to see the components it uses.</p>';
 }
-// Level-2 default panel: one step's narrative (actor · story · under the hood) + a link back to the
-// full Components map with this step's touched nodes spotlighted.
+// One step's narrative (actor · story · under the hood) + a link back to the full Components map with
+// this step's touched nodes spotlighted. Used as the Level-2 default panel AND when a step is selected
+// at Level 1, so a plain click reads the same detail without drilling. The driving actor comes from
+// GP_ACTOR_OF_STEP (the same mapping that builds the diagram), so it always matches the lifeline.
 function showGPStep(gpId) {
   const s = GP_BY_ID[gpId];
   if (!s) { panel.innerHTML = EMPTY_PANEL; return; }
-  const actor = gpActor(s);
+  const actor = (GP_ACTOR_OF_STEP[gpId] || {}).name || '';
   panel.innerHTML = '<h2>' + esc(s.id) + ' · ' + esc(s.title) + '</h2>'
     + '<div class="badges">' + (s.uc ? '<span class="badge kind">' + esc(s.uc) + '</span>' : '')
-      + (actor ? '<span class="badge edge">' + esc(actor.replace(/[*`]/g, '')) + '</span>' : '') + '</div>'
+      + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
     + '<dl>'
     + (s.story ? '<dt>Story</dt><dd>' + mdInline(s.story) + '</dd>' : '')
     + (s.under_the_hood ? '<dt>Under the hood</dt><dd>' + mdInline(s.under_the_hood) + '</dd>' : '')
@@ -246,6 +252,18 @@ function showGPStep(gpId) {
     + '<a class="locate" href="#">Locate in full map →</a>';
   const link = panel.querySelector('.locate');
   if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); pendingFocus = gpTouched(s); go({ kind: 'component' }); });
+}
+// One actor's card: its kind, what its role wants (the explanation), and the Golden Path steps it drives.
+function showGPActor(a) {
+  const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
+  const drives = (a.steps || []).map((st) =>
+    '<dd>' + esc(st.id) + (st.title ? ' — ' + esc(st.title) : '') + '</dd>').join('');
+  panel.innerHTML = '<h2>' + esc(a.name) + '</h2>'
+    + '<div class="badges">' + kindBadge + '</div>'
+    + '<dl>'
+    + (a.wants ? '<dt>Wants</dt><dd>' + mdInline(a.wants) + '</dd>' : '')
+    + (drives ? '<dt>Drives</dt>' + drives : '')
+    + '</dl>';
 }
 
 // --- hover tooltip --------------------------------------------------------------
@@ -301,13 +319,15 @@ function tipContainerEdgeHtml(a, b) {
   if (shown.length === 1) return '<div class="tm">' + mdInline(shown[0]) + '</div>' + more;
   return '<ul class="tl">' + shown.map((w) => '<li>' + mdInline(w) + '</li>').join('') + '</ul>' + more;
 }
-function tipGPHtml(gpId) {  // hover a GP step (message) -> its title + story preview
+function tipGPHtml(gpId) {  // hover a GP step (message) -> just its story (the explanation), like a subsystem tip
   const s = GP_BY_ID[gpId];
   if (!s) return '';
-  return '<div class="tt">' + esc(s.id + (s.title ? ' — ' + s.title : '')) + '</div>'
-    + '<div class="tk">golden path step</div>'
-    + (s.story ? '<div class="tm">' + mdInline(s.story) + '</div>'
-               : '<div class="tn">no story recorded</div>');
+  return s.story ? '<div class="tm">' + mdInline(s.story) + '</div>'
+                 : '<div class="tn">no story recorded</div>';
+}
+function tipGPActorHtml(a) {  // hover an actor / its lifeline -> just what its role wants (the explanation)
+  return a && a.wants ? '<div class="tm">' + mdInline(a.wants) + '</div>'
+                      : '<div class="tn">no description recorded</div>';
 }
 function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor if it would overflow the viewport
   const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
@@ -663,32 +683,135 @@ function bindDomain() {
   });
 }
 
-// Golden Path (Level 1) is a Mermaid sequenceDiagram, a different SVG shape again: each step is a
-// message whose label carries its GP id (`GP1 — …`). We bind every message text (and its arrow line,
-// paired by index when counts align) to drill into that step. The GP id is read FROM the label, so
-// binding stays correct even if Mermaid reorders or adds elements.
+// --- Golden Path (Level 1) selection ---------------------------------------------
+// A sequenceDiagram, a different SVG shape again: a step is a message (text + line), an actor is a
+// stick figure over a lifeline. Both SELECT (panel + glow + focus-dim); a step also ⌘-clicks to drill.
+// Glow one GP element (figure, text, lifeline or arrow) with the soft GP_SEL drop-shadow — a touch
+// above the hover glow, never the heavy stroke-recolour the click used to apply. Returns a cleanup.
+function gpGlow(el) {
+  el.style.filter = GP_SEL;
+  return () => { el.style.filter = ''; };
+}
+// Glow a set of elements and remember them in scene.gpLit (a step driven by a selected actor is
+// glowed but isn't itself the selection, so its own hover handlers must restore THIS glow on leave —
+// not blank it). Returns a cleanup that both undoes the glow and forgets the set.
+function gpHighlight(scene, els) {
+  scene.gpLit = new Set(els);
+  const undo = els.map(gpGlow);
+  return () => { undo.forEach((f) => f()); scene.gpLit = new Set(); };
+}
+// The filter an element should rest at given the current selection: the GP_SEL glow if the selection
+// lit it, else none. Hover-off restores to this instead of blanking, so a selection glow survives a
+// passing hover.
+function gpRestFilter(scene, el) {
+  return scene.gpLit.has(el) ? GP_SEL : '';
+}
+function gpFocus(scene, keep) {  // dim every focusable GP element not in the keep set (system stays lit)
+  for (const el of scene.dimEls) el.style.opacity = keep.has(el) ? '' : DIM;
+}
+// Select an actor: its figure + lifeline + every step it drives glow; the rest dims. Toggle off if re-clicked.
+function selectGPActor(scene, a) {
+  const selKey = 'gpactor:' + a.aid;
+  if (scene.selectedKey === selKey) { resetScene(scene); return; }
+  scene.selectedKey = selKey;
+  showGPActor(a);
+  const stepEls = [];
+  for (const i of a.stepIdx) { const m = scene.gpMsg[i]; if (m) { if (m.text) stepEls.push(m.text); if (m.line) stepEls.push(m.line); } }
+  const lit = [...scene.gpActor[a.aid].els, ...stepEls];
+  sceneSelect(scene, () => gpHighlight(scene, lit));
+  gpFocus(scene, new Set(lit));
+}
+// Select a step: the step (text + line) glows and its driving actor stays lit; the rest dims.
+function selectGPStep(scene, i, gpId, aid) {
+  const selKey = 'gpstep:' + gpId;
+  if (scene.selectedKey === selKey) { resetScene(scene); return; }
+  scene.selectedKey = selKey;
+  showGPStep(gpId);
+  const m = scene.gpMsg[i] || {};
+  const glow = [m.text, m.line].filter(Boolean);
+  const rec = aid ? scene.gpActor[aid] : null;
+  sceneSelect(scene, () => gpHighlight(scene, glow));
+  gpFocus(scene, new Set([...glow, ...(rec ? rec.els : [])]));
+}
+
+// Bind the Golden Path: steps + actors both select; a step ⌘-clicks to its Level-2 components view.
+// The step id is no longer in the label, so message[i] pairs with GRAPH.gp[i] by order; an actor's
+// figure/lifeline are found by participant id (data-id="GPAn") and its driven steps come from GP_ACTORS.
 function bindGP() {
-  const root = mainScene.root;
+  const scene = mainScene, root = scene.root;
+  // message text[i] <-> GRAPH.gp[i]; its arrow is the .messageLine with data-id "i<idx>".
   const texts = [...root.querySelectorAll('text.messageText')];
-  const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
-  const aligned = lines.length === texts.length;
-  texts.forEach((t, i) => {
-    const m = (t.textContent || '').match(/\b(GP\d+)\b/);
-    if (!m) return;
-    const gpId = m[1];
-    const drill = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); go({ kind: 'gpstep', gp: gpId }); };
-    const on = () => { t.style.filter = HOVER; };
-    const off = () => { t.style.filter = ''; };
-    for (const el of [t, aligned ? lines[i] : null]) {
+  const lineByIdx = {};
+  root.querySelectorAll('.messageLine0, .messageLine1').forEach((ln) => {
+    const m = (ln.getAttribute('data-id') || '').match(/^i(\d+)$/);
+    if (m) lineByIdx[+m[1]] = ln;
+  });
+  scene.gpMsg = {};  // step index -> { text, line }
+  for (let i = 0; i < (GRAPH.gp || []).length; i++) {
+    const text = texts[i] || null;
+    const line = lineByIdx[i] || null;
+    if (text) scene.dimEls.push(text);
+    if (line) scene.dimEls.push(line);
+    scene.gpMsg[i] = { text, line };
+  }
+  // resolve each actor's DOM (figure top + bottom mirror + lifeline) by participant id, register for dimming.
+  scene.gpActor = {};  // aid -> { els:[…] }
+  const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
+  for (const a of GP_ACTORS) {
+    const figT = root.querySelector('.actor-top[data-id="' + a.aid + '"]');
+    const life = root.querySelector('line.actor-line[data-id="' + a.aid + '"]');
+    const figB = bottoms.find((g) => (g.textContent || '').trim() === a.name) || null;  // no data-id on the mirror
+    const els = [figT, figB, life].filter(Boolean);
+    scene.gpActor[a.aid] = { els };
+    for (const el of els) scene.dimEls.push(el);
+  }
+  const aidOfStep = {};  // step index -> driving actor id (keeps the actor lit when a step is selected)
+  for (const a of GP_ACTORS) for (const i of a.stepIdx) aidOfStep[i] = a.aid;
+
+  // steps: plain click selects (panel), ⌘-click drills to Level 2.
+  (GRAPH.gp || []).forEach((step, i) => {
+    const { text, line } = scene.gpMsg[i];
+    if (!text) return;
+    const gpId = step.id, selKey = 'gpstep:' + gpId;
+    const on = () => { if (scene.selectedKey !== selKey) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; } };
+    // restore to the resting glow (an actor-selected step keeps its HILITE), not blank
+    const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = gpRestFilter(scene, text); if (line) line.style.filter = gpRestFilter(scene, line); } };
+    const click = (ev) => {
+      if (isDrag(ev)) return;
+      ev.stopPropagation();
+      off();
+      if (isDrillClick(ev)) { go({ kind: 'gpstep', gp: gpId }); return; }  // ⌘-click drills in
+      selectGPStep(scene, i, gpId, aidOfStep[i]);
+    };
+    for (const el of [text, line]) {
       if (!el) continue;
       el.style.cursor = 'pointer';
-      el.style.setProperty('pointer-events', el === t ? 'all' : 'stroke', 'important');
-      el.addEventListener('click', drill);
+      el.style.setProperty('pointer-events', el === text ? 'all' : 'stroke', 'important');
+      if (el === text) el.classList.add('drill');  // ⌘-held cursor affordance
+      el.addEventListener('click', click);
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
       attachTip(el, () => tipGPHtml(gpId));
     }
   });
+
+  // actors: click the figure or anywhere on the lifeline to select the actor (no drill).
+  for (const a of GP_ACTORS) {
+    const rec = scene.gpActor[a.aid], selKey = 'gpactor:' + a.aid;
+    const on = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = HOVER; };
+    const off = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = gpRestFilter(scene, el); };
+    const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off(); selectGPActor(scene, a); };
+    for (const el of rec.els) {
+      if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', click);
+      el.addEventListener('mouseenter', on);
+      el.addEventListener('mouseleave', off);
+      attachTip(el, () => tipGPActorHtml(a));
+    }
+    const life = rec.els.find((el) => el.tagName === 'line');
+    if (life) attachEdgeHandlers(life, null, click, on, off, () => tipGPActorHtml(a), false);
+  }
 }
 
 // --- render ---------------------------------------------------------------------
@@ -754,8 +877,9 @@ function renderChrome(s) {
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
-  // The drill hint only applies where ⌘-click drills: the Subsystems map + a subsystem neighbourhood.
-  drillhint.hidden = !(s.kind === 'container' || s.kind === 'subsystem');
+  // The drill hint only applies where ⌘-click drills: the Subsystems map + a subsystem neighbourhood,
+  // and the Golden Path (⌘-click a step opens its components view).
+  drillhint.hidden = !(s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'gp');
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it
@@ -839,4 +963,4 @@ zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); update
 if (HAS_DIFF) {
   toggle.addEventListener('click', () => { mode = mode === 'diff' ? 'base' : 'diff'; render(); });
 }
-go({ kind: 'context' });  // start high (C4 Context); drill down from there
+go({ kind: HAS_GP ? 'gp' : 'context' });  // land on the Golden Path (the behavioural spine); fall back to Context
