@@ -324,19 +324,25 @@ function tipNodeHtml(id) {
                  : '<div class="tn">no description recorded</div>';
 }
 function tipEdgeHtml(e) {
-  // context edges (actor→system / system→dep) carry from/to + wants/usedFor under the verb "uses";
-  // component/domain edges carry src/dst + verb + why.
+  // Tooltips show only the explanation — you're hovering the arrow, so its endpoints (and, for most
+  // edges, its verb) are already on screen. Context edges explain via wants/usedFor; component edges
+  // via why. DOMAIN relations are the deliberate exception: the verb/kind is their content and is NOT
+  // drawn on the arrow (the label is the backing field name), and they carry no why — so keep the card.
   if (e.type === 'actor' || e.type === 'dep') {
     const meaning = e.type === 'actor' ? e.wants : e.usedFor;
-    return '<div class="tt">' + esc(e.from) + ' → ' + esc(e.to) + '</div><div class="tk">uses</div>'
-      + (meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
-                 : '<div class="tn">no description recorded</div>');
+    return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
+                   : '<div class="tn">no description recorded</div>';
   }
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  return '<div class="tt">' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</div>'
-    + '<div class="tk">' + esc(e.verb) + '</div>'
-    + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
-             : '<div class="tn">no why recorded</div>');
+  if (e.kind) {  // domain relation — keep endpoints + verb (the relation's content, not on the arrow)
+    const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+    return '<div class="tt">' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</div>'
+      + '<div class="tk">' + esc(e.verb) + '</div>'
+      + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
+               : '<div class="tn">no why recorded</div>');
+  }
+  // component edge: endpoints + verb are already on the diagram — show only the why.
+  return e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
+               : '<div class="tn">no why recorded</div>';
 }
 // Hover an inter-subsystem arrow (Subsystems view) -> just the explanation (Why) of every
 // component→component edge it aggregates. You're already on that arrow, so no subsystem/component
