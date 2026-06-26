@@ -25,15 +25,23 @@ your AI coding agent to:
 
 ## How to use
 
-You drive coyodex with three prompts.
+coyodex runs as a Claude Code skill: install it once, then drive the three steps
+with `/coyodex`.
 
-> The prompts say `method.md`, which lives in this coyodex repo. Make it reachable
-> by the agent (e.g. clone coyodex next to your project) before running them.
-
-**1. Build the baseline.** Point the agent at the method and let it map the repo:
+**1. Install the skill (once).** Clone this repo, then from its root run (macOS/Linux):
 
 ```
-Read method.md and follow it to analyze this repo.
+make install
+```
+
+This symlinks the skill into `~/.claude/skills/coyodex` and records this repo's path,
+so `/coyodex` points straight here instead of searching for the clone. Re-run it only
+if you move the repo; `make uninstall` removes it.
+
+**2. Build the baseline.** In your project, let the skill map the repo:
+
+```
+/coyodex map this repo
 ```
 
 This writes `.coyodex/project-map.md`: a current-state map, behavioral layer
@@ -45,11 +53,10 @@ Every row drills down to `file:line`, and stable IDs let the same map feed
 (Context → Subsystems → Components → code) — and finishes by giving you links to **both** the map
 and the diagram.
 
-**2. Analyze a diff.** After you change code, ask for the change-impact report:
+**3. Analyze a diff.** After you change code, ask for the change-impact report:
 
 ```
-I've changed code since the last analysis. Read method.md and follow it to
-report the change impact against the map.
+/coyodex what's the change impact since the last analysis?
 ```
 
 This writes a change-impact report to `.coyodex/analysis-changes/<date>.md` — the
@@ -57,35 +64,22 @@ change's adds, touches, and ripples, in the project's own terms. The file is lef
 **uncommitted** so you can review it (in chat or an editor) first. The baseline
 itself isn't touched yet.
 
-**3. Accept the diff.** Once the report looks right, fold it into the baseline:
+**4. Accept the diff.** Once the report looks right, fold it into the baseline:
 
 ```
-The report looks right. Read method.md and follow it to accept the change.
+/coyodex the report looks right, accept the change
 ```
 
 This patches `.coyodex/project-map.md` and commits it together with the report
-from step 2 — now the accepted `.coyodex/analysis-changes/<date>.md`: the change
+from step 3 — now the accepted `.coyodex/analysis-changes/<date>.md`: the change
 report, the history, and the deletion record in one file
 ([change-impact](method/change-impact.md)). Accept is mechanical — it applies the
 report you reviewed, with no fresh analysis.
 
-### Optional shortcut: the `/coyodex` skill
-
-If you use Claude Code, install the bundled skill once so you can drive all three
-steps by intent (e.g. *"generate a project map with the coyodex method"*) instead
-of pasting the prompts above. It ships in [`skill/coyodex`](skill/coyodex). From the
-repo root (macOS/Linux):
-
-```
-make install
-```
-
-This symlinks the skill into `~/.claude/skills/coyodex` and records this repo's path,
-so the skill points straight here instead of searching for the clone. Re-run it only
-if you move the repo; `make uninstall` removes it.
-
 The skill picks Build / Analyze / Accept from what you asked and then follows
-`method.md` — the method stays the single source of truth.
+`method.md` — the method stays the single source of truth. Not on Claude Code? Each
+step also works by pasting *"Read `method.md` and follow it to …"* to any agent that
+can read this repo.
 
 ## The workflow
 
