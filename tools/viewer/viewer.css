@@ -3,6 +3,10 @@ body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #1
 header { padding: 8px 14px; background: #1e1b4b; color: #fff; display: flex; gap: 12px; align-items: center; }
 header h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 0 0 auto; }
 header .meta { font-size: 12px; opacity: .8; flex: 1; }
+/* hint that ⌘-click drills in — shown only on the Subsystems / neighbourhood views (toggled in JS) */
+#drillhint { flex: 0 0 auto; font-size: 11px; white-space: nowrap; color: #c7d2fe;
+             background: #312e81; border: 1px solid #4338ca; padding: 3px 8px; border-radius: 6px; }
+#drillhint[hidden] { display: none; }
 header button { font: inherit; font-size: 12px; padding: 4px 12px; border: 0; border-radius: 6px;
                 background: #6366f1; color: #fff; cursor: pointer; }
 header button:hover { background: #818cf8; }
@@ -44,6 +48,17 @@ main { display: flex; height: calc(100vh - 38px); }
 /* inline `code` in prose fields (mdInline), light panel background */
 #panel code { font-family: ui-monospace, monospace; font-size: 12px; background: #f3f4f6;
               padding: 0 3px; border-radius: 3px; color: #1f2937; }
+/* Subsystems-arrow panel: every crossing in one uniform font — `from → to:` then the explanation
+   indented below. No small-caps dt; the bullet and indent carry the structure instead. */
+#panel .xcount { color: #6b7280; margin-bottom: 10px; }
+#panel .xlist { margin: 0; padding-left: 18px; }
+#panel .xlist li { margin-top: 12px; }
+#panel .xlist li:first-child { margin-top: 0; }
+#panel .xwhy { padding-left: 14px; margin-top: 2px; }
+
+/* While ⌘ is held (body.cmd), drillable subsystem boxes + inter-subsystem arrows show a drill-in
+   cursor — the affordance for ⌘-click drilling. !important beats the inline cursor:pointer. */
+body.cmd .drill, body.cmd .drill * { cursor: zoom-in !important; }
 
 .hint { padding: 6px 14px; font-size: 12px; color: #6b7280; background: #f3f4f6; min-height: 28px; }
 /* breadcrumb: the structural nesting path down to the current view */
@@ -62,10 +77,10 @@ main { display: flex; height: calc(100vh - 38px); }
 #tip .tk { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .65; margin-bottom: 4px; }
 #tip .tm { opacity: .95; }
 #tip .tn { opacity: .55; font-style: italic; }
-/* arrow tooltip (Subsystems view): one row per aggregated component→component edge */
-#tip .tr { margin-top: 5px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,.14); }
-#tip .tr .tv { opacity: .7; font-style: italic; }
-#tip .tr .tw { opacity: .9; margin-top: 1px; }
+/* arrow tooltip (Subsystems view): one bullet per aggregated component→component edge's explanation */
+#tip .tl { margin: 0; padding-left: 16px; opacity: .95; }
+#tip .tl li { margin-top: 4px; }
+#tip .tl li:first-child { margin-top: 0; }
 #tip code { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(255,255,255,.16);
             padding: 0 3px; border-radius: 3px; }
 

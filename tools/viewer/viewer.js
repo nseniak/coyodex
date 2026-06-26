@@ -42,6 +42,7 @@ const tip = document.getElementById('tip');
 const zoomin = document.getElementById('zoomin');
 const zoomout = document.getElementById('zoomout');
 const zoomlevel = document.getElementById('zoomlevel');
+const drillhint = document.getElementById('drillhint');
 document.getElementById('meta').innerHTML = META;
 const esc = (s) => (s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 // Inline markdown -> safe HTML for prose fields (Purpose / Why / Wants / …): a link collapses to its
@@ -116,6 +117,8 @@ function resetScene(scene) {  // clear selection + focus, restore the scene's de
 // A click whose pointer moved far from its mousedown is the tail of a drag-pan — ignore it,
 // so panning never deselects.
 function isDrag(e) { return Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5; }
+// A ⌘-click (⌃-click off Mac) — the modifier that turns a select into a drill-in on subsystems/arrows.
+function isDrillClick(e) { return !!e && (e.metaKey || e.ctrlKey); }
 
 // --- side panel -----------------------------------------------------------------
 function showNode(id) {
@@ -194,6 +197,19 @@ function showTwoSubsystems(a, b) {
   panel.innerHTML = '<div class="badges"><span class="badge edge">connection</span></div>'
     + subsystemBlock(a) + '<hr>' + subsystemBlock(b);
 }
+// Selecting (not drilling) a Subsystems arrow: list every component→component crossing it bundles as
+// `from → to:` with its explanation indented below — one uniform font, no verb — so the wiring is
+// readable without leaving the map.
+function showContainerEdge(a, b) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const list = CONTAINER_EDGES[a + '>' + b] || [];
+  const items = list.map((r) =>
+    '<li><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
+    + (r.why ? '<div class="xwhy">' + mdInline(r.why) + '</div>' : '') + '</li>').join('');
+  panel.innerHTML = '<h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+    + '<div class="xcount">' + list.length + ' connection' + (list.length === 1 ? '' : 's') + '</div>'
+    + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no connections recorded</p>');
+}
 
 // --- Golden Path panels ---------------------------------------------------------
 // The actor that drives a step: the `Actor` cell of its use case (UC node), or '' when unknown.
@@ -248,6 +264,10 @@ function tipNodeHtml(id) {
   const n = GRAPH.nodes[id];
   if (!n) return '';
   const meaning = meaningOf(n);
+  // A subsystem box already prints its name, and you only hover one inside the Subsystems view,
+  // so the name + "subsystem" tag are redundant — show just the explanatory text (nothing if none).
+  if (n.kind === 'subsystem')
+    return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>' : '';
   return '<div class="tt">' + esc(n.name) + '</div><div class="tk">' + esc(n.kind) + '</div>'
     + (meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
                : '<div class="tn">no description recorded</div>');
@@ -267,20 +287,19 @@ function tipEdgeHtml(e) {
     + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
              : '<div class="tn">no why recorded</div>');
 }
-// Hover an inter-subsystem arrow (Subsystems view) -> the meaning of every component→component edge
-// it aggregates: each underlying arrow's `src verb dst` + its Why. Capped so a busy pair stays legible.
+// Hover an inter-subsystem arrow (Subsystems view) -> just the explanation (Why) of every
+// component→component edge it aggregates. You're already on that arrow, so no subsystem/component
+// names: a single link reads as plain text, several as a bullet list. Capped so a busy pair stays legible.
 const TIP_EDGE_CAP = 14;
 function tipContainerEdgeHtml(a, b) {
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const list = CONTAINER_EDGES[a + '>' + b] || [];
-  const rows = list.slice(0, TIP_EDGE_CAP).map((r) =>
-    '<div class="tr">' + esc(r.srcName) + ' <span class="tv">' + esc(r.verb) + '</span> ' + esc(r.dstName)
-    + (r.why ? '<div class="tw">' + mdInline(r.why) + '</div>' : '') + '</div>').join('');
-  const more = list.length > TIP_EDGE_CAP
-    ? '<div class="tn">+' + (list.length - TIP_EDGE_CAP) + ' more…</div>' : '';
-  return '<div class="tt">' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</div>'
-    + '<div class="tk">' + list.length + ' connection' + (list.length === 1 ? '' : 's') + '</div>'
-    + (rows || '<div class="tn">no connections recorded</div>') + more;
+  const whys = list.map((r) => r.why).filter((w) => w && String(w).trim());
+  if (!whys.length) return '<div class="tn">no description recorded</div>';
+  const shown = whys.slice(0, TIP_EDGE_CAP);
+  const more = whys.length > TIP_EDGE_CAP
+    ? '<div class="tn">+' + (whys.length - TIP_EDGE_CAP) + ' more…</div>' : '';
+  if (shown.length === 1) return '<div class="tm">' + mdInline(shown[0]) + '</div>' + more;
+  return '<ul class="tl">' + shown.map((w) => '<li>' + mdInline(w) + '</li>').join('') + '</ul>' + more;
 }
 function tipGPHtml(gpId) {  // hover a GP step (message) -> its title + story preview
   const s = GP_BY_ID[gpId];
@@ -369,7 +388,9 @@ function selectNode(scene, el, id) {
   scene.selectedKey = 'node:' + id;
   showNode(id);
   sceneSelect(scene, () => { el.style.filter = HILITE; return () => { el.style.filter = ''; }; });
-  focusNode(scene, id);
+  // Dim to this node's neighbourhood only when the node is drawn in this scene; a box that isn't
+  // registered (e.g. a neighbourhood's external subsystem) would otherwise dim everything around it.
+  if (scene.nodeEls[id]) focusNode(scene, id); else clearFocus(scene);
 }
 
 function bindNodes(scene, onActivate) {
@@ -387,7 +408,7 @@ function bindNodes(scene, onActivate) {
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;  // tail of a drag-pan, not a real click
       e.stopPropagation();
-      onActivate(id, el);
+      onActivate(id, el, e);
     });
     if (mode === 'diff' && DIFF_STATE[id]) addBadge(el, DIFF_STATE[id]);
   });
@@ -395,7 +416,7 @@ function bindNodes(scene, onActivate) {
 
 // Give an edge's visible path a wide transparent hit-path + make its label clickable.
 // `tipHtml` (optional) wires a hover meaning-preview on the same hit-area + label.
-function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml) {
+function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml, drillable) {
   const hit = p.cloneNode(false);
   hit.removeAttribute('id'); hit.removeAttribute('marker-end'); hit.removeAttribute('class');
   hit.style.setProperty('stroke', 'transparent', 'important');
@@ -403,6 +424,7 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml) {
   hit.style.setProperty('fill', 'none', 'important');
   hit.style.setProperty('marker-end', 'none', 'important');
   hit.style.pointerEvents = 'stroke'; hit.style.cursor = 'pointer';
+  if (drillable) hit.classList.add('drill');  // ⌘-held cursor affordance
   hit.addEventListener('click', onClick);
   hit.addEventListener('mouseenter', hoverOn);
   hit.addEventListener('mouseleave', hoverOff);
@@ -410,6 +432,7 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml) {
   if (label) {
     label.style.cursor = 'pointer';
     label.style.setProperty('pointer-events', 'all', 'important');
+    if (drillable) label.classList.add('drill');
     label.addEventListener('click', onClick);
     label.addEventListener('mouseenter', hoverOn);
     label.addEventListener('mouseleave', hoverOff);
@@ -441,28 +464,35 @@ function glowEdge(p, label) {
 }
 
 // Wire one edge for the SELECT model (highlight + focus + panel) — context, components, internal edges.
-function bindSelectEdge(scene, p, label, e, selKey, showFn) {
+// `opts.onDrill` (optional) makes a ⌘-click drill instead of select, and marks the arrow with the
+// drill cursor; `opts.tipFn` overrides the hover preview (defaults to the plain edge tip).
+function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
+  opts = opts || {};
   const hoverOn = () => { if (scene.selectedKey !== selKey) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
   const hoverOff = () => { if (scene.selectedKey !== selKey) { p.style.filter = ''; if (label) label.style.filter = ''; } };
   const onClick = (ev) => {
     if (isDrag(ev)) return;  // tail of a drag-pan, not a real click
     ev.stopPropagation();
+    if (opts.onDrill && isDrillClick(ev)) { hoverOff(); opts.onDrill(); return; }  // ⌘-click drills in
     hoverOff();  // drop the hover glow before (de)selecting, so it can't linger under HILITE
     if (scene.selectedKey === selKey) { resetScene(scene); return; }  // click again = deselect
     scene.selectedKey = selKey;
-    showFn(); sceneSelect(scene, () => glowEdge(p, label)); focusEdge(scene, e);
+    showFn(); sceneSelect(scene, () => glowEdge(p, label));
+    // Dim to the edge only when its endpoints are drawn here; an aggregated arrow whose ends aren't
+    // (e.g. a neighbourhood's cross arrow) would otherwise dim the whole view.
+    if (scene.nodeEls[e.src] || scene.nodeEls[e.dst]) focusEdge(scene, e); else clearFocus(scene);
   };
   scene.edgeEls.push({ e, path: p, label });
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, () => tipEdgeHtml(e));
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.tipFn || (() => tipEdgeHtml(e)), !!opts.onDrill);
 }
 
-// Wire one edge to NAVIGATE on click (no in-scene selection) — subsystem-map arrows + cross arrows.
-// `tipHtml` (optional) previews the arrow's meaning(s) on hover, same as a select edge.
-function bindNavEdge(p, label, onNavigate, tipHtml) {
-  const hoverOn = () => { p.style.filter = HOVER; if (label) label.style.filter = HOVER; };
-  const hoverOff = () => { p.style.filter = ''; if (label) label.style.filter = ''; };
-  const onClick = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); hoverOff(); onNavigate(); };
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml);
+// An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
+// the sidebar lists every component→component crossing it bundles — and a ⌘-click drills into the
+// two-subsystem edge view. Reuses the select-edge machinery with a container-edge panel + tip.
+function bindContainerEdge(scene, p, label, a, b) {
+  bindSelectEdge(scene, p, label, { src: a, dst: b }, 'sedge:' + a + '>' + b,
+    () => showContainerEdge(a, b),
+    { onDrill: () => go({ kind: 'edge', a, b }), tipFn: () => tipContainerEdgeHtml(a, b) });
 }
 
 // `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn } or null to skip.
@@ -524,85 +554,52 @@ function bindComponent() {
   bindNodes(mainScene, (id, el) => selectNode(mainScene, el, id));
   bindEdges(mainScene, resolveComponentEdge);
 }
-// The "Open ▸" pill: a button drawn IN the subsystem box's SVG group (so it pans/zooms anchored to
-// the box) that appears while the box is hovered and drills into that subsystem on click. Built in
-// SVG (not HTML) for the same reason badges are — it stays glued to the node under any pan/zoom.
-// Inline !important mirrors makeBadge: Mermaid sets SVG fill/font with !important.
-function makeOpenPill(boxEl, sid) {
-  const bb = boxEl.getBBox();
-  const w = 54, h = 21, m = 5;
-  const x = bb.x + bb.width - w - m, y = bb.y + m;  // tucked into the box's top-right corner
-  const g = document.createElementNS(SVGNS, 'g');
-  g.style.cursor = 'pointer';
-  const rect = document.createElementNS(SVGNS, 'rect');
-  rect.setAttribute('x', x); rect.setAttribute('y', y);
-  rect.setAttribute('width', w); rect.setAttribute('height', h); rect.setAttribute('rx', 10);
-  const fill = (c) => rect.style.setProperty('fill', c, 'important');
-  fill('#2563eb');
-  rect.style.setProperty('stroke', '#fff', 'important');
-  rect.style.setProperty('stroke-width', '1.25px', 'important');
-  const t = document.createElementNS(SVGNS, 'text');
-  t.setAttribute('x', x + w / 2); t.setAttribute('y', y + h / 2);
-  t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'central');
-  t.style.setProperty('fill', '#fff', 'important');
-  t.style.setProperty('font-family', '-apple-system, system-ui, sans-serif', 'important');
-  t.style.setProperty('font-size', '12px', 'important');
-  t.style.setProperty('font-weight', '600', 'important');
-  t.style.setProperty('pointer-events', 'none', 'important');  // clicks land on the rect, not the glyph
-  t.textContent = 'Open ▸';
-  g.appendChild(rect); g.appendChild(t);
-  g.addEventListener('mouseenter', () => fill('#1d4ed8'));  // brighten — it reads as a button
-  g.addEventListener('mouseleave', () => fill('#2563eb'));
-  g.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); go({ kind: 'subsystem', sid }); });
-  return g;
-}
 function bindContainer() {
-  // Subsystem boxes: a single click SELECTS the box + its linked subsystems (like selecting a
-  // component); an "Open ▸" pill fades in on hover (top-right corner of the box) and drills in on
-  // click. Register every box in the scene so focusNode can dim the non-linked ones.
+  // Subsystem boxes: a plain click SELECTS the box + its linked subsystems (like selecting a
+  // component); a ⌘-click drills in. Register every box in the scene so focusNode can dim the
+  // non-linked ones, and tag it `drill` so the cursor shows the drill-in affordance while ⌘ is held.
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id]) return;
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
-    let pill = null;  // lazily built on first hover, then shown/hidden by attach/detach
-    el.addEventListener('mouseenter', () => {
-      if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER;
-      if (!pill) pill = makeOpenPill(el, id);
-      el.appendChild(pill);  // last child => painted above the box; mouseleave won't fire moving onto it
-    });
-    el.addEventListener('mouseleave', () => {
-      if (mainScene.selectedKey !== 'node:' + id) el.style.filter = '';
-      if (pill && pill.parentNode === el) el.removeChild(pill);
-    });
+    el.classList.add('drill');
+    el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
+    el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
     attachTip(el, () => tipNodeHtml(id));
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;
       e.stopPropagation();
+      if (isDrillClick(e)) { go({ kind: 'subsystem', sid: id }); return; }  // ⌘-click drills in
       selectNode(mainScene, el, id);
     });
   });
-  // Inter-subsystem arrows: register in the scene (so a selected box keeps its linked neighbours),
-  // hover previews the meanings of all the component edges they aggregate, click drills the pair.
+  // Inter-subsystem arrows: plain click selects (crossings show in the sidebar), ⌘-click drills the
+  // pair. bindContainerEdge registers each in the scene so a selected box keeps its linked neighbours.
   eachEdge(mainScene.root, (p, label, m) => {
     const a = m[1], b = m[2];
     if (!(GRAPH.nodes[a] && GRAPH.nodes[b])) return;
-    mainScene.edgeEls.push({ e: { src: a, dst: b }, path: p, label });
-    bindNavEdge(p, label, () => go({ kind: 'edge', a, b }), () => tipContainerEdgeHtml(a, b));
+    bindContainerEdge(mainScene, p, label, a, b);
   });
 }
-function bindSubsystem(sid) {  // neighbourhood: component -> detail; neighbour box / cross arrow -> drill
-  bindNodes(mainScene, (id, el) => {
-    if (GRAPH.nodes[id].kind === 'subsystem') go({ kind: 'subsystem', sid: id });  // walk to the neighbour
-    else selectNode(mainScene, el, id);
+function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click on a neighbour box / cross arrow drills
+  bindNodes(mainScene, (id, el, ev) => {
+    // A neighbour subsystem box: plain click shows its info, ⌘-click walks into it. A component: select.
+    if (GRAPH.nodes[id].kind === 'subsystem' && isDrillClick(ev)) { go({ kind: 'subsystem', sid: id }); return; }
+    selectNode(mainScene, el, id);
+  });
+  // Neighbour boxes aren't drilled by a plain click any more, so tag them `drill` for the ⌘ cursor.
+  mainScene.root.querySelectorAll('g.node').forEach((el) => {
+    const id = idOf(el);
+    if (id && GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'subsystem') el.classList.add('drill');
   });
   eachEdge(diagram, (p, label, m) => {
     const a = m[1], b = m[2];
     const aSub = GRAPH.nodes[a] && GRAPH.nodes[a].kind === 'subsystem';
     const bSub = GRAPH.nodes[b] && GRAPH.nodes[b].kind === 'subsystem';
-    if (aSub || bSub) {  // cross arrow -> the pair's edge view, keeping direction
+    if (aSub || bSub) {  // cross arrow: select shows its crossings; ⌘-click drills the pair (keeping direction)
       const pa = aSub ? a : sid, pb = bSub ? b : sid;
-      bindNavEdge(p, label, () => go({ kind: 'edge', a: pa, b: pb }));
+      bindContainerEdge(mainScene, p, label, pa, pb);
     } else {
       const r = resolveComponentEdge(m);
       if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
@@ -757,6 +754,8 @@ function renderChrome(s) {
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
+  // The drill hint only applies where ⌘-click drills: the Subsystems map + a subsystem neighbourhood.
+  drillhint.hidden = !(s.kind === 'container' || s.kind === 'subsystem');
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it
@@ -819,6 +818,12 @@ document.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.altKey) && e.key === 'ArrowRight') { e.preventDefault(); fwd(); return; }
   if (e.key === 'Escape' && mainScene) resetScene(mainScene);
 });
+// While ⌘ (or ⌃ off Mac) is held, flag the body so drillable subsystems/arrows show the drill-in
+// cursor (see .drill in the CSS). Clear on key-up and on blur so a released key never sticks.
+const setCmd = (on) => document.body.classList.toggle('cmd', on);
+document.addEventListener('keydown', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(true); });
+document.addEventListener('keyup', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(false); });
+window.addEventListener('blur', () => setCmd(false));
 buildLegend();
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }

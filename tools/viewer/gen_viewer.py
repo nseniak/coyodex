@@ -7,8 +7,9 @@ The viewer's own CSS/JS are authored in viewer.css / viewer.js next to this modu
 build time, so the emitted HTML stays standalone — it carries no path back to this repo (see the
 "Generated artifacts are standalone w.r.t. the coyodex repo" design note).
 The viewer offers four altitudes — Context (C4) → Subsystems (click a box to select it + its linked
-subsystems; hover a box for its "Open ▸" pill to drill in; click an arrow for the pair's edge card,
-hover it to preview the component edges it bundles) → Components → code links — navigated as a
+subsystems, or ⌘-click to drill in; click an arrow to select it — the side panel lists every
+component edge it bundles — or ⌘-click to drill into the pair's edge card; while ⌘ is held, drillable
+boxes/arrows show a drill-in cursor) → Components → code links — navigated as a
 back/forward history within one frame, wraps Mermaid's SVG with pan/zoom and a click->side-panel
 bridge, and a baseline<->diff toggle that recolors added/modified/deleted nodes and the elements they
 ripple to.
@@ -539,6 +540,7 @@ __STYLE__
 <header>
   <h1>coyodex viewer</h1>
   <span class="meta" id="meta"></span>
+  <span id="drillhint" hidden>&#8984;-click to drill down</span>
   <span id="nav">
     <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
     <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
