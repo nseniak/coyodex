@@ -127,20 +127,37 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 ---
 
+## Contexts (CX) — bounded contexts of the domain model
+
+<!-- Optional; recommended above ~15 entities. T5 entities grouped into contexts (bounded contexts /
+     aggregates), optionally nested. Membership is carried on each card (a `CONTEXT:` line); members,
+     the inter-context (CX→CX) arrows, and the subsystem→context (S→CX) bridge are all DERIVED. Omit
+     this whole section on small models — ungrouped entities are valid. Cluster entities the same way
+     components cluster into Subsystems: directory (the card's SOURCE) first, then relation cohesion. -->
+
+| ID | Context | Purpose | Parent | Anchor | Conf. |
+|---|---|---|---|---|---|
+| **CX1** | <context> | <one-line purpose> | <CX-id or empty> | [dir/](path/) | inferred |
+
+---
+
 ## T5 — Domain model (domain cards)
 
 <!-- Each entity is a CARD (a block), not a table row — same micro-format as the Golden Path. The
      heading defines the E id; FIELDS = attributes, RELATIONS = typed E→E edges (authored on the
      source side only, never in the backbone edge list). Renders as a Mermaid classDiagram.
-     Full spec: method/domain-cards.md. Separators are `·`, never raw `|`. -->
+     An optional `CONTEXT:` line assigns the entity to one context (CX) — the domain-model analog of a
+     component's `Subsystem` cell. Full spec: method/domain-cards.md. Separators are `·`, never raw `|`. -->
 
 **E1 — <Entity>** *(<stored where>)*
+CONTEXT: CX1
 MEANING: <one-line meaning>
 FIELDS: <name>:<type> PK · <name>:<type> · <name>:<type>
 RELATIONS: contains 1→* E2 <display>
 SOURCE: [file](path#L1)
 
 **E2 — <Entity>** *(<stored where>)*
+CONTEXT: CX1
 MEANING: <one-line meaning>
 FIELDS: <name>:<type> · <name>:<type>
 SOURCE: [file](path#L1)

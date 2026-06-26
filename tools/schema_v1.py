@@ -11,25 +11,27 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 
-# IDs by prefix. Multi-letter prefixes (UC, GP) must precede the single-letter ones. `E` (domain
-# entity) is a reference token here but is DEFINED in a card heading (DEF_ENTITY below), not a table
-# row — so it is intentionally ABSENT from the table-definition patterns that follow.
-ID_TOKEN = re.compile(r"\b(?:UC\d+|GP\d+|C\d+|D\d+|E\d+|S\d+)\b")
+# IDs by prefix. Multi-letter prefixes (UC, GP, CX) must precede the single-letter ones (so `CX1`
+# never reads as `C` + stray text). `E` (domain entity) is a reference token here but is DEFINED in a
+# card heading (DEF_ENTITY below), not a table row — so it is intentionally ABSENT from the
+# table-definition patterns that follow. `CX` (domain context — a cluster of T5 entities) IS
+# table-defined (its own Contexts table, like `S`), so it appears in those patterns alongside `S`.
+ID_TOKEN = re.compile(r"\b(?:UC\d+|GP\d+|CX\d+|C\d+|D\d+|E\d+|S\d+)\b")
 
 # A definition is the FIRST cell of a table row, bolded: `| **C1** | ... |`
 # — not an inline bold reference in prose. (E is card-defined; see DEF_ENTITY.)
-DEF_BOLD = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|S\d+)\*\*\s*\|")
+DEF_BOLD = re.compile(r"^\|\s*\*\*(UC\d+|CX\d+|C\d+|D\d+|S\d+)\*\*\s*\|")
 
 # A bold id anywhere in a cell — a parser uses this to find a row's defining id.
-DEF_ID_CELL = re.compile(r"\*\*(UC\d+|C\d+|D\d+|S\d+)\*\*")
+DEF_ID_CELL = re.compile(r"\*\*(UC\d+|CX\d+|C\d+|D\d+|S\d+)\*\*")
 
 # A bold id at the START of a first cell but with extra text glued after it — i.e. NOT a clean
 # `| **C1** |` definition. Id and name sharing the cell is the most common reason an id reads as
 # "undefined"; the validator uses these to name that exact cause. Two glue forms:
 #   GLUED_DEF       — name OUTSIDE the bold:  `| **UC1** Search… |`
 #   GLUED_DEF_INNER — name INSIDE the bold:   `| **C8 Upstream** |`
-GLUED_DEF = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|S\d+)\*\*\s+[^|]")
-GLUED_DEF_INNER = re.compile(r"^\|\s*\*\*(UC\d+|C\d+|D\d+|S\d+)\s+[^*|]+\*\*")
+GLUED_DEF = re.compile(r"^\|\s*\*\*(UC\d+|CX\d+|C\d+|D\d+|S\d+)\*\*\s+[^|]")
+GLUED_DEF_INNER = re.compile(r"^\|\s*\*\*(UC\d+|CX\d+|C\d+|D\d+|S\d+)\s+[^*|]+\*\*")
 
 # Block-heading definitions (NOT table rows): a Golden Path step `**GP1 — ...` and a T5 domain card
 # `**E1 — ...` (see method/domain-cards.md). Each DEFINES its id in the heading.
@@ -112,11 +114,14 @@ def strip_fences(text: str) -> str:
 
 def membership_col(headers_lower: list[str], child_id: str) -> int | None:
     """Index of a row's membership column, chosen by the row's OWN id kind (robust to column
-    order): a subsystem row's 'Subsystem' header is its *name* column, so its parent pointer is
-    'Parent'; a component (or other) row's membership IS the 'Subsystem' column."""
+    order): a subsystem (`S`) or context (`CX`) row's name header ('Subsystem' / 'Context') is its
+    *name* column, so its parent pointer is 'Parent'; a component (or other) row's membership IS the
+    'Subsystem' column. (Entity→context membership is NOT a table cell — it is the card's `CONTEXT:`
+    line, parsed in iter_domain_cards — so only the Contexts table's own `Parent` nesting comes
+    through here for `CX`.)"""
     sub = headers_lower.index("subsystem") if "subsystem" in headers_lower else None
     par = headers_lower.index("parent") if "parent" in headers_lower else None
-    return par if child_id.startswith("S") else (sub if sub is not None else par)
+    return par if child_id.startswith(("S", "CX")) else (sub if sub is not None else par)
 
 
 def membership_ids(child_id: str, cells: list[str], headers_lower: list[str]) -> list[str]:
@@ -136,6 +141,12 @@ def membership_ids(child_id: str, cells: list[str], headers_lower: list[str]) ->
 
 # Full heading parse: `**E1 — Order** *(orders collection)*` -> id, name, store(optional).
 ENTITY_HEADING = re.compile(r"^\*\*(E\d+)\s+—\s*(.+?)\s*\*\*\s*(?:\*\((.*?)\)\*)?\s*$")
+
+# A card's optional `CONTEXT:` line carries the one parent context (a `CX` id) the entity belongs to —
+# the domain-model analog of a component's `Subsystem` cell. Display text may follow the id (`CONTEXT:
+# CX2 Ordering`); only the id is captured. Membership is single-source on the child, exactly like
+# component → subsystem; the member list and the derived CX→CX / S→CX edges are computed, never authored.
+CONTEXT_ID = re.compile(r"\bCX\d+\b")
 
 ALLOWED_CARDINALITY = {"1", "*", "0..1", "1..*"}
 _CARD = r"\*|\d+|0\.\.1|1\.\.\*"
@@ -193,6 +204,7 @@ class DomainCard:
     relations: list[CardRelation]
     line: int  # 1-based heading line, for error messages
     heading_ok: bool = True  # False = heading matched DEF_ENTITY but not the full `**En — Name** *(store)*`
+    context: str | None = None  # the one parent context (a `CX` id) from a `CONTEXT:` line; None = ungrouped
 
 
 def _split_glued_markers(typ: str) -> tuple[str, list[str]]:
@@ -300,7 +312,7 @@ def iter_domain_cards(lines: list[str]):
         fm = ENTITY_HEADING.match(head)
         eid = hm.group(1)
         name, store = (fm.group(2).strip(), (fm.group(3) or "").strip()) if fm else (eid, "")
-        meaning, source = "", None
+        meaning, source, context = "", None, None
         fields_out: list[CardField] = []
         relations: list[CardRelation] = []
         line_no = i + 1
@@ -311,6 +323,9 @@ def iter_domain_cards(lines: list[str]):
                 break
             if s.startswith("MEANING:"):
                 meaning = s[len("MEANING:"):].strip()
+            elif s.startswith("CONTEXT:"):
+                cm = CONTEXT_ID.search(s)
+                context = cm.group(0) if cm else None
             elif s.startswith("SOURCE:"):
                 lm = _CARD_LINK.search(s)
                 source = lm.group(1) if lm else (s[len("SOURCE:"):].strip() or None)
@@ -326,5 +341,5 @@ def iter_domain_cards(lines: list[str]):
                 j = k - 1
             j += 1
         yield DomainCard(eid, name, store, meaning, source, fields_out, relations, line_no,
-                         heading_ok=fm is not None)
+                         heading_ok=fm is not None, context=context)
         i = j

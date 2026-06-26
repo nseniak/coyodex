@@ -27,6 +27,7 @@ labeled lines carry the rest:
 
 ```
 **E<n> — <Name>** *(<stored where>)*
+CONTEXT: <CX-id>                          ← optional; the one context the entity belongs to
 MEANING: <one-line meaning>
 FIELDS: <field> · <field> · …            ← inline, OR a bullet list (see FIELDS)
 RELATIONS: <relation> · <relation> · …
@@ -36,10 +37,17 @@ SOURCE: [<file>](<path>#L<line>)
 | Part | Required | Holds | Parses to |
 |---|---|---|---|
 | heading `**En — Name** *(store)*` | yes | id, display name, store | node id / name + `fields.Stored` |
+| `CONTEXT:` | no | one `CX` id (the entity's context) | `node.parent` |
 | `MEANING:` | yes | one-line gloss | `fields.Meaning` |
 | `FIELDS:` | yes | attribute list | `node.attrs` |
 | `RELATIONS:` | no | typed `E→E` edges | `edges` (carry `card` + `kind`) |
 | `SOURCE:` | yes | `[text](path#Lnn)` | `node.file` / `node.line` |
+
+> **`CONTEXT:` groups the entity** into a bounded context (`CX`) — the domain-model analog of a
+> component's `Subsystem` cell, single-sourced on the child. It is **optional and additive**: omit it
+> and the entity is ungrouped (top-level). Contexts are defined in their own `ID | Context | Purpose |
+> Parent | Anchor | Conf.` table; clustering, the derived `CX→CX` / `S→CX` edges, and the Domain
+> bounded-contexts overview are specified in [schema v1](schema-v1.md#domain-grouping-is-the-same-machine-on-the-entity-graph-optional-additive).
 
 - The heading em-dash `—` and the `*(…)*` metadata parens mirror the Golden Path heading
   (`**GP1 — title** *(UC1)*`). The parens carry "stored where" (the old T5 column). Optional.

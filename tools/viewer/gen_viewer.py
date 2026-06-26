@@ -152,8 +152,10 @@ def _parent_of(graph: GraphDict, nid: str) -> str | None:
     return cast("str | None", n.get("parent")) if n else None
 
 
-def _top_subsystem(graph: GraphDict, nid: str) -> str | None:
-    """Walk parent pointers up to the top-level subsystem above `nid` (or None)."""
+def _top_group(graph: GraphDict, nid: str) -> str | None:
+    """Walk parent pointers up to the top-level GROUP above `nid` (or None). Generic over the grouping
+    kind — a component resolves to its top subsystem (`S`), an entity to its top context (`CX`) —
+    because the two forests share the one `parent` pointer over disjoint id spaces."""
     cur = _parent_of(graph, nid)
     if cur is None:
         return None
@@ -172,6 +174,12 @@ def has_grouping(graph: GraphDict) -> bool:
 
 def has_domain(graph: GraphDict) -> bool:
     return any(str(n.get("kind")) == "entity" for n in graph["nodes"].values())
+
+
+def has_contexts(graph: GraphDict) -> bool:
+    """True when the domain model is grouped into contexts (a `CX` node exists) — gates the Domain
+    view's bounded-contexts overview, exactly as has_grouping gates the Subsystems view."""
+    return any(str(n.get("kind")) == "context" for n in graph["nodes"].values())
 
 
 def _safe_member(s: str) -> str:
@@ -193,43 +201,177 @@ def _relation_label(edge: dict[str, Any]) -> str:
     return label if edge.get("fk_side") == "src" else "↩ " + label
 
 
+def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
+                     with_members: bool) -> list[str]:
+    """The `classDiagram` lines for one entity box. `with_members=True` renders its attributes
+    (`type name`); `with_members=False` renders a bare box — used for a cross-context NEIGHBOUR entity
+    in a per-context card, so it reads as collapsed (its detail lives in its own context's view).
+    Shared by the flat Domain view and the per-context card so a class renders identically in both."""
+    label = _safe_label(str(node["name"]))
+    if not with_members:
+        return [f'  class {nid}["{label}"]']
+    out = [f'  class {nid}["{label}"] {{']
+    for a in cast("list[dict[str, str]]", node.get("attrs") or []):
+        # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
+        atype = _safe_member(ent_names.get(str(a.get("type", "")), str(a.get("type", ""))))
+        # `[]` is part of the type's SHAPE (it makes the field multi-valued), so show it in the box
+        # — unlike PK/FK/?/unique (annotations), which stay in the click-panel. Otherwise a
+        # collection reads as single-valued in the box and the `*` lives only on the relation arrow.
+        if "[]" in str(a.get("markers", "")).split():
+            atype += "[]"
+        member = f'{atype} {_safe_member(str(a.get("name", "")))}'.strip()
+        if member:
+            out.append(f"    {member}")
+    out.append("  }")
+    return out
+
+
+def _class_relation_line(e: dict[str, Any]) -> str:
+    """The `classDiagram` arrow line for one domain relation (kind + cardinality + backing-field
+    label). Shared by the flat Domain view and the per-context card so an edge renders identically."""
+    s, d, kind = str(e["src"]), str(e["dst"]), str(e.get("kind"))
+    arrow = CLASS_ARROW.get(kind, "-->")
+    label = _relation_label(e)
+    suffix = f" : {label}" if label else ""
+    if kind == "inheritance":
+        return f"  {s} {arrow} {d}{suffix}"
+    left = f'"{e["src_card"]}" ' if e.get("src_card") else ""
+    right = f' "{e["dst_card"]}"' if e.get("dst_card") else ""
+    return f"  {s} {left}{arrow}{right} {d}{suffix}"
+
+
+def _domain_relation_edges(graph: GraphDict) -> list[dict[str, Any]]:
+    """The E→E domain-relation edges — a relation `kind` is set AND both endpoints are entity nodes.
+    Distinct from component edges (no kind) and the C→E bridge edges (no kind, dst is an entity); the
+    source for the Domain view's derived CX→CX arrows and the per-context card's drawn relations."""
+    nodes = graph["nodes"]
+    return [cast("dict[str, Any]", e) for e in graph["edges"]
+            if e.get("kind") and str(nodes.get(str(e["src"]), {}).get("kind")) == "entity"
+            and str(nodes.get(str(e["dst"]), {}).get("kind")) == "entity"]
+
+
+def _entities_of(graph: GraphDict, cxid: str) -> list[tuple[str, str]]:
+    """(id, name) of every entity whose top-level context is `cxid` (mirrors _components_of)."""
+    return [(eid, str(n["name"])) for eid, n in graph["nodes"].items()
+            if str(n["kind"]) == "entity" and _top_group(graph, eid) == cxid]
+
+
 def gen_domain_mermaid(graph: GraphDict) -> str:
     """C4 Code altitude: the T5 domain model as a Mermaid `classDiagram` — each entity a class box
     (id = its `E` id, label = its name) holding its attributes (`type name`), with typed, cardinal
     relations between entities. Markers (PK/FK/…) live in the click->panel, since classDiagram boxes
-    carry no native key notation. Class id = the `E` id so the viewer's id bridge resolves a click."""
+    carry no native key notation. Class id = the `E` id so the viewer's id bridge resolves a click.
+    This is the FLAT whole-model view; on a context-grouped map the viewer leads with the Contexts
+    overview (gen_domain_container_mermaid) and drills into one context's card."""
     ents = [(nid, n) for nid, n in graph["nodes"].items() if str(n["kind"]) == "entity"]
     ent_ids = {nid for nid, _ in ents}
     ent_names = {nid: str(n["name"]) for nid, n in ents}
     lines = ["classDiagram"]
     for nid, n in ents:
-        lines.append(f'  class {nid}["{_safe_label(str(n["name"]))}"] {{')
-        for a in cast("list[dict[str, str]]", n.get("attrs") or []):
-            # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
-            atype = _safe_member(ent_names.get(str(a.get("type", "")), str(a.get("type", ""))))
-            # `[]` is part of the type's SHAPE (it makes the field multi-valued), so show it in the box
-            # — unlike PK/FK/?/unique (annotations), which stay in the click-panel. Otherwise a
-            # collection reads as single-valued in the box and the `*` lives only on the relation arrow.
-            if "[]" in str(a.get("markers", "")).split():
-                atype += "[]"
-            member = f'{atype} {_safe_member(str(a.get("name", "")))}'.strip()
-            if member:
-                lines.append(f"    {member}")
-        lines.append("  }")
+        lines += _class_box_lines(nid, cast("dict[str, Any]", n), ent_names, with_members=True)
     for e in graph["edges"]:
-        s, d, kind = str(e["src"]), str(e["dst"]), e.get("kind")
-        if not (kind and s in ent_ids and d in ent_ids):
-            continue
-        arrow = CLASS_ARROW.get(str(kind), "-->")
-        label = _relation_label(cast("dict[str, Any]", e))
-        suffix = f" : {label}" if label else ""
-        if kind == "inheritance":
-            lines.append(f"  {s} {arrow} {d}{suffix}")
-        else:
-            left = f'"{e["src_card"]}" ' if e.get("src_card") else ""
-            right = f' "{e["dst_card"]}"' if e.get("dst_card") else ""
-            lines.append(f"  {s} {left}{arrow}{right} {d}{suffix}")
+        if e.get("kind") and str(e["src"]) in ent_ids and str(e["dst"]) in ent_ids:
+            lines.append(_class_relation_line(cast("dict[str, Any]", e)))
     return "\n".join(lines)
+
+
+# Domain context palette — the magenta family of the entity classDef, so a context box reads as
+# "a box of entities" at the bounded-contexts altitude.
+DOMAIN_CONTEXT_CLASSDEF = "  classDef context fill:#fdf4ff,stroke:#86198f,color:#581c87;"
+
+# The bridge verb split (C→E edges): a component that `persists`/`writes` an entity OWNS that
+# context's data; any other verb (typically `reads`) merely CONSUMES it. Drives the subsystem-card
+# bridge arrow label, surfacing a context that many subsystems own/read as a shared kernel.
+_OWN_VERBS = {"persists", "writes"}
+
+
+def gen_domain_container_mermaid(graph: GraphDict) -> str:
+    """Domain Container altitude: each top-level context (`CX`) a box labelled `Name (N)` (N = its
+    entity count), with inter-context arrows DERIVED from the E→E relation list (a `CXa → CXb` arrow
+    exists iff a domain relation crosses, labelled by count). The exact mirror of
+    gen_container_mermaid for components — the scalable entry point into a large domain model."""
+    lines = ["flowchart TB"]
+    for nid, node in graph["nodes"].items():
+        if str(node["kind"]) == "context" and _parent_of(graph, nid) is None:
+            n_ent = len(_entities_of(graph, nid))
+            lines.append(f'  {nid}["{_safe_label(str(node["name"]))} ({n_ent})"]:::cy-{nid}')
+            lines.append(f"  class {nid} context")
+    counts: dict[tuple[str, str], int] = {}
+    for e in _domain_relation_edges(graph):
+        ca, cb = _top_group(graph, str(e["src"])), _top_group(graph, str(e["dst"]))
+        if ca and cb and ca != cb:
+            counts[(ca, cb)] = counts.get((ca, cb), 0) + 1
+    for (ca, cb), c in sorted(counts.items()):
+        lines.append(f"  {ca} -->|{c}| {cb}")
+    lines.append(DOMAIN_CONTEXT_CLASSDEF)
+    return "\n".join(lines)
+
+
+def gen_domain_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """For each inter-context arrow 'A>B' in the Domain overview, the underlying entity→entity
+    relations that cross from A to B (endpoints, names, verb, kind) — the viewer lists them in the
+    arrow's hover tooltip. Mirrors the crossing logic in gen_domain_container_mermaid."""
+    out: dict[str, list[dict[str, str]]] = {}
+    for e in _domain_relation_edges(graph):
+        s, d = str(e["src"]), str(e["dst"])
+        ca, cb = _top_group(graph, s), _top_group(graph, d)
+        if ca and cb and ca != cb:
+            sn, dn = graph["nodes"].get(s), graph["nodes"].get(d)
+            out.setdefault(f"{ca}>{cb}", []).append({
+                "src": s,
+                "dst": d,
+                "srcName": str(sn["name"]) if sn else s,
+                "dstName": str(dn["name"]) if dn else d,
+                "verb": str(e["verb"]),
+                "kind": str(e.get("kind") or ""),
+            })
+    return out
+
+
+def gen_domain_context_card(graph: GraphDict, cxid: str) -> str:
+    """A per-context `classDiagram`: the context's own entities drawn full (attributes), the entities
+    they relate to ACROSS the boundary drawn as collapsed (member-less) neighbour boxes, and the
+    relations among them. The entity analog of gen_subsystem_card_mermaid — each screen stays small
+    no matter the total model size. Node ids + relation shapes match the flat Domain view, so the
+    viewer's class/relation bridge resolves a click to the entity panel or the relation detail."""
+    members = _entities_of(graph, cxid)
+    member_ids = {eid for eid, _ in members}
+    ent_names = {nid: str(n["name"]) for nid, n in graph["nodes"].items() if str(n["kind"]) == "entity"}
+    rels: list[dict[str, Any]] = []
+    neighbours: list[str] = []
+    seen_nb: set[str] = set()
+    for e in _domain_relation_edges(graph):
+        s, d = str(e["src"]), str(e["dst"])
+        if s not in member_ids and d not in member_ids:
+            continue
+        rels.append(e)
+        for end in (s, d):
+            if end not in member_ids and end not in seen_nb:
+                seen_nb.add(end)
+                neighbours.append(end)
+    lines = ["classDiagram"]
+    nodes = graph["nodes"]
+    for eid, _ in members:  # the context's own entities, full
+        lines += _class_box_lines(eid, cast("dict[str, Any]", nodes[eid]), ent_names, with_members=True)
+    for nb in neighbours:   # cross-context related entities, collapsed
+        lines += _class_box_lines(nb, cast("dict[str, Any]", nodes[nb]), ent_names, with_members=False)
+    for e in rels:
+        lines.append(_class_relation_line(e))
+    if len(lines) == 1:
+        # A defined-but-empty context (no member entities — so no neighbours / relations either) would
+        # leave a body-less `classDiagram`, which Mermaid rejects (the drill would throw). Emit a
+        # placeholder class so the card stays a VALID, self-explaining diagram. The id carries no
+        # prefix+digits, so the viewer's id bridge skips it (it isn't a clickable element).
+        name = _safe_label(str(nodes[cxid]["name"])) if cxid in nodes else cxid
+        lines.append(f'  class EmptyContext["{name} — no entities"]')
+    return "\n".join(lines)
+
+
+def domain_context_mermaids(graph: GraphDict) -> dict[str, str]:
+    """One per-context card per top-level context (see gen_domain_context_card)."""
+    return {nid: gen_domain_context_card(graph, nid)
+            for nid, node in graph["nodes"].items()
+            if str(node["kind"]) == "context" and _parent_of(graph, nid) is None}
 
 
 def gen_container_mermaid(graph: GraphDict) -> str:
@@ -242,7 +384,7 @@ def gen_container_mermaid(graph: GraphDict) -> str:
             lines.append(f"  class {nid} subsystem")
     counts: dict[tuple[str, str], int] = {}
     for e in graph["edges"]:
-        sa, sb = _top_subsystem(graph, str(e["src"])), _top_subsystem(graph, str(e["dst"]))
+        sa, sb = _top_group(graph, str(e["src"])), _top_group(graph, str(e["dst"]))
         if sa and sb and sa != sb:
             counts[(sa, sb)] = counts.get((sa, sb), 0) + 1
     for (sa, sb), c in sorted(counts.items()):
@@ -259,7 +401,7 @@ def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
     out: dict[str, list[dict[str, str]]] = {}
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
-        sa, sb = _top_subsystem(graph, s), _top_subsystem(graph, d)
+        sa, sb = _top_group(graph, s), _top_group(graph, d)
         if sa and sb and sa != sb:
             sn, dn = graph["nodes"].get(s), graph["nodes"].get(d)
             out.setdefault(f"{sa}>{sb}", []).append({
@@ -276,7 +418,7 @@ def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
 def _components_of(graph: GraphDict, sid: str) -> list[tuple[str, str]]:
     """(id, name) of every component whose top-level subsystem is `sid`."""
     return [(cid, str(n["name"])) for cid, n in graph["nodes"].items()
-            if str(n["kind"]) == "component" and _top_subsystem(graph, cid) == sid]
+            if str(n["kind"]) == "component" and _top_group(graph, cid) == sid]
 
 
 def _component_subgraph(graph: GraphDict, sid: str, indent: str = "  ") -> list[str]:
@@ -299,11 +441,14 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
     unlabelled arrow per (component, neighbour) pair (Q2-style aggregation, no count). A component
     inside the frame points to the neighbour box (outbound) or is pointed at by it (inbound). The
     viewer turns a click on such an arrow into the matching edge card, and a click on a neighbour
-    box into that subsystem's own card."""
+    box into that subsystem's own card. When the subsystem's components touch the domain model
+    (`C→E` edges), the contexts they own/read are also drawn as collapsed boxes — the bridge between
+    the structural and domain groupings (owns = persists/writes, reads = anything else)."""
     members = {cid for cid, _ in _components_of(graph, sid)}
     deps: set[str] = set()
     neighbours: set[str] = set()
     cross: set[tuple[str, str]] = set()  # rendered (src, dst): a component and a neighbour-subsystem box
+    bridges: set[tuple[str, str, str]] = set()  # (member component, context box, 'owns'|'reads')
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
         ks, kd = str(graph["nodes"].get(s, {}).get("kind")), str(graph["nodes"].get(d, {}).get("kind"))
@@ -312,15 +457,19 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
         if d in members and ks == "dep":
             deps.add(s)
         if s in members and kd == "component":          # outbound: member -> component elsewhere
-            td = _top_subsystem(graph, d)
+            td = _top_group(graph, d)
             if td and td != sid:
                 neighbours.add(td)
                 cross.add((s, td))
         if d in members and ks == "component":          # inbound: component elsewhere -> member
-            ts = _top_subsystem(graph, s)
+            ts = _top_group(graph, s)
             if ts and ts != sid:
                 neighbours.add(ts)
                 cross.add((ts, d))
+        if s in members and kd == "entity":             # bridge: a member touches a domain entity
+            cx = _top_group(graph, d)
+            if cx:
+                bridges.add((s, cx, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
     keep = members | deps  # the set whose internal (labelled) edges are drawn
     lines = ["flowchart TB", *_component_subgraph(graph, sid)]
     for nb in sorted(neighbours):  # collapsed neighbour-subsystem boxes
@@ -330,13 +479,21 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
     for did in sorted(deps):  # deps belong to no subsystem — draw them outside the frame
         lines.append(f'  {did}{open_b}{_safe_label(str(graph["nodes"][did]["name"]))}{close_b}:::cy-{did}')
         lines.append(f"  class {did} dep")
+    bridge_ctx = {cx for _, cx, _ in bridges}
+    for cx in sorted(bridge_ctx):  # collapsed context boxes the subsystem's data bridges to
+        lines.append(f'  {cx}["{_safe_label(str(graph["nodes"][cx]["name"]))}"]:::cy-{cx}')
+        lines.append(f"  class {cx} context")
     for src, verb, dst in _diagram_edges(graph, None, keep):  # internal + dep edges (labelled)
         lines.append(f"  {src} -->|{verb}| {dst}")
     for src, dst in sorted(cross):  # neighbourhood arrows (unlabelled; click -> edge card)
         lines.append(f"  {src} --> {dst}")
+    for src, cx, rel in sorted(bridges):  # bridge arrows: member -> context (owns / reads)
+        lines.append(f"  {src} -->|{rel}| {cx}")
     lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
     lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
     lines.append("  classDef subsystem fill:#fef3c7,stroke:#b45309,color:#7c2d12;")
+    if bridge_ctx:
+        lines.append(DOMAIN_CONTEXT_CLASSDEF)
     return "\n".join(lines)
 
 
@@ -355,7 +512,7 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
     lines = ["flowchart LR", *_component_subgraph(graph, a), *_component_subgraph(graph, b)]
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
-        if _top_subsystem(graph, s) == a and _top_subsystem(graph, d) == b:
+        if _top_group(graph, s) == a and _top_group(graph, d) == b:
             lines.append(f"  {s} -->|{e['verb']}| {d}")
     lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
     return "\n".join(lines)
@@ -366,7 +523,7 @@ def edge_card_mermaids(graph: GraphDict) -> dict[str, str]:
     keyed 'A>B' to match the rendered inter-subsystem arrow's endpoints."""
     pairs: set[tuple[str, str]] = set()
     for e in graph["edges"]:
-        sa, sb = _top_subsystem(graph, str(e["src"])), _top_subsystem(graph, str(e["dst"]))
+        sa, sb = _top_group(graph, str(e["src"])), _top_group(graph, str(e["dst"]))
         if sa and sb and sa != sb:
             pairs.add((sa, sb))
     return {f"{a}>{b}": gen_edge_card_mermaid(graph, a, b) for a, b in sorted(pairs)}
@@ -661,6 +818,9 @@ HTML = r"""<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>coyodex viewer</title>
+<!-- Inline data-URI favicon (two nodes + an edge, the viewer's palette): gives the page an icon AND
+     stops the browser's default /favicon.ico request 404ing. Inline so the HTML stays self-contained. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
 <style>
 __STYLE__
 </style>
@@ -746,6 +906,8 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              diff_state: dict[str, str], container_mm: str, by_sub: dict[str, str],
              edge_cards: dict[str, str], container_edges: dict[str, list[dict[str, str]]],
              grouping: bool, domain_mm: str, domain: bool,
+             domain_container_mm: str, domain_ctx: dict[str, str],
+             domain_container_edges: dict[str, list[dict[str, str]]], contexts: bool,
              gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool,
              libs_mm: str, folded: list[dict[str, str]],
              repo_root: str, gh_repo: str | None, gh_commit: str | None) -> str:
@@ -766,6 +928,9 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_EDGE_CARD__", json.dumps(edge_cards))
         .replace("__CONTAINER_EDGES__", json.dumps(container_edges))
         .replace("__MERMAID_DOMAIN__", json.dumps(domain_mm))
+        .replace("__MERMAID_DOMAIN_CONTAINER__", json.dumps(domain_container_mm))
+        .replace("__MERMAID_DOMAIN_CTX__", json.dumps(domain_ctx))
+        .replace("__DOMAIN_CONTAINER_EDGES__", json.dumps(domain_container_edges))
         .replace("__MERMAID_GP__", json.dumps(gp_mm))
         .replace("__MERMAID_GP_STEP__", json.dumps(gp_steps))
         .replace("__GP_ACTORS__", json.dumps(gp_actors_list))
@@ -775,6 +940,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__HAS_DIFF__", "true" if has_diff else "false")
         .replace("__HAS_GROUPING__", "true" if grouping else "false")
         .replace("__HAS_DOMAIN__", "true" if domain else "false")
+        .replace("__HAS_CONTEXTS__", "true" if contexts else "false")
         .replace("__HAS_GP__", "true" if gp else "false")
         .replace("__META__", json.dumps(meta))
         .replace("__DIFF_STATE__", json.dumps(diff_state))
@@ -806,6 +972,10 @@ def main() -> int:
     container_edges = gen_container_edges(graph) if grouping else {}
     domain = has_domain(graph)
     domain_mm = gen_domain_mermaid(graph) if domain else ""
+    contexts = has_contexts(graph)
+    domain_container_mm = gen_domain_container_mermaid(graph) if contexts else ""
+    domain_ctx = domain_context_mermaids(graph) if contexts else {}
+    domain_container_edges = gen_domain_container_edges(graph) if contexts else {}
     gp = has_gp(graph)
     gp_mm = gen_gp_mermaid(graph) if gp else ""
     gp_steps = gp_step_mermaids(graph) if gp else {}
@@ -822,6 +992,7 @@ def main() -> int:
     gh_commit = graph["commit"]
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
+                    domain_container_mm, domain_ctx, domain_container_edges, contexts,
                     gp_mm, gp_steps, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")

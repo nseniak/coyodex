@@ -8,7 +8,10 @@ const MERMAID_CONTAINER = __MERMAID_CONTAINER__;
 const MERMAID_BY_SUB = __MERMAID_BY_SUB__;        // subsystem neighbourhood: sid -> sub-diagram
 const MERMAID_EDGE_CARD = __MERMAID_EDGE_CARD__;  // edge pair: 'A>B' -> two-subsystem sub-diagram
 const CONTAINER_EDGES = __CONTAINER_EDGES__;      // inter-subsystem arrow 'A>B' -> [crossing component edges]
-const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classDiagram
+const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classDiagram (flat, ungrouped)
+const MERMAID_DOMAIN_CONTAINER = __MERMAID_DOMAIN_CONTAINER__;  // bounded-contexts overview (flowchart of CX boxes)
+const MERMAID_DOMAIN_CTX = __MERMAID_DOMAIN_CTX__;             // per-context card: CX-id -> classDiagram
+const DOMAIN_CONTAINER_EDGES = __DOMAIN_CONTAINER_EDGES__;     // inter-context arrow 'A>B' -> [crossing E->E relations]
 const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): black-box sequence diagram
 const MERMAID_GP_STEP = __MERMAID_GP_STEP__;      // GP step (Level 2): GP-id -> components-used sub-diagram
 const GP_ACTORS = __GP_ACTORS__;                  // Golden-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
@@ -17,6 +20,7 @@ const FOLDED_LIBS = __FOLDED_LIBS__;              // [{id,name,type}] folded out
 const LIBS_ID = 'LIBS';                           // synthetic id of that collapsed box (matches gen_viewer.LIBS_ID)
 const HAS_GROUPING = __HAS_GROUPING__;
 const HAS_DOMAIN = __HAS_DOMAIN__;
+const HAS_CONTEXTS = __HAS_CONTEXTS__;  // domain model grouped into contexts -> Domain view leads with the overview
 const HAS_GP = __HAS_GP__;
 const CONTEXT_EDGES = __CONTEXT_EDGES__;
 const HAS_DIFF = __HAS_DIFF__;
@@ -139,8 +143,9 @@ function showNode(id) {
   if (!n) return;
   const chg = n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '';
   const rows = Object.entries(n.fields || {})
-    // a subsystem's first field IS its name (already in the title) — don't repeat it
-    .filter(([k]) => !(n.kind === 'subsystem' && k.toLowerCase() === 'subsystem'))
+    // a subsystem's / context's first field IS its name (already in the title) — don't repeat it
+    .filter(([k]) => !((n.kind === 'subsystem' && k.toLowerCase() === 'subsystem')
+                       || (n.kind === 'context' && k.toLowerCase() === 'context')))
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${mdInline(v)}</dd>`).join('');
   // entity attributes (T5 domain cards): `type name` + any markers (PK/FK/unique/…)
   const attrs = (n.attrs && n.attrs.length)
@@ -242,6 +247,18 @@ function showContainerEdge(a, b) {
     + '<div class="xcount">' + list.length + ' connection' + (list.length === 1 ? '' : 's') + '</div>'
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no connections recorded</p>');
 }
+// Selecting an inter-context arrow (Domain overview): list every entity→entity relation it bundles as
+// `from → to:` with its verb (+ kind) below — the domain analog of showContainerEdge.
+function showDomainContainerEdge(a, b) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const list = DOMAIN_CONTAINER_EDGES[a + '>' + b] || [];
+  const items = list.map((r) =>
+    '<li><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
+    + '<div class="xwhy">' + esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : '') + '</div></li>').join('');
+  panel.innerHTML = '<h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+    + '<div class="xcount">' + list.length + ' relation' + (list.length === 1 ? '' : 's') + '</div>'
+    + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no relations recorded</p>');
+}
 
 // --- Golden Path panels ---------------------------------------------------------
 // The C/D/E ids a step touches that actually exist as graph nodes — the Level-2 subgraph + spotlight set.
@@ -317,8 +334,8 @@ function tipNodeHtml(id) {
   const meaning = meaningOf(n);
   // The box you're hovering already prints its name, and its kind reads from the shape/colour, so a
   // name header + kind tag only restate what's on screen — show just the explanatory text.
-  // (Subsystems suppress the card entirely when there's nothing to explain.)
-  if (n.kind === 'subsystem')
+  // (Subsystems / contexts suppress the card entirely when there's nothing to explain.)
+  if (n.kind === 'subsystem' || n.kind === 'context')
     return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>' : '';
   return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
                  : '<div class="tn">no description recorded</div>';
@@ -357,6 +374,16 @@ function tipContainerEdgeHtml(a, b) {
     ? '<div class="tn">+' + (whys.length - TIP_EDGE_CAP) + ' more…</div>' : '';
   if (shown.length === 1) return '<div class="tm">' + mdInline(shown[0]) + '</div>' + more;
   return '<ul class="tl">' + shown.map((w) => '<li>' + mdInline(w) + '</li>').join('') + '</ul>' + more;
+}
+// Hover an inter-context arrow (Domain overview) -> the crossing entity→entity relations (from → to ·
+// verb). The domain analog of tipContainerEdgeHtml; capped so a busy pair stays legible.
+function tipDomainContainerEdgeHtml(a, b) {
+  const list = DOMAIN_CONTAINER_EDGES[a + '>' + b] || [];
+  if (!list.length) return '<div class="tn">no relations recorded</div>';
+  const shown = list.slice(0, TIP_EDGE_CAP);
+  const more = list.length > TIP_EDGE_CAP ? '<div class="tn">+' + (list.length - TIP_EDGE_CAP) + ' more…</div>' : '';
+  return '<ul class="tl">' + shown.map((r) =>
+    '<li>' + esc(r.srcName) + ' → ' + esc(r.dstName) + ' · ' + esc(r.verb) + '</li>').join('') + '</ul>' + more;
 }
 function tipGPHtml(gpId) {  // hover a GP step (message) -> just its story (the explanation), like a subsystem tip
   const s = GP_BY_ID[gpId];
@@ -420,6 +447,8 @@ function actionTipNode(id) {
   if (srcNode(id)) return actionOpenSrcHtml(n);
   if (String(n.kind) === 'subsystem')
     return '<div class="tt">Open subsystem</div><div class="tm">' + esc(n.name) + '</div>';
+  if (String(n.kind) === 'context')
+    return '<div class="tt">Open context</div><div class="tm">' + esc(n.name) + '</div>';
   if (id === LIBS_ID)
     return '<div class="tt">Open Libraries</div><div class="tm">' + FOLDED_LIBS.length + ' bundled</div>';
   return null;
@@ -484,7 +513,7 @@ function idOf(el) {
   if (cls) return cls.slice(3);
   const dataId = el.getAttribute('data-id');
   if (dataId && GRAPH.nodes[dataId]) return dataId;
-  const m = (el.id || '').match(/(?:^|-)((?:UC|GP|C|D|E|S)\d+)(?:-|$)/);
+  const m = (el.id || '').match(/(?:^|-)((?:UC|GP|CX|C|D|E|S)\d+)(?:-|$)/);  // CX before C: a context id is not a component
   return m ? m[1] : null;
 }
 
@@ -653,7 +682,8 @@ let history = [];
 let hi = -1;  // index of the current state
 
 function stateKey(s) {
-  return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '') + (s.gp ? ':' + s.gp : '');
+  return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
+    + (s.gp ? ':' + s.gp : '') + (s.cx ? ':' + s.cx : '');
 }
 function captureViewport() {  // stash the current pan/zoom on the entry we're about to leave
   if (mainPz && hi >= 0 && history[hi]) history[hi].vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
@@ -693,10 +723,11 @@ function bindComponent() {
   bindNodes(mainScene, (id, el) => selectNode(mainScene, el, id));
   bindEdges(mainScene, resolveComponentEdge);
 }
-function bindContainer() {
-  // Subsystem boxes: a plain click SELECTS the box + its linked subsystems (like selecting a
-  // component); a ⌘-click drills in. Register every box in the scene so focusNode can dim the
-  // non-linked ones, and tag it `drill` so the cursor shows the drill-in affordance while ⌘ is held.
+// A "container" altitude (Subsystems or the Domain bounded-contexts overview): group boxes that
+// SELECT on a plain click (box + its linked neighbours) and DRILL on a ⌘-click, plus derived
+// inter-group arrows. `drillFor(id)` is the drill-in state; `edgeBinder` wires each arrow. Shared so
+// the component-subsystem and entity-context overviews behave identically (the bridge is symmetry).
+function bindGroupContainer(drillFor, edgeBinder) {
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id]) return;
@@ -709,28 +740,38 @@ function bindContainer() {
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;
       e.stopPropagation();
-      if (isDrillClick(e)) { go({ kind: 'subsystem', sid: id }); return; }  // ⌘-click drills in
+      if (isDrillClick(e)) { go(drillFor(id)); return; }  // ⌘-click drills in
       selectNode(mainScene, el, id);
     });
   });
-  // Inter-subsystem arrows: plain click selects (crossings show in the sidebar), ⌘-click drills the
-  // pair. bindContainerEdge registers each in the scene so a selected box keeps its linked neighbours.
   eachEdge(mainScene.root, (p, label, m) => {
     const a = m[1], b = m[2];
     if (!(GRAPH.nodes[a] && GRAPH.nodes[b])) return;
-    bindContainerEdge(mainScene, p, label, a, b);
+    edgeBinder(mainScene, p, label, a, b);
   });
+}
+function bindContainer() { bindGroupContainer((id) => ({ kind: 'subsystem', sid: id }), bindContainerEdge); }
+// The Domain bounded-contexts overview: a context box ⌘-drills to its per-context card; an
+// inter-context arrow selects to the crossing entity→entity relations (no further drill).
+function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domctx', cx: id }), bindDomainContainerEdge); }
+function bindDomainContainerEdge(scene, p, label, a, b) {
+  bindSelectEdge(scene, p, label, { src: a, dst: b }, 'dctxedge:' + a + '>' + b,
+    () => showDomainContainerEdge(a, b),
+    { tipFn: () => tipDomainContainerEdgeHtml(a, b) });
 }
 function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click on a neighbour box / cross arrow drills
   bindNodes(mainScene, (id, el, ev) => {
-    // A neighbour subsystem box: plain click shows its info, ⌘-click walks into it. A component: select.
+    // A neighbour subsystem box: plain click shows its info, ⌘-click walks into it. A bridge context
+    // box: ⌘-click crosses into that context's card (the structural↔domain bridge). A component: select.
     if (GRAPH.nodes[id].kind === 'subsystem' && isDrillClick(ev)) { go({ kind: 'subsystem', sid: id }); return; }
+    if (GRAPH.nodes[id].kind === 'context' && isDrillClick(ev)) { go({ kind: 'domctx', cx: id }); return; }
     selectNode(mainScene, el, id);
   });
-  // Neighbour boxes aren't drilled by a plain click any more, so tag them `drill` for the ⌘ cursor.
+  // Neighbour subsystem + bridge context boxes drill on ⌘-click, so tag them `drill` for the cursor.
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
-    if (id && GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'subsystem') el.classList.add('drill');
+    const k = id && GRAPH.nodes[id] && GRAPH.nodes[id].kind;
+    if (k === 'subsystem' || k === 'context') el.classList.add('drill');
   });
   eachEdge(diagram, (p, label, m) => {
     const a = m[1], b = m[2];
@@ -940,7 +981,10 @@ function mermaidFor(s) {
   if (s.kind === 'container') return MERMAID_CONTAINER;
   if (s.kind === 'subsystem') return MERMAID_BY_SUB[s.sid];
   if (s.kind === 'edge') return MERMAID_EDGE_CARD[s.a + '>' + s.b];
-  if (s.kind === 'domain') return MERMAID_DOMAIN;
+  // Domain: the bounded-contexts overview when grouped (drill a context for its classes), else the
+  // flat whole-model classDiagram.
+  if (s.kind === 'domain') return HAS_CONTEXTS ? MERMAID_DOMAIN_CONTAINER : MERMAID_DOMAIN;
+  if (s.kind === 'domctx') return MERMAID_DOMAIN_CTX[s.cx];
   if (s.kind === 'gp') return MERMAID_GP;
   if (s.kind === 'gpstep') return MERMAID_GP_STEP[s.gp];
   if (s.kind === 'libs') return MERMAID_LIBS;
@@ -948,6 +992,7 @@ function mermaidFor(s) {
 }
 function applyDefaultPanel(s) {
   if (s.kind === 'subsystem') showNode(s.sid);
+  else if (s.kind === 'domctx') showNode(s.cx);
   else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
   else if (s.kind === 'gp') showGPOverview();
   else if (s.kind === 'gpstep') showGPStep(s.gp);
@@ -959,7 +1004,8 @@ function bindFor(s) {
   else if (s.kind === 'container') bindContainer();
   else if (s.kind === 'subsystem') bindSubsystem(s.sid);
   else if (s.kind === 'edge') bindEdgePair();
-  else if (s.kind === 'domain') bindDomain();
+  else if (s.kind === 'domain') (HAS_CONTEXTS ? bindDomainContainer : bindDomain)();
+  else if (s.kind === 'domctx') bindDomain();  // a per-context card is a classDiagram — same class/relation bridge
   else if (s.kind === 'gp') bindGP();
   else if (s.kind === 'gpstep') bindComponent();  // step subgraph = a Components view scoped to the step
   else if (s.kind === 'libs') bindLibs();
@@ -967,6 +1013,7 @@ function bindFor(s) {
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'context' || kind === 'component' || kind === 'domain') return kind;
+  if (kind === 'domctx') return 'domain';  // a per-context card lives under the Domain button
   if (kind === 'gp' || kind === 'gpstep') return 'gp';
   if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
   return 'container';
@@ -977,6 +1024,7 @@ function stateTitle(s) {
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Domain';
+  if (s.kind === 'domctx') return (GRAPH.nodes[s.cx] ? GRAPH.nodes[s.cx].name : s.cx);
   if (s.kind === 'gp') return 'Golden Path';
   if (s.kind === 'gpstep') return gpTitle(s.gp);
   if (s.kind === 'libs') return 'Libraries';
@@ -986,6 +1034,7 @@ function stateTitle(s) {
 }
 function ancestors(s) {  // structural nesting path (top → s), independent of the click history
   if (s.kind === 'domain') return [{ kind: 'domain' }];   // a standalone behavioural lens, not nested in Context
+  if (s.kind === 'domctx') return [{ kind: 'domain' }, { kind: 'domctx', cx: s.cx }];  // context card nested under Domain
   if (s.kind === 'gp') return [{ kind: 'gp' }];           // the Golden Path is its own behavioural lens
   if (s.kind === 'gpstep') return [{ kind: 'gp' }, { kind: 'gpstep', gp: s.gp }];  // step nested under it
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold drills out of Context
@@ -1006,8 +1055,12 @@ function renderChrome(s) {
   // ⌘-click differs by altitude: it drills where a level exists below (Subsystems / neighbourhood /
   // Golden Path), and opens source at the leaf (Components / Domain entities / a GP step's view).
   // Show the matching hint, else hide it.
-  const drillKind = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'gp';
-  const srcKind = s.kind === 'component' || s.kind === 'domain' || s.kind === 'gpstep';
+  // The Domain overview drills into a context (when grouped); the flat Domain view and a per-context
+  // card open an entity's source at the leaf.
+  const drillKind = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'gp'
+    || (s.kind === 'domain' && HAS_CONTEXTS);
+  const srcKind = s.kind === 'component' || s.kind === 'gpstep' || s.kind === 'domctx'
+    || (s.kind === 'domain' && !HAS_CONTEXTS);
   drillhint.hidden = !(drillKind || srcKind);
   drillhint.innerHTML = drillKind ? '&#8984;-click to drill down' : '&#8984;-click a box to open its source';
   navback.disabled = hi <= 0;

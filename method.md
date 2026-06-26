@@ -114,6 +114,11 @@ faces: outside = journey, inside = T6 flow + edges.
   Each entity is a **real named type** whose `SOURCE` anchors its definition (don't synthesize
   unnamed concepts). Entity↔entity relations are authored on the source card only, never in the
   backbone edge list. Full spec: [domain cards](method/domain-cards.md).
+- **Contexts (CX)** *(optional; recommended above ~15 entities)*: `ID | Context | Purpose | Parent |
+  Anchor | Conf.` — the domain analog of Subsystems: T5 entities grouped into bounded contexts,
+  optionally nested. Membership is carried on each card (a `CONTEXT:` line holding one `CX`); the
+  member list, the inter-context arrows, and the subsystem→context bridge are *derived*. The Domain
+  diagram then leads with a bounded-contexts overview and drills into one context's classDiagram.
 - **T6 Use-case flows**: `Flow | steps | Uses (element + role) | Key files`.
 
 ### Operational dimensions — standard core four
@@ -177,7 +182,9 @@ traced, but the "user sees" register sometimes needs the running app, not just c
 first: T3 → harvest T4, T2, T5 (a full sweep — also the completeness checklist that
 catches side doors) → synthesize T1 → **cluster components into Subsystems** (large maps: by
 directory first, then dependency/behavioral cohesion; minimize inter-group edges; mark
-directory-derived = verified, cohesion-derived = inferred) → trace T6 + edge list. Nodes (T4/T5/T2)
+directory-derived = verified, cohesion-derived = inferred) → **cluster entities into Contexts**
+(large domain models: the same recipe on the entity graph — by `SOURCE` directory first, then
+`RELATIONS` cohesion) → trace T6 + edge list. Nodes (T4/T5/T2)
 before the edges/flows that connect them. **Present** top-down (T1–T3 first). The "Depends on"
 columns and relationship rows harden last (they need tracing) — keep them inferred until
 traced. Drilling can correct an inferred upper row; upper tables get more accurate as the

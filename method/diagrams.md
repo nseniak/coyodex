@@ -11,7 +11,7 @@ graph; no separate persisted model is needed.
 | **Context** | the system, actors, external deps | T0 Goal · Roles · T2 |
 | **Container** | runtime pieces (services, datastores, sandboxes) | Deployment + components |
 | **Component** | T1 components + their verbed arrows | T1 + the edge list |
-| **Code** | entry points → `file:line`; the **domain model as a `classDiagram`** (entities with attributes + typed, cardinal relations) | T4 anchors · T5 [domain cards](domain-cards.md) |
+| **Code** | entry points → `file:line`; the **domain model as a `classDiagram`** (entities with attributes + typed, cardinal relations) — led by a **bounded-contexts overview** when the model is grouped into contexts | T4 anchors · T5 [domain cards](domain-cards.md) · Contexts |
 | **Behavioral overlay** | the Golden Path as a black-box sequence of steps; drill a step into the subgraph of components it touches | GP steps + traceability |
 
 Drill down = zoom one level in; step back = zoom out — the same "name a row to drill"
@@ -43,9 +43,11 @@ show/hide toggle. The element-keyed deltas are the data.
 - **Tier B — a small self-contained HTML viewer**, available in [`tools/viewer/`](../tools/viewer/).
   Parses the markdown (via the shared `tools/schema_v1.py` grammar) and renders the C4 altitudes —
   Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges) →
-  Components → code — plus the **Golden Path** as its own behavioural overlay (a black-box sequence
-  diagram of the steps; clicking a step drills into the induced subgraph of the components it
-  touches, with a link back to locate them in the full map). Navigated as a back/forward history
+  Components → code — plus the **Domain** model (when grouped into contexts, a bounded-contexts
+  overview that ⌘-drills into one context's `classDiagram`; a subsystem card also draws the contexts
+  its components own/read — the derived `S→CX` bridge) and the **Golden Path** as its own behavioural
+  overlay (a black-box sequence diagram of the steps; clicking a step drills into the induced subgraph
+  of the components it touches, with a link back to locate them in the full map). Navigated as a back/forward history
   (header arrows, ⌘/⌥+←/→, breadcrumb) with pan/zoom, click→panel, and a baseline⇄diff overlay.
   Mermaid + svg-pan-zoom load from a pinned CDN with Subresource-Integrity.
 
