@@ -1092,6 +1092,52 @@ def test_validator_no_empty_warning_for_parent_context() -> None:
     assert "Contexts with no entities" not in out, out             # CX1 is a parent, not empty
 
 
+def make_both_groupings_map() -> str:
+    """A map with BOTH groupings + the cross-altitude edges that triggered the leak: S1{C1}, S2{C2};
+    CX1{E1,E2}, CX2{E3}; a C1->C2 component edge (S→S crossing), C1 persists E1 + C2 persists E3
+    (C→E bridge edges), and E1 refersTo E3 (an E→E relation crossing CX1→CX2). The Subsystems overview
+    must show ONLY S→S and never a CX box; the Domain overview ONLY CX→CX and never an S box."""
+    return (
+        "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n| **S1** | Edge | x |  | a | V |\n| **S2** | Core | x |  | a | V |\n\n"
+        "## Contexts (CX)\n| ID | Context | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n| **CX1** | Ordering | x |  | a | V |\n| **CX2** | Catalog | x |  | a | V |\n\n"
+        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|---|\n| **C1** | Front | S1 | x | f | C2 |\n| **C2** | Core | S2 | x | f |  |\n\n"
+        "## T5\n\n"
+        "**E1 — Order** *(s)*\nCONTEXT: CX1\nMEANING: m\nFIELDS: id:int · product:E3\n"
+        "RELATIONS: contains 1→* E2 Line · refersTo *→1 E3 Product\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — Line**\nCONTEXT: CX1\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n\n"
+        "**E3 — Product**\nCONTEXT: CX2\nMEANING: m\nFIELDS: y:int\nSOURCE: [f](f#L3)\n\n"
+        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
+        "| C1 | calls | C2 | reach core | f |\n"
+        "| C1 | persists | E1 | store order | f |\n"
+        "| C2 | persists | E3 | store product | f |\n"
+    )
+
+
+def test_container_overview_excludes_contexts() -> None:
+    # The bug class: with C→E / E→E edges present, the Subsystems overview must NOT pick up entity
+    # endpoints (whose top group is a CONTEXT) and invent S→CX / CX→CX arrows that draw bare CX boxes.
+    g = parse_map(make_both_groupings_map())
+    mm = gen_viewer.gen_container_mermaid(g)
+    assert "CX" not in mm                                  # no context box / arrow leaks in
+    assert "S1 -->|1| S2" in mm                            # the real S→S crossing (C1->C2), count 1 (not inflated by C→E)
+    # the Domain overview is the mirror: contexts only, no subsystem leak
+    dmm = gen_viewer.gen_domain_container_mermaid(g)
+    assert "CX1 -->|1| CX2" in dmm and "\n  S" not in dmm  # CX→CX present, no S box/arrow
+
+
+def test_container_edges_exclude_contexts() -> None:
+    ce = gen_viewer.gen_container_edges(parse_map(make_both_groupings_map()))
+    assert set(ce) == {"S1>S2"}                            # only the real subsystem pair, no S>CX keys
+
+
+def test_edge_cards_exclude_contexts() -> None:
+    cards = gen_viewer.edge_card_mermaids(parse_map(make_both_groupings_map()))
+    assert set(cards) == {"S1>S2"}                         # no spurious S>CX edge card
+
+
 # --- Golden Path (GP) -----------------------------------------------------------
 def test_parser_gp_captures_uc_and_touches() -> None:
     g = parse_map(make_gp_map())

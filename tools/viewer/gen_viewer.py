@@ -155,7 +155,9 @@ def _parent_of(graph: GraphDict, nid: str) -> str | None:
 def _top_group(graph: GraphDict, nid: str) -> str | None:
     """Walk parent pointers up to the top-level GROUP above `nid` (or None). Generic over the grouping
     kind — a component resolves to its top subsystem (`S`), an entity to its top context (`CX`) —
-    because the two forests share the one `parent` pointer over disjoint id spaces."""
+    because the two forests share the one `parent` pointer over disjoint id spaces. Callers that mean a
+    specific altitude must use _top_subsystem / _top_context, NOT this directly, so the two altitudes
+    never bleed (an entity endpoint must not read as an inter-subsystem crossing, and vice versa)."""
     cur = _parent_of(graph, nid)
     if cur is None:
         return None
@@ -166,6 +168,22 @@ def _top_group(graph: GraphDict, nid: str) -> str | None:
             return cur
         seen.add(cur)
         cur = p
+
+
+def _top_subsystem(graph: GraphDict, nid: str) -> str | None:
+    """`nid`'s top group, but ONLY when it is a subsystem (`S`) — else None. The component/subsystem
+    altitude uses this so an entity endpoint (top group = a CONTEXT) never reads as an inter-subsystem
+    crossing. Before contexts existed an entity had no parent, so C→E / E→E edges were silently
+    excluded from the Subsystems overview; now they must be excluded explicitly by kind."""
+    g = _top_group(graph, nid)
+    return g if g is not None and str(graph["nodes"].get(g, {}).get("kind")) == "subsystem" else None
+
+
+def _top_context(graph: GraphDict, nid: str) -> str | None:
+    """`nid`'s top group, but ONLY when it is a context (`CX`) — else None. The domain-altitude mirror
+    of _top_subsystem, so a component/dep endpoint never reads as an inter-context crossing."""
+    g = _top_group(graph, nid)
+    return g if g is not None and str(graph["nodes"].get(g, {}).get("kind")) == "context" else None
 
 
 def has_grouping(graph: GraphDict) -> bool:
@@ -253,7 +271,7 @@ def _domain_relation_edges(graph: GraphDict) -> list[dict[str, Any]]:
 def _entities_of(graph: GraphDict, cxid: str) -> list[tuple[str, str]]:
     """(id, name) of every entity whose top-level context is `cxid` (mirrors _components_of)."""
     return [(eid, str(n["name"])) for eid, n in graph["nodes"].items()
-            if str(n["kind"]) == "entity" and _top_group(graph, eid) == cxid]
+            if str(n["kind"]) == "entity" and _top_context(graph, eid) == cxid]
 
 
 def gen_domain_mermaid(graph: GraphDict) -> str:
@@ -298,7 +316,7 @@ def gen_domain_container_mermaid(graph: GraphDict) -> str:
             lines.append(f"  class {nid} context")
     counts: dict[tuple[str, str], int] = {}
     for e in _domain_relation_edges(graph):
-        ca, cb = _top_group(graph, str(e["src"])), _top_group(graph, str(e["dst"]))
+        ca, cb = _top_context(graph, str(e["src"])), _top_context(graph, str(e["dst"]))
         if ca and cb and ca != cb:
             counts[(ca, cb)] = counts.get((ca, cb), 0) + 1
     for (ca, cb), c in sorted(counts.items()):
@@ -314,7 +332,7 @@ def gen_domain_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str
     out: dict[str, list[dict[str, str]]] = {}
     for e in _domain_relation_edges(graph):
         s, d = str(e["src"]), str(e["dst"])
-        ca, cb = _top_group(graph, s), _top_group(graph, d)
+        ca, cb = _top_context(graph, s), _top_context(graph, d)
         if ca and cb and ca != cb:
             sn, dn = graph["nodes"].get(s), graph["nodes"].get(d)
             out.setdefault(f"{ca}>{cb}", []).append({
@@ -384,7 +402,7 @@ def gen_container_mermaid(graph: GraphDict) -> str:
             lines.append(f"  class {nid} subsystem")
     counts: dict[tuple[str, str], int] = {}
     for e in graph["edges"]:
-        sa, sb = _top_group(graph, str(e["src"])), _top_group(graph, str(e["dst"]))
+        sa, sb = _top_subsystem(graph, str(e["src"])), _top_subsystem(graph, str(e["dst"]))
         if sa and sb and sa != sb:
             counts[(sa, sb)] = counts.get((sa, sb), 0) + 1
     for (sa, sb), c in sorted(counts.items()):
@@ -401,7 +419,7 @@ def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
     out: dict[str, list[dict[str, str]]] = {}
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
-        sa, sb = _top_group(graph, s), _top_group(graph, d)
+        sa, sb = _top_subsystem(graph, s), _top_subsystem(graph, d)
         if sa and sb and sa != sb:
             sn, dn = graph["nodes"].get(s), graph["nodes"].get(d)
             out.setdefault(f"{sa}>{sb}", []).append({
@@ -418,7 +436,7 @@ def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
 def _components_of(graph: GraphDict, sid: str) -> list[tuple[str, str]]:
     """(id, name) of every component whose top-level subsystem is `sid`."""
     return [(cid, str(n["name"])) for cid, n in graph["nodes"].items()
-            if str(n["kind"]) == "component" and _top_group(graph, cid) == sid]
+            if str(n["kind"]) == "component" and _top_subsystem(graph, cid) == sid]
 
 
 def _component_subgraph(graph: GraphDict, sid: str, indent: str = "  ") -> list[str]:
@@ -457,17 +475,17 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
         if d in members and ks == "dep":
             deps.add(s)
         if s in members and kd == "component":          # outbound: member -> component elsewhere
-            td = _top_group(graph, d)
+            td = _top_subsystem(graph, d)
             if td and td != sid:
                 neighbours.add(td)
                 cross.add((s, td))
         if d in members and ks == "component":          # inbound: component elsewhere -> member
-            ts = _top_group(graph, s)
+            ts = _top_subsystem(graph, s)
             if ts and ts != sid:
                 neighbours.add(ts)
                 cross.add((ts, d))
         if s in members and kd == "entity":             # bridge: a member touches a domain entity
-            cx = _top_group(graph, d)
+            cx = _top_context(graph, d)
             if cx:
                 bridges.add((s, cx, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
     keep = members | deps  # the set whose internal (labelled) edges are drawn
@@ -512,7 +530,7 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
     lines = ["flowchart LR", *_component_subgraph(graph, a), *_component_subgraph(graph, b)]
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
-        if _top_group(graph, s) == a and _top_group(graph, d) == b:
+        if _top_subsystem(graph, s) == a and _top_subsystem(graph, d) == b:
             lines.append(f"  {s} -->|{e['verb']}| {d}")
     lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
     return "\n".join(lines)
@@ -523,7 +541,7 @@ def edge_card_mermaids(graph: GraphDict) -> dict[str, str]:
     keyed 'A>B' to match the rendered inter-subsystem arrow's endpoints."""
     pairs: set[tuple[str, str]] = set()
     for e in graph["edges"]:
-        sa, sb = _top_group(graph, str(e["src"])), _top_group(graph, str(e["dst"]))
+        sa, sb = _top_subsystem(graph, str(e["src"])), _top_subsystem(graph, str(e["dst"]))
         if sa and sb and sa != sb:
             pairs.add((sa, sb))
     return {f"{a}>{b}": gen_edge_card_mermaid(graph, a, b) for a, b in sorted(pairs)}
