@@ -8,6 +8,12 @@
 
 </div>
 
+> [!WARNING]
+> **Alpha (v0.1.0) — experimental, early, and incomplete.** Expect breaking
+> changes (including to the on-disk map format) and rough edges. It's good for
+> trying out and sending feedback, not for relying on yet. Bug reports and
+> ideas are very welcome — please [open an issue](../../issues).
+
 When your agent generates a lot of code for you, you sometimes end up with code
 you have completely lost track of. It runs fine until the day you actually
 need to understand it. And then you find there's nothing under your feet.
@@ -102,4 +108,25 @@ stay in step.
 
 ## Status
 
-This project is experimental.
+**Alpha — v0.1.0. Experimental and incomplete.** Expect breaking changes,
+including to the on-disk map format — there are no backward-compatibility
+guarantees yet, so a newer version may not read a map produced by an older one.
+Good for evaluating and giving feedback; not yet something to depend on.
+
+**What works today**
+
+- Build a baseline map of a repo and render it as an interactive, drillable C4 viewer.
+- Analyze a code diff against the map, overlay what changed and what it ripples to,
+  and accept the result back into the baseline.
+- Open a component's or domain entity's source straight from the viewer — in your
+  editor (VS Code, Cursor, IntelliJ, …) or on GitHub.
+
+**Known gaps / rough edges**
+
+- The map format and the method itself are still moving; treat maps as disposable.
+- Tested mainly on small and medium repos; behavior on large codebases is unexplored.
+- Map quality depends on the coding agent and model — expect to review and correct it.
+- The viewer is a browser page. On github.com the committed HTML shows as source, not
+  rendered — view it via GitHub Pages or a raw-HTML proxy (e.g. raw.githack.com).
+
+Feedback and bug reports are welcome — please [open an issue](../../issues).
