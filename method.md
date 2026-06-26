@@ -166,6 +166,11 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   edge). Author these alongside the component edges — they power the component↔class cross-links and
   the subsystem→subdomain bridge. (Only E↔E relations stay off the backbone — those live on the
   domain cards.)
+- **C→E is additive — it must NOT thin the component graph.** Trace `C↔C` and `C↔D` **first**; add
+  `C→E` after, never instead. Completeness: **every external dep (T2) needs ≥1 incoming component
+  edge** — a dep with no edge is an *un-traced* `C→D`, not an unused dependency — and a component
+  graph with far fewer edges than components is under-traced. The component edge list is the primary
+  trace output; the validator nudges on orphan deps (a thin-trace symptom).
 - **`Why` = a short phrase: why `From` needs `To`** (e.g. "verify service tokens", "cache
   refreshed OAuth tokens"). The edge list is the **canonical home for relationship rationale** —
   the verb gives the category, `Why` gives the purpose the verb can't carry (especially the
@@ -211,7 +216,8 @@ synthesis → parallel trace.**
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
   Each trace agent also records the **`C→E` edges** for the components in its slice — the entities
   they persist/write/read by **direct** use — so structural entity-usage is captured at component
-  granularity, not only behaviorally via GP `Touches:`.
+  granularity, not only behaviorally via GP `Touches:`. This is *additional*: the `C↔C`/`C↔D` edges
+  remain the primary output and must stay complete (every dep wired, the component graph not sparse).
 - Guardrails: all agents share the same schema + edge-verb vocabulary; Phase 1 produces
   the canonical node inventory FIRST (nodes before edges, agents reference nodes and
   never invent them); every agent keeps inferred-vs-verified labels + returns `file:line`;
@@ -239,10 +245,7 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > [domain-cards.md](method/domain-cards.md)). Each card is a **real named type** (class / dataclass /
 > enum) whose `SOURCE` anchors its **definition** — do NOT synthesize an entity for an unnamed
 > concept; type embedded fields by their entity (`auth:E7`) so relations carry the field name.
-> When a file you read **persists, writes, or reads** a domain entity (a repository / adapter / store,
-> or a service that uses the entity type **directly**), also return the **`C→E` edge** for it
-> (`From | Verb | To` = `Cn | persists/writes/reads | En`, with `file:line`) — direct use only, one
-> `persists`/`writes` owner per entity plus its direct `reads` consumers.
+> (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)
 
 **Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
 root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit

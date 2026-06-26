@@ -496,11 +496,10 @@ def check_entity_sources(text: str, map_path: Path) -> list[str]:
     return problems
 
 
-def collect_owner_edges(text: str) -> set[str]:
-    """Entity ids that have an incoming `C → persists/writes → E` edge — an OWNING component. Scans the
-    backbone edge tables. Used only for the completeness nudge below: once a map authors *some* C→E
-    ownership, flag the aggregate-root entities the trace left unowned. No-op (``set()``) otherwise."""
-    owned: set[str] = set()
+def collect_edges(text: str) -> list[tuple[str, str, str]]:
+    """All `(src_id, verb_lower, dst_id)` from the backbone edge tables (header `From | Verb | To`).
+    Shared by the completeness nudges (C→E ownership, orphan deps). Empty when there is no edge list."""
+    out: list[tuple[str, str, str]] = []
     lines = text.splitlines()
     i, n = 0, len(lines)
     while i < n:
@@ -524,10 +523,9 @@ def collect_owner_edges(text: str) -> set[str]:
             src = ID_TOKEN.search(cells[ci["from"]]) if ci["from"] < len(cells) else None
             dst = ID_TOKEN.search(cells[ci["to"]]) if ci["to"] < len(cells) else None
             verb = cells[ci["verb"]].strip().lower() if ci["verb"] < len(cells) else ""
-            if (src and dst and src.group(0).startswith("C")
-                    and dst.group(0).startswith("E") and verb in ("persists", "writes")):
-                owned.add(dst.group(0))
-    return owned
+            if src and dst:
+                out.append((src.group(0), verb, dst.group(0)))
+    return out
 
 
 def main() -> int:
@@ -639,11 +637,12 @@ def main() -> int:
     empty_sd = sorted(i for i in defined if i.startswith("SD") and i not in assigned_sd and i not in parent_sd)
     if empty_sd:
         warnings.append(f"Subdomains with no entities: {', '.join(empty_sd)}")
+    edges = collect_edges(text)
     # Non-blocking nudge: once SOME entity has an owning component (a `persists`/`writes` C→E edge), the
     # map is authoring structural ownership — so list aggregate-root entities that still have none, the
     # owners the trace likely missed. Embedded value objects (the target of a contains/has relation,
     # persisted via their container) are exempt. Silent when no C→E ownership is authored at all.
-    owned = collect_owner_edges(text)
+    owned = {d for s, v, d in edges if s.startswith("C") and d.startswith("E") and v in ("persists", "writes")}
     if owned and entities_defined:
         embedded = {r.target for c in iter_domain_cards(text.splitlines())
                     for r in c.relations if r.ok and r.kind in ("composition", "aggregation")}
@@ -651,6 +650,15 @@ def main() -> int:
         if unowned:
             shown = ", ".join(unowned[:12]) + (f", +{len(unowned) - 12} more" if len(unowned) > 12 else "")
             warnings.append(f"Entities with no owning component (no persists/writes C→E edge): {shown}")
+    # Non-blocking nudge: a defined external dep (T2) with NO incoming edge is an *un-traced* `C→D`, not
+    # an unused dependency — the symptom of a thin edge trace (the C→E-dilution regression). Only fires
+    # when the map has an edge list at all, so a map that hasn't traced edges yet isn't nagged.
+    if edges:
+        targets = {d for _, _, d in edges}
+        orphan_deps = sorted(i for i in defined if i.startswith("D") and i not in targets)
+        if orphan_deps:
+            shown = ", ".join(orphan_deps[:12]) + (f", +{len(orphan_deps) - 12} more" if len(orphan_deps) > 12 else "")
+            warnings.append(f"External deps with no incoming edge (un-traced — which component uses each?): {shown}")
 
     # Summary of the element inventory, by prefix.
     by_prefix: dict[str, list[str]] = {}

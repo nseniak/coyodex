@@ -1173,6 +1173,32 @@ def test_validator_embedded_entity_exempt_from_owner_warning() -> None:
     assert code == 0 and "no owning component" not in out, out
 
 
+def make_orphan_dep_map(d1_wired: bool = False) -> str:
+    """Components C1/C2 with a C1->C2 edge; dep D1. D1 gets an incoming edge only when d1_wired."""
+    dep_edge = "| C1 | uses | D1 | cache | f |\n" if d1_wired else ""
+    return (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | App | x | f | C2 |\n| **C2** | Core | x | f |  |\n\n"
+        "## T2\n| ID | Name | Type | Used for | Where configured | Conf. |\n|---|---|---|---|---|---|\n"
+        "| **D1** | Cache | store | speed | env | V |\n\n"
+        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
+        "| C1 | calls | C2 | reach core | f |\n" + dep_edge
+    )
+
+
+def test_validator_warns_orphan_dep() -> None:
+    # D1 defined but nothing connects to it -> an un-traced C→D, the thin-trace symptom -> nudge.
+    code, out = run_validator(make_orphan_dep_map())
+    assert code == 0, out
+    assert "no incoming edge" in out and "D1" in out, out
+
+
+def test_validator_no_orphan_warning_when_dep_wired() -> None:
+    # D1 has an incoming `C1 uses D1` edge -> not orphaned -> silent.
+    code, out = run_validator(make_orphan_dep_map(d1_wired=True))
+    assert code == 0 and "no incoming edge" not in out, out
+
+
 # --- Golden Path (GP) -----------------------------------------------------------
 def test_parser_gp_captures_uc_and_touches() -> None:
     g = parse_map(make_gp_map())
