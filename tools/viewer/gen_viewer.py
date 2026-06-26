@@ -25,6 +25,7 @@ from __future__ import annotations
 import copy
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any, cast
@@ -32,6 +33,37 @@ from typing import Any, cast
 from build_graph import DiffDict, GraphDict, build_diff
 
 _ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined into the HTML at build time
+
+
+def _git(args: list[str], cwd: Path) -> str | None:
+    """Run a read-only git command in `cwd`; return stripped stdout, or None on any failure
+    (not a repo, git missing, no remote). Build-time only — never blocks rendering."""
+    try:
+        out = subprocess.run(["git", "-C", str(cwd), *args],
+                             capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return out.stdout.strip() if out.returncode == 0 and out.stdout.strip() else None
+
+
+def repo_root_default(anchor: Path) -> str:
+    """Absolute path of the mapped repo, seeded into the viewer as the default source root for
+    'open in editor' links. The viewer overrides this with a per-machine value in localStorage, so a
+    wrong path on a teammate's checkout is fixable in Settings without a rebuild. Falls back to the
+    output file's directory when `anchor` is not inside a git work tree."""
+    top = _git(["rev-parse", "--show-toplevel"], anchor)
+    return top or str(anchor.resolve())
+
+
+def gh_repo_url(anchor: Path) -> str | None:
+    """GitHub repository URL ('https://github.com/<owner>/<repo>') from the `origin` remote, for the
+    'open on GitHub' target. None when there is no `origin` remote or it is not github.com. The viewer
+    combines this with the map's commit into blob links and lets the user override the URL in Settings."""
+    url = _git(["remote", "get-url", "origin"], anchor)
+    if not url:
+        return None
+    m = re.search(r"github\.com[:/]+([^/]+)/(.+?)(?:\.git)?/?$", url)
+    return f"https://github.com/{m.group(1)}/{m.group(2)}" if m else None
 
 SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]')}
 DIAGRAM_KINDS = ("component", "dep")
@@ -582,6 +614,7 @@ __STYLE__
     <button id="zoomlevel" title="Fit to screen">100%</button>
     <button id="zoomin" title="Zoom in">+</button>
   </span>
+  <button id="setbtn" title="Source link settings (editor + repo root)">&#9881;</button>
   <button id="toggle" style="display:none"></button>
 </header>
 <div class="hint"><span id="crumb"></span></div>
@@ -593,6 +626,32 @@ __STYLE__
   <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
 </main>
 <div id="tip"></div>
+<div id="modal" class="modal" hidden>
+  <div class="modal-card">
+    <h2 id="modalTitle">Open source links</h2>
+    <p id="modalIntro" class="modal-help"></p>
+    <label class="modal-row">Open in
+      <select id="setEditor"></select>
+    </label>
+    <label class="modal-row" id="setCustomRow" hidden>Custom URI
+      <input id="setCustom" type="text" placeholder="subl://open?url=file://{abspath}&amp;line={line}">
+    </label>
+    <label class="modal-row" id="setGhRow" hidden>GitHub repository URL
+      <input id="setGhRepo" type="text" placeholder="https://github.com/owner/repo">
+    </label>
+    <label class="modal-row" id="setRootRow">Repository root <span class="modal-sub">(absolute path on this machine)</span>
+      <input id="setRoot" type="text" placeholder="/Users/you/code/your-repo">
+    </label>
+    <p class="modal-help" id="setHelp">Placeholders: <code>{abspath}</code> <code>{path}</code> <code>{line}</code> <code>{col}</code>.
+       The browser cannot pick a folder for you — type or paste the absolute path. Stored only in this browser.</p>
+    <p class="modal-help" id="setGhHelp" hidden>Files open on GitHub at this repository, pinned to the map's commit. Stored only in this browser.</p>
+    <p id="modalErr" class="modal-err" hidden></p>
+    <div class="modal-btns">
+      <button id="setCancel" type="button">Cancel</button>
+      <button id="setSave" type="button" class="primary">Save</button>
+    </div>
+  </div>
+</div>
 <script type="module">
 __SCRIPT__
 </script>
@@ -606,12 +665,16 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              diff_state: dict[str, str], container_mm: str, by_sub: dict[str, str],
              edge_cards: dict[str, str], container_edges: dict[str, list[dict[str, str]]],
              grouping: bool, domain_mm: str, domain: bool,
-             gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool) -> str:
+             gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool,
+             repo_root: str, gh_repo: str | None, gh_commit: str | None) -> str:
     css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
     js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
     return (
         HTML.replace("__STYLE__", css)
         .replace("__SCRIPT__", js)
+        .replace("__REPO_ROOT__", json.dumps(repo_root))
+        .replace("__GH_REPO__", json.dumps(gh_repo))
+        .replace("__GH_COMMIT__", json.dumps(gh_commit))
         .replace("__GRAPH_JSON__", json.dumps(graph))
         .replace("__MERMAID_BASE__", json.dumps(base))
         .replace("__MERMAID_DIFF__", json.dumps(diff_mm))
@@ -665,9 +728,15 @@ def main() -> int:
     gp_actors_list = gp_actors(graph) if gp else []
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
+    # Source-link config, derived at build time from the mapped repo (the output dir anchors it).
+    # Seeded into the viewer; the user can override the root / GitHub URL in Settings (localStorage).
+    anchor = out.resolve().parent
+    repo_root = repo_root_default(anchor)
+    gh_repo = gh_repo_url(anchor)
+    gh_commit = graph["commit"]
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
-                    gp_mm, gp_steps, gp_actors_list, gp)
+                    gp_mm, gp_steps, gp_actors_list, gp, repo_root, gh_repo, gh_commit)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")
     return 0

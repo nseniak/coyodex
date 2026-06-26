@@ -41,7 +41,10 @@ main { display: flex; height: calc(100vh - 38px); }
 #panel dd .muted { color: #9ca3af; font-style: italic; }
 #panel h3 { font-size: 14px; margin: 0 0 2px; }
 #panel hr { border: 0; border-top: 1px solid #e5e7eb; margin: 14px 0; }
-#panel .src { margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px; color: #2563eb; }
+/* source ref in the panel: a button styled as a link — click opens it in the editor / on GitHub */
+#panel .src { display: inline-block; margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px;
+              color: #2563eb; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
+#panel .src:hover { text-decoration: underline; }
 /* "Locate in full map" link on a Golden Path step panel */
 #panel .locate { display: inline-block; margin-top: 16px; font-size: 13px; color: #2563eb; text-decoration: none; }
 #panel .locate:hover { text-decoration: underline; }
@@ -59,6 +62,11 @@ main { display: flex; height: calc(100vh - 38px); }
 /* While ⌘ is held (body.cmd), drillable subsystem boxes + inter-subsystem arrows show a drill-in
    cursor — the affordance for ⌘-click drilling. !important beats the inline cursor:pointer. */
 body.cmd .drill, body.cmd .drill * { cursor: zoom-in !important; }
+/* Leaf boxes with a source ref (components / domain entities) show a </> cursor instead — ⌘-click
+   opens the source rather than drilling. SVG data-URI cursor, pointer as the fallback. */
+body.cmd .opensrc, body.cmd .opensrc * {
+  cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='22'%20viewBox='0%200%2028%2022'%3E%3Crect%20x='1'%20y='1'%20width='26'%20height='20'%20rx='5'%20fill='%234f46e5'%20stroke='%23fff'%20stroke-width='1.5'/%3E%3Cg%20fill='none'%20stroke='%23fff'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'%3E%3Cpolyline%20points='10,7%206,11%2010,15'/%3E%3Cpolyline%20points='18,7%2022,11%2018,15'/%3E%3Cline%20x1='15.5'%20y1='6'%20x2='12.5'%20y2='16'/%3E%3C/g%3E%3C/svg%3E") 4 4, pointer !important;
+}
 
 .hint { padding: 6px 14px; font-size: 12px; color: #6b7280; background: #f3f4f6; min-height: 28px; }
 /* breadcrumb: the structural nesting path down to the current view */
@@ -77,6 +85,10 @@ body.cmd .drill, body.cmd .drill * { cursor: zoom-in !important; }
 #tip .tk { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .65; margin-bottom: 4px; }
 #tip .tm { opacity: .95; }
 #tip .tn { opacity: .55; font-style: italic; }
+/* ⌘-action tooltip: wider than the prose preview so a file path fits, with the path on its own
+   monospace line that wraps (never truncates). */
+#tip.action { max-width: min(560px, 92vw); }
+#tip .tpath { font-family: ui-monospace, monospace; font-size: 11px; opacity: .92; margin-top: 3px; word-break: break-all; }
 /* arrow tooltip (Subsystems view): one bullet per aggregated component→component edge's explanation */
 #tip .tl { margin: 0; padding-left: 16px; opacity: .95; }
 #tip .tl li { margin-top: 4px; }
@@ -89,3 +101,26 @@ body.cmd .drill, body.cmd .drill * { cursor: zoom-in !important; }
 #legend.on { display: block; }
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
+
+/* Source-link settings modal — also the first-use confirm. The [hidden] attr toggles it from JS. */
+#modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+         background: rgba(17,24,39,.45); }
+#modal[hidden] { display: none; }
+.modal-card { width: 460px; max-width: 92vw; background: #fff; border-radius: 12px; padding: 20px 22px;
+              box-shadow: 0 12px 44px rgba(0,0,0,.32); }
+.modal-card h2 { font-size: 16px; margin: 0 0 4px; }
+.modal-row { display: block; margin: 12px 0 0; font-size: 12px; color: #374151; }
+.modal-row[hidden] { display: none; }
+.modal-sub { color: #9ca3af; font-weight: 400; }
+.modal-row select, .modal-row input { display: block; width: 100%; margin-top: 4px; font: inherit; font-size: 13px;
+              padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 6px; }
+.modal-help { font-size: 11px; color: #6b7280; margin: 12px 0 0; }
+.modal-help code { font-family: ui-monospace, monospace; background: #f3f4f6; padding: 0 3px; border-radius: 3px; }
+.modal-err { font-size: 12px; color: #cf222e; margin: 10px 0 0; }
+.modal-err[hidden] { display: none; }
+.modal-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+.modal-btns button { font: inherit; font-size: 13px; padding: 6px 14px; border: 1px solid #d1d5db;
+              border-radius: 6px; background: #fff; color: #374151; cursor: pointer; }
+.modal-btns button:hover { background: #f3f4f6; }
+.modal-btns button.primary { background: #6366f1; border-color: #6366f1; color: #fff; }
+.modal-btns button.primary:hover { background: #818cf8; }

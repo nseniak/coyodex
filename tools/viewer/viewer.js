@@ -146,10 +146,17 @@ function showNode(id) {
         return esc(((ty ? ty + ' ' : '') + (a.name || '') + (a.markers ? '  ·  ' + a.markers : '')).trim());
       }).join('<br>') + '</dd>'
     : '';
-  const src = n.file ? `<div class="src">${n.file}${n.line ? ':' + n.line : ''}</div>` : '';
+  // A leaf with source (component / entity) gets a clickable link that opens it; other kinds with a
+  // `file` (e.g. a subsystem's entry-point dir) keep the plain read-only text as before.
+  const ref = n.file ? esc(cleanPath(n.file, n.line)) + (n.line ? ':' + n.line : '') : '';
+  const src = !n.file ? ''
+    : srcNode(id) ? `<button type="button" class="src srclink" title="Open source (editor or GitHub)">${ref}</button>`
+    : `<div class="src">${ref}</div>`;
   panel.innerHTML = `<h2>${id} · ${n.name}</h2>`
     + `<div class="badges"><span class="badge kind">${n.kind}</span>${chg}</div>`
     + `<dl>${rows}${attrs}</dl>${src}`;
+  const sl = panel.querySelector('.srclink');
+  if (sl) sl.addEventListener('click', () => openSource(n));
 }
 
 function showEdge(e) {
@@ -339,11 +346,57 @@ function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor i
 }
 function showTip(html, x, y) { if (!html) return; tip.innerHTML = html; tip.classList.add('on'); moveTip(x, y); }
 function hideTip() { tip.classList.remove('on'); }
-// Wire an element to preview `htmlFn()` while hovered — added alongside the existing glow handlers.
-function attachTip(el, htmlFn) {
-  el.addEventListener('mouseenter', (ev) => showTip(htmlFn(), ev.clientX, ev.clientY));
-  el.addEventListener('mousemove', (ev) => moveTip(ev.clientX, ev.clientY));
-  el.addEventListener('mouseleave', hideTip);
+// The element currently under the cursor and how to describe it: `htmlFn` is the meaning preview,
+// `actionFn` (optional) the "what a ⌘-click does here" text. Held so pressing/releasing ⌘ can swap the
+// tooltip live, without waiting for a new mouse event (see setCmd).
+let hover = null;
+function renderHoverTip() {
+  if (!hover) return;
+  let html = '', action = false;
+  if (document.body.classList.contains('cmd') && hover.actionFn) { const a = hover.actionFn(); if (a) { html = a; action = true; } }
+  if (!html) html = hover.htmlFn() || '';
+  if (html) { tip.innerHTML = html; tip.classList.toggle('action', action); tip.classList.add('on'); moveTip(hover.x, hover.y); }
+  else hideTip();
+}
+// Wire an element to preview `htmlFn()` while hovered (and, while ⌘ is held, `actionFn()` instead).
+function attachTip(el, htmlFn, actionFn) {
+  el.addEventListener('mouseenter', (ev) => { hover = { htmlFn, actionFn: actionFn || null, x: ev.clientX, y: ev.clientY }; renderHoverTip(); });
+  el.addEventListener('mousemove', (ev) => { if (hover) { hover.x = ev.clientX; hover.y = ev.clientY; } moveTip(ev.clientX, ev.clientY); });
+  el.addEventListener('mouseleave', () => { hover = null; hideTip(); });
+}
+// While ⌘ is held, the hovered element's tooltip describes the ⌘-click action (drill in / open source)
+// instead of its meaning. Two lines: a bold action line ("Open in <dest>" / "Open subsystem"), then the
+// specific target (file path / name) on its own line so a long path gets full width (see #tip.action).
+// Return null for elements with no ⌘ action (the meaning preview then stays).
+function openDestName() {
+  const id = openTargetId();
+  if (id === 'github') return 'GitHub';
+  if (id === 'native') return null;            // nothing chosen yet — the click opens Settings first
+  if (id === 'custom') return 'your editor';
+  const t = OPEN_TARGETS.find((x) => x.id === id);
+  return t ? t.label : 'your editor';
+}
+function actionOpenSrcHtml(n) {
+  const path = cleanPath(n.file, n.line) + (n.line ? ':' + n.line : '');
+  const dest = openDestName();
+  return '<div class="tt">' + (dest ? 'Open in ' + esc(dest) : 'Open source') + '</div>'
+       + '<div class="tpath">' + esc(path) + '</div>';
+}
+function actionTipNode(id) {
+  const n = GRAPH.nodes[id];
+  if (!n) return null;
+  if (srcNode(id)) return actionOpenSrcHtml(n);
+  if (String(n.kind) === 'subsystem')
+    return '<div class="tt">Open subsystem</div><div class="tm">' + esc(n.name) + '</div>';
+  return null;
+}
+function actionTipEdge(a, b) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  return '<div class="tt">Open</div><div class="tm">' + esc(nm(a)) + ' &rarr; ' + esc(nm(b)) + '</div>';
+}
+function actionTipGP(gpId) {
+  const s = GP_BY_ID[gpId];
+  return '<div class="tt">Open step</div>' + (s && s.title ? '<div class="tm">' + esc(s.title) + '</div>' : '');
 }
 
 // --- diff badges + legend -------------------------------------------------------
@@ -421,13 +474,15 @@ function bindNodes(scene, onActivate) {
     // selecting a component dims the internal neighbourhood — not the external boxes. Still clickable.
     if (GRAPH.nodes[id].kind !== 'subsystem') scene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
+    markOpenSrc(el, id);  // leaf with a source ref -> ⌘-held cursor shows the open-source affordance
     // Hover affordance — skip while this node is the active selection, so HILITE wins.
     el.addEventListener('mouseenter', () => { if (scene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
     el.addEventListener('mouseleave', () => { if (scene.selectedKey !== 'node:' + id) el.style.filter = ''; });
-    attachTip(el, () => tipNodeHtml(id));  // hover -> meaning preview (no selection needed)
+    attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // hover -> meaning; ⌘ -> the action
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;  // tail of a drag-pan, not a real click
       e.stopPropagation();
+      if (openSrcClick(id, e)) return;  // ⌘-click a leaf with a source ref opens it instead of selecting
       onActivate(id, el, e);
     });
     if (mode === 'diff' && DIFF_STATE[id]) addBadge(el, DIFF_STATE[id]);
@@ -436,7 +491,7 @@ function bindNodes(scene, onActivate) {
 
 // Give an edge's visible path a wide transparent hit-path + make its label clickable.
 // `tipHtml` (optional) wires a hover meaning-preview on the same hit-area + label.
-function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml, drillable) {
+function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml, drillable, actionFn) {
   const hit = p.cloneNode(false);
   hit.removeAttribute('id'); hit.removeAttribute('marker-end'); hit.removeAttribute('class');
   hit.style.setProperty('stroke', 'transparent', 'important');
@@ -457,7 +512,7 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml, drill
     label.addEventListener('mouseenter', hoverOn);
     label.addEventListener('mouseleave', hoverOff);
   }
-  if (tipHtml) { attachTip(hit, tipHtml); if (label) attachTip(label, tipHtml); }
+  if (tipHtml) { attachTip(hit, tipHtml, actionFn); if (label) attachTip(label, tipHtml, actionFn); }
 }
 
 // Iterate a diagram's edges, pairing each path with its label by index. Mermaid emits one label
@@ -503,7 +558,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
     if (scene.nodeEls[e.src] || scene.nodeEls[e.dst]) focusEdge(scene, e); else clearFocus(scene);
   };
   scene.edgeEls.push({ e, path: p, label });
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.tipFn || (() => tipEdgeHtml(e)), !!opts.onDrill);
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.tipFn || (() => tipEdgeHtml(e)), !!opts.onDrill, opts.actionFn);
 }
 
 // An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
@@ -512,7 +567,8 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
 function bindContainerEdge(scene, p, label, a, b) {
   bindSelectEdge(scene, p, label, { src: a, dst: b }, 'sedge:' + a + '>' + b,
     () => showContainerEdge(a, b),
-    { onDrill: () => go({ kind: 'edge', a, b }), tipFn: () => tipContainerEdgeHtml(a, b) });
+    { onDrill: () => go({ kind: 'edge', a, b }), tipFn: () => tipContainerEdgeHtml(a, b),
+      actionFn: () => actionTipEdge(a, b) });
 }
 
 // `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn } or null to skip.
@@ -586,7 +642,7 @@ function bindContainer() {
     el.classList.add('drill');
     el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
     el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
-    attachTip(el, () => tipNodeHtml(id));
+    attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;
       e.stopPropagation();
@@ -670,10 +726,11 @@ function bindDomain() {
     if (!id || !GRAPH.nodes[id] || mainScene.nodeEls[id]) return;
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
+    markOpenSrc(el, id);  // a domain entity with a source ref is also ⌘-click-to-open
     el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
     el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
-    attachTip(el, () => tipNodeHtml(id));  // hover -> meaning preview (no selection needed)
-    el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); selectNode(mainScene, el, id); });
+    attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // hover -> meaning; ⌘ -> the action
+    el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); if (openSrcClick(id, ev)) return; selectNode(mainScene, el, id); });
   });
   eachClassEdge(mainScene.root, (p, label, src, dst) => {
     const arr = COMP_LOOKUP[src + '>' + dst];
@@ -791,7 +848,7 @@ function bindGP() {
       el.addEventListener('click', click);
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
-      attachTip(el, () => tipGPHtml(gpId));
+      attachTip(el, () => tipGPHtml(gpId), () => actionTipGP(gpId));
     }
   });
 
@@ -877,9 +934,13 @@ function renderChrome(s) {
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
-  // The drill hint only applies where ⌘-click drills: the Subsystems map + a subsystem neighbourhood,
-  // and the Golden Path (⌘-click a step opens its components view).
-  drillhint.hidden = !(s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'gp');
+  // ⌘-click differs by altitude: it drills where a level exists below (Subsystems / neighbourhood /
+  // Golden Path), and opens source at the leaf (Components / Domain entities / a GP step's view).
+  // Show the matching hint, else hide it.
+  const drillKind = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'gp';
+  const srcKind = s.kind === 'component' || s.kind === 'domain' || s.kind === 'gpstep';
+  drillhint.hidden = !(drillKind || srcKind);
+  drillhint.innerHTML = drillKind ? '&#8984;-click to drill down' : '&#8984;-click a box to open its source';
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it
@@ -944,10 +1005,199 @@ document.addEventListener('keydown', (e) => {
 });
 // While ⌘ (or ⌃ off Mac) is held, flag the body so drillable subsystems/arrows show the drill-in
 // cursor (see .drill in the CSS). Clear on key-up and on blur so a released key never sticks.
-const setCmd = (on) => document.body.classList.toggle('cmd', on);
+const setCmd = (on) => { document.body.classList.toggle('cmd', on); renderHoverTip(); };
 document.addEventListener('keydown', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(true); });
 document.addEventListener('keyup', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(false); });
 window.addEventListener('blur', () => setCmd(false));
+
+// --- open source in an external editor / on GitHub -------------------------------
+// A node's source ref (file [+ line]) opens in the user's editor via its URL scheme (vscode://,
+// idea://, …) or, as a portable fallback, on GitHub (blob URL pinned to the map's commit). Ported
+// from mondrian: a target table + placeholder fill + a scheme allowlist + a hidden-anchor click —
+// no server, the OS scheme handler does the opening. The absolute path is built from a repo root the
+// user sets once (seeded at build time in REPO_ROOT_DEFAULT, overridable in Settings/localStorage).
+const REPO_ROOT_DEFAULT = __REPO_ROOT__;
+const GH_REPO_DEFAULT = __GH_REPO__;   // GitHub repo URL (overridable in Settings) or null
+const GH_COMMIT = __GH_COMMIT__;       // the map's commit SHA — blob links are pinned to it
+const GH_BAKED = !!(GH_REPO_DEFAULT && GH_COMMIT);  // GitHub target available out of the box
+const OPEN_TARGETS = [
+  { id: 'native', label: '— choose —', uri: '' },
+  { id: 'github', label: 'GitHub (blob, pinned to commit)', uri: '' },  // only listed/usable when GH_BASE is set
+  { id: 'vscode', label: 'VS Code', uri: 'vscode://file{abspath}:{line}:{col}' },
+  { id: 'cursor', label: 'Cursor', uri: 'cursor://file{abspath}:{line}:{col}' },
+  { id: 'vscodium', label: 'VSCodium', uri: 'vscodium://file{abspath}:{line}:{col}' },
+  { id: 'windsurf', label: 'Windsurf', uri: 'windsurf://file{abspath}:{line}:{col}' },
+  { id: 'intellij', label: 'IntelliJ IDEA', uri: 'idea://open?file={abspath}&line={line}' },
+  { id: 'pycharm', label: 'PyCharm', uri: 'pycharm://open?file={abspath}&line={line}' },
+  { id: 'webstorm', label: 'WebStorm', uri: 'webstorm://open?file={abspath}&line={line}' },
+  { id: 'goland', label: 'GoLand', uri: 'goland://open?file={abspath}&line={line}' },
+  { id: 'zed', label: 'Zed', uri: 'zed://file{abspath}:{line}:{col}' },
+  { id: 'custom', label: 'Custom…', uri: '' },
+];
+// The only schemes allowed to land in an <a href> — blocks javascript:/data:/file:/http(s): so a
+// hand-typed custom template can't run script or hijack navigation.
+const ALLOWED_OPEN_SCHEMES = new Set([
+  'vscode', 'vscode-insiders', 'cursor', 'vscodium', 'windsurf', 'zed', 'idea', 'pycharm', 'webstorm',
+  'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
+  'txmt', 'mate', 'mvim', 'emacs', 'atom',
+]);
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo' };
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* private mode: in-session only */ } };
+const srcRoot = () => (lsGet(LS.root) || REPO_ROOT_DEFAULT || '').replace(/\/+$/, '');
+// Default target: GitHub when the map has a remote+commit (zero setup, works for everyone), else the
+// '— choose —' placeholder. A saved choice always wins.
+const openTargetId = () => lsGet(LS.editor) || (GH_BAKED ? 'github' : 'native');
+const needsRoot = (id) => id !== 'native' && id !== 'github';  // only editor/custom targets need a local root
+const customUri = () => lsGet(LS.custom) || '';
+// `file` keeps its source anchor as parsed from the map link (e.g. 'src/app.py#L42' or 'src/app.py:42');
+// the line is carried separately in `line`, so strip the anchor + any leading slash before joining the
+// path onto the repo root or the GitHub base. The `#L<n>` form is unambiguous; the `:<n>` form is
+// stripped only when it equals the parsed `line`, so a real path ending in ':<digits>' survives.
+const cleanPath = (file, line) => {
+  let p = String(file).replace(/#L\d+$/, '');
+  if (line) p = p.replace(new RegExp(':' + line + '$'), '');
+  return p.replace(/^\/+/, '');
+};
+const uriScheme = (u) => { const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(u); return m ? m[1].toLowerCase() : ''; };
+const fillUri = (t, v) => t.replace(/\{abspath\}/g, v.abspath).replace(/\{path\}/g, v.path)
+  .replace(/\{line\}/g, v.line).replace(/\{col\}/g, v.col);
+
+// Editor URI for a ref, or null when no editor is chosen, no root is set, or the scheme isn't allowed.
+function editorUri(file, line) {
+  const id = openTargetId();
+  if (id === 'native') return null;
+  const t = OPEN_TARGETS.find((x) => x.id === id);
+  const tmpl = id === 'custom' ? customUri() : (t ? t.uri : '');
+  const root = srcRoot();
+  if (!tmpl || !root) return null;
+  const rel = cleanPath(file, line);
+  const uri = fillUri(tmpl, { abspath: root + '/' + rel, path: rel, line: line || 1, col: 1 });
+  return ALLOWED_OPEN_SCHEMES.has(uriScheme(uri)) ? uri : null;
+}
+// GitHub repo URL — a saved override wins over the build-time default; trailing slashes trimmed.
+const ghRepo = () => (lsGet(LS.repo) || GH_REPO_DEFAULT || '').replace(/\/+$/, '');
+// Blob URL for a ref, pinned to the map's commit, or null when no repo URL / no commit is known.
+const ghUrl = (file, line) => {
+  const repo = ghRepo();
+  if (!repo || !GH_COMMIT) return null;
+  return repo + '/blob/' + GH_COMMIT + '/' + cleanPath(file, line) + (line ? '#L' + line : '');
+};
+function fireUri(uri) {
+  const a = document.createElement('a');
+  a.href = uri; a.style.display = 'none';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+// Open a node's source. On first use (an editor is chosen but the seeded root isn't confirmed yet) we
+// route through Settings so the user can confirm/fix the root once — the browser can't check whether a
+// path exists, so we ask rather than guess. Side effect only: the editor / GitHub hand-off.
+let pendingSrc = null;
+function openSource(n) {
+  if (!n || !n.file) return;
+  // First time ever: pop Settings so the user picks how source opens (editor or GitHub) and confirms
+  // the root / URL. After they Save once (LS.ok), later clicks open straight away.
+  if (lsGet(LS.ok) !== '1') { pendingSrc = n; openSettings(true); return; }
+  doOpenSource(n);
+}
+function doOpenSource(n) {
+  // An editor target builds a scheme URI; the GitHub target (or any fallback) opens the blob URL.
+  if (openTargetId() !== 'github') {
+    const uri = editorUri(n.file, n.line);
+    if (uri) { fireUri(uri); return; }
+  }
+  const gh = ghUrl(n.file, n.line);
+  if (gh) { window.open(gh, '_blank', 'noopener'); return; }
+  pendingSrc = n; openSettings(false);   // nothing usable configured yet -> open Settings
+}
+// ⌘-click a leaf that carries a source ref opens it instead of selecting; `markOpenSrc` tags such
+// boxes so the ⌘-held cursor shows the open-source affordance. Shared by the component + domain
+// binders so the behaviour lands in one place (see bindNodes / bindDomain).
+// Only these leaf kinds open their source on ⌘-click — never a subsystem (it drills) or a dep (its
+// `file` is an external manifest, not local source). A subsystem box reached via bindNodes (the
+// neighbourhood view) carries a `file` too, so this guard keeps its ⌘-click as a drill.
+const SRC_KINDS = new Set(['component', 'entity']);
+const srcNode = (id) => { const n = GRAPH.nodes[id]; return (n && n.file && SRC_KINDS.has(String(n.kind))) ? n : null; };
+function markOpenSrc(el, id) { if (srcNode(id)) el.classList.add('opensrc'); }
+function openSrcClick(id, ev) { const n = srcNode(id); if (n && isDrillClick(ev)) { openSource(n); return true; } return false; }
+
+// --- settings dialog (editor target + repo root) ---------------------------------
+// A small modal that doubles as the first-use confirm. Everything persists to localStorage — no
+// server (mondrian's /settings endpoint is dropped). Saving on first use continues the pending open.
+const modal = document.getElementById('modal');
+const setbtn = document.getElementById('setbtn');
+const setEditor = document.getElementById('setEditor');
+const setCustomRow = document.getElementById('setCustomRow');
+const setCustom = document.getElementById('setCustom');
+const setRoot = document.getElementById('setRoot');
+const setRootRow = document.getElementById('setRootRow');
+const setGhRepo = document.getElementById('setGhRepo');
+const setGhRow = document.getElementById('setGhRow');
+const setHelp = document.getElementById('setHelp');
+const setGhHelp = document.getElementById('setGhHelp');
+const setCancel = document.getElementById('setCancel');
+const setSave = document.getElementById('setSave');
+const modalErr = document.getElementById('modalErr');
+const modalIntro = document.getElementById('modalIntro');
+const modalTitle = document.getElementById('modalTitle');
+OPEN_TARGETS.forEach((t) => {
+  if (t.id === 'github' && !GH_BAKED) return;  // GitHub target only when the map has a remote + commit
+  const o = document.createElement('option');
+  o.value = t.id; o.textContent = t.label; setEditor.appendChild(o);
+});
+// Show only the rows + help that fit the selected target: GitHub gets its repo-URL field and note;
+// editors/custom get the repo-root field, the placeholders blurb, and (for custom) the custom-URI row.
+const syncRows = () => {
+  const id = setEditor.value;
+  const gh = id === 'github';
+  setGhRow.hidden = !gh;
+  setGhHelp.hidden = !gh;
+  setCustomRow.hidden = id !== 'custom';
+  setRootRow.hidden = !needsRoot(id);
+  setHelp.hidden = !needsRoot(id);  // the {abspath}/{path}… blurb is editor-only
+};
+function openSettings(firstUse) {
+  setEditor.value = openTargetId();
+  setCustom.value = customUri();
+  setRoot.value = srcRoot();
+  setGhRepo.value = ghRepo();
+  syncRows();
+  modalErr.hidden = true;
+  const ref = (firstUse && pendingSrc) ? cleanPath(pendingSrc.file, pendingSrc.line) + (pendingSrc.line ? ':' + pendingSrc.line : '') : '';
+  modalTitle.textContent = firstUse ? 'How should source links open?' : 'Open source links';
+  modalIntro.hidden = !firstUse;
+  modalIntro.textContent = firstUse
+    ? 'First time — choose how to open ' + ref + ' (your editor, or GitHub), then Save. Change it anytime with the ⚙ button.' : '';
+  modal.hidden = false;
+}
+function closeSettings() { modal.hidden = true; pendingSrc = null; }
+function saveSettings() {
+  const id = setEditor.value;
+  const custom = setCustom.value.trim();
+  const ghRepoVal = setGhRepo.value.trim();
+  if (id === 'custom') {
+    if (!custom) { modalErr.textContent = 'Enter a custom URI template.'; modalErr.hidden = false; return; }
+    if (!ALLOWED_OPEN_SCHEMES.has(uriScheme(custom))) {
+      modalErr.textContent = 'Scheme not allowed — use an editor scheme (vscode://, subl://, …).';
+      modalErr.hidden = false; return;
+    }
+  }
+  if (id === 'github' && ghRepoVal && !/^https?:\/\//i.test(ghRepoVal)) {
+    modalErr.textContent = 'Enter a full GitHub URL (https://github.com/owner/repo).';
+    modalErr.hidden = false; return;
+  }
+  lsSet(LS.editor, id); lsSet(LS.custom, custom); lsSet(LS.root, setRoot.value.trim());
+  lsSet(LS.repo, ghRepoVal); lsSet(LS.ok, '1');
+  const n = pendingSrc;
+  closeSettings();
+  if (n && id !== 'native') doOpenSource(n);   // first-use: continue the open the user asked for
+}
+setbtn.addEventListener('click', () => openSettings(false));
+setEditor.addEventListener('change', syncRows);
+setCancel.addEventListener('click', closeSettings);
+setSave.addEventListener('click', saveSettings);
+modal.addEventListener('click', (e) => { if (e.target === modal) closeSettings(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeSettings(); });
+
 buildLegend();
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
