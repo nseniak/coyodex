@@ -167,7 +167,7 @@ function showNode(id) {
   const src = !n.file ? ''
     : localRef(n.file) ? `<button type="button" class="src srclink" title="Open in editor or on GitHub">${ref}</button>`
     : `<div class="src">${ref}</div>`;
-  panel.innerHTML = `<h2>${id} · ${n.name}</h2>`
+  panel.innerHTML = `<h2>${esc(n.name)}</h2>`
     + `<div class="badges"><span class="badge kind">${n.kind}</span>${chg}</div>`
     + `<dl>${rows}${attrs}</dl>${src}`;
   const sl = panel.querySelector('.srclink');
@@ -193,8 +193,6 @@ function showEdge(e) {
     + (e.why ? '<dt>Why</dt><dd>' + mdInline(e.why) + '</dd>' : '')
     + card
     + implRow
-    + '<dt>From</dt><dd>' + e.src + ' · ' + esc(nm(e.src)) + '</dd>'
-    + '<dt>To</dt><dd>' + e.dst + ' · ' + esc(nm(e.dst)) + '</dd>'
     + '</dl>'
     + (e.where ? '<div class="src">' + esc(e.where) + '</div>' : '');
 }
@@ -234,7 +232,7 @@ function subsystemBlock(id) {
   const n = GRAPH.nodes[id];
   if (!n) return '';
   const purpose = n.fields && (n.fields.Purpose || n.fields.purpose);
-  return '<h3>' + esc(id) + ' · ' + esc(n.name) + '</h3>'
+  return '<h3>' + esc(n.name) + '</h3>'
     + (purpose ? '<dl><dt>Purpose</dt><dd>' + mdInline(purpose) + '</dd></dl>' : '');
 }
 function showTwoSubsystems(a, b) {
@@ -292,8 +290,9 @@ function showGPStep(gpId) {
   const s = GP_BY_ID[gpId];
   if (!s) { panel.innerHTML = EMPTY_PANEL; return; }
   const actor = (GP_ACTOR_OF_STEP[gpId] || {}).name || '';
-  panel.innerHTML = '<h2>' + esc(s.id) + ' · ' + esc(s.title) + '</h2>'
-    + '<div class="badges">' + (s.uc ? '<span class="badge kind">' + esc(s.uc) + '</span>' : '')
+  const ucName = s.uc ? (GRAPH.nodes[s.uc] ? GRAPH.nodes[s.uc].name : s.uc) : '';  // use-case name, not its id
+  panel.innerHTML = '<h2>' + esc(s.title || s.id) + '</h2>'
+    + '<div class="badges">' + (ucName ? '<span class="badge kind">' + esc(ucName) + '</span>' : '')
       + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
     + '<dl>'
     + (s.story ? '<dt>Story</dt><dd>' + mdInline(s.story) + '</dd>' : '')
@@ -307,7 +306,7 @@ function showGPStep(gpId) {
 function showGPActor(a) {
   const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
   const drives = (a.steps || []).map((st) =>
-    '<dd>' + esc(st.id) + (st.title ? ' — ' + esc(st.title) : '') + '</dd>').join('');
+    '<dd>' + esc(st.title || st.id) + '</dd>').join('');
   panel.innerHTML = '<h2>' + esc(a.name) + '</h2>'
     + '<div class="badges">' + kindBadge + '</div>'
     + '<dl>'
@@ -1174,7 +1173,7 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
   return 'container';
 }
-function gpTitle(gp) { const s = GP_BY_ID[gp]; return s ? s.id + (s.title ? ' — ' + s.title : '') : gp; }
+function gpTitle(gp) { const s = GP_BY_ID[gp]; return s ? (s.title || s.id) : gp; }  // breadcrumb crumb: title, not the GPn id
 function stateTitle(s) {
   if (s.kind === 'context') return 'Context';
   if (s.kind === 'container') return 'Subsystems';
