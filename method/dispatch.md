@@ -4,6 +4,12 @@ The user invoked coyodex on a repo. Decide the mode, then read the listed doc(s)
 follow them — don't restate them or work from memory. All tools live under this clone (`tools/...`).
 The clone's `internal/` folder is design rationale, not the method — ignore it.
 
+## Step 0 — did the user name a mode?
+
+If the invocation explicitly names a mode — **`build`**, **`analyze`**, or **`accept`** (the verbs
+the README teaches, e.g. `/coyodex analyze`) — do that mode directly: Build → `method.md`, Analyze /
+Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall through to Step 1.)
+
 ## Step 1 — is there already a baseline?
 
 Look for `.coyodex/project-map.md` in the analyzed repo.

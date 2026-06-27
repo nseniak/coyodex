@@ -8,12 +8,6 @@
 
 </div>
 
-> [!WARNING]
-> **Alpha (v0.1.0) — experimental, early, and incomplete.** Expect breaking
-> changes (including to the on-disk map format) and rough edges. It's good for
-> trying out and sending feedback, not for relying on yet. Bug reports and
-> ideas are very welcome — please [open an issue](../../issues).
-
 When your agent generates a lot of code for you, you sometimes end up with code
 you have completely lost track of. It runs fine until the day you actually
 need to understand it. And then you find there's nothing under your feet.
@@ -42,10 +36,10 @@ make install
 This installs the skill into `~/.claude/skills/coyodex` with this repo's path baked in, so `/coyodex`
 reads the method straight from here. Re-run only if you move the repo; `make uninstall` removes it.
 
-**2. Build the baseline.** In your project:
+**2. Build the baseline.** In your project, with no map yet, `/coyodex` builds it:
 
 ```
-/coyodex map this repo
+/coyodex
 ```
 
 Writes `.coyodex/project-map.md` (the map) and `.coyodex/project-map.html` (an interactive, drillable
@@ -56,7 +50,7 @@ Writes `.coyodex/project-map.md` (the map) and `.coyodex/project-map.html` (an i
 **4. Analyze the change.**
 
 ```
-/coyodex what's the change impact?
+/coyodex analyze
 ```
 
 Writes a report to `.coyodex/analysis-changes/<date>.md` — what your change adds, touches, and ripples
@@ -66,7 +60,7 @@ isn't touched yet.
 **5. Accept the change.**
 
 ```
-/coyodex the report looks right, accept it
+/coyodex accept
 ```
 
 Patches the map, re-renders the viewer, bumps the commit pin, and commits the map together with the
@@ -81,7 +75,7 @@ The skill only points at this repo and follows the method docs, which decide Bui
 ## The workflow
 
 ```
-/coyodex build ──▶ .coyodex/project-map.md   (committed, commit-pinned)
+/coyodex ────────▶ .coyodex/project-map.md   (committed, commit-pinned)
                    .coyodex/project-map.html (rendered interactive viewer)
    │
    ▼
