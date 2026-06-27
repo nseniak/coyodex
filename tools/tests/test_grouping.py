@@ -381,9 +381,10 @@ def test_subsystem_card_keeps_internal_wiring_and_deps() -> None:
     assert "S1 --> C2" in s2                            # inbound cross arrow: neighbour box -> member
 
 
-def test_edge_card_has_both_subsystems_and_only_cross_edges() -> None:
-    # Q2=A: an edge card frames BOTH subsystems with ALL their components, but draws ONLY the
-    # A->B component edges — no internal edges, no deps, no other-subsystem edges.
+def test_edge_card_has_both_subsystems_with_cross_and_inner_edges() -> None:
+    # Q2=A: an edge card frames BOTH subsystems with ALL their components, draws the A->B
+    # component edges AND each subsystem's own internal wiring — but no deps, no other-subsystem
+    # edges, and only the A->B direction of the crossing.
     g = parse_map(make_card_map())
     cards = gen_viewer.edge_card_mermaids(g)
     assert set(cards) == {"S1>S2"}                      # only the direction that actually crosses
@@ -391,7 +392,7 @@ def test_edge_card_has_both_subsystems_and_only_cross_edges() -> None:
     assert "subgraph S1[" in card and "subgraph S2[" in card
     assert "C1" in card and "C3" in card and "C2" in card   # all components of both (Q2=A)
     assert "C1 -->|calls| C2" in card and "C3 -->|calls| C2" in card  # the cross edges
-    assert "routes" not in card                         # internal S1 edge dropped
+    assert "C1 -->|routes| C3" in card                  # S1's inner link now kept
     assert "D1" not in card                             # no deps in an edge card
 
 

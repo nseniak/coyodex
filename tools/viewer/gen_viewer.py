@@ -524,11 +524,20 @@ def subsystem_component_mermaids(graph: GraphDict) -> dict[str, str]:
 
 def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
     """Edge card: subsystems `a` and `b` as two subgraph frames holding ALL their components
-    (Q2=A), with ONLY the a->b component edges drawn — no internal edges, no deps, no edges to
-    other subsystems. Node ids + `src -->|verb| dst` match the component view, so the viewer's
-    edge bridge resolves an in-card arrow to its real component edge."""
+    (Q2=A), drawn with the a->b component edges that cross between them PLUS each subsystem's own
+    internal component->component wiring — so the crossing reads in the context of both subsystems'
+    inner structure. Deps and edges to other subsystems are still omitted, and only the a->b
+    direction of the crossing is drawn (the b->a arrow has its own card). Node ids +
+    `src -->|verb| dst` match the component view, so the viewer's edge bridge resolves any in-card
+    arrow to its real component edge."""
+    members_a = {cid for cid, _ in _components_of(graph, a)}
+    members_b = {cid for cid, _ in _components_of(graph, b)}
     lines = ["flowchart LR", *_component_subgraph(graph, a), *_component_subgraph(graph, b)]
-    for e in graph["edges"]:
+    for src, verb, dst in _diagram_edges(graph, None, members_a):  # a's inner links
+        lines.append(f"  {src} -->|{verb}| {dst}")
+    for src, verb, dst in _diagram_edges(graph, None, members_b):  # b's inner links
+        lines.append(f"  {src} -->|{verb}| {dst}")
+    for e in graph["edges"]:  # the a->b crossing edges (the link this card is for)
         s, d = str(e["src"]), str(e["dst"])
         if _top_subsystem(graph, s) == a and _top_subsystem(graph, d) == b:
             lines.append(f"  {s} -->|{e['verb']}| {d}")
