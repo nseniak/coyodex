@@ -1007,6 +1007,17 @@ def test_domain_overview_shows_only_top_level_subdomains() -> None:
     assert "SD1 -->|1| SD3" in cont       # nested E2->E3 aggregates to the top SD1->SD3 arrow
 
 
+def test_nested_domain_edge_cards_for_disjoint_pairs_only() -> None:
+    # E1->E2 is parent->child (SD1>SD2 overlap) -> navigated, no card. E2->E3 is disjoint and gets a
+    # card at every level it is drawn: SD2>SD3 (nested) and SD1>SD3 (overview / SD1 card).
+    cards = gen_viewer.domain_edge_card_mermaids(parse_map(make_nested_subdomain_map()))
+    assert "SD1>SD2" not in cards
+    assert {"SD2>SD3", "SD1>SD3"} <= set(cards)
+    ce = gen_viewer.gen_domain_container_edges(parse_map(make_nested_subdomain_map()))
+    assert {"SD2>SD3", "SD1>SD3"} <= set(ce)
+    assert {(r["src"], r["dst"]) for r in ce["SD2>SD3"]} == {("E2", "E3")}
+
+
 def test_iter_domain_cards_parses_context() -> None:
     by_id = {c.id: c for c in schema_v1.iter_domain_cards(make_context_map().splitlines())}
     assert by_id["E1"].subdomain == "SD1" and by_id["E2"].subdomain == "SD1" and by_id["E4"].subdomain == "SD2"

@@ -391,24 +391,49 @@ def gen_domain_container_mermaid(graph: GraphDict) -> str:
     return "\n".join(lines)
 
 
-def gen_domain_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
-    """For each inter-subdomain arrow 'A>B' in the Domain overview, the underlying entity→entity
-    relations that cross from A to B (endpoints, names, verb, kind) — the viewer lists them in the
-    arrow's hover tooltip. Mirrors the crossing logic in gen_domain_container_mermaid."""
-    out: dict[str, list[dict[str, str]]] = {}
+def _subdomain_ancestors(graph: GraphDict, nid: str) -> list[str]:
+    """The subdomain ids on `nid`'s parent chain (nearest first) — the domain mirror of
+    _subsystem_ancestors, enumerating the boxes `nid` collapses into at successive drill levels."""
+    out: list[str] = []
+    cur, seen = _parent_of(graph, nid), set()
+    while cur and cur not in seen:
+        seen.add(cur)
+        if str(graph["nodes"].get(cur, {}).get("kind")) == "subdomain":
+            out.append(cur)
+        cur = _parent_of(graph, cur)
+    return out
+
+
+def _domain_edge_card_pairs(graph: GraphDict) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Every disjoint ordered subdomain pair (a, b) an entity relation crosses between, with the
+    crossing relations — the domain mirror of _edge_card_pairs (subdomain ancestors of each endpoint,
+    disjoint only), covering the pair at every drill level. The single source for the domain edge-card
+    diagrams and the per-arrow crossing lists."""
+    out: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for e in _domain_relation_edges(graph):
         s, d = str(e["src"]), str(e["dst"])
-        ca, cb = _top_subdomain(graph, s), _top_subdomain(graph, d)
-        if ca and cb and ca != cb:
-            sn, dn = graph["nodes"].get(s), graph["nodes"].get(d)
-            out.setdefault(f"{ca}>{cb}", []).append({
-                "src": s,
-                "dst": d,
-                "srcName": str(sn["name"]) if sn else s,
-                "dstName": str(dn["name"]) if dn else d,
-                "verb": str(e["verb"]),
-                "kind": str(e.get("kind") or ""),
-            })
+        for a in _subdomain_ancestors(graph, s):
+            for b in _subdomain_ancestors(graph, d):
+                if _disjoint(graph, a, b):
+                    out.setdefault((a, b), []).append(e)
+    return out
+
+
+def gen_domain_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """For each inter-subdomain arrow 'A>B' the viewer can draw — at the Domain overview AND inside any
+    (possibly nested) subdomain card — the underlying entity→entity relations crossing from A's subtree
+    to B's (endpoints, names, verb, kind), listed in the arrow's hover tooltip / select panel. Derived
+    from the one _domain_edge_card_pairs source, keyed 'A>B' to match the relation bridge."""
+    out: dict[str, list[dict[str, str]]] = {}
+    for (a, b), edges in _domain_edge_card_pairs(graph).items():
+        out[f"{a}>{b}"] = [{
+            "src": str(e["src"]),
+            "dst": str(e["dst"]),
+            "srcName": str(graph["nodes"][str(e["src"])]["name"]) if str(e["src"]) in graph["nodes"] else str(e["src"]),
+            "dstName": str(graph["nodes"][str(e["dst"])]["name"]) if str(e["dst"]) in graph["nodes"] else str(e["dst"]),
+            "verb": str(e["verb"]),
+            "kind": str(e.get("kind") or ""),
+        } for e in edges]
     return out
 
 
@@ -531,40 +556,44 @@ def domain_subdomain_mermaids(graph: GraphDict) -> dict[str, str]:
 
 
 def gen_domain_edge_card(graph: GraphDict, a: str, b: str) -> str:
-    """Domain edge card: subdomains `a` and `b` both framed as `namespace` blocks holding ALL their
-    entities (full), drawn with the a→b crossing relations PLUS each subdomain's own internal relations —
-    so the crossing reads in the context of both subdomains' inner structure. It also draws the reverse
-    structure↔domain bridge (collapsed subsystem boxes that own/read either subdomain's entities), the
-    same as the subdomain card. The entity analog of gen_edge_card_mermaid (only the a→b direction is
-    drawn; the b→a arrow has its own card). Node ids + relation shapes match the flat Domain view, so the
-    class/relation bridge resolves any in-card relation to its detail."""
-    ents_a = _entities_of(graph, a)
+    """Domain edge card: disjoint subdomains `a` and `b` framed as `namespace` blocks holding their
+    IMMEDIATE entities (full) + child-subdomain boxes, drawn with the a→b crossings PLUS each frame's own
+    internal relations. A crossing between two DIRECT entities keeps its full relation (so the bridge
+    resolves it); a crossing into a child subdomain is an aggregated box arrow. It also draws the reverse
+    structure↔domain bridge (collapsed subsystem boxes that own/read either frame's direct entities). The
+    entity analog of gen_edge_card_mermaid (only the a→b direction; the b→a arrow has its own card)."""
+    ents_a = _entities_of(graph, a)            # direct child entities of each frame
     ents_b = _entities_of(graph, b)
     ids_a = {eid for eid, _ in ents_a}
     ids_b = {eid for eid, _ in ents_b}
     lines = ["classDiagram",
              *_subdomain_namespace(graph, a, ents_a),
-             *_subdomain_namespace(graph, b, ents_b),
-             *_subsystem_bridge_lines(graph, ids_a | ids_b)]  # subsystems owning/reading either subdomain
+             *_subdomain_namespace(graph, b, ents_b)]
+    for cid, _ in _child_subdomains(graph, a) + _child_subdomains(graph, b):  # style the child boxes drawn in the frames
+        lines.append(f"  style {cid} {SUBDOMAIN_STYLE}")
+    lines += _subsystem_bridge_lines(graph, ids_a | ids_b)  # subsystems owning/reading either subdomain's direct entities
+    agg: set[tuple[str, str]] = set()
     for e in _domain_relation_edges(graph):
         s, d = str(e["src"]), str(e["dst"])
-        in_a = s in ids_a and d in ids_a       # a's inner wiring
-        in_b = s in ids_b and d in ids_b       # b's inner wiring
-        crossing = s in ids_a and d in ids_b   # the a→b link this card is for
-        if in_a or in_b or crossing:
+        if (s in ids_a and d in ids_a) or (s in ids_b and d in ids_b):  # a frame's inner wiring (both direct)
             lines.append(_class_relation_line(cast("dict[str, Any]", e)))
+            continue
+        if _in_subtree(graph, s, a) and _in_subtree(graph, d, b):        # the a→b crossing this card is for
+            ba, bb = _child_under(graph, s, a), _child_under(graph, d, b)
+            if ba == s and bb == d:                                      # both direct entities -> full relation
+                lines.append(_class_relation_line(cast("dict[str, Any]", e)))
+            else:                                                        # reaches into a child subdomain -> aggregated box arrow
+                agg.add((str(ba), str(bb)))
+    for src, dst in sorted(agg):
+        lines.append(f"  {src} --> {dst}")
     return "\n".join(lines)
 
 
 def domain_edge_card_mermaids(graph: GraphDict) -> dict[str, str]:
-    """One edge-card per directed top-subdomain pair that has a crossing relation, keyed 'A>B' to match
-    the rendered inter-subdomain arrow's endpoints (the entity analog of edge_card_mermaids)."""
-    pairs: set[tuple[str, str]] = set()
-    for e in _domain_relation_edges(graph):
-        ca, cb = _top_subdomain(graph, str(e["src"])), _top_subdomain(graph, str(e["dst"]))
-        if ca and cb and ca != cb:
-            pairs.add((ca, cb))
-    return {f"{a}>{b}": gen_domain_edge_card(graph, a, b) for a, b in sorted(pairs)}
+    """One edge-card per disjoint subdomain pair with a crossing relation — at every drill level, not
+    only top-level — keyed 'A>B' to match the rendered arrow's endpoints. The entity analog of
+    edge_card_mermaids, built from the one _domain_edge_card_pairs source."""
+    return {f"{a}>{b}": gen_domain_edge_card(graph, a, b) for (a, b) in sorted(_domain_edge_card_pairs(graph))}
 
 
 def gen_bridge_card_mermaid(graph: GraphDict, sid: str, sdid: str) -> str:

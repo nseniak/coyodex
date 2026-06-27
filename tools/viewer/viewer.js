@@ -890,10 +890,16 @@ function bindDomainSub(sd) {
     } else if (kx === 'subsystem' || ky === 'subsystem') {  // a bridge arrow: subsystem -> entity (owns/reads)
       const sub = kx === 'subsystem' ? x : y;
       bindBridgeEdge(mainScene, p, label, x, y, { kind: 'bridge', sid: sub, sd: sd }, sub);  // ⌘ -> the S×SD bridge card
-    } else {  // a cross arrow to/from a collapsed neighbour subdomain box: select crossings, ⌘ drills the pair
-      const a = kx === 'subdomain' ? x : sd;
-      const b = ky === 'subdomain' ? y : sd;
-      bindDomainContainerEdge(mainScene, p, label, a, b, { src: x, dst: y });  // focus on the DRAWN endpoints
+    } else {  // a cross arrow involving a collapsed subdomain box — disjoint pairs card, overlapping ones navigate
+      const subX = kx === 'subdomain', subY = ky === 'subdomain';
+      if (subX && subY) {  // box <-> box (child subdomain <-> neighbour, or child <-> child)
+        if (disjointBoxes(x, y) && MERMAID_DOMAIN_EDGE_CARD[x + '>' + y]) bindDomainContainerEdge(mainScene, p, label, x, y, { src: x, dst: y });
+        else bindNavEdge(p, label, x, y, isAncestorOf(x, y) ? y : x);  // descend into the deeper box
+      } else {  // entity (focal member) <-> subdomain box; the entity side collapses to this card's subdomain (sd)
+        const box = subX ? x : y, a = subX ? x : sd, b = subY ? y : sd;
+        if (disjointBoxes(box, sd) && MERMAID_DOMAIN_EDGE_CARD[a + '>' + b]) bindDomainContainerEdge(mainScene, p, label, a, b, { src: x, dst: y });
+        else bindNavEdge(p, label, x, y, box);  // box is a child to descend into, or an ancestor to zoom out to
+      }
     }
   });
 }

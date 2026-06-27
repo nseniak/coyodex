@@ -238,3 +238,17 @@ map) is unaffected — one map, one root.
   [viewer.js:889](../../tools/viewer/viewer.js#L889)), so generating them is only correct alongside
   that binding. Today nested **box** drill is fully data-backed (a card per level); nested cross-**arrow**
   click + deep breadcrumb are Phase B. No flat map is affected.
+- **Phase B (done)** — the nested drill is now usable in the viewer.
+  - **B1 breadcrumb** — `ancestors()` walks the parent chain via `groupChain()`, so a deep drill shows
+    every level (Subsystems › Plugins › Social Content), each crumb clickable; subsystems + subdomains.
+  - **B2 panel** — `showNode()` lists a group's immediate children (child groups first, each tagged with
+    its descendant-leaf count, then direct leaves). Child-box ⌘-drill already worked (`bindNodes`).
+  - **B3 edge cards** — one `_edge_card_pairs` source (and `_domain_edge_card_pairs` twin) enumerates
+    every DISJOINT subsystem/subdomain pair an edge crosses (over the endpoints' ancestors), so edge
+    cards + crossing lists exist at every drill level. `gen_edge_card_mermaid` / `gen_domain_edge_card`
+    are level-relative (frame immediate children; a direct-member crossing stays labelled, a crossing
+    into a child group is an aggregated box arrow). The JS binding routes an OVERLAPPING pair (a child
+    of, or ancestor of, the current card) to **navigation** (descend / zoom out via `bindNavEdge`) and a
+    DISJOINT pair to its edge card (guarded by existence) — for both `bindSubsystem` and `bindDomainSub`.
+  - Flat maps render byte-identical throughout. End-to-end: a nested map bakes `S2>S3` + `S1>S3`, omits
+    the overlapping `S1>S2`.
