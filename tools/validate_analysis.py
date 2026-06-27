@@ -10,7 +10,7 @@ for diagrams/tooling:
   3. Every Golden Path step (GPn heading) has a `Touches:` line.
   4. Grouping, when present (no-op when absent): every Subsystem/Parent value
      resolves to a defined `S`; at most one parent per element; no nesting
-     cycles; nesting depth <= MAX_DEPTH.
+     cycles. (Nesting depth is unbounded — deep chains only WARN, never block.)
   5. Table shape: every row of a markdown table (header / separator / data)
      carries the same column count — catches the malformed-separator / dropped-cell
      class that silently breaks parsing and diagram rendering.
@@ -41,10 +41,10 @@ from schema_v1 import (
     DEF_ENTITY,
     DEF_GP,
     DEP_KINDS,
+    DEEP_NEST_WARN,
     GLUED_DEF,
     GLUED_DEF_INNER,
     ID_TOKEN,
-    MAX_DEPTH,
     REL_ALIAS,
     fk_targets,
     iter_domain_cards,
@@ -279,12 +279,14 @@ def _is_parent_kind(par: str, kind: str) -> bool:  # par's id-prefix matches the
     return par.startswith("SD") if kind == "subdomain" else _is_subsystem_id(par)
 
 
-def check_hierarchy(parents: dict[str, str], defined: set[str]) -> list[str]:
-    """Parent must be the right KIND for the child (component/subsystem -> `S`; entity/subdomain ->
-    `SD`) and defined; no nesting cycles; depth <= MAX_DEPTH. The two forests (component->S and
-    entity->SD) share one walk — their id spaces are disjoint, so a chain never crosses between them.
-    The kind check is EXACT, not a bare prefix test: `SD` starts with `S`, so a component pointed at a
-    subdomain must still be flagged (the same collision class as `CX`/`C` before the rename)."""
+def check_hierarchy(parents: dict[str, str], defined: set[str]) -> tuple[list[str], list[str]]:
+    """Returns ``(problems, warnings)``. Parent must be the right KIND for the child
+    (component/subsystem -> `S`; entity/subdomain -> `SD`) and defined, with no nesting cycles — all
+    BLOCKING. Nesting deeper than `DEEP_NEST_WARN` is a non-blocking ADVISORY: arbitrary depth is allowed
+    (the viewer renders it), and the cycle check — not a depth cap — is what makes the walk terminate.
+    The two forests (component->S and entity->SD) share one walk — their id spaces are disjoint, so a
+    chain never crosses between them. The kind check is EXACT, not a bare prefix test: `SD` starts with
+    `S`, so a component pointed at a subdomain must still be flagged."""
     problems: list[str] = []
     for child, par in parents.items():
         want = _expected_parent_kind(child)
@@ -296,6 +298,7 @@ def check_hierarchy(parents: dict[str, str], defined: set[str]) -> list[str]:
     # Walk only well-formed (right-kind) pointers, so a wrong-type parent reported above does not
     # also surface as a spurious "cycle" line.
     valid = {c: p for c, p in parents.items() if _is_parent_kind(p, _expected_parent_kind(c))}
+    deep: set[str] = set()
     for start in valid:
         chain, cur, depth = [start], start, 0
         while cur in valid:
@@ -305,10 +308,37 @@ def check_hierarchy(parents: dict[str, str], defined: set[str]) -> list[str]:
                 problems.append(f"Nesting cycle: {' -> '.join(chain)} -> {cur}")
                 break
             chain.append(cur)
-            if depth > MAX_DEPTH:
-                problems.append(f"Nesting exceeds depth {MAX_DEPTH}: {' -> '.join(chain)}")
+            if depth > DEEP_NEST_WARN:
+                deep.add(" -> ".join(chain))  # the over-deep chain (top → leaf), deduped across walks
                 break
-    return problems
+    warnings = [f"Deep nesting (> {DEEP_NEST_WARN} levels) — is each level pulling its weight? {d}"
+                for d in sorted(deep)]
+    return problems, warnings
+
+
+_LIST_ITEM = re.compile(r"^[a-z][a-z0-9_]+$")  # a bare lowercase identifier — a likely sub-unit (dir/module) name
+_ALTITUDE_MIN = 6  # this many bare-identifier items in one cell reads as a list of sub-units, not a purpose
+
+
+def check_altitude_hints(text: str) -> list[str]:
+    """Advisory (non-blocking): a T1 component whose definition row packs many sub-units into one cell —
+    `>= _ALTITUDE_MIN` bare lowercase identifier names like `twitch, youtube, reddit, …` — is usually a
+    GROUP wearing a component's hat. Suggest promoting it to a subsystem so its members get their own
+    drill level. Heuristic: bare-identifier matching skips ID lists (a Depends-on cell is `C13, C9, …`,
+    uppercase) and prose (multi-word clauses), so it rarely fires on a genuine component."""
+    out: list[str] = []
+    for line in text.splitlines():
+        m = re.match(r"\|\s*\*\*(C\d+)\*\*\s*\|", line)  # a component DEFINITION row (id alone in cell 1)
+        if not m:
+            continue
+        for cell in line.split("|"):
+            n = sum(1 for s in (seg.strip() for seg in cell.split(",")) if _LIST_ITEM.match(s))
+            if n >= _ALTITUDE_MIN:
+                out.append(f"Component {m.group(1)} lists {n} sub-units in one cell — if these are real "
+                           f"units, consider promoting {m.group(1)} to a subsystem (its members then get "
+                           f"their own drill level)")
+                break  # one hint per component, even if several cells qualify
+    return out
 
 
 def find_glued_ids(text: str) -> set[str]:
@@ -599,7 +629,26 @@ def main() -> int:
 
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column or SUBDOMAIN line.
     problems.extend(parent_problems)
-    problems.extend(check_hierarchy(all_parents, defined))
+    hierarchy_problems, hierarchy_warnings = check_hierarchy(all_parents, defined)
+    problems.extend(hierarchy_problems)
+    warnings.extend(hierarchy_warnings)
+    warnings.extend(check_altitude_hints(text))  # advisory: a component that is really a group
+    # Non-blocking nudge: a group whose ONLY child is another group of the same kind is a redundant
+    # nesting level (it adds depth without grouping anything). Only nested maps can trigger it, so flat
+    # maps stay silent.
+    child_count: dict[str, int] = {}
+    only_child: dict[str, str] = {}
+    for c, p in all_parents.items():
+        child_count[p] = child_count.get(p, 0) + 1
+        only_child[p] = c  # used only when count==1, where it is the single child
+    redundant = sorted(
+        p for p, n in child_count.items() if n == 1
+        and ((_is_subsystem_id(p) and _is_subsystem_id(only_child[p]))
+             or (p.startswith("SD") and only_child[p].startswith("SD")))
+    )
+    if redundant:
+        warnings.append("Groups whose only child is another group of the same kind (redundant nesting "
+                        f"level): {', '.join(redundant)}")
 
     def _is_component(i: str) -> bool:  # a component id (no other prefix starts with "C" now)
         return i.startswith("C")

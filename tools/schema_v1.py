@@ -40,7 +40,10 @@ DEF_GP = re.compile(r"^\*\*(GP\d+)\s+—")
 DEF_ENTITY = re.compile(r"^\*\*(E\d+)\s+—")
 
 # Grouping: membership is ONE parent pointer carried on the child.
-MAX_DEPTH = 3  # max subsystem levels (parent-pointer hops) in any membership chain
+# Nesting depth is ADVISORY, not capped: the viewer renders arbitrary depth, and the cycle check (not a
+# depth limit) is what guarantees the membership walk terminates. The validator only *warns* when a
+# chain is deeper than this, as a gentle "is each level pulling its weight?" nudge.
+DEEP_NEST_WARN = 5  # warn (non-blocking) when a membership chain is deeper than this many parent hops
 
 # External-dependency Kind — a closed vocabulary that drives how the C4 Context view treats a dep.
 # The first four are EXTERNAL SYSTEMS the project talks to across a boundary (drawn at Context, by
