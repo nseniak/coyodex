@@ -180,6 +180,20 @@ request. Rejected: defaulting to Build/overwrite (silently destroys curation); a
 (safe but adds friction to the common Analyze path). This lives in `method/dispatch.md`, consistent
 with the skill-is-a-pointer principle above.
 
+### Drilling deeper = refine the one map, never a second map file
+When a subsystem is too big to detail at its altitude (e.g. mee6's Plugins), the answer is to **nest
+inside the single map** — render the multi-level subsystems/subdomains the schema already allows as
+recursive drill levels, and **promote a leaf component into a subsystem on demand** (re-tracing its
+edges; the validator's "references resolve" guards the half-done case). Rejected: **child maps** (a
+second `.coyodex/<sub>/project-map.md`), because a second file is a second ID space — bidirectional
+links can't cross it, shared elements duplicate, the viewer can't drill across, and
+analyze/accept/change-impact only track the one baseline. Restoring cross-file links would need a
+qualified-ID namespace + whole-forest load *only to re-simulate what one graph gives for free*. The
+data model + validator already support arbitrary nesting; the gap was viewer-only (it flattened to the
+top ancestor). Full plan + evidence: [single-map-drilldown-proposal](single-map-drilldown-proposal.md).
+This supersedes the child-map shape and extends [grouping-proposal](grouping-proposal.md)'s
+"several levels of nesting" through to the viewer.
+
 ## What was deliberately deferred
 
 - A precomputed index / call-graph (revisit only at scale).
