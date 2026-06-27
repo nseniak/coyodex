@@ -29,6 +29,7 @@ import json
 import re
 import subprocess
 import sys
+from html import escape as html_escape
 from pathlib import Path
 from typing import Any, cast
 
@@ -1159,12 +1160,22 @@ def main() -> int:
     context_mm = gen_context_mermaid(graph)
     context_edges = gen_context_edges(graph)
     state = compute_state(graph, diff)
+    # Source-link config, derived at build time from the mapped repo (the output dir anchors it).
+    # Seeded into the viewer; the user can override the root / GitHub URL in Settings (localStorage).
+    anchor = out.resolve().parent
+    repo_root = repo_root_default(anchor)
+    gh_repo = gh_repo_url(anchor)
+    gh_commit = graph["commit"]
+    # Repo root name in the header — so the map plainly states which repo its file links resolve into.
+    repo_name = Path(repo_root).name or repo_root
+    repo_tag = f'<strong class="repo" title="{html_escape(repo_root, quote=True)}">{html_escape(repo_name)}</strong> · '
     if diff:
         meta = f"diff: <code>{diff['base']}</code> → <code>{diff['new']}</code> · {len(diff['changes'])} changes"
     else:
         commit = graph['commit'] or 'unknown'
         committed = graph.get('committed')
         meta = f"baseline @ commit <code>{commit}</code>" + (f" from {committed}" if committed else "")
+    meta = repo_tag + meta
     grouping = has_grouping(graph)
     container_mm = gen_container_mermaid(graph) if grouping else ""
     by_sub = subsystem_component_mermaids(graph) if grouping else {}
@@ -1186,12 +1197,6 @@ def main() -> int:
     folded = folded_libs(graph)
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
-    # Source-link config, derived at build time from the mapped repo (the output dir anchors it).
-    # Seeded into the viewer; the user can override the root / GitHub URL in Settings (localStorage).
-    anchor = out.resolve().parent
-    repo_root = repo_root_default(anchor)
-    gh_repo = gh_repo_url(anchor)
-    gh_commit = graph["commit"]
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
                     domain_container_mm, domain_sub, domain_edge_cards, bridge_cards, domain_container_edges, subdomains,

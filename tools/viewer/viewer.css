@@ -7,6 +7,7 @@ body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #1
 header { padding: 8px 14px; background: #1e1b4b; color: #fff; display: flex; gap: 12px; align-items: center; }
 header h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 0 0 auto; }
 header .meta { font-size: 12px; opacity: .8; flex: 1; }
+header .meta .repo { color: #c7d2fe; font-weight: 600; }  /* the mapped repo name — file links resolve here */
 header button { font: inherit; font-size: 12px; padding: 4px 12px; border: 0; border-radius: 6px;
                 background: #6366f1; color: #fff; cursor: pointer; }
 header button:hover { background: #818cf8; }

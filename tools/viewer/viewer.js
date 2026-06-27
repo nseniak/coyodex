@@ -1325,8 +1325,16 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
 const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', panelW: 'coyodex.panelW' };
-const lsGet = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
-const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* private mode: in-session only */ } };
+// The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
+// per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
+// A single global key let a root saved while viewing one repo's map open files from the WRONG repo in
+// another map served from the same browser origin (file:// or a shared localhost). Editor choice /
+// custom URI / onboarding flag stay global — one editor per machine, shared across every map.
+const MAP_NS = REPO_ROOT_DEFAULT || GH_REPO_DEFAULT || 'default';
+const PER_REPO = new Set([LS.root, LS.repo]);
+const nsKey = (k) => (PER_REPO.has(k) ? k + '::' + MAP_NS : k);
+const lsGet = (k) => { try { return localStorage.getItem(nsKey(k)); } catch (_) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(nsKey(k), v); } catch (_) { /* private mode: in-session only */ } };
 const srcRoot = () => (lsGet(LS.root) || REPO_ROOT_DEFAULT || '').replace(/\/+$/, '');
 // Default target: GitHub when the map has a remote+commit (zero setup, works for everyone), else the
 // '— choose —' placeholder. A saved choice always wins.
