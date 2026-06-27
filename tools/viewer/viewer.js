@@ -144,6 +144,35 @@ function isDrag(e) { return Math.abs(e.clientX - downX) > 5 || Math.abs(e.client
 function isDrillClick(e) { return !!e && (e.metaKey || e.ctrlKey); }
 
 // --- side panel -----------------------------------------------------------------
+// Leaves (components under a subsystem, entities under a subdomain) anywhere beneath `id`, any depth —
+// the size hint shown next to a collapsed child group in the panel. Seen-set guards a malformed cycle.
+function descendantLeafCount(id, parentKind) {
+  const leaf = parentKind === 'subsystem' ? 'component' : 'entity';
+  let c = 0;
+  for (const k in GRAPH.nodes) {
+    if (GRAPH.nodes[k].kind !== leaf) continue;
+    let cur = GRAPH.nodes[k].parent; const seen = new Set();
+    while (cur && !seen.has(cur)) { if (cur === id) { c += 1; break; } seen.add(cur); cur = GRAPH.nodes[cur] && GRAPH.nodes[cur].parent; }
+  }
+  return c;
+}
+// A group node's panel lists its IMMEDIATE children (child groups first, each tagged with how many
+// leaves nest under it, then direct leaves) — so the panel mirrors the card: one level down, with a
+// size hint for what a child box would expand into. Empty for a non-group or a leaf group.
+function groupMembersHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || (n.kind !== 'subsystem' && n.kind !== 'subdomain')) return '';
+  const kids = Object.keys(GRAPH.nodes).filter((k) => GRAPH.nodes[k].parent === id);
+  if (!kids.length) return '';
+  const order = (k) => (GRAPH.nodes[k].kind === n.kind ? 0 : 1);  // child groups before leaves
+  kids.sort((a, b) => order(a) - order(b) || (GRAPH.nodes[a].name || '').localeCompare(GRAPH.nodes[b].name || ''));
+  const items = kids.map((k) => {
+    const kn = GRAPH.nodes[k];
+    const tag = kn.kind === n.kind ? ` <span class="muted">(${descendantLeafCount(k, n.kind)})</span>` : '';
+    return `<dd>• ${esc(kn.name)}${tag}</dd>`;
+  }).join('');
+  return '<dt>Contains</dt>' + items;
+}
 function showNode(id) {
   const n = GRAPH.nodes[id];
   if (!n) return;
@@ -169,7 +198,7 @@ function showNode(id) {
     : `<div class="src">${ref}</div>`;
   panel.innerHTML = `<h2>${esc(n.name)}</h2>`
     + `<div class="badges"><span class="badge kind">${n.kind}</span>${chg}</div>`
-    + `<dl>${rows}${attrs}</dl>${src}`;
+    + `<dl>${rows}${attrs}${groupMembersHtml(id)}</dl>${src}`;
   const sl = panel.querySelector('.srclink');
   if (sl) sl.addEventListener('click', () => openSource(n));
 }
@@ -1194,12 +1223,21 @@ function stateTitle(s) {
   if (s.kind === 'subsystem') return nm(s.sid);
   return nm(s.a) + ' → ' + nm(s.b);  // edge
 }
+// The nesting path (top ancestor → id) as breadcrumb states, walking `parent` pointers — so a deep
+// drill (Subsystems › Plugins › Social Content) shows EVERY level, each crumb clickable. A seen-set
+// guards against a malformed parent cycle.
+function groupChain(kind, key, id) {
+  const chain = []; const seen = new Set(); let cur = id;
+  while (cur && !seen.has(cur)) { seen.add(cur); chain.unshift({ kind, [key]: cur }); const n = GRAPH.nodes[cur]; cur = n && n.parent; }
+  return chain;
+}
 function ancestors(s) {  // structural nesting path (top → s), independent of the click history
-  // Each tab's OVERVIEW shows a single crumb (its own name); only a drill-down appends a deeper crumb.
+  // Each tab's OVERVIEW shows a single crumb (its own name); only a drill-down appends deeper crumbs.
   // So sibling tabs read uniformly — Subsystems, Components, Domain, Golden Path, Context are each one
-  // crumb at the top, and ancestry (Subsystems › Auth, Context › Libraries) appears only once you zoom in.
+  // crumb at the top, and ancestry (Subsystems › Auth › … , Context › Libraries) appears only once you
+  // zoom in; a nested subsystem/subdomain appends one crumb PER level via groupChain.
   if (s.kind === 'domain') return [{ kind: 'domain' }];
-  if (s.kind === 'domsub') return [{ kind: 'domain' }, { kind: 'domsub', sd: s.sd }];  // subdomain card under Domain
+  if (s.kind === 'domsub') return [{ kind: 'domain' }, ...groupChain('domsub', 'sd', s.sd)];  // subdomain card (full nesting path) under Domain
   if (s.kind === 'domedge') return [{ kind: 'domain' }, { kind: 'domedge', a: s.a, b: s.b }];  // subdomain pair beside them
   if (s.kind === 'bridge') return [{ kind: 'container' }, { kind: 'bridge', sid: s.sid, sd: s.sd }];  // S×SD bridge under Subsystems
   if (s.kind === 'gp') return [{ kind: 'gp' }];
@@ -1208,7 +1246,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
   const trail = [{ kind: 'container' }];                  // the Subsystems overview is the root of this branch
-  if (s.kind === 'subsystem') trail.push({ kind: 'subsystem', sid: s.sid });
+  if (s.kind === 'subsystem') trail.push(...groupChain('subsystem', 'sid', s.sid));  // full nesting path top → sid
   else if (s.kind === 'edge') trail.push({ kind: 'edge', a: s.a, b: s.b });  // a pair lives beside the subsystems
   return trail;
 }
