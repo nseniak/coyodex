@@ -482,6 +482,54 @@ def test_nested_container_edges_keyed_per_level() -> None:
     assert {(r["src"], r["dst"]) for r in ce["S2>S3"]} == {("C2", "C3")}
 
 
+def make_coarse_component_map() -> str:
+    """One component whose Purpose cell lists 7 plugin-like sub-units — the altitude smell."""
+    return (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | Social plugins | twitch, youtube, reddit, instagram, tiktok, kick, bluesky | f |  |\n"
+    )
+
+
+def make_deep_nesting_map(levels: int = 7) -> str:
+    """A straight subsystem chain S1<-S2<-...<-S{levels} with one component at the bottom — depth > 5."""
+    rows = "".join(f"| **S{i}** | s{i} | x | {('S' + str(i - 1)) if i > 1 else ''} | a | V |\n"
+                   for i in range(1, levels + 1))
+    s_table = "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n|---|---|---|---|---|---|\n" + rows + "\n"
+    t1 = ("## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n|---|---|---|---|---|---|\n"
+          f"| **C1** | App | S{levels} | x | f |  |\n")
+    return s_table + t1
+
+
+def make_redundant_level_map() -> str:
+    """S1's only child is the subsystem S2 (a redundant wrapper); S2 holds the real components."""
+    return (
+        "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n|---|---|---|---|---|---|\n"
+        "| **S1** | Wrapper | x |  | a | V |\n| **S2** | Real | x | S1 | a | V |\n\n"
+        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n|---|---|---|---|---|---|\n"
+        "| **C1** | A | S2 | x | f |  |\n| **C2** | B | S2 | x | f |  |\n"
+    )
+
+
+def test_validator_warns_coarse_component() -> None:
+    # advisory only (exit 0); the component that lists many sub-units is nudged toward a subsystem.
+    code, out = run_validator(make_coarse_component_map())
+    assert code == 0
+    assert "C1" in out and "consider promoting" in out
+
+
+def test_validator_deep_nesting_warns_not_blocks() -> None:
+    # arbitrary depth is allowed — a > 5-level chain WARNS but does not fail the build (was a hard error).
+    code, out = run_validator(make_deep_nesting_map(7))
+    assert code == 0
+    assert "Deep nesting" in out
+
+
+def test_validator_warns_redundant_nesting_level() -> None:
+    code, out = run_validator(make_redundant_level_map())
+    assert code == 0
+    assert "redundant nesting level" in out and "S1" in out
+
+
 def test_container_edges_list_crossing_component_edges() -> None:
     # Each inter-subsystem arrow 'A>B' carries the underlying component->component edges (endpoints,
     # names, verb, why) so the viewer lists their meanings in the arrow's hover tooltip.
