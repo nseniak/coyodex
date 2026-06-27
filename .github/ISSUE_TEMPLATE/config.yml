@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Read the method
+    url: https://github.com/nseniak/coyodex/blob/main/method.md
+    about: The method is the single source of truth — it may already answer your question.
+  - name: Security report
+    url: https://github.com/nseniak/coyodex/security/advisories/new
+    about: Found a vulnerability? Report it privately here, not in a public issue.

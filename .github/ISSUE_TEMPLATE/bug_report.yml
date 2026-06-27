@@ -1,0 +1,60 @@
+name: Bug report
+description: Something the skill, the method, or the viewer got wrong.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. coyodex is alpha, so this really helps.
+        Please fill in what you can — a clear repro is worth more than a long description.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong, and what did you expect instead?
+      placeholder: The map said X, but the code actually does Y…
+    validations:
+      required: true
+  - type: dropdown
+    id: step
+    attributes:
+      label: Which step?
+      description: Where in the loop did it happen?
+      options:
+        - Build (map this repo)
+        - Analyze (change impact)
+        - Accept (fold into baseline)
+        - Viewer (the interactive HTML)
+        - Install / setup (make install)
+        - Other / not sure
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: What did you run, and on what? A link to a public repo (or a small one) is ideal.
+      placeholder: |
+        1. /coyodex map this repo
+        2. …
+        3. …
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: coyodex version (see VERSION), the agent / model you drove it with, and your OS.
+      placeholder: |
+        coyodex: 0.1.0
+        agent/model: Claude Code, Opus 4.x
+        OS: macOS 15
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Logs, screenshots of the viewer, the relevant slice of the map, etc.
+    validations:
+      required: false
