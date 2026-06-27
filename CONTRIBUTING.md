@@ -26,7 +26,8 @@ By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
   it; it is not a mirror of the code. Changes to behavior usually start here.
 - **`method/`** — the supporting method docs (`schema-v1.md`, `domain-cards.md`,
   `change-impact.md`, `diagrams.md`) and templates.
-- **`skill/coyodex/`** — the Claude Code skill (`SKILL.md`) that drives the method.
+- **`skill/coyodex/`** — the agent skill (`SKILL.md`) that drives the method; works on
+  Claude Code, Codex, and Cursor.
 - **`tools/`** — the Python tooling: schema validation, the analysis validator,
   and the **`viewer/`** (builds the standalone interactive HTML from the map).
 - **`README.md`** — user-facing overview and the install / usage steps.
@@ -36,12 +37,14 @@ By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Local setup
 
-The skill itself needs no build — install it into Claude Code once from the repo
-root (macOS/Linux):
+The skill itself needs no build — install it once from the repo root (macOS/Linux).
+`make install` copies `SKILL.md` (with the repo path baked in) into each agent's
+skills home — `~/.claude/skills` (Claude Code) and `~/.agents/skills` (the cross-agent
+standard read by Codex and Cursor):
 
 ```
-make install      # symlinks skill/coyodex -> ~/.claude/skills/coyodex
-make uninstall     # removes it
+make install      # copies skill/coyodex -> ~/.claude/skills + ~/.agents/skills
+make uninstall     # removes it from both
 ```
 
 The Python tooling under `tools/` uses standard `pytest` and is type-checked with

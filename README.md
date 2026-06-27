@@ -25,7 +25,8 @@ your AI coding agent to:
 
 ## How to use
 
-coyodex runs as a Claude Code skill. Install it once, then drive everything with `/coyodex`.
+coyodex runs as an agent skill — it works on Claude Code, Codex, and Cursor. Install it once, then
+drive everything with `/coyodex`.
 
 **1. Install the skill (once).** Clone this repo, then from its root run (macOS/Linux):
 
@@ -33,8 +34,10 @@ coyodex runs as a Claude Code skill. Install it once, then drive everything with
 make install
 ```
 
-This installs the skill into `~/.claude/skills/coyodex` with this repo's path baked in, so `/coyodex`
-reads the method straight from here. Re-run only if you move the repo; `make uninstall` removes it.
+This installs the skill into each agent's skills home (`~/.claude/skills` for Claude Code,
+`~/.agents/skills` — the cross-agent standard read by Codex and Cursor) with this repo's path baked
+in, so `/coyodex` reads the method straight from here on all three. Re-run only if you move the repo;
+`make uninstall` removes it.
 
 **2. Build the baseline.** In your project, with no map yet, `/coyodex` builds it:
 
@@ -69,8 +72,9 @@ report.
 Then keep coding and repeat steps 3–5.
 
 The skill only points at this repo and follows the method docs, which decide Build / Analyze / Accept
-— the method stays the single source of truth. Not on Claude Code? Each step also works by pasting
-*"Read `method.md` and follow it to …"* to any agent that can read this repo.
+— the method stays the single source of truth. `make install` covers Claude Code, Codex, and Cursor;
+on any other agent, each step also works by pasting *"Read `method.md` and follow it to …"* to any
+agent that can read this repo.
 
 ## The workflow
 
