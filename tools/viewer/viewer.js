@@ -1195,28 +1195,12 @@ function renderChrome(s) {
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
-  // ⌘-click differs by altitude: it drills where a level exists below (Subsystems / neighbourhood /
-  // Golden Path), and opens source at the leaf (Components / Domain entities / a GP step's view).
-  // Show the matching hint, else hide it.
-  // The Domain overview drills into a subdomain (when grouped); the flat Domain view and a per-subdomain
-  // card open an entity's source at the leaf.
-  const drillKind = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'gp'
-    || s.kind === 'domsub'  // a subdomain card drills into neighbour subdomains / the edge pair
-    || s.kind === 'context'  // the System box / Libraries box drill in on ⌘-click
-    || (s.kind === 'domain' && HAS_SUBDOMAINS);
-  const srcKind = s.kind === 'component' || s.kind === 'gpstep' || s.kind === 'domedge' || s.kind === 'edge'
-    || s.kind === 'libs'  // the Libraries fold lists deps whose ⌘-click opens their source
-    || (s.kind === 'domain' && !HAS_SUBDOMAINS);
-  // A plain click "focuses" — dims the diagram to the clicked element's own links + connected boxes —
-  // in every diagram (the Golden Path dims to the selected step's actor/line; the graphs to the node's
-  // neighbourhood). So the focus hint is universal; only the ⌘-action (drill vs source) varies.
-  const focusKind = true;
-  const hints = [];
-  if (focusKind) hints.push('Click to focus');
-  if (drillKind) hints.push('&#8984;-click to drill down');
-  else if (srcKind) hints.push('&#8984;-click a box to open its source');
-  drillhint.hidden = hints.length === 0;
-  drillhint.innerHTML = hints.join(' · ');
+  // One shared hint pill across every view: a plain click focuses (dims to the clicked element's own
+  // links + connected boxes), and ⌘-click drills down — into the next altitude where one exists, or to
+  // the source at a leaf (Components / Domain entities / a GP step). Both are "drilling in", so the pill
+  // reads the same everywhere instead of splitting "drill down" vs "open source".
+  drillhint.hidden = false;
+  drillhint.innerHTML = 'Click to focus · &#8984;-click to drill down';
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it
