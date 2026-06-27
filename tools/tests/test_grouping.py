@@ -994,19 +994,42 @@ def test_gen_domain_container_edges_list_crossing_relations() -> None:
     assert rows[0]["srcName"] == "Order" and rows[0]["dstName"] == "Product" and rows[0]["verb"] == "refersTo"
 
 
-def test_gen_domain_subdomain_card_members_full_neighbours_collapsed() -> None:
+def test_gen_domain_subdomain_card_frames_members_collapses_neighbour_subdomains() -> None:
+    # The neighbourhood card: the focal subdomain framed as a `namespace` holding its own entities FULL,
+    # every OTHER subdomain it relates to drawn as ONE collapsed box (not its individual entities), and a
+    # cross arrow per (focal entity, neighbour subdomain) pair — the entity analog of the subsystem card.
     cards = gen_viewer.domain_subdomain_mermaids(parse_map(make_context_map()))
     assert set(cards) == {"SD1", "SD2"}
     cx1 = cards["SD1"]
     assert cx1.startswith("classDiagram")
+    assert 'namespace SD1["Ordering (2)"] {' in cx1                     # focal subdomain is a labelled frame
     assert 'class E1["Order"] {' in cx1 and "ObjectId id" in cx1        # member entity, FULL box
     assert 'class E2["LineItem"] {' in cx1                              # the other member, full
-    assert 'class E4["Product"]' in cx1 and 'class E4["Product"] {' not in cx1  # cross-context neighbour, COLLAPSED
-    assert 'E1 "1" *-- "*" E2' in cx1                                   # intra-context composition
-    assert ": product" in cx1                                          # the cross relation, labelled by its backing field
-    # in SD2's card the roles flip: E4 is full, E1 is the collapsed neighbour
+    assert 'class SD2["Catalog (1)"]' in cx1                            # neighbour drawn as ONE collapsed subdomain box
+    assert 'class E4["Product"]' not in cx1                             # the neighbour's entity is NOT drawn (collapsed to SD)
+    assert 'E1 "1" *-- "*" E2' in cx1                                   # intra-subdomain composition, full
+    assert "E1 --> SD2" in cx1                                          # cross arrow to the collapsed neighbour box
+    assert ": product" not in cx1                                       # the crossing is aggregated, not a labelled relation here
+    # in SD2's card the roles flip: E4 is the framed member, SD1 the collapsed neighbour, arrow inbound
     cx2 = cards["SD2"]
+    assert 'namespace SD2["Catalog (1)"] {' in cx2
     assert 'class E4["Product"] {' in cx2 and 'class E1["Order"] {' not in cx2
+    assert 'class SD1["Ordering (2)"]' in cx2 and "SD1 --> E4" in cx2   # inbound cross arrow from the neighbour
+
+
+def test_gen_domain_edge_card_two_namespaces_with_inner_and_crossing() -> None:
+    # The subdomain edge card: BOTH subdomains framed as namespaces with ALL their entities full, each
+    # subdomain's inner relations, and the crossing relations drawn IN FULL (kind + backing-field label) —
+    # the entity analog of the subsystem edge card. Keyed by the crossing direction only.
+    g = parse_map(make_context_map())
+    cards = gen_viewer.domain_edge_card_mermaids(g)
+    assert set(cards) == {"SD1>SD2"}                                   # only the crossing direction (E1 → E4)
+    card = cards["SD1>SD2"]
+    assert card.startswith("classDiagram")
+    assert 'namespace SD1["Ordering (2)"] {' in card and 'namespace SD2["Catalog (1)"] {' in card
+    assert 'class E1["Order"] {' in card and 'class E2["LineItem"] {' in card and 'class E4["Product"] {' in card
+    assert 'E1 "1" *-- "*" E2' in card                                 # SD1's inner wiring
+    assert 'E1 "*" --> "1" E4 : product' in card                       # the crossing relation, drawn in full
 
 
 def test_subsystem_card_bridges_to_contexts_owns_and_reads() -> None:
@@ -1037,10 +1060,11 @@ def test_render_inlines_context_data() -> None:
         assert r.returncode == 0, r.stdout + r.stderr
         html = out.read_text(encoding="utf-8")
         for ph in ("__MERMAID_DOMAIN_CONTAINER__", "__MERMAID_DOMAIN_SUB__",
-                   "__DOMAIN_CONTAINER_EDGES__", "__HAS_SUBDOMAINS__"):
+                   "__MERMAID_DOMAIN_EDGE_CARD__", "__DOMAIN_CONTAINER_EDGES__", "__HAS_SUBDOMAINS__"):
             assert ph not in html, ph
         assert "const HAS_SUBDOMAINS = true;" in html
         assert "Ordering (2)" in html       # the bounded-contexts overview is inlined
+        assert "SD1>SD2" in html            # the subdomain edge-card diagram (keyed by crossing pair) is inlined
 
 
 def test_render_no_context_data_when_ungrouped() -> None:

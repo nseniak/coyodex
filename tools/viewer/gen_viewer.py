@@ -346,42 +346,68 @@ def gen_domain_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str
     return out
 
 
+def _subdomain_namespace(graph: GraphDict, sdid: str,
+                         members: list[tuple[str, str]]) -> list[str]:
+    """`classDiagram` lines framing a subdomain's entities as `namespace <sdid>["Name (N)"] { … }` —
+    each member entity drawn full (attributes). The classDiagram analog of `_component_subgraph`:
+    a subdomain always reads as a labelled frame (Mermaid 11 namespaces render as a titled cluster,
+    DOM-id `cluster-<sdid>`, with the inner class group ids unchanged so the id bridge still resolves).
+    Shared by the subdomain card and the domain edge card."""
+    nodes = graph["nodes"]
+    ent_names = {nid: str(n["name"]) for nid, n in nodes.items() if str(n["kind"]) == "entity"}
+    nm = _safe_label(str(nodes[sdid]["name"])) if sdid in nodes else sdid
+    out = [f'namespace {sdid}["{nm} ({len(members)})"] {{']
+    for eid, _ in members:
+        out += _class_box_lines(eid, cast("dict[str, Any]", nodes[eid]), ent_names, with_members=True)
+    out.append("}")
+    return out
+
+
 def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
-    """A per-subdomain `classDiagram`: the subdomain's own entities drawn full (attributes), the entities
-    they relate to ACROSS the boundary drawn as collapsed (member-less) neighbour boxes, and the
-    relations among them. The entity analog of gen_subsystem_card_mermaid — each screen stays small
-    no matter the total model size. Node ids + relation shapes match the flat Domain view, so the
-    viewer's class/relation bridge resolves a click to the entity panel or the relation detail."""
+    """A per-subdomain `classDiagram` neighbourhood: `sdid` framed as a `namespace` holding its own
+    entities (full attributes), every OTHER subdomain its entities relate to drawn as a collapsed
+    member-less box (one per neighbour subdomain, labelled `Name (N)`), the focal subdomain's internal
+    relations drawn in full, and one arrow per (focal entity, neighbour subdomain) crossing pair. The
+    entity analog of gen_subsystem_card_mermaid — each screen stays small no matter the total model
+    size, neighbours stay collapsed, and the viewer turns a click on a neighbour box into that
+    subdomain's card and a click on a cross arrow into the two-subdomain edge card. Node ids + relation
+    shapes match the flat Domain view, so the class/relation bridge resolves a click to the entity panel
+    or the relation detail."""
     members = _entities_of(graph, sdid)
     member_ids = {eid for eid, _ in members}
-    ent_names = {nid: str(n["name"]) for nid, n in graph["nodes"].items() if str(n["kind"]) == "entity"}
-    rels: list[dict[str, Any]] = []
-    neighbours: list[str] = []
-    seen_nb: set[str] = set()
+    nodes = graph["nodes"]
+    internal: list[dict[str, Any]] = []   # both endpoints in this subdomain — drawn full
+    cross: set[tuple[str, str]] = set()   # rendered (src, dst): a focal entity ↔ a neighbour SD box (direction kept)
+    nb_sds: set[str] = set()
     for e in _domain_relation_edges(graph):
         s, d = str(e["src"]), str(e["dst"])
-        if s not in member_ids and d not in member_ids:
-            continue
-        rels.append(e)
-        for end in (s, d):
-            if end not in member_ids and end not in seen_nb:
-                seen_nb.add(end)
-                neighbours.append(end)
-    lines = ["classDiagram"]
-    nodes = graph["nodes"]
-    for eid, _ in members:  # the subdomain's own entities, full
-        lines += _class_box_lines(eid, cast("dict[str, Any]", nodes[eid]), ent_names, with_members=True)
-    for nb in neighbours:   # cross-subdomain related entities, collapsed
-        lines += _class_box_lines(nb, cast("dict[str, Any]", nodes[nb]), ent_names, with_members=False)
-    for e in rels:
-        lines.append(_class_relation_line(e))
-    if len(lines) == 1:
-        # A defined-but-empty subdomain (no member entities — so no neighbours / relations either) would
-        # leave a body-less `classDiagram`, which Mermaid rejects (the drill would throw). Emit a
-        # placeholder class so the card stays a VALID, self-explaining diagram. The id carries no
-        # prefix+digits, so the viewer's id bridge skips it (it isn't a clickable element).
+        s_in, d_in = s in member_ids, d in member_ids
+        if s_in and d_in:
+            internal.append(e)
+        elif s_in:
+            nb = _top_subdomain(graph, d)
+            if nb and nb != sdid:
+                cross.add((s, nb))
+                nb_sds.add(nb)
+        elif d_in:
+            nb = _top_subdomain(graph, s)
+            if nb and nb != sdid:
+                cross.add((nb, d))
+                nb_sds.add(nb)
+    if not members:
+        # A defined-but-empty subdomain would leave a body-less classDiagram, which Mermaid rejects
+        # (the drill would throw). Emit a placeholder class so the card stays a VALID, self-explaining
+        # diagram; its id carries no prefix+digits, so the viewer's id bridge skips it.
         name = _safe_label(str(nodes[sdid]["name"])) if sdid in nodes else sdid
-        lines.append(f'  class EmptySubdomain["{name} — no entities"]')
+        return f'classDiagram\n  class EmptySubdomain["{name} — no entities"]'
+    lines = ["classDiagram", *_subdomain_namespace(graph, sdid, members)]
+    for nb in sorted(nb_sds):  # collapsed neighbour-subdomain boxes (member-less, count-labelled)
+        n_ent = len(_entities_of(graph, nb))
+        lines.append(f'  class {nb}["{_safe_label(str(nodes[nb]["name"]))} ({n_ent})"]')
+    for e in internal:  # the focal subdomain's own relations, full
+        lines.append(_class_relation_line(e))
+    for src, dst in sorted(cross):  # crossing arrows to/from collapsed neighbour boxes (click → edge card)
+        lines.append(f"  {src} --> {dst}")
     return "\n".join(lines)
 
 
@@ -390,6 +416,41 @@ def domain_subdomain_mermaids(graph: GraphDict) -> dict[str, str]:
     return {nid: gen_domain_subdomain_card(graph, nid)
             for nid, node in graph["nodes"].items()
             if str(node["kind"]) == "subdomain" and _parent_of(graph, nid) is None}
+
+
+def gen_domain_edge_card(graph: GraphDict, a: str, b: str) -> str:
+    """Domain edge card: subdomains `a` and `b` both framed as `namespace` blocks holding ALL their
+    entities (full), drawn with the a→b crossing relations PLUS each subdomain's own internal relations —
+    so the crossing reads in the context of both subdomains' inner structure. The entity analog of
+    gen_edge_card_mermaid (only the a→b direction is drawn; the b→a arrow has its own card). Node ids +
+    relation shapes match the flat Domain view, so the class/relation bridge resolves any in-card
+    relation to its detail."""
+    ents_a = _entities_of(graph, a)
+    ents_b = _entities_of(graph, b)
+    ids_a = {eid for eid, _ in ents_a}
+    ids_b = {eid for eid, _ in ents_b}
+    lines = ["classDiagram",
+             *_subdomain_namespace(graph, a, ents_a),
+             *_subdomain_namespace(graph, b, ents_b)]
+    for e in _domain_relation_edges(graph):
+        s, d = str(e["src"]), str(e["dst"])
+        in_a = s in ids_a and d in ids_a       # a's inner wiring
+        in_b = s in ids_b and d in ids_b       # b's inner wiring
+        crossing = s in ids_a and d in ids_b   # the a→b link this card is for
+        if in_a or in_b or crossing:
+            lines.append(_class_relation_line(cast("dict[str, Any]", e)))
+    return "\n".join(lines)
+
+
+def domain_edge_card_mermaids(graph: GraphDict) -> dict[str, str]:
+    """One edge-card per directed top-subdomain pair that has a crossing relation, keyed 'A>B' to match
+    the rendered inter-subdomain arrow's endpoints (the entity analog of edge_card_mermaids)."""
+    pairs: set[tuple[str, str]] = set()
+    for e in _domain_relation_edges(graph):
+        ca, cb = _top_subdomain(graph, str(e["src"])), _top_subdomain(graph, str(e["dst"]))
+        if ca and cb and ca != cb:
+            pairs.add((ca, cb))
+    return {f"{a}>{b}": gen_domain_edge_card(graph, a, b) for a, b in sorted(pairs)}
 
 
 def gen_container_mermaid(graph: GraphDict) -> str:
@@ -934,6 +995,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              edge_cards: dict[str, str], container_edges: dict[str, list[dict[str, str]]],
              grouping: bool, domain_mm: str, domain: bool,
              domain_container_mm: str, domain_sub: dict[str, str],
+             domain_edge_cards: dict[str, str],
              domain_container_edges: dict[str, list[dict[str, str]]], subdomains: bool,
              gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool,
              libs_mm: str, folded: list[dict[str, str]],
@@ -957,6 +1019,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_DOMAIN__", json.dumps(domain_mm))
         .replace("__MERMAID_DOMAIN_CONTAINER__", json.dumps(domain_container_mm))
         .replace("__MERMAID_DOMAIN_SUB__", json.dumps(domain_sub))
+        .replace("__MERMAID_DOMAIN_EDGE_CARD__", json.dumps(domain_edge_cards))
         .replace("__DOMAIN_CONTAINER_EDGES__", json.dumps(domain_container_edges))
         .replace("__MERMAID_GP__", json.dumps(gp_mm))
         .replace("__MERMAID_GP_STEP__", json.dumps(gp_steps))
@@ -1002,6 +1065,7 @@ def main() -> int:
     subdomains = has_subdomains(graph)
     domain_container_mm = gen_domain_container_mermaid(graph) if subdomains else ""
     domain_sub = domain_subdomain_mermaids(graph) if subdomains else {}
+    domain_edge_cards = domain_edge_card_mermaids(graph) if subdomains else {}
     domain_container_edges = gen_domain_container_edges(graph) if subdomains else {}
     gp = has_gp(graph)
     gp_mm = gen_gp_mermaid(graph) if gp else ""
@@ -1019,7 +1083,7 @@ def main() -> int:
     gh_commit = graph["commit"]
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
-                    domain_container_mm, domain_sub, domain_container_edges, subdomains,
+                    domain_container_mm, domain_sub, domain_edge_cards, domain_container_edges, subdomains,
                     gp_mm, gp_steps, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")

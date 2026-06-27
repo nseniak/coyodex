@@ -81,7 +81,17 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
 - **Domain** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal
   relations (composition/aggregation/inheritance/association). Click a class for its fields +
-  `file:line`; click a relation for its kind + cardinality.
+  `file:line`; click a relation for its kind + cardinality. When the model groups entities into
+  **subdomains**, the Domain view drills exactly like Subsystems (in place, back/forward history):
+  - It leads with a **Subdomains overview** — one box per subdomain, with `SD→SD` arrows derived from
+    the crossing entity relations (count-labelled).
+  - Click a subdomain **box** → its *neighbourhood* card: the subdomain framed as a `namespace` holding
+    its own entities full (attributes + internal relations), with every other subdomain it relates to
+    drawn as a collapsed box joined by cross arrows. Click a neighbour box to re-center on it; click a
+    cross arrow to open that pair's edge view.
+  - Click an `SD→SD` **arrow** (overview or neighbourhood) → its edge view: the two subdomains both
+    framed, showing each one's inner relations plus the concrete entity relations that cross between
+    them. Class boxes ⌘-click to open source; relation arrows click for kind + cardinality.
 - **Diff overlay** — pass a change-impact report to recolor added/modified/deleted nodes and the
   elements they ripple to, with a baseline⇄diff toggle.
 
