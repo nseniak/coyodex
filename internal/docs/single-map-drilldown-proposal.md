@@ -220,3 +220,21 @@ map) is unaffected — one map, one root.
 - **Diagram density**: avoided by the "immediate children only" property — depth doesn't enlarge any
   single card.
 - **HTML size** grows (cards for every group) — acceptable.
+
+## Implementation log
+
+- **Phase 1a (done)** — subsystem cards render nested levels. `_child_under` / `_sibling_level_box`
+  replace flatten-to-top; `_components_of` = direct members; `_component_subgraph` draws child
+  subsystems as drillable boxes; `gen_subsystem_card_mermaid` buckets every endpoint at the card's
+  level; `subsystem_component_mermaids` emits a card for every subsystem. Flat byte-identical.
+- **Phase 1b (done)** — domain/subdomain symmetry (`_entities_of` direct, `_child_subdomains`,
+  `_descendant_entity_count`, `_sibling_subdomain_box`, `gen_domain_subdomain_card` level-relative,
+  `domain_subdomain_mermaids` all levels). Plus the **"immediate children only" rule**: a parent card
+  shows only its DIRECT members' deps/bridges; a child's deps/bridges live on the child's card (avoids
+  clutter and the cross-arrow-to-dep mis-binding).
+- **Re-sequenced** — **per-level edge cards** (`edge_card_mermaids` / `gen_container_edges` and the
+  domain twins for nested sibling pairs) move from A into **Phase B**: which edge-card keys must exist
+  is determined by the JS cross-arrow drill binding (`pa>pb` substitution,
+  [viewer.js:889](../../tools/viewer/viewer.js#L889)), so generating them is only correct alongside
+  that binding. Today nested **box** drill is fully data-backed (a card per level); nested cross-**arrow**
+  click + deep breadcrumb are Phase B. No flat map is affected.

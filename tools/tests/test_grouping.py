@@ -931,6 +931,63 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     return _VALID_HEAD + ctx + "## T5 — Domain model (domain cards)\n\n" + body
 
 
+def make_nested_subdomain_map() -> str:
+    """SD1 (top) nests SD2; SD3 is a top-level sibling. E1 is a DIRECT entity of SD1, E2 a grandchild
+    (in SD2), E3 in SD3. E1 contains E2 (direct entity -> child-subdomain box), E2 refersTo E3
+    (grandchild -> sibling subdomain). The domain mirror of make_nested_subsystem_map."""
+    contexts = (
+        "## Subdomains (SD)\n"
+        "| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **SD1** | Ordering | x |  | [order.py](order.py#L1) | inferred |\n"
+        "| **SD2** | Inner | x | SD1 | [order.py](order.py#L1) | inferred |\n"
+        "| **SD3** | Catalog | x |  | [product.py](product.py#L1) | inferred |\n\n"
+    )
+    cards = (
+        "**E1 — Order** *(orders)*\nSUBDOMAIN: SD1\nMEANING: a purchase\nFIELDS: id:ObjectId PK\n"
+        "RELATIONS: contains 1→* E2 LineItem\nSOURCE: [order.py](order.py#L12)\n\n"
+        "**E2 — LineItem**\nSUBDOMAIN: SD2\nMEANING: a line\nFIELDS: sku:string · prod:E3\n"
+        "RELATIONS: refersTo *→1 E3 Product\nSOURCE: [order.py](order.py#L58)\n\n"
+        "**E3 — Product**\nSUBDOMAIN: SD3\nMEANING: a product\nFIELDS: name:string\nSOURCE: [product.py](product.py#L9)\n"
+    )
+    return make_context_map(cards=cards, contexts=contexts)
+
+
+def test_nested_subdomain_validates_clean() -> None:
+    code, out = run_validator(make_nested_subdomain_map())
+    assert code == 0, out
+
+
+def test_nested_subdomain_has_card_at_every_level() -> None:
+    by_sd = gen_viewer.domain_subdomain_mermaids(parse_map(make_nested_subdomain_map()))
+    assert {"SD1", "SD2", "SD3"} <= set(by_sd)   # a card for the NESTED subdomain SD2, not only top-level
+
+
+def test_nested_subdomain_card_shows_child_box_not_flattened() -> None:
+    by_sd = gen_viewer.domain_subdomain_mermaids(parse_map(make_nested_subdomain_map()))
+    sd1 = by_sd["SD1"]
+    assert "namespace SD1[" in sd1
+    assert "E1" in sd1                    # direct entity
+    assert "class SD2[" in sd1           # child subdomain as a (drillable) collapsed box
+    assert "E2" not in sd1               # grandchild entity NOT flattened into the parent card
+    assert "E1 --> SD2" in sd1           # direct entity -> child-subdomain box (aggregated)
+
+
+def test_nested_subdomain_crossing_resolves_at_card_level() -> None:
+    by_sd = gen_viewer.domain_subdomain_mermaids(parse_map(make_nested_subdomain_map()))
+    sd1 = by_sd["SD1"]
+    assert "SD2 --> SD3" in sd1           # E2(in SD2) -> E3(in SD3) shows as child-box -> sibling box
+    sd2 = by_sd["SD2"]
+    assert "E2" in sd2 and "E2 --> SD3" in sd2
+
+
+def test_domain_overview_shows_only_top_level_subdomains() -> None:
+    cont = gen_viewer.gen_domain_container_mermaid(parse_map(make_nested_subdomain_map()))
+    assert 'SD1["' in cont and 'SD3["' in cont
+    assert 'SD2["' not in cont
+    assert "SD1 -->|1| SD3" in cont       # nested E2->E3 aggregates to the top SD1->SD3 arrow
+
+
 def test_iter_domain_cards_parses_context() -> None:
     by_id = {c.id: c for c in schema_v1.iter_domain_cards(make_context_map().splitlines())}
     assert by_id["E1"].subdomain == "SD1" and by_id["E2"].subdomain == "SD1" and by_id["E4"].subdomain == "SD2"

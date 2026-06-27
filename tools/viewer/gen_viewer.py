@@ -301,9 +301,37 @@ def _domain_relation_edges(graph: GraphDict) -> list[dict[str, Any]]:
 
 
 def _entities_of(graph: GraphDict, sdid: str) -> list[tuple[str, str]]:
-    """(id, name) of every entity whose top-level subdomain is `sdid` (mirrors _components_of)."""
+    """(id, name) of the DIRECT child entities of `sdid` (parent is exactly `sdid`), the domain mirror
+    of _components_of. Entities nested in child subdomains are drawn one level down, on those
+    subdomains' own cards. Leaf subdomain: direct == all, so flat maps are unchanged."""
     return [(eid, str(n["name"])) for eid, n in graph["nodes"].items()
-            if str(n["kind"]) == "entity" and _top_subdomain(graph, eid) == sdid]
+            if str(n["kind"]) == "entity" and _parent_of(graph, eid) == sdid]
+
+
+def _child_subdomains(graph: GraphDict, sdid: str) -> list[tuple[str, str]]:
+    """(id, name) of the DIRECT child subdomains of `sdid` — drawn inside its card as collapsed,
+    drillable boxes (the domain mirror of _child_subsystems). Empty for a leaf subdomain."""
+    return [(c, str(n["name"])) for c, n in graph["nodes"].items()
+            if str(n["kind"]) == "subdomain" and _parent_of(graph, c) == sdid]
+
+
+def _descendant_entity_count(graph: GraphDict, sdid: str) -> int:
+    """Number of entities anywhere under `sdid` (any depth) — the '(N)' shown on a collapsed neighbour
+    box or the Subdomains-overview box, so the label reflects the whole subtree, not just direct kids.
+    Flat: equals the direct count."""
+    return sum(1 for eid, n in graph["nodes"].items()
+               if str(n["kind"]) == "entity" and _child_under(graph, eid, sdid) is not None)
+
+
+def _sibling_subdomain_box(graph: GraphDict, nid: str, sdid: str) -> str | None:
+    """The subdomain box to draw `nid` as in `sdid`'s card when `nid` is OUTSIDE sdid's subtree — the
+    domain mirror of _sibling_level_box: the ancestor of `nid` sharing sdid's parent, else nid's
+    top-level subdomain. For a top-level `sdid` this is exactly `_top_subdomain(nid)`, so flat maps are
+    unchanged."""
+    b = _child_under(graph, nid, _parent_of(graph, sdid))
+    if b is not None and str(graph["nodes"].get(b, {}).get("kind")) == "subdomain":
+        return b
+    return _top_subdomain(graph, nid)
 
 
 def gen_domain_mermaid(graph: GraphDict) -> str:
@@ -349,7 +377,7 @@ def gen_domain_container_mermaid(graph: GraphDict) -> str:
     lines = ["flowchart TB"]
     for nid, node in graph["nodes"].items():
         if str(node["kind"]) == "subdomain" and _parent_of(graph, nid) is None:
-            n_ent = len(_entities_of(graph, nid))
+            n_ent = _descendant_entity_count(graph, nid)
             lines.append(f'  {nid}["{_safe_label(str(node["name"]))} ({n_ent})"]:::cy-{nid}')
             lines.append(f"  class {nid} subdomain")
     counts: dict[tuple[str, str], int] = {}
@@ -397,6 +425,8 @@ def _subdomain_namespace(graph: GraphDict, sdid: str,
     out = [f'namespace {sdid}["{nm} ({len(members)})"] {{']
     for eid, _ in members:
         out += _class_box_lines(eid, cast("dict[str, Any]", nodes[eid]), ent_names, with_members=True)
+    for cid, cname in _child_subdomains(graph, sdid):  # nested child subdomains: collapsed, drillable
+        out.append(f'  class {cid}["{_safe_label(cname)} ({_descendant_entity_count(graph, cid)})"]')
     out.append("}")
     return out
 
@@ -438,52 +468,66 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
     that subsystem's card, and a click on a cross arrow into the two-subdomain edge card. Node ids +
     relation shapes match the flat Domain view, so the class/relation bridge resolves a click to the
     entity panel or the relation detail."""
-    members = _entities_of(graph, sdid)
+    members = _entities_of(graph, sdid)          # direct child entities (drawn full)
     member_ids = {eid for eid, _ in members}
+    child_sd_ids = {c for c, _ in _child_subdomains(graph, sdid)}  # nested child subdomains (collapsed, drillable)
     nodes = graph["nodes"]
-    if not members:
+    if not members and not child_sd_ids:
         # A defined-but-empty subdomain would leave a body-less classDiagram, which Mermaid rejects
         # (the drill would throw). Emit a placeholder class so the card stays a VALID, self-explaining
         # diagram; its id carries no prefix+digits, so the viewer's id bridge skips it. (Returning here
         # also skips the relation/bridge loops below, which would all be empty with no member entities.)
         name = _safe_label(str(nodes[sdid]["name"])) if sdid in nodes else sdid
         return f'classDiagram\n  class EmptySubdomain["{name} — no entities"]'
-    internal: list[dict[str, Any]] = []   # both endpoints in this subdomain — drawn full
-    cross: set[tuple[str, str]] = set()   # rendered (src, dst): a focal entity ↔ a neighbour SD box (direction kept)
+    internal: list[dict[str, Any]] = []   # both endpoints DIRECT entities of this subdomain — drawn full
+    cross: set[tuple[str, str]] = set()   # focal box ↔ a neighbour-subdomain box (direction kept)
+    childcross: set[tuple[str, str]] = set()  # aggregated arrows touching a nested child-subdomain box
     nb_sds: set[str] = set()
+    # Bucket each relation endpoint at THIS card's level via `_child_under` (the domain mirror of the
+    # subsystem card): a direct entity buckets to itself, a deeper one to the child-subdomain box that
+    # holds it, an out-of-subtree one to None. Leaf subdomain -> each is the entity itself or None,
+    # identical to the old `in member_ids` / `_top_subdomain` flat behaviour.
     for e in _domain_relation_edges(graph):
         s, d = str(e["src"]), str(e["dst"])
-        s_in, d_in = s in member_ids, d in member_ids
-        if s_in and d_in:
-            internal.append(e)
-        elif s_in:
-            nb = _top_subdomain(graph, d)
+        bs, bd = _child_under(graph, s, sdid), _child_under(graph, d, sdid)
+        if bs is not None and bd is not None:          # both inside sdid's subtree
+            if bs == s and bd == d:
+                internal.append(e)                     # two direct entities -> full relation
+            elif bs != bd:
+                childcross.add((bs, bd))               # a child-subdomain box is involved -> aggregated
+        elif bs is not None:                           # outbound crossing to outside sdid
+            nb = _sibling_subdomain_box(graph, d, sdid)
             if nb and nb != sdid:
-                cross.add((s, nb))
+                cross.add((bs, nb))
                 nb_sds.add(nb)
-        elif d_in:
-            nb = _top_subdomain(graph, s)
+        elif bd is not None:                           # inbound crossing from outside sdid
+            nb = _sibling_subdomain_box(graph, s, sdid)
             if nb and nb != sdid:
-                cross.add((nb, d))
+                cross.add((nb, bd))
                 nb_sds.add(nb)
     lines = ["classDiagram", *_subdomain_namespace(graph, sdid, members)]
+    for cid in sorted(child_sd_ids):  # style the nested child-subdomain boxes (declared inside the namespace)
+        lines.append(f"  style {cid} {SUBDOMAIN_STYLE}")
     for nb in sorted(nb_sds):  # collapsed neighbour-subdomain boxes (member-less, count-labelled)
-        n_ent = len(_entities_of(graph, nb))
+        n_ent = _descendant_entity_count(graph, nb)
         lines.append(f'  class {nb}["{_safe_label(str(nodes[nb]["name"]))} ({n_ent})"]')
         lines.append(f"  style {nb} {SUBDOMAIN_STYLE}")  # magenta — same as a subdomain box anywhere else
-    lines += _subsystem_bridge_lines(graph, member_ids)  # reverse structure↔domain bridge (amber boxes + owns/reads)
+    lines += _subsystem_bridge_lines(graph, member_ids)  # reverse structure↔domain bridge over DIRECT members
     for e in internal:  # the focal subdomain's own relations, full
         lines.append(_class_relation_line(e))
     for src, dst in sorted(cross):  # crossing arrows to/from collapsed neighbour boxes (click → edge card)
+        lines.append(f"  {src} --> {dst}")
+    for src, dst in sorted(childcross):  # nested child-subdomain arrows (aggregated; box drills in)
         lines.append(f"  {src} --> {dst}")
     return "\n".join(lines)
 
 
 def domain_subdomain_mermaids(graph: GraphDict) -> dict[str, str]:
-    """One per-subdomain card per top-level subdomain (see gen_domain_subdomain_card)."""
+    """One per-subdomain card per subdomain at EVERY level (see gen_domain_subdomain_card), so a nested
+    child subdomain has its own card to drill into — the domain mirror of subsystem_component_mermaids."""
     return {nid: gen_domain_subdomain_card(graph, nid)
             for nid, node in graph["nodes"].items()
-            if str(node["kind"]) == "subdomain" and _parent_of(graph, nid) is None}
+            if str(node["kind"]) == "subdomain"}
 
 
 def gen_domain_edge_card(graph: GraphDict, a: str, b: str) -> str:
@@ -661,23 +705,19 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
         s, d = str(e["src"]), str(e["dst"])
         ks, kd = str(graph["nodes"].get(s, {}).get("kind")), str(graph["nodes"].get(d, {}).get("kind"))
         bs, bd = _child_under(graph, s, sid), _child_under(graph, d, sid)
-        if kd == "dep":                                  # the subtree touches a dep (drawn outside)
-            if bs is not None:
+        if kd == "dep":                                  # a DIRECT member's dep (a child's deps live on its own card)
+            if bs == s:
                 deps.add(d)
-                if bs != s:                              # reached via a child subsystem -> aggregated box arrow
-                    childcross.add((bs, d))
             continue
         if ks == "dep":
-            if bd is not None:
+            if bd == d:
                 deps.add(s)
-                if bd != d:
-                    childcross.add((s, bd))
             continue
-        if kd == "entity":                               # bridge: the subtree touches a domain entity
-            if bs is not None:
+        if kd == "entity":                               # bridge: a DIRECT member touches a domain entity
+            if bs == s:
                 sd = _top_subdomain(graph, d)
                 if sd:
-                    bridges.add((bs, sd, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
+                    bridges.add((s, sd, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
             continue
         if ks == "entity":
             continue
