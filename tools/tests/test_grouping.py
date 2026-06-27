@@ -659,6 +659,23 @@ def test_render_produces_self_contained_html() -> None:
         assert 'rel="icon"' in html   # inline favicon -> no /favicon.ico 404, stays self-contained
 
 
+def test_render_bakes_nested_drill_data() -> None:
+    # End-to-end: a nested map's HTML carries an edge card for each DISJOINT cross-pair at every level
+    # (S2>S3 nested, S1>S3 overview) and omits the overlapping parent-child pair (S1>S2, which navigates).
+    with tempfile.TemporaryDirectory() as d:
+        md = Path(d) / "project-map.md"
+        md.write_text(make_nested_subsystem_map(), encoding="utf-8")
+        out = Path(d) / "project-map.html"
+        r = subprocess.run(
+            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            capture_output=True, text=True,
+        )
+        assert r.returncode == 0, r.stdout + r.stderr
+        html = out.read_text(encoding="utf-8")
+        assert '"S2>S3"' in html and '"S1>S3"' in html
+        assert '"S1>S2"' not in html
+
+
 # --- domain cards (T5) ----------------------------------------------------------
 def test_parse_card_fields_markers() -> None:
     fs = schema_v1.parse_card_fields(["id: ObjectId PK", "email: string unique", "note"])

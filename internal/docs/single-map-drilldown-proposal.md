@@ -252,3 +252,17 @@ map) is unaffected — one map, one root.
     DISJOINT pair to its edge card (guarded by existence) — for both `bindSubsystem` and `bindDomainSub`.
   - Flat maps render byte-identical throughout. End-to-end: a nested map bakes `S2>S3` + `S1>S3`, omits
     the overlapping `S1>S2`.
+- **Phase C (done)** — validator warnings (all non-blocking): `MAX_DEPTH(3)` → `DEEP_NEST_WARN(5)` and
+  the depth check demoted from a hard error to a warning (`check_hierarchy` now returns
+  `(problems, warnings)`); `check_altitude_hints` (a component whose row lists ≥6 bare sub-unit names);
+  redundant-nesting-level nudge (a group whose only child is another group of the same kind).
+- **Phase D (done)** — docs: `dispatch.md` (deeper = refine in place; child maps unsupported),
+  `method.md` ("Drilling deeper" rule + recursive-drill note), `schema-v1.md` (recursive render + depth
+  advisory, both altitudes), `diagrams.md`, `change-impact.md` (Promotion change shape), the template
+  (nested S3 + SD2 examples), `viewer/README.md`.
+- **Phase E (done)** — tests: validator warnings (×3), nested subsystem/subdomain cards + edge cards,
+  per-level container edges, and a render-level end-to-end nested assertion. 128 tests; pyright +
+  `node --check` clean.
+- **Phase F (done)** — `VERSION` 0.1.0 → 0.2.0; the scratch `_a4_demo` was removed; the existing mee6
+  `plugins/` child map is left for the user to convert via the documented recipe.
+- **Remaining** — independent adversarial review of the whole change (viewer-wide blast radius).
