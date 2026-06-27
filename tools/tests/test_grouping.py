@@ -463,6 +463,25 @@ def test_container_overview_shows_only_top_level_subsystems() -> None:
     assert "S1 -->|1| S3" in cont
 
 
+def test_nested_edge_cards_for_disjoint_pairs_only() -> None:
+    # The parent->child crossing (C1->C2, the S1>S2 overlap) is NOT an edge card — it's navigated.
+    # The disjoint crossing C2->C3 gets a card at every level it is drawn: S2>S3 (nested card) and
+    # S1>S3 (overview / S1 card), each framing two non-overlapping subsystems.
+    cards = gen_viewer.edge_card_mermaids(parse_map(make_nested_subsystem_map()))
+    assert "S1>S2" not in cards
+    assert {"S2>S3", "S1>S3"} <= set(cards)
+    s2s3 = cards["S2>S3"]
+    assert "subgraph S2[" in s2s3 and "subgraph S3[" in s2s3
+    assert "C2 -->|calls| C3" in s2s3            # a direct-member crossing stays labelled
+    assert "S2 --> C3" in cards["S1>S3"]         # a crossing reaching into child S2 is an aggregated box arrow
+
+
+def test_nested_container_edges_keyed_per_level() -> None:
+    ce = gen_viewer.gen_container_edges(parse_map(make_nested_subsystem_map()))
+    assert {"S2>S3", "S1>S3"} <= set(ce)
+    assert {(r["src"], r["dst"]) for r in ce["S2>S3"]} == {("C2", "C3")}
+
+
 def test_container_edges_list_crossing_component_edges() -> None:
     # Each inter-subsystem arrow 'A>B' carries the underlying component->component edges (endpoints,
     # names, verb, why) so the viewer lists their meanings in the arrow's hover tooltip.

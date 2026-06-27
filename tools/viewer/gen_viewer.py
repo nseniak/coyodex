@@ -627,25 +627,64 @@ def gen_container_mermaid(graph: GraphDict) -> str:
     return "\n".join(lines)
 
 
-def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
-    """For each inter-subsystem arrow 'A>B' drawn in the Subsystems view, the underlying
-    component->component edges that cross from A to B (endpoints, names, verb, why) — the viewer
-    lists their meanings in the arrow's hover tooltip. Mirrors the crossing logic in
-    gen_container_mermaid, so each list's length equals that arrow's count label."""
-    out: dict[str, list[dict[str, str]]] = {}
+def _subsystem_ancestors(graph: GraphDict, nid: str) -> list[str]:
+    """The subsystem ids on `nid`'s parent chain (nearest first) — the boxes `nid` collapses into at
+    successive drill levels. Used to enumerate the disjoint pairs a component edge crosses between."""
+    out: list[str] = []
+    cur, seen = _parent_of(graph, nid), set()
+    while cur and cur not in seen:
+        seen.add(cur)
+        if str(graph["nodes"].get(cur, {}).get("kind")) == "subsystem":
+            out.append(cur)
+        cur = _parent_of(graph, cur)
+    return out
+
+
+def _in_subtree(graph: GraphDict, nid: str, anc: str) -> bool:
+    """True when `nid` is strictly inside `anc`'s subtree (its level-relative bucket exists)."""
+    return _child_under(graph, nid, anc) is not None
+
+
+def _disjoint(graph: GraphDict, a: str, b: str) -> bool:
+    """True when subsystems `a` and `b` are neither equal nor nested — so they can frame a two-box edge
+    card without overlapping. Overlapping (ancestor/descendant) pairs are navigated, never carded."""
+    return a != b and not _in_subtree(graph, a, b) and not _in_subtree(graph, b, a)
+
+
+def _edge_card_pairs(graph: GraphDict) -> dict[tuple[str, str], list[dict[str, Any]]]:
+    """Every disjoint ordered subsystem pair (a, b) a component edge crosses between, with the crossing
+    edges. `a`/`b` range over the subsystem ancestors of the edge's endpoints, so this covers the pair
+    at EVERY drill level (the top-level overview arrow AND a nested card's cross arrow) — a superset of
+    what any single card draws, keyed to match the viewer's edge bridge. The single source for both the
+    edge-card diagrams and the per-arrow crossing lists."""
+    out: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
-        sa, sb = _top_subsystem(graph, s), _top_subsystem(graph, d)
-        if sa and sb and sa != sb:
-            sn, dn = graph["nodes"].get(s), graph["nodes"].get(d)
-            out.setdefault(f"{sa}>{sb}", []).append({
-                "src": s,
-                "dst": d,
-                "srcName": str(sn["name"]) if sn else s,
-                "dstName": str(dn["name"]) if dn else d,
-                "verb": str(e["verb"]),
-                "why": str(e["why"]) if e["why"] else "",
-            })
+        if str(graph["nodes"].get(s, {}).get("kind")) != "component" \
+                or str(graph["nodes"].get(d, {}).get("kind")) != "component":
+            continue
+        for a in _subsystem_ancestors(graph, s):
+            for b in _subsystem_ancestors(graph, d):
+                if _disjoint(graph, a, b):
+                    out.setdefault((a, b), []).append(e)
+    return out
+
+
+def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """For each inter-subsystem arrow 'A>B' the viewer can draw — at the Subsystems overview AND inside
+    any (possibly nested) subsystem card — the underlying component->component edges crossing from A's
+    subtree to B's (endpoints, names, verb, why), listed in the arrow's hover tooltip / select panel.
+    Derived from the one _edge_card_pairs source, keyed 'A>B' to match the edge bridge."""
+    out: dict[str, list[dict[str, str]]] = {}
+    for (a, b), edges in _edge_card_pairs(graph).items():
+        out[f"{a}>{b}"] = [{
+            "src": str(e["src"]),
+            "dst": str(e["dst"]),
+            "srcName": str(graph["nodes"][str(e["src"])]["name"]) if str(e["src"]) in graph["nodes"] else str(e["src"]),
+            "dstName": str(graph["nodes"][str(e["dst"])]["name"]) if str(e["dst"]) in graph["nodes"] else str(e["dst"]),
+            "verb": str(e["verb"]),
+            "why": str(e["why"]) if e["why"] else "",
+        } for e in edges]
     return out
 
 
@@ -775,13 +814,12 @@ def subsystem_component_mermaids(graph: GraphDict) -> dict[str, str]:
 
 
 def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
-    """Edge card: subsystems `a` and `b` as two subgraph frames holding ALL their components
-    (Q2=A), drawn with the a->b component edges that cross between them PLUS each subsystem's own
-    internal component->component wiring — so the crossing reads in the context of both subsystems'
-    inner structure. Deps and edges to other subsystems are still omitted, and only the a->b
-    direction of the crossing is drawn (the b->a arrow has its own card). Node ids +
-    `src -->|verb| dst` match the component view, so the viewer's edge bridge resolves any in-card
-    arrow to its real component edge."""
+    """Edge card: disjoint subsystems `a` and `b` as two frames holding their IMMEDIATE children
+    (components + child-subsystem boxes), drawn with the a->b crossings between them PLUS each frame's
+    own internal component wiring. A crossing between two DIRECT members keeps its `src -->|verb| dst`
+    so the viewer's edge bridge resolves it to the real component edge; a crossing reaching into a child
+    subsystem is an aggregated box arrow. Deps and other-subsystem edges are omitted, and only the a->b
+    direction is drawn (the b->a arrow has its own card)."""
     members_a = {cid for cid, _ in _components_of(graph, a)}
     members_b = {cid for cid, _ in _components_of(graph, b)}
     lines = ["flowchart LR", *_component_subgraph(graph, a), *_component_subgraph(graph, b)]
@@ -789,23 +827,29 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
         lines.append(f"  {src} -->|{verb}| {dst}")
     for src, verb, dst in _diagram_edges(graph, None, members_b):  # b's inner links
         lines.append(f"  {src} -->|{verb}| {dst}")
-    for e in graph["edges"]:  # the a->b crossing edges (the link this card is for)
+    agg: set[tuple[str, str]] = set()
+    for e in graph["edges"]:  # the a->b crossings, bucketed to each frame's immediate children
         s, d = str(e["src"]), str(e["dst"])
-        if _top_subsystem(graph, s) == a and _top_subsystem(graph, d) == b:
+        if not (_in_subtree(graph, s, a) and _in_subtree(graph, d, b)):
+            continue
+        ba, bb = _child_under(graph, s, a), _child_under(graph, d, b)
+        if ba == s and bb == d:                      # both direct members -> labelled (resolves to the edge)
             lines.append(f"  {s} -->|{e['verb']}| {d}")
+        else:                                        # reaches into a child subsystem -> aggregated box arrow
+            agg.add((str(ba), str(bb)))
+    for src, dst in sorted(agg):
+        lines.append(f"  {src} --> {dst}")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
+    if _child_subsystems(graph, a) or _child_subsystems(graph, b):  # child boxes present -> style them
+        lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     return "\n".join(lines)
 
 
 def edge_card_mermaids(graph: GraphDict) -> dict[str, str]:
-    """One edge-card diagram per directed top-subsystem pair that has a crossing component edge,
-    keyed 'A>B' to match the rendered inter-subsystem arrow's endpoints."""
-    pairs: set[tuple[str, str]] = set()
-    for e in graph["edges"]:
-        sa, sb = _top_subsystem(graph, str(e["src"])), _top_subsystem(graph, str(e["dst"]))
-        if sa and sb and sa != sb:
-            pairs.add((sa, sb))
-    return {f"{a}>{b}": gen_edge_card_mermaid(graph, a, b) for a, b in sorted(pairs)}
+    """One edge-card diagram per disjoint subsystem pair with a crossing component edge — at every drill
+    level, not only top-level — keyed 'A>B' to match the rendered arrow's endpoints (overview or nested
+    card). Built from the one _edge_card_pairs source."""
+    return {f"{a}>{b}": gen_edge_card_mermaid(graph, a, b) for (a, b) in sorted(_edge_card_pairs(graph))}
 
 
 def compute_state(graph: GraphDict, diff: DiffDict | None) -> dict[str, str]:

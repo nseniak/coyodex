@@ -897,6 +897,23 @@ function bindDomainSub(sd) {
     }
   });
 }
+// `a` is a strict ancestor of `node` in the group tree (walks parent pointers; seen-set guards a cycle).
+function isAncestorOf(a, node) {
+  let cur = GRAPH.nodes[node] && GRAPH.nodes[node].parent; const seen = new Set();
+  while (cur && !seen.has(cur)) { if (cur === a) return true; seen.add(cur); cur = GRAPH.nodes[cur] && GRAPH.nodes[cur].parent; }
+  return false;
+}
+// Two group boxes can frame a two-box edge card only when neither contains the other.
+function disjointBoxes(x, y) { return x !== y && !isAncestorOf(x, y) && !isAncestorOf(y, x); }
+// An arrow whose pair OVERLAPS (one box contains the other) can't be a two-box edge card, so it instead
+// navigates to a single box: plain click shows that box's panel, ⌘-click opens its card (descend into a
+// child, or zoom out to an ancestor). Also the fallback when an edge card happens not to exist.
+function bindNavEdge(p, label, a, b, target) {
+  const k = GRAPH.nodes[target] && GRAPH.nodes[target].kind;
+  const dest = k === 'subdomain' ? { kind: 'domsub', sd: target } : { kind: 'subsystem', sid: target };
+  bindSelectEdge(mainScene, p, label, { src: a, dst: b }, 'navedge:' + a + '>' + b,
+    () => showNode(target), { onDrill: () => go(dest), actionFn: () => actionTipNode(target) });
+}
 function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click on a neighbour box / cross arrow drills
   bindNodes(mainScene, (id, el, ev) => {
     // A neighbour subsystem box: plain click shows its info, ⌘-click walks into it. A bridge subdomain
@@ -915,16 +932,25 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
     const a = m[1], b = m[2];
     const ka = GRAPH.nodes[a] && GRAPH.nodes[a].kind;
     const kb = GRAPH.nodes[b] && GRAPH.nodes[b].kind;
-    if (ka === 'subsystem' || kb === 'subsystem') {  // cross arrow: select shows its crossings; ⌘-click drills the pair
-      const pa = ka === 'subsystem' ? a : sid, pb = kb === 'subsystem' ? b : sid;
-      bindContainerEdge(mainScene, p, label, pa, pb, { src: a, dst: b });  // focus on the DRAWN endpoints
-    } else if (ka === 'subdomain' || kb === 'subdomain') {  // bridge arrow: a member component <-> a subdomain box
+    if (ka === 'subdomain' || kb === 'subdomain') {  // bridge arrow: a member component <-> a subdomain box
       const sd = ka === 'subdomain' ? a : b;
       bindBridgeEdge(mainScene, p, label, a, b, { kind: 'bridge', sid: sid, sd: sd }, sd);  // ⌘ -> the S×SD bridge card
-    } else {
-      const r = resolveComponentEdge(m);
-      if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
+      return;
     }
+    const subA = ka === 'subsystem', subB = kb === 'subsystem';
+    if (subA && subB) {  // box <-> box: disjoint siblings drill to the pair's edge card; nested ones navigate
+      if (disjointBoxes(a, b) && MERMAID_EDGE_CARD[a + '>' + b]) bindContainerEdge(mainScene, p, label, a, b, { src: a, dst: b });
+      else bindNavEdge(p, label, a, b, isAncestorOf(a, b) ? b : a);  // descend into the deeper box
+      return;
+    }
+    if (subA || subB) {  // member <-> box. The member side collapses to THIS card's subsystem (sid).
+      const box = subA ? a : b, pa = subA ? a : sid, pb = subB ? b : sid;
+      if (disjointBoxes(box, sid) && MERMAID_EDGE_CARD[pa + '>' + pb]) bindContainerEdge(mainScene, p, label, pa, pb, { src: a, dst: b });
+      else bindNavEdge(p, label, a, b, box);  // box is a child to descend into, or an ancestor to zoom out to
+      return;
+    }
+    const r = resolveComponentEdge(m);  // member <-> member: the real labelled component edge
+    if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
   });
 }
 function bindEdgePair() {  // both subsystems framed; arrows are component edges
