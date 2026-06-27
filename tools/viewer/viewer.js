@@ -284,13 +284,6 @@ function gpTouched(s) {
   return new Set((s && s.touches || []).filter((t) => GRAPH.nodes[t]
     && ['component', 'dep', 'entity'].includes(GRAPH.nodes[t].kind)));
 }
-// Level-1 default panel: the Golden Path at a glance; the diagram is where you click a step.
-function showGPOverview() {
-  const n = (GRAPH.gp || []).length;
-  panel.innerHTML = '<h2>Golden Path</h2>'
-    + '<div class="badges"><span class="badge kind">' + n + ' step' + (n === 1 ? '' : 's') + '</span></div>'
-    + '<p class="empty">Click a step to see the components it uses.</p>';
-}
 // One step's narrative (actor · story · under the hood) + a link back to the full Components map with
 // this step's touched nodes spotlighted. Used as the Level-2 default panel AND when a step is selected
 // at Level 1, so a plain click reads the same detail without drilling. The driving actor comes from
@@ -1152,7 +1145,6 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
   else if (s.kind === 'domedge') showTwoSubdomains(s.a, s.b);
   else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
-  else if (s.kind === 'gp') showGPOverview();
   else if (s.kind === 'gpstep') showGPStep(s.gp);
   else if (s.kind === 'libs') showLibsFold();
   // Every overview without a more specific default (Context, Subsystems, Components, Domain) opens on
