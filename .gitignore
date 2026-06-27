@@ -5,4 +5,3 @@ internal/
 __pycache__/
 .playwright-mcp/
 tools/viewer/build/
-skill/coyodex/.coyodex-home

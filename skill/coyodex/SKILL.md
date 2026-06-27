@@ -11,37 +11,9 @@ description: >
 
 # coyodex
 
-coyodex is a method (prompts) + tools for building and maintaining a drillable map of a codebase.
-**This skill only bootstraps and routes — the method docs are the source of truth. Read the doc for
-your mode and follow it; don't restate it or work from memory.**
+coyodex is a method (prompts) + tools for a drillable map of a codebase. **The repo is the source of
+truth — this skill only points at it. Read the method docs and follow them; don't work from memory.**
 
-## Step 0 — locate the coyodex clone (always first)
-
-The method lives in a separate `coyodex` repo. `make install` writes its path to
-`~/.claude/skills/coyodex/.coyodex-home`, so read that first and only search if it is missing:
-
-```
-COYODEX="$(cat ~/.claude/skills/coyodex/.coyodex-home 2>/dev/null)"
-if [ -z "$COYODEX" ] || [ ! -f "$COYODEX/method.md" ]; then
-  for d in ~/Projects/coyodex ../coyodex ../../coyodex ~/coyodex; do
-    [ -f "$d/method.md" ] && COYODEX="$d" && break
-  done
-fi
-echo "$COYODEX"
-```
-
-If still empty, ask the user for the path. Call every tool by its path inside that clone
-(`$COYODEX/tools/...`). Ignore the clone's `internal/` folder — design rationale, not the method.
-
-## Pick the mode, read its doc, follow it
-
-| The user wants | Mode | Read fully, then follow |
-|---|---|---|
-| new map / "map this repo" / "build the baseline" | **Build** | `method.md` (+ `method/schema-v1.md`, `method/domain-cards.md`); start from `method/templates/project-map.template.md` |
-| "I changed code, what's the impact?" | **Analyze** | `method/change-impact.md` |
-| "the report looks right, accept it" | **Accept** | `method/change-impact.md` |
-
-Invariant: the map is the single source at the analyzed repo's `.coyodex/project-map.md`; after every
-write, validate (`$COYODEX/tools/validate_analysis.py --check-sources` — the flag reads each domain
-card's SOURCE file to reject synthesized entities) then render
-(`$COYODEX/tools/viewer/render.py`) — the HTML is a rendering, never a second source.
+Read `__COYODEX_HOME__/method/dispatch.md` and follow it. It picks the mode (build / analyze /
+accept), handles an existing baseline, and points to every other doc and tool. Every path it
+mentions is relative to `__COYODEX_HOME__` — the coyodex clone.

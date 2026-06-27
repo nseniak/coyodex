@@ -10,7 +10,7 @@ Two linked families:
 
 They join at **use case ↔ flow**.
 
-See also: [schema v1](method/schema-v1.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
+See also: [dispatch](method/dispatch.md) · [schema v1](method/schema-v1.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
 
 The method is `method.md` and the `method/` docs (plus `tools/`). The coyodex repo's
 **`internal/`** folder (design rationale, working notes) is **not** part of the method — ignore it
@@ -247,9 +247,12 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > concept; type embedded fields by their entity (`auth:E7`) so relations carry the field name.
 > (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)
 
-**Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
-root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
-it was built at (the baseline pin — see the pin gate below).
+**Output files — map + diagrams.** Build writes a **new** baseline and overwrites any existing
+`.coyodex/project-map.md`, so you should only be here for a first map or a user-confirmed rebuild —
+[dispatch](method/dispatch.md) routes an existing baseline to Analyze, not Build. Write the full
+analysis to `.coyodex/project-map.md` at the root of the analyzed repo, conform to
+[schema v1](method/schema-v1.md), and record in it the commit it was built at (the baseline pin —
+see the pin gate below).
 
 **Baseline pin — require committed code, or record it dirty.** The pin must mean "the map describes
 *exactly* this commit". The map you just read reflects the **working tree**, so if the code has

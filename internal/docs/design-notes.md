@@ -147,6 +147,39 @@ viewer still loads Mermaid + svg-pan-zoom from a CDN (version-pinned + SRI, so n
 and a tampered file is rejected, but it needs network at view time). Vendoring those two libs into
 the artifact would close that last gap; deferred, not rejected.
 
+### The skill is a pure pointer; the method is the source of truth
+The installed Claude skill (`skill/coyodex/SKILL.md`) does **only two things**: locate the coyodex
+clone (read `.coyodex-home`, else search) and hand off to [`method/dispatch.md`](../../method/dispatch.md).
+No mode logic, no routing table, no procedure lives in the skill. Reason: the skill is **installed
+once**, but the method **evolves continuously in the repo**. Anything that can change — how to pick
+build/analyze/accept, how to handle an existing baseline, the validate-then-render invariant — must
+live where it evolves: the method docs, read fresh on every invocation. If routing lived in the
+skill it would go stale the moment the method changed and could only be fixed by reinstalling.
+Keeping the skill a thin, stable pointer means the contract "find the repo, obey the repo" never has
+to change. Rejected: the earlier skill carried the mode/routing table inline — moved to
+`method/dispatch.md` so the skill holds nothing that can rot.
+
+**Install bakes the path; no runtime lookup.** `make install` copies `SKILL.md` into
+`~/.claude/skills/coyodex` and substitutes the clone's absolute path for the `__COYODEX_HOME__`
+placeholder. So the installed skill is just "read `<clone>/method/dispatch.md` and follow it" — it
+needs no Step-0 locate, no `.coyodex-home`, no fallback search. This keeps the skill the purest
+possible pointer while the method/tools are still read live from the repo (so they keep evolving).
+Rejected the earlier **symlink** install (which kept `SKILL.md` live-from-repo): a symlink can't
+carry a machine-specific path without dirtying the tracked file, and it forced the runtime locate
+step the bake removes. Cost accepted: editing the skill *pointer itself* now needs a reinstall — but
+it is stable by design, so that is essentially never.
+
+### Dispatch: an existing baseline defaults to Analyze, never a silent rebuild
+When coyodex is invoked and `.coyodex/project-map.md` already exists, the default is **Analyze**, not
+Build. Reason: Build regenerates the map from scratch and **overwrites the curated, reviewed
+baseline** — losing manual fixes and the pin history; that destruction must never be a fallback for
+an ambiguous invocation. A freshness check guards the empty case: if the pinned commit equals the
+current code (`git diff --quiet <pin> -- . ':(exclude).coyodex'`), report "baseline is up to date"
+instead of producing an empty diff. Rebuild stays available but only on an **explicit, confirmed**
+request. Rejected: defaulting to Build/overwrite (silently destroys curation); asking on every run
+(safe but adds friction to the common Analyze path). This lives in `method/dispatch.md`, consistent
+with the skill-is-a-pointer principle above.
+
 ## What was deliberately deferred
 
 - A precomputed index / call-graph (revisit only at scale).

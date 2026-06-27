@@ -4,17 +4,17 @@ SKILLS_DIR := $(HOME)/.claude/skills
 .PHONY: install uninstall
 
 # Install the coyodex skill globally (macOS/Linux).
-# - symlinks the skill into ~/.claude/skills so the global skill always
-#   reflects this repo's edits
-# - writes this repo's absolute path into .coyodex-home so the skill points
-#   straight here instead of searching for the clone
+# Copies SKILL.md into ~/.claude/skills/coyodex with this repo's absolute path
+# baked in (replacing __COYODEX_HOME__), so the skill points straight here with
+# no runtime lookup. The method docs and tools are still read live from this
+# repo, so they keep evolving without reinstalling. Re-run install only if you
+# move the repo or edit SKILL.md itself.
 install:
-	mkdir -p $(SKILLS_DIR)
-	ln -sfn $(REPO)/skill/coyodex $(SKILLS_DIR)/coyodex
-	echo $(REPO) > $(REPO)/skill/coyodex/.coyodex-home
+	rm -rf $(SKILLS_DIR)/coyodex
+	mkdir -p $(SKILLS_DIR)/coyodex
+	sed 's|__COYODEX_HOME__|$(REPO)|g' skill/coyodex/SKILL.md > $(SKILLS_DIR)/coyodex/SKILL.md
 	@echo "Installed coyodex skill -> $(SKILLS_DIR)/coyodex (home: $(REPO))"
 
 uninstall:
-	rm -f $(SKILLS_DIR)/coyodex
-	rm -f $(REPO)/skill/coyodex/.coyodex-home
+	rm -rf $(SKILLS_DIR)/coyodex
 	@echo "Uninstalled coyodex skill from $(SKILLS_DIR)/coyodex"

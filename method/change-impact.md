@@ -38,7 +38,8 @@ baseline pinned @ C0  ───────────────────�
    step 2: git diff C1..C2 ...
 ```
 
-- The **pin = the last accepted point.** Diff left endpoint = pin, right endpoint = now.
+- The **pin = the last accepted point.** Diff left endpoint = pin, right endpoint = **now = the
+  current working tree** (includes uncommitted edits and new files, so analysis runs on a dirty tree).
 - Between edits and accept the baseline lags the code on purpose; that lag is exactly what
   the diff describes. Accept zeroes it.
 - **Cadence is yours:** several code commits then one accept → a cumulative `pin..now` diff;
@@ -53,8 +54,12 @@ baseline pinned @ C0  ───────────────────�
 - **Cheaper direction.** Start from the change set and trace OUTWARD to the elements it
   reaches. Do NOT walk every baseline element asking "is it affected?" (that's O(all
   elements) and forces proving a negative for each).
-- **Baseline pin.** The diff is `git diff <baseline-commit>..<now>` (use `-M` so renames are
-  renames). git is ground truth for added/deleted/renamed.
+- **Baseline pin.** The diff is `git diff <baseline-commit>` — pin **to the current working tree**,
+  not commit-to-commit, so it captures committed changes *and* uncommitted edits (use `-M` so renames
+  are renames). A plain `git diff` omits **untracked** new files, so also list them
+  (`git ls-files --others --exclude-standard`) and treat them as added. git is ground truth for
+  added/deleted/renamed. (Analysis runs fine on a dirty tree; *accepting* still needs committed code
+  — the pin gate in `method.md`.)
 - **Per change.** Classify modified / added / deleted; **ripple** by following the changed
   element's relationships (edge list) to downstream elements and Golden Path steps. Verify by
   reading the changed code; a pure refactor/move with no behavior change = "no analysis
