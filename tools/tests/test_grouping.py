@@ -1040,6 +1040,26 @@ def test_subsystem_card_bridges_to_contexts_owns_and_reads() -> None:
     assert "class SD1 subdomain" in s2 and "C2 -->|reads| SD1" in s2      # reads -> it merely CONSUMES it
 
 
+def test_subdomain_card_bridges_to_subsystems_owns_and_reads() -> None:
+    # The reverse of test_subsystem_card_bridges_to_contexts: a subdomain card draws every subsystem
+    # whose components own/read its entities as a collapsed (amber) box with an owns/reads arrow INTO
+    # the entity — the structure↔domain bridge seen from the domain side.
+    sd1 = gen_viewer.domain_subdomain_mermaids(parse_map(make_bridge_map()))["SD1"]
+    assert 'namespace SD1[' in sd1 and 'class E1["Order"] {' in sd1
+    assert 'class S1["Edge"]' in sd1 and "S1 --> E1 : owns" in sd1        # the writer subsystem OWNS the entity
+    assert 'class S2["Core"]' in sd1 and "S2 --> E1 : reads" in sd1       # the reader subsystem READS it
+    assert "style S1 fill:" in sd1                                        # subsystem box styled (amber), distinct from entities
+
+
+def test_subdomain_card_has_no_subsystem_box_without_bridges() -> None:
+    # Regression mirror: a pure domain map (no C->E edges, no subsystems) draws no subsystem box / amber
+    # styling in the subdomain card. (Neighbour SUBDOMAIN boxes are still drawn + styled magenta.)
+    sd1 = gen_viewer.domain_subdomain_mermaids(parse_map(make_context_map()))["SD1"]
+    assert "class S1" not in sd1
+    assert gen_viewer.SUBSYSTEM_STYLE not in sd1                # no amber (subsystem) styling
+    assert f"style SD2 {gen_viewer.SUBDOMAIN_STYLE}" in sd1     # neighbour subdomain IS styled magenta
+
+
 def test_subsystem_card_has_no_context_box_without_bridges() -> None:
     # Regression: a map with no C->E edges draws no subdomain box / classDef in the subsystem card.
     s1 = gen_viewer.subsystem_component_mermaids(parse_map(make_card_map()))["S1"]

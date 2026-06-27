@@ -37,7 +37,11 @@ const GP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Golden-Path selection: just a
 const DIM = '0.15';  // opacity for non-focused elements
 const EMPTY_PANEL = '<p class="empty">Click a node or edge to see details.</p>';
 
-mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default', flowchart: { curve: 'basis' } });
+// `class.hideEmptyMembersBox`: a member-less class renders as a plain box (no empty UML compartments),
+// so the subdomain card's collapsed neighbour boxes (subsystems/subdomains) read as simple boxes, like
+// the flowchart cards — only real entities (with attributes) keep the class compartments.
+mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default',
+  flowchart: { curve: 'basis' }, class: { hideEmptyMembersBox: true } });
 
 const diagram = document.getElementById('diagram');
 const stage = document.getElementById('stage');
@@ -557,9 +561,10 @@ function bindNodes(scene, onActivate) {
   scene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id]) return;
-    // Subsystem boxes (a neighbourhood diagram's collapsed neighbours) stay out of the focus set, so
-    // selecting a component dims the internal neighbourhood — not the external boxes. Still clickable.
-    if (GRAPH.nodes[id].kind !== 'subsystem') scene.nodeEls[id] = el;
+    // Every drawn box joins the focus set, so selecting a node keeps only its connected boxes lit and
+    // dims the rest — collapsed neighbour boxes (subsystems/subdomains) included, the same as the
+    // members. (Their bridge/cross arrows are registered as edges, so focus resolves the connection.)
+    scene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
     markOpenSrc(el, id);  // leaf with a source ref -> ⌘-held cursor shows the open-source affordance
     // Hover affordance — skip while this node is the active selection, so HILITE wins.
@@ -651,11 +656,25 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
 // An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
 // the sidebar lists every component→component crossing it bundles — and a ⌘-click drills into the
 // two-subsystem edge view. Reuses the select-edge machinery with a container-edge panel + tip.
-function bindContainerEdge(scene, p, label, a, b) {
-  bindSelectEdge(scene, p, label, { src: a, dst: b }, 'sedge:' + a + '>' + b,
+// `focusE` overrides the endpoints used for the focus/dim pass (not the select/drill, which always act
+// on the subsystem pair a→b). In the Subsystems overview the drawn arrow IS a→b, so it's omitted; in a
+// subsystem card the arrow is drawn component→neighbour, so the caller passes the DRAWN endpoints —
+// otherwise selecting the component wouldn't keep its own cross arrow + the neighbour box lit.
+function bindContainerEdge(scene, p, label, a, b, focusE) {
+  bindSelectEdge(scene, p, label, focusE || { src: a, dst: b }, 'sedge:' + a + '>' + b,
     () => showContainerEdge(a, b),
     { onDrill: () => go({ kind: 'edge', a, b }), tipFn: () => tipContainerEdgeHtml(a, b),
       actionFn: () => actionTipEdge(a, b) });
+}
+// A bridge arrow across the structural↔domain groupings (component↔subdomain in a subsystem card,
+// subsystem↔entity in a subdomain card, labelled owns/reads). Registered as an edge with its DRAWN
+// endpoints so a focus pass keeps it + both ends lit; a plain click shows the collapsed `box`'s panel,
+// a ⌘-click drills into `target` (that box's own card). The bridge has no `why`, so the default tip
+// reads "no why recorded" — consistent with a why-less component edge.
+function bindBridgeEdge(scene, p, label, a, b, target, box) {
+  bindSelectEdge(scene, p, label, { src: a, dst: b }, 'bridge:' + a + '>' + b,
+    () => showNode(box),
+    { onDrill: () => go(target), actionFn: () => actionTipNode(box) });
 }
 
 // `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn } or null to skip.
@@ -764,8 +783,8 @@ function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', s
 // An inter-subdomain arrow (Domain overview + subdomain-card cross arrows): a plain click SELECTS it
 // (the sidebar lists every entity→entity relation it bundles) and a ⌘-click drills into the
 // two-subdomain edge view. The domain analog of bindContainerEdge.
-function bindDomainContainerEdge(scene, p, label, a, b) {
-  bindSelectEdge(scene, p, label, { src: a, dst: b }, 'dctxedge:' + a + '>' + b,
+function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
+  bindSelectEdge(scene, p, label, focusE || { src: a, dst: b }, 'dctxedge:' + a + '>' + b,
     () => showDomainContainerEdge(a, b),
     { onDrill: () => go({ kind: 'domedge', a, b }), tipFn: () => tipDomainContainerEdgeHtml(a, b),
       actionFn: () => actionTipEdge(a, b) });
@@ -781,19 +800,21 @@ function bindDomainSub(sd) {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id] || seen.has(id)) return;
     seen.add(id);
+    mainScene.nodeEls[id] = el;  // every drawn box joins the focus set — members + collapsed neighbours
     el.style.cursor = 'pointer';
     el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
     el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
     attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));
-    if (GRAPH.nodes[id].kind === 'subdomain') {  // collapsed neighbour: ⌘ walks into its own card (kept out of the focus set)
+    const k = GRAPH.nodes[id].kind;
+    if (k === 'subdomain' || k === 'subsystem') {  // a collapsed neighbour box: ⌘ walks into its own card
       el.classList.add('drill');
+      const target = k === 'subdomain' ? { kind: 'domsub', sd: id } : { kind: 'subsystem', sid: id };
       el.addEventListener('click', (ev) => {
         if (isDrag(ev)) return; ev.stopPropagation();
-        if (isDrillClick(ev)) { go({ kind: 'domsub', sd: id }); return; }
+        if (isDrillClick(ev)) { go(target); return; }
         selectNode(mainScene, el, id);
       });
     } else {  // the focal subdomain's own entity: select / ⌘-open-source, like the flat Domain view
-      mainScene.nodeEls[id] = el;
       markOpenSrc(el, id);
       el.addEventListener('click', (ev) => {
         if (isDrag(ev)) return; ev.stopPropagation();
@@ -810,10 +831,13 @@ function bindDomainSub(sd) {
       if (!arr) return;
       const e = arr[0];
       bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showEdge(e));
-    } else {  // a cross arrow to/from a collapsed neighbour box: select crossings, ⌘ drills the pair
+    } else if (kx === 'subsystem' || ky === 'subsystem') {  // a bridge arrow: subsystem -> entity (owns/reads)
+      const sub = kx === 'subsystem' ? x : y;
+      bindBridgeEdge(mainScene, p, label, x, y, { kind: 'subsystem', sid: sub }, sub);
+    } else {  // a cross arrow to/from a collapsed neighbour subdomain box: select crossings, ⌘ drills the pair
       const a = kx === 'subdomain' ? x : sd;
       const b = ky === 'subdomain' ? y : sd;
-      bindDomainContainerEdge(mainScene, p, label, a, b);
+      bindDomainContainerEdge(mainScene, p, label, a, b, { src: x, dst: y });  // focus on the DRAWN endpoints
     }
   });
 }
@@ -833,11 +857,14 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
   });
   eachEdge(diagram, (p, label, m) => {
     const a = m[1], b = m[2];
-    const aSub = GRAPH.nodes[a] && GRAPH.nodes[a].kind === 'subsystem';
-    const bSub = GRAPH.nodes[b] && GRAPH.nodes[b].kind === 'subsystem';
-    if (aSub || bSub) {  // cross arrow: select shows its crossings; ⌘-click drills the pair (keeping direction)
-      const pa = aSub ? a : sid, pb = bSub ? b : sid;
-      bindContainerEdge(mainScene, p, label, pa, pb);
+    const ka = GRAPH.nodes[a] && GRAPH.nodes[a].kind;
+    const kb = GRAPH.nodes[b] && GRAPH.nodes[b].kind;
+    if (ka === 'subsystem' || kb === 'subsystem') {  // cross arrow: select shows its crossings; ⌘-click drills the pair
+      const pa = ka === 'subsystem' ? a : sid, pb = kb === 'subsystem' ? b : sid;
+      bindContainerEdge(mainScene, p, label, pa, pb, { src: a, dst: b });  // focus on the DRAWN endpoints
+    } else if (ka === 'subdomain' || kb === 'subdomain') {  // bridge arrow: a member component <-> a subdomain box
+      const sd = ka === 'subdomain' ? a : b;
+      bindBridgeEdge(mainScene, p, label, a, b, { kind: 'domsub', sd }, sd);
     } else {
       const r = resolveComponentEdge(m);
       if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
@@ -859,10 +886,10 @@ function eachClassEdge(root, fn) {
   const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
   const aligned = labels.length === paths.length;
   paths.forEach((p, i) => {
-    // SD before E so a collapsed neighbour-subdomain box (the subdomain card's cross arrows, id
-    // `id_E1_SD2`) resolves to SD2, not a phantom E. The flat Domain view + edge cards are all
-    // entity↔entity, so this generalisation is a no-op there.
-    const m = (p.id || '').match(/[_-]((?:SD|E)\d+)_((?:SD|E)\d+)(?:[_-]|$)/);
+    // Match entity (E), subdomain (SD) and subsystem (S) endpoints. SD before S so a subdomain id never
+    // reads as a subsystem; both before E. The subdomain card's cross arrows (`id_E1_SD2`) and bridge
+    // arrows (`id_S1_E1`) need SD/S; the flat Domain view + edge cards are all E↔E, a no-op there.
+    const m = (p.id || '').match(/[_-]((?:SD|S|E)\d+)_((?:SD|S|E)\d+)(?:[_-]|$)/);
     if (m) fn(p, aligned ? labels[i] || null : null, m[1], m[2]);
   });
 }
@@ -1126,10 +1153,18 @@ function renderChrome(s) {
   const drillKind = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'gp'
     || s.kind === 'domsub'  // a subdomain card drills into neighbour subdomains / the edge pair
     || (s.kind === 'domain' && HAS_SUBDOMAINS);
-  const srcKind = s.kind === 'component' || s.kind === 'gpstep' || s.kind === 'domedge'
+  const srcKind = s.kind === 'component' || s.kind === 'gpstep' || s.kind === 'domedge' || s.kind === 'edge'
     || (s.kind === 'domain' && !HAS_SUBDOMAINS);
-  drillhint.hidden = !(drillKind || srcKind);
-  drillhint.innerHTML = drillKind ? '&#8984;-click to drill down' : '&#8984;-click a box to open its source';
+  // A plain click "focuses" — dims the diagram to the clicked element's own links + connected boxes —
+  // in every diagram (the Golden Path dims to the selected step's actor/line; the graphs to the node's
+  // neighbourhood). So the focus hint is universal; only the ⌘-action (drill vs source) varies.
+  const focusKind = true;
+  const hints = [];
+  if (focusKind) hints.push('Click to focus');
+  if (drillKind) hints.push('&#8984;-click to drill down');
+  else if (srcKind) hints.push('&#8984;-click a box to open its source');
+  drillhint.hidden = hints.length === 0;
+  drillhint.innerHTML = hints.join(' · ');
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it

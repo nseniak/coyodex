@@ -293,9 +293,14 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
     return "\n".join(lines)
 
 
-# Domain subdomain palette — the magenta family of the entity classDef, so a subdomain box reads as
-# "a box of entities" at the Subdomain altitude.
-DOMAIN_SUBDOMAIN_CLASSDEF = "  classDef subdomain fill:#fdf4ff,stroke:#86198f,color:#581c87;"
+# Group-box palettes, defined once and reused as a flowchart `classDef` and as a classDiagram `style`
+# (Mermaid's classDiagram has no classDef-by-name, so collapsed boxes there are styled per-id). Amber =
+# the structural family (subsystem `S` boxes); magenta = the domain family (subdomain `SD` boxes). A
+# subsystem and a subdomain therefore read identically wherever they appear — overview, subsystem card,
+# or subdomain card — so the two altitudes never blur.
+SUBSYSTEM_STYLE = "fill:#fef3c7,stroke:#b45309,color:#7c2d12"
+SUBDOMAIN_STYLE = "fill:#fdf4ff,stroke:#86198f,color:#581c87"
+DOMAIN_SUBDOMAIN_CLASSDEF = f"  classDef subdomain {SUBDOMAIN_STYLE};"
 
 # The bridge verb split (C→E edges): a component that `persists`/`writes` an entity OWNS that
 # subdomain's data; any other verb (typically `reads`) merely CONSUMES it. Drives the subsystem-card
@@ -367,15 +372,25 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
     """A per-subdomain `classDiagram` neighbourhood: `sdid` framed as a `namespace` holding its own
     entities (full attributes), every OTHER subdomain its entities relate to drawn as a collapsed
     member-less box (one per neighbour subdomain, labelled `Name (N)`), the focal subdomain's internal
-    relations drawn in full, and one arrow per (focal entity, neighbour subdomain) crossing pair. The
-    entity analog of gen_subsystem_card_mermaid — each screen stays small no matter the total model
-    size, neighbours stay collapsed, and the viewer turns a click on a neighbour box into that
-    subdomain's card and a click on a cross arrow into the two-subdomain edge card. Node ids + relation
-    shapes match the flat Domain view, so the class/relation bridge resolves a click to the entity panel
-    or the relation detail."""
+    relations drawn in full, and one arrow per (focal entity, neighbour subdomain) crossing pair. It
+    ALSO draws the structure↔domain bridge in reverse: every subsystem whose components own/read one of
+    these entities is drawn as a collapsed (amber) box with a `owns`/`reads` arrow into that entity —
+    the mirror of the subsystem card's subdomain bridge. The entity analog of gen_subsystem_card_mermaid
+    — each screen stays small no matter the total model size, neighbours stay collapsed, and the viewer
+    turns a click on a neighbour subdomain box into that subdomain's card, a neighbour subsystem box into
+    that subsystem's card, and a click on a cross arrow into the two-subdomain edge card. Node ids +
+    relation shapes match the flat Domain view, so the class/relation bridge resolves a click to the
+    entity panel or the relation detail."""
     members = _entities_of(graph, sdid)
     member_ids = {eid for eid, _ in members}
     nodes = graph["nodes"]
+    if not members:
+        # A defined-but-empty subdomain would leave a body-less classDiagram, which Mermaid rejects
+        # (the drill would throw). Emit a placeholder class so the card stays a VALID, self-explaining
+        # diagram; its id carries no prefix+digits, so the viewer's id bridge skips it. (Returning here
+        # also skips the relation/bridge loops below, which would all be empty with no member entities.)
+        name = _safe_label(str(nodes[sdid]["name"])) if sdid in nodes else sdid
+        return f'classDiagram\n  class EmptySubdomain["{name} — no entities"]'
     internal: list[dict[str, Any]] = []   # both endpoints in this subdomain — drawn full
     cross: set[tuple[str, str]] = set()   # rendered (src, dst): a focal entity ↔ a neighbour SD box (direction kept)
     nb_sds: set[str] = set()
@@ -394,20 +409,29 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
             if nb and nb != sdid:
                 cross.add((nb, d))
                 nb_sds.add(nb)
-    if not members:
-        # A defined-but-empty subdomain would leave a body-less classDiagram, which Mermaid rejects
-        # (the drill would throw). Emit a placeholder class so the card stays a VALID, self-explaining
-        # diagram; its id carries no prefix+digits, so the viewer's id bridge skips it.
-        name = _safe_label(str(nodes[sdid]["name"])) if sdid in nodes else sdid
-        return f'classDiagram\n  class EmptySubdomain["{name} — no entities"]'
+    bridges: set[tuple[str, str, str]] = set()  # (neighbour subsystem box, member entity, 'owns'|'reads')
+    nb_subs: set[str] = set()
+    for e in graph["edges"]:                     # the reverse of the subsystem card's data bridge: which
+        s, d = str(e["src"]), str(e["dst"])      # subsystems' components own/read this subdomain's entities
+        if d in member_ids and str(nodes.get(s, {}).get("kind")) == "component":
+            sub = _top_subsystem(graph, s)
+            if sub:
+                nb_subs.add(sub)
+                bridges.add((sub, d, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
     lines = ["classDiagram", *_subdomain_namespace(graph, sdid, members)]
     for nb in sorted(nb_sds):  # collapsed neighbour-subdomain boxes (member-less, count-labelled)
         n_ent = len(_entities_of(graph, nb))
         lines.append(f'  class {nb}["{_safe_label(str(nodes[nb]["name"]))} ({n_ent})"]')
+        lines.append(f"  style {nb} {SUBDOMAIN_STYLE}")  # magenta — same as a subdomain box anywhere else
+    for sub in sorted(nb_subs):  # collapsed neighbour-subsystem boxes (the structure↔domain bridge)
+        lines.append(f'  class {sub}["{_safe_label(str(nodes[sub]["name"]))}"]')
+        lines.append(f"  style {sub} {SUBSYSTEM_STYLE}")  # amber — same as a subsystem box anywhere else
     for e in internal:  # the focal subdomain's own relations, full
         lines.append(_class_relation_line(e))
     for src, dst in sorted(cross):  # crossing arrows to/from collapsed neighbour boxes (click → edge card)
         lines.append(f"  {src} --> {dst}")
+    for sub, ent, rel in sorted(bridges):  # bridge arrows: subsystem -> entity (owns / reads)
+        lines.append(f"  {sub} --> {ent} : {rel}")
     return "\n".join(lines)
 
 
@@ -468,7 +492,7 @@ def gen_container_mermaid(graph: GraphDict) -> str:
             counts[(sa, sb)] = counts.get((sa, sb), 0) + 1
     for (sa, sb), c in sorted(counts.items()):
         lines.append(f"  {sa} -->|{c}| {sb}")
-    lines.append("  classDef subsystem fill:#fef3c7,stroke:#b45309,color:#7c2d12;")
+    lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     return "\n".join(lines)
 
 
@@ -570,7 +594,7 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
         lines.append(f"  {src} -->|{rel}| {sd}")
     lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
     lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
-    lines.append("  classDef subsystem fill:#fef3c7,stroke:#b45309,color:#7c2d12;")
+    lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     if bridge_sd:
         lines.append(DOMAIN_SUBDOMAIN_CLASSDEF)
     return "\n".join(lines)
