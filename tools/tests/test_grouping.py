@@ -91,6 +91,33 @@ def make_card_map() -> str:
     )
 
 
+def make_nested_subsystem_map() -> str:
+    """S1 (top) nests S2; S3 is a top-level sibling. C1 is a DIRECT member of S1, C2 a grandchild
+    (member of S2), C3 lives in S3. Edges: C1->C2 (member -> child-subsystem box), C2->C3 (grandchild
+    -> sibling subsystem). Exercises level-relative drill: S1's card must show S2 as a drillable box
+    (not S2's components flattened in), and the C2->C3 crossing must resolve to the S3 box at S1's
+    altitude."""
+    return (
+        "## Subsystems (S)\n"
+        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **S1** | Platform | x |  | a | V |\n"
+        "| **S2** | Inner | x | S1 | a | V |\n"
+        "| **S3** | Other | x |  | a | V |\n\n"
+        "## T1\n"
+        "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **C1** | Gate | S1 | x | f | C2 |\n"
+        "| **C2** | Worker | S2 | x | f | C3 |\n"
+        "| **C3** | Sink | S3 | x | f |  |\n\n"
+        "### edges\n"
+        "| From | Verb | To | Why | Where |\n"
+        "|---|---|---|---|---|\n"
+        "| C1 | calls | C2 | dispatch | f |\n"
+        "| C2 | calls | C3 | forward | f |\n"
+    )
+
+
 def make_empty_verb_map() -> str:
     """An edge row with a blank Verb cell — renders as `C1 -->|| C2`, which can drop the Mermaid
     label and desync the viewer's positional path/label zip. The validator must reject it."""
@@ -394,6 +421,46 @@ def test_edge_card_has_both_subsystems_with_cross_and_inner_edges() -> None:
     assert "C1 -->|calls| C2" in card and "C3 -->|calls| C2" in card  # the cross edges
     assert "C1 -->|routes| C3" in card                  # S1's inner link now kept
     assert "D1" not in card                             # no deps in an edge card
+
+
+def test_nested_subsystem_has_card_at_every_level() -> None:
+    # A card is generated for the NESTED subsystem S2, not only top-level ones — so ⌘-clicking the S2
+    # box inside S1's card has a card to open.
+    by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_nested_subsystem_map()))
+    assert {"S1", "S2", "S3"} <= set(by_sub)
+
+
+def test_nested_parent_card_shows_child_subsystem_box_not_flattened() -> None:
+    # S1's card shows its DIRECT member C1 and its child subsystem S2 as a drillable box — and does NOT
+    # flatten S2's grandchild component C2 into the card (that lives one level down, on S2's card).
+    by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_nested_subsystem_map()))
+    s1 = by_sub["S1"]
+    assert "subgraph S1[" in s1
+    assert "C1" in s1                       # direct member
+    assert "class S2 subsystem" in s1       # child subsystem as a (drillable) collapsed box
+    assert "C2" not in s1                   # grandchild NOT flattened into the parent card
+    assert "C1 --> S2" in s1                # member -> child-subsystem box (aggregated, drills in)
+
+
+def test_nested_crossing_resolves_at_card_level() -> None:
+    # C2 (in S2) -> C3 (in S3): on S1's card this reads as the child box S2 -> the sibling box S3,
+    # resolved at S1's altitude (not flattened to top). On S2's own card the grandchild's external link
+    # to S3 is drawn directly.
+    by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_nested_subsystem_map()))
+    s1 = by_sub["S1"]
+    assert "S2 --> S3" in s1
+    assert "class S3 subsystem" in s1       # the sibling neighbour box
+    s2 = by_sub["S2"]
+    assert "C2" in s2 and "C2 --> S3" in s2
+
+
+def test_container_overview_shows_only_top_level_subsystems() -> None:
+    # The Subsystems overview draws only top-level groups (S1, S3); the nested S2 is reachable by
+    # drilling S1, not as a top-level box. The nested C2->C3 edge aggregates to the top S1->S3 arrow.
+    cont = gen_viewer.gen_container_mermaid(parse_map(make_nested_subsystem_map()))
+    assert 'S1["' in cont and 'S3["' in cont
+    assert 'S2["' not in cont
+    assert "S1 -->|1| S3" in cont
 
 
 def test_container_edges_list_crossing_component_edges() -> None:

@@ -187,6 +187,37 @@ def _top_subdomain(graph: GraphDict, nid: str) -> str | None:
     return g if g is not None and str(graph["nodes"].get(g, {}).get("kind")) == "subdomain" else None
 
 
+def _child_under(graph: GraphDict, nid: str, ancestor: str | None) -> str | None:
+    """The immediate child of `ancestor` on the path down to `nid` — the LEVEL-RELATIVE bucket that
+    replaces flatten-to-top. Returns `nid` itself when its direct parent is `ancestor`; the
+    intermediate child-group when `nid` is deeper; None when `nid` is not in `ancestor`'s subtree.
+    With `ancestor=None` it is `nid`'s top-level ancestor (i.e. `_top_group`), so the root overview
+    is just the card of the virtual root. This is what lets a subsystem card show its IMMEDIATE
+    children (and bucket a deep endpoint into the child box that contains it) instead of flattening."""
+    cur, seen = nid, set()
+    while True:
+        p = _parent_of(graph, cur)
+        if p == ancestor:
+            return cur
+        if p is None or p in seen:
+            return None
+        seen.add(cur)
+        cur = p
+
+
+def _sibling_level_box(graph: GraphDict, nid: str, sid: str) -> str | None:
+    """The subsystem box to draw `nid` as in `sid`'s card when `nid` is OUTSIDE sid's subtree: the
+    ancestor of `nid` that is a sibling of `sid` (shares sid's parent), so neighbours read at sid's
+    own altitude. Falls back to nid's top-level subsystem when nid is not under sid's parent (a
+    distant link still shows, collapsed). None when no subsystem box applies (e.g. an ungrouped
+    component) — matching the old `_top_subsystem` skip. For a top-level `sid` (parent None) this is
+    exactly `_top_subsystem(nid)`, so flat maps are unchanged."""
+    b = _child_under(graph, nid, _parent_of(graph, sid))
+    if b is not None and str(graph["nodes"].get(b, {}).get("kind")) == "subsystem":
+        return b
+    return _top_subsystem(graph, nid)
+
+
 def has_grouping(graph: GraphDict) -> bool:
     return any(str(n.get("kind")) == "subsystem" for n in graph["nodes"].values())
 
@@ -575,9 +606,19 @@ def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
 
 
 def _components_of(graph: GraphDict, sid: str) -> list[tuple[str, str]]:
-    """(id, name) of every component whose top-level subsystem is `sid`."""
+    """(id, name) of the DIRECT child components of `sid` (its immediate component members — those
+    whose `parent` is exactly `sid`, NOT all descendants). Nested components live in `sid`'s child
+    subsystems and are drawn one level down, on those subsystems' own cards. For a leaf subsystem
+    (no child subsystems) direct == all, so flat maps are unchanged."""
     return [(cid, str(n["name"])) for cid, n in graph["nodes"].items()
-            if str(n["kind"]) == "component" and _top_subsystem(graph, cid) == sid]
+            if str(n["kind"]) == "component" and _parent_of(graph, cid) == sid]
+
+
+def _child_subsystems(graph: GraphDict, sid: str) -> list[tuple[str, str]]:
+    """(id, name) of the DIRECT child subsystems of `sid` — drawn inside its card as collapsed,
+    drillable boxes (⌘-click opens the child's own card). Empty for a leaf subsystem."""
+    return [(s, str(n["name"])) for s, n in graph["nodes"].items()
+            if str(n["kind"]) == "subsystem" and _parent_of(graph, s) == sid]
 
 
 def _component_subgraph(graph: GraphDict, sid: str, indent: str = "  ") -> list[str]:
@@ -589,6 +630,9 @@ def _component_subgraph(graph: GraphDict, sid: str, indent: str = "  ") -> list[
     for cid, name in _components_of(graph, sid):
         out.append(f"{indent}  {cid}{open_b}{_safe_label(name)}{close_b}:::cy-{cid}")
         out.append(f"{indent}  class {cid} component")
+    for ssid, sname in _child_subsystems(graph, sid):  # nested child subsystems: collapsed, drillable
+        out.append(f'{indent}  {ssid}["{_safe_label(sname)}"]:::cy-{ssid}')
+        out.append(f"{indent}  class {ssid} subsystem")
     out.append(f"{indent}end")
     return out
 
@@ -603,32 +647,55 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
     box into that subsystem's own card. When the subsystem's components touch the domain model
     (`C→E` edges), the subdomains they own/read are also drawn as collapsed boxes — the bridge between
     the structural and domain groupings (owns = persists/writes, reads = anything else)."""
-    members = {cid for cid, _ in _components_of(graph, sid)}
+    members = {cid for cid, _ in _components_of(graph, sid)}   # direct component members (drawn nodes)
     deps: set[str] = set()
     neighbours: set[str] = set()
-    cross: set[tuple[str, str]] = set()  # rendered (src, dst): a component and a neighbour-subsystem box
-    bridges: set[tuple[str, str, str]] = set()  # (member component, subdomain box, 'owns'|'reads')
+    cross: set[tuple[str, str]] = set()       # drawn-box -> neighbour-subsystem box (or reverse), unlabelled
+    childcross: set[tuple[str, str]] = set()  # aggregated arrows touching a nested child-subsystem box
+    bridges: set[tuple[str, str, str]] = set()  # (drawn box, subdomain box, 'owns'|'reads')
+    # Every endpoint is bucketed at THIS card's level: `_child_under` gives the immediate child of `sid`
+    # that contains it — the component itself when a direct member, the child-subsystem box when deeper,
+    # None when outside sid's subtree. A leaf subsystem has no child boxes, so each bs/bd is the endpoint
+    # itself or None — identical to the old `in members` / `_top_subsystem` flat behaviour.
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
         ks, kd = str(graph["nodes"].get(s, {}).get("kind")), str(graph["nodes"].get(d, {}).get("kind"))
-        if s in members and kd == "dep":
-            deps.add(d)
-        if d in members and ks == "dep":
-            deps.add(s)
-        if s in members and kd == "component":          # outbound: member -> component elsewhere
-            td = _top_subsystem(graph, d)
-            if td and td != sid:
-                neighbours.add(td)
-                cross.add((s, td))
-        if d in members and ks == "component":          # inbound: component elsewhere -> member
-            ts = _top_subsystem(graph, s)
-            if ts and ts != sid:
-                neighbours.add(ts)
-                cross.add((ts, d))
-        if s in members and kd == "entity":             # bridge: a member touches a domain entity
-            sd = _top_subdomain(graph, d)
-            if sd:
-                bridges.add((s, sd, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
+        bs, bd = _child_under(graph, s, sid), _child_under(graph, d, sid)
+        if kd == "dep":                                  # the subtree touches a dep (drawn outside)
+            if bs is not None:
+                deps.add(d)
+                if bs != s:                              # reached via a child subsystem -> aggregated box arrow
+                    childcross.add((bs, d))
+            continue
+        if ks == "dep":
+            if bd is not None:
+                deps.add(s)
+                if bd != d:
+                    childcross.add((s, bd))
+            continue
+        if kd == "entity":                               # bridge: the subtree touches a domain entity
+            if bs is not None:
+                sd = _top_subdomain(graph, d)
+                if sd:
+                    bridges.add((bs, sd, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
+            continue
+        if ks == "entity":
+            continue
+        if bs is not None and bd is not None:            # both inside sid's subtree
+            if not (bs == s and bd == d) and bs != bd:   # a child-subsystem box is involved -> aggregated
+                childcross.add((bs, bd))
+            continue                                     # two direct members -> labelled (via keep) below
+        if bs is not None:                               # outbound crossing to outside sid
+            nb = _sibling_level_box(graph, d, sid)
+            if nb and nb != sid:
+                neighbours.add(nb)
+                cross.add((bs, nb))
+            continue
+        if bd is not None:                               # inbound crossing from outside sid
+            nb = _sibling_level_box(graph, s, sid)
+            if nb and nb != sid:
+                neighbours.add(nb)
+                cross.add((nb, bd))
     keep = members | deps  # the set whose internal (labelled) edges are drawn
     lines = ["flowchart TB", *_component_subgraph(graph, sid)]
     for nb in sorted(neighbours):  # collapsed neighbour-subsystem boxes
@@ -646,6 +713,8 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
         lines.append(f"  {src} -->|{verb}| {dst}")
     for src, dst in sorted(cross):  # neighbourhood arrows (unlabelled; click -> edge card)
         lines.append(f"  {src} --> {dst}")
+    for src, dst in sorted(childcross):  # nested child-subsystem arrows (aggregated; box drills in)
+        lines.append(f"  {src} --> {dst}")
     for src, sd, rel in sorted(bridges):  # bridge arrows: member -> subdomain (owns / reads)
         lines.append(f"  {src} -->|{rel}| {sd}")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
@@ -657,10 +726,12 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
 
 
 def subsystem_component_mermaids(graph: GraphDict) -> dict[str, str]:
-    """One subsystem-card diagram per top-level subsystem (see gen_subsystem_card_mermaid)."""
+    """One subsystem-card diagram per subsystem at EVERY level (see gen_subsystem_card_mermaid), so a
+    nested child subsystem has its own card to drill into. The viewer keys these by id, so a ⌘-click on
+    any subsystem box — top-level box in the overview or a child box inside a card — finds its card."""
     return {nid: gen_subsystem_card_mermaid(graph, nid)
             for nid, node in graph["nodes"].items()
-            if str(node["kind"]) == "subsystem" and _parent_of(graph, nid) is None}
+            if str(node["kind"]) == "subsystem"}
 
 
 def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
