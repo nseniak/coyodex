@@ -448,6 +448,15 @@ function actionOpenSrcHtml(n) {
 function actionTipNode(id) {
   const n = GRAPH.nodes[id];
   if (!n) return null;
+  if (id === 'SYS') {
+    // ⌘-click on the System drills into its internals — Subsystems when the map groups, else Components.
+    // Only the Context view wires that drill (markSysDrill tags the box); elsewhere SYS just selects, so
+    // gate the action tooltip on the drill affordance actually being present.
+    const sys = mainScene.nodeEls['SYS'];
+    if (sys && sys.classList.contains('drill'))
+      return '<div class="tt">' + (HAS_GROUPING ? 'Show subsystems' : 'Show components') + '</div>';
+    return null;
+  }
   if (srcNode(id)) return actionOpenSrcHtml(n);
   if (String(n.kind) === 'subsystem')
     return '<div class="tt">Open subsystem</div><div class="tm">' + esc(n.name) + '</div>';
