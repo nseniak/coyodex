@@ -142,7 +142,7 @@ def gen_mermaid(graph: GraphDict, diff: DiffDict | None = None, only: set[str] |
         lines.append(f"  class {nid} {kind}")
     for src, verb, dst in _diagram_edges(graph, diff, ids):
         lines.append(f"  {src} -->|{verb}| {dst}")
-    lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
+    lines.append(f"  classDef component {COMPONENT_STYLE};")
     lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
     return "\n".join(lines)
 
@@ -300,6 +300,7 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
 # or subdomain card — so the two altitudes never blur.
 SUBSYSTEM_STYLE = "fill:#fef3c7,stroke:#b45309,color:#7c2d12"
 SUBDOMAIN_STYLE = "fill:#fdf4ff,stroke:#86198f,color:#581c87"
+COMPONENT_STYLE = "fill:#eef2ff,stroke:#3730a3,color:#1e1b4b"  # indigo — component (C) boxes
 DOMAIN_SUBDOMAIN_CLASSDEF = f"  classDef subdomain {SUBDOMAIN_STYLE};"
 
 # The bridge verb split (C→E edges): a component that `persists`/`writes` an entity OWNS that
@@ -490,6 +491,47 @@ def domain_edge_card_mermaids(graph: GraphDict) -> dict[str, str]:
     return {f"{a}>{b}": gen_domain_edge_card(graph, a, b) for a, b in sorted(pairs)}
 
 
+def gen_bridge_card_mermaid(graph: GraphDict, sid: str, sdid: str) -> str:
+    """Bridge card: subsystem `sid` and subdomain `sdid` framed side by side — the structure↔domain
+    relationship — with every component→entity owns/reads edge between them drawn in full. The analog of
+    the edge cards across the two groupings (S×S pairs two subsystems, SD×SD two subdomains; this pairs a
+    subsystem with a subdomain). Rendered as a classDiagram so the subsystem's components (member-less,
+    simple boxes) and the subdomain's entities (full boxes) share one canvas; node ids + the C→E edges
+    match the component view, so the viewer resolves an in-card arrow to its real edge."""
+    comps = _components_of(graph, sid)
+    ents = _entities_of(graph, sdid)
+    comp_ids = {cid for cid, _ in comps}
+    ent_ids = {eid for eid, _ in ents}
+    nodes = graph["nodes"]
+    lines = ["classDiagram", f'namespace {sid}["{_safe_label(str(nodes[sid]["name"]))}"] {{']
+    for cid, name in comps:  # the subsystem's components as member-less (simple) boxes
+        lines.append(f'  class {cid}["{_safe_label(name)}"]')
+    lines.append("}")
+    lines += _subdomain_namespace(graph, sdid, ents)  # the subdomain's entities, full
+    for cid, _ in comps:  # indigo — read as components, not entities
+        lines.append(f"  style {cid} {COMPONENT_STYLE}")
+    for e in graph["edges"]:  # the C→E bridge edges (owns / reads)
+        s, d = str(e["src"]), str(e["dst"])
+        if s in comp_ids and d in ent_ids:
+            rel = "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"
+            lines.append(f"  {s} --> {d} : {rel}")
+    return "\n".join(lines)
+
+
+def bridge_card_mermaids(graph: GraphDict) -> dict[str, str]:
+    """One bridge card per (subsystem, subdomain) pair joined by a component→entity edge, keyed 'S>SD'
+    to match the bridge arrow's drill target (the structure↔domain analog of edge_card_mermaids)."""
+    nodes = graph["nodes"]
+    pairs: set[tuple[str, str]] = set()
+    for e in graph["edges"]:
+        s, d = str(e["src"]), str(e["dst"])
+        if str(nodes.get(s, {}).get("kind")) == "component" and str(nodes.get(d, {}).get("kind")) == "entity":
+            sub, sd = _top_subsystem(graph, s), _top_subdomain(graph, d)
+            if sub and sd:
+                pairs.add((sub, sd))
+    return {f"{sub}>{sd}": gen_bridge_card_mermaid(graph, sub, sd) for sub, sd in sorted(pairs)}
+
+
 def gen_container_mermaid(graph: GraphDict) -> str:
     """C4 Container: top-level subsystems as boxes, with inter-subsystem edges DERIVED from the
     component edge list (an S->S arrow exists iff a component edge crosses), labeled by count."""
@@ -605,7 +647,7 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
         lines.append(f"  {src} --> {dst}")
     for src, sd, rel in sorted(bridges):  # bridge arrows: member -> subdomain (owns / reads)
         lines.append(f"  {src} -->|{rel}| {sd}")
-    lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
+    lines.append(f"  classDef component {COMPONENT_STYLE};")
     lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     if bridge_sd:
@@ -639,7 +681,7 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
         s, d = str(e["src"]), str(e["dst"])
         if _top_subsystem(graph, s) == a and _top_subsystem(graph, d) == b:
             lines.append(f"  {s} -->|{e['verb']}| {d}")
-    lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
+    lines.append(f"  classDef component {COMPONENT_STYLE};")
     return "\n".join(lines)
 
 
@@ -904,7 +946,7 @@ def gen_gp_step_mermaid(graph: GraphDict, gp_id: str) -> str:
         lines.append(f"  class {nid} {kind}")
     for src, verb, dst in _diagram_edges(graph, None, ids):
         lines.append(f"  {src} -->|{verb}| {dst}")
-    lines.append("  classDef component fill:#eef2ff,stroke:#3730a3,color:#1e1b4b;")
+    lines.append(f"  classDef component {COMPONENT_STYLE};")
     lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
     lines.append("  classDef entity fill:#fdf4ff,stroke:#86198f,color:#581c87;")
     return "\n".join(lines)
@@ -1033,7 +1075,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              edge_cards: dict[str, str], container_edges: dict[str, list[dict[str, str]]],
              grouping: bool, domain_mm: str, domain: bool,
              domain_container_mm: str, domain_sub: dict[str, str],
-             domain_edge_cards: dict[str, str],
+             domain_edge_cards: dict[str, str], bridge_cards: dict[str, str],
              domain_container_edges: dict[str, list[dict[str, str]]], subdomains: bool,
              gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool,
              libs_mm: str, folded: list[dict[str, str]],
@@ -1058,6 +1100,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_DOMAIN_CONTAINER__", json.dumps(domain_container_mm))
         .replace("__MERMAID_DOMAIN_SUB__", json.dumps(domain_sub))
         .replace("__MERMAID_DOMAIN_EDGE_CARD__", json.dumps(domain_edge_cards))
+        .replace("__MERMAID_BRIDGE_CARD__", json.dumps(bridge_cards))
         .replace("__DOMAIN_CONTAINER_EDGES__", json.dumps(domain_container_edges))
         .replace("__MERMAID_GP__", json.dumps(gp_mm))
         .replace("__MERMAID_GP_STEP__", json.dumps(gp_steps))
@@ -1104,6 +1147,7 @@ def main() -> int:
     domain_container_mm = gen_domain_container_mermaid(graph) if subdomains else ""
     domain_sub = domain_subdomain_mermaids(graph) if subdomains else {}
     domain_edge_cards = domain_edge_card_mermaids(graph) if subdomains else {}
+    bridge_cards = bridge_card_mermaids(graph) if (grouping and subdomains) else {}
     domain_container_edges = gen_domain_container_edges(graph) if subdomains else {}
     gp = has_gp(graph)
     gp_mm = gen_gp_mermaid(graph) if gp else ""
@@ -1121,7 +1165,7 @@ def main() -> int:
     gh_commit = graph["commit"]
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
-                    domain_container_mm, domain_sub, domain_edge_cards, domain_container_edges, subdomains,
+                    domain_container_mm, domain_sub, domain_edge_cards, bridge_cards, domain_container_edges, subdomains,
                     gp_mm, gp_steps, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit)
     out.write_text(html, encoding="utf-8")
     print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")

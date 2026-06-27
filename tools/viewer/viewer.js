@@ -12,6 +12,7 @@ const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classD
 const MERMAID_DOMAIN_CONTAINER = __MERMAID_DOMAIN_CONTAINER__;  // Subdomains overview (flowchart of SD boxes)
 const MERMAID_DOMAIN_SUB = __MERMAID_DOMAIN_SUB__;             // per-subdomain card: SD-id -> classDiagram
 const MERMAID_DOMAIN_EDGE_CARD = __MERMAID_DOMAIN_EDGE_CARD__; // subdomain edge pair: 'A>B' -> two-subdomain classDiagram
+const MERMAID_BRIDGE_CARD = __MERMAID_BRIDGE_CARD__;           // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
 const DOMAIN_CONTAINER_EDGES = __DOMAIN_CONTAINER_EDGES__;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
 const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): black-box sequence diagram
 const MERMAID_GP_STEP = __MERMAID_GP_STEP__;      // GP step (Level 2): GP-id -> components-used sub-diagram
@@ -245,6 +246,11 @@ function showTwoSubsystems(a, b) {
 function showTwoSubdomains(a, b) {
   panel.innerHTML = '<div class="badges"><span class="badge edge">relations</span></div>'
     + subsystemBlock(a) + '<hr>' + subsystemBlock(b);
+}
+// The bridge-card default panel — the subsystem and subdomain being framed (the structure↔domain pair).
+function showBridge(sid, sd) {
+  panel.innerHTML = '<div class="badges"><span class="badge edge">bridge</span></div>'
+    + subsystemBlock(sid) + '<hr>' + subsystemBlock(sd);
 }
 // Selecting (not drilling) a Subsystems arrow: list every component→component crossing it bundles as
 // `from → to:` with its explanation indented below — one uniform font, no verb — so the wiring is
@@ -527,6 +533,19 @@ function idOf(el) {
   if (dataId && GRAPH.nodes[dataId]) return dataId;
   const m = (el.id || '').match(/(?:^|-)((?:UC|GP|SD|C|D|E|S)\d+)(?:-|$)/);  // SD before S: a subdomain id is not a subsystem
   return m ? m[1] : null;
+}
+// Walk an id's parent chain up to its top-level subdomain (or null) — the domain mirror of a top
+// subsystem. Used to key a bridge card from a domain-edge-card bridge arrow (subsystem → entity).
+function topSubdomainOf(id) {
+  let cur = id; const seen = new Set();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const n = GRAPH.nodes[cur];
+    if (!n) return null;
+    if (n.kind === 'subdomain') return cur;
+    cur = n.parent;
+  }
+  return null;
 }
 
 // --- shared binding -------------------------------------------------------------
@@ -844,7 +863,7 @@ function bindDomainSub(sd) {
       bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showEdge(e));
     } else if (kx === 'subsystem' || ky === 'subsystem') {  // a bridge arrow: subsystem -> entity (owns/reads)
       const sub = kx === 'subsystem' ? x : y;
-      bindBridgeEdge(mainScene, p, label, x, y, { kind: 'subsystem', sid: sub }, sub);
+      bindBridgeEdge(mainScene, p, label, x, y, { kind: 'bridge', sid: sub, sd: sd }, sub);  // ⌘ -> the S×SD bridge card
     } else {  // a cross arrow to/from a collapsed neighbour subdomain box: select crossings, ⌘ drills the pair
       const a = kx === 'subdomain' ? x : sd;
       const b = ky === 'subdomain' ? y : sd;
@@ -875,7 +894,7 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
       bindContainerEdge(mainScene, p, label, pa, pb, { src: a, dst: b });  // focus on the DRAWN endpoints
     } else if (ka === 'subdomain' || kb === 'subdomain') {  // bridge arrow: a member component <-> a subdomain box
       const sd = ka === 'subdomain' ? a : b;
-      bindBridgeEdge(mainScene, p, label, a, b, { kind: 'domsub', sd }, sd);
+      bindBridgeEdge(mainScene, p, label, a, b, { kind: 'bridge', sid: sid, sd: sd }, sd);  // ⌘ -> the S×SD bridge card
     } else {
       const r = resolveComponentEdge(m);
       if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
@@ -917,10 +936,11 @@ function eachClassEdge(root, fn) {
   const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
   const aligned = labels.length === paths.length;
   paths.forEach((p, i) => {
-    // Match entity (E), subdomain (SD) and subsystem (S) endpoints. SD before S so a subdomain id never
-    // reads as a subsystem; both before E. The subdomain card's cross arrows (`id_E1_SD2`) and bridge
-    // arrows (`id_S1_E1`) need SD/S; the flat Domain view + edge cards are all E↔E, a no-op there.
-    const m = (p.id || '').match(/[_-]((?:SD|S|E)\d+)_((?:SD|S|E)\d+)(?:[_-]|$)/);
+    // Match entity (E), subdomain (SD), subsystem (S), component (C) and dep (D) endpoints. SD before S
+    // so a subdomain id never reads as a subsystem. Needed by the subdomain card (`id_E1_SD2`, `id_S1_E1`)
+    // and the bridge card's component→entity arrows (`id_C1_E1`); the flat Domain view + edge cards are
+    // all E↔E, a no-op there.
+    const m = (p.id || '').match(/[_-]((?:SD|S|C|D|E)\d+)_((?:SD|S|C|D|E)\d+)(?:[_-]|$)/);
     if (m) fn(p, aligned ? labels[i] || null : null, m[1], m[2]);
   });
 }
@@ -967,8 +987,8 @@ function bindDomain() {
   eachClassEdge(mainScene.root, (p, label, src, dst) => {
     const ks = GRAPH.nodes[src] && GRAPH.nodes[src].kind, kd = GRAPH.nodes[dst] && GRAPH.nodes[dst].kind;
     if (ks === 'subsystem' || kd === 'subsystem') {  // a bridge arrow subsystem -> entity (owns/reads)
-      const sub = ks === 'subsystem' ? src : dst;
-      bindBridgeEdge(mainScene, p, label, src, dst, { kind: 'subsystem', sid: sub }, sub);
+      const sub = ks === 'subsystem' ? src : dst, ent = ks === 'subsystem' ? dst : src;
+      bindBridgeEdge(mainScene, p, label, src, dst, { kind: 'bridge', sid: sub, sd: topSubdomainOf(ent) }, sub);  // ⌘ -> bridge card
       return;
     }
     const arr = COMP_LOOKUP[src + '>' + dst];
@@ -1120,6 +1140,7 @@ function mermaidFor(s) {
   if (s.kind === 'domain') return HAS_SUBDOMAINS ? MERMAID_DOMAIN_CONTAINER : MERMAID_DOMAIN;
   if (s.kind === 'domsub') return MERMAID_DOMAIN_SUB[s.sd];
   if (s.kind === 'domedge') return MERMAID_DOMAIN_EDGE_CARD[s.a + '>' + s.b];
+  if (s.kind === 'bridge') return MERMAID_BRIDGE_CARD[s.sid + '>' + s.sd];
   if (s.kind === 'gp') return MERMAID_GP;
   if (s.kind === 'gpstep') return MERMAID_GP_STEP[s.gp];
   if (s.kind === 'libs') return MERMAID_LIBS;
@@ -1130,11 +1151,13 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'domsub') showNode(s.sd);
   else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
   else if (s.kind === 'domedge') showTwoSubdomains(s.a, s.b);
+  else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
   else if (s.kind === 'gp') showGPOverview();
   else if (s.kind === 'gpstep') showGPStep(s.gp);
   else if (s.kind === 'libs') showLibsFold();
-  // Context + Subsystems open on the System's overview (its overall functionality), not a blank panel.
-  else if ((s.kind === 'context' || s.kind === 'container') && GRAPH.nodes['SYS']) showNode('SYS');
+  // Every overview without a more specific default (Context, Subsystems, Components, Domain) opens on
+  // the System's overview — its overall functionality — instead of a blank panel.
+  else if (GRAPH.nodes['SYS']) showNode('SYS');
   else panel.innerHTML = EMPTY_PANEL;
 }
 function bindFor(s) {
@@ -1145,6 +1168,7 @@ function bindFor(s) {
   else if (s.kind === 'domain') (HAS_SUBDOMAINS ? bindDomainContainer : bindDomain)();
   else if (s.kind === 'domsub') bindDomainSub(s.sd);  // neighbourhood: framed entities + collapsed neighbour boxes + cross arrows
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
+  else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
   else if (s.kind === 'gp') bindGP();
   else if (s.kind === 'gpstep') bindComponent();  // step subgraph = a Components view scoped to the step
   else if (s.kind === 'libs') bindLibs();
@@ -1153,6 +1177,7 @@ function bindFor(s) {
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
   if (kind === 'context' || kind === 'component' || kind === 'domain') return kind;
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
+  if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
   if (kind === 'gp' || kind === 'gpstep') return 'gp';
   if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
   return 'container';
@@ -1165,6 +1190,7 @@ function stateTitle(s) {
   if (s.kind === 'domain') return 'Domain';
   if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
+  if (s.kind === 'bridge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.sid) + ' → ' + nm(s.sd); }
   if (s.kind === 'gp') return 'Golden Path';
   if (s.kind === 'gpstep') return gpTitle(s.gp);
   if (s.kind === 'libs') return 'Libraries';
@@ -1179,6 +1205,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'domain') return [{ kind: 'domain' }];
   if (s.kind === 'domsub') return [{ kind: 'domain' }, { kind: 'domsub', sd: s.sd }];  // subdomain card under Domain
   if (s.kind === 'domedge') return [{ kind: 'domain' }, { kind: 'domedge', a: s.a, b: s.b }];  // subdomain pair beside them
+  if (s.kind === 'bridge') return [{ kind: 'container' }, { kind: 'bridge', sid: s.sid, sd: s.sd }];  // S×SD bridge under Subsystems
   if (s.kind === 'gp') return [{ kind: 'gp' }];
   if (s.kind === 'gpstep') return [{ kind: 'gp' }, { kind: 'gpstep', gp: s.gp }];  // step under the Golden Path
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context

@@ -1194,6 +1194,19 @@ def test_domain_edge_card_includes_subsystem_bridges() -> None:
     assert "style S1 fill:" in card                        # amber subsystem box, distinct from entities
 
 
+def test_bridge_card_pairs_subsystem_and_subdomain() -> None:
+    # The bridge card frames a subsystem and a subdomain side by side, with the component→entity
+    # owns/reads edges between them — the structure↔domain analog of the edge cards. Keyed 'S>SD'.
+    cards = gen_viewer.bridge_card_mermaids(parse_map(make_both_groupings_map()))
+    assert "S1>SD1" in cards and "S2>SD2" in cards
+    card = cards["S1>SD1"]
+    assert card.startswith("classDiagram")
+    assert 'namespace S1["Edge"] {' in card and 'class C1["Front"]' in card    # subsystem frame + its component box
+    assert 'namespace SD1[' in card and 'class E1["Order"] {' in card          # subdomain frame + entity (full, attrs)
+    assert "C1 --> E1 : owns" in card                                          # the C→E bridge edge
+    assert "style C1 fill:" in card                                            # component box styled (indigo)
+
+
 # --- C->E ownership nudge --------------------------------------------------------
 def make_owner_map(e2_embedded: bool = False) -> str:
     """C1 persists E1 (an owner). E2 has no owner; embedded in E1 (contains) only when e2_embedded."""
