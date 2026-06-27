@@ -1324,7 +1324,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo' };
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', panelW: 'coyodex.panelW' };
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch (_) { return null; } };
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* private mode: in-session only */ } };
 const srcRoot = () => (lsGet(LS.root) || REPO_ROOT_DEFAULT || '').replace(/\/+$/, '');
@@ -1494,6 +1494,32 @@ setSave.addEventListener('click', saveSettings);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeSettings(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeSettings(); });
 
+// --- first-run navigation guide -------------------------------------------------
+// A one-time overlay teaching click-to-focus / ⌘-click-to-drill, remembered in localStorage so it
+// shows once (Esc / backdrop / "Got it" dismiss it). The canvas hint is informational, not a reopener.
+const coach = document.getElementById('coach');
+const dismissCoach = () => { coach.hidden = true; lsSet(LS.coach, '1'); };
+document.getElementById('coachok').addEventListener('click', dismissCoach);
+coach.addEventListener('click', (e) => { if (e.target === coach) dismissCoach(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.hidden) dismissCoach(); });
+if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once
+
+// --- resizable side panel -------------------------------------------------------
+// Drag the handle to set the panel width; persisted so it survives reloads, clamped so both the canvas
+// and the panel stay usable. The drag starts on the handle (not the svg), so svg-pan-zoom never pans.
+const resizer = document.getElementById('resizer');
+const clampPanelW = (w) => Math.min(Math.max(w, 240), Math.round(window.innerWidth * 0.7));
+const savedPanelW = parseInt(lsGet(LS.panelW) || '', 10);
+if (savedPanelW) panel.style.width = clampPanelW(savedPanelW) + 'px';
+let resizing = false;
+resizer.addEventListener('mousedown', (e) => { e.preventDefault(); resizing = true; document.body.classList.add('resizing'); });
+document.addEventListener('mousemove', (e) => { if (resizing) panel.style.width = clampPanelW(window.innerWidth - e.clientX) + 'px'; });
+document.addEventListener('mouseup', () => {
+  if (!resizing) return;
+  resizing = false; document.body.classList.remove('resizing');
+  lsSet(LS.panelW, String(parseInt(panel.style.width, 10) || ''));
+});
+
 buildLegend();
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
@@ -1509,4 +1535,4 @@ zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); update
 if (HAS_DIFF) {
   toggle.addEventListener('click', () => { mode = mode === 'diff' ? 'base' : 'diff'; render(); });
 }
-go({ kind: HAS_GP ? 'gp' : 'context' });  // land on the Golden Path (the behavioural spine); fall back to Context
+go({ kind: 'context' });  // always land on the Context view (the highest, C4 system-in-the-world altitude)

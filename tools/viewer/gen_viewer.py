@@ -1014,17 +1014,16 @@ __STYLE__
 <header>
   <h1>coyodex viewer</h1>
   <span class="meta" id="meta"></span>
-  <span id="drillhint" hidden>&#8984;-click to drill down</span>
-  <span id="nav">
-    <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
-    <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
-  </span>
   <span id="viewsw">
     <button data-view="context">Context</button>
     <button data-view="gp">Golden Path</button>
     <button data-view="container">Subsystems</button>
     <button data-view="domain">Domain</button>
     <button data-view="component">Components</button>
+  </span>
+  <span id="nav">
+    <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
+    <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
   </span>
   <span id="zoomctl">
     <button id="zoomout" title="Zoom out">−</button>
@@ -1039,7 +1038,12 @@ __STYLE__
   <div id="stage">
     <div id="diagram"></div>
     <div id="legend"></div>
+    <!-- Always-on, informational navigation caption overlaid on the canvas bottom-left (filled in JS).
+         Lives over the diagram, not in the header chrome users skip. Not interactive (pointer-events:none). -->
+    <div id="drillhint" hidden></div>
   </div>
+  <!-- Drag handle to resize the side panel (width persisted in localStorage). -->
+  <div id="resizer" title="Drag to resize"></div>
   <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
 </main>
 <div id="tip"></div>
@@ -1066,6 +1070,21 @@ __STYLE__
     <div class="modal-btns">
       <button id="setCancel" type="button">Cancel</button>
       <button id="setSave" type="button" class="primary">Save</button>
+    </div>
+  </div>
+</div>
+<!-- First-run navigation guide: shown once (localStorage), reopened from the canvas hint. -->
+<div id="coach" class="modal" hidden>
+  <div class="modal-card">
+    <h2>Getting around the map</h2>
+    <ul class="coach-list">
+      <li><b>Select a view</b> in the top bar</li>
+      <li><b>Scroll</b> to zoom, <b>drag</b> to move</li>
+      <li><b>Click</b> a box or arrow &mdash; shows its details</li>
+      <li><b>&#8984;-click</b> (Ctrl-click) &mdash; drills in</li>
+    </ul>
+    <div class="modal-btns">
+      <button id="coachok" type="button" class="primary">Got it</button>
     </div>
   </div>
 </div>

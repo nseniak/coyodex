@@ -1,12 +1,12 @@
 * { box-sizing: border-box; }
-body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #111; }
+/* Flex column so `main` fills the real space left under the header + breadcrumb bar (whatever their
+   heights) — a fixed `calc(100vh - …)` undercounts the breadcrumb and pushes the stage bottom (and
+   anything pinned there: the diagram hint, the diff legend) below the fold. */
+body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #111;
+       height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 header { padding: 8px 14px; background: #1e1b4b; color: #fff; display: flex; gap: 12px; align-items: center; }
 header h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 0 0 auto; }
 header .meta { font-size: 12px; opacity: .8; flex: 1; }
-/* hint that ⌘-click drills in — shown only on the Subsystems / neighbourhood views (toggled in JS) */
-#drillhint { flex: 0 0 auto; font-size: 11px; white-space: nowrap; color: #c7d2fe;
-             background: #312e81; border: 1px solid #4338ca; padding: 3px 8px; border-radius: 6px; }
-#drillhint[hidden] { display: none; }
 header button { font: inherit; font-size: 12px; padding: 4px 12px; border: 0; border-radius: 6px;
                 background: #6366f1; color: #fff; cursor: pointer; }
 header button:hover { background: #818cf8; }
@@ -20,11 +20,17 @@ header button:hover { background: #818cf8; }
 #zoomctl { display: inline-flex; gap: 4px; flex: 0 0 auto; align-items: center; }
 #zoomctl button { font-size: 13px; line-height: 1; padding: 4px 9px; }
 #zoomctl #zoomlevel { min-width: 52px; font-size: 12px; font-variant-numeric: tabular-nums; }
-main { display: flex; height: calc(100vh - 38px); }
-#stage { flex: 1; position: relative; overflow: hidden; background: #fafafa; }
+main { display: flex; flex: 1; min-height: 0; }
+#stage { flex: 1; min-width: 0; position: relative; overflow: hidden; background: #fafafa; }
 #diagram { width: 100%; height: 100%; }
 #diagram svg { width: 100%; height: 100%; }
-#panel { width: 340px; border-left: 1px solid #e5e7eb; padding: 16px; overflow-y: auto; background: #fff; }
+/* drag handle between the canvas and the side panel — the panel's visible divider, doubling as the
+   grab target. Widened hit area via padding-free 5px; highlights on hover / while dragging. */
+#resizer { flex: 0 0 5px; cursor: col-resize; background: #e5e7eb; }
+#resizer:hover, body.resizing #resizer { background: #818cf8; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing #stage { pointer-events: none; }  /* no canvas hovers/pans mid-drag */
+#panel { flex: 0 0 auto; width: 340px; padding: 16px; overflow-y: auto; background: #fff; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }
 #panel .badges { margin-bottom: 12px; }
@@ -96,16 +102,30 @@ body.cmd .opensrc, body.cmd .opensrc * {
 #tip code { font-family: ui-monospace, monospace; font-size: 11px; background: rgba(255,255,255,.16);
             padding: 0 3px; border-radius: 3px; }
 
-#legend { position: absolute; left: 12px; bottom: 12px; background: #fff; border: 1px solid #e5e7eb;
+/* bottom-RIGHT of the canvas so it never collides with the informational hint in the bottom-left */
+#legend { position: absolute; right: 12px; bottom: 12px; background: #fff; border: 1px solid #e5e7eb;
           border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: none; }
 #legend.on { display: block; }
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
 
-/* Source-link settings modal — also the first-use confirm. The [hidden] attr toggles it from JS. */
-#modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
+/* Always-on, informational navigation caption overlaid on the canvas (bottom-left) — sits where the
+   user is actually looking instead of in the header chrome. Not interactive: pointer-events:none so it
+   never intercepts a drag-pan or a click on the diagram beneath it. */
+#drillhint { position: absolute; left: 12px; bottom: 12px; z-index: 5; pointer-events: none;
+             font: inherit; font-size: 12px; white-space: nowrap; color: #312e81;
+             background: rgba(255,255,255,.92); border: 1px solid #c7d2fe; border-radius: 999px;
+             padding: 4px 13px; box-shadow: 0 1px 5px rgba(0,0,0,.12); }
+#drillhint[hidden] { display: none; }
+
+/* Source-link settings modal + first-run navigation guide (#coach). The [hidden] attr toggles from JS. */
+#modal, #coach { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
          background: rgba(17,24,39,.45); }
-#modal[hidden] { display: none; }
+#modal[hidden], #coach[hidden] { display: none; }
+/* the navigation-guide body: one line per interaction */
+.coach-list { margin: 12px 0 0; padding-left: 20px; font-size: 13px; color: #374151; line-height: 1.5; }
+.coach-list li { margin-top: 8px; }
+.coach-list li:first-child { margin-top: 0; }
 .modal-card { width: 460px; max-width: 92vw; background: #fff; border-radius: 12px; padding: 20px 22px;
               box-shadow: 0 12px 44px rgba(0,0,0,.32); }
 .modal-card h2 { font-size: 16px; margin: 0 0 4px; }
