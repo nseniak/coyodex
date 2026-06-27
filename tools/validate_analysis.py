@@ -321,23 +321,30 @@ _ALTITUDE_MIN = 6  # this many bare-identifier items in one cell reads as a list
 
 
 def check_altitude_hints(text: str) -> list[str]:
-    """Advisory (non-blocking): a T1 component whose definition row packs many sub-units into one cell —
-    `>= _ALTITUDE_MIN` bare lowercase identifier names like `twitch, youtube, reddit, …` — is usually a
-    GROUP wearing a component's hat. Suggest promoting it to a subsystem so its members get their own
-    drill level. Heuristic: bare-identifier matching skips ID lists (a Depends-on cell is `C13, C9, …`,
-    uppercase) and prose (multi-word clauses), so it rarely fires on a genuine component."""
+    """Advisory (non-blocking): a T1 component whose **Purpose** lists many sub-units — `>= _ALTITUDE_MIN`
+    bare lowercase identifier names like `twitch, youtube, reddit, …` — is usually a GROUP wearing a
+    component's hat. Suggest promoting it to a subsystem so its members get their own drill level. Only
+    the Purpose cell is inspected (found from the T1 header), so a `Depends on` cell — IDs *or*
+    snake_case dep names — never trips it; bare-identifier matching also skips prose (multi-word
+    clauses)."""
     out: list[str] = []
+    purpose_col: int | None = None  # index of the 'Purpose' cell in the current table, or None outside one
     for line in text.splitlines():
-        m = re.match(r"\|\s*\*\*(C\d+)\*\*\s*\|", line)  # a component DEFINITION row (id alone in cell 1)
-        if not m:
+        cells = line.split("|")
+        if len(cells) > 2 and any(c.strip().lower() == "purpose" for c in cells):  # a table header with a Purpose column
+            purpose_col = next(i for i, c in enumerate(cells) if c.strip().lower() == "purpose")
             continue
-        for cell in line.split("|"):
-            n = sum(1 for s in (seg.strip() for seg in cell.split(",")) if _LIST_ITEM.match(s))
-            if n >= _ALTITUDE_MIN:
-                out.append(f"Component {m.group(1)} lists {n} sub-units in one cell — if these are real "
-                           f"units, consider promoting {m.group(1)} to a subsystem (its members then get "
-                           f"their own drill level)")
-                break  # one hint per component, even if several cells qualify
+        if not line.lstrip().startswith("|"):  # left the table (blank line / prose / heading)
+            purpose_col = None
+            continue
+        m = re.match(r"\|\s*\*\*(C\d+)\*\*\s*\|", line)  # a component DEFINITION row (id alone in cell 1)
+        if not m or purpose_col is None or purpose_col >= len(cells):
+            continue
+        n = sum(1 for s in (seg.strip() for seg in cells[purpose_col].split(",")) if _LIST_ITEM.match(s))
+        if n >= _ALTITUDE_MIN:
+            out.append(f"Component {m.group(1)} lists {n} sub-units in its Purpose — if these are real "
+                       f"units, consider promoting {m.group(1)} to a subsystem (its members then get "
+                       f"their own drill level)")
     return out
 
 

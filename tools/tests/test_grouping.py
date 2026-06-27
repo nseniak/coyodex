@@ -530,6 +530,46 @@ def test_validator_warns_redundant_nesting_level() -> None:
     assert "redundant nesting level" in out and "S1" in out
 
 
+def make_snakecase_deps_map() -> str:
+    """A real component with a prose Purpose and 6 snake_case dependency names — the altitude hint must
+    inspect only the Purpose, so the Depends-on list does NOT trip it (review finding #3)."""
+    return (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | Gateway | routes requests to backends | f | auth_svc, billing_svc, user_svc, mail_svc, log_svc, cron_svc |\n"
+    )
+
+
+def test_validator_altitude_hint_inspects_purpose_only() -> None:
+    code, out = run_validator(make_snakecase_deps_map())
+    assert code == 0
+    assert "consider promoting" not in out  # 6 snake_case names in Depends-on must NOT trip the hint
+
+
+def make_nested_bridge_map() -> str:
+    """A nested subsystem (S2<-S1) and nested subdomain (SD2<-SD1) joined by a C->E owns edge — so a
+    bridge arrow can be drawn on a NESTED subsystem card AND a nested subdomain card (review finding #1)."""
+    return (
+        "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n|---|---|---|---|---|---|\n"
+        "| **S1** | Outer | x |  | a | V |\n| **S2** | Inner | x | S1 | a | V |\n\n"
+        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n|---|---|---|---|---|---|\n"
+        "| **C1** | Repo | S2 | x | f |  |\n\n"
+        "## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n|---|---|---|---|---|---|\n"
+        "| **SD1** | DomOuter | x |  | [f](f#L1) | inferred |\n| **SD2** | DomInner | x | SD1 | [f](f#L1) | inferred |\n\n"
+        "## T5 — Domain model (domain cards)\n\n"
+        "**E1 — Order** *(orders)*\nSUBDOMAIN: SD2\nMEANING: x\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
+        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
+        "| C1 | persists | E1 | store | f |\n"
+    )
+
+
+def test_nested_bridge_cards_keyed_per_level() -> None:
+    # The JS requests a bridge card for whatever S/SD boxes a card draws: S2>SD1 from the nested
+    # subsystem card (top-subdomain box) and S1>SD2 from the nested subdomain card (top-subsystem box).
+    # Every (subsystem-ancestor, subdomain-ancestor) pair must be generated so no drill misses its key.
+    keys = set(gen_viewer.bridge_card_mermaids(parse_map(make_nested_bridge_map())))
+    assert {"S1>SD1", "S2>SD1", "S1>SD2", "S2>SD2"} <= keys
+
+
 def test_container_edges_list_crossing_component_edges() -> None:
     # Each inter-subsystem arrow 'A>B' carries the underlying component->component edges (endpoints,
     # names, verb, why) so the viewer lists their meanings in the arrow's hover tooltip.

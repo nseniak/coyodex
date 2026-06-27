@@ -603,37 +603,51 @@ def gen_bridge_card_mermaid(graph: GraphDict, sid: str, sdid: str) -> str:
     subsystem with a subdomain). Rendered as a classDiagram so the subsystem's components (member-less,
     simple boxes) and the subdomain's entities (full boxes) share one canvas; node ids + the C→E edges
     match the component view, so the viewer resolves an in-card arrow to its real edge."""
-    comps = _components_of(graph, sid)
-    ents = _entities_of(graph, sdid)
-    comp_ids = {cid for cid, _ in comps}
-    ent_ids = {eid for eid, _ in ents}
+    comps = _components_of(graph, sid)            # direct component members
+    ents = _entities_of(graph, sdid)              # direct entity members
     nodes = graph["nodes"]
     lines = ["classDiagram", f'namespace {sid}["{_safe_label(str(nodes[sid]["name"]))}"] {{']
-    for cid, name in comps:  # the subsystem's components as member-less (simple) boxes
+    for cid, name in comps:  # direct components as member-less (simple) boxes
         lines.append(f'  class {cid}["{_safe_label(name)}"]')
+    for ssid, sname in _child_subsystems(graph, sid):  # child subsystems as collapsed (drillable) boxes
+        lines.append(f'  class {ssid}["{_safe_label(sname)}"]')
     lines.append("}")
-    lines += _subdomain_namespace(graph, sdid, ents)  # the subdomain's entities, full
+    lines += _subdomain_namespace(graph, sdid, ents)  # the subdomain's immediate entities (+ child SD boxes)
     for cid, _ in comps:  # indigo — read as components, not entities
         lines.append(f"  style {cid} {COMPONENT_STYLE}")
-    for e in graph["edges"]:  # the C→E bridge edges (owns / reads)
+    for ssid, _ in _child_subsystems(graph, sid):
+        lines.append(f"  style {ssid} {SUBSYSTEM_STYLE}")
+    for cid, _ in _child_subdomains(graph, sdid):
+        lines.append(f"  style {cid} {SUBDOMAIN_STYLE}")
+    # owns/reads C→E edges crossing sid's subtree -> sdid's subtree, bucketed to each frame's immediate
+    # children: a direct member->direct entity edge stays labelled (resolves to the real edge); a
+    # crossing into a child group is an aggregated arrow.
+    bridges: set[tuple[str, str, str]] = set()
+    for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
-        if s in comp_ids and d in ent_ids:
+        if str(nodes.get(s, {}).get("kind")) != "component" or str(nodes.get(d, {}).get("kind")) != "entity":
+            continue
+        if _in_subtree(graph, s, sid) and _in_subtree(graph, d, sdid):
             rel = "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"
-            lines.append(f"  {s} --> {d} : {rel}")
+            bridges.add((str(_child_under(graph, s, sid)), str(_child_under(graph, d, sdid)), rel))
+    for bs, bd, rel in sorted(bridges):
+        lines.append(f"  {bs} --> {bd} : {rel}")
     return "\n".join(lines)
 
 
 def bridge_card_mermaids(graph: GraphDict) -> dict[str, str]:
-    """One bridge card per (subsystem, subdomain) pair joined by a component→entity edge, keyed 'S>SD'
-    to match the bridge arrow's drill target (the structure↔domain analog of edge_card_mermaids)."""
+    """One bridge card per (subsystem-ancestor, subdomain-ancestor) pair joined by a C→E owns/reads edge
+    — at EVERY drill level, so a NESTED subsystem card's bridge arrow (key `nestedS>SD`) and a nested
+    subdomain card's reverse bridge (key `S>nestedSD`) both resolve. Keyed 'S>SD'; the cross-grouping
+    analog of edge_card_mermaids (no disjoint check — the two forests never overlap)."""
     nodes = graph["nodes"]
     pairs: set[tuple[str, str]] = set()
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
         if str(nodes.get(s, {}).get("kind")) == "component" and str(nodes.get(d, {}).get("kind")) == "entity":
-            sub, sd = _top_subsystem(graph, s), _top_subdomain(graph, d)
-            if sub and sd:
-                pairs.add((sub, sd))
+            for a in _subsystem_ancestors(graph, s):
+                for b in _subdomain_ancestors(graph, d):
+                    pairs.add((a, b))
     return {f"{sub}>{sd}": gen_bridge_card_mermaid(graph, sub, sd) for sub, sd in sorted(pairs)}
 
 

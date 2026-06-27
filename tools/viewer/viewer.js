@@ -1319,7 +1319,20 @@ async function render() {
   hideTip();  // a re-render replaces the diagram — drop any tooltip from the old one
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   const s = history[hi];
-  const { svg } = await mermaid.render('coyodexGraph' + (rc++), mermaidFor(s));
+  // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,
+  // not throw an unhandled rejection that freezes the view mid-navigation. Show a message + keep the
+  // chrome (back/forward still work) so the user can step out.
+  let svg;
+  try {
+    const src = mermaidFor(s);
+    if (!src) throw new Error('no diagram for ' + JSON.stringify(s));
+    ({ svg } = await mermaid.render('coyodexGraph' + (rc++), src));
+  } catch (_) {
+    if (seq !== renderSeq) return;
+    diagram.innerHTML = '<p class="empty">This view could not be rendered.</p>';
+    renderChrome(s);
+    return;
+  }
   if (seq !== renderSeq) return;  // a newer render started during the async layout — drop this stale one
   diagram.innerHTML = svg;
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
