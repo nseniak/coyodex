@@ -266,10 +266,12 @@ python3 tools/viewer/render.py .coyodex/project-map.md .coyodex/project-map.html
 ```
 
 The HTML is a *rendering* of the map (no second source) — commit it alongside the map so the two
-stay in step and a reviewer can open it. **Finish by reporting the full absolute paths of BOTH**
-the map (`.coyodex/project-map.md`) and the diagram HTML (`.coyodex/project-map.html`), as links,
-so the reader can open either. (Paths to `tools/...` are relative to the coyodex clone, like the
-validator above.)
+stay in step and a reviewer can open it. **Finish by reporting BOTH artifacts as links** — the
+map (`.coyodex/project-map.md`) and the diagram HTML (`.coyodex/project-map.html`), as relative
+paths so the reader can open either. **In addition, for the HTML give the full clickable `file://`
+URL with the absolute path**, so the reader can open the diagram straight in a browser — e.g.
+`Open in browser: file:///abs/path/to/repo/.coyodex/project-map.html`. (Paths to `tools/...` are
+relative to the coyodex clone, like the validator above.)
 
 **Maintaining the map.** When code changes after a baseline exists, follow
 [change-impact](method/change-impact.md): report the impact against the map (modified /
