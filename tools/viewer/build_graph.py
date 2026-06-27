@@ -82,6 +82,7 @@ class GPStep:
 class GraphDict(TypedDict):
     commit: str | None
     title: str | None
+    goal: str | None
     nodes: dict[str, dict[str, object]]
     edges: list[dict[str, object]]
     gp: list[dict[str, object]]
@@ -322,6 +323,21 @@ def parse_roles(tables: list[tuple[list[str], list[list[str]]]]) -> list[dict[st
     return roles
 
 
+GOAL_HDR = re.compile(r"^##\s+T0\b[^\n]*$", re.M)  # the "## T0 — Goal …" heading
+
+
+def parse_goal(text: str) -> str | None:
+    """The T0 — Goal prose: the system's overall functionality, surfaced as the System node's overview.
+    Captures everything between the T0 heading and the next `## ` heading (or `---` rule)."""
+    m = GOAL_HDR.search(text)
+    if not m:
+        return None
+    rest = text[m.end():]
+    stop = re.search(r"^(?:##\s|---\s*$)", rest, re.M)
+    body = (rest[:stop.start()] if stop else rest).strip()
+    return body or None
+
+
 def build(md_path: Path) -> GraphDict:
     # Ignore fenced code blocks (Mermaid / shell / teaching examples) — they are not live content.
     text = strip_fences(md_path.read_text(encoding="utf-8"))
@@ -340,6 +356,7 @@ def build(md_path: Path) -> GraphDict:
     return {
         "commit": commit_m.group(1) if commit_m else None,
         "title": title,
+        "goal": parse_goal(text),
         "nodes": {nid: asdict(n) for nid, n in nodes.items()},
         "edges": [asdict(e) for e in edges],
         "gp": [asdict(g) for g in gp],

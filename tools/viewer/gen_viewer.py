@@ -368,6 +368,30 @@ def _subdomain_namespace(graph: GraphDict, sdid: str,
     return out
 
 
+def _subsystem_bridge_lines(graph: GraphDict, member_ids: set[str]) -> list[str]:
+    """`classDiagram` lines for the reverse structure↔domain bridge over `member_ids`: every subsystem
+    whose components own/read one of those entities, drawn as a collapsed (amber) box with an owns/reads
+    arrow into the entity. The mirror of the subsystem card's subdomain bridge; shared by the subdomain
+    card and the domain edge card. owns = persists/writes, reads = anything else."""
+    nodes = graph["nodes"]
+    bridges: set[tuple[str, str, str]] = set()  # (subsystem box, member entity, 'owns'|'reads')
+    nb_subs: set[str] = set()
+    for e in graph["edges"]:
+        s, d = str(e["src"]), str(e["dst"])
+        if d in member_ids and str(nodes.get(s, {}).get("kind")) == "component":
+            sub = _top_subsystem(graph, s)
+            if sub:
+                nb_subs.add(sub)
+                bridges.add((sub, d, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
+    out: list[str] = []
+    for sub in sorted(nb_subs):  # collapsed neighbour-subsystem boxes (amber, like a subsystem anywhere)
+        out.append(f'  class {sub}["{_safe_label(str(nodes[sub]["name"]))}"]')
+        out.append(f"  style {sub} {SUBSYSTEM_STYLE}")
+    for sub, ent, rel in sorted(bridges):  # bridge arrows: subsystem -> entity (owns / reads)
+        out.append(f"  {sub} --> {ent} : {rel}")
+    return out
+
+
 def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
     """A per-subdomain `classDiagram` neighbourhood: `sdid` framed as a `namespace` holding its own
     entities (full attributes), every OTHER subdomain its entities relate to drawn as a collapsed
@@ -409,29 +433,16 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
             if nb and nb != sdid:
                 cross.add((nb, d))
                 nb_sds.add(nb)
-    bridges: set[tuple[str, str, str]] = set()  # (neighbour subsystem box, member entity, 'owns'|'reads')
-    nb_subs: set[str] = set()
-    for e in graph["edges"]:                     # the reverse of the subsystem card's data bridge: which
-        s, d = str(e["src"]), str(e["dst"])      # subsystems' components own/read this subdomain's entities
-        if d in member_ids and str(nodes.get(s, {}).get("kind")) == "component":
-            sub = _top_subsystem(graph, s)
-            if sub:
-                nb_subs.add(sub)
-                bridges.add((sub, d, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
     lines = ["classDiagram", *_subdomain_namespace(graph, sdid, members)]
     for nb in sorted(nb_sds):  # collapsed neighbour-subdomain boxes (member-less, count-labelled)
         n_ent = len(_entities_of(graph, nb))
         lines.append(f'  class {nb}["{_safe_label(str(nodes[nb]["name"]))} ({n_ent})"]')
         lines.append(f"  style {nb} {SUBDOMAIN_STYLE}")  # magenta — same as a subdomain box anywhere else
-    for sub in sorted(nb_subs):  # collapsed neighbour-subsystem boxes (the structure↔domain bridge)
-        lines.append(f'  class {sub}["{_safe_label(str(nodes[sub]["name"]))}"]')
-        lines.append(f"  style {sub} {SUBSYSTEM_STYLE}")  # amber — same as a subsystem box anywhere else
+    lines += _subsystem_bridge_lines(graph, member_ids)  # reverse structure↔domain bridge (amber boxes + owns/reads)
     for e in internal:  # the focal subdomain's own relations, full
         lines.append(_class_relation_line(e))
     for src, dst in sorted(cross):  # crossing arrows to/from collapsed neighbour boxes (click → edge card)
         lines.append(f"  {src} --> {dst}")
-    for sub, ent, rel in sorted(bridges):  # bridge arrows: subsystem -> entity (owns / reads)
-        lines.append(f"  {sub} --> {ent} : {rel}")
     return "\n".join(lines)
 
 
@@ -445,17 +456,19 @@ def domain_subdomain_mermaids(graph: GraphDict) -> dict[str, str]:
 def gen_domain_edge_card(graph: GraphDict, a: str, b: str) -> str:
     """Domain edge card: subdomains `a` and `b` both framed as `namespace` blocks holding ALL their
     entities (full), drawn with the a→b crossing relations PLUS each subdomain's own internal relations —
-    so the crossing reads in the context of both subdomains' inner structure. The entity analog of
-    gen_edge_card_mermaid (only the a→b direction is drawn; the b→a arrow has its own card). Node ids +
-    relation shapes match the flat Domain view, so the class/relation bridge resolves any in-card
-    relation to its detail."""
+    so the crossing reads in the context of both subdomains' inner structure. It also draws the reverse
+    structure↔domain bridge (collapsed subsystem boxes that own/read either subdomain's entities), the
+    same as the subdomain card. The entity analog of gen_edge_card_mermaid (only the a→b direction is
+    drawn; the b→a arrow has its own card). Node ids + relation shapes match the flat Domain view, so the
+    class/relation bridge resolves any in-card relation to its detail."""
     ents_a = _entities_of(graph, a)
     ents_b = _entities_of(graph, b)
     ids_a = {eid for eid, _ in ents_a}
     ids_b = {eid for eid, _ in ents_b}
     lines = ["classDiagram",
              *_subdomain_namespace(graph, a, ents_a),
-             *_subdomain_namespace(graph, b, ents_b)]
+             *_subdomain_namespace(graph, b, ents_b),
+             *_subsystem_bridge_lines(graph, ids_a | ids_b)]  # subsystems owning/reading either subdomain
     for e in _domain_relation_edges(graph):
         s, d = str(e["src"]), str(e["dst"])
         in_a = s in ids_a and d in ids_a       # a's inner wiring
@@ -750,7 +763,8 @@ def gen_libs_mermaid(graph: GraphDict) -> str:
 def add_context_nodes(g: dict[str, Any], graph: GraphDict) -> None:
     """Synthetic System + actor nodes in the panel graph so the click bridge resolves them."""
     g["nodes"]["SYS"] = {"id": "SYS", "kind": "system", "name": graph["title"] or "System",
-                         "file": None, "line": None, "fields": {}}
+                         "file": None, "line": None,
+                         "fields": {"Overview": graph["goal"]} if graph.get("goal") else {}}
     for i, r in enumerate(graph["roles"]):
         rid = "R" + str(i)
         g["nodes"][rid] = {"id": rid, "kind": r["kind"], "name": r["name"], "file": None, "line": None,
@@ -956,10 +970,10 @@ __STYLE__
     <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
   </span>
   <span id="viewsw">
+    <button data-view="context">Context</button>
     <button data-view="gp">Golden Path</button>
     <button data-view="container">Subsystems</button>
     <button data-view="domain">Domain</button>
-    <button data-view="context">Context</button>
     <button data-view="component">Components</button>
   </span>
   <span id="zoomctl">

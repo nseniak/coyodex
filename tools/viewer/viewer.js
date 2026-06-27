@@ -557,6 +557,11 @@ function markLibsDrill() {
   const el = mainScene.nodeEls[LIBS_ID];
   if (el) el.classList.add('drill');
 }
+// Tag the System box with the drill cursor (⌘-drills into Subsystems / Components).
+function markSysDrill() {
+  const el = mainScene.nodeEls['SYS'];
+  if (el) el.classList.add('drill');
+}
 
 function bindNodes(scene, onActivate) {
   scene.root.querySelectorAll('g.node').forEach((el) => {
@@ -729,7 +734,11 @@ function fwd() { if (hi < history.length - 1) { captureViewport(); hi += 1; rend
 // --- per-state binding ----------------------------------------------------------
 function bindContext() {
   bindNodes(mainScene, (id, el, e) => {
-    if (id === 'SYS') { go({ kind: HAS_GROUPING ? 'container' : 'component' }); return; }  // drill in
+    if (id === 'SYS') {  // the System box: ⌘-click drills in, a plain click selects (shows its overview)
+      if (isDrillClick(e)) { go({ kind: HAS_GROUPING ? 'container' : 'component' }); return; }
+      selectNode(mainScene, el, id);
+      return;
+    }
     if (id === LIBS_ID) {  // collapsed Libraries box: ⌘-click drills to the full list, plain click previews it
       if (isDrillClick(e)) { go({ kind: 'libs' }); return; }
       selectLibsFold(mainScene, el);
@@ -738,6 +747,7 @@ function bindContext() {
     selectNode(mainScene, el, id);
   });
   bindEdges(mainScene, resolveContextEdge);
+  markSysDrill();
   markLibsDrill();
 }
 // The Libraries drill-down: the System + every folded in-process dep, same shape as Context. SYS and
@@ -875,6 +885,26 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
 function bindEdgePair() {  // both subsystems framed; arrows are component edges
   bindNodes(mainScene, (id, el) => selectNode(mainScene, el, id));
   bindEdges(mainScene, resolveComponentEdge);
+  bindFrameDrill(mainScene);  // ⌘-click either subsystem frame to open its card
+}
+// An edge card frames two groups (subsystem subgraphs / subdomain namespaces) as Mermaid clusters.
+// Make each frame ⌘-drill into that group's card, so an edge card is no longer a dead-end. The framed
+// members + arrows keep their own handlers (they live in separate elements / stop propagation), so a
+// frame click only fires on the frame's own rect or title.
+function bindFrameDrill(scene) {
+  scene.root.querySelectorAll('g.cluster').forEach((c) => {
+    const id = idOf(c);
+    const k = id && GRAPH.nodes[id] && GRAPH.nodes[id].kind;
+    const target = k === 'subsystem' ? { kind: 'subsystem', sid: id }
+      : k === 'subdomain' ? { kind: 'domsub', sd: id } : null;
+    if (!target) return;
+    c.classList.add('drill');
+    c.addEventListener('click', (ev) => {
+      if (isDrag(ev) || !isDrillClick(ev)) return;  // only ⌘-click drills the frame
+      ev.stopPropagation();
+      go(target);
+    });
+  });
 }
 
 // classDiagram (the Domain view) emits a different SVG shape than flowchart, so it gets its own
@@ -919,13 +949,28 @@ function bindDomain() {
     if (!id || !GRAPH.nodes[id] || mainScene.nodeEls[id]) return;
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
-    markOpenSrc(el, id);  // a domain entity with a source ref is also ⌘-click-to-open
     el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
     el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
     attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // hover -> meaning; ⌘ -> the action
-    el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); if (openSrcClick(id, ev)) return; selectNode(mainScene, el, id); });
+    if (GRAPH.nodes[id].kind === 'subsystem') {  // a bridge box (domain edge card): ⌘ drills into its card
+      el.classList.add('drill');
+      el.addEventListener('click', (ev) => {
+        if (isDrag(ev)) return; ev.stopPropagation();
+        if (isDrillClick(ev)) { go({ kind: 'subsystem', sid: id }); return; }
+        selectNode(mainScene, el, id);
+      });
+    } else {  // a domain entity: select / ⌘-open-source
+      markOpenSrc(el, id);
+      el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); if (openSrcClick(id, ev)) return; selectNode(mainScene, el, id); });
+    }
   });
   eachClassEdge(mainScene.root, (p, label, src, dst) => {
+    const ks = GRAPH.nodes[src] && GRAPH.nodes[src].kind, kd = GRAPH.nodes[dst] && GRAPH.nodes[dst].kind;
+    if (ks === 'subsystem' || kd === 'subsystem') {  // a bridge arrow subsystem -> entity (owns/reads)
+      const sub = ks === 'subsystem' ? src : dst;
+      bindBridgeEdge(mainScene, p, label, src, dst, { kind: 'subsystem', sid: sub }, sub);
+      return;
+    }
     const arr = COMP_LOOKUP[src + '>' + dst];
     if (!arr) return;
     const e = arr[0];
@@ -1088,6 +1133,8 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'gp') showGPOverview();
   else if (s.kind === 'gpstep') showGPStep(s.gp);
   else if (s.kind === 'libs') showLibsFold();
+  // Context + Subsystems open on the System's overview (its overall functionality), not a blank panel.
+  else if ((s.kind === 'context' || s.kind === 'container') && GRAPH.nodes['SYS']) showNode('SYS');
   else panel.innerHTML = EMPTY_PANEL;
 }
 function bindFor(s) {
@@ -1097,7 +1144,7 @@ function bindFor(s) {
   else if (s.kind === 'edge') bindEdgePair();
   else if (s.kind === 'domain') (HAS_SUBDOMAINS ? bindDomainContainer : bindDomain)();
   else if (s.kind === 'domsub') bindDomainSub(s.sd);  // neighbourhood: framed entities + collapsed neighbour boxes + cross arrows
-  else if (s.kind === 'domedge') bindDomain();  // both subdomains framed; all arrows are entity↔entity relations
+  else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
   else if (s.kind === 'gp') bindGP();
   else if (s.kind === 'gpstep') bindComponent();  // step subgraph = a Components view scoped to the step
   else if (s.kind === 'libs') bindLibs();
@@ -1155,8 +1202,10 @@ function renderChrome(s) {
   // card open an entity's source at the leaf.
   const drillKind = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'gp'
     || s.kind === 'domsub'  // a subdomain card drills into neighbour subdomains / the edge pair
+    || s.kind === 'context'  // the System box / Libraries box drill in on ⌘-click
     || (s.kind === 'domain' && HAS_SUBDOMAINS);
   const srcKind = s.kind === 'component' || s.kind === 'gpstep' || s.kind === 'domedge' || s.kind === 'edge'
+    || s.kind === 'libs'  // the Libraries fold lists deps whose ⌘-click opens their source
     || (s.kind === 'domain' && !HAS_SUBDOMAINS);
   // A plain click "focuses" — dims the diagram to the clicked element's own links + connected boxes —
   // in every diagram (the Golden Path dims to the selected step's actor/line; the graphs to the node's

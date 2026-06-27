@@ -1183,6 +1183,17 @@ def test_edge_cards_exclude_contexts() -> None:
     assert set(cards) == {"S1>S2"}                         # no spurious S>SD edge card
 
 
+def test_domain_edge_card_includes_subsystem_bridges() -> None:
+    # The domain edge card draws the reverse structure↔domain bridge too: each subsystem whose
+    # components own/read either subdomain's entities, as a collapsed (amber) box with an owns/reads
+    # arrow (C1 persists E1 -> S1 owns E1; C2 persists E3 -> S2 owns E3). Mirrors the subdomain card.
+    card = gen_viewer.domain_edge_card_mermaids(parse_map(make_both_groupings_map()))["SD1>SD2"]
+    assert 'namespace SD1[' in card and 'namespace SD2[' in card
+    assert 'class S1["Edge"]' in card and "S1 --> E1 : owns" in card
+    assert 'class S2["Core"]' in card and "S2 --> E3 : owns" in card
+    assert "style S1 fill:" in card                        # amber subsystem box, distinct from entities
+
+
 # --- C->E ownership nudge --------------------------------------------------------
 def make_owner_map(e2_embedded: bool = False) -> str:
     """C1 persists E1 (an owner). E2 has no owner; embedded in E1 (contains) only when e2_embedded."""
