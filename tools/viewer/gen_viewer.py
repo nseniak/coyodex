@@ -821,7 +821,10 @@ def add_context_nodes(g: dict[str, Any], graph: GraphDict) -> None:
 def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
     """Explanations for the Context view's synthetic edges, derived from already-parsed map data:
     actor→system = the role's 'wants'; system→dep = the dep's 'Used for' + the component edges
-    (with their Why) that realize it. Keyed by '<src>><dst>' to match the rendered edge path ids."""
+    (with their Why) that realize it; system→Libraries = the collapsed fold (panel reuses the roster).
+    Keyed by '<src>><dst>' to match the rendered edge path ids. Registering the Libraries arrow here is
+    what lets the viewer's focus/dim pass treat it like any other edge (keep it lit when the System is
+    focused; dim it when a dependency is selected) — without an entry the arrow stays un-bound."""
     title = graph["title"] or "System"
     ce: dict[str, dict[str, Any]] = {}
     for i, r in enumerate(graph["roles"]):
@@ -848,6 +851,11 @@ def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
                             "from": title, "to": str(node["name"]),
                             "usedFor": str(fields.get("Used for") or ""),
                             "realizedBy": by_dst.get(nid, [])}
+    # The collapsed Libraries fold draws a `SYS -->|bundles| LIBS` arrow (gen_context_mermaid). Register
+    # it so the viewer binds it as a real edge; its panel/tooltip reuse the box's roster, not a 'why'.
+    if folded_libs(graph):
+        ce["SYS>" + LIBS_ID] = {"src": "SYS", "dst": LIBS_ID, "type": "libs",
+                                "from": title, "to": "Libraries"}
     return ce
 
 
@@ -1135,7 +1143,9 @@ def main() -> int:
     if diff:
         meta = f"diff: <code>{diff['base']}</code> → <code>{diff['new']}</code> · {len(diff['changes'])} changes"
     else:
-        meta = f"baseline @ <code>{graph['commit'] or 'unknown'}</code>"
+        commit = graph['commit'] or 'unknown'
+        committed = graph.get('committed')
+        meta = f"baseline @ commit <code>{commit}</code>" + (f" from {committed}" if committed else "")
     grouping = has_grouping(graph)
     container_mm = gen_container_mermaid(graph) if grouping else ""
     by_sub = subsystem_component_mermaids(graph) if grouping else {}

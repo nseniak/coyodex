@@ -200,6 +200,7 @@ function showEdge(e) {
 // Context-edge panel: actor→system shows the role's wants; system→dep shows what it's used for
 // and the component edges (with their Why) that realize the dependency.
 function showContextEdge(ce) {
+  if (ce.type === 'libs') { showLibsFold(); return; }  // SYS→Libraries arrow: same roster panel as the box
   let body = '';
   if (ce.type === 'actor') {
     body = ce.wants ? '<dt>Wants</dt><dd>' + mdInline(ce.wants) + '</dd>' : '';
@@ -343,33 +344,28 @@ function tipNodeHtml(id) {
   if (!n) return '';
   const meaning = meaningOf(n);
   // The box you're hovering already prints its name, and its kind reads from the shape/colour, so a
-  // name header + kind tag only restate what's on screen — show just the explanatory text.
-  // (Subsystems / subdomains suppress the card entirely when there's nothing to explain.)
-  if (n.kind === 'subsystem' || n.kind === 'subdomain')
-    return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>' : '';
-  return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
-                 : '<div class="tn">no description recorded</div>';
+  // name header + kind tag only restate what's on screen — show just the explanatory text. No meaning
+  // recorded -> no tooltip at all (don't pop a bare "no description" placeholder).
+  return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>' : '';
 }
 function tipEdgeHtml(e) {
   // Tooltips show only the explanation — you're hovering the arrow, so its endpoints (and, for most
-  // edges, its verb) are already on screen. Context edges explain via wants/usedFor; component edges
-  // via why. DOMAIN relations are the deliberate exception: the verb/kind is their content and is NOT
-  // drawn on the arrow (the label is the backing field name), and they carry no why — so keep the card.
-  if (e.type === 'actor' || e.type === 'dep') {
-    const meaning = e.type === 'actor' ? e.wants : e.usedFor;
-    return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>'
-                   : '<div class="tn">no description recorded</div>';
+  // edges, its verb) are already on screen. Context edges explain via wants/usedFor (the Libraries fold
+  // arrow has neither); component edges via why. With nothing to explain, show no tooltip at all rather
+  // than a bare placeholder. DOMAIN relations are the deliberate exception: the verb/kind is their
+  // content and is NOT drawn on the arrow (the label is the backing field name) — so keep that card.
+  if (e.type === 'actor' || e.type === 'dep' || e.type === 'libs') {
+    const meaning = e.type === 'actor' ? e.wants : e.usedFor;  // libs has neither -> no tooltip
+    return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>' : '';
   }
   if (e.kind) {  // domain relation — keep endpoints + verb (the relation's content, not on the arrow)
     const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
     return '<div class="tt">' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</div>'
       + '<div class="tk">' + esc(e.verb) + '</div>'
-      + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
-               : '<div class="tn">no why recorded</div>');
+      + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>' : '');
   }
-  // component edge: endpoints + verb are already on the diagram — show only the why.
-  return e.why ? '<div class="tm">' + mdInline(e.why) + '</div>'
-               : '<div class="tn">no why recorded</div>';
+  // component edge: endpoints + verb are already on the diagram — show only the why (none -> no tooltip).
+  return e.why ? '<div class="tm">' + mdInline(e.why) + '</div>' : '';
 }
 // Hover an inter-subsystem arrow (Subsystems view) -> just the explanation (Why) of every
 // component→component edge it aggregates. You're already on that arrow, so no subsystem/component
@@ -378,7 +374,7 @@ const TIP_EDGE_CAP = 14;
 function tipContainerEdgeHtml(a, b) {
   const list = CONTAINER_EDGES[a + '>' + b] || [];
   const whys = list.map((r) => r.why).filter((w) => w && String(w).trim());
-  if (!whys.length) return '<div class="tn">no description recorded</div>';
+  if (!whys.length) return '';  // nothing recorded -> no tooltip
   const shown = whys.slice(0, TIP_EDGE_CAP);
   const more = whys.length > TIP_EDGE_CAP
     ? '<div class="tn">+' + (whys.length - TIP_EDGE_CAP) + ' more…</div>' : '';
@@ -389,7 +385,7 @@ function tipContainerEdgeHtml(a, b) {
 // verb). The domain analog of tipContainerEdgeHtml; capped so a busy pair stays legible.
 function tipDomainContainerEdgeHtml(a, b) {
   const list = DOMAIN_CONTAINER_EDGES[a + '>' + b] || [];
-  if (!list.length) return '<div class="tn">no relations recorded</div>';
+  if (!list.length) return '';  // nothing recorded -> no tooltip
   const shown = list.slice(0, TIP_EDGE_CAP);
   const more = list.length > TIP_EDGE_CAP ? '<div class="tn">+' + (list.length - TIP_EDGE_CAP) + ' more…</div>' : '';
   return '<ul class="tl">' + shown.map((r) =>
@@ -398,12 +394,10 @@ function tipDomainContainerEdgeHtml(a, b) {
 function tipGPHtml(gpId) {  // hover a GP step (message) -> just its story (the explanation), like a subsystem tip
   const s = GP_BY_ID[gpId];
   if (!s) return '';
-  return s.story ? '<div class="tm">' + mdInline(s.story) + '</div>'
-                 : '<div class="tn">no story recorded</div>';
+  return s.story ? '<div class="tm">' + mdInline(s.story) + '</div>' : '';  // no story -> no tooltip
 }
 function tipGPActorHtml(a) {  // hover an actor / its lifeline -> just what its role wants (the explanation)
-  return a && a.wants ? '<div class="tm">' + mdInline(a.wants) + '</div>'
-                      : '<div class="tn">no description recorded</div>';
+  return a && a.wants ? '<div class="tm">' + mdInline(a.wants) + '</div>' : '';  // no wants -> no tooltip
 }
 function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor if it would overflow the viewport
   const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
@@ -552,16 +546,18 @@ function selectNode(scene, el, id) {
   if (scene.nodeEls[id]) focusNode(scene, id); else clearFocus(scene);
 }
 
-// Select the collapsed Libraries box: highlight + show its roster (showLibsFold), no neighbourhood dim
-// (its only link is the un-bound SYS→box arrow). Reuses the node selKey so bindNodes' hover guard
-// matches and the selection glow isn't overwritten by a passing hover. Toggles off on re-click.
+// Select the collapsed Libraries box: highlight + show its roster (showLibsFold), and dim to its
+// neighbourhood (the System + the SYS→box arrow) just like selecting a dependency — the bundles arrow
+// is a registered context edge, so focusNode resolves the connection. Reuses the node selKey so
+// bindNodes' hover guard matches and the selection glow isn't overwritten by a passing hover. Toggles
+// off on re-click.
 function selectLibsFold(scene, el) {
   const selKey = 'node:' + LIBS_ID;
   if (scene.selectedKey === selKey) { resetScene(scene); return; }
   scene.selectedKey = selKey;
   showLibsFold();
   sceneSelect(scene, () => { el.style.filter = HILITE; return () => { el.style.filter = ''; }; });
-  clearFocus(scene);
+  if (scene.nodeEls[LIBS_ID]) focusNode(scene, LIBS_ID); else clearFocus(scene);
 }
 // Tag the Libraries box with the drill cursor (it ⌘-drills into the full list), like subsystem boxes.
 function markLibsDrill() {
@@ -687,7 +683,7 @@ function bindContainerEdge(scene, p, label, a, b, focusE) {
 // subsystem↔entity in a subdomain card, labelled owns/reads). Registered as an edge with its DRAWN
 // endpoints so a focus pass keeps it + both ends lit; a plain click shows the collapsed `box`'s panel,
 // a ⌘-click drills into `target` (that box's own card). The bridge has no `why`, so the default tip
-// reads "no why recorded" — consistent with a why-less component edge.
+// shows nothing on hover — consistent with a why-less component edge.
 function bindBridgeEdge(scene, p, label, a, b, target, box) {
   bindSelectEdge(scene, p, label, { src: a, dst: b }, 'bridge:' + a + '>' + b,
     () => showNode(box),
