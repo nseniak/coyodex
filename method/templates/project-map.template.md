@@ -71,13 +71,16 @@ UNDER THE HOOD: <… [file](path#L1) …>
 ## Subsystems (S) — the container altitude
 
 <!-- Optional; recommended above ~15 components. Components grouped into subsystems, optionally
-     nested. Membership is carried on each component (T1 `Subsystem` column); members +
-     inter-subsystem edges are derived. Omit this whole section on small maps — ungrouped
-     components are valid. -->
+     NESTED — a subsystem's `Parent` is another `S` (S3 below nests under S1). The viewer drills nested
+     levels recursively, so a big area goes finer IN THIS MAP — never a second map file. Go deeper by
+     nesting, or by promoting a leaf component into a subsystem (see method.md "Drilling deeper").
+     Membership is carried on each child (T1 `Subsystem` column / this `Parent` cell); members +
+     inter-subsystem edges are derived. Omit this whole section on small maps — ungrouped are valid. -->
 
 | ID | Subsystem | Purpose | Parent | Anchor | Conf. |
 |---|---|---|---|---|---|
-| **S1** | <subsystem> | <one-line purpose> | <S-id or empty> | [dir/](path/) | inferred |
+| **S1** | <subsystem> | <one-line purpose> |  | [dir/](path/) | inferred |
+| **S3** | <nested subsystem> | <one-line purpose> | S1 | [dir/sub/](path/sub/) | inferred |
 
 ---
 
@@ -87,6 +90,7 @@ UNDER THE HOOD: <… [file](path#L1) …>
 |---|---|---|---|---|---|
 | **C1** | <component> | S1 | <purpose> | [file](path#L1) | C2 |
 | **C2** | <component> | S1 | <purpose> | [file](path#L1) |  |
+| **C3** | <nested component> | S3 | <purpose> | [file](path/sub#L1) |  |
 
 ### T1 backbone — component dependency edges (the diagram source)
 
@@ -137,7 +141,8 @@ UNDER THE HOOD: <… [file](path#L1) …>
 
 | ID | Subdomain | Purpose | Parent | Anchor | Conf. |
 |---|---|---|---|---|---|
-| **SD1** | <subdomain> | <one-line purpose> | <SD-id or empty> | [dir/](path/) | inferred |
+| **SD1** | <subdomain> | <one-line purpose> |  | [dir/](path/) | inferred |
+| **SD2** | <nested subdomain> | <one-line purpose> | SD1 | [dir/sub/](path/sub/) | inferred |
 
 ---
 
@@ -161,6 +166,12 @@ SUBDOMAIN: SD1
 MEANING: <one-line meaning>
 FIELDS: <name>:<type> · <name>:<type>
 SOURCE: [file](path#L1)
+
+**E3 — <Entity>** *(<stored where>)*
+SUBDOMAIN: SD2
+MEANING: <one-line meaning, lives in the nested subdomain SD2>
+FIELDS: <name>:<type>
+SOURCE: [file](path/sub#L1)
 
 ---
 

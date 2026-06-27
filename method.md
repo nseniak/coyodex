@@ -94,8 +94,11 @@ faces: outside = journey, inside = T6 flow + edges.
 ### Level 0 (one screen, whole project)
 - **Subsystems (S)** *(optional; recommended above ~15 components)*: `ID | Subsystem | Purpose |
   Parent | Anchor | Conf.` — the Container altitude: components grouped into subsystems, optionally
-  nested. Membership is carried on the child (a `Subsystem` column on T1); the member list and the
-  inter-subsystem edges are *derived*, never authored. Present this first on large maps; drill into T1.
+  nested (a subsystem's `Parent` is another `S`). Membership is carried on the child (a `Subsystem`
+  column on T1); the member list and the inter-subsystem edges are *derived*, never authored. Present
+  this first on large maps; drill into T1. **Nesting renders as recursive drill**: each subsystem's card
+  shows only its *immediate* children (sub-subsystems as drillable boxes), so a large area drills down
+  level by level inside the one map — there is no depth limit (deep chains only warn).
 - **T1 Components**: `Component | Subsystem | Purpose | Entry point | Depends on` (the `Subsystem`
   cell is the component's one parent `S`, or empty = ungrouped).
 - **T2 External dependencies**: `Name | Kind | Type | Used for | Where configured`. `Kind` (optional,
@@ -309,6 +312,22 @@ relative to the coyodex clone, like the validator above.)
 added / deleted), then accept: patch the map, bump the baseline pin, **re-render the diagram**
 (`tools/viewer/render.py`, so it tracks the patched map), save the annotated diff under
 `.coyodex/analysis-changes/<date>.md`, and commit the map + diagram with the code.
+
+**Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big
+to detail at its altitude (e.g. a `plugins` area holding dozens of feature units), go finer **inside the
+one map**, two ways:
+- **Nest** — add child subsystems (their `Parent` is the bigger `S`) and move the members onto them.
+- **Promote a leaf component into a subsystem** — when a component turns out to *be* a group (its
+  Purpose enumerates many sub-units; the validator nudges this), retire the component, add a subsystem in
+  its place, and add its real units as components under it. **Re-trace its edges**: the old component's
+  aggregate edges (`C — verb → X`) must be re-pointed to the specific new components — a subsystem can't
+  be an edge endpoint, so the validator's "every reference resolves" check fails on any leftover edge
+  to the retired id, which forces (and guards) the re-trace.
+
+Both are ordinary single-map edits; the viewer then drills the new level automatically. **Altitude may
+be uneven** — refine only where you need detail; an area you haven't drilled stays a single box. This
+**supersedes child maps** (a second `.coyodex/<area>/project-map.md`): a separate file is a separate ID
+space, so links can't cross it and Analyze/Accept won't track it — see [dispatch](method/dispatch.md).
 
 **How to apply.** Lead with the behavioral layer (T0 Goal → Glossary → Roles → Use cases →
 Golden Path), then structural Level 0 (T1–T3); generate the rest on demand as the reader

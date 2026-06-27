@@ -66,6 +66,10 @@ in their own table (`ID | Subsystem | Purpose | Parent | Anchor | Conf.`), optio
   exists iff a component edge crosses from `S_a` to `S_b`. Never authored.
 - **Grouped "Depends on" / grouped touches are derived** the same way; `S` is *not* written into
   `Touches:` lines.
+- **Nesting renders as recursive drill, to any depth.** A subsystem's card shows only its *immediate*
+  children (sub-subsystems as drillable boxes, direct components inline); drilling a child box opens its
+  own card. Depth is **not capped** — the validator only *warns* past `DEEP_NEST_WARN` (5). Deeper detail
+  is added in place (nest, or promote a leaf component into a subsystem), **never** in a second map file.
 - Grouping is **optional and additive**: a map with no Subsystems table and no `Subsystem` column
   is fully valid (its components are simply ungrouped).
 
@@ -78,7 +82,8 @@ in their own table (`ID | Subdomain | Purpose | Parent | Anchor | Conf.`), optio
 - **Membership lives on the child, once** — but on the **card**, not a table cell: each domain card
   carries a `SUBDOMAIN:` line holding **one** `SD` ID (the analog of a component's `Subsystem` cell). A
   card with no `SUBDOMAIN:` line is ungrouped (top-level). The Subdomains table's own `Parent` cell nests
-  one subdomain inside another.
+  one subdomain inside another — and the Domain view **drills these nested subdomains recursively**, each
+  card showing one level, exactly like subsystems.
 - **Cluster entities like components** — directory first (the card's `SOURCE` location), then relation
   cohesion (the `RELATIONS` graph); minimise crossing relations. Directory-derived = verified,
   cohesion-derived = inferred.

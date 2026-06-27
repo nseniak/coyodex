@@ -56,3 +56,11 @@ the header (`**Commit:**` / `**Committed:**` line), then:
 The map is the single source at the analyzed repo's `.coyodex/project-map.md`. After every write,
 validate (`tools/validate_analysis.py --check-sources`) then render (`tools/viewer/render.py`) — the
 HTML is a rendering, never a second source.
+
+**Going deeper stays in the one map.** When a part of the system needs finer detail than its current
+altitude, refine it IN PLACE — nest subsystems/subdomains, or promote a leaf component into a subsystem
+(see `method.md` "Drilling deeper"). The viewer drills these nested levels recursively. **Never write a
+second map file** (a per-area `.coyodex/<area>/project-map.md` "child map"): a separate file is a
+separate ID space, so cross-references can't resolve, bidirectional links and shared elements break, the
+viewer can't drill across it, and Analyze/Accept/change-impact only ever track this one baseline. Child
+maps are **not supported**.

@@ -89,6 +89,7 @@ carries the exact **was → now** text, not just a description of impact.
 | Added | the new row + which table/section + where | insert |
 | Deleted | which row to remove + every reference to scrub | delete + clean refs |
 | Ripple | the **new text** of each rippled element (e.g. GP4's new story), not just "GP4 affected" | apply it |
+| Promotion (drill deeper) | the retired component id, the new subsystem + its child components, and every old `C — verb → X` edge **re-pointed** to a specific new component | retire the component, insert the subsystem + children, re-point the edges, scrub refs to the old id (a subsystem can't be an edge endpoint, so any leftover edge to it fails validation) |
 
 **If accept finds itself inferring or re-reading code, the report was incomplete** —
 regenerate the report, don't invent at accept time. The draft `analysis-changes/<date>.md`

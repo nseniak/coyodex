@@ -58,17 +58,19 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   inter-subsystem edges **derived** from the component edge list (count-labelled). Drilling replaces
   the diagram **in place** (no popups) and is tracked as a back/forward **history** (stepping back
   or forward restores each view's pan/zoom as you left it):
-  - Click a **box** → its *neighbourhood* view: the subsystem framed around its components (with
-    their internal wiring + the deps they touch outside the frame), and every other subsystem its
-    components link to/from drawn as a collapsed box, joined by unlabelled component→box arrows.
-    Click a neighbour box to re-center on it (walk the graph); click a cross arrow to open that
-    pair's edge view.
-  - Click an `S→S` **arrow** → its edge view: the two subsystems framed with just the concrete
-    component edges that cross between them.
+  - Click a **box** → its *neighbourhood* view: the subsystem framed around its **immediate** children
+    (its direct components inline, plus any **child subsystems as drillable boxes**), with the deps those
+    direct components touch outside the frame, and every other subsystem its members link to/from drawn
+    as a collapsed box. Click a child box to drill **deeper** (nesting goes to any depth); click a
+    neighbour box to re-center on it; click a cross arrow to open that pair's edge view.
+  - Click an `S→S` **arrow** → its edge view: the two subsystems framed with the concrete crossings
+    between them. A cross arrow into a box that *contains* (or is contained by) the current one instead
+    **navigates** to that box (drill in / zoom out), since one can't frame the other.
   - Component nodes/arrows behave like the Components view (click for `file:line`); the side panel
-    shows the subsystem(s) you're on. **Navigate** with the header **◀ ▶** arrows, **⌘+←/→** or
-    **⌥+←/→**, or by clicking an ancestor crumb in the breadcrumb (the structural nesting path,
-    e.g. Context › Subsystems › *this subsystem*) below the header.
+    shows the group you're on **plus its immediate children** (child groups annotated with how many
+    leaves nest under them). **Navigate** with the header **◀ ▶** arrows, **⌘+←/→** or **⌥+←/→**, or by
+    clicking any crumb in the breadcrumb — which now shows the **full nesting path**, one crumb per
+    level (e.g. Subsystems › Plugins › Social Content). The Domain view nests subdomains the same way.
 - **Components** — every component + its verbed edges; click a node/edge for details + `file:line`.
 - **Golden Path** *(when the map has a Golden Path)* — the behavioural overlay, in two levels:
   - **Level 1** is the path as a black-box **sequence diagram** — each step a message from its actor

@@ -15,7 +15,9 @@ graph; no separate persisted model is needed.
 | **Behavioral overlay** | the Golden Path as a black-box sequence of steps; drill a step into the subgraph of components it touches | GP steps + traceability |
 
 Drill down = zoom one level in; step back = zoom out — the same "name a row to drill"
-navigation as the markdown, made visual.
+navigation as the markdown, made visual. The Container and Code altitudes **nest to any depth**: a
+subsystem (or subdomain) that holds child subsystems drills into them recursively, each card showing one
+level — so a large area keeps drilling inside the **one** map rather than spilling into a second file.
 
 **Context-diagram direction.** Actors (from Roles) point *into* the system — they initiate use
 cases. External dependencies (from T2) point *out* — the system calls them. Keeping external
