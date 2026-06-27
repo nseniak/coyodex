@@ -7,7 +7,7 @@
 > **Schema v1** (ID-based): every element has a stable ID (`UC`/`C`/`D`/`E`/`GP`);
 > cross-references use IDs; validated by `tools/validate_analysis.py`.
 > Confidence: **verified** (read/traced) vs **inferred** (naming/convention).
-> **Commit:** `<sha>` · **Built:** `<date>`
+> **Commit:** `<sha>` · **Committed:** `<commit-date>` · **Built:** `<date>`
 
 ---
 

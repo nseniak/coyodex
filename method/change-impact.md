@@ -115,7 +115,10 @@ clean baseline.
 ## Accept — the four actions
 
 1. Apply the report's `was → now` blocks to `.coyodex/project-map.md` (mechanical).
-2. Bump its commit pin to the code commit it now describes.
+2. Bump its commit pin (and **Committed** date) to the code commit it now describes — the same
+   **pin gate** as Build applies (`method.md`): the *code* must be committed (the `.coyodex/` report
+   and map you are accepting are expected to be dirty — that's what this step commits), else give the
+   user the A/B choice and record the pin `-dirty` only if they pick B.
 3. Re-render the diagram (`python3 tools/viewer/render.py .coyodex/project-map.md
    .coyodex/project-map.html`) — a deterministic re-render of the patched map, no new inference.
 4. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).

@@ -249,7 +249,35 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 
 **Output files — map + diagrams.** Write the full analysis to `.coyodex/project-map.md` at the
 root of the analyzed repo, conform to [schema v1](method/schema-v1.md), and record in it the commit
-it was built at (the baseline pin). **Start from the template** —
+it was built at (the baseline pin — see the pin gate below).
+
+**Baseline pin — require committed code, or record it dirty.** The pin must mean "the map describes
+*exactly* this commit". The map you just read reflects the **working tree**, so if the code has
+uncommitted changes, HEAD alone is a misleading pin (and a later `git diff <pin>..<now>` would miss
+the edits already baked into the map). So before recording the pin, check the analyzed repo for
+uncommitted **code** — coyodex's own files under `.coyodex/` (map / html / report) don't count, they
+are always in flux and the workflow commits them:
+
+```
+git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is committed
+```
+
+- **Code committed** (empty output) → record the pin from HEAD:
+  `git -C <repo> rev-parse --short HEAD` (the sha) and
+  `git -C <repo> show -s --format=%cs HEAD` (its commit date, `YYYY-MM-DD`).
+- **Uncommitted code** → STOP and give the user a choice, then **loop**:
+  - **A (recommended)** — commit (or stash) the code first, so the baseline corresponds to a
+    real commit; then re-check and record the pin as above.
+  - **B** — proceed without committing, but record that the code was dirty: pin the sha with a
+    `-dirty` suffix (`<short-sha>-dirty`), date = HEAD's commit date.
+
+  Re-run the check after each round; only continue when the code is committed (A) **or** the user
+  explicitly chose B.
+
+Write the pin into the map header line — the template's **Commit** / **Committed** / **Built** line
+(sha · commit date · today).
+
+**Start from the template** —
 [`method/templates/project-map.template.md`](method/templates/project-map.template.md): fill its cells and Write the filled map to `.coyodex/project-map.md` in one write — read the
 template, then write; don't shell-`cp` it into place and then overwrite it (the copy is wasted and
 overwriting a freshly-created file trips the read-before-write guard), and don't author the map from

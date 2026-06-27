@@ -33,6 +33,7 @@ from schema_v1 import (  # noqa: E402
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href
 COMMIT = re.compile(r"\*\*Commit:\*\*\s*`([^`]+)`")
+COMMITTED = re.compile(r"\*\*Committed:\*\*\s*`([^`]+)`")  # commit date of the pinned commit
 
 # `SD` must resolve to "subdomain" (a cluster of T5 entities); `_kind_of` extracts the full alpha
 # prefix, so "SD" is looked up whole and never collides with the single-letter "S" (subsystem).
@@ -81,6 +82,7 @@ class GPStep:
 
 class GraphDict(TypedDict):
     commit: str | None
+    committed: str | None  # commit date of the pin (None for older maps without the field)
     title: str | None
     goal: str | None
     nodes: dict[str, dict[str, object]]
@@ -349,12 +351,14 @@ def build(md_path: Path) -> GraphDict:
     edges.extend(dedges)
     gp = parse_gp(lines)
     commit_m = COMMIT.search(text)
+    committed_m = COMMITTED.search(text)
     title_m = re.search(r"^#\s+(.+?)\s*$", text, re.M)
     title = title_m.group(1).strip() if title_m else None
     if title and " — " in title:
         title = title.split(" — ")[0].strip()
     return {
         "commit": commit_m.group(1) if commit_m else None,
+        "committed": committed_m.group(1) if committed_m else None,
         "title": title,
         "goal": parse_goal(text),
         "nodes": {nid: asdict(n) for nid, n in nodes.items()},
