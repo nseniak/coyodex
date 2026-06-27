@@ -4,7 +4,7 @@
 
 <img src="assets/running-off-the-cliff.jpg" alt="Wile E. Coyote, having run past the edge of the cliff, hanging in mid-air just before he looks down" width="640">
 
-### Vibe code without running off the cliff.
+### Vibe code without running off the cliff
 
 </div>
 
