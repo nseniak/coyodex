@@ -159,11 +159,12 @@ function showNode(id) {
         return esc(((ty ? ty + ' ' : '') + (a.name || '') + (a.markers ? '  ·  ' + a.markers : '')).trim());
       }).join('<br>') + '</dd>'
     : '';
-  // A leaf with source (component / entity) gets a clickable link that opens it; other kinds with a
-  // `file` (e.g. a subsystem's entry-point dir) keep the plain read-only text as before.
+  // Any node with a local source ref — a component/entity FILE or a subsystem/subdomain entry DIRECTORY —
+  // gets a clickable link that opens it exactly the way the diagram's ⌘-click does (editor or GitHub). An
+  // off-repo URL (e.g. a dep pointing at a website) stays plain text, since openSource can't resolve it.
   const ref = n.file ? esc(cleanPath(n.file, n.line)) + (n.line ? ':' + n.line : '') : '';
   const src = !n.file ? ''
-    : srcNode(id) ? `<button type="button" class="src srclink" title="Open source (editor or GitHub)">${ref}</button>`
+    : localRef(n.file) ? `<button type="button" class="src srclink" title="Open in editor or on GitHub">${ref}</button>`
     : `<div class="src">${ref}</div>`;
   panel.innerHTML = `<h2>${id} · ${n.name}</h2>`
     + `<div class="badges"><span class="badge kind">${n.kind}</span>${chg}</div>`
@@ -1125,16 +1126,18 @@ function stateTitle(s) {
   return nm(s.a) + ' → ' + nm(s.b);  // edge
 }
 function ancestors(s) {  // structural nesting path (top → s), independent of the click history
-  if (s.kind === 'domain') return [{ kind: 'domain' }];   // a standalone behavioural lens, not nested in Context
-  if (s.kind === 'domsub') return [{ kind: 'domain' }, { kind: 'domsub', sd: s.sd }];  // subdomain card nested under Domain
-  if (s.kind === 'domedge') return [{ kind: 'domain' }, { kind: 'domedge', a: s.a, b: s.b }];  // subdomain pair beside the subdomains
-  if (s.kind === 'gp') return [{ kind: 'gp' }];           // the Golden Path is its own behavioural lens
-  if (s.kind === 'gpstep') return [{ kind: 'gp' }, { kind: 'gpstep', gp: s.gp }];  // step nested under it
-  if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold drills out of Context
-  const trail = [{ kind: 'context' }];                    // Context is the root of the structural zoom
-  if (s.kind === 'context') return trail;
-  if (s.kind === 'component') { trail.push({ kind: 'component' }); return trail; }
-  trail.push({ kind: 'container' });                      // Subsystems sit inside the Context
+  // Each tab's OVERVIEW shows a single crumb (its own name); only a drill-down appends a deeper crumb.
+  // So sibling tabs read uniformly — Subsystems, Components, Domain, Golden Path, Context are each one
+  // crumb at the top, and ancestry (Subsystems › Auth, Context › Libraries) appears only once you zoom in.
+  if (s.kind === 'domain') return [{ kind: 'domain' }];
+  if (s.kind === 'domsub') return [{ kind: 'domain' }, { kind: 'domsub', sd: s.sd }];  // subdomain card under Domain
+  if (s.kind === 'domedge') return [{ kind: 'domain' }, { kind: 'domedge', a: s.a, b: s.b }];  // subdomain pair beside them
+  if (s.kind === 'gp') return [{ kind: 'gp' }];
+  if (s.kind === 'gpstep') return [{ kind: 'gp' }, { kind: 'gpstep', gp: s.gp }];  // step under the Golden Path
+  if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
+  if (s.kind === 'context') return [{ kind: 'context' }];
+  if (s.kind === 'component') return [{ kind: 'component' }];
+  const trail = [{ kind: 'container' }];                  // the Subsystems overview is the root of this branch
   if (s.kind === 'subsystem') trail.push({ kind: 'subsystem', sid: s.sid });
   else if (s.kind === 'edge') trail.push({ kind: 'edge', a: s.a, b: s.b });  // a pair lives beside the subsystems
   return trail;
@@ -1283,6 +1286,13 @@ const cleanPath = (file, line) => {
   if (line) p = p.replace(new RegExp(':' + line + '$'), '');
   return p.replace(/^\/+/, '');
 };
+// True when a map href is an in-repo path (a file or a directory) rather than an off-repo URL — only
+// those can be opened in the editor / on GitHub. An `http(s)://…` ref is left as plain text. The `://`
+// test (not a bare `scheme:`) is deliberate: it must NOT match the `path:line` form like `app.py:42`.
+const localRef = (file) => !!file && !/^[a-z][a-z0-9+.-]*:\/\//i.test(String(file));
+// A directory ref ends with `/` (the map convention `[dir/](path/)`); it opens differently from a file —
+// GitHub `/tree/` not `/blob/`, the editor without a line/column, and no `#L` anchor.
+const isDirRef = (file, line) => cleanPath(file, line).endsWith('/');
 const uriScheme = (u) => { const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(u); return m ? m[1].toLowerCase() : ''; };
 const fillUri = (t, v) => t.replace(/\{abspath\}/g, v.abspath).replace(/\{path\}/g, v.path)
   .replace(/\{line\}/g, v.line).replace(/\{col\}/g, v.col);
@@ -1292,10 +1302,13 @@ function editorUri(file, line) {
   const id = openTargetId();
   if (id === 'native') return null;
   const t = OPEN_TARGETS.find((x) => x.id === id);
-  const tmpl = id === 'custom' ? customUri() : (t ? t.uri : '');
+  let tmpl = id === 'custom' ? customUri() : (t ? t.uri : '');
   const root = srcRoot();
   if (!tmpl || !root) return null;
   const rel = cleanPath(file, line);
+  // A directory has no line/column — drop that suffix so we open the folder, not a phantom `dir:1:1`.
+  // Covers both template shapes: `…{abspath}:{line}:{col}` and `…?file={abspath}&line={line}`.
+  if (isDirRef(file, line)) tmpl = tmpl.replace(/:\{line\}:\{col\}$/, '').replace(/[?&]line=\{line\}$/, '');
   const uri = fillUri(tmpl, { abspath: root + '/' + rel, path: rel, line: line || 1, col: 1 });
   return ALLOWED_OPEN_SCHEMES.has(uriScheme(uri)) ? uri : null;
 }
@@ -1305,7 +1318,10 @@ const ghRepo = () => (lsGet(LS.repo) || GH_REPO_DEFAULT || '').replace(/\/+$/, '
 const ghUrl = (file, line) => {
   const repo = ghRepo();
   if (!repo || !GH_COMMIT) return null;
-  return repo + '/blob/' + GH_COMMIT + '/' + cleanPath(file, line) + (line ? '#L' + line : '');
+  const rel = cleanPath(file, line);
+  // A directory lives under /tree/ (no line anchor); a file under /blob/, pinned to the map's commit.
+  const dir = isDirRef(file, line);
+  return repo + '/' + (dir ? 'tree' : 'blob') + '/' + GH_COMMIT + '/' + rel + (!dir && line ? '#L' + line : '');
 };
 function fireUri(uri) {
   const a = document.createElement('a');
