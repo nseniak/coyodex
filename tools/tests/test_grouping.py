@@ -235,6 +235,29 @@ def make_escaped_pipe_map() -> str:
     )
 
 
+def make_escaped_pipe_edge_map() -> str:
+    r"""An edge whose Why cell contains an escaped pipe (`run a\|b`). The renderer must split on
+    UNescaped pipes only, so the cell keeps its literal `|` and the later Where column is not shifted
+    — the sibling of the validator's escaped-pipe test, on the parser/renderer side."""
+    return (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | A | x | f |  |\n| **C2** | B | x | f |  |\n\n"
+        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
+        "| C1 | uses | C2 | run a\\|b mode | [f](f#L9) |\n"
+    )
+
+
+def test_renderer_keeps_escaped_pipe_cell_and_columns_aligned() -> None:
+    # The escaped pipe stays literal in the Why cell, and Where still resolves to its link (not shifted
+    # by a phantom column). Before the shared split_cells, the renderer split on `\|` and mangled both.
+    g = parse_map(make_escaped_pipe_edge_map())
+    e = next(x for x in g["edges"] if x["src"] == "C1" and x["dst"] == "C2")
+    assert e["why"] == "run a|b mode", e["why"]          # literal pipe preserved, cell not truncated
+    assert e["where"] == "f#L9", e["where"]              # Where column not shifted out by a phantom cell
+    code, out = run_validator(make_escaped_pipe_edge_map())
+    assert code == 0, out                                # and the validator still agrees it is well-formed
+
+
 def make_glued_inner_map() -> str:
     """Id and name share the bold (`**C8 Upstream**`) — the glued hint must still fire."""
     return (
@@ -630,6 +653,137 @@ def test_validator_hints_glued_id_cell() -> None:
 def test_validator_catches_column_mismatch() -> None:
     code, out = run_validator(make_bad_columns_map())
     assert code == 1 and "columns" in out, out
+
+
+def make_comment_split_edge_map(placement: str = "between_sep_rows") -> str:
+    """An edge table with an HTML comment placed at `placement`:
+      'above_header'      — comment before the `From|Verb|To` header (Variant A: harmless, table intact)
+      'between_sep_rows'  — comment between the separator and the first data row (Variant B: the bug)
+      'between_header_sep'— comment between the header and the separator (also splits the table)
+      'between_rows_blank'— a blank line between two data rows (the comment-free sibling: still splits)
+    The components are defined so the only difference between variants is the split, not undefined ids."""
+    head = (
+        "## T1\n"
+        "| ID | Component | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|\n"
+        "| **C1** | Alpha | x | f | C2 |\n"
+        "| **C2** | Beta | x | f | C3 |\n"
+        "| **C3** | Gamma | x | f |  |\n\n"
+        "### T1 backbone — component dependency edges\n\n"
+    )
+    note = "<!-- a two-line\n     explanatory note -->\n"
+    hdr, sep = "| From | Verb | To |\n", "|---|---|---|\n"
+    rows = "| C1 | uses | C2 | \n| C2 | calls | C3 | \n"
+    if placement == "above_header":
+        body = note + hdr + sep + rows
+    elif placement == "between_header_sep":
+        body = hdr + note + sep + rows
+    elif placement == "between_rows_blank":
+        body = hdr + sep + "| C1 | uses | C2 | \n\n| C2 | calls | C3 | \n"
+    else:  # between_sep_rows — the reported bug
+        body = hdr + sep + note + "\n" + rows
+    return head + body
+
+
+def test_comment_above_header_keeps_all_edges() -> None:
+    # Variant A: a comment BEFORE the edge header leaves the table run intact — both edges parse and
+    # the validator passes (the control that isolates comment PLACEMENT as the single variable).
+    g = parse_map(make_comment_split_edge_map("above_header"))
+    assert len(g["edges"]) == 2   # both backbone edges parse (the only edges in this map)
+    code, out = run_validator(make_comment_split_edge_map("above_header"))
+    assert code == 0, out
+
+
+def test_comment_between_separator_and_rows_drops_edges_silently_then_caught() -> None:
+    # Variant B (the reported silent-data-loss bug): a comment between the separator and the rows
+    # splits the table — the parser drops EVERY edge, and the validator must now FAIL on the split
+    # (before this check it passed green while the render lost all component arrows).
+    g = parse_map(make_comment_split_edge_map("between_sep_rows"))
+    assert g["edges"] == []   # silent row loss in the parse: every backbone edge dropped
+    code, out = run_validator(make_comment_split_edge_map("between_sep_rows"))
+    assert code == 1, out
+    assert "Empty table" in out and "Detached table rows" in out, out
+
+
+def test_comment_between_header_and_separator_is_caught() -> None:
+    # A comment between the header and the separator also splits the run (header alone + separator+rows);
+    # the parser drops the edges and the validator flags the detached block.
+    g = parse_map(make_comment_split_edge_map("between_header_sep"))
+    assert g["edges"] == []
+    code, out = run_validator(make_comment_split_edge_map("between_header_sep"))
+    assert code == 1 and "Detached table row" in out, out
+
+
+def test_blank_line_between_rows_is_caught() -> None:
+    # The comment-free sibling: a blank line between two data rows orphans the trailing row(s). The
+    # parser drops the row after the blank, and the validator flags the lone detached row.
+    g = parse_map(make_comment_split_edge_map("between_rows_blank"))
+    assert len(g["edges"]) == 1   # only the row before the blank survives
+    code, out = run_validator(make_comment_split_edge_map("between_rows_blank"))
+    assert code == 1 and "Detached table row" in out, out
+
+
+def test_table_runs_no_false_positive_on_clean_maps() -> None:
+    # Every well-formed map (header + separator + rows) must stay clean under the split-table check —
+    # the regression guard against false positives that would block valid maps.
+    for md in (make_grouped_map("proper"), make_grouped_map("agent"), make_card_map(),
+               make_gp_map(), make_domain_map(), make_ungrouped_map()):
+        assert validate_analysis.check_table_runs(schema_v1.strip_fences(md)) == [], md
+
+
+def make_unterminated_fence_map() -> str:
+    """An opening ``` that is never closed — strip_fences then swallows the rest (C1, GP1), which used
+    to validate green. The fence guard must fail it (Fix B)."""
+    return (
+        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
+        "| **UC1** | Search | Shopper | a -> b |\n\n"
+        "## Example (fence never closed)\n```\nsome example\n\n"
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | App | x | f |  |\n\n"
+        "## Golden Path\n**GP1 — Search** *(UC1)*\nSTORY: x\n`Touches:` UC1, C1\n"
+    )
+
+
+def test_validator_fails_unterminated_fence() -> None:
+    # An open code fence with no close swallows everything after it; the guard must catch the silent
+    # loss (before this, the validator passed the truncated map green).
+    code, out = run_validator(make_unterminated_fence_map())
+    assert code == 1 and "Unterminated code fence" in out, out
+
+
+def test_validator_balanced_fence_not_flagged() -> None:
+    # No false positive: a normal closed fence must NOT trip the unterminated-fence guard.
+    code, out = run_validator(make_fenced_dup_def_map())
+    assert code == 0 and "Unterminated code fence" not in out, out
+
+
+def make_gp_far_touches_map() -> str:
+    """A GP step whose `Touches:` line sits more than 8 lines below the heading (a long STORY / UNDER
+    THE HOOD). The validator's body window must reach it (matching the parser), not stop at 8 lines and
+    falsely report a missing Touches (Fix D)."""
+    filler = "\n".join(f"UNDER THE HOOD: detail {k}" for k in range(1, 9))
+    return (
+        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
+        "| **UC1** | Search | Shopper | a -> b |\n\n"
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | App | x | f |  |\n\n"
+        "## Golden Path\n**GP1 — Search** *(UC1)*\nSTORY: x\n" + filler + "\n`Touches:` UC1, C1\n"
+    )
+
+
+def test_validator_gp_touches_found_beyond_old_window() -> None:
+    # The Touches line is > 8 lines below the heading; the validator must still find it (parser-aligned
+    # window), not falsely fail. Regression for the gp_bodies 8-line-cap divergence.
+    code, out = run_validator(make_gp_far_touches_map())
+    assert code == 0, out
+    assert "missing a Touches" not in out, out
+
+
+def test_validator_gp_missing_touches_still_fails() -> None:
+    # Widening the body window must not disable the check: a step with NO Touches line anywhere still fails.
+    md = make_gp_far_touches_map().replace("\n`Touches:` UC1, C1\n", "\n")
+    code, out = run_validator(md)
+    assert code == 1 and "missing a Touches" in out, out
 
 
 def test_validator_rejects_empty_verb() -> None:
@@ -1490,7 +1644,9 @@ def test_validator_warns_unowned_entity() -> None:
 
 def test_validator_no_owner_warning_when_nothing_owned() -> None:
     # No persists/writes C→E edge at all -> the map doesn't author ownership -> silent (don't nag).
-    md = make_owner_map().replace("| C1 | persists | E1 | store | f |\n", "")
+    # Drop the whole edge table (not just its row) so the map has no dangling header+separator — an
+    # empty table is its own malformed shape (check_table_runs), unrelated to the ownership nudge.
+    md = make_owner_map().split("### edges")[0]
     code, out = run_validator(md)
     assert code == 0 and "no owning component" not in out, out
 

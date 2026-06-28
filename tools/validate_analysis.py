@@ -14,6 +14,12 @@ for diagrams/tooling:
   5. Table shape: every row of a markdown table (header / separator / data)
      carries the same column count — catches the malformed-separator / dropped-cell
      class that silently breaks parsing and diagram rendering.
+  5b. Table runs: no table is SPLIT by an injected non-pipe line (HTML comment, blank
+     line, stray prose). A table is one contiguous run of `|`-lines for both the parser
+     and the renderer, so a comment between the separator and the rows breaks it into an
+     empty table + a detached row block — the renderer silently drops the orphaned rows
+     and every other check skips them. This flags the split itself (the only check that
+     can see what would silently vanish from the render).
   6. Edge verbs: every edge row (From + To id) carries a non-empty Verb — a blank one
      renders as `src -->|| dst`, dropping the Mermaid label and desyncing the viewer.
 
@@ -47,27 +53,30 @@ from schema_v1 import (
     ID_TOKEN,
     REL_ALIAS,
     fk_targets,
+    is_separator_row,
     iter_domain_cards,
+    iter_pipe_runs,
     membership_ids,
     resolve_backing,
+    split_cells,
     strip_fences,
+    unterminated_fence_line,
 )
-
-
-def is_separator_row(row: str) -> bool:
-    """A markdown table separator like ``|---|:--:|`` — dashes/colons/pipes/space only."""
-    return "-" in row and bool(re.fullmatch(r"[\s|:\-]+", row.strip()))
-
-
-def split_cells(row: str) -> list[str]:
-    r"""Stripped cells of a table row. Escaped pipes (``\|`` — the schema's sanctioned way to put a
-    literal pipe inside a cell) are neutralised first so they don't read as column separators."""
-    return [c.strip() for c in row.replace(r"\|", "").strip().strip("|").split("|")]
 
 
 def n_columns(row: str) -> int:
     """Cell count of a table row."""
     return len(split_cells(row))
+
+
+def iter_tables(text: str) -> list[tuple[int, list[str]]]:
+    """Each WELL-FORMED table — a ``|``-run of >= 2 lines whose 2nd line is a separator — as
+    ``(start_index, block_lines)``. Built on the shared ``schema_v1.iter_pipe_runs`` grouping, so every
+    table check sees tables the same way the parser/renderer does. A lone row or a separator-less block
+    is skipped here (it is not a renderable table); that split-table case is reported by
+    ``check_table_runs`` instead, so skipping it here never hides a silent loss. Run on fence-free text."""
+    return [(start, block) for start, block in iter_pipe_runs(text.splitlines())
+            if len(block) >= 2 and is_separator_row(block[1])]
 
 
 def collect_defined(text: str) -> tuple[dict[str, int], list[str]]:
@@ -93,17 +102,19 @@ def collect_referenced(text: str) -> set[str]:
 
 
 def gp_bodies(text: str, gp_order: list[str]) -> list[tuple[str, list[str]]]:
-    """(gp_id, body_lines) per GP step — the labeled lines (STORY / Actor / Touches / …) between a
-    GPn heading and the next GP (capped at an 8-line window). One place defines the step window, so
-    every GP-body check reads the same slice."""
+    """(gp_id, body_lines) per GP step — the labeled lines (STORY / Actor / Touches / …) from a GPn
+    heading to the NEXT GP heading. Matches the parser's parse_gp step window exactly (build_graph
+    reads to the next GP, unbounded), so the validator checks the same span the renderer parses — a
+    Touches/Actor line is never validated against a different slice than it is rendered from. One place
+    defines the step window, so every GP-body check reads the same lines."""
     lines = text.splitlines()
     heading_idx = {m.group(1): i for i, line in enumerate(lines) if (m := DEF_GP.match(line))}
     out: list[tuple[str, list[str]]] = []
     for gp in gp_order:
         start = heading_idx[gp]
         body: list[str] = []
-        for line in lines[start + 1 : start + 8]:
-            if DEF_GP.match(line):
+        for line in lines[start + 1 :]:
+            if DEF_GP.match(line):  # same stop condition as parse_gp — to the next GP step
                 break
             body.append(line)
         out.append((gp, body))
@@ -121,18 +132,7 @@ def collect_role_names(text: str) -> set[str]:
     """Lowercased role display-names from the Roles table (first column, bold-stripped). Empty when
     there is no Roles table — so the Actor check below is a no-op on maps without one."""
     names: set[str] = set()
-    lines = text.splitlines()
-    i, n = 0, len(lines)
-    while i < n:
-        if not lines[i].lstrip().startswith("|"):
-            i += 1
-            continue
-        block: list[str] = []
-        while i < n and lines[i].lstrip().startswith("|"):
-            block.append(lines[i])
-            i += 1
-        if len(block) < 2 or not is_separator_row(block[1]):
-            continue
+    for _start, block in iter_tables(text):
         headers = [c.lower() for c in split_cells(block[0])]
         if not headers or headers[0] != "role":
             continue
@@ -187,18 +187,7 @@ def check_dep_kinds(text: str) -> list[str]:
     when no D-defining table has a Kind column (Kind is then inferred from Type). Scoped to rows that
     define a `D` id, so the Roles table's own human/service `Kind` column is never inspected."""
     problems: list[str] = []
-    lines = text.splitlines()
-    i, n = 0, len(lines)
-    while i < n:
-        if not lines[i].lstrip().startswith("|"):
-            i += 1
-            continue
-        block: list[str] = []
-        while i < n and lines[i].lstrip().startswith("|"):
-            block.append(lines[i])
-            i += 1
-        if len(block) < 2 or not is_separator_row(block[1]):
-            continue  # not a real table
+    for _start, block in iter_tables(text):
         headers = [c.lower() for c in split_cells(block[0])]
         if "kind" not in headers:
             continue
@@ -226,16 +215,10 @@ def collect_parents(text: str) -> tuple[dict[str, str], list[str]]:
     """
     parents: dict[str, str] = {}
     problems: list[str] = []
-    lines = text.splitlines()
-    i = 0
-    while i < len(lines):
-        if not lines[i].lstrip().startswith("|"):
-            i += 1
-            continue
-        block: list[str] = []
-        while i < len(lines) and lines[i].lstrip().startswith("|"):
-            block.append(lines[i])
-            i += 1
+    # iter_pipe_runs (not iter_tables): a membership table is found by its header, and rows are read
+    # via DEF_BOLD + separators skipped inline — so this does NOT require a separator on line 2 (the
+    # historical behavior; check_table_runs is what flags a genuinely separator-less block).
+    for _start, block in iter_pipe_runs(text.splitlines()):
         if len(block) < 2:
             continue
         headers = [c.lower() for c in split_cells(block[0])]
@@ -362,27 +345,51 @@ def find_glued_ids(text: str) -> set[str]:
     return out
 
 
+def check_table_runs(text: str) -> list[str]:
+    """Catch a table SILENTLY SPLIT by an injected non-pipe line (HTML comment, blank line, stray
+    prose). The parser and every table check model a markdown table as ONE contiguous run of `|`-lines
+    (see schema_v1.iter_pipe_runs). A comment/blank line between the separator and the rows — or
+    between two rows — breaks that run into a header+separator with no rows and a detached `|`-block.
+    The renderer then
+    draws nothing for the orphaned rows, AND the shape/edge/membership checks skip the orphan (its
+    block has no separator on line 2), so the loss is invisible: the ids still appear in prose, so the
+    undefined-reference check stays green. This lint flags the break itself, so the gate sees exactly
+    what would break the render:
+      - a single stray `|` line (a lone orphaned row);
+      - a multi-line `|` block whose 2nd line is NOT a separator (detached rows / missing separator);
+      - a well-formed header+separator table with ZERO data rows (its rows were split away).
+    Run on fence-free text. Zero hits on a well-formed map (every run is header + separator + rows)."""
+    problems: list[str] = []
+    for start, block in iter_pipe_runs(text.splitlines()):
+        ln = start + 1
+        if len(block) == 1:
+            problems.append(
+                f"Detached table row at line {ln}: a lone `|` line that is not part of any table "
+                f"(`{block[0].strip()[:50]}`) — a comment/blank line likely split it from its table, "
+                f"so the renderer drops it"
+            )
+        elif not is_separator_row(block[1]):
+            problems.append(
+                f"Detached table rows at line {ln}: a {len(block)}-line `|` block with no separator on "
+                f"its 2nd line — its header+separator was split off (HTML comment / blank line between "
+                f"the separator and the rows?), so the renderer silently drops all {len(block)} rows"
+            )
+        elif not [b for b in block[2:] if not is_separator_row(b)]:
+            problems.append(
+                f"Empty table at line {ln}: header `{block[0].strip()[:50]}` has a separator but ZERO "
+                f"data rows — its rows were split away (HTML comment / blank line after the separator?), "
+                f"so the renderer draws nothing for this table"
+            )
+    return problems
+
+
 def check_table_shape(text: str) -> list[str]:
     """Every row of a markdown table must have the header's column count. A table = a run of
-    `|`-lines whose 2nd line is a separator; non-table pipe content is skipped (no false
-    positives). Catches malformed separators and dropped/extra cells that break parsing.
-    Note: a block with NO separator row is treated as non-table and skipped — so a *deleted*
-    separator is not caught here (markdown wouldn't render it as a table either); the check
-    catches a dropped/added cell in an otherwise-well-formed table. Run on fence-free text."""
+    `|`-lines whose 2nd line is a separator; non-table pipe content is skipped here (the split-table
+    case those skipped blocks represent is caught by check_table_runs instead). Catches malformed
+    separators and dropped/extra cells that break parsing. Run on fence-free text."""
     problems: list[str] = []
-    lines = text.splitlines()
-    i, n = 0, len(lines)
-    while i < n:
-        if not lines[i].lstrip().startswith("|"):
-            i += 1
-            continue
-        start = i
-        block: list[str] = []
-        while i < n and lines[i].lstrip().startswith("|"):
-            block.append(lines[i])
-            i += 1
-        if len(block) < 2 or not is_separator_row(block[1]):
-            continue  # not a real table (no separator on the 2nd line)
+    for start, block in iter_tables(text):
         expected = n_columns(block[0])
         for offset, row in enumerate(block[1:], start=1):
             got = n_columns(row)
@@ -401,19 +408,7 @@ def check_edge_verbs(text: str) -> list[str]:
     the viewer's positional path/label pairing for every later edge in that diagram. Only edge
     tables (header starts From | Verb | To) are inspected, so the check is additive."""
     problems: list[str] = []
-    lines = text.splitlines()
-    i, n = 0, len(lines)
-    while i < n:
-        if not lines[i].lstrip().startswith("|"):
-            i += 1
-            continue
-        start = i
-        block: list[str] = []
-        while i < n and lines[i].lstrip().startswith("|"):
-            block.append(lines[i])
-            i += 1
-        if len(block) < 2 or not is_separator_row(block[1]):
-            continue  # not a real table
+    for start, block in iter_tables(text):
         headers = [c.lower() for c in split_cells(block[0])]
         if headers[:3] != ["from", "verb", "to"]:
             continue
@@ -537,18 +532,7 @@ def collect_edges(text: str) -> list[tuple[str, str, str]]:
     """All `(src_id, verb_lower, dst_id)` from the backbone edge tables (header `From | Verb | To`).
     Shared by the completeness nudges (C→E ownership, orphan deps). Empty when there is no edge list."""
     out: list[tuple[str, str, str]] = []
-    lines = text.splitlines()
-    i, n = 0, len(lines)
-    while i < n:
-        if not lines[i].lstrip().startswith("|"):
-            i += 1
-            continue
-        block: list[str] = []
-        while i < n and lines[i].lstrip().startswith("|"):
-            block.append(lines[i])
-            i += 1
-        if len(block) < 2 or not is_separator_row(block[1]):
-            continue
+    for _start, block in iter_tables(text):
         headers = [c.lower() for c in split_cells(block[0])]
         if headers[:3] != ["from", "verb", "to"]:
             continue
@@ -572,10 +556,21 @@ def main() -> int:
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
+    raw = path.read_text(encoding="utf-8")
+    # Fail fast on an unterminated code fence: strip_fences would blank everything after it, so EVERY
+    # downstream check runs on truncated text and silently misses the swallowed half of the map. Report
+    # just this — no other finding is trustworthy until the fence is closed.
+    fence_line = unterminated_fence_line(raw)
+    if fence_line is not None:
+        print("\nVALIDATION FAILED:")
+        print(f"  - Unterminated code fence opened at line {fence_line} (``` or ~~~) — it has no "
+              "closing fence, so every table, definition, and GP step after it is treated as code "
+              "and silently dropped from the parse and the diagram. Close the fence.")
+        return 1
     # Parse from fence-free text: verbatim examples inside ``` code fences (Mermaid, shell, a
     # teaching example of a malformed table) are not live content — don't read them as tables,
     # definitions, or references.
-    text = strip_fences(path.read_text(encoding="utf-8"))
+    text = strip_fences(raw)
 
     defined_counts, gp_order = collect_defined(text)
     defined = set(defined_counts)
@@ -626,6 +621,7 @@ def main() -> int:
     problems.extend(check_gp_actors(text, gp_order, collect_role_names(text)))
     problems.extend(check_roles_kind(text))
     problems.extend(check_dep_kinds(text))
+    problems.extend(check_table_runs(text))   # a table split by a comment/blank line (silent row loss)
     problems.extend(check_table_shape(text))
     problems.extend(check_edge_verbs(text))
     domain_problems, domain_warnings = check_domain_cards(text)

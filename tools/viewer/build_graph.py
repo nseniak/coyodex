@@ -24,10 +24,13 @@ from schema_v1 import (  # noqa: E402
     ID_TOKEN,
     classify_dep,
     fk_targets,
+    is_separator_row,
     iter_domain_cards,
+    iter_pipe_runs,
     membership_col,
     membership_ids,
     resolve_backing,
+    split_cells,
     strip_fences,
 )
 
@@ -106,15 +109,6 @@ class DiffDict(TypedDict):
     new_edges: list[dict[str, str]]
 
 
-def _cells(line: str) -> list[str]:
-    """Split a markdown table row into trimmed cell strings."""
-    return [c.strip() for c in line.strip().strip("|").split("|")]
-
-
-def _is_separator(line: str) -> bool:
-    return bool(re.fullmatch(r"[\s|:-]+", line.strip())) and "-" in line
-
-
 def _kind_of(node_id: str) -> str:
     m = re.match(r"[A-Z]+", node_id)
     return KIND_BY_PREFIX.get(m.group(0) if m else "", "unknown")
@@ -141,21 +135,16 @@ def _first_id(cell: str) -> str | None:
 
 
 def _tables(lines: list[str]) -> list[tuple[list[str], list[list[str]]]]:
-    """Group consecutive `|`-prefixed lines into (headers, rows) tables."""
+    """Group consecutive `|`-prefixed lines into (headers, rows) tables, via the shared
+    schema_v1.iter_pipe_runs grouping — the SAME table model the validator uses, so the parser and the
+    gate cannot drift on where a table begins and ends. A run of < 2 lines is not a table; separator
+    rows are dropped from the body."""
     tables: list[tuple[list[str], list[list[str]]]] = []
-    i = 0
-    while i < len(lines):
-        if lines[i].lstrip().startswith("|"):
-            block: list[str] = []
-            while i < len(lines) and lines[i].lstrip().startswith("|"):
-                block.append(lines[i])
-                i += 1
-            if len(block) >= 2:
-                headers = _cells(block[0])
-                rows = [_cells(b) for b in block[1:] if not _is_separator(b)]
-                tables.append((headers, rows))
-        else:
-            i += 1
+    for _start, block in iter_pipe_runs(lines):
+        if len(block) >= 2:
+            headers = split_cells(block[0])
+            rows = [split_cells(b) for b in block[1:] if not is_separator_row(b)]
+            tables.append((headers, rows))
     return tables
 
 

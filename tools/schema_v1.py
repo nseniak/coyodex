@@ -116,6 +116,69 @@ def strip_fences(text: str) -> str:
     return "\n".join(out)
 
 
+def unterminated_fence_line(text: str) -> int | None:
+    """The 1-based line number of a code fence (``` or ~~~) that is never closed, or None if every
+    fence is balanced. strip_fences toggles in/out of a fence on each marker line, so an ODD number of
+    markers leaves the final fence open — and strip_fences then blanks the ENTIRE remainder of the
+    document, silently swallowing every table / definition / GP step after the stray fence. Mirrors
+    strip_fences's own toggling so the two agree on exactly which fence is dangling. Run on RAW text
+    (before strip_fences)."""
+    in_fence = False
+    opened_at: int | None = None
+    for idx, line in enumerate(text.splitlines(), start=1):
+        stripped = line.lstrip()
+        if stripped.startswith("```") or stripped.startswith("~~~"):
+            in_fence = not in_fence
+            opened_at = idx if in_fence else None
+    return opened_at if in_fence else None
+
+
+_UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")  # a column separator: a `|` NOT preceded by a backslash
+
+
+def split_cells(row: str) -> list[str]:
+    r"""Stripped cells of a markdown table row. An escaped pipe (``\|`` — the schema's sanctioned way
+    to put a literal pipe inside a cell) is NOT a column separator: the row is split only on UNescaped
+    pipes, and each cell's ``\|`` is then restored to a literal ``|``. Shared by the validator and the
+    parser/renderer so column counting AND cell content agree in one place — previously the validator
+    stripped ``\|`` (correct count) while the renderer split on it (mangled cells), a silent drift."""
+    core = row.strip()
+    core = core[1:] if core.startswith("|") else core      # drop the one leading table delimiter…
+    core = core[:-1] if core.endswith("|") else core        # …and the one trailing delimiter
+    return [c.replace(r"\|", "|").strip() for c in _UNESCAPED_PIPE.split(core)]
+
+
+def is_separator_row(line: str) -> bool:
+    r"""A markdown table separator row like ``|---|:--:|`` — dashes / colons / pipes / spaces only,
+    with at least one dash. Shared by the validator and the parser/renderer so 'is this the separator
+    line' is decided in exactly one place (it used to be re-implemented in each)."""
+    return "-" in line and bool(re.fullmatch(r"[\s|:\-]+", line.strip()))
+
+
+def iter_pipe_runs(lines: list[str]) -> list[tuple[int, list[str]]]:
+    """Each maximal run of ``|``-prefixed lines as ``(start_index, block_lines)`` (0-based start).
+
+    This is THE table grouping shared by the validator and the parser/renderer — the single source of
+    'where does one table start and end'. A markdown table is a contiguous run of ``|``-lines, so ANY
+    non-pipe line inside it (a blank line, stray prose, an HTML comment) breaks the run into two. That
+    is the silent-split class the validator's ``check_table_runs`` guards; keeping the grouping in one
+    place is what stops the validator and renderer from disagreeing about it. Run on fence-free text
+    (``strip_fences``) so a ``|`` row inside a code fence is never grouped as a table."""
+    out: list[tuple[int, list[str]]] = []
+    i, n = 0, len(lines)
+    while i < n:
+        if not lines[i].lstrip().startswith("|"):
+            i += 1
+            continue
+        start = i
+        block: list[str] = []
+        while i < n and lines[i].lstrip().startswith("|"):
+            block.append(lines[i])
+            i += 1
+        out.append((start, block))
+    return out
+
+
 def membership_col(headers_lower: list[str], child_id: str) -> int | None:
     """Index of a row's membership column, chosen by the row's OWN id kind (robust to column
     order): a subsystem (`S`) or subdomain (`SD`) row's name header ('Subsystem' / 'Subdomain') is its
