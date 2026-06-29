@@ -2,8 +2,12 @@
 
 The user invoked coyodex on a repo. Decide the mode, then read the listed doc(s) **fully** and
 follow them — don't restate them or work from memory. The tooling is the `coyodex` CLI, installed
-into this clone's venv (`.venv/bin/coyodex`; source under `coyodex/`).
+into this clone's venv (`.venv/bin/coyodex`; source under `tools/coyodex/`).
 The clone's `internal/` folder is design rationale, not the method — ignore it.
+
+**Path reminder:** every `method.md` / `method/...` / template / `.venv/bin/coyodex` path below is
+under the coyodex clone (`COYODEX_HOME` from the skill), **not** the repo you are mapping (your cwd).
+Read/run them with that absolute prefix. Only `.coyodex/...` paths are in the analyzed repo.
 
 ## Step 0 — did the user name a mode?
 

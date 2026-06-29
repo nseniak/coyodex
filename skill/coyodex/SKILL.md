@@ -14,6 +14,16 @@ description: >
 coyodex is a method (prompts) + tools for a drillable map of a codebase. **The repo is the source of
 truth — this skill only points at it. Read the method docs and follow them; don't work from memory.**
 
+**Two different directories — keep them straight:**
+- **`COYODEX_HOME` = `__COYODEX_HOME__`** — the coyodex clone. ALL method docs (`method.md`,
+  `method/...`, templates) and the tools (`.venv/bin/coyodex`) live here.
+- **The repo you are mapping** — your current working directory, a *different* path. Its only
+  coyodex content is `.coyodex/` (the map + report you produce).
+
+So whenever a doc says to read `method.md`, `method/schema-v1.md`, a template, or to run
+`.venv/bin/coyodex ...`, that path is **under `COYODEX_HOME`** — read/run it with that absolute
+prefix (e.g. `__COYODEX_HOME__/method.md`). **Never look for method docs or tools in the repo you
+are mapping; they are not there.** Only `.coyodex/...` paths are relative to the analyzed repo.
+
 Read `__COYODEX_HOME__/method/dispatch.md` and follow it. It picks the mode (build / analyze /
-accept), handles an existing baseline, and points to every other doc and tool. Every path it
-mentions is relative to `__COYODEX_HOME__` — the coyodex clone.
+accept), handles an existing baseline, and points to every other doc and tool.
