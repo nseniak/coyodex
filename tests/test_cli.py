@@ -25,10 +25,11 @@ CORE_MODULES = [
     "coyodex.viewer.render",
     "coyodex.viewer.build_graph",
     "coyodex.viewer.gen_viewer",
+    "coyodex.viewer.filetree",
     "coyodex.schema_v1",
 ]
 CORE_SOURCES = ["validate_analysis.py", "schema_v1.py",
-                "viewer/render.py", "viewer/build_graph.py", "viewer/gen_viewer.py"]
+                "viewer/render.py", "viewer/build_graph.py", "viewer/gen_viewer.py", "viewer/filetree.py"]
 
 
 # --- firewall -------------------------------------------------------------------

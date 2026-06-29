@@ -31,6 +31,55 @@ main { display: flex; flex: 1; min-height: 0; }
 #resizer:hover, body.resizing #resizer { background: #818cf8; }
 body.resizing { cursor: col-resize; user-select: none; }
 body.resizing #stage { pointer-events: none; }  /* no canvas hovers/pans mid-drag */
+
+/* --- file browser (left pane) ------------------------------------------------------------------
+   A foldable repo tree shaded by map coverage. Same flex-item + inline-width + drag-handle model as
+   the side panel, mirrored to the left edge. #treetoggle (header) hides it; width persists. */
+#treetoggle { flex: 0 0 auto; background: #4338ca; }
+#treetoggle.off { background: #3730a3; color: #a5b4fc; }
+#tree { flex: 0 0 auto; width: 260px; display: flex; flex-direction: column; min-width: 0;
+        background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
+#treehead { flex: 0 0 auto; padding: 8px 10px; border-bottom: 1px solid #f3f4f6;
+            display: flex; align-items: center; gap: 8px; }
+#treetitle { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; font-weight: 600; }
+#treelegend { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 10px; color: #9ca3af; }
+.tdot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 2px; vertical-align: -1px; }
+.tdot-self { background: #4f46e5; }
+.tdot-has { background: #c7d2fe; }
+.tdot-none { background: #e5e7eb; }
+#treebody { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 12px; font-size: 13px; }
+/* one row = caret + icon + name (+ a node-id chip when a node points exactly here). Depth is set
+   inline via padding-left. The whole row is the click target. */
+.trow { display: flex; align-items: center; gap: 4px; padding: 2px 10px 2px 0; cursor: pointer;
+        white-space: nowrap; user-select: none; transition: background .12s ease; }
+.trow:hover { background: #f5f6ff; }
+.trow.sel { background: #eef2ff; box-shadow: inset 2px 0 0 #4f46e5; }
+.trow.flash { background: #fde68a; }  /* brief feedback when an unmapped file is clicked (no node to select) */
+.tcaret { flex: 0 0 14px; text-align: center; color: #9ca3af; font-size: 10px; transition: transform .1s ease; }
+.trow.open > .tcaret { transform: rotate(90deg); }
+.tcaret.leaf { visibility: hidden; }
+.tname { overflow: hidden; text-overflow: ellipsis; }
+.tchip { flex: 0 0 auto; margin-left: 6px; font-size: 9px; font-family: ui-monospace, monospace;
+         background: #eef2ff; color: #3730a3; border-radius: 8px; padding: 0 5px; }
+/* count badge on a partial folder: how many mapped items are inside — a positive "expand me" cue.
+   Muted (vs the indigo id chip) so it reads as a hint, and hidden once the folder is open. */
+.tcount { flex: 0 0 auto; margin-left: 6px; font-size: 9px; font-variant-numeric: tabular-nums;
+          background: #e0e7ff; color: #4f46e5; border-radius: 8px; padding: 0 6px; font-weight: 600; }
+.trow.open > .tcount { display: none; }
+/* coverage shading: 'none' (nothing in the map points here) dims; 'self' (a node anchors this exact
+   path) reads strongest; 'under'/'has' sit in between at full strength. */
+.trow.cov-none { color: #b6bcc6; }
+.trow.cov-self > .tname { font-weight: 600; color: #1e1b4b; }
+.tchildren { display: none; }
+.tchildren.open { display: block; }
+.tempty { padding: 10px 12px; color: #9ca3af; font-size: 12px; }
+/* the file-browser's own resize handle (mirror of #resizer, on the pane's right edge) */
+#treeresizer { flex: 0 0 5px; cursor: col-resize; background: #e5e7eb; }
+#treeresizer:hover, body.resizing #treeresizer { background: #818cf8; }
+/* folded away via the header toggle, or absent when the repo has no walkable tree */
+body.tree-hidden #tree, body.tree-hidden #treeresizer { display: none; }
+body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #treetoggle { display: none; }
+
 #panel { flex: 0 0 auto; width: 340px; padding: 16px; overflow-y: auto; background: #fff; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }

@@ -28,6 +28,7 @@ const CONTEXT_EDGES = __CONTEXT_EDGES__;
 const HAS_DIFF = __HAS_DIFF__;
 const META = __META__;
 const DIFF_STATE = __DIFF_STATE__;
+const FILE_TREE = __FILE_TREE__;  // mapped repo's file tree + map-coverage overlay (null when no walkable repo)
 const SVGNS = 'http://www.w3.org/2000/svg';
 const R = 10;
 const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'modified'],
@@ -90,6 +91,9 @@ for (const a of GP_ACTORS) for (const st of a.steps) GP_ACTOR_OF_STEP[st.id] = a
 // When the GP-step panel's "Locate in full map" link navigates to the Components view, the set of ids
 // to spotlight there is stashed here and applied once that view has rendered (then cleared).
 let pendingFocus = null;
+// When a file-browser click navigates to another view to reveal a node, the node id to select is
+// stashed here and applied once that view has rendered (the same deferred-action pattern as pendingFocus).
+let pendingSelect = null;
 
 // --- scene ----------------------------------------------------------------------
 // A "scene" wraps the diagram currently shown: its root, the bound node/edge elements, the active
@@ -135,6 +139,7 @@ function resetScene(scene) {  // clear selection + focus, restore the scene's de
   sceneSelect(scene, null);
   scene.selectedKey = null;
   scene.defaultPanel();
+  highlightTreePath(null);  // drop the file-browser highlight too
 }
 
 // A click whose pointer moved far from its mousedown is the tail of a drag-pan — ignore it,
@@ -582,6 +587,7 @@ function selectNode(scene, el, id) {
   // Dim to this node's neighbourhood only when the node is drawn in this scene; a box that isn't
   // registered (e.g. a neighbourhood's external subsystem) would otherwise dim everything around it.
   if (scene.nodeEls[id]) focusNode(scene, id); else clearFocus(scene);
+  syncTreeToNode(id);  // mirror the selection into the file browser (graph -> tree)
 }
 
 // Select the collapsed Libraries box: highlight + show its roster (showLibsFold), and dim to its
@@ -1343,6 +1349,13 @@ async function render() {
     const keep = pendingFocus; pendingFocus = null;
     applyFocus(mainScene, (nid) => keep.has(nid), (e) => keep.has(e.src) && keep.has(e.dst));
   }
+  // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
+  // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
+  if (pendingSelect) {
+    const id = pendingSelect; pendingSelect = null;
+    const el = mainScene.nodeEls[id];
+    if (el) selectNode(mainScene, el, id); else { showNode(id); syncTreeToNode(id); }
+  }
   const svgEl = diagram.querySelector('svg');
   if (svgEl && window.svgPanZoom) {
     svgEl.removeAttribute('style');
@@ -1359,6 +1372,169 @@ async function render() {
   }
   if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e)) resetScene(mainScene); });  // empty space deselects
   renderChrome(s);
+}
+
+// --- file browser (left pane) ---------------------------------------------------
+// A foldable repo tree (VSCode/JetBrains-style) shaded by map coverage, two-way bound to the diagram:
+//   • graph -> tree: selecting a node highlights its file/folder row (syncTreeToNode, called by selectNode)
+//   • tree -> graph: clicking a row navigates to the view that draws the matching node and selects it
+// Rows build lazily as folders expand, so a large repo stays responsive. Data comes pre-resolved from
+// Python (filetree.py): each entry carries `cov` (coverage shade), `node` (exact id), and `sel` (the id
+// a click selects — exact, else the nearest ancestor folder-node = the "finer grain" rule).
+const treeBody = document.getElementById('treebody');
+const treeToggleBtn = document.getElementById('treetoggle');
+const treeResizer = document.getElementById('treeresizer');
+const rowByPath = {};   // path (no trailing slash) -> { row, kids, entry, depth, built }
+const pathByNode = {};  // node id -> its exact tree path (graph -> tree highlight for a mapped node)
+let treeSelPath = null; // path of the currently highlighted row
+
+// A dir anchor in the map keeps a trailing slash ('src/api/'); the walked dir row does not ('src/api').
+// Strip it so the two always match.
+function treeKey(p) { return String(p || '').replace(/\/+$/, ''); }
+
+// One row: a twisty (folders only), the name, and an id chip when a node points exactly here.
+function makeRow(entry, depth) {
+  const row = document.createElement('div');
+  row.className = 'trow cov-' + entry.cov + (entry.dir ? ' tdir' : ' tfile');
+  row.style.paddingLeft = (8 + depth * 14) + 'px';
+  row.title = entry.path || entry.name;
+  const caret = document.createElement('span');
+  caret.className = 'tcaret' + (entry.dir && entry.children.length ? '' : ' leaf');
+  caret.textContent = '▶';  // ▶ (rotates when the folder is open)
+  const name = document.createElement('span');
+  name.className = 'tname';
+  name.textContent = entry.name;
+  row.appendChild(caret);
+  row.appendChild(name);
+  if (entry.node) {
+    const chip = document.createElement('span');
+    chip.className = 'tchip';
+    chip.textContent = entry.node;
+    row.appendChild(chip);
+  } else if (entry.dir && entry.mapped > 0) {
+    // A partial folder (not itself a mapped unit) carries a count of the mapped components/subsystems
+    // inside — a positive "expand me" cue. CSS hides it once the folder is open (children show their own).
+    const count = document.createElement('span');
+    count.className = 'tcount';
+    count.textContent = entry.mapped;
+    count.title = entry.mapped + ' mapped inside';
+    row.appendChild(count);
+  }
+  return row;
+}
+function renderChildrenInto(container, children, depth) {
+  for (const entry of children) {
+    const key = treeKey(entry.path);
+    const row = makeRow(entry, depth);
+    container.appendChild(row);
+    let kids = null;
+    if (entry.dir && entry.children.length) {
+      kids = document.createElement('div');
+      kids.className = 'tchildren';
+      container.appendChild(kids);
+    }
+    rowByPath[key] = { row, kids, entry, depth, built: false };
+    row.addEventListener('click', () => onRowClick(key));
+  }
+}
+function onRowClick(key) {
+  const rec = rowByPath[key];
+  if (!rec) return;
+  if (rec.entry.dir) toggleDir(key);
+  if (rec.entry.sel) selectFromTree(rec.entry.sel);     // mapped (exact or under a folder-node)
+  else if (!rec.entry.dir) flashNoMap(rec.row);         // unmapped file: a click does nothing -> brief hint
+}
+function toggleDir(key) {
+  const rec = rowByPath[key];
+  if (!rec || !rec.kids) return;
+  const open = rec.kids.classList.toggle('open');
+  rec.row.classList.toggle('open', open);
+  if (open && !rec.built) { renderChildrenInto(rec.kids, rec.entry.children, rec.depth + 1); rec.built = true; }
+}
+function expandDir(key) {  // ensure a folder is open + its children built (used when revealing a path)
+  const rec = rowByPath[key];
+  if (!rec || !rec.kids || rec.kids.classList.contains('open')) return;
+  rec.kids.classList.add('open');
+  rec.row.classList.add('open');
+  if (!rec.built) { renderChildrenInto(rec.kids, rec.entry.children, rec.depth + 1); rec.built = true; }
+}
+function flashNoMap(row) { row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 450); }
+
+// tree -> graph: which view draws `id` (so the box exists to select), and the id to select there.
+function selectTargetFor(id) {
+  const n = GRAPH.nodes[id];
+  if (!n) return null;
+  const parentKind = (k) => { const p = n.parent; return p && GRAPH.nodes[p] ? GRAPH.nodes[p].kind === k : false; };
+  switch (n.kind) {
+    case 'component': {
+      // Open the component INSIDE its parent subsystem's card (the zoomed-in neighbourhood), where it's
+      // drawn as a member box — not the flat Components view. Fall back to Components when the map is
+      // ungrouped (no parent subsystem to drill into).
+      const p = n.parent;
+      const inSub = !!(p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'subsystem');
+      return { state: inSub ? { kind: 'subsystem', sid: p } : { kind: 'component' }, selectId: id };
+    }
+    case 'dep': {
+      // A dependency lives at the Context altitude, not in a subsystem: an external SYSTEM is its own
+      // box on the Context diagram, while an in-process framework/library is folded into the "Libraries"
+      // box and drawn individually only in its drill (kind:'libs'). Route to whichever holds a
+      // selectable box for this dep.
+      const folded = FOLDED_LIBS.some((d) => d.id === id);
+      return { state: folded ? { kind: 'libs' } : { kind: 'context' }, selectId: id };
+    }
+    case 'usecase':  // not drawn at a structural altitude — fall back to the Components view (panel only)
+      return { state: { kind: 'component' }, selectId: id };
+    case 'entity': {
+      const sd = HAS_SUBDOMAINS ? topSubdomainOf(id) : null;
+      return { state: sd ? { kind: 'domsub', sd } : { kind: 'domain' }, selectId: id };
+    }
+    case 'subsystem':  // its parent's card draws it as a box; a top-level one lives on the Subsystems overview
+      return { state: parentKind('subsystem') ? { kind: 'subsystem', sid: n.parent } : { kind: 'container' }, selectId: id };
+    case 'subdomain':
+      return { state: parentKind('subdomain') ? { kind: 'domsub', sd: n.parent } : { kind: 'domain' }, selectId: id };
+    default:
+      return { state: { kind: 'component' }, selectId: id };
+  }
+}
+function selectFromTree(nodeId) {
+  const t = selectTargetFor(nodeId);
+  if (!t) return;
+  const cur = history[hi];
+  if (cur && stateKey(cur) === stateKey(t.state)) {       // already in the right view — select in place
+    const el = mainScene && mainScene.nodeEls[t.selectId];
+    if (el) selectNode(mainScene, el, t.selectId); else { showNode(t.selectId); syncTreeToNode(t.selectId); }
+  } else {                                                // navigate, then render() consumes pendingSelect
+    pendingSelect = t.selectId;
+    go(t.state);
+  }
+}
+
+// graph -> tree: highlight the row for `id`'s source path (exact map, else its file/dir path), expanding
+// ancestor folders so the row exists and is visible. No path / no row -> just clear the highlight.
+function syncTreeToNode(id) {
+  const n = GRAPH.nodes[id];
+  let path = pathByNode[id];
+  if (!path && n && n.file && localRef(n.file)) path = treeKey(cleanPath(n.file, n.line));
+  highlightTreePath(path);
+}
+function highlightTreePath(path) {
+  if (treeSelPath && rowByPath[treeSelPath]) rowByPath[treeSelPath].row.classList.remove('sel');
+  treeSelPath = null;
+  if (!path) return;
+  const parts = path.split('/');
+  for (let i = 0, acc = ''; i < parts.length - 1; i++) { acc = acc ? acc + '/' + parts[i] : parts[i]; expandDir(acc); }
+  const rec = rowByPath[path];
+  if (!rec) return;  // node points at a path not in the walk (excluded / deleted) — nothing to highlight
+  rec.row.classList.add('sel');
+  treeSelPath = path;
+  rec.row.scrollIntoView({ block: 'nearest' });
+}
+function buildFileTree() {
+  if (!FILE_TREE) { document.body.classList.add('no-tree'); return; }
+  (function index(e) { if (e.node) pathByNode[e.node] = treeKey(e.path); for (const c of e.children) index(c); })(FILE_TREE);
+  const kids = FILE_TREE.children || [];
+  if (!kids.length) { treeBody.innerHTML = '<div class="tempty">No files found.</div>'; return; }
+  renderChildrenInto(treeBody, kids, 0);
 }
 
 // --- startup --------------------------------------------------------------------
@@ -1407,7 +1583,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', panelW: 'coyodex.panelW' };
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', panelW: 'coyodex.panelW', treeW: 'coyodex.treeW', treeHidden: 'coyodex.treeHidden' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
 // A single global key let a root saved while viewing one repo's map open files from the WRONG repo in
@@ -1461,6 +1637,18 @@ function editorUri(file, line) {
 }
 // GitHub repo URL — a saved override wins over the build-time default; trailing slashes trimmed.
 const ghRepo = () => (lsGet(LS.repo) || GH_REPO_DEFAULT || '').replace(/\/+$/, '');
+// The GitHub-resolvable ref for the map's commit. The `Commit:` field can hold more than a bare SHA,
+// and GitHub 404s on anything that isn't a real commit/tag/branch — so reduce it to one:
+//   • short SHA              dc8e5d6                       -> used as-is
+//   • dirty build            dc8e5d6-dirty                 -> drop the `-dirty` describe suffix
+//   • `git describe --tags`  v1.4.2-5-gdc8e5d6[-dirty]     -> the commit is the `g<sha>` tail
+// An exact tag (`v1.4.2`, no `-<N>-g…`) is itself a valid ref, so it's left untouched. The meta line
+// still shows the full raw value, so dirty / describe provenance stays visible.
+const ghRef = () => {
+  const raw = String(GH_COMMIT || '').replace(/-dirty$/, '');
+  const m = raw.match(/-\d+-g([0-9a-f]+)$/i);  // `<tag>-<commits-since>-g<abbrev-sha>`
+  return m ? m[1] : raw;
+};
 // Blob URL for a ref, pinned to the map's commit, or null when no repo URL / no commit is known.
 const ghUrl = (file, line) => {
   const repo = ghRepo();
@@ -1468,7 +1656,7 @@ const ghUrl = (file, line) => {
   const rel = cleanPath(file, line);
   // A directory lives under /tree/ (no line anchor); a file under /blob/, pinned to the map's commit.
   const dir = isDirRef(file, line);
-  return repo + '/' + (dir ? 'tree' : 'blob') + '/' + GH_COMMIT + '/' + rel + (!dir && line ? '#L' + line : '');
+  return repo + '/' + (dir ? 'tree' : 'blob') + '/' + ghRef() + '/' + rel + (!dir && line ? '#L' + line : '');
 };
 function fireUri(uri) {
   const a = document.createElement('a');
@@ -1610,6 +1798,29 @@ document.addEventListener('mouseup', () => {
   resizing = false; document.body.classList.remove('resizing');
   lsSet(LS.panelW, String(parseInt(panel.style.width, 10) || ''));
 });
+
+// --- file browser: build + toggle + resize --------------------------------------
+// Same persist-and-clamp model as the side panel, mirrored to the left edge. The pane folds away via
+// the header toggle; both its width and folded state survive reloads.
+const tree = document.getElementById('tree');
+const clampTreeW = (w) => Math.min(Math.max(w, 180), Math.round(window.innerWidth * 0.5));
+const savedTreeW = parseInt(lsGet(LS.treeW) || '', 10);
+if (savedTreeW) tree.style.width = clampTreeW(savedTreeW) + 'px';
+if (lsGet(LS.treeHidden) === '1') { document.body.classList.add('tree-hidden'); treeToggleBtn.classList.add('off'); }
+treeToggleBtn.addEventListener('click', () => {
+  const hidden = document.body.classList.toggle('tree-hidden');
+  treeToggleBtn.classList.toggle('off', hidden);
+  lsSet(LS.treeHidden, hidden ? '1' : '0');
+});
+let treeResizing = false;
+treeResizer.addEventListener('mousedown', (e) => { e.preventDefault(); treeResizing = true; document.body.classList.add('resizing'); });
+document.addEventListener('mousemove', (e) => { if (treeResizing) tree.style.width = clampTreeW(e.clientX) + 'px'; });
+document.addEventListener('mouseup', () => {
+  if (!treeResizing) return;
+  treeResizing = false; document.body.classList.remove('resizing');
+  lsSet(LS.treeW, String(parseInt(tree.style.width, 10) || ''));
+});
+buildFileTree();
 
 buildLegend();
 viewsw.querySelectorAll('button').forEach((b) => {

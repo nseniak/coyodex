@@ -35,6 +35,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
+from coyodex.viewer.filetree import FileTreeNode, build_file_tree  # repo file tree + map-coverage overlay (browser pane)
 from coyodex.schema_v1 import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
 
 _ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined into the HTML at build time
@@ -1213,6 +1214,7 @@ __STYLE__
 <body>
 <header>
   <h1>coyodex viewer</h1>
+  <button id="treetoggle" title="Toggle file browser">&#9776; Files</button>
   <span class="meta" id="meta"></span>
   <span id="viewsw">
     <button data-view="context">Context</button>
@@ -1235,6 +1237,21 @@ __STYLE__
 </header>
 <div class="hint"><span id="crumb"></span></div>
 <main>
+  <!-- File browser: the mapped repo's real tree, shaded by map coverage. Selecting a graph element
+       highlights its file here; clicking a file/folder selects the matching component/subsystem. -->
+  <aside id="tree">
+    <div id="treehead">
+      <span id="treetitle">Files</span>
+      <span id="treelegend">
+        <span class="tdot tdot-self"></span>mapped
+        <span class="tdot tdot-has"></span>partial
+        <span class="tdot tdot-none"></span>unmapped
+      </span>
+    </div>
+    <div id="treebody"></div>
+  </aside>
+  <!-- Drag handle to resize the file browser (width persisted in localStorage). -->
+  <div id="treeresizer" title="Drag to resize"></div>
   <div id="stage">
     <div id="diagram"></div>
     <div id="legend"></div>
@@ -1306,7 +1323,8 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              domain_container_edges: dict[str, list[dict[str, str]]], subdomains: bool,
              gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool,
              libs_mm: str, folded: list[dict[str, str]],
-             repo_root: str, gh_repo: str | None, gh_commit: str | None) -> str:
+             repo_root: str, gh_repo: str | None, gh_commit: str | None,
+             file_tree: FileTreeNode | None) -> str:
     css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
     js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
     return (
@@ -1342,6 +1360,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__HAS_GP__", "true" if gp else "false")
         .replace("__META__", json.dumps(meta))
         .replace("__DIFF_STATE__", json.dumps(diff_state))
+        .replace("__FILE_TREE__", json.dumps(file_tree))
     )
 
 
@@ -1391,12 +1410,15 @@ def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
     gp_actors_list = gp_actors(graph) if gp else []
     libs_mm = gen_libs_mermaid(graph)
     folded = folded_libs(graph)
+    # File-browser pane: the mapped repo's real tree (rooted at the same repo_root the source links
+    # resolve against) overlaid with map coverage. None when repo_root isn't a walkable repo.
+    file_tree = build_file_tree(graph, repo_root)
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
                     domain_container_mm, domain_sub, domain_edge_cards, bridge_cards, domain_container_edges, subdomains,
-                    gp_mm, gp_steps, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit)
+                    gp_mm, gp_steps, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit, file_tree)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
 
