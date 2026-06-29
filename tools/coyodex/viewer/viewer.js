@@ -1320,6 +1320,22 @@ function updateZoomLevel() {  // reflect the current pan-zoom scale in the heade
   if (zoomlevel) zoomlevel.textContent = mainPz ? Math.round(mainPz.getZoom() * 100) + '%' : '100%';
 }
 
+// Keep the diagram fitted to the stage as the side bars (or the window) resize it. svg-pan-zoom caches
+// the container size at init, so without this the content would clip/misalign when #stage's width
+// changes. We re-fit (not just resize) so the SAME content stays framed in the new width — the diagram
+// rescales with the stage instead of getting cut off. Coalesced to one re-fit per animation frame so a
+// drag's mousemove stream stays smooth.
+let refitRaf = 0;
+function refitStage() {
+  if (refitRaf) return;
+  refitRaf = requestAnimationFrame(() => {
+    refitRaf = 0;
+    if (!mainPz) return;
+    mainPz.resize(); mainPz.fit(); mainPz.center();
+    updateZoomLevel();
+  });
+}
+
 async function render() {
   const seq = ++renderSeq;
   hideTip();  // a re-render replaces the diagram — drop any tooltip from the old one
@@ -1440,9 +1456,18 @@ function renderChildrenInto(container, children, depth) {
 function onRowClick(key) {
   const rec = rowByPath[key];
   if (!rec) return;
-  if (rec.entry.dir) toggleDir(key);
-  if (rec.entry.sel) selectFromTree(rec.entry.sel);     // mapped (exact or under a folder-node)
-  else if (!rec.entry.dir) flashNoMap(rec.row);         // unmapped file: a click does nothing -> brief hint
+  const e = rec.entry;
+  if (e.dir) {
+    // A folder expands; it selects ONLY when it is itself a mapped subsystem/component (e.node set).
+    // An intermediate folder that merely sits under a mapped one just expands — opening it must not
+    // hijack the selection to the containing subsystem.
+    toggleDir(key);
+    if (e.node) selectFromTree(e.node);
+  } else if (e.sel) {
+    selectFromTree(e.sel);     // a file selects its component, else its owning subsystem (finer grain)
+  } else {
+    flashNoMap(rec.row);       // unmapped file: a click does nothing -> brief hint
+  }
 }
 function toggleDir(key) {
   const rec = rowByPath[key];
@@ -1551,6 +1576,7 @@ const setCmd = (on) => { document.body.classList.toggle('cmd', on); renderHoverT
 document.addEventListener('keydown', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(true); });
 document.addEventListener('keyup', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(false); });
 window.addEventListener('blur', () => setCmd(false));
+window.addEventListener('resize', refitStage);  // keep the diagram fitted when the window itself resizes
 
 // --- open source in an external editor / on GitHub -------------------------------
 // A node's source ref (file [+ line]) opens in the user's editor via its URL scheme (vscode://,
@@ -1792,7 +1818,7 @@ const savedPanelW = parseInt(lsGet(LS.panelW) || '', 10);
 if (savedPanelW) panel.style.width = clampPanelW(savedPanelW) + 'px';
 let resizing = false;
 resizer.addEventListener('mousedown', (e) => { e.preventDefault(); resizing = true; document.body.classList.add('resizing'); });
-document.addEventListener('mousemove', (e) => { if (resizing) panel.style.width = clampPanelW(window.innerWidth - e.clientX) + 'px'; });
+document.addEventListener('mousemove', (e) => { if (resizing) { panel.style.width = clampPanelW(window.innerWidth - e.clientX) + 'px'; refitStage(); } });
 document.addEventListener('mouseup', () => {
   if (!resizing) return;
   resizing = false; document.body.classList.remove('resizing');
@@ -1811,10 +1837,11 @@ treeToggleBtn.addEventListener('click', () => {
   const hidden = document.body.classList.toggle('tree-hidden');
   treeToggleBtn.classList.toggle('off', hidden);
   lsSet(LS.treeHidden, hidden ? '1' : '0');
+  refitStage();  // the stage just got wider/narrower — re-fit the diagram into it
 });
 let treeResizing = false;
 treeResizer.addEventListener('mousedown', (e) => { e.preventDefault(); treeResizing = true; document.body.classList.add('resizing'); });
-document.addEventListener('mousemove', (e) => { if (treeResizing) tree.style.width = clampTreeW(e.clientX) + 'px'; });
+document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX) + 'px'; refitStage(); } });
 document.addEventListener('mouseup', () => {
   if (!treeResizing) return;
   treeResizing = false; document.body.classList.remove('resizing');
