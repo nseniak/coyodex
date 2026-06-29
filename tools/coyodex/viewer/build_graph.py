@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Parse a schema-v1 project-map.md into a graph JSON (the parser/renderer interface).
 
-Reuses the schema-v1 grammar from tools/schema_v1.py by import — one grammar, shared with the
+Reuses the schema-v1 grammar from tools/coyodex/schema_v1.py by import — one grammar, shared with the
 validator. The JSON it emits is an ephemeral parse result, never a hand-maintained second source.
 
-Usage:  python3 build_graph.py [fixture/project-map.md] [build/graph.json]
+Normally driven in-process by `coyodex render`. For two-stage debugging:
+    python -m coyodex.viewer.build_graph [project-map.md] [graph.json]
 """
 from __future__ import annotations
 
@@ -15,10 +16,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import TypedDict
 
-# Shared schema-v1 grammar lives in tools/schema_v1.py (one grammar for validator + parser). This
-# file sits in tools/viewer/, so put the sibling tools/ dir on the path to import it.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from schema_v1 import (  # noqa: E402
+# Shared schema-v1 grammar lives in tools/coyodex/schema_v1.py (one grammar for validator + parser).
+from coyodex.schema_v1 import (
     DEF_GP,
     DEF_ID_CELL,
     ID_TOKEN,
@@ -404,9 +403,10 @@ def build_diff(md_path: Path) -> DiffDict:
     return DiffDict(base=base, new=new, changes=changes, new_edges=new_edges)
 
 
-def main() -> int:
-    md = Path(sys.argv[1] if len(sys.argv) > 1 else "fixture/project-map.md")
-    out = Path(sys.argv[2] if len(sys.argv) > 2 else "build/graph.json")
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    md = Path(argv[0] if len(argv) > 0 else "fixture/project-map.md")
+    out = Path(argv[1] if len(argv) > 1 else "build/graph.json")
     if not md.exists():
         print(f"ERROR: {md} not found", file=sys.stderr)
         return 1
@@ -421,4 +421,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

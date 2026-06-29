@@ -1,7 +1,8 @@
 # Dispatch — what to do when coyodex is invoked
 
 The user invoked coyodex on a repo. Decide the mode, then read the listed doc(s) **fully** and
-follow them — don't restate them or work from memory. All tools live under this clone (`tools/...`).
+follow them — don't restate them or work from memory. The tooling is the `coyodex` CLI, installed
+into this clone's venv (`.venv/bin/coyodex`; source under `coyodex/`).
 The clone's `internal/` folder is design rationale, not the method — ignore it.
 
 ## Step 0 — did the user name a mode?
@@ -40,7 +41,7 @@ the header (`**Commit:**` / `**Committed:**` line), then:
    - **Both true — current source == the pin** → the baseline is current. Tell the user
      `baseline is up to date @ commit <id> from <date>` and stop; do **not** produce an empty diff.
      (If only `.coyodex/project-map.html` is missing or stale, just re-render it with
-     `tools/viewer/render.py` — that is a render, not a rebuild.)
+     `coyodex render` — that is a render, not a rebuild.)
    - **Otherwise — the source differs** (a later commit, uncommitted edits, or new files) →
      **Analyze**: read `method/change-impact.md` and follow it. The diff it computes is
      `git diff <pin>` (pin → working tree) plus any untracked files.
@@ -54,7 +55,7 @@ the header (`**Commit:**` / `**Committed:**` line), then:
 ## Invariant (every mode)
 
 The map is the single source at the analyzed repo's `.coyodex/project-map.md`. After every write,
-validate (`tools/validate_analysis.py --check-sources`) then render (`tools/viewer/render.py`) — the
+validate (`coyodex validate --check-sources`) then render (`coyodex render`) — the
 HTML is a rendering, never a second source.
 
 **Going deeper stays in the one map.** When a part of the system needs finer detail than its current

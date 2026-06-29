@@ -42,8 +42,8 @@ show/hide toggle. The element-keyed deltas are the data.
   level + a Golden Path sequence diagram, with `click`→source and diff via styled
   regeneration. Cheap, in-repo, version-controlled; "drill-down" is hyperlinked per-level
   diagrams rather than true zoom.
-- **Tier B — a small self-contained HTML viewer**, available in [`tools/viewer/`](../tools/viewer/).
-  Parses the markdown (via the shared `tools/schema_v1.py` grammar) and renders the C4 altitudes —
+- **Tier B — a small self-contained HTML viewer**, available in [`tools/coyodex/viewer/`](../tools/coyodex/viewer/).
+  Parses the markdown (via the shared `tools/coyodex/schema_v1.py` grammar) and renders the C4 altitudes —
   Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges) →
   Components → code — plus the **Domain** model (when grouped into contexts, a bounded-contexts
   overview that ⌘-drills into one subdomain's `classDiagram`; a subsystem card also draws the subdomains

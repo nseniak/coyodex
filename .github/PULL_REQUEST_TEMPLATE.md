@@ -13,7 +13,7 @@ Closes #
 
 - [ ] Bug fix
 - [ ] Method / docs change (`method.md`, `method/`, `README.md`)
-- [ ] Tooling change (`tools/`, viewer)
+- [ ] Tooling change (`tools/coyodex/`, viewer)
 - [ ] Skill change (`skill/`)
 - [ ] Other:
 
@@ -21,8 +21,8 @@ Closes #
 
 - [ ] The diff is scoped to one change.
 - [ ] If behavior changed, the method (`method.md` / `method/`) was updated in the same PR.
-- [ ] `pytest tools` passes.
-- [ ] `pyright tools` is clean.
+- [ ] `.venv/bin/pytest tests` passes.
+- [ ] `.venv/bin/pyright tools` is clean.
 - [ ] This change does **not** alter the on-disk map format — or, if it does, I've called that out below.
 
 ## How I tested it

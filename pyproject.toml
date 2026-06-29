@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "coyodex"
+description = "Build and maintain a top-down, drillable map of a codebase."
+readme = "README.md"
+requires-python = ">=3.10"
+dynamic = ["version"]
+# The core gate (validate + render) is stdlib-only by design — keep this empty.
+# The structural pre-index's tree-sitter deps live under the `preindex` extra below.
+dependencies = []
+
+[project.optional-dependencies]
+# Polyglot symbol/import extraction for `coyodex preindex` only. tree-sitter is a
+# deliberate, scoped exception to the stdlib-only rule (see internal/docs/design-notes.md).
+preindex = [
+    "tree-sitter>=0.21",
+    "tree-sitter-language-pack>=0.2",
+]
+# Test + type-check tooling. Installed into the repo-local venv by `make dev`, so the gates
+# run against the editable package (coyodex importable, no cwd/sys.path tricks).
+dev = [
+    "pytest>=8",
+    "pyright>=1.1",
+]
+
+[project.scripts]
+coyodex = "coyodex.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.setuptools]
+# src-layout with the source root named `tools/` (so the repo root reads as method/ + tools/ +
+# skill/ — the method and the tools it drives). The package on disk is tools/coyodex/, imported
+# as `coyodex`; the dir name matches the import name, so static tools (pyright) resolve it.
+package-dir = { "" = "tools" }
+packages = ["coyodex", "coyodex.viewer"]
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
+
+[tool.setuptools.package-data]
+# The viewer inlines these into the standalone HTML at render time; ship them in the wheel.
+"coyodex.viewer" = ["viewer.css", "viewer.js"]

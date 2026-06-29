@@ -44,7 +44,7 @@ things worth keeping in mind when assessing risk:
 - The generated `project-map.html` inlines its assets and is meant to be opened
   in a browser. Reports about the viewer mishandling repo content (for example,
   unescaped file paths or code rendered into the page) are in scope.
-- The Python tooling under `tools/` parses the map and analysis files. Reports
+- The Python tooling under `tools/coyodex/` parses the map and analysis files. Reports
   about parsing untrusted map/analysis input unsafely are in scope.
 - coyodex sends your code and map context to whatever AI agent / model you drive
   it with. How that third-party agent handles your data is **out of scope** for

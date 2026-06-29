@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Tests for the structural pre-index (preindex.py + preindex_lib.py).
+"""Tests for the structural pre-index (coyodex.preindex + coyodex.preindex_lib).
 
-Stdlib-only — no pytest required. Run either way:
-    python3 tools/tests/test_preindex.py
-    pytest tools/tests/test_preindex.py
+Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
+    python3 tests/test_preindex.py
+    pytest tests/test_preindex.py
 
 Non-Python symbol tests are gated on the tree-sitter grammar pack being installed
-(`make deps`); they assert graceful self-reported coverage (GR3) when it is absent.
+(the `preindex` extra); they assert graceful self-reported coverage (GR3) when it is absent.
 """
 from __future__ import annotations
 
@@ -16,12 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-TOOLS = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(TOOLS))
-
-import preindex  # noqa: E402
-import preindex_lib  # noqa: E402
-import validate_analysis  # noqa: E402  (tool #4 — compression-coverage check)
+from coyodex import preindex, preindex_lib, validate_analysis  # tool #4: compression-coverage check
 
 
 # --- builders -------------------------------------------------------------------

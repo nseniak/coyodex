@@ -21,6 +21,7 @@ import ast
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 # --------------------------------------------------------------------------------------
 # Language detection
@@ -274,7 +275,7 @@ def py_imports(path: Path, rel: str) -> list[ImportRef]:
 
 # ---- tree-sitter path (optional; only loaded when needed) ----
 
-_TS_PARSERS: dict[str, object] = {}
+_TS_PARSERS: dict[str, Any] = {}  # cached tree-sitter parsers (typed Any: no top-level ts import)
 _TS_IMPORT_ERROR: str | None = None
 
 
@@ -292,7 +293,7 @@ def _try_import_ts() -> bool:
         return False
 
 
-def _ts_get_parser(lang: str):
+def _ts_get_parser(lang: str) -> Any:
     # Build the parser the documented way (tree_sitter.Parser(get_language(...))). The pack's own
     # get_parser() returns an incompatible wrapper on some tree-sitter builds (root_node unusable),
     # so we go through get_language + the stdlib-style Parser, which is stable across 0.21–0.25.

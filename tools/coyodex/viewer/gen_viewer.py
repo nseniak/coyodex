@@ -20,7 +20,8 @@ Node labels are the element name only (no ID prefix) to keep them uncluttered;
 the ID still appears in the panel header and drives the bridge via the cy-<ID>
 class.
 
-Usage:  python3 gen_viewer.py [build/graph.json] [build/project-map.html] [report.md]
+Normally driven in-process by `coyodex render`. For two-stage debugging:
+    python -m coyodex.viewer.gen_viewer [graph.json] [out.html] [report.md]
 """
 from __future__ import annotations
 
@@ -33,8 +34,8 @@ from html import escape as html_escape
 from pathlib import Path
 from typing import Any, cast
 
-from build_graph import DiffDict, GraphDict, build_diff
-from schema_v1 import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
+from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
+from coyodex.schema_v1 import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
 
 _ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined into the HTML at build time
 
@@ -1344,14 +1345,11 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
     )
 
 
-def main() -> int:
-    src = Path(sys.argv[1] if len(sys.argv) > 1 else "build/graph.json")
-    out = Path(sys.argv[2] if len(sys.argv) > 2 else "build/project-map.html")
-    report = Path(sys.argv[3]) if len(sys.argv) > 3 else None
-    if not src.exists():
-        print(f"ERROR: {src} not found (run build_graph.py first)", file=sys.stderr)
-        return 1
-    graph = cast(GraphDict, json.loads(src.read_text(encoding="utf-8")))
+def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
+    """Render a parsed graph (+ optional change-impact report) to a standalone HTML viewer file.
+
+    The in-process entry point used by `coyodex render`; `main()` is the thin file-based wrapper.
+    """
     diff = build_diff(report) if report and report.exists() else None
     base_mm = gen_mermaid(graph, None)
     diff_mm = gen_mermaid(graph, diff) if diff else base_mm
@@ -1399,10 +1397,23 @@ def main() -> int:
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
                     domain_container_mm, domain_sub, domain_edge_cards, bridge_cards, domain_container_edges, subdomains,
                     gp_mm, gp_steps, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit)
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
-    print(f"Wrote viewer -> {out}  (diff: {'yes' if diff else 'no'})")
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    src = Path(argv[0] if len(argv) > 0 else "build/graph.json")
+    out = Path(argv[1] if len(argv) > 1 else "build/project-map.html")
+    report = Path(argv[2]) if len(argv) > 2 else None
+    if not src.exists():
+        print(f"ERROR: {src} not found (build the graph first)", file=sys.stderr)
+        return 1
+    graph = cast(GraphDict, json.loads(src.read_text(encoding="utf-8")))
+    write_html(graph, out, report)
+    print(f"Wrote viewer -> {out}  (diff: {'yes' if report and report.exists() else 'no'})")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

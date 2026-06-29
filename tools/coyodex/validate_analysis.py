@@ -38,7 +38,7 @@ Opt-in (reads the analyzed repo's source/tree, not just the map):
 
 Exit 0 = clean, 1 = problems found.
 
-Usage:  python3 tools/validate_analysis.py [--check-sources] [--check-coverage] [.coyodex/project-map.md]
+Usage:  coyodex validate [--check-sources] [--check-coverage] [.coyodex/project-map.md]
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ import sys
 from pathlib import Path
 
 # Grammar (regexes, membership rule) lives in schema_v1, shared with the parser — one grammar.
-from schema_v1 import (
+from coyodex.schema_v1 import (
     DEF_BOLD,
     DEF_ENTITY,
     DEF_GP,
@@ -384,7 +384,7 @@ def check_compression_coverage(text: str, root: Path) -> list[str]:
     # Local import: keep the CORE GATE independent of the advisory pre-index module — the validator
     # imports nothing from it at load time, only this opt-in check pulls the shared (stdlib) walk
     # helper. Reuses CODE, never the pre-index's JSON DATA (GR4: generation != verification).
-    from preindex_lib import iter_source_files
+    from coyodex.preindex_lib import iter_source_files
 
     root = root.resolve()
     walk = iter_source_files(root)
@@ -655,10 +655,11 @@ def collect_edges(text: str) -> list[tuple[str, str, str]]:
     return out
 
 
-def main() -> int:
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
-    check_sources = "--check-sources" in sys.argv  # opt-in: read SOURCE files to flag synthesized entities
-    check_coverage = "--check-coverage" in sys.argv  # opt-in: re-walk the repo to flag map-fidelity gaps
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    args = [a for a in argv if not a.startswith("-")]
+    check_sources = "--check-sources" in argv  # opt-in: read SOURCE files to flag synthesized entities
+    check_coverage = "--check-coverage" in argv  # opt-in: re-walk the repo to flag map-fidelity gaps
     path = Path(args[0] if args else ".coyodex/project-map.md")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
@@ -847,4 +848,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

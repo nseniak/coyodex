@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Schema v1 grammar — the single source of the project-map token/definition rules.
 
-Imported by the validator (``tools/validate_analysis.py``) and the parser
-(``tools/viewer/build_graph.py``) so there is ONE grammar, never two that can drift.
+Imported by the validator (``tools/coyodex/validate_analysis.py``) and the parser
+(``tools/coyodex/viewer/build_graph.py``) so there is ONE grammar, never two that can drift.
 Stdlib-only.
 """
 from __future__ import annotations

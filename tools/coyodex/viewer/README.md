@@ -8,7 +8,7 @@ committed markdown (no second source) and draws it; the markdown stays the singl
 
 ```
 .coyodex/project-map.md          schema-v1 map (single source)
-   │  build_graph.py             parser — uses the shared grammar in tools/schema_v1.py
+   │  build_graph.py             parser — uses the shared grammar in tools/coyodex/schema_v1.py
    ▼
 graph.json                       ephemeral parse result (parser ↔ renderer interface)
    │  gen_viewer.py              inlines viewer.css + viewer.js → one self-contained HTML file
@@ -23,18 +23,18 @@ machine that has never seen coyodex (the only external load is the pinned + SRI 
 
 ## Run
 
-One step (what the method calls) — map straight to HTML; the `graph.json` interface stays in a
-temp file:
+One step (what the method calls) — map straight to HTML, parsed and rendered in process (no
+temp `graph.json`):
 
 ```bash
-python3 tools/viewer/render.py .coyodex/project-map.md .coyodex/project-map.html [analysis-changes/<date>.md]
+.venv/bin/coyodex render .coyodex/project-map.md .coyodex/project-map.html [analysis-changes/<date>.md]
 ```
 
-Or the two stages explicitly (e.g. to inspect the parsed graph):
+Or the two stages explicitly (e.g. to inspect the parsed graph), run as modules:
 
 ```bash
-python3 tools/viewer/build_graph.py .coyodex/project-map.md build/graph.json   # parse → graph.json
-python3 tools/viewer/gen_viewer.py  build/graph.json build/project-map.html    # graph.json → HTML
+python -m coyodex.viewer.build_graph .coyodex/project-map.md build/graph.json   # parse → graph.json
+python -m coyodex.viewer.gen_viewer  build/graph.json build/project-map.html    # graph.json → HTML
 ```
 
 To view, serve over http (file:// can't fetch the CDN libs cleanly):
@@ -100,7 +100,7 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
 ## Tests
 
 ```bash
-python3 tools/tests/test_grouping.py     # stdlib runner; or: pytest tools/tests/test_grouping.py
+python tests/test_grouping.py     # stdlib runner; or: .venv/bin/pytest tests/test_grouping.py
 ```
 
 ## Scope & current limits

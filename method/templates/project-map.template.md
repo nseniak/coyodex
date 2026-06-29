@@ -5,7 +5,7 @@
 > Model / Deps → Flows + Edges), joined at **use case ↔ flow**.
 > Every row is drillable: name a row and it expands to a lower table or a `file:line`.
 > **Schema v1** (ID-based): every element has a stable ID (`UC`/`C`/`D`/`E`/`GP`);
-> cross-references use IDs; validated by `tools/validate_analysis.py`.
+> cross-references use IDs; validated by `coyodex validate`.
 > Confidence: **verified** (read/traced) vs **inferred** (naming/convention).
 > **Commit:** `<sha>` · **Committed:** `<commit-date>` · **Built:** `<date>`
 
@@ -243,5 +243,4 @@ SOURCE: [file](path/sub#L1)
 
 ---
 
-*Generated with coyodex. Run `python3 tools/validate_analysis.py .coyodex/project-map.md`
-after each edit.*
+*Generated with coyodex. Run `coyodex validate .coyodex/project-map.md` after each edit.*

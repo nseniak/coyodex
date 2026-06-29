@@ -312,20 +312,20 @@ validates clean and the Domain `classDiagram` renders with a working click-bridg
 browser: clicking a class shows its fields + source, clicking a relation shows its kind +
 cardinality).
 
-1. **`tools/schema_v1.py`** — `DEF_ENTITY` heading definition (`E` is card-defined, removed from the
+1. **`tools/coyodex/schema_v1.py`** — `DEF_ENTITY` heading definition (`E` is card-defined, removed from the
    table-row patterns); shared `iter_domain_cards` / `parse_card_fields` / `parse_card_relations`
    grammar (`RELATION_ITEM`, `REL_HOW`, `ALLOWED_CARDINALITY`, `REL_KIND`); the shared relation
    backing resolver `resolve_backing` + `fk_targets` (token-exact `FK→` matching).
-2. **`tools/validate_analysis.py`** — `check_domain_cards` (MEANING/SOURCE/FIELDS present, every
+2. **`tools/coyodex/validate_analysis.py`** — `check_domain_cards` (MEANING/SOURCE/FIELDS present, every
    field typed, every relation well-formed, single-side); plus a non-blocking warning for a
    field-less, note-less association. Card ids ride the generic duplicate/undefined-reference checks.
-3. **`tools/viewer/build_graph.py`** — `parse_domain` (modeled on `parse_gp`); `Node.attrs`,
+3. **`tools/coyodex/viewer/build_graph.py`** — `parse_domain` (modeled on `parse_gp`); `Node.attrs`,
    `Edge.kind` / `src_card` / `dst_card`; a second pass resolves each relation's backing field into
    `Edge.fk_field` / `Edge.fk_side`, and carries the `{how}` note as `Edge.how`.
-4. **`tools/viewer/gen_viewer.py`** — `gen_domain_mermaid` emits the `classDiagram`; `_relation_label`
+4. **`tools/coyodex/viewer/gen_viewer.py`** — `gen_domain_mermaid` emits the `classDiagram`; `_relation_label`
    formats the resolved `fk_field` / `fk_side` into the arrow label (plain forward, `↩` reverse); a
    **Domain** view button (hidden when the map has no entities).
-5. **`tools/viewer/viewer.js`** — a classDiagram click-bridge (`bindDomain` / `eachClassEdge`):
+5. **`tools/coyodex/viewer/viewer.js`** — a classDiagram click-bridge (`bindDomain` / `eachClassEdge`):
    class group id `…-classId-E1-N` resolves via the id regex, relation path id `…-id_E1_E2_N`
    encodes its endpoints; the panel renders entity `attrs`, relation cardinality, and an **Implemented
    by** line (the backing field, or the authored `{how}` note for a field-less relation).

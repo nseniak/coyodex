@@ -110,10 +110,10 @@ library:
 
 ## The validator
 
-[`tools/validate_analysis.py`](../tools/validate_analysis.py) is stdlib-only:
+The validator ([`tools/coyodex/validate_analysis.py`](../tools/coyodex/validate_analysis.py)) is stdlib-only:
 
 ```
-python3 tools/validate_analysis.py .coyodex/project-map.md
+.venv/bin/coyodex validate .coyodex/project-map.md
 ```
 
 It prints an element inventory and exits non-zero on: duplicate definitions, references to

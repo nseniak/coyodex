@@ -23,6 +23,13 @@ your AI coding agent to:
 - **analyze a code diff** against it and generate a baseline-map overlay:
   what each change adds, touches, and ripples to, in the project's own terms.
 
+## Requirements
+
+- **Python 3.10+** — `make install` builds an isolated virtualenv in the repo (`.venv/`) and installs
+  the `coyodex` CLI into it, so nothing lands in your system/active Python. 3.10 is the floor because
+  the structural pre-index uses tree-sitter, which requires it.
+- **git** and a **macOS/Linux** shell (the `make` targets are POSIX `sh`).
+
 ## How to use
 
 coyodex runs as an agent skill — it works on Claude Code, Codex, and Cursor. Install it once, then
@@ -36,9 +43,11 @@ make install
 
 This installs the skill into each agent's skills home (`~/.claude/skills` for Claude Code,
 `~/.agents/skills` — the cross-agent standard read by Codex and Cursor) with this repo's path baked
-in, so `/coyodex` reads the method straight from here on all three. It also installs the Python
-dependencies for the structural pre-index (`tools/requirements.txt` — tree-sitter; run `make deps`
-alone to refresh them). Re-run only if you move the repo; `make uninstall` removes it.
+in, so `/coyodex` reads the method straight from here on all three. It also builds the repo-local
+`.venv/` and installs the `coyodex` CLI into it, including the tree-sitter deps for the structural
+pre-index (the `[preindex]` extra in `pyproject.toml`; run `make deps` alone to refresh them). The
+CLI is installed editable, so the method and tools keep evolving from this clone without reinstalling.
+Re-run `make install` only if you move the repo; `make uninstall` removes the skill, `make clean` the venv.
 
 **2. Build the baseline.** In your project, with no map yet, `/coyodex` builds it:
 
@@ -47,7 +56,7 @@ alone to refresh them). Re-run only if you move the repo; `make uninstall` remov
 ```
 
 Writes `.coyodex/project-map.md` (the map) and `.coyodex/project-map.html` (an interactive, drillable
-[C4 viewer](tools/viewer/)), pinned to the current commit. Commit both with your code.
+[C4 viewer](tools/coyodex/viewer/)), pinned to the current commit. Commit both with your code.
 
 **3. Edit your code.** Work as usual.
 

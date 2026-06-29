@@ -4,4 +4,8 @@ internal/
 .firecrawl/
 __pycache__/
 .playwright-mcp/
-tools/viewer/build/
+tools/coyodex/viewer/build/
+.venv/
+build/
+dist/
+*.egg-info/

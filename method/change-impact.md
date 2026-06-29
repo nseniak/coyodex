@@ -125,7 +125,7 @@ clean baseline.
    **pin gate** as Build applies (`method.md`): the *code* must be committed (the `.coyodex/` report
    and map you are accepting are expected to be dirty — that's what this step commits), else give the
    user the A/B choice and record the pin `-dirty` only if they pick B.
-3. Re-render the diagram (`python3 tools/viewer/render.py .coyodex/project-map.md
+3. Re-render the diagram (`.venv/bin/coyodex render .coyodex/project-map.md
    .coyodex/project-map.html`) — a deterministic re-render of the patched map, no new inference.
 4. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).
 5. git-commit all (map + diagram + report) — so baseline-commit stays aligned with code-commit.

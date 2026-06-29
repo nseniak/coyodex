@@ -28,8 +28,10 @@ By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
   `change-impact.md`, `diagrams.md`) and templates.
 - **`skill/coyodex/`** — the agent skill (`SKILL.md`) that drives the method; works on
   Claude Code, Codex, and Cursor.
-- **`tools/`** — the Python tooling: schema validation, the analysis validator,
-  and the **`viewer/`** (builds the standalone interactive HTML from the map).
+- **`tools/coyodex/`** — the Python package behind the `coyodex` CLI: the pre-index, schema
+  validation, the analysis validator, and the **`viewer/`** (builds the standalone
+  interactive HTML from the map). `cli.py` is the subcommand dispatcher.
+- **`tests/`** — the tool tests (stdlib runners; also run under `pytest`).
 - **`README.md`** — user-facing overview and the install / usage steps.
 
 > `internal/` (design notes, working drafts) is **not** part of the method and is
@@ -47,12 +49,14 @@ make install      # copies skill/coyodex -> ~/.claude/skills + ~/.agents/skills
 make uninstall     # removes it from both
 ```
 
-The Python tooling under `tools/` uses standard `pytest` and is type-checked with
-`pyright` (see `pyrightconfig.json`):
+The `coyodex` package is tested with `pytest` and type-checked with `pyright` (see
+`pyrightconfig.json`). `make dev` builds the repo-local venv and installs both into it
+(alongside the editable package), so the gates run against the installed CLI:
 
 ```
-pytest tools                 # run the tool tests
-pyright tools                # type-check (please keep it clean)
+make dev                     # venv + editable install + pytest/pyright
+.venv/bin/pytest tests       # run the tool tests
+.venv/bin/pyright tools      # type-check (please keep it clean)
 ```
 
 ## Pull request guidelines
@@ -64,7 +68,7 @@ pyright tools                # type-check (please keep it clean)
 - **Update the method and the docs together with the code.** If behavior changes,
   `method.md` / `method/` should change in the same PR, since the method is the
   source of truth.
-- **Run the gates** (`pytest tools`, `pyright tools`) before pushing, and say in
+- **Run the gates** (`.venv/bin/pytest tests`, `.venv/bin/pyright tools`) before pushing, and say in
   the PR what you ran.
 - **Fill in the PR template** so a reviewer can see what changed, why, and how you
   checked it.

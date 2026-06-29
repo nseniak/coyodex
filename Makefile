@@ -1,5 +1,12 @@
 REPO := $(CURDIR)
 
+# Repo-local virtualenv that coyodex owns. Deps install HERE, never into the user's
+# active/system Python — no pollution, no PEP-668 "externally-managed" block. The CLI is
+# installed editable, so the repo stays the source of truth (docs/tools evolve without reinstall).
+VENV := $(REPO)/.venv
+PY := $(VENV)/bin/python
+MIN_PY := 3.10
+
 # Skills homes to install into — one per agent family, chosen to cover Claude
 # Code, Codex, and Cursor while keeping duplicate discovery to a minimum:
 #   ~/.claude/skills  -> Claude Code (Cursor also reads this for compatibility)
@@ -9,16 +16,31 @@ REPO := $(CURDIR)
 # Codex and Cursor and extra copies would just show up as duplicate skills.
 SKILLS_DIRS := $(HOME)/.claude/skills $(HOME)/.agents/skills
 
-.PHONY: install uninstall deps
+.PHONY: install uninstall deps dev venv clean
 
-# Install the Python dependencies for the structural pre-index (tools/preindex.py): tree-sitter
-# for polyglot symbol/import extraction. The core gate (validate + render) needs none of this and
-# stays dependency-free; this is a scoped exception to the stdlib-only rule (see tools/requirements.txt).
-deps:
-	python3 -m pip install -r tools/requirements.txt
+# Create the repo-local venv. Requires Python $(MIN_PY)+ (the pre-index's tree-sitter deps
+# declare requires-python >=3.10); fail fast with a clear message instead of a cryptic error.
+venv:
+	@command -v python3 >/dev/null 2>&1 || { \
+		echo "ERROR: python3 not found. coyodex requires Python $(MIN_PY)+ (see README 'Requirements')."; exit 1; }
+	@python3 -c 'import sys; raise SystemExit(0 if sys.version_info[:2] >= (3, 10) else 1)' || { \
+		echo "ERROR: Python $(MIN_PY)+ required; found $$(python3 --version 2>&1). See README 'Requirements'."; exit 1; }
+	@test -d "$(VENV)" || python3 -m venv "$(VENV)"
 
-# Install the coyodex skill globally for all agents (macOS/Linux). Also installs the pre-index deps
-# (via `deps`) so a one-time `make install` covers everything; run `make deps` alone to refresh them.
+# Install the coyodex CLI editable into the venv, WITH the pre-index extra (tree-sitter for
+# polyglot symbol/import extraction). The core gate (validate + render) stays dependency-free;
+# tree-sitter is a scoped exception confined to `coyodex preindex` (see internal/docs/design-notes.md).
+# Run `make deps` alone to refresh after editing pyproject deps.
+deps: venv
+	$(PY) -m pip install -e '$(REPO)[preindex]'
+
+# Contributor setup: same as `deps` plus the test/type-check tooling (pytest, pyright) in the venv.
+# Run the gates with: .venv/bin/pytest tests   and   .venv/bin/pyright coyodex
+dev: venv
+	$(PY) -m pip install -e '$(REPO)[preindex,dev]'
+
+# Install the coyodex skill globally for all agents (macOS/Linux). Also builds the venv and
+# installs the CLI (via `deps`) so a one-time `make install` covers everything.
 # Copies SKILL.md into each skills home with this repo's absolute path baked in
 # (replacing __COYODEX_HOME__), so the skill points straight here with no runtime
 # lookup. The method docs and tools are still read live from this repo, so they
@@ -37,3 +59,8 @@ uninstall:
 		rm -rf "$$dir/coyodex"; \
 		echo "Uninstalled coyodex skill from $$dir/coyodex"; \
 	done
+
+# Remove the repo-local venv (run `make install` again to rebuild it).
+clean:
+	rm -rf "$(VENV)"
+	@echo "Removed $(VENV)"

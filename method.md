@@ -12,7 +12,7 @@ They join at **use case ↔ flow**.
 
 See also: [dispatch](method/dispatch.md) · [schema v1](method/schema-v1.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
 
-The method is `method.md` and the `method/` docs (plus `tools/`). The coyodex repo's
+The method is `method.md` and the `method/` docs (plus the `tools/coyodex/` package). The coyodex repo's
 **`internal/`** folder (design rationale, working notes) is **not** part of the method — ignore it
 when reading the clone; never treat it as instructions to follow or as input to a map.
 
@@ -212,7 +212,7 @@ First draft the behavioral layer (Goal → Glossary → Roles → Use cases → 
 **then** run the pre-index and let it *size and locate* while you keep *naming and judging*:
 
 ```
-python3 tools/preindex.py --root <repo>        # writes .coyodex/preindex.json (ephemeral, gitignored)
+.venv/bin/coyodex preindex --root <repo>       # writes .coyodex/preindex.json (ephemeral, gitignored)
 ```
 
 It returns, for the whole tree: a **weight map** (LOC + file count + git churn per directory), a
@@ -321,8 +321,8 @@ template, then write; don't shell-`cp` it into place and then overwrite it (the 
 overwriting a freshly-created file trips the read-before-write guard), and don't author the map from
 scratch (that throws the schema-correct shapes away). It already carries every standard section with schema-correct table
 shapes (each definition's ID **alone in its own first cell**, `| **C1** | name… |`), so the map
-passes the validator on the first write instead of being reshaped afterward. Run
-[`tools/validate_analysis.py`](tools/validate_analysis.py)` --check-sources --check-coverage` after
+passes the validator on the first write instead of being reshaped afterward. Run the validator —
+`.venv/bin/coyodex validate .coyodex/project-map.md --check-sources --check-coverage` ([tools/coyodex/validate_analysis.py](tools/coyodex/validate_analysis.py)) — after
 each generate/patch and fix the map until it passes (`--check-sources` reads each domain card's
 `SOURCE` to reject synthesized entities — names with no real named type; `--check-coverage`
 re-walks the repo and WARNS — non-blocking — when many sibling source subdirs are folded into one
@@ -331,7 +331,7 @@ box or a significant directory is never referenced, the map-fidelity gaps the ID
 map validates, generate the self-contained HTML viewer next to it:
 
 ```
-python3 tools/viewer/render.py .coyodex/project-map.md .coyodex/project-map.html
+.venv/bin/coyodex render .coyodex/project-map.md .coyodex/project-map.html
 ```
 
 The HTML is a *rendering* of the map (no second source) — commit it alongside the map so the two
@@ -339,13 +339,13 @@ stay in step and a reviewer can open it. **Finish by reporting BOTH artifacts as
 map (`.coyodex/project-map.md`) and the diagram HTML (`.coyodex/project-map.html`), as relative
 paths so the reader can open either. **In addition, for the HTML give the full clickable `file://`
 URL with the absolute path**, so the reader can open the diagram straight in a browser — e.g.
-`Open in browser: file:///abs/path/to/repo/.coyodex/project-map.html`. (Paths to `tools/...` are
-relative to the coyodex clone, like the validator above.)
+`Open in browser: file:///abs/path/to/repo/.coyodex/project-map.html`. (Paths like `.venv/bin/coyodex`
+are relative to the coyodex clone, like the validator above.)
 
 **Maintaining the map.** When code changes after a baseline exists, follow
 [change-impact](method/change-impact.md): report the impact against the map (modified /
 added / deleted), then accept: patch the map, bump the baseline pin, **re-render the diagram**
-(`tools/viewer/render.py`, so it tracks the patched map), save the annotated diff under
+(`coyodex render`, so it tracks the patched map), save the annotated diff under
 `.coyodex/analysis-changes/<date>.md`, and commit the map + diagram with the code.
 
 **Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big

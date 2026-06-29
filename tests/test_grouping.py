@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Tests for the schema-v1 grammar, the parser, and the validator's grouping checks.
 
-Stdlib-only — no pytest required. Run either way:
-    python3 tools/tests/test_grouping.py        # built-in runner (prints pass/fail)
-    pytest tools/tests/test_grouping.py         # if pytest is installed
+Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
+    python3 tests/test_grouping.py        # built-in runner (prints pass/fail)
+    pytest tests/test_grouping.py         # if pytest is installed
 """
 from __future__ import annotations
 
@@ -13,16 +13,13 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
-TOOLS = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(TOOLS))            # schema_v1, validate_analysis
-sys.path.insert(0, str(TOOLS / "viewer"))  # build_graph
+from coyodex import schema_v1, validate_analysis
+from coyodex.viewer import build_graph, gen_viewer
 
-import build_graph  # noqa: E402
-import gen_viewer  # noqa: E402
-import schema_v1  # noqa: E402
-import validate_analysis  # noqa: E402
-
-VALIDATOR = TOOLS / "validate_analysis.py"
+# Run validator/renderer as modules so the subprocess tests hit the same entry points as the CLI.
+VALIDATOR = [sys.executable, "-m", "coyodex.validate_analysis"]
+RENDER = [sys.executable, "-m", "coyodex.viewer.render"]
+REPO = Path(__file__).resolve().parent.parent  # repo root; tests/ sits directly under it
 
 
 # --- builders -------------------------------------------------------------------
@@ -363,7 +360,7 @@ def run_validator(md: str) -> tuple[int, str]:
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write(md)
         path = f.name
-    r = subprocess.run([sys.executable, str(VALIDATOR), path], capture_output=True, text=True)
+    r = subprocess.run([*VALIDATOR, path], capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
 
 
@@ -612,7 +609,7 @@ def test_render_inlines_edge_card_data() -> None:
         md.write_text(make_card_map(), encoding="utf-8")
         out = Path(d) / "project-map.html"
         r = subprocess.run(
-            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            [*RENDER, str(md), str(out)],
             capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr
@@ -832,7 +829,7 @@ def test_parser_ignores_fenced_nodes() -> None:
 def test_template_validates_clean() -> None:
     # The template is what the agent copies to start a map, so it must stay schema-correct
     # (resolvable refs, ID-alone cells, consistent columns). Guards against template drift.
-    template = TOOLS.parent / "method" / "templates" / "project-map.template.md"
+    template = REPO / "method" / "templates" / "project-map.template.md"
     code, out = run_validator(template.read_text(encoding="utf-8"))
     assert code == 0, out
 
@@ -844,7 +841,7 @@ def test_render_produces_self_contained_html() -> None:
         md.write_text(make_grouped_map("proper"), encoding="utf-8")
         out = Path(d) / "project-map.html"
         r = subprocess.run(
-            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            [*RENDER, str(md), str(out)],
             capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr
@@ -861,7 +858,7 @@ def test_render_bakes_nested_drill_data() -> None:
         md.write_text(make_nested_subsystem_map(), encoding="utf-8")
         out = Path(d) / "project-map.html"
         r = subprocess.run(
-            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            [*RENDER, str(md), str(out)],
             capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr
@@ -1487,7 +1484,7 @@ def test_render_inlines_context_data() -> None:
         md.write_text(make_context_map(), encoding="utf-8")
         out = Path(d) / "project-map.html"
         r = subprocess.run(
-            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            [*RENDER, str(md), str(out)],
             capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr
@@ -1507,7 +1504,7 @@ def test_render_no_context_data_when_ungrouped() -> None:
         md.write_text(make_domain_map(), encoding="utf-8")
         out = Path(d) / "project-map.html"
         r = subprocess.run(
-            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            [*RENDER, str(md), str(out)],
             capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr
@@ -1816,7 +1813,7 @@ def test_render_inlines_gp_data() -> None:
         md.write_text(make_gp_map(), encoding="utf-8")
         out = Path(d) / "project-map.html"
         r = subprocess.run(
-            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            [*RENDER, str(md), str(out)],
             capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr
@@ -1951,7 +1948,7 @@ def test_render_inlines_libs_fold_data() -> None:
         md.write_text(make_dep_kinds_map(), encoding="utf-8")
         out = Path(d) / "project-map.html"
         r = subprocess.run(
-            [sys.executable, str(TOOLS / "viewer" / "render.py"), str(md), str(out)],
+            [*RENDER, str(md), str(out)],
             capture_output=True, text=True,
         )
         assert r.returncode == 0, r.stdout + r.stderr

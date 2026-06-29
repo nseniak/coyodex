@@ -16,8 +16,8 @@ into the map verbatim (GR2). Weight is a hint to where to look, never a decision
 validator never reads this file; it re-measures (GR4).
 
 Usage:
-  python3 tools/preindex.py [--root .] [--out .coyodex/preindex.json] [--since <rev|date>]
-                            [--pairs pairs.json] [--max-depth N]
+  coyodex preindex [--root .] [--out .coyodex/preindex.json] [--since <rev|date>]
+                   [--pairs pairs.json] [--max-depth N]
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import json
 import sys
 from pathlib import Path
 
-from preindex_lib import (
+from coyodex.preindex_lib import (
     SYMBOL_LANGS,
     ImportRef,
     Symbol,
@@ -39,11 +39,11 @@ from preindex_lib import (
 )
 
 
-def _arg(flag: str, default: str | None = None) -> str | None:
-    if flag in sys.argv:
-        i = sys.argv.index(flag)
-        if i + 1 < len(sys.argv):
-            return sys.argv[i + 1]
+def _arg(argv: list[str], flag: str, default: str | None = None) -> str | None:
+    if flag in argv:
+        i = argv.index(flag)
+        if i + 1 < len(argv):
+            return argv[i + 1]
     return default
 
 
@@ -212,12 +212,13 @@ def build_imports(files: list[Path], root: Path, pairs_path: str | None) -> tupl
 # main
 # --------------------------------------------------------------------------------------
 
-def main() -> int:
-    root = Path(_arg("--root", ".") or ".").resolve()
-    out_path = Path(_arg("--out", str(root / ".coyodex" / "preindex.json")) or "")
-    since = _arg("--since")
-    pairs_path = _arg("--pairs")
-    md = _arg("--max-depth")
+def main(argv: list[str] | None = None) -> int:
+    argv = list(sys.argv[1:] if argv is None else argv)
+    root = Path(_arg(argv, "--root", ".") or ".").resolve()
+    out_path = Path(_arg(argv, "--out", str(root / ".coyodex" / "preindex.json")) or "")
+    since = _arg(argv, "--since")
+    pairs_path = _arg(argv, "--pairs")
+    md = _arg(argv, "--max-depth")
     max_depth = int(md) if md else None
 
     walk = iter_source_files(root)
@@ -270,8 +271,14 @@ def main() -> int:
         "  NOTE: draft the behavioral layer BEFORE using this (GR1); reconcile every item, "
         "never copy verbatim (GR2).\n"
     )
+    if not ts_ok:
+        sys.stderr.write(
+            "  HINT: tree-sitter is not installed, so non-Python languages get no symbols/imports.\n"
+            "        Install the pre-index extra into the coyodex venv to enable polyglot support:\n"
+            "          <coyodex-home>/.venv/bin/pip install -e '<coyodex-home>[preindex]'\n"
+        )
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))
