@@ -36,8 +36,9 @@ make install
 
 This installs the skill into each agent's skills home (`~/.claude/skills` for Claude Code,
 `~/.agents/skills` — the cross-agent standard read by Codex and Cursor) with this repo's path baked
-in, so `/coyodex` reads the method straight from here on all three. Re-run only if you move the repo;
-`make uninstall` removes it.
+in, so `/coyodex` reads the method straight from here on all three. It also installs the Python
+dependencies for the structural pre-index (`tools/requirements.txt` — tree-sitter; run `make deps`
+alone to refresh them). Re-run only if you move the repo; `make uninstall` removes it.
 
 **2. Build the baseline.** In your project, with no map yet, `/coyodex` builds it:
 

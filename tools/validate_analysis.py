@@ -27,13 +27,18 @@ When an id reads as undefined because its definition row glued extra text into t
 ID cell (`| **UC1** Search… |` instead of `| **UC1** | Search… |`), the report names
 that specific cause instead of the generic "undefined ID".
 
-Opt-in (reads the analyzed repo's source, not just the map):
+Opt-in (reads the analyzed repo's source/tree, not just the map):
   7. --check-sources: each domain card's entity NAME must appear in its SOURCE file — catches
      synthesized entities (a name with no real named type) and wrong anchors.
+  8. --check-coverage: re-walk the repo tree and WARN on map-fidelity gaps the referential checks
+     cannot see — peer-level compression (many sibling source subdirs folded into ~one box, the
+     65-plugins-as-one-component failure) and significant directories the map never references.
+     Advisory only (intentional abstraction is a feature); it re-measures the tree and never reads
+     the pre-index JSON, so generation and verification stay independent.
 
 Exit 0 = clean, 1 = problems found.
 
-Usage:  python3 tools/validate_analysis.py [--check-sources] [.coyodex/project-map.md]
+Usage:  python3 tools/validate_analysis.py [--check-sources] [--check-coverage] [.coyodex/project-map.md]
 """
 from __future__ import annotations
 
@@ -331,6 +336,107 @@ def check_altitude_hints(text: str) -> list[str]:
     return out
 
 
+_COMPRESSION_MIN = 8      # this many sibling source subdirs folded into ~one box reads as lost signal
+_ABSENT_MIN_FILES = 25    # a top-level dir this large with nothing referenced is a likely unmapped module
+_REF_LINK = re.compile(r"\]\(([^)\s#]+)")                         # markdown link target ](path...)
+_REF_INLINE = re.compile(r"(?<![\w/])((?:[\w.\-]+/)+[\w.\-]+)")   # inline a/b/c path
+# Monorepo container roots — under these, a fold one level deeper is still an altitude decision
+# (`packages/app/plugins`), so look one level further. Under an ordinary package it is not, so a leaf
+# component's internal subdirs (`mee6/plugins/achievements/`) stay abstracted (GR6).
+_MONOREPO_ROOTS = {"packages", "apps", "services", "libs", "modules", "projects", "workspaces", "crates"}
+
+
+def _fold_depth_ok(dpath: str) -> bool:
+    """Inspect folds at the top/second level — one deeper under a recognized monorepo container."""
+    first = dpath.split("/", 1)[0]
+    return dpath.count("/") <= (2 if first in _MONOREPO_ROOTS else 1)
+
+
+def _map_referenced_paths(text: str, root: Path) -> set[str]:
+    """Repo-relative paths (files AND dirs) the map points at — markdown link targets + inline paths,
+    kept only when they actually exist under root."""
+    cands: set[str] = set(_REF_LINK.findall(text)) | set(_REF_INLINE.findall(text))
+    rootstr = str(root)
+    refs: set[str] = set()
+    for c in cands:
+        c = c.split("#", 1)[0].strip()
+        if c.startswith("file://"):
+            c = c[7:]
+        if c.startswith(rootstr):
+            c = c[len(rootstr):]
+        c = c.strip("/")
+        if c and not c.startswith(".coyodex") and (root / c).exists():
+            refs.add(c)
+    return refs
+
+
+def check_compression_coverage(text: str, root: Path) -> list[str]:
+    """Advisory (non-blocking, opt-in via --check-coverage): the map-fidelity counterpart to the
+    referential checks. Flags two *lost-signal* shapes by RE-MEASURING the repo tree (never reading
+    the pre-index's JSON — GR4):
+      - peer-level COMPRESSION — a top/second-level directory whose many sibling source subdirs are
+        folded into ~one map box (the 65-plugins-as-one-component failure). Only top/second level,
+        because a leaf component's internal subdirs are SUPPOSED to be abstracted (GR6).
+      - significant ABSENT modules — a top-level dir with many source files that the map never
+        references at all.
+    Both self-report their denominator. Intentional abstraction is a feature, so this only ever
+    WARNS, never blocks (GR6)."""
+    # Local import: keep the CORE GATE independent of the advisory pre-index module — the validator
+    # imports nothing from it at load time, only this opt-in check pulls the shared (stdlib) walk
+    # helper. Reuses CODE, never the pre-index's JSON DATA (GR4: generation != verification).
+    from preindex_lib import iter_source_files
+
+    root = root.resolve()
+    walk = iter_source_files(root)
+    dir_children: dict[str, set[str]] = {}
+    dir_filecount: dict[str, int] = {}
+    for f in walk.files:
+        parts = f.relative_to(root).parts
+        for i in range(len(parts)):
+            dpath = "/".join(parts[:i]) if i else "."
+            dir_filecount[dpath] = dir_filecount.get(dpath, 0) + 1
+            if i + 1 < len(parts):
+                dir_children.setdefault(dpath, set()).add("/".join(parts[:i + 1]))
+
+    refs = _map_referenced_paths(text, root)
+
+    def covered_under(prefix: str) -> bool:
+        return any(r == prefix or r.startswith(prefix + "/") for r in refs)
+
+    out: list[str] = []
+    flagged: set[str] = set()
+    for dpath, subs in sorted(dir_children.items()):
+        n = len(subs)
+        if dpath == "." or not _fold_depth_ok(dpath) or n < _COMPRESSION_MIN or not covered_under(dpath):
+            continue
+        covered_subs = sum(1 for s in subs if covered_under(s))
+        if covered_subs * 4 < n:  # the map individually represents fewer than ~a quarter of the peers
+            flagged.add(dpath)
+            out.append(
+                f"Compression: {dpath}/ holds {n} sibling source subdirs but the map references paths "
+                f"in only {covered_subs} of them — up to {n - covered_subs} peer modules folded into "
+                f"~one box; if distinct, drill {dpath}/ into a subsystem ({n} subdirs, measured at "
+                f"validate time)"
+            )
+    # Absent / under-referenced: a dir the map never references that is either large (>= _ABSENT_MIN_FILES
+    # files) OR has many sibling subdirs (>= _COMPRESSION_MIN) — the latter catches a small-but-fanned
+    # fold the compression pass skips because the map references nothing inside it.
+    absent: list[tuple[int, str]] = []
+    for dpath, fc in dir_filecount.items():
+        if dpath == "." or not _fold_depth_ok(dpath) or dpath in flagged or covered_under(dpath):
+            continue
+        n_subs = len(dir_children.get(dpath, ()))
+        if fc >= _ABSENT_MIN_FILES or n_subs >= _COMPRESSION_MIN:
+            absent.append((fc, dpath))
+    for fc, dpath in sorted(absent, reverse=True)[:8]:
+        n_subs = len(dir_children.get(dpath, ()))
+        out.append(
+            f"Coverage: {dpath}/ ({fc} source files, {n_subs} subdirs) has no path referenced in the "
+            f"map — likely an unmapped module (measured at validate time)"
+        )
+    return out
+
+
 def find_glued_ids(text: str) -> set[str]:
     """IDs whose definition row glued the name into the ID cell — either outside the bold
     (`| **UC1** Search… |`) or inside it (`| **C8 Upstream** |`). Such a row is not a clean
@@ -552,6 +658,7 @@ def collect_edges(text: str) -> list[tuple[str, str, str]]:
 def main() -> int:
     args = [a for a in sys.argv[1:] if not a.startswith("-")]
     check_sources = "--check-sources" in sys.argv  # opt-in: read SOURCE files to flag synthesized entities
+    check_coverage = "--check-coverage" in sys.argv  # opt-in: re-walk the repo to flag map-fidelity gaps
     path = Path(args[0] if args else ".coyodex/project-map.md")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
@@ -636,6 +743,8 @@ def main() -> int:
     problems.extend(hierarchy_problems)
     warnings.extend(hierarchy_warnings)
     warnings.extend(check_altitude_hints(text))  # advisory: a component that is really a group
+    if check_coverage:  # opt-in map-fidelity: peer-level compression + absent modules (re-measured, GR4)
+        warnings.extend(check_compression_coverage(text, path.resolve().parent.parent))
     # Non-blocking nudge: a group whose ONLY child is another group of the same kind is a redundant
     # nesting level (it adds depth without grouping anything). Only nested maps can trigger it, so flat
     # maps stay silent.

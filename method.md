@@ -205,6 +205,38 @@ columns and relationship rows harden last (they need tracing) — keep them infe
 traced. Drilling can correct an inferred upper row; upper tables get more accurate as the
 reader drills.
 
+**Pre-index (structural input — run it after the behavioral draft, before the structural
+harvest).** On a non-trivial repo, don't choose altitude from a *count* ("65 plugins, too many")
+or from maintainer diagrams alone — that is how a heavy area silently collapses into one box.
+First draft the behavioral layer (Goal → Glossary → Roles → Use cases → Golden-Path skeleton),
+**then** run the pre-index and let it *size and locate* while you keep *naming and judging*:
+
+```
+python3 tools/preindex.py --root <repo>        # writes .coyodex/preindex.json (ephemeral, gitignored)
+```
+
+It returns, for the whole tree: a **weight map** (LOC + file count + git churn per directory), a
+**symbol index** (`class/func → file:line + kind`, with an `ambiguous` list when a name is defined
+in several places), and — when you pass `--pairs` a `{component: [paths]}` map — a lower-bound
+**import-edge advisory** between components you have *already named*. Use it like this:
+
+- **Weight is a hint to where to look, never a decision.** A directory carrying a large share of
+  the tree's mass *and* split into many sibling sub-units (e.g. `plugins/` with dozens of
+  subdirs) is a **drill candidate** — promote it to a subsystem and map its units, don't fold it
+  into one component. But a heavy *generated* dir still collapses, and a tiny *auth gate* still
+  gets promoted — the number sets attention, your judgement sets altitude.
+- **Reconcile every item; never paste it in.** The pre-index is input you accept / reject /
+  abstract with a reason — it is not rows for the map. The behavioral layer and the subsystem
+  names stay yours.
+- **Treat what it could not parse as UNKNOWN, not empty.** Its `coverage` block reports the files
+  it skipped and the languages without symbol data (symbols are deep for Python; other languages
+  need the tree-sitter pack). An unparsed region is a region you still owe a read.
+
+This concretises finding **G1** in
+[internal/docs/scaling-to-large-codebases.md](internal/docs/scaling-to-large-codebases.md); the
+guardrails above are **GR1/GR2/GR3/GR5** there. The validator's `--check-coverage` (below) is the
+verification half — it re-measures the tree independently and never reads this JSON (**GR4**).
+
 **Parallel mode (large repos only — serial is simpler and just as accurate on small
 ones).** The build order maps to a fan-out workflow: **parallel harvest → barrier
 synthesis → parallel trace.**
@@ -290,9 +322,12 @@ overwriting a freshly-created file trips the read-before-write guard), and don't
 scratch (that throws the schema-correct shapes away). It already carries every standard section with schema-correct table
 shapes (each definition's ID **alone in its own first cell**, `| **C1** | name… |`), so the map
 passes the validator on the first write instead of being reshaped afterward. Run
-[`tools/validate_analysis.py`](tools/validate_analysis.py)` --check-sources` after each generate/patch
-and fix the map until it passes (the flag reads each domain card's `SOURCE` to reject synthesized
-entities — names with no real named type). **Then render the diagrams** — once the
+[`tools/validate_analysis.py`](tools/validate_analysis.py)` --check-sources --check-coverage` after
+each generate/patch and fix the map until it passes (`--check-sources` reads each domain card's
+`SOURCE` to reject synthesized entities — names with no real named type; `--check-coverage`
+re-walks the repo and WARNS — non-blocking — when many sibling source subdirs are folded into one
+box or a significant directory is never referenced, the map-fidelity gaps the ID checks can't see).
+**Then render the diagrams** — once the
 map validates, generate the self-contained HTML viewer next to it:
 
 ```
@@ -330,6 +365,8 @@ be uneven** — refine only where you need detail; an area you haven't drilled s
 space, so links can't cross it and Analyze/Accept won't track it — see [dispatch](method/dispatch.md).
 
 **How to apply.** Lead with the behavioral layer (T0 Goal → Glossary → Roles → Use cases →
-Golden Path), then structural Level 0 (T1–T3); generate the rest on demand as the reader
-drills. Always attach `file:line`. Label every entry point and every relationship as
+Golden Path); on a non-trivial repo run the **pre-index** next (never before the behavioral
+draft — GR1), then build structural Level 0 (T1–T3) using its weight map to set altitude;
+generate the rest on demand as the reader drills. Always attach `file:line` (the pre-index's
+symbol index gives correct ones). Label every entry point and every relationship as
 verified vs inferred — that is where wrong guesses hide.
