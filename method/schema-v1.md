@@ -14,7 +14,7 @@ Every element has a stable, unique ID by prefix:
 |---|---|
 | `UC` | Use case |
 | `R` | Role / actor (optional; reference roles by name if unprefixed) |
-| `GP` | Golden Path step |
+| `GP` | Golden Path step (a use-case occurrence — a position in the ordered walk) |
 | `C` | Component (T1) |
 | `S` | Subsystem — a group of components and/or nested subsystems (optional) |
 | `D` | External dependency (T2) |
@@ -24,24 +24,32 @@ Every element has a stable, unique ID by prefix:
 Definitions live in the **first cell of a table row** (`| **C1** | ... |`) or, for the two
 block formats, in a heading: Golden Path steps (`**GP1 — ...**`) and domain entities
 (`**E1 — ...**`, the T5 domain cards). An ID written anywhere else is a *reference*, not a
-definition.
+definition — including a **T6 flow block** (`**UC7 — ...**`), which is keyed by an *already-defined*
+use case (the canonical `UC` definition is its Use-cases table row), so the flow heading references
+that use case rather than redefining it.
 
 ## The 5 conventions
 
 1. **Stable column headers per table** — the headers are the schema; don't rename them.
 2. **ID-based cross-references** — every reference (T1 "Depends on", T1 `Subsystem`, the
-   Subsystems `Parent`, the card `SUBDOMAIN:` / Subdomains `Parent`, edge endpoints, GP `Touches:`,
-   traceability tables, "Used in GP") resolves to a defined ID, not a bare display name. Display text
-   may accompany the ID (`C8 Upstream connectivity`) but the ID must be present.
+   Subsystems `Parent`, the card `SUBDOMAIN:` / Subdomains `Parent`, edge endpoints, a GP step's
+   `*(UCn)*` use-case tag, **T6 flow step endpoints**) resolves to a defined ID, not a bare display
+   name. Display text may accompany the ID (`C8 Upstream connectivity`) but the ID must be present.
+   (A flow step endpoint may instead be a **Role name** — an actor step — which resolves against the
+   Roles table, not the ID space; such a Role must NOT be named like an element ID (`C3`, `E1`, …), or
+   it will read as that element.)
 3. **No raw `|` inside table cells** — escape or avoid it; it silently breaks table parsing.
-4. **Block micro-formats** — two tiers are blocks, not tables, each with a defining heading and
-   labeled lines: the **Golden Path** (`**GPn — title**` + STORY, UNDER THE HOOD, and a `Touches:`
-   line listing the IDs it touches) and the **T5 domain cards** (`**En — Name**` + FIELDS,
-   RELATIONS, MEANING, SOURCE — see [domain-cards.md](domain-cards.md)). In both, the heading
-   defines the ID and separators inside list lines are `·`, never raw `|`.
-5. **A validator** — checks ID uniqueness, that every reference resolves, that every GP step has
-   a `Touches:` line, and that every table row carries its header's column count (catching
-   malformed separators / dropped cells). Run it after each generate/patch.
+4. **Block micro-formats** — three tiers are blocks, not tables, each a heading + labeled/numbered
+   lines: the **Golden Path** (`**GPn — title** *(UCn)*` + an optional `why:` line — the step *is* a
+   use case, so it carries no STORY/UNDER-THE-HOOD/Touches; those live in the use case's flow); the
+   **T6 flows** (`**UCn — title**` + numbered step lines `n. from → to [: phrase] [· note]`); and the
+   **T5 domain cards** (`**En — Name**` + FIELDS, RELATIONS, MEANING, SOURCE — see
+   [domain-cards.md](domain-cards.md)). The GP and card headings *define* their ID; a flow heading
+   *references* a use case. Separators inside list lines are `·`, never raw `|`.
+5. **A validator** — checks ID uniqueness, that every reference resolves, that every GP step names a
+   use case (`*(UCn)*`) and every T6 flow step's endpoints resolve (to an ID or a Role), and that
+   every table row carries its header's column count (catching malformed separators / dropped cells).
+   Run it after each generate/patch.
 
 ## Derived, not duplicated
 
@@ -51,8 +59,10 @@ definition.
 - The edge **`Why`** is the **canonical relationship rationale** — distinct from a node's Purpose
   (about the node) and from the Golden Path (the sequenced story). Narrative layers reference
   edges instead of re-explaining them, so the `Why` lives in exactly one place.
-- The Golden Path `Touches:` lines and the traceability table are two views of the same
-  `GP-step — touches → element` edges.
+- A use case's **T6 flow steps** ARE its touches; the `Used in UC` backward view (element → the use
+  cases whose flow steps through it) is **derived** from them by the tooling, never authored.
+  Element↔element flow steps reuse the backbone edge (`Verb` + `Why`), so a relationship's rationale is
+  never restated in the flow.
 
 ### Grouping is single-source (optional, additive)
 
@@ -64,8 +74,8 @@ in their own table (`ID | Subsystem | Purpose | Parent | Anchor | Conf.`), optio
   list — the member view is *derived*.
 - **Inter-subsystem edges are derived** from the component edge list + membership: `S_a → S_b`
   exists iff a component edge crosses from `S_a` to `S_b`. Never authored.
-- **Grouped "Depends on" / grouped touches are derived** the same way; `S` is *not* written into
-  `Touches:` lines.
+- **Grouped "Depends on" is derived** the same way; an `S` is *not* a flow-step or edge endpoint
+  (those reference components/deps/entities, never a subsystem).
 - **Nesting renders as recursive drill, to any depth.** A subsystem's card shows only its *immediate*
   children (sub-subsystems as drillable boxes, direct components inline); drilling a child box opens its
   own card. Depth is **not capped** — the validator only *warns* past `DEEP_NEST_WARN` (5). Deeper detail
@@ -82,7 +92,7 @@ in their own table (`ID | Subdomain | Purpose | Parent | Anchor | Conf.`), optio
 - **Membership lives on the child, once** — but on the **card**, not a table cell: each domain card
   carries a `SUBDOMAIN:` line holding **one** `SD` ID (the analog of a component's `Subsystem` cell). A
   card with no `SUBDOMAIN:` line is ungrouped (top-level). The Subdomains table's own `Parent` cell nests
-  one subdomain inside another — and the Domain view **drills these nested subdomains recursively**, each
+  one subdomain inside another — and the Entities view **drills these nested subdomains recursively**, each
   card showing one level, exactly like subsystems.
 - **Cluster entities like components** — directory first (the card's `SOURCE` location), then relation
   cohesion (the `RELATIONS` graph); minimise crossing relations. Directory-derived = verified,
@@ -117,7 +127,8 @@ The validator ([`tools/coyodex/validate_analysis.py`](../tools/coyodex/validate_
 ```
 
 It prints an element inventory and exits non-zero on: duplicate definitions, references to
-undefined IDs, a Golden Path step missing its `Touches:` line, a Roles table missing the required
+undefined IDs, a Golden Path step missing or with an unresolvable `*(UCn)*` use-case tag, a T6 flow
+step whose endpoint resolves to neither a defined ID nor a Role, a Roles table missing the required
 `Kind` column, a T2 dependency whose **optional** `Kind` cell is not one of the closed set
 `datastore / messaging / service / platform / framework / library` (no-op when the column is absent),
 a table row whose column count differs from its header (malformed separator,

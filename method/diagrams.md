@@ -12,7 +12,7 @@ graph; no separate persisted model is needed.
 | **Container** | runtime pieces (services, datastores, sandboxes) | Deployment + components |
 | **Component** | T1 components + their verbed arrows | T1 + the edge list |
 | **Code** | entry points → `file:line`; the **domain model as a `classDiagram`** (entities with attributes + typed, cardinal relations) — led by a **Subdomains overview** when the model is grouped into subdomains | T4 anchors · T5 [domain cards](domain-cards.md) · Subdomains |
-| **Behavioral overlay** | the Golden Path as a black-box sequence of steps; drill a step into the subgraph of components it touches | GP steps + traceability |
+| **Behavioral overlay** | the Golden Path as a black-box sequence of use cases; drill a step into its use case's T6 flow (a sequence diagram of actor + components/deps/entities) | GP steps + T6 flows |
 
 Drill down = zoom one level in; step back = zoom out — the same "name a row to drill"
 navigation as the markdown, made visual. The Container and Code altitudes **nest to any depth**: a
@@ -44,13 +44,18 @@ show/hide toggle. The element-keyed deltas are the data.
   diagrams rather than true zoom.
 - **Tier B — a small self-contained HTML viewer**, available in [`tools/coyodex/viewer/`](../tools/coyodex/viewer/).
   Parses the markdown (via the shared `tools/coyodex/schema_v1.py` grammar) and renders the C4 altitudes —
-  Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges) →
-  Components → code — plus the **Domain** model (when grouped into contexts, a bounded-contexts
-  overview that ⌘-drills into one subdomain's `classDiagram`; a subsystem card also draws the subdomains
-  its components own/read — the derived `S→SD` bridge) and the **Golden Path** as its own behavioural
-  overlay (a black-box sequence diagram of the steps; clicking a step drills into the induced subgraph
-  of the components it touches, with a link back to locate them in the full map). Navigated as a back/forward history
-  (header arrows, ⌘/⌥+←/→, breadcrumb) with pan/zoom, click→panel, and a baseline⇄diff overlay.
+  Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges; drill a
+  subsystem for its components → code) — plus the **Entities** view (the T5 domain model; when grouped
+  into subdomains, a bounded-contexts overview that ⌘-drills into one subdomain's `classDiagram`; a
+  subsystem card also draws the subdomains its components own/read — the derived `S→SD` bridge) and the
+  **Golden Path** as its own behavioural overlay (a black-box sequence diagram of the use cases; clicking
+  a step drills into its use case's T6 flow — a sequence diagram + readable narrative — whose element
+  links locate each element in its home view). Navigated as a back/forward history (header arrows,
+  ⌘/⌥+←/→, breadcrumb) with pan/zoom and click→panel. A change-impact report adds a baseline⇄diff
+  overlay on the Subsystems views (subsystem boxes badged with their subtree's change, components badged
+  in their cards, a change summary in the panel). There is no flat whole-repo Components tab — it was too
+  heavy as a landing view; a map with no subsystem of its own gets one default subsystem so the
+  component altitude always exists, and the flat-map generators are kept dormant/restorable.
   Mermaid + svg-pan-zoom load from a pinned CDN with Subresource-Integrity.
 
 Reference frame: the **C4 model**, **Structurizr**, **Sourcetrail** — all standard. The

@@ -54,7 +54,8 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   (framework / library) collapse into one **📚 Libraries (N)** box — ⌘-click it to drill into the full
   list (or plain-click to preview the names), so the top altitude stays a clean C4 picture instead of
   a star of every imported library. The split is the T2 `Kind` column (inferred from `Type` when absent).
-- **Subsystems** *(when the map groups components)* — the Container altitude: subsystem boxes with
+- **Subsystems** *(whenever the map has components — a map that defines no subsystem of its own gets
+  one default subsystem so this altitude always exists)* — the Container altitude: subsystem boxes with
   inter-subsystem edges **derived** from the component edge list (count-labelled). Drilling replaces
   the diagram **in place** (no popups) and is tracked as a back/forward **history** (stepping back
   or forward restores each view's pan/zoom as you left it):
@@ -66,25 +67,28 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   - Click an `S→S` **arrow** → its edge view: the two subsystems framed with the concrete crossings
     between them. A cross arrow into a box that *contains* (or is contained by) the current one instead
     **navigates** to that box (drill in / zoom out), since one can't frame the other.
-  - Component nodes/arrows behave like the Components view (click for `file:line`); the side panel
+  - Component nodes/arrows are clickable for details + `file:line`; the side panel
     shows the group you're on **plus its immediate children** (child groups annotated with how many
     leaves nest under them). **Navigate** with the header **◀ ▶** arrows, **⌘+←/→** or **⌥+←/→**, or by
     clicking any crumb in the breadcrumb — which now shows the **full nesting path**, one crumb per
-    level (e.g. Subsystems › Plugins › Social Content). The Domain view nests subdomains the same way.
-- **Components** — every component + its verbed edges; click a node/edge for details + `file:line`.
+    level (e.g. Subsystems › Plugins › Social Content). The Entities view nests subdomains the same way.
+  - *(No flat whole-repo Components tab: it was too heavy to be a landing view. Components are reached
+    by drilling a subsystem; a map that defines no subsystem of its own gets one **default subsystem**
+    (named after the project) so there is always a structural altitude. The flat-map generators are kept
+    dormant and restorable.)*
 - **Golden Path** *(when the map has a Golden Path)* — the behavioural overlay, in two levels:
-  - **Level 1** is the path as a black-box **sequence diagram** — each step a message from its actor
-    to the System, in order. The actor (lifeline) is the step's `Actor:` line if present, else the
-    actor of its first use case. Click a step to drill in.
-  - **Level 2** (a step) is its **components-used** diagram: the induced subgraph of the C/D/E nodes
-    that step `Touches:`, plus the verbed edges among them. Click a node/edge for `file:line`; the
-    **Locate in full map →** link in the panel jumps to the Components view with the step's nodes
-    spotlighted. Navigate back with the breadcrumb (Golden Path › *this step*) or the **◀ ▶** arrows.
-- **Domain** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
+  - **Level 1** is the path as a black-box **sequence diagram** — an ordered walk through the use
+    cases, each step a message from its use case's actor to the System. Click a step to drill in.
+  - **Level 2** (a step) opens its **use case's T6 flow**: a **sequence diagram** of the actor plus the
+    components/deps/entities it touches, each step an ordered message (the verb comes from the backbone
+    edge), with the same steps as a readable numbered narrative in the side panel — each element link
+    locates that element in its home view (its subsystem card, entity card, …).
+    Navigate back with the breadcrumb (Golden Path › *this step*) or the **◀ ▶** arrows.
+- **Entities** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal
   relations (composition/aggregation/inheritance/association). Click a class for its fields +
   `file:line`; click a relation for its kind + cardinality. When the model groups entities into
-  **subdomains**, the Domain view drills exactly like Subsystems (in place, back/forward history):
+  **subdomains**, the Entities view drills exactly like Subsystems (in place, back/forward history):
   - It leads with a **Subdomains overview** — one box per subdomain, with `SD→SD` arrows derived from
     the crossing entity relations (count-labelled).
   - Click a subdomain **box** → its *neighbourhood* card: the subdomain framed as a `namespace` holding
@@ -94,8 +98,12 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   - Click an `SD→SD` **arrow** (overview or neighbourhood) → its edge view: the two subdomains both
     framed, showing each one's inner relations plus the concrete entity relations that cross between
     them. Class boxes ⌘-click to open source; relation arrows click for kind + cardinality.
-- **Diff overlay** — pass a change-impact report to recolor added/modified/deleted nodes and the
-  elements they ripple to, with a baseline⇄diff toggle.
+- **Diff overlay** *(on the Subsystems views)* — pass a change-impact report and the viewer lands on
+  the Subsystems overview in **diff** mode: each subsystem box is badged with its subtree's change
+  (added/modified/deleted/rippled), drilling a subsystem badges its changed components, and the side
+  panel lists every change (added elements included, since they have no box to badge). A
+  baseline⇄diff toggle switches the badges off/on. *(The overlay used to live on the flat Components
+  map; it moved here when that tab was removed.)*
 
 ## Tests
 
@@ -112,8 +120,9 @@ python tests/test_grouping.py     # stdlib runner; or: .venv/bin/pytest tests/te
   pinned to the map's commit SHA is a follow-up.
 - **Subsystem drill-down replaces the diagram in place** (no popups) with a back/forward history,
   rather than expanding boxes in the map. Neighbours are shown collapsed (one box per subsystem,
-  aggregated arrows), so a hub subsystem stays readable; full multi-hop tracing still lives in the
-  Components view. Note: **⌘+←/→** is hijacked from the browser's own back/forward via
-  `preventDefault` (⌥+←/→ is the conflict-free alternative).
+  aggregated arrows), so a hub subsystem stays readable. The flat whole-repo Components map (which
+  showed every component at once) was removed as a tab — its generators are kept dormant. Note:
+  **⌘+←/→** is hijacked from the browser's own back/forward via `preventDefault` (⌥+←/→ is the
+  conflict-free alternative).
 - The Python side (parser + validator) is **stdlib-only**; the only third-party dependency is the
   client-side JS above.

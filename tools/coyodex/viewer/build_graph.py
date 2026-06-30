@@ -20,11 +20,14 @@ from typing import TypedDict
 from coyodex.schema_v1 import (
     DEF_GP,
     DEF_ID_CELL,
+    GP_HEADING,
+    GP_UC_TAG,
     ID_TOKEN,
     classify_dep,
     fk_targets,
     is_separator_row,
     iter_domain_cards,
+    iter_flows,
     iter_pipe_runs,
     membership_col,
     membership_ids,
@@ -41,6 +44,11 @@ COMMITTED = re.compile(r"\*\*Committed:\*\*\s*`([^`]+)`")  # commit date of the 
 # prefix, so "SD" is looked up whole and never collides with the single-letter "S" (subsystem).
 KIND_BY_PREFIX = {"C": "component", "D": "dep", "E": "entity", "UC": "usecase", "S": "subsystem",
                   "SD": "subdomain"}
+
+# Synthetic id for the default subsystem injected when a map has components but no subsystem of its
+# own (see _ensure_default_subsystem). "S0" is a valid subsystem id (prefix "S") and can't collide,
+# since the case only fires when no subsystem node exists.
+DEFAULT_SUBSYSTEM_ID = "S0"
 
 
 @dataclass
@@ -73,13 +81,13 @@ class Edge:
 
 @dataclass
 class GPStep:
+    """A Golden Path step = a use-case occurrence: a position (`id`) in the ordered walk that realizes
+    a use case (`uc`). It carries no STORY/Touches — those live in the use case's T6 flow; drilling the
+    step opens that flow. `why` is the optional prerequisite that fixes this step's position."""
     id: str
     title: str
-    story: str
-    under_the_hood: str
-    touches: list[str] = field(default_factory=list)
-    uc: str | None = None  # the use case the step realizes (from the `*(UCn)*` heading tag); fallback actor source
-    actor: str | None = None  # explicit driving role from an `Actor:` line; overrides the UC-derived actor
+    uc: str | None = None  # the use case this step realizes (from the required `*(UCn)*` heading tag)
+    why: str = ""          # optional `why:` line — the prerequisite that places this step in the walk
 
 
 class GraphDict(TypedDict):
@@ -90,6 +98,7 @@ class GraphDict(TypedDict):
     nodes: dict[str, dict[str, object]]
     edges: list[dict[str, object]]
     gp: list[dict[str, object]]
+    flows: list[dict[str, object]]  # T6 use-case flows (one per use case): the ordered inside view
     roles: list[dict[str, str]]
 
 
@@ -211,30 +220,21 @@ def parse_gp(lines: list[str]) -> list[GPStep]:
             i += 1
             continue
         gp_id = m.group(1)
-        # First UC in the heading tag -> the step's (primary) use case. The tag may list several
-        # (`*(UC21, UC22)*`) or carry trailing text (`*(UC16 follow-on)*`); take the first id so a
-        # multi-UC step still resolves to a real actor instead of falling back to a generic one.
-        uc_m = re.search(r"UC\d+", lines[i])
-        uc = uc_m.group(0) if uc_m else None
-        title = lines[i].split("—", 1)[1].strip() if "—" in lines[i] else ""
-        title = re.sub(r"\*\*|\*\([^)]*\)\*?", "", title).strip().rstrip("*").strip()
-        story = under = ""
-        actor: str | None = None
-        touches: list[str] = []
+        hm = GP_HEADING.match(lines[i])
+        title = hm.group(2).strip() if hm else ""
+        # The `*(UCn)*` tag (required) names the use case this step realizes. It may carry trailing
+        # text (`*(UC16 follow-on)*`); take the first id. The step's detail lives in that use case's
+        # flow, so the only thing harvested from the body is the optional `why:` line.
+        ut = GP_UC_TAG.search(lines[i])
+        uc = ut.group(1) if ut else None
+        why = ""
         j = i + 1
         while j < len(lines) and not DEF_GP.match(lines[j]):
             s = lines[j].strip()
-            if s.startswith("STORY:"):
-                story = s[len("STORY:"):].strip()
-            elif s.startswith("UNDER THE HOOD:"):
-                under = s[len("UNDER THE HOOD:"):].strip()
-            elif s.startswith("Actor:"):
-                actor = s[len("Actor:"):].strip() or None
-            elif s.startswith("`Touches:`") or s.startswith("Touches:"):
-                touches = ID_TOKEN.findall(s)
+            if s.lower().startswith("why:"):
+                why = s[len("why:"):].strip()
             j += 1
-        steps.append(GPStep(id=gp_id, title=title, story=story, under_the_hood=under,
-                            touches=touches, uc=uc, actor=actor))
+        steps.append(GPStep(id=gp_id, title=title, uc=uc, why=why))
         i = j
     return steps
 
@@ -328,6 +328,26 @@ def parse_goal(text: str) -> str | None:
     return body or None
 
 
+def _ensure_default_subsystem(nodes: dict[str, Node], title: str | None) -> None:
+    """If the map has components but defines NO subsystem, inject one default subsystem (`S0`, named
+    after the project) and reparent every component under it. This keeps the viewer uniform: there is
+    always a subsystem altitude that holds the component-level view, so the flat per-component map is
+    never the only place components live. A map that already groups its components is left untouched;
+    a pure domain map (no components) gets nothing."""
+    has_subsystem = any(n.kind == "subsystem" for n in nodes.values())
+    comp_ids = [nid for nid, n in nodes.items() if n.kind == "component"]
+    if has_subsystem or not comp_ids:
+        return
+    nodes[DEFAULT_SUBSYSTEM_ID] = Node(
+        id=DEFAULT_SUBSYSTEM_ID, kind="subsystem", name=title or "Application",
+        file=None, line=None,
+        fields={"Purpose": "All components — this map defines no subsystem grouping."},
+        parent=None,
+    )
+    for nid in comp_ids:
+        nodes[nid].parent = DEFAULT_SUBSYSTEM_ID
+
+
 def build(md_path: Path) -> GraphDict:
     # Ignore fenced code blocks (Mermaid / shell / teaching examples) — they are not live content.
     text = strip_fences(md_path.read_text(encoding="utf-8"))
@@ -338,12 +358,14 @@ def build(md_path: Path) -> GraphDict:
     nodes.update(dnodes)
     edges.extend(dedges)
     gp = parse_gp(lines)
+    flows = list(iter_flows(lines))  # T6 use-case flows (ordered inside view of each use case)
     commit_m = COMMIT.search(text)
     committed_m = COMMITTED.search(text)
     title_m = re.search(r"^#\s+(.+?)\s*$", text, re.M)
     title = title_m.group(1).strip() if title_m else None
     if title and " — " in title:
         title = title.split(" — ")[0].strip()
+    _ensure_default_subsystem(nodes, title)  # always expose a subsystem altitude for the components
     return {
         "commit": commit_m.group(1) if commit_m else None,
         "committed": committed_m.group(1) if committed_m else None,
@@ -352,6 +374,7 @@ def build(md_path: Path) -> GraphDict:
         "nodes": {nid: asdict(n) for nid, n in nodes.items()},
         "edges": [asdict(e) for e in edges],
         "gp": [asdict(g) for g in gp],
+        "flows": [asdict(f) for f in flows],
         "roles": parse_roles(tables),
     }
 

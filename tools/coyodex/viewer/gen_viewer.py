@@ -6,15 +6,18 @@ HTML file with the graph inlined and Mermaid + svg-pan-zoom loaded from a pinned
 The viewer's own CSS/JS are authored in viewer.css / viewer.js next to this module and inlined at
 build time, so the emitted HTML stays standalone — it carries no path back to this repo (see the
 "Generated artifacts are standalone w.r.t. the coyodex repo" design note).
-The viewer offers four altitudes — Context (C4; external SYSTEMS drawn by name, while in-process
+The viewer offers these altitudes — Context (C4; external SYSTEMS drawn by name, while in-process
 framework/library deps fold into one ⌘-clickable "Libraries" box that drills to the full list) →
 Subsystems (click a box to select it + its linked
 subsystems, or ⌘-click to drill in; click an arrow to select it — the side panel lists every
 component edge it bundles — or ⌘-click to drill into the pair's edge card; while ⌘ is held, drillable
-boxes/arrows show a drill-in cursor) → Components → code links — navigated as a
+boxes/arrows show a drill-in cursor) → a subsystem's components → code links — navigated as a
 back/forward history within one frame, wraps Mermaid's SVG with pan/zoom and a click->side-panel
-bridge, and a baseline<->diff toggle that recolors added/modified/deleted nodes and the elements they
-ripple to.
+bridge, and a baseline<->diff toggle (on the Subsystems views) that badges added/modified/deleted/
+rippled elements. A map with no subsystem of its own gets one synthetic default subsystem (build_graph),
+so the component-level view is always reached by drilling a subsystem. The flat whole-repo component
+map (gen_mermaid / MERMAID_BASE / MERMAID_DIFF and the viewer's `component` state) is no longer wired
+to a tab — it is kept dormant and restorable.
 
 Node labels are the element name only (no ID prefix) to keep them uncluttered;
 the ID still appears in the panel header and drives the bridge via the cy-<ID>
@@ -79,9 +82,6 @@ def gh_repo_url(anchor: Path) -> str | None:
 
 SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]')}
 DIAGRAM_KINDS = ("component", "dep")
-# Golden-Path step view also draws entities (rounded box) alongside components/deps.
-GP_SHAPE = {**SHAPE, "entity": ('("', '")')}
-GP_STEP_KINDS = ("component", "dep", "entity")
 
 # Domain (T5) relationship kind -> Mermaid classDiagram arrow. The diamond/triangle sits at the
 # `src` (left) end, matching how the relation is authored on the source entity's card.
@@ -146,7 +146,7 @@ def gen_mermaid(graph: GraphDict, diff: DiffDict | None = None, only: set[str] |
     for src, verb, dst in _diagram_edges(graph, diff, ids):
         lines.append(f"  {src} -->|{verb}| {dst}")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
-    lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
+    lines.append(f"  classDef dep {DEP_STYLE};")
     return "\n".join(lines)
 
 
@@ -349,21 +349,51 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
     lines = ["classDiagram"]
     for nid, n in ents:
         lines += _class_box_lines(nid, cast("dict[str, Any]", n), ent_names, with_members=True)
+    for nid, _ in ents:  # tint each entity (light fuchsia member) — the flat view has no namespace to inherit from
+        lines.append(f"  style {nid} {ENTITY_STYLE}")
     for e in graph["edges"]:
         if e.get("kind") and str(e["src"]) in ent_ids and str(e["dst"]) in ent_ids:
             lines.append(_class_relation_line(cast("dict[str, Any]", e)))
     return "\n".join(lines)
 
 
-# Group-box palettes, defined once and reused as a flowchart `classDef` and as a classDiagram `style`
-# (Mermaid's classDiagram has no classDef-by-name, so collapsed boxes there are styled per-id). Amber =
-# the structural family (subsystem `S` boxes); magenta = the domain family (subdomain `SD` boxes). A
-# subsystem and a subdomain therefore read identically wherever they appear — overview, subsystem card,
-# or subdomain card — so the two altitudes never blur.
-SUBSYSTEM_STYLE = "fill:#fef3c7,stroke:#b45309,color:#7c2d12"
-SUBDOMAIN_STYLE = "fill:#fdf4ff,stroke:#86198f,color:#581c87"
-COMPONENT_STYLE = "fill:#eef2ff,stroke:#3730a3,color:#1e1b4b"  # indigo — component (C) boxes
+# Element palettes — TINT PER FAMILY: one hue per family, the container box a DEEPER shade of the
+# member's hue, so a member visibly belongs to its container while the two families stay distinct.
+#   Structural family = INDIGO: component (member, indigo-50) inside subsystem (container, indigo-200).
+#   Domain family     = FUCHSIA: entity (member, fuchsia-50) inside subdomain (container, fuchsia-200).
+# Within a family the container + member share the stroke and differ only by fill depth; the families
+# differ by hue (indigo vs fuchsia), so subsystem≠subdomain AND component≠entity (the old clash, where
+# the entity used Mermaid's default lavender ≈ the component's indigo, is gone). Defined once, reused as
+# flowchart `classDef`s and as classDiagram per-id `style`s (classDiagram has no classDef-by-name).
+COMPONENT_STYLE = "fill:#eef2ff,stroke:#3730a3,color:#1e1b4b"  # indigo-50   — component (C), light member
+SUBSYSTEM_STYLE = "fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b"  # indigo-200  — subsystem (S), deep container
+ENTITY_STYLE    = "fill:#fdf4ff,stroke:#86198f,color:#581c87"  # fuchsia-50  — entity (E), light member
+SUBDOMAIN_STYLE = "fill:#f5d0fe,stroke:#86198f,color:#581c87"  # fuchsia-200 — subdomain (SD), deep container
+DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     — external dependency (D)
 DOMAIN_SUBDOMAIN_CLASSDEF = f"  classDef subdomain {SUBDOMAIN_STYLE};"
+
+
+def _fill_stroke(style: str) -> dict[str, str]:
+    """`{'fill':…, 'stroke':…}` parsed from a `fill:…,stroke:…,color:…` style string."""
+    d: dict[str, str] = {}
+    for part in style.split(","):
+        k, _, v = part.partition(":")
+        d[k.strip()] = v.strip()
+    return {"fill": d["fill"], "stroke": d["stroke"]}
+
+
+# Per-kind fill/stroke, injected into the viewer so it can recolour elements Mermaid renders with a
+# default (kind-agnostic) palette: an EXPANDED group's CLUSTER frame (a drilled subsystem subgraph /
+# subdomain namespace — defaults to pale yellow, and `style` can't reach a classDiagram namespace) and a
+# FLOW sequence diagram's participant boxes (every `participant` is the same default box, so an entity
+# would read like a component). Derived from the box styles above — one source for every view.
+ELEMENT_TINT = {
+    "component": _fill_stroke(COMPONENT_STYLE),
+    "dep": _fill_stroke(DEP_STYLE),
+    "entity": _fill_stroke(ENTITY_STYLE),
+    "subsystem": _fill_stroke(SUBSYSTEM_STYLE),
+    "subdomain": _fill_stroke(SUBDOMAIN_STYLE),
+}
 
 # The bridge verb split (C→E edges): a component that `persists`/`writes` an entity OWNS that
 # subdomain's data; any other verb (typically `reads`) merely CONSUMES it. Drives the subsystem-card
@@ -455,12 +485,14 @@ def _subdomain_namespace(graph: GraphDict, sdid: str,
     for cid, cname in _child_subdomains(graph, sdid):  # nested child subdomains: collapsed, drillable
         out.append(f'  class {cid}["{_safe_label(cname)} ({_descendant_entity_count(graph, cid)})"]')
     out.append("}")
+    for eid, _ in members:  # tint each focal entity (light fuchsia member); `style` lives OUTSIDE the namespace
+        out.append(f"  style {eid} {ENTITY_STYLE}")
     return out
 
 
 def _subsystem_bridge_lines(graph: GraphDict, member_ids: set[str]) -> list[str]:
     """`classDiagram` lines for the reverse structure↔domain bridge over `member_ids`: every subsystem
-    whose components own/read one of those entities, drawn as a collapsed (amber) box with an owns/reads
+    whose components own/read one of those entities, drawn as a collapsed (indigo) box with an owns/reads
     arrow into the entity. The mirror of the subsystem card's subdomain bridge; shared by the subdomain
     card and the domain edge card. owns = persists/writes, reads = anything else."""
     nodes = graph["nodes"]
@@ -474,7 +506,7 @@ def _subsystem_bridge_lines(graph: GraphDict, member_ids: set[str]) -> list[str]
                 nb_subs.add(sub)
                 bridges.add((sub, d, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
     out: list[str] = []
-    for sub in sorted(nb_subs):  # collapsed neighbour-subsystem boxes (amber, like a subsystem anywhere)
+    for sub in sorted(nb_subs):  # collapsed neighbour-subsystem boxes (indigo, like a subsystem anywhere)
         out.append(f'  class {sub}["{_safe_label(str(nodes[sub]["name"]))}"]')
         out.append(f"  style {sub} {SUBSYSTEM_STYLE}")
     for sub, ent, rel in sorted(bridges):  # bridge arrows: subsystem -> entity (owns / reads)
@@ -488,7 +520,7 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
     member-less box (one per neighbour subdomain, labelled `Name (N)`), the focal subdomain's internal
     relations drawn in full, and one arrow per (focal entity, neighbour subdomain) crossing pair. It
     ALSO draws the structure↔domain bridge in reverse: every subsystem whose components own/read one of
-    these entities is drawn as a collapsed (amber) box with a `owns`/`reads` arrow into that entity —
+    these entities is drawn as a collapsed (indigo) box with a `owns`/`reads` arrow into that entity —
     the mirror of the subsystem card's subdomain bridge. The entity analog of gen_subsystem_card_mermaid
     — each screen stays small no matter the total model size, neighbours stay collapsed, and the viewer
     turns a click on a neighbour subdomain box into that subdomain's card, a neighbour subsystem box into
@@ -538,7 +570,7 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
     for nb in sorted(nb_sds):  # collapsed neighbour-subdomain boxes (member-less, count-labelled)
         n_ent = _descendant_entity_count(graph, nb)
         lines.append(f'  class {nb}["{_safe_label(str(nodes[nb]["name"]))} ({n_ent})"]')
-        lines.append(f"  style {nb} {SUBDOMAIN_STYLE}")  # magenta — same as a subdomain box anywhere else
+        lines.append(f"  style {nb} {SUBDOMAIN_STYLE}")  # fuchsia — same as a subdomain box anywhere else
     lines += _subsystem_bridge_lines(graph, member_ids)  # reverse structure↔domain bridge over DIRECT members
     for e in internal:  # the focal subdomain's own relations, full
         lines.append(_class_relation_line(e))
@@ -842,7 +874,7 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
     for src, sd, rel in sorted(bridges):  # bridge arrows: member -> subdomain (owns / reads)
         lines.append(f"  {src} -->|{rel}| {sd}")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
-    lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
+    lines.append(f"  classDef dep {DEP_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     if bridge_sd:
         lines.append(DOMAIN_SUBDOMAIN_CLASSDEF)
@@ -966,7 +998,7 @@ CONTEXT_CLASSDEFS = [
     "  classDef system fill:#1e1b4b,stroke:#312e81,color:#fff;",
     "  classDef human fill:#fff7ed,stroke:#c2410c,color:#7c2d12;",
     "  classDef svc fill:#eef2ff,stroke:#4338ca,color:#312e81;",
-    "  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;",
+    f"  classDef dep {DEP_STYLE};",
     "  classDef libs fill:#f1f5f9,stroke:#475569,color:#1e293b;",
 ]
 
@@ -1075,12 +1107,8 @@ def _safe_msg(s: str) -> str:
 
 
 def _gp_actor(graph: GraphDict, step: dict[str, Any]) -> str:
-    """The actor that drives a GP step. An explicit `Actor:` line wins (the only reliable signal when
-    a step bundles several UCs with different actors); otherwise fall back to the `Actor` cell of the
-    step's FIRST use case, then to a generic 'Actor'."""
-    explicit = step.get("actor")
-    if isinstance(explicit, str) and explicit.strip():
-        return _safe_msg(explicit)
+    """The actor that drives a GP step = the `Actor` of the use case it realizes (a step IS exactly one
+    use case, so no separate actor signal is needed), falling back to a generic 'Actor'."""
     uc = step.get("uc")
     node = graph["nodes"].get(uc) if isinstance(uc, str) else None
     if node:
@@ -1137,33 +1165,108 @@ def gp_actors(graph: GraphDict) -> list[dict[str, Any]]:
     return out
 
 
-def gen_gp_step_mermaid(graph: GraphDict, gp_id: str) -> str:
-    """Behavioural overlay, Level 2: the components-used diagram for one GP step — the induced
-    subgraph of the C/D/E nodes the step `Touches:`, plus the verbed edges among them. Same node ids
-    and `src -->|verb| dst` shape as the Components view, so the viewer's id/edge bridge resolves a
-    click to its node panel (-> file:line) or its real edge."""
-    step = next((s for s in graph["gp"] if s["id"] == gp_id), None)
-    touched = [t for t in cast("list[str]", step["touches"] if step else [])
-               if t in graph["nodes"] and str(graph["nodes"][t]["kind"]) in GP_STEP_KINDS]
-    ids = set(touched)
-    lines = ["flowchart LR"]
-    for nid in touched:
-        node = graph["nodes"][nid]
-        kind = str(node["kind"])
-        open_b, close_b = GP_SHAPE.get(kind, SHAPE["component"])
-        lines.append(f"  {nid}{open_b}{_safe_label(str(node['name']))}{close_b}:::cy-{nid}")
-        lines.append(f"  class {nid} {kind}")
-    for src, verb, dst in _diagram_edges(graph, None, ids):
-        lines.append(f"  {src} -->|{verb}| {dst}")
-    lines.append(f"  classDef component {COMPONENT_STYLE};")
-    lines.append("  classDef dep fill:#ecfdf5,stroke:#065f46,color:#064e3b;")
-    lines.append("  classDef entity fill:#fdf4ff,stroke:#86198f,color:#581c87;")
+# ── T6 use-case flows: the shared sequence renderer ───────────────────────────────────────────────
+# One renderer drives BOTH the use-case view and the Golden-Path step drill-down (a GP step IS a use
+# case, so it opens that use case's flow). A flow renders two derived views from ONE source — a Mermaid
+# sequenceDiagram (the visual) and a numbered narrative (the readable text) — so the "why" of each step
+# is never authored twice. Element↔element steps pull their verb + why from the backbone edge.
+
+def _edge_index(graph: GraphDict) -> dict[tuple[str, str], tuple[str, str]]:
+    """{(src_id, dst_id): (verb, why)} from the backbone edges — the single source for an element↔
+    element flow step's label/why. First edge for a pair wins (a pair almost always has one)."""
+    idx: dict[tuple[str, str], tuple[str, str]] = {}
+    for e in cast("list[dict[str, Any]]", graph["edges"]):
+        key = (str(e.get("src")), str(e.get("dst")))
+        if key not in idx:
+            idx[key] = (str(e.get("verb") or ""), str(e.get("why") or ""))
+    return idx
+
+
+def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, Any]) -> str:
+    """A flow step's arrow label: the authored phrase if any (actor steps carry one); else the backbone
+    edge's verb for an element↔element step; else a neutral 'uses'."""
+    phrase = str(st.get("phrase") or "").strip()
+    if phrase:
+        return phrase
+    if st.get("src_is_id") and st.get("dst_is_id"):
+        verb, _why = idx.get((str(st["src"]), str(st["dst"])), ("", ""))
+        if verb:
+            return verb
+    return "uses"
+
+
+def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
+    """One use case's flow as a Mermaid sequenceDiagram: the actor + the touched components/deps/
+    entities as lifelines (first-appearance order), each step an ordered message. An element lifeline's
+    participant id IS its node id, so the viewer's id→node bridge resolves a click to its panel."""
+    idx = _edge_index(graph)
+    steps = [s for s in cast("list[dict[str, Any]]", flow.get("steps") or []) if s.get("ok")]
+    pid: dict[str, str] = {}     # raw endpoint token -> Mermaid participant id
+    decls: list[str] = []
+    n_actor = 0
+
+    def ensure(token: str, is_id: bool) -> None:
+        nonlocal n_actor
+        if token in pid:
+            return
+        if is_id:                                  # an element endpoint: a real node -> its name; an
+            # unknown id (the validator blocks the build on it) -> the raw id, still a participant, so a
+            # missing element never mis-reads as a person.
+            label = _safe_msg(str(graph["nodes"][token]["name"])) if token in graph["nodes"] else token
+            pid[token] = token
+            decls.append(f"  participant {token} as {label}")
+        else:                                      # a Role name (actor step) — no node behind it
+            aid = "FA" + str(n_actor)
+            n_actor += 1
+            pid[token] = aid
+            decls.append(f"  actor {aid} as {_safe_msg(token)}")
+
+    for st in steps:
+        ensure(str(st["src"]), bool(st.get("src_is_id")))
+        ensure(str(st["dst"]), bool(st.get("dst_is_id")))
+    lines = ["sequenceDiagram"] + decls
+    for st in steps:
+        lines.append(f"  {pid[str(st['src'])]}->>{pid[str(st['dst'])]}: {_safe_msg(_flow_step_label(idx, st))}")
     return "\n".join(lines)
 
 
-def gp_step_mermaids(graph: GraphDict) -> dict[str, str]:
-    """One step-detail diagram per GP step, keyed by GP id (see gen_gp_step_mermaid)."""
-    return {str(s["id"]): gen_gp_step_mermaid(graph, str(s["id"])) for s in graph["gp"]}
+def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
+    """The readable numbered steps for the side panel — the SAME source as gen_flow_mermaid. Each step
+    carries its from/to display names + (clickable) node ids, the action verb/phrase, the why (from the
+    backbone edge for element↔element steps), and any note. The viewer renders it as the prose view."""
+    idx = _edge_index(graph)
+    out: list[dict[str, Any]] = []
+    for st in cast("list[dict[str, Any]]", flow.get("steps") or []):
+        if not st.get("ok"):
+            continue
+        src, dst = str(st["src"]), str(st["dst"])
+        src_id = src if (st.get("src_is_id") and src in graph["nodes"]) else None
+        dst_id = dst if (st.get("dst_is_id") and dst in graph["nodes"]) else None
+        phrase = str(st.get("phrase") or "").strip()
+        verb, why = phrase, ""
+        if not phrase and st.get("src_is_id") and st.get("dst_is_id"):
+            v, w = idx.get((src, dst), ("", ""))
+            verb, why = (v or "uses"), w
+        elif not phrase:
+            verb = "uses"
+        out.append({
+            "n": st.get("n"),
+            "srcId": src_id, "src": str(graph["nodes"][src]["name"]) if src_id else src,
+            "dstId": dst_id, "dst": str(graph["nodes"][dst]["name"]) if dst_id else dst,
+            "verb": verb, "why": why, "note": str(st.get("note") or "").strip(),
+        })
+    return out
+
+
+def flow_mermaids(graph: GraphDict) -> dict[str, str]:
+    """{uc_id: sequenceDiagram} for every T6 flow — the use-case view and the GP-step drill-down both
+    look a flow up here by its use case id."""
+    return {str(f["uc"]): gen_flow_mermaid(graph, f) for f in graph["flows"]}
+
+
+def flow_narratives(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
+    """{uc_id: [narrative step, …]} for every T6 flow — the readable companion to flow_mermaids."""
+    return {str(f["uc"]): flow_narrative(graph, f) for f in graph["flows"]}
 
 
 def merged_graph(graph: GraphDict, diff: DiffDict | None) -> dict[str, Any]:
@@ -1220,8 +1323,12 @@ __STYLE__
     <button data-view="context">Context</button>
     <button data-view="gp">Golden Path</button>
     <button data-view="container">Subsystems</button>
-    <button data-view="domain">Domain</button>
-    <button data-view="component">Components</button>
+    <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
+
+    <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
+         landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's
+         `component` machinery are kept dormant so the tab can be restored by re-adding this button.
+         Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
   </span>
   <span id="nav">
     <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
@@ -1321,7 +1428,8 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              domain_container_mm: str, domain_sub: dict[str, str],
              domain_edge_cards: dict[str, str], bridge_cards: dict[str, str],
              domain_container_edges: dict[str, list[dict[str, str]]], subdomains: bool,
-             gp_mm: str, gp_steps: dict[str, str], gp_actors_list: list[dict[str, Any]], gp: bool,
+             gp_mm: str, flows_mm: dict[str, str], flows_narr: dict[str, list[dict[str, Any]]],
+             gp_actors_list: list[dict[str, Any]], gp: bool,
              libs_mm: str, folded: list[dict[str, str]],
              repo_root: str, gh_repo: str | None, gh_commit: str | None,
              file_tree: FileTreeNode | None) -> str:
@@ -1348,7 +1456,9 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__MERMAID_BRIDGE_CARD__", json.dumps(bridge_cards))
         .replace("__DOMAIN_CONTAINER_EDGES__", json.dumps(domain_container_edges))
         .replace("__MERMAID_GP__", json.dumps(gp_mm))
-        .replace("__MERMAID_GP_STEP__", json.dumps(gp_steps))
+        .replace("__FLOWS_MM__", json.dumps(flows_mm))
+        .replace("__FLOWS_NARR__", json.dumps(flows_narr))
+        .replace("__ELEMENT_TINT__", json.dumps(ELEMENT_TINT))
         .replace("__GP_ACTORS__", json.dumps(gp_actors_list))
         .replace("__MERMAID_LIBS__", json.dumps(libs_mm))
         .replace("__FOLDED_LIBS__", json.dumps(folded))
@@ -1406,8 +1516,11 @@ def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
     domain_container_edges = gen_domain_container_edges(graph) if subdomains else {}
     gp = has_gp(graph)
     gp_mm = gen_gp_mermaid(graph) if gp else ""
-    gp_steps = gp_step_mermaids(graph) if gp else {}
     gp_actors_list = gp_actors(graph) if gp else []
+    # Flows are independent of the Golden Path — the use-case view needs them even with no GP — so they
+    # are computed from graph["flows"] directly (empty when the map has no T6 section).
+    flows_mm = flow_mermaids(graph)
+    flows_narr = flow_narratives(graph)
     libs_mm = gen_libs_mermaid(graph)
     folded = folded_libs(graph)
     # File-browser pane: the mapped repo's real tree (rooted at the same repo_root the source links
@@ -1418,7 +1531,7 @@ def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
                     domain_container_mm, domain_sub, domain_edge_cards, bridge_cards, domain_container_edges, subdomains,
-                    gp_mm, gp_steps, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit, file_tree)
+                    gp_mm, flows_mm, flows_narr, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit, file_tree)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
 

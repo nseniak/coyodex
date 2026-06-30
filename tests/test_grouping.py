@@ -299,8 +299,8 @@ def make_domain_map(cards: str | None = None) -> str:
 
 
 def make_gp_map() -> str:
-    """A two-step Golden Path: GP1 (UC1, actor Andy) touches C1+C2; GP2 (UC2, actor Adam) touches
-    C2+D1. Exercises the GP sequence (actors from UCs) and the per-step induced subgraph."""
+    """A two-step Golden Path (GP1=UC1 actor Andy, GP2=UC2 actor Adam) + the two use-case T6 flows.
+    Exercises the GP overview sequence (actors from the UCs) and each use case's flow sequence."""
     return (
         "## Use cases\n"
         "| ID | Use case | Actor | Trigger → Outcome |\n"
@@ -318,12 +318,15 @@ def make_gp_map() -> str:
         "| **D1** | Cache | store | speed | env | V |\n\n"
         "## Golden Path\n"
         "**GP1 — Submit order** *(UC1)*\n"
-        "STORY: Andy submits.\n"
-        "UNDER THE HOOD: C1 calls C2.\n"
-        "`Touches:` C1, C2\n\n"
         "**GP2 — Approve order** *(UC2)*\n"
-        "STORY: Adam approves.\n"
-        "`Touches:` C2, D1\n\n"
+        "why: needs the order from GP1\n\n"
+        "## T6 — Use-case flows\n"
+        "**UC1 — Submit order**\n"
+        "1. Andy → C1 : submits the order\n"
+        "2. C1 → C2\n\n"
+        "**UC2 — Approve order**\n"
+        "1. Adam → C2 : approves the order\n"
+        "2. C2 → D1\n\n"
         "### edges\n"
         "| From | Verb | To | Why | Where |\n"
         "|---|---|---|---|---|\n"
@@ -332,27 +335,26 @@ def make_gp_map() -> str:
     )
 
 
-def make_gp_explicit_actor_map(actor_line: str = "Actor: Org admin") -> str:
-    """GP1 bundles UC21 (End user) + UC22; without an Actor line the lane derives from the first UC
-    = 'End user'. The `Actor:` line overrides it. `actor_line` lets a test inject a bad/blank value
-    (mirrors the real mcpolis GP1, where the admin signs in via an end-user sign-in use case)."""
+def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
+    """A Golden Path step whose use case's actor matches a defined Role, so gp_actors can join the
+    lifeline to the Roles table (wants + kind). The T6 flow opens with an actor step; `flow_actor` lets a
+    test inject a bad value to exercise the flow actor-step Role check."""
     return (
         "## Roles (actors)\n"
         "| Role | Kind | What they want | Use cases they drive |\n"
         "|---|---|---|---|\n"
-        "| **Org admin** | human | manage | UC22 |\n"
-        "| **End user** | human | use | UC21, UC22 |\n\n"
+        "| **Org admin** | human | manage | UC22 |\n\n"
         "## Use cases\n"
         "| ID | Use case | Actor | Trigger → Outcome |\n"
         "|---|---|---|---|\n"
-        "| **UC21** | Sign in | End user | a -> b |\n"
-        "| **UC22** | Create org | End user / Org admin | a -> b |\n\n"
+        "| **UC22** | Create org | Org admin | a -> b |\n\n"
         "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
         "| **C1** | A | x | f |  |\n\n"
         "## Golden Path\n"
-        "**GP1 — Admin signs in and creates the org** *(UC21, UC22)*\n"
-        + (actor_line + "\n" if actor_line else "")
-        + "STORY: x\n`Touches:` C1\n"
+        "**GP1 — Admin creates the org** *(UC22)*\n\n"
+        "## T6 — Use-case flows\n"
+        "**UC22 — Create org**\n"
+        f"1. {flow_actor} → C1 : creates the org\n"
     )
 
 
@@ -406,6 +408,33 @@ def test_parser_subsystem_nodes_and_edges() -> None:
     g = parse_map(make_grouped_map("agent"))
     assert {k for k, v in g["nodes"].items() if v["kind"] == "subsystem"} == {"S1", "S2"}
     assert any(e["src"] == "C1" and e["dst"] == "C2" for e in g["edges"])
+
+
+# --- default subsystem (always expose a subsystem altitude) ---------------------
+def test_default_subsystem_injected_when_ungrouped() -> None:
+    # A map with components but no Subsystem table gets ONE synthetic subsystem named after the project,
+    # with every component reparented under it — so the component-level view always sits under a
+    # subsystem (the flat Components map is no longer the only home for components).
+    g = parse_map(make_ungrouped_map())  # title 'X', one component C1, no S table
+    subs = {k: v for k, v in g["nodes"].items() if v["kind"] == "subsystem"}
+    assert set(subs) == {build_graph.DEFAULT_SUBSYSTEM_ID}
+    assert subs[build_graph.DEFAULT_SUBSYSTEM_ID]["name"] == "X"
+    assert g["nodes"]["C1"]["parent"] == build_graph.DEFAULT_SUBSYSTEM_ID
+    assert gen_viewer.has_grouping(g) is True
+
+
+def test_no_default_subsystem_when_already_grouped() -> None:
+    # A map that already groups its components is left untouched — no S0, the real subsystems stand.
+    g = parse_map(make_grouped_map("proper"))
+    assert build_graph.DEFAULT_SUBSYSTEM_ID not in g["nodes"]
+    assert {k for k, v in g["nodes"].items() if v["kind"] == "subsystem"} == {"S1", "S2"}
+
+
+def test_no_default_subsystem_for_pure_domain_map() -> None:
+    # No components -> nothing to group -> no synthetic subsystem (a pure domain map stays ungrouped).
+    g = parse_map(make_domain_map())
+    assert build_graph.DEFAULT_SUBSYSTEM_ID not in g["nodes"]
+    assert not any(v["kind"] == "subsystem" for v in g["nodes"].values())
 
 
 # --- card generators (gen_viewer) -----------------------------------------------
@@ -754,33 +783,11 @@ def test_validator_balanced_fence_not_flagged() -> None:
     assert code == 0 and "Unterminated code fence" not in out, out
 
 
-def make_gp_far_touches_map() -> str:
-    """A GP step whose `Touches:` line sits more than 8 lines below the heading (a long STORY / UNDER
-    THE HOOD). The validator's body window must reach it (matching the parser), not stop at 8 lines and
-    falsely report a missing Touches (Fix D)."""
-    filler = "\n".join(f"UNDER THE HOOD: detail {k}" for k in range(1, 9))
-    return (
-        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
-        "| **UC1** | Search | Shopper | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | App | x | f |  |\n\n"
-        "## Golden Path\n**GP1 — Search** *(UC1)*\nSTORY: x\n" + filler + "\n`Touches:` UC1, C1\n"
-    )
-
-
-def test_validator_gp_touches_found_beyond_old_window() -> None:
-    # The Touches line is > 8 lines below the heading; the validator must still find it (parser-aligned
-    # window), not falsely fail. Regression for the gp_bodies 8-line-cap divergence.
-    code, out = run_validator(make_gp_far_touches_map())
-    assert code == 0, out
-    assert "missing a Touches" not in out, out
-
-
-def test_validator_gp_missing_touches_still_fails() -> None:
-    # Widening the body window must not disable the check: a step with NO Touches line anywhere still fails.
-    md = make_gp_far_touches_map().replace("\n`Touches:` UC1, C1\n", "\n")
+def test_validator_gp_missing_uc_tag_fails() -> None:
+    # A Golden Path step IS a use case, so it must name one: a step with no `*(UCn)*` tag fails.
+    md = make_gp_map().replace("**GP1 — Submit order** *(UC1)*", "**GP1 — Submit order**")
     code, out = run_validator(md)
-    assert code == 1 and "missing a Touches" in out, out
+    assert code == 1 and "missing a `*(UCn)*` use-case tag" in out, out
 
 
 def test_validator_rejects_empty_verb() -> None:
@@ -865,6 +872,50 @@ def test_render_bakes_nested_drill_data() -> None:
         html = out.read_text(encoding="utf-8")
         assert '"S2>S3"' in html and '"S1>S3"' in html
         assert '"S1>S2"' not in html
+
+
+def make_report_map() -> str:
+    """A minimal change-impact report: C2 modified, C9 added (C9 is not in the base map). Drives the
+    diff overlay — its base→new header + a `change` table are what build_diff parses."""
+    return (
+        "# Change impact: abc → def\n\n"
+        "| Element | Change | Name | Kind | Note |\n"
+        "|---|---|---|---|---|\n"
+        "| **C2** | modified | Engine | component | tweaked |\n"
+        "| **C9** | added | NewWorker | component | new |\n"
+    )
+
+
+def test_render_has_no_components_tab_but_keeps_generators() -> None:
+    # The flat Components map is no longer a tab; its generators stay baked so it can be restored.
+    with tempfile.TemporaryDirectory() as d:
+        md = Path(d) / "project-map.md"
+        md.write_text(make_grouped_map("proper"), encoding="utf-8")
+        out = Path(d) / "project-map.html"
+        r = subprocess.run([*RENDER, str(md), str(out)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        html = out.read_text(encoding="utf-8")
+        assert 'data-view="component"' not in html        # the Components tab button is gone
+        assert 'data-view="container"' in html            # Subsystems remains
+        assert "MERMAID_BASE" in html and "bindComponent" in html  # generators kept dormant (restorable)
+
+
+def test_render_diff_overlay_wired_to_subsystems() -> None:
+    # With a change-impact report the diff overlay is armed on the Subsystems views (not the removed
+    # Components tab): HAS_DIFF + DIFF_STATE are baked, and the viewer lands on the Subsystems overview.
+    with tempfile.TemporaryDirectory() as d:
+        md = Path(d) / "project-map.md"
+        md.write_text(make_grouped_map("proper"), encoding="utf-8")
+        report = Path(d) / "report.md"
+        report.write_text(make_report_map(), encoding="utf-8")
+        out = Path(d) / "project-map.html"
+        r = subprocess.run([*RENDER, str(md), str(out), str(report)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        html = out.read_text(encoding="utf-8")
+        assert "const HAS_DIFF = true;" in html
+        assert '"C2": "modified"' in html and '"C9": "added"' in html
+        assert "(HAS_DIFF && HAS_GROUPING) ? 'container' : 'context'" in html  # lands on Subsystems for a diff
+        assert 'data-view="component"' not in html        # never resurrects the flat map
 
 
 # --- domain cards (T5) ----------------------------------------------------------
@@ -1681,12 +1732,22 @@ def test_validator_no_orphan_warning_when_dep_wired() -> None:
 
 
 # --- Golden Path (GP) -----------------------------------------------------------
-def test_parser_gp_captures_uc_and_touches() -> None:
+def test_parser_gp_captures_uc_and_why() -> None:
     g = parse_map(make_gp_map())
     steps = {s["id"]: s for s in g["gp"]}
     assert steps["GP1"]["uc"] == "UC1" and steps["GP2"]["uc"] == "UC2"
-    assert steps["GP1"]["touches"] == ["C1", "C2"]
-    assert steps["GP2"]["touches"] == ["C2", "D1"]
+    assert steps["GP1"]["why"] == "" and steps["GP2"]["why"] == "needs the order from GP1"
+    assert "touches" not in steps["GP1"]  # the step no longer carries its own touches/story
+
+
+def test_parser_captures_use_case_flows() -> None:
+    g = parse_map(make_gp_map())
+    flows = {cast(str, f["uc"]): f for f in g["flows"]}
+    assert set(flows) == {"UC1", "UC2"}
+    s1 = cast("list[dict[str, object]]", flows["UC1"]["steps"])
+    assert s1[0]["src"] == "Andy" and not s1[0]["src_is_id"] and s1[0]["phrase"] == "submits the order"
+    assert s1[1]["src"] == "C1" and s1[1]["dst"] == "C2" and s1[1]["src_is_id"] and s1[1]["dst_is_id"]
+    assert all(st["ok"] for st in s1)
 
 
 def test_gen_gp_mermaid_black_box_sequence() -> None:
@@ -1706,7 +1767,7 @@ def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
     md = (
         "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
         "| **C1** | A | x | f |  |\n\n"
-        "## Golden Path\n**GP1 — Do a thing**\nSTORY: x\n`Touches:` C1\n"
+        "## Golden Path\n**GP1 — Do a thing**\n"
     )
     mm = gen_viewer.gen_gp_mermaid(parse_map(md))
     assert "actor GPA0 as Actor" in mm and "GPA0->>GPSYS: Do a thing" in mm
@@ -1715,14 +1776,14 @@ def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
 def test_gp_actors_links_roles_and_steps() -> None:
     # gp_actors mirrors the diagram's participant order/ids and joins each actor to its Roles-table
     # entry (wants + kind) and the steps it drives (stepIdx = the message positions to highlight).
-    g = parse_map(make_gp_explicit_actor_map("Actor: Org admin"))
+    g = parse_map(make_gp_role_actor_map())
     actors = gen_viewer.gp_actors(g)
     assert len(actors) == 1
     a = actors[0]
     assert a["aid"] == "GPA0" and a["name"] == "Org admin"
     assert a["kind"] == "human" and a["wants"] == "manage"   # joined from the Roles table by name
     assert a["stepIdx"] == [0]
-    assert a["steps"] == [{"id": "GP1", "title": "Admin signs in and creates the org"}]
+    assert a["steps"] == [{"id": "GP1", "title": "Admin creates the org"}]
 
 
 def test_gp_actors_without_matching_role_has_blank_wants() -> None:
@@ -1748,8 +1809,8 @@ def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
         "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
         "| **C1** | A | x | f |  |\n\n"
         "## Golden Path\n"
-        "**GP1 — Sign in and create** *(UC1, UC2)*\nSTORY: x\n`Touches:` C1\n\n"
-        "**GP2 — Renewal flow** *(UC3 follow-on)*\nSTORY: x\n`Touches:` C1\n"
+        "**GP1 — Sign in and create** *(UC1, UC2)*\n\n"
+        "**GP2 — Renewal flow** *(UC3 follow-on)*\n"
     )
     g = parse_map(md)
     steps = {s["id"]: s for s in g["gp"]}
@@ -1760,45 +1821,75 @@ def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
     assert "as Actor" not in mm                  # ...not the generic fallback
 
 
-def test_gp_explicit_actor_overrides_first_uc() -> None:
-    # An `Actor:` line is the reliable signal for a multi-UC step: it wins over the first UC's actor.
-    g = parse_map(make_gp_explicit_actor_map("Actor: Org admin"))
-    step = g["gp"][0]
-    assert step["actor"] == "Org admin"
-    assert gen_viewer._gp_actor(g, step) == "Org admin"      # explicit wins over UC21's 'End user'
-    mm = gen_viewer.gen_gp_mermaid(g)
-    assert "actor GPA0 as Org admin" in mm and "End user" not in mm
+def test_gp_actor_is_use_case_actor() -> None:
+    # A step IS one use case, so its driving actor is that use case's Actor cell (no separate signal).
+    g = parse_map(make_gp_role_actor_map())
+    assert gen_viewer._gp_actor(g, g["gp"][0]) == "Org admin"
 
 
-def test_gp_without_actor_falls_back_to_first_uc() -> None:
-    g = parse_map(make_gp_explicit_actor_map(""))            # no Actor line
-    assert g["gp"][0]["actor"] is None
-    assert gen_viewer._gp_actor(g, g["gp"][0]) == "End user"  # falls back to first UC (UC21)
-
-
-def test_validator_accepts_defined_role_actor() -> None:
-    code, out = run_validator(make_gp_explicit_actor_map("Actor: Org admin"))
+def test_validator_accepts_defined_flow_actor() -> None:
+    # A flow actor step whose Role is defined in the Roles table validates clean.
+    code, out = run_validator(make_gp_role_actor_map())
     assert code == 0, out
 
 
-def test_validator_rejects_undefined_role_actor() -> None:
-    code, out = run_validator(make_gp_explicit_actor_map("Actor: Sysadmin"))
+def test_validator_rejects_undefined_flow_actor() -> None:
+    # A flow actor step naming an undefined Role fails (the actor endpoint can't resolve).
+    code, out = run_validator(make_gp_role_actor_map("Sysadmin"))
     assert code == 1 and "not a defined Role" in out, out
 
 
-def test_gen_gp_step_mermaid_induced_subgraph() -> None:
-    # Level 2: each step's diagram is the induced subgraph of the nodes it touches + the edges among
-    # them — and nothing the step does not touch.
-    steps = gen_viewer.gp_step_mermaids(parse_map(make_gp_map()))
-    s1 = steps["GP1"]
-    assert "flowchart" in s1
-    assert "class C1 component" in s1 and "class C2 component" in s1
-    assert "C1 -->|calls| C2" in s1                  # the intra-step edge is drawn
-    assert "D1" not in s1                            # GP1 does not touch the dep
-    s2 = steps["GP2"]
-    assert "class C2 component" in s2 and "class D1 dep" in s2
-    assert "C2 -->|reads| D1" in s2                  # component->dep edge, with the entity-style classDef present
-    assert "C1" not in s2                            # GP2 does not touch C1
+def test_flow_mermaid_sequence_from_use_case() -> None:
+    # A use case's flow renders as a sequenceDiagram: the actor + the touched elements as lifelines,
+    # each step a message whose label is the actor step's authored phrase or the backbone edge's verb.
+    mm = gen_viewer.flow_mermaids(parse_map(make_gp_map()))
+    s1 = mm["UC1"]
+    assert s1.startswith("sequenceDiagram")
+    assert "actor FA0 as Andy" in s1                      # the actor lifeline
+    assert "participant C1 as Gateway" in s1 and "participant C2 as Engine" in s1
+    assert "FA0->>C1: submits the order" in s1           # actor step -> the authored phrase
+    assert "C1->>C2: calls" in s1                         # element step -> verb from the backbone edge
+    s2 = mm["UC2"]
+    assert "C2->>D1: reads" in s2
+
+
+def test_flow_narrative_derives_why_from_edge() -> None:
+    # The readable narrative pulls each element↔element step's why from the backbone edge (one source).
+    narr = gen_viewer.flow_narratives(parse_map(make_gp_map()))["UC1"]
+    step2 = next(s for s in narr if s["n"] == 2)
+    assert step2["srcId"] == "C1" and step2["dstId"] == "C2"
+    assert step2["verb"] == "calls" and step2["why"] == "reach engine"
+
+
+def test_parse_flow_step_variants() -> None:
+    pf = schema_v1.parse_flow_step
+    s = pf(1, "Member → C2 : opens the page")          # actor step: phrase kept, endpoints split
+    assert s.ok and s.src == "Member" and not s.src_is_id and s.dst == "C2" and s.dst_is_id
+    assert s.phrase == "opens the page"
+    s = pf(2, "C5 → E3 · members list")                # element step: note after '·', no phrase
+    assert s.ok and s.src == "C5" and s.dst == "E3" and s.note == "members list" and s.phrase == ""
+    assert pf(3, "C1 -> C2").ok                          # ASCII arrow works
+    s = pf(4, "Member → C2 : clicks -> then: opens")   # arrow/colon inside the phrase don't confuse it
+    assert s.ok and s.src == "Member" and s.dst == "C2" and s.phrase == "clicks -> then: opens"
+    assert not pf(5, "C1 does a thing").ok               # no arrow -> malformed
+    assert not pf(6, "C1 → C2 → C3").ok                  # F1: >1 arrow -> a step is one interaction
+
+
+def test_validator_rejects_multi_arrow_flow_step() -> None:
+    # F1 regression: a step bundling several interactions (>1 arrow) must fail even on a roleless map.
+    md = make_gp_map().replace("2. C1 → C2\n", "2. C1 → C2 → D1\n")
+    code, out = run_validator(md)
+    assert code == 1 and "from → to" in out, out
+
+
+def test_validator_rejects_duplicate_uc_flow() -> None:
+    # F2 regression: two flow blocks for one use case would silently overwrite in the render -> fail.
+    md = make_gp_map().replace(
+        "## T6 — Use-case flows\n",
+        "## T6 — Use-case flows\n**UC1 — Dup flow**\n1. Andy → C1 : dup\n\n",
+    )
+    code, out = run_validator(md)
+    assert code == 1 and "more than one T6 flow" in out, out
 
 
 def test_validator_gp_map_clean() -> None:

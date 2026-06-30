@@ -14,9 +14,11 @@ const MERMAID_DOMAIN_SUB = __MERMAID_DOMAIN_SUB__;             // per-subdomain 
 const MERMAID_DOMAIN_EDGE_CARD = __MERMAID_DOMAIN_EDGE_CARD__; // subdomain edge pair: 'A>B' -> two-subdomain classDiagram
 const MERMAID_BRIDGE_CARD = __MERMAID_BRIDGE_CARD__;           // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
 const DOMAIN_CONTAINER_EDGES = __DOMAIN_CONTAINER_EDGES__;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
-const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): black-box sequence diagram
-const MERMAID_GP_STEP = __MERMAID_GP_STEP__;      // GP step (Level 2): GP-id -> components-used sub-diagram
+const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): use cases as a black-box sequence
+const FLOWS_MM = __FLOWS_MM__;                    // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
+const FLOWS_NARR = __FLOWS_NARR__;                // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
 const GP_ACTORS = __GP_ACTORS__;                  // Golden-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
+const ELEMENT_TINT = __ELEMENT_TINT__;            // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
 const MERMAID_LIBS = __MERMAID_LIBS__;            // Context "Libraries" drill: System + the folded in-process deps
 const FOLDED_LIBS = __FOLDED_LIBS__;              // [{id,name,type}] folded out of Context into the Libraries box
 const LIBS_ID = 'LIBS';                           // synthetic id of that collapsed box (matches gen_viewer.LIBS_ID)
@@ -38,6 +40,9 @@ const HOVER = 'drop-shadow(0 0 3px #60a5fa)';  // softer hover glow: signals "cl
 const GP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Golden-Path selection: just a touch stronger than HOVER (not the heavy HILITE)
 const DIM = '0.15';  // opacity for non-focused elements
 const EMPTY_PANEL = '<p class="empty">Click a node or edge to see details.</p>';
+// Shown when a use case has no T6 flow yet, so the flow view still renders (the panel explains it)
+// instead of degrading to the generic "could not be rendered" card.
+const EMPTY_FLOW_MM = 'sequenceDiagram\n  participant System\n  Note over System: No T6 flow recorded';
 
 // `class.hideEmptyMembersBox`: a member-less class renders as a plain box (no empty UML compartments),
 // so the subdomain card's collapsed neighbour boxes (subsystems/subdomains) read as simple boxes, like
@@ -68,7 +73,7 @@ const mdInline = (s) => esc(String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$
   .replace(/`([^`]+)`/g, '<code>$1</code>')
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
-let mode = 'base';
+let mode = HAS_DIFF ? 'diff' : 'base';  // a diff render arms the change-impact overlay from the start
 let mainPz = null;     // svg-pan-zoom for the current diagram
 let rc = 0;
 let renderSeq = 0;     // bumped each render(); an in-flight render bails if it's no longer current
@@ -79,7 +84,8 @@ let downX = 0, downY = 0;  // last mousedown, to tell a real click from a drag-p
 const COMP_LOOKUP = {};
 for (const e of GRAPH.edges || []) (COMP_LOOKUP[e.src + '>' + e.dst] ||= []).push(e);
 
-// Golden Path step lookup 'GP1' -> step record (id, title, story, under_the_hood, touches, uc).
+// Golden Path step lookup 'GP1' -> step record (id, title, uc, why). The step IS a use case; its
+// detailed actions live in that use case's T6 flow (FLOWS_MM / FLOWS_NARR), opened when the step drills.
 const GP_BY_ID = {};
 for (const s of GRAPH.gp || []) GP_BY_ID[s.id] = s;
 // Golden Path actor lookups: by participant id (GPA0) and by the step it drives (GP1 -> actor record).
@@ -87,12 +93,19 @@ const GP_ACTOR_BY_AID = {};
 for (const a of GP_ACTORS) GP_ACTOR_BY_AID[a.aid] = a;
 const GP_ACTOR_OF_STEP = {};
 for (const a of GP_ACTORS) for (const st of a.steps) GP_ACTOR_OF_STEP[st.id] = a;
+// Reverse traceability ("Used in UC"): element id -> Set of use-case ids whose T6 flow steps through
+// it. The backward view of the flows (derived here, never authored), shown as links on a node's panel.
+const USES_BY_NODE = {};
+for (const f of GRAPH.flows || []) {
+  for (const st of (f.steps || [])) {
+    for (const end of [st.src, st.dst]) {
+      if (GRAPH.nodes[end]) (USES_BY_NODE[end] ||= new Set()).add(f.uc);
+    }
+  }
+}
 
-// When the GP-step panel's "Locate in full map" link navigates to the Components view, the set of ids
-// to spotlight there is stashed here and applied once that view has rendered (then cleared).
-let pendingFocus = null;
-// When a file-browser click navigates to another view to reveal a node, the node id to select is
-// stashed here and applied once that view has rendered (the same deferred-action pattern as pendingFocus).
+// When a click navigates to another view to reveal a node (the file browser, a flow element link, the
+// change-impact summary), the node id to select is stashed here and applied once that view has rendered.
 let pendingSelect = null;
 
 // --- scene ----------------------------------------------------------------------
@@ -128,6 +141,24 @@ function focusNode(scene, id) {
 }
 function focusEdge(scene, e0) {
   applyFocus(scene, (nid) => nid === e0.src || nid === e0.dst, (e) => e.src === e0.src && e.dst === e0.dst);
+}
+// An EXPANDED group (a drilled subsystem / subdomain) renders as a Mermaid CLUSTER frame, which
+// defaults to pale yellow. Tint each cluster to its family so a group reads the SAME colour collapsed (a
+// box) or expanded (a frame). The cluster's DOM id ends with its element id (`<diagramId>-S1` / `-SD1`);
+// one pass covers flowchart subgraphs (subsystem cards) AND classDiagram namespaces (subdomain cards +
+// the mixed S×SD bridge), where Mermaid's `style` directive can't reach the frame.
+function tintClusters(root) {
+  root.querySelectorAll('g.cluster').forEach((g) => {
+    const m = (g.id || '').match(/-([A-Za-z]+\d+)$/);
+    const node = m && GRAPH.nodes[m[1]];
+    const tint = node && ELEMENT_TINT[node.kind];
+    if (!tint) return;
+    const rect = g.querySelector('rect');
+    if (rect) {
+      rect.style.setProperty('fill', tint.fill, 'important');
+      rect.style.setProperty('stroke', tint.stroke, 'important');
+    }
+  });
 }
 function clearFocus(scene) {
   for (const nid in scene.nodeEls) scene.nodeEls[nid].style.opacity = '';
@@ -178,6 +209,16 @@ function groupMembersHtml(id) {
   }).join('');
   return '<dt>Contains</dt>' + items;
 }
+// The "Used in UC" backward view for an element: the use cases whose T6 flow steps through it, as
+// links into each use case's flow. Derived from USES_BY_NODE; '' when no flow touches this element.
+function usedInHtml(id) {
+  const set = USES_BY_NODE[id];
+  if (!set || !set.size) return '';
+  const links = [...set].sort().map((uc) =>
+    '<a href="#" class="ucref" data-uc="' + esc(uc) + '">'
+    + esc(GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc) + '</a>').join(', ');
+  return '<dt>Used in</dt><dd>' + links + '</dd>';
+}
 function showNode(id) {
   const n = GRAPH.nodes[id];
   if (!n) return;
@@ -203,9 +244,12 @@ function showNode(id) {
     : `<div class="src">${ref}</div>`;
   panel.innerHTML = `<h2>${esc(n.name)}</h2>`
     + `<div class="badges"><span class="badge kind">${n.kind}</span>${chg}</div>`
-    + `<dl>${rows}${attrs}${groupMembersHtml(id)}</dl>${src}`;
+    + `<dl>${rows}${attrs}${usedInHtml(id)}${groupMembersHtml(id)}</dl>${src}`;
   const sl = panel.querySelector('.srclink');
   if (sl) sl.addEventListener('click', () => openSource(n));
+  panel.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
+  }));
 }
 
 function showEdge(e) {
@@ -221,6 +265,14 @@ function showEdge(e) {
       + (e.fk_side === 'dst' ? ' <span class="muted">(back-reference)</span>' : '')
     : (e.how ? mdInline(e.how) : '');
   const implRow = impl ? '<dt>Implemented by</dt><dd>' + impl + '</dd>' : '';
+  // The edge's `where` source ref — clickable (opens in editor / on GitHub) when it's an in-repo path,
+  // exactly like a node's source link; plain text for an off-repo URL. (Was a non-clickable div.)
+  const wn = e.where ? whereNode(e.where) : null;
+  const srcHtml = !wn ? ''
+    : (localRef(wn.file)
+        ? '<button type="button" class="src srclink" title="Open in editor or on GitHub">'
+          + esc(cleanPath(wn.file, wn.line) + (wn.line ? ':' + wn.line : '')) + '</button>'
+        : '<div class="src">' + esc(e.where) + '</div>');
   panel.innerHTML = '<h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
     + '<div class="badges"><span class="badge edge">' + esc(e.verb) + '</span>' + kindBadge + '</div>'
     + '<dl>'
@@ -228,7 +280,9 @@ function showEdge(e) {
     + card
     + implRow
     + '</dl>'
-    + (e.where ? '<div class="src">' + esc(e.where) + '</div>' : '');
+    + srcHtml;
+  const sl = panel.querySelector('.srclink');
+  if (sl) sl.addEventListener('click', () => openSource(wn));
 }
 
 // Context-edge panel: actor→system shows the role's wants; system→dep shows what it's used for
@@ -311,31 +365,188 @@ function showDomainContainerEdge(a, b) {
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no relations recorded</p>');
 }
 
-// --- Golden Path panels ---------------------------------------------------------
-// The C/D/E ids a step touches that actually exist as graph nodes — the Level-2 subgraph + spotlight set.
-function gpTouched(s) {
-  return new Set((s && s.touches || []).filter((t) => GRAPH.nodes[t]
-    && ['component', 'dep', 'entity'].includes(GRAPH.nodes[t].kind)));
+// --- Golden Path + use-case flow panels -----------------------------------------
+// A use case's flow as a readable numbered list — the SAME source as its sequence diagram (FLOWS_MM),
+// so the "why" of each step is shown once and never drifts. Each element endpoint links to its node;
+// the why (from the backbone edge) and any flow note are inline. '' when the use case has no T6 flow.
+function flowNarrativeHtml(uc) {
+  const steps = FLOWS_NARR[uc] || [];
+  if (!steps.length) return '';
+  const end = (label, id) => id
+    ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
+  const items = steps.map((st) =>
+    '<li><span class="flowact">' + end(st.src, st.srcId) + ' <em>' + esc(st.verb) + '</em> ' + end(st.dst, st.dstId) + '</span>'
+    + (st.why ? '<span class="floww"> — ' + mdInline(st.why) + '</span>' : '')
+    + (st.note ? '<span class="flown"> (' + mdInline(st.note) + ')</span>' : '') + '</li>').join('');
+  return '<ol class="flow">' + items + '</ol>';
 }
-// One step's narrative (actor · story · under the hood) + a link back to the full Components map with
-// this step's touched nodes spotlighted. Used as the Level-2 default panel AND when a step is selected
-// at Level 1, so a plain click reads the same detail without drilling. The driving actor comes from
-// GP_ACTOR_OF_STEP (the same mapping that builds the diagram), so it always matches the lifeline.
+// Wire the narrative's element links: a click locates that node in its home view (its subsystem card,
+// domain card, etc.) and selects it — the same routing the file browser uses.
+function bindFlowRefs() {
+  panel.querySelectorAll('a.flowref').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    selectFromTree(a.getAttribute('data-id'));
+  }));
+}
+// The use-case flow panel — shared by the Golden-Path step drill-down and the use-case view: the use
+// case (name + driving actor) + the numbered narrative (the readable twin of the sequence diagram drawn
+// at this altitude); each step's element links locate that element in its home view.
+function showFlowPanel(uc, title, why) {
+  const ucNode = uc ? GRAPH.nodes[uc] : null;
+  const ucName = ucNode ? ucNode.name : (uc || '');
+  const f = (ucNode && ucNode.fields) || {};
+  const actor = f.Actor || f.actor || '';
+  const narr = flowNarrativeHtml(uc);
+  panel.innerHTML = '<h2>' + esc(title || ucName) + '</h2>'
+    + '<div class="badges">' + (ucName ? '<span class="badge kind">' + esc(ucName) + '</span>' : '')
+      + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
+    + (why ? '<dl><dt>Why here</dt><dd>' + mdInline(why) + '</dd></dl>' : '')
+    + (narr || '<p class="empty">No T6 flow recorded for this use case.</p>');
+  // Each step's element links locate that element in its home view; there is no flat full-map view to
+  // spotlight the whole flow on, so the "Locate in full map" link is gone with the Components tab.
+  bindFlowRefs();
+}
+// A Golden Path step opens its use case's flow (the step IS that use case). Title = the step title.
 function showGPStep(gpId) {
   const s = GP_BY_ID[gpId];
   if (!s) { panel.innerHTML = EMPTY_PANEL; return; }
-  const actor = (GP_ACTOR_OF_STEP[gpId] || {}).name || '';
-  const ucName = s.uc ? (GRAPH.nodes[s.uc] ? GRAPH.nodes[s.uc].name : s.uc) : '';  // use-case name, not its id
-  panel.innerHTML = '<h2>' + esc(s.title || s.id) + '</h2>'
-    + '<div class="badges">' + (ucName ? '<span class="badge kind">' + esc(ucName) + '</span>' : '')
-      + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
-    + '<dl>'
-    + (s.story ? '<dt>Story</dt><dd>' + mdInline(s.story) + '</dd>' : '')
-    + (s.under_the_hood ? '<dt>Under the hood</dt><dd>' + mdInline(s.under_the_hood) + '</dd>' : '')
-    + '</dl>'
-    + '<a class="locate" href="#">Locate in full map →</a>';
-  const link = panel.querySelector('.locate');
-  if (link) link.addEventListener('click', (ev) => { ev.preventDefault(); pendingFocus = gpTouched(s); go({ kind: 'component' }); });
+  showFlowPanel(s.uc, s.title || s.id, s.why);
+}
+// The use-case view default panel (reached directly, not via a Golden Path position).
+function showUseCase(uc) {
+  showFlowPanel(uc, GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc, '');
+}
+// The flow views (gpstep / usecase) are sequence diagrams — wire them like every other diagram, using
+// the same sequence-diagram focus machinery the Golden Path uses (gpHighlight/gpFocus over element
+// sets, since a participant is split across top box / label / lifeline / bottom mirror). Element
+// participants select (focus to their messages + the other ends) / ⌘-open their source (component &
+// entity leaves) / tooltip like nodes; message arrows select (the backbone edge, or the actor step) / focus / tooltip
+// like edges; the role actor gets a meaning tooltip. message[i] <-> FLOWS_NARR[uc][i] (gen_flow_mermaid
+// emits one message per ok step, in the order flow_narrative lists them).
+function bindFlow(uc) {
+  const scene = mainScene, root = scene.root;
+  const steps = FLOWS_NARR[uc] || [];
+
+  // Each participant's DOM parts (top box / lifeline / bottom mirror / label), keyed by the Mermaid
+  // `name` attribute (== the participant id) — the one key BOTH box participants and the actor figure
+  // carry (data-id sits only on the figure + lifelines). Labels carry no name, so match them by text.
+  const elementIds = new Set();
+  for (const st of steps) { if (st.srcId) elementIds.add(st.srcId); if (st.dstId) elementIds.add(st.dstId); }
+  const labelEls = [...root.querySelectorAll('text.actor-box, text.actor-man')];
+  const partsById = {};
+  for (const id of elementIds) {
+    if (!GRAPH.nodes[id]) continue;
+    const sel = '[name="' + id + '"]';
+    const parts = [root.querySelector('.actor-top' + sel), root.querySelector('line.actor-line' + sel),
+                   root.querySelector('.actor-bottom' + sel)].filter(Boolean);
+    for (const t of labelEls) if ((t.textContent || '').trim() === GRAPH.nodes[id].name) parts.push(t);
+    if (!parts.length) continue;
+    partsById[id] = parts;
+    for (const el of parts) scene.dimEls.push(el);
+    // colour the box by kind — every Mermaid `participant` is the same default box, so without this an
+    // entity reads like a component. Top/bottom are <rect> (boxes); the lifeline <line> stays neutral.
+    const tint = ELEMENT_TINT[GRAPH.nodes[id].kind];
+    if (tint) for (const el of parts) if (el.tagName === 'rect') {
+      el.style.setProperty('fill', tint.fill, 'important');
+      el.style.setProperty('stroke', tint.stroke, 'important');
+    }
+  }
+
+  // messages: text[i] + arrow line[i] (data-id "i<idx>") pair with steps[i] — same pairing as bindGP.
+  const texts = [...root.querySelectorAll('text.messageText')];
+  const lineByIdx = {};
+  root.querySelectorAll('.messageLine0, .messageLine1').forEach((ln) => {
+    const m = (ln.getAttribute('data-id') || '').match(/^i(\d+)$/);
+    if (m) lineByIdx[+m[1]] = ln;
+  });
+  const msgEls = steps.map((_, i) => [texts[i], lineByIdx[i]].filter(Boolean));
+  for (const els of msgEls) for (const el of els) scene.dimEls.push(el);
+
+  // element participants: select (focus to its messages + their other ends) / ⌘-drill to home / tooltip.
+  for (const id of Object.keys(partsById)) {
+    const parts = partsById[id], selKey = 'node:' + id;
+    const myMsg = steps.map((st, i) => (st.srcId === id || st.dstId === id) ? i : -1).filter((i) => i >= 0);
+    const select = () => {
+      if (scene.selectedKey === selKey) { resetScene(scene); return; }
+      scene.selectedKey = selKey;
+      showNode(id);
+      const keep = new Set(parts);
+      for (const i of myMsg) {
+        for (const el of msgEls[i]) keep.add(el);
+        for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
+      }
+      sceneSelect(scene, () => gpHighlight(scene, parts));
+      gpFocus(scene, keep);
+      syncTreeToNode(id);
+    };
+    const on = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = HOVER; };
+    const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = gpRestFilter(scene, el); };
+    for (const el of parts) {
+      el.style.cursor = 'pointer';
+      markOpenSrc(el, id);  // </> cursor on a component/entity leaf with a source ref, like the other diagrams
+      el.addEventListener('mouseenter', on);
+      el.addEventListener('mouseleave', off);
+      attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // ⌘-hover shows the open-source action
+      el.addEventListener('click', (e) => {
+        if (isDrag(e)) return;
+        e.stopPropagation();
+        if (openSrcClick(id, e)) return;  // ⌘-click opens source (component/entity), consistent with the rest
+        select();
+      });
+    }
+  }
+
+  // role actor: a meaning tooltip (what the role wants). The figure isn't a graph node — no focus/drill.
+  const wantsByName = {};
+  for (const r of GRAPH.roles || []) wantsByName[(r.name || '').trim().toLowerCase()] = r.wants;
+  const roleNames = new Set();
+  for (const st of steps) if (!st.srcId && st.src) roleNames.add(st.src.toLowerCase());
+  for (const t of root.querySelectorAll('text.actor-man')) {
+    const nm = (t.textContent || '').trim().toLowerCase();
+    if (roleNames.has(nm) && wantsByName[nm]) attachTip(t, () => '<div class="tm">' + mdInline(wantsByName[nm]) + '</div>');
+  }
+
+  // messages: select (the backbone edge for an element↔element step, else the step's own panel) / focus /
+  // tooltip (the why). A step's arrow + label glow together; focus keeps them + both endpoints' columns.
+  steps.forEach((st, i) => {
+    const els = msgEls[i];
+    if (!els.length) return;
+    const text = texts[i] || null, line = lineByIdx[i] || null;
+    const edge = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || [])[0] : null;
+    const selKey = 'flowstep:' + uc + ':' + i;
+    const onClick = (ev) => {
+      if (isDrag(ev)) return;
+      ev.stopPropagation();
+      if (scene.selectedKey === selKey) { resetScene(scene); return; }
+      scene.selectedKey = selKey;
+      if (edge) showEdge(edge); else showFlowStep(uc, i);
+      const keep = new Set(els);
+      for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
+      sceneSelect(scene, () => gpHighlight(scene, els));
+      gpFocus(scene, keep);
+    };
+    const on = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = HOVER; };
+    const off = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = gpRestFilter(scene, el); };
+    if (line) attachEdgeHandlers(line, text, onClick, on, off, () => flowStepTip(st), false);
+    else { text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important'); text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off); attachTip(text, () => flowStepTip(st)); }
+  });
+}
+// A flow message's side panel for an ACTOR step (an element↔element step shows its backbone edge instead).
+function showFlowStep(uc, i) {
+  const st = (FLOWS_NARR[uc] || [])[i];
+  if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
+  const end = (label, id) => id ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
+  panel.innerHTML = '<h2>' + end(st.src, st.srcId) + ' &rarr; ' + end(st.dst, st.dstId) + '</h2>'
+    + '<div class="badges"><span class="badge edge">' + esc(st.verb) + '</span></div>'
+    + '<dl>' + (st.why ? '<dt>Why</dt><dd>' + mdInline(st.why) + '</dd>' : '')
+    + (st.note ? '<dt>Note</dt><dd>' + mdInline(st.note) + '</dd>' : '') + '</dl>';
+  bindFlowRefs();
+}
+// A flow message's hover tooltip: the explanation only (why for an element step, else a note). The verb
+// is already drawn on the arrow, so — like every other edge tooltip — show only what isn't on screen.
+function flowStepTip(st) {
+  const m = st.why || st.note || '';
+  return m ? '<div class="tm">' + mdInline(m) + '</div>' : '';
 }
 // One actor's card: its kind, what its role wants (the explanation), and the Golden Path steps it drives.
 function showGPActor(a) {
@@ -425,10 +636,13 @@ function tipDomainContainerEdgeHtml(a, b) {
   return '<ul class="tl">' + shown.map((r) =>
     '<li>' + esc(r.srcName) + ' → ' + esc(r.dstName) + ' · ' + esc(r.verb) + '</li>').join('') + '</ul>' + more;
 }
-function tipGPHtml(gpId) {  // hover a GP step (message) -> just its story (the explanation), like a subsystem tip
+function tipGPHtml(gpId) {  // hover a GP step (message) -> its use case's trigger→outcome (the explanation)
   const s = GP_BY_ID[gpId];
   if (!s) return '';
-  return s.story ? '<div class="tm">' + mdInline(s.story) + '</div>' : '';  // no story -> no tooltip
+  const f = (s.uc && GRAPH.nodes[s.uc] && GRAPH.nodes[s.uc].fields) || {};
+  let txt = '';
+  for (const k in f) { const kl = k.toLowerCase(); if (kl.includes('outcome') || kl.includes('trigger')) { txt = String(f[k]); break; } }
+  return txt ? '<div class="tm">' + mdInline(txt) + '</div>' : '';  // nothing recorded -> no tooltip
 }
 function tipGPActorHtml(a) {  // hover an actor / its lifeline -> just what its role wants (the explanation)
   return a && a.wants ? '<div class="tm">' + mdInline(a.wants) + '</div>' : '';  // no wants -> no tooltip
@@ -483,12 +697,12 @@ function actionTipNode(id) {
   const n = GRAPH.nodes[id];
   if (!n) return null;
   if (id === 'SYS') {
-    // ⌘-click on the System drills into its internals — Subsystems when the map groups, else Components.
+    // ⌘-click on the System drills into its internals — Subsystems when the map groups, else the Domain.
     // Only the Context view wires that drill (markSysDrill tags the box); elsewhere SYS just selects, so
     // gate the action tooltip on the drill affordance actually being present.
     const sys = mainScene.nodeEls['SYS'];
     if (sys && sys.classList.contains('drill'))
-      return '<div class="tt">' + (HAS_GROUPING ? 'Show subsystems' : 'Show components') + '</div>';
+      return '<div class="tt">' + (HAS_GROUPING ? 'Show subsystems' : 'Show domain') + '</div>';
     return null;
   }
   if (srcNode(id)) return actionOpenSrcHtml(n);
@@ -555,6 +769,62 @@ function buildLegend() {
   legend.innerHTML = ''; legend.appendChild(frag);
 }
 
+// --- diff overlay on the Subsystems views ---------------------------------------
+// The change-impact diff used to be a tab of its own (the flat Components map). It now overlays the
+// Subsystems views: per-component badges in the cards are added by bindNodes (mode==='diff'); the two
+// things bindNodes can't do live here. (1) The Subsystems OVERVIEW draws subsystem boxes (not via
+// bindNodes), so badge each box with its subtree's aggregate change. (2) That overview's default panel
+// becomes a change-impact summary listing every changed element — including ADDED ones, which have no
+// box anywhere to badge.
+function subsystemDiffState(sid) {
+  if (DIFF_STATE[sid]) return DIFF_STATE[sid];     // the subsystem itself changed
+  let changed = false, rippled = false;
+  for (const id in DIFF_STATE) {
+    if (!isAncestorOf(sid, id)) continue;          // only changes inside this box's subtree
+    if (DIFF_STATE[id] === 'rippled') rippled = true; else changed = true;
+  }
+  return changed ? 'modified' : (rippled ? 'rippled' : null);
+}
+function applyDiffOverlay(s) {
+  if (s.kind === 'container') {                     // overview: badge each subsystem box with its subtree's change
+    for (const id in mainScene.nodeEls) {
+      const st = subsystemDiffState(id);
+      if (st) addBadge(mainScene.nodeEls[id], st);
+    }
+  } else if (s.kind === 'subsystem' || s.kind === 'edge' || s.kind === 'component') {  // cards: per-node badge
+    for (const id in mainScene.nodeEls) {
+      if (DIFF_STATE[id]) addBadge(mainScene.nodeEls[id], DIFF_STATE[id]);
+    }
+  }
+}
+// The Subsystems-overview panel in diff mode: every changed element grouped by state, each name
+// clickable to locate it in its home view. Added elements appear here even though they badge no box.
+function showDiffSummary() {
+  const order = ['added', 'modified', 'deleted', 'rippled'];
+  const groups = { added: [], modified: [], deleted: [], rippled: [] };
+  for (const id in DIFF_STATE) { const st = DIFF_STATE[id]; if (groups[st]) groups[st].push(id); }
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const total = order.reduce((sum, k) => sum + groups[k].length, 0);
+  let html = '<h2>Change impact</h2>'
+    + '<div class="badges"><span class="badge kind">' + total + ' change' + (total === 1 ? '' : 's') + '</span></div>';
+  for (const st of order) {
+    const ids = groups[st];
+    if (!ids.length) continue;
+    ids.sort((a, b) => nm(a).localeCompare(nm(b)));
+    html += '<dl><dt><span class="badge ' + st + '">' + st + '</span></dt>'
+      + ids.map((id) => {
+          const n = GRAPH.nodes[id];
+          const kind = n && n.kind ? ' <span class="muted">' + esc(n.kind) + '</span>' : '';
+          return '<dd><a href="#" class="diffref" data-id="' + esc(id) + '">' + esc(nm(id)) + '</a>' + kind + '</dd>';
+        }).join('') + '</dl>';
+  }
+  if (!total) html += '<p class="empty">No changes recorded.</p>';
+  panel.innerHTML = html;
+  panel.querySelectorAll('a.diffref').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); selectFromTree(a.getAttribute('data-id'));
+  }));
+}
+
 function idOf(el) {
   const cls = [...el.classList].find((c) => c.startsWith('cy-'));
   if (cls) return cls.slice(3);
@@ -608,10 +878,17 @@ function markLibsDrill() {
   const el = mainScene.nodeEls[LIBS_ID];
   if (el) el.classList.add('drill');
 }
-// Tag the System box with the drill cursor (⌘-drills into Subsystems / Components).
+// Where ⌘-clicking the System box drills: the Subsystems overview when the map groups (it always does
+// once a default subsystem is injected for component-bearing maps), else the Domain model, else nowhere.
+function sysDrillTarget() {
+  if (HAS_GROUPING) return { kind: 'container' };
+  if (HAS_DOMAIN) return { kind: 'domain' };
+  return null;
+}
+// Tag the System box with the drill cursor — only when there's somewhere to drill into.
 function markSysDrill() {
   const el = mainScene.nodeEls['SYS'];
-  if (el) el.classList.add('drill');
+  if (el && sysDrillTarget()) el.classList.add('drill');
 }
 
 function bindNodes(scene, onActivate) {
@@ -634,7 +911,9 @@ function bindNodes(scene, onActivate) {
       if (openSrcClick(id, e)) return;  // ⌘-click a leaf with a source ref opens it instead of selecting
       onActivate(id, el, e);
     });
-    if (mode === 'diff' && DIFF_STATE[id]) addBadge(el, DIFF_STATE[id]);
+    // Diff badges are NOT added here: applyDiffOverlay() owns them, so they appear only on the
+    // Subsystems-family views (and the dormant Components view) — never as strays in Context/Libraries
+    // where bindNodes also runs but the diff legend is hidden.
   });
 }
 
@@ -766,7 +1045,7 @@ let hi = -1;  // index of the current state
 
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
-    + (s.gp ? ':' + s.gp : '') + (s.sd ? ':' + s.sd : '');
+    + (s.gp ? ':' + s.gp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '');
 }
 function captureViewport() {  // stash the current pan/zoom on the entry we're about to leave
   if (mainPz && hi >= 0 && history[hi]) history[hi].vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
@@ -786,7 +1065,7 @@ function fwd() { if (hi < history.length - 1) { captureViewport(); hi += 1; rend
 function bindContext() {
   bindNodes(mainScene, (id, el, e) => {
     if (id === 'SYS') {  // the System box: ⌘-click drills in, a plain click selects (shows its overview)
-      if (isDrillClick(e)) { go({ kind: HAS_GROUPING ? 'container' : 'component' }); return; }
+      if (isDrillClick(e)) { const t = sysDrillTarget(); if (t) go(t); return; }
       selectNode(mainScene, el, id);
       return;
     }
@@ -1206,7 +1485,8 @@ function mermaidFor(s) {
   if (s.kind === 'domedge') return MERMAID_DOMAIN_EDGE_CARD[s.a + '>' + s.b];
   if (s.kind === 'bridge') return MERMAID_BRIDGE_CARD[s.sid + '>' + s.sd];
   if (s.kind === 'gp') return MERMAID_GP;
-  if (s.kind === 'gpstep') return MERMAID_GP_STEP[s.gp];
+  if (s.kind === 'gpstep') return FLOWS_MM[(GP_BY_ID[s.gp] || {}).uc] || EMPTY_FLOW_MM;  // the step's use case's flow
+  if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
   if (s.kind === 'libs') return MERMAID_LIBS;
   return mode === 'diff' ? MERMAID_DIFF : MERMAID_BASE;  // component
 }
@@ -1217,9 +1497,13 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'domedge') showTwoSubdomains(s.a, s.b);
   else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
   else if (s.kind === 'gpstep') showGPStep(s.gp);
+  else if (s.kind === 'usecase') showUseCase(s.uc);
   else if (s.kind === 'libs') showLibsFold();
-  // Every overview without a more specific default (Context, Subsystems, Components, Domain) opens on
-  // the System's overview — its overall functionality — instead of a blank panel.
+  // The Subsystems overview in diff mode leads with the change-impact summary (which subsystems/elements
+  // changed), since that is the whole point of opening a diff render.
+  else if (s.kind === 'container' && mode === 'diff' && HAS_DIFF) showDiffSummary();
+  // Every overview without a more specific default (Context, Subsystems, Domain) opens on the System's
+  // overview — its overall functionality — instead of a blank panel.
   else if (GRAPH.nodes['SYS']) showNode('SYS');
   else panel.innerHTML = EMPTY_PANEL;
 }
@@ -1233,7 +1517,8 @@ function bindFor(s) {
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
   else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
   else if (s.kind === 'gp') bindGP();
-  else if (s.kind === 'gpstep') bindComponent();  // step subgraph = a Components view scoped to the step
+  else if (s.kind === 'gpstep') bindFlow((GP_BY_ID[s.gp] || {}).uc);  // the step opens its use case's flow
+  else if (s.kind === 'usecase') bindFlow(s.uc);
   else if (s.kind === 'libs') bindLibs();
   else bindComponent();
 }
@@ -1241,7 +1526,7 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'context' || kind === 'component' || kind === 'domain') return kind;
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
-  if (kind === 'gp' || kind === 'gpstep') return 'gp';
+  if (kind === 'gp' || kind === 'gpstep' || kind === 'usecase') return 'gp';
   if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
   return 'container';
 }
@@ -1250,12 +1535,13 @@ function stateTitle(s) {
   if (s.kind === 'context') return 'Context';
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
-  if (s.kind === 'domain') return 'Domain';
+  if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
   if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
   if (s.kind === 'bridge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.sid) + ' → ' + nm(s.sd); }
   if (s.kind === 'gp') return 'Golden Path';
   if (s.kind === 'gpstep') return gpTitle(s.gp);
+  if (s.kind === 'usecase') return (GRAPH.nodes[s.uc] ? GRAPH.nodes[s.uc].name : s.uc);
   if (s.kind === 'libs') return 'Libraries';
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   if (s.kind === 'subsystem') return nm(s.sid);
@@ -1280,6 +1566,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'bridge') return [{ kind: 'container' }, { kind: 'bridge', sid: s.sid, sd: s.sd }];  // S×SD bridge under Subsystems
   if (s.kind === 'gp') return [{ kind: 'gp' }];
   if (s.kind === 'gpstep') return [{ kind: 'gp' }, { kind: 'gpstep', gp: s.gp }];  // step under the Golden Path
+  if (s.kind === 'usecase') return [{ kind: 'gp' }, { kind: 'usecase', uc: s.uc }];  // a use case's flow, under the Golden Path
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
@@ -1289,8 +1576,12 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   return trail;
 }
 function renderChrome(s) {
-  legend.classList.toggle('on', s.kind === 'component' && mode === 'diff');
-  toggle.style.display = (HAS_DIFF && s.kind === 'component') ? '' : 'none';
+  // The baseline⇄diff change-impact overlay lives on the Subsystems views now (overview + cards),
+  // not the removed flat Components map: the overview badges each subsystem with its subtree's change,
+  // and the cards badge their member components (via bindNodes).
+  const diffHost = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge';
+  legend.classList.toggle('on', diffHost && mode === 'diff');
+  toggle.style.display = (HAS_DIFF && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
@@ -1357,14 +1648,11 @@ async function render() {
   }
   if (seq !== renderSeq) return;  // a newer render started during the async layout — drop this stale one
   diagram.innerHTML = svg;
+  tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
   bindFor(s);
   applyDefaultPanel(s);
-  // "Locate in full map" arrived here: spotlight the GP step's touched nodes in the Components view.
-  if (pendingFocus && s.kind === 'component') {
-    const keep = pendingFocus; pendingFocus = null;
-    applyFocus(mainScene, (nid) => keep.has(nid), (e) => keep.has(e.src) && keep.has(e.dst));
-  }
+  if (mode === 'diff' && HAS_DIFF) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
   if (pendingSelect) {
@@ -1493,11 +1781,11 @@ function selectTargetFor(id) {
   switch (n.kind) {
     case 'component': {
       // Open the component INSIDE its parent subsystem's card (the zoomed-in neighbourhood), where it's
-      // drawn as a member box — not the flat Components view. Fall back to Components when the map is
-      // ungrouped (no parent subsystem to drill into).
+      // drawn as a member box. A default subsystem is injected when a map has none, so this parent is
+      // normally present; fall back to the Subsystems overview if a component is somehow ungrouped.
       const p = n.parent;
       const inSub = !!(p && GRAPH.nodes[p] && GRAPH.nodes[p].kind === 'subsystem');
-      return { state: inSub ? { kind: 'subsystem', sid: p } : { kind: 'component' }, selectId: id };
+      return { state: inSub ? { kind: 'subsystem', sid: p } : { kind: 'container' }, selectId: id };
     }
     case 'dep': {
       // A dependency lives at the Context altitude, not in a subsystem: an external SYSTEM is its own
@@ -1507,8 +1795,8 @@ function selectTargetFor(id) {
       const folded = FOLDED_LIBS.some((d) => d.id === id);
       return { state: folded ? { kind: 'libs' } : { kind: 'context' }, selectId: id };
     }
-    case 'usecase':  // not drawn at a structural altitude — fall back to the Components view (panel only)
-      return { state: { kind: 'component' }, selectId: id };
+    case 'usecase':  // a use case opens its T6 flow (sequence diagram + numbered narrative)
+      return { state: { kind: 'usecase', uc: id } };
     case 'entity': {
       const sd = HAS_SUBDOMAINS ? topSubdomainOf(id) : null;
       return { state: sd ? { kind: 'domsub', sd } : { kind: 'domain' }, selectId: id };
@@ -1518,7 +1806,7 @@ function selectTargetFor(id) {
     case 'subdomain':
       return { state: parentKind('subdomain') ? { kind: 'domsub', sd: n.parent } : { kind: 'domain' }, selectId: id };
     default:
-      return { state: { kind: 'component' }, selectId: id };
+      return { state: { kind: 'context' }, selectId: id };  // unknown kind -> the always-present root
   }
 }
 function selectFromTree(nodeId) {
@@ -1639,6 +1927,9 @@ const cleanPath = (file, line) => {
 // those can be opened in the editor / on GitHub. An `http(s)://…` ref is left as plain text. The `://`
 // test (not a bare `scheme:`) is deliberate: it must NOT match the `path:line` form like `app.py:42`.
 const localRef = (file) => !!file && !/^[a-z][a-z0-9+.-]*:\/\//i.test(String(file));
+// An edge's `where` source ref ("path#Lnn" / "path:nn" / "path") -> {file, line} for openSource. The
+// full ref stays as `file` (cleanPath/editorUri/ghUrl strip the anchor themselves), like a node's file.
+const whereNode = (where) => { const m = String(where).match(/(?:#L|:)(\d+)$/); return { file: where, line: m ? +m[1] : null }; };
 // A directory ref ends with `/` (the map convention `[dir/](path/)`); it opens differently from a file —
 // GitHub `/tree/` not `/blob/`, the editor without a line/column, and no `#L` anchor.
 const isDirRef = (file, line) => cleanPath(file, line).endsWith('/');
@@ -1864,4 +2155,6 @@ zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); update
 if (HAS_DIFF) {
   toggle.addEventListener('click', () => { mode = mode === 'diff' ? 'base' : 'diff'; render(); });
 }
-go({ kind: 'context' });  // always land on the Context view (the highest, C4 system-in-the-world altitude)
+// Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise the
+// Context view — the highest, C4 system-in-the-world altitude.
+go({ kind: (HAS_DIFF && HAS_GROUPING) ? 'container' : 'context' });

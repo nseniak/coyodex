@@ -91,6 +91,7 @@ body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #treetoggle { displa
 .badge.added { background: #dafbe1; color: #1a7f37; }
 .badge.modified { background: #fff8c5; color: #9a6700; }
 .badge.deleted { background: #ffebe9; color: #cf222e; }
+.badge.rippled { background: #ffedd5; color: #b45309; }  /* the change-impact summary's "ripples to" group */
 #panel dl { margin: 0; }
 #panel dt { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; margin-top: 10px; }
 #panel dd { margin: 2px 0 0; }
@@ -104,6 +105,18 @@ body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #treetoggle { displa
 /* "Locate in full map" link on a Golden Path step panel */
 #panel .locate { display: inline-block; margin-top: 16px; font-size: 13px; color: #2563eb; text-decoration: none; }
 #panel .locate:hover { text-decoration: underline; }
+/* T6 use-case flow narrative: the readable twin of the sequence diagram. One numbered step per line —
+   `from verb to`, then the edge's Why and any flow note, so the "why" reads inline. */
+#panel ol.flow { margin: 4px 0 0; padding-left: 20px; }
+#panel ol.flow li { margin: 6px 0; line-height: 1.4; }
+#panel ol.flow .flowact em { font-style: normal; color: #6b7280; }   /* the verb/phrase, de-emphasised */
+#panel ol.flow .floww { color: #4b5563; }                            /* the backbone edge's Why */
+#panel ol.flow .flown { color: #9ca3af; font-style: italic; }        /* the flow-specific note */
+#panel ol.flow a.flowref { color: #2563eb; text-decoration: none; }
+#panel ol.flow a.flowref:hover { text-decoration: underline; }
+/* "Used in UC" backward-view links on a node panel (element -> the use cases whose flow touches it) */
+#panel a.ucref { color: #2563eb; text-decoration: none; }
+#panel a.ucref:hover { text-decoration: underline; }
 /* inline `code` in prose fields (mdInline), light panel background */
 #panel code { font-family: ui-monospace, monospace; font-size: 12px; background: #f3f4f6;
               padding: 0 3px; border-radius: 3px; color: #1f2937; }
