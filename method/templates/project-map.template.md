@@ -41,30 +41,27 @@
 | ID | Use case | Actor | Trigger → Outcome |
 |---|---|---|---|
 | **UC1** | <use case> | <actor> | <trigger → outcome> |
+| **UC2** | <use case> | <actor> | <trigger → outcome> |
+| **UC3** | <use case> | <actor> | <trigger → outcome> |
 
 ---
 
-## Golden Path Narrative — the spine
+## Golden Path — the spine (an ordered walk through the use cases)
 
-One happy-path story across all main functionality and every actor. STORY = what the actor
-does/sees, referring to actors by their **role** (the Roles-table names), not invented persona
-nicknames. UNDER THE HOOD = traced mechanics. Example values are ILLUSTRATIVE; the mechanics are
-traced. Each step ends with a `Touches:` line. Optional `Actor:` line = the role that *drives* the
-step (a Roles-table name) — set it when the step bundles use cases with different actors, so the
-diagram draws the right lifeline; otherwise it defaults to the step's first use case's actor.
+The happy-path ORDERING of use cases across all main functionality and every actor. Each step IS a
+use case — its `*(UCn)*` tag is required; `GPn` is just its position in the walk. The step carries no
+STORY / mechanics / Touches: those live once in the use case's T6 flow below, and drilling a step
+opens it. An optional `why:` line records the prerequisite that fixes this step's position. The
+driving actor is the use case's own Actor (no separate `Actor:` line). Refer to actors by their
+Roles-table names, never invented nicknames.
 
 **GP1 — <title>** *(UC1)*
-<!-- optional: the Roles-table name driving this step; omit to default to the first use case's actor -->
-Actor: <Role>
-STORY: <…>
-UNDER THE HOOD: <… [file](path#L1) …>
-`Touches:` C1, C2 · D1 · E1
+**GP2 — <title>** *(UC2)*
+why: needs the result of GP1
+**GP3 — <title>** *(UC3)*
 
-### Golden Path ↔ entity traceability
-
-| Step | T1 components | T2 deps | T5 entities |
-|---|---|---|---|
-| GP1 <title> | C1, C2 | D1 | E1 |
+<!-- The use-case↔element traceability and the backward "Used in UC" view are DERIVED from the T6
+     flows below (the flow steps name the elements) — not authored here. -->
 
 ---
 
@@ -93,6 +90,10 @@ UNDER THE HOOD: <… [file](path#L1) …>
 | **C3** | <nested component> | S3 | <purpose> | [file](path/sub#L1) |  |
 
 ### T1 backbone — component dependency edges (the diagram source)
+
+<!-- `Why` = why From needs To (terse; carries what the verb omits). `Where` = the CALL SITE: the
+     `file:line` in FROM's code where it invokes To (the main one if several), NOT To's definition —
+     it's the line a flow arrow opens. -->
 
 | From | Verb | To | Why | Where |
 |---|---|---|---|---|
@@ -177,12 +178,24 @@ SOURCE: [file](path/sub#L1)
 
 ## T6 — Use-case flows
 
-<!-- The inside view of a use case (its outside view is the Journey). `Uses` = the elements +
-     role per step; it is the most-used slice of the backbone edge list (don't restate Why here). -->
+<!-- The INSIDE view of each use case (its outside view is the Journey). ONE BLOCK PER USE CASE:
+     a `**UCn — title**` heading + numbered step lines. A step is `from → to`, where each endpoint is
+     an element ID (C/D/E) or a Role name. When BOTH ends are elements it is a pure reference to the
+     backbone edge — its Verb + Why render the step (sequence message AND readable line), so DON'T
+     restate the why. An ACTOR step (`<Role> → C…`) carries a short authored phrase after `: ` (the
+     backbone has no actor edges). Add flow-specific context after `· `. Renders as a Mermaid
+     sequenceDiagram + a numbered narrative, and is the drill-down of the matching Golden Path step.
+     Separators inside a line are `·`, never raw `|`.
+     A step may go BACKWARD too: a `to` that is an earlier participant renders right-to-left. Record
+     the meaningful returns — the response the actor sees, an error/fallback, a callback/event — as
+     authored steps (step 5 below). Don't echo every call with a return. -->
 
-| Flow | Steps | Uses (element + role) | Key files |
-|---|---|---|---|
-| UC1 <flow> | <step → step → step> | C1, D1, E1 | [file](path#L1) |
+**UC1 — <flow title>**
+1. <Role> → C1 : <what the actor does>
+2. C1 → C2
+3. C2 → E1 · <optional note>
+4. C2 → D1
+5. C1 → <Role> : <the response the actor sees — a backward step, drawn right-to-left>
 
 ---
 

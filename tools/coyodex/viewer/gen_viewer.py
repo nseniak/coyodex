@@ -1184,12 +1184,16 @@ def _edge_index(graph: GraphDict) -> dict[tuple[str, str], tuple[str, str]]:
 
 def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, Any]) -> str:
     """A flow step's arrow label: the authored phrase if any (actor steps carry one); else the backbone
-    edge's verb for an element↔element step; else a neutral 'uses'."""
+    edge's verb for an element↔element step; else a neutral 'uses'. The catch-all `uses` carries no
+    meaning on its own, so when the edge has a `Why`, show the Why on the arrow instead — a sharper verb
+    (reads / persists / …) stays as-is and clean."""
     phrase = str(st.get("phrase") or "").strip()
     if phrase:
         return phrase
     if st.get("src_is_id") and st.get("dst_is_id"):
-        verb, _why = idx.get((str(st["src"]), str(st["dst"])), ("", ""))
+        verb, why = idx.get((str(st["src"]), str(st["dst"])), ("", ""))
+        if verb.lower() == "uses" and why:
+            return why
         if verb:
             return verb
     return "uses"

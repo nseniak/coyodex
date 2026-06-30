@@ -142,6 +142,15 @@ function focusNode(scene, id) {
 function focusEdge(scene, e0) {
   applyFocus(scene, (nid) => nid === e0.src || nid === e0.dst, (e) => e.src === e0.src && e.dst === e0.dst);
 }
+// Paint a rect with a kind's injected fill/stroke (ELEMENT_TINT). Shared by the two spots Mermaid
+// renders a box kind-agnostically — cluster frames and flow participant boxes. No-op if the rect or the
+// kind's tint is missing.
+function applyTint(rect, kind) {
+  const tint = kind && ELEMENT_TINT[kind];
+  if (!rect || !tint) return;
+  rect.style.setProperty('fill', tint.fill, 'important');
+  rect.style.setProperty('stroke', tint.stroke, 'important');
+}
 // An EXPANDED group (a drilled subsystem / subdomain) renders as a Mermaid CLUSTER frame, which
 // defaults to pale yellow. Tint each cluster to its family so a group reads the SAME colour collapsed (a
 // box) or expanded (a frame). The cluster's DOM id ends with its element id (`<diagramId>-S1` / `-SD1`);
@@ -151,13 +160,7 @@ function tintClusters(root) {
   root.querySelectorAll('g.cluster').forEach((g) => {
     const m = (g.id || '').match(/-([A-Za-z]+\d+)$/);
     const node = m && GRAPH.nodes[m[1]];
-    const tint = node && ELEMENT_TINT[node.kind];
-    if (!tint) return;
-    const rect = g.querySelector('rect');
-    if (rect) {
-      rect.style.setProperty('fill', tint.fill, 'important');
-      rect.style.setProperty('stroke', tint.stroke, 'important');
-    }
+    applyTint(g.querySelector('rect'), node && node.kind);
   });
 }
 function clearFocus(scene) {
@@ -445,11 +448,7 @@ function bindFlow(uc) {
     for (const el of parts) scene.dimEls.push(el);
     // colour the box by kind — every Mermaid `participant` is the same default box, so without this an
     // entity reads like a component. Top/bottom are <rect> (boxes); the lifeline <line> stays neutral.
-    const tint = ELEMENT_TINT[GRAPH.nodes[id].kind];
-    if (tint) for (const el of parts) if (el.tagName === 'rect') {
-      el.style.setProperty('fill', tint.fill, 'important');
-      el.style.setProperty('stroke', tint.stroke, 'important');
-    }
+    for (const el of parts) if (el.tagName === 'rect') applyTint(el, GRAPH.nodes[id].kind);
   }
 
   // messages: text[i] + arrow line[i] (data-id "i<idx>") pair with steps[i] — same pairing as bindGP.

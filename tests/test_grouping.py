@@ -796,6 +796,29 @@ def test_validator_rejects_empty_verb() -> None:
     assert code == 1 and "empty Verb" in out, out
 
 
+def _where_edge_map(where: str) -> str:
+    return (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | A | x | f |  |\n| **C2** | B | x | f |  |\n\n"
+        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
+        f"| C1 | uses | C2 | reach B | {where} |\n"
+    )
+
+
+def test_validator_warns_on_non_file_where() -> None:
+    # A prose `Where` (not a file link / path:line) is a dead drill-to-code link -> advisory WARNING,
+    # never a failure (an inferred edge may lack a precise site).
+    code, out = run_validator(_where_edge_map("in the handler"))
+    assert code == 0, out
+    assert "`Where` is not a source location" in out, out
+
+
+def test_validator_accepts_file_where() -> None:
+    # A `[file](path#Lnnn)` call-site link is the expected shape -> no warning.
+    code, out = run_validator(_where_edge_map("[gw.py](src/gw.py#L42)"))
+    assert code == 0 and "not a source location" not in out, out
+
+
 def test_validator_clean_maps_pass_table_shape() -> None:
     # The known-good maps must stay shape-clean (regression guard for false positives).
     for md in (make_grouped_map("proper"), make_grouped_map("agent"), make_ungrouped_map()):
@@ -1859,6 +1882,18 @@ def test_flow_narrative_derives_why_from_edge() -> None:
     step2 = next(s for s in narr if s["n"] == 2)
     assert step2["srcId"] == "C1" and step2["dstId"] == "C2"
     assert step2["verb"] == "calls" and step2["why"] == "reach engine"
+
+
+def test_flow_uses_arrow_shows_why() -> None:
+    # The catch-all `uses` carries no meaning on its own: when the edge has a Why, the arrow shows the
+    # Why instead. A sharper verb (calls / reads / …) stays as-is.
+    md = make_gp_map().replace("| C1 | calls | C2 | reach engine | f |",
+                               "| C1 | uses | C2 | reach engine | f |")
+    s1 = gen_viewer.flow_mermaids(parse_map(md))["UC1"]
+    assert "C1->>C2: reach engine" in s1      # generic 'uses' -> the Why
+    assert "C1->>C2: uses" not in s1
+    s2 = gen_viewer.flow_mermaids(parse_map(md))["UC2"]
+    assert "C2->>D1: reads" in s2             # a sharp verb is untouched
 
 
 def test_parse_flow_step_variants() -> None:

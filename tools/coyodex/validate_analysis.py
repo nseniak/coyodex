@@ -5,9 +5,10 @@ Stdlib-only. Checks that the analysis file is a clean machine-parseable source
 for diagrams/tooling:
 
   1. Every element ID (UC/C/D/E/S/GP) is defined exactly once.
-  2. Every ID *reference* (Touches lines, traceability tables, edge list,
-     Depends-on, Used-in-GP, Subsystem/Parent membership) resolves to a defined ID.
-  3. Every Golden Path step (GPn heading) has a `Touches:` line.
+  2. Every ID *reference* (T6 flow steps, GP `*(UCn)*` tags, edge list,
+     Depends-on, Subsystem/Parent membership) resolves to a defined ID.
+  3. Every Golden Path step (GPn heading) names its use case (`*(UCn)*` tag), and every T6 flow
+     step is a well-formed `from → to` whose endpoints resolve (an element ID, or a Role for an actor).
   4. Grouping, when present (no-op when absent): every Subsystem/Parent value
      resolves to a defined `S`; at most one parent per element; no nesting
      cycles. (Nesting depth is unbounded — deep chains only WARN, never block.)
@@ -22,6 +23,8 @@ for diagrams/tooling:
      can see what would silently vanish from the render).
   6. Edge verbs: every edge row (From + To id) carries a non-empty Verb — a blank one
      renders as `src -->|| dst`, dropping the Mermaid label and desyncing the viewer.
+  6b. Edge `Where` (WARN): the call-site `Where` is a source location (a `[file](path#Lnnn)` link
+     or a bare `path:line`), not empty/prose — a flow arrow opens it, so a bad one is a dead link.
 
 When an id reads as undefined because its definition row glued extra text into the
 ID cell (`| **UC1** Search… |` instead of `| **UC1** | Search… |`), the report names
@@ -29,7 +32,9 @@ that specific cause instead of the generic "undefined ID".
 
 Opt-in (reads the analyzed repo's source/tree, not just the map):
   7. --check-sources: each domain card's entity NAME must appear in its SOURCE file — catches
-     synthesized entities (a name with no real named type) and wrong anchors.
+     synthesized entities (a name with no real named type) and wrong anchors. Also WARNs on any
+     drill-to-code anchor (edge `Where`, node anchor, card SOURCE) that doesn't resolve to a real
+     file/dir in the repo — a moved / renamed / mistyped path.
   8. --check-coverage: re-walk the repo tree and WARN on map-fidelity gaps the referential checks
      cannot see — peer-level compression (many sibling source subdirs folded into ~one box, the
      65-plugins-as-one-component failure) and significant directories the map never references.
@@ -51,15 +56,18 @@ from coyodex.schema_v1 import (
     DEF_BOLD,
     DEF_ENTITY,
     DEF_GP,
+    DEF_ID_CELL,
     DEP_KINDS,
     DEEP_NEST_WARN,
     GLUED_DEF,
     GLUED_DEF_INNER,
+    GP_UC_TAG,
     ID_TOKEN,
     REL_ALIAS,
     fk_targets,
     is_separator_row,
     iter_domain_cards,
+    iter_flows,
     iter_pipe_runs,
     membership_ids,
     resolve_backing,
@@ -106,31 +114,13 @@ def collect_referenced(text: str) -> set[str]:
     return set(ID_TOKEN.findall(text))
 
 
-def gp_bodies(text: str, gp_order: list[str]) -> list[tuple[str, list[str]]]:
-    """(gp_id, body_lines) per GP step — the labeled lines (STORY / Actor / Touches / …) from a GPn
-    heading to the NEXT GP heading. Matches the parser's parse_gp step window exactly (build_graph
-    reads to the next GP, unbounded), so the validator checks the same span the renderer parses — a
-    Touches/Actor line is never validated against a different slice than it is rendered from. One place
-    defines the step window, so every GP-body check reads the same lines."""
+def check_gp_use_cases(text: str, gp_order: list[str]) -> list[str]:
+    """Each Golden Path step must name the use case it realizes via a `*(UCn)*` tag — the step IS that
+    use case, and its detail lives in the use case's T6 flow. (That the named use case resolves to a
+    definition is handled by the global undefined-reference check.) Returns the GP ids missing a tag."""
     lines = text.splitlines()
-    heading_idx = {m.group(1): i for i, line in enumerate(lines) if (m := DEF_GP.match(line))}
-    out: list[tuple[str, list[str]]] = []
-    for gp in gp_order:
-        start = heading_idx[gp]
-        body: list[str] = []
-        for line in lines[start + 1 :]:
-            if DEF_GP.match(line):  # same stop condition as parse_gp — to the next GP step
-                break
-            body.append(line)
-        out.append((gp, body))
-    return out
-
-
-def check_gp_touches(text: str, gp_order: list[str]) -> list[str]:
-    """Each GPn heading must be followed by a `Touches:` line before the next GP."""
-    return [gp for gp, body in gp_bodies(text, gp_order)
-            if not any(s.startswith("`Touches:`") or s.startswith("Touches:")
-                       for s in (ln.strip() for ln in body))]
+    heading = {m.group(1): line for line in lines if (m := DEF_GP.match(line))}
+    return [gp for gp in gp_order if not GP_UC_TAG.search(heading.get(gp, ""))]
 
 
 def collect_role_names(text: str) -> set[str]:
@@ -152,21 +142,32 @@ def collect_role_names(text: str) -> set[str]:
     return names
 
 
-def check_gp_actors(text: str, gp_order: list[str], role_names: set[str]) -> list[str]:
-    """A GP step's optional `Actor:` line must name a defined Role (it sets the diagram's lifeline).
-    No-op when no step carries an Actor line; also skipped when the map has no Roles table (nothing
-    to resolve against), so the check stays additive."""
-    if not role_names:
-        return []
+def check_flow_steps(text: str, role_names: set[str]) -> list[str]:
+    """T6 flow problems the global id-resolution check can't see: a use case with more than ONE flow
+    block (the renderer keys flows by use case, so a second would silently overwrite the first — and a
+    stray `**UCn — …**` line in prose parses as a flow), a step that is not a well-formed `from → to`
+    interaction, and an ACTOR endpoint (a Role name, not an element ID) that doesn't resolve to a
+    defined Role. Element-ID endpoints are covered by the global undefined-reference check; the Role
+    check is skipped when the map has no Roles table, so this stays additive."""
     problems: list[str] = []
-    for gp, body in gp_bodies(text, gp_order):
-        for ln in body:
-            s = ln.strip()
-            if s.startswith("Actor:"):
-                val = re.sub(r"[*`]", "", s[len("Actor:"):]).strip()
-                if val and val.lower() not in role_names:
-                    problems.append(f"{gp} Actor '{val}' is not a defined Role (Roles table)")
-                break
+    flows = list(iter_flows(text.splitlines()))
+    counts: dict[str, int] = {}
+    for f in flows:
+        counts[f.uc] = counts.get(f.uc, 0) + 1
+    dups = sorted(uc for uc, c in counts.items() if c > 1)
+    if dups:
+        problems.append("Use cases with more than one T6 flow block (each use case has exactly one "
+                        f"flow): {', '.join(dups)}")
+    for flow in flows:
+        for st in flow.steps:
+            tag = f"{flow.uc} flow step {st.n}"
+            if not st.ok:
+                problems.append(f"{tag} is not a `from → to` interaction: '{st.src}'")
+                continue
+            if role_names:
+                for end, is_id in ((st.src, st.src_is_id), (st.dst, st.dst_is_id)):
+                    if not is_id and end and end.lower() not in role_names:
+                        problems.append(f"{tag}: actor '{end}' is not a defined Role")
     return problems
 
 
@@ -536,6 +537,102 @@ def check_edge_verbs(text: str) -> list[str]:
     return problems
 
 
+# A `Where` / anchor cell should be a SOURCE LOCATION (the call site a flow arrow opens). These tell a
+# file reference from prose / an off-repo URL.
+_LINK_HREF = re.compile(r"\[[^\]]*\]\(([^)]+)\)")        # markdown link -> href
+_BARE_PATH = re.compile(r"^\S+\.\w+(?:[:#]L?\d+)?$")      # bare `path.ext` (+ optional :line / #Lnnn)
+_URL_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)  # http(s):// etc. — off-repo, not a local file
+
+
+def _where_href(cell: str) -> str | None:
+    """The file href a `Where` / anchor cell points to: a markdown link's target, or the cell itself
+    when it is a bare `path.ext[:line]` token. None for an empty / prose / off-repo-URL cell."""
+    cell = cell.strip()
+    if not cell:
+        return None
+    m = _LINK_HREF.search(cell)
+    if m:
+        href = m.group(1).strip()
+        return href if href and not _URL_SCHEME.match(href) else None
+    return cell if _BARE_PATH.match(cell) else None
+
+
+def check_edge_where(text: str) -> list[str]:
+    """WARN when a backbone edge's `Where` is not a source location — empty, prose, or an off-repo URL
+    rather than a `[file](path#Lnnn)` call-site link (or a bare `path:line`). `Where` is the line a flow
+    arrow opens, so a bad one is a dead drill-to-code link. Advisory, not blocking (an *inferred* edge
+    may lack a precise site; older maps shouldn't break). No-op when an edge table has no `Where`
+    column."""
+    out: list[str] = []
+    for start, block in iter_tables(text):
+        headers = [c.lower() for c in split_cells(block[0])]
+        if headers[:3] != ["from", "verb", "to"] or "where" not in headers:
+            continue
+        ci = {h: idx for idx, h in enumerate(headers)}
+        for offset, row in enumerate(block[2:], start=2):
+            if is_separator_row(row):
+                continue
+            cells = split_cells(row)
+            src = ID_TOKEN.search(cells[ci["from"]]) if ci["from"] < len(cells) else None
+            dst = ID_TOKEN.search(cells[ci["to"]]) if ci["to"] < len(cells) else None
+            if not (src and dst):
+                continue
+            where = cells[ci["where"]] if ci["where"] < len(cells) else ""
+            if _where_href(where) is None:
+                out.append(f"{src.group(0)} → {dst.group(0)} (line {start + offset + 1}): `Where` is not "
+                           f"a source location (use a `[file](path#Lnnn)` call-site link)")
+    return out
+
+
+def _anchor_hrefs(text: str) -> list[tuple[str, str]]:
+    """(label, href) for every drill-to-code anchor: each backbone edge's `Where`, each table-definition
+    row's first link (node files/dirs), and each domain card's SOURCE. Off-repo URLs excluded."""
+    out: list[tuple[str, str]] = []
+    for _start, block in iter_tables(text):
+        headers = [c.lower() for c in split_cells(block[0])]
+        ci = {h: idx for idx, h in enumerate(headers)}
+        is_edge = headers[:3] == ["from", "verb", "to"]
+        for row in block[2:]:
+            if is_separator_row(row):
+                continue
+            cells = split_cells(row)
+            if is_edge and "where" in ci:
+                src = ID_TOKEN.search(cells[ci["from"]]) if ci["from"] < len(cells) else None
+                dst = ID_TOKEN.search(cells[ci["to"]]) if ci["to"] < len(cells) else None
+                href = _where_href(cells[ci["where"]]) if ci["where"] < len(cells) else None
+                if src and dst and href:
+                    out.append((f"{src.group(0)} → {dst.group(0)} `Where`", href))
+            elif not is_edge and cells:
+                dm = DEF_ID_CELL.search(cells[0])
+                lm = _LINK_HREF.search(" ".join(cells))
+                if dm and lm and not _URL_SCHEME.match(lm.group(1).strip()):
+                    out.append((dm.group(1), lm.group(1).strip()))
+    for c in iter_domain_cards(text.splitlines()):
+        if c.source and not _URL_SCHEME.match(c.source):
+            out.append((c.id, c.source))
+    return out
+
+
+def check_anchor_existence(text: str, map_path: Path) -> list[str]:
+    """WARN on a drill-to-code anchor whose path doesn't resolve to a real file/dir in the repo — a
+    moved / renamed / mistyped `file:line` (an edge `Where`, a node anchor, a card SOURCE). Opt-in
+    (`--check-sources`): it reads the analyzed repo, so run it on a real `.coyodex/` map, not a template
+    (where every path is a placeholder). Advisory — never blocks."""
+    roots = [map_path.resolve().parent, map_path.resolve().parent.parent]
+    out: list[str] = []
+    for label, href in _anchor_hrefs(text):
+        rel = re.sub(r":\d+$", "", href.split("#", 1)[0])   # drop a #Lnnn anchor and a :line suffix
+        is_dir = rel.endswith("/")
+        rel = rel.rstrip("/")
+        if not rel:
+            continue
+        ok = any((r / rel).is_dir() if is_dir else (r / rel).is_file() for r in roots)
+        if not ok:
+            out.append(f"{label}: '{href}' does not resolve to a {'directory' if is_dir else 'file'} "
+                       f"in the repo")
+    return out
+
+
 def check_domain_cards(text: str) -> tuple[list[str], list[str]]:
     """T5 domain-card checks (no-op when there are no cards): each card has MEANING / SOURCE /
     FIELDS; every field has a type; every RELATIONS item is well-formed; a relation pair is declared
@@ -722,21 +819,23 @@ def main(argv: list[str] | None = None) -> int:
         if truly_undefined:
             problems.append(f"References to undefined IDs: {', '.join(truly_undefined)}")
 
-    missing_touches = check_gp_touches(text, gp_order)
-    if missing_touches:
-        problems.append(f"Golden Path steps missing a Touches: line: {', '.join(missing_touches)}")
+    missing_uc = check_gp_use_cases(text, gp_order)
+    if missing_uc:
+        problems.append(f"Golden Path steps missing a `*(UCn)*` use-case tag: {', '.join(missing_uc)}")
 
-    problems.extend(check_gp_actors(text, gp_order, collect_role_names(text)))
+    problems.extend(check_flow_steps(text, collect_role_names(text)))
     problems.extend(check_roles_kind(text))
     problems.extend(check_dep_kinds(text))
     problems.extend(check_table_runs(text))   # a table split by a comment/blank line (silent row loss)
     problems.extend(check_table_shape(text))
     problems.extend(check_edge_verbs(text))
+    warnings.extend(check_edge_where(text))   # advisory: an edge `Where` that isn't a source location
     domain_problems, domain_warnings = check_domain_cards(text)
     problems.extend(domain_problems)
     warnings.extend(domain_warnings)
     if check_sources:
         problems.extend(check_entity_sources(text, path))
+        warnings.extend(check_anchor_existence(text, path))  # advisory: anchors that don't resolve to a real file/dir
 
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column or SUBDOMAIN line.
     problems.extend(parent_problems)
@@ -843,7 +942,8 @@ def main(argv: list[str] | None = None) -> int:
         for p in problems:
             print(f"  - {p}")
         return 1
-    print("Schema v1: OK — all IDs defined once, all references resolve, every GP step has Touches.")
+    print("Schema v1: OK — all IDs defined once, all references resolve, every GP step names a use "
+          "case, every flow step well-formed.")
     return 0
 
 

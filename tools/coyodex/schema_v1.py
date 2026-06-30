@@ -39,6 +39,13 @@ GLUED_DEF_INNER = re.compile(r"^\|\s*\*\*(UC\d+|SD\d+|C\d+|D\d+|S\d+)\s+[^*|]+\*
 DEF_GP = re.compile(r"^\*\*(GP\d+)\s+—")
 DEF_ENTITY = re.compile(r"^\*\*(E\d+)\s+—")
 
+# A Golden Path step heading: `**GPn — title** *(UCn)*`. The step IS a use-case occurrence — the
+# `*(UCn)*` tag (REQUIRED) names the use case it realizes; `GPn` is its position in the walk and the
+# step carries no STORY/Touches (those live in the use case's T6 flow). GP_HEADING captures (id,
+# title); GP_UC_TAG captures the realized use case from the trailing `*(...)*` tag.
+GP_HEADING = re.compile(r"^\*\*(GP\d+)\s+—\s*(.+?)\s*\*\*")
+GP_UC_TAG = re.compile(r"\*\(\s*(UC\d+)")
+
 # Grouping: membership is ONE parent pointer carried on the child.
 # Nesting depth is ADVISORY, not capped: the viewer renders arbitrary depth, and the cycle check (not a
 # depth limit) is what guarantees the membership walk terminates. The validator only *warns* when a
@@ -409,4 +416,90 @@ def iter_domain_cards(lines: list[str]):
             j += 1
         yield DomainCard(eid, name, store, meaning, source, fields_out, relations, line_no,
                          heading_ok=fm is not None, subdomain=subdomain)
+        i = j
+
+
+# ── T6 use-case flows ─────────────────────────────────────────────────────────────────────────────
+# A flow is the INSIDE view of one use case: a block headed `**UCn — title**` followed by numbered
+# step lines. Each step is an ordered interaction `from → to [: phrase] [· note]`. An endpoint is
+# either an element ID (C/D/E/…) or a Role display name (an actor step — the backbone has no actor
+# edges, so actor steps carry an authored phrase). When BOTH ends are element IDs the step is a pure
+# reference to the backbone edge between them, so its verb + Why render the step from one source.
+# Shared by the parser and the validator, so the rendered flow and the validated flow are one parse.
+FLOW_HEADING = re.compile(r"^\*\*(UC\d+)\s+—\s*(.+?)\s*\*\*\s*$")
+FLOW_STEP = re.compile(r"^\s*(\d+)\.\s+(.+?)\s*$")
+_FLOW_ARROW = re.compile(r"\s*(?:→|->)\s*")
+_STEP_ENDPOINT_ID = re.compile(r"^(?:UC\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)$")
+
+
+def is_step_id(token: str) -> bool:
+    """True if `token` is an element ID (C/D/E/UC/S/SD); False -> treat it as a Role display name."""
+    return bool(_STEP_ENDPOINT_ID.match(token.strip()))
+
+
+@dataclass
+class FlowStep:
+    n: int               # the step number as written
+    src: str             # an element ID (C/D/E/…) or a Role display name
+    dst: str             # same
+    src_is_id: bool      # True -> src is an element ID; False -> a Role name (actor step)
+    dst_is_id: bool
+    phrase: str = ""     # authored inline phrase (after ": ") — e.g. the actor's action
+    note: str = ""       # flow-specific note (after "· ")
+    ok: bool = True      # False -> the line could not be split into `from → to`
+
+
+@dataclass
+class Flow:
+    uc: str              # the use case this flow realizes (its UC id, DEFINED in the Use-cases table)
+    title: str
+    steps: list[FlowStep]
+    line_no: int
+
+
+def parse_flow_step(n: int, body: str) -> FlowStep:
+    """Parse one `from → to [: phrase] [· note]` step body. Split order: note (`·`), then the inline
+    phrase (`:`), THEN the arrow — so a note or a phrase that itself contains `:` / `·` / `->` never
+    confuses the from→to split. A body without EXACTLY one arrow comes back ok=False (the validator
+    flags it): zero arrows is malformed, and ≥2 means several interactions were bundled into one step
+    (a step is a single interaction)."""
+    raw = body.strip()
+    note = ""
+    if "·" in raw:
+        raw, note = (p.strip() for p in raw.split("·", 1))
+    phrase = ""
+    if ":" in raw:
+        raw, phrase = (p.strip() for p in raw.split(":", 1))
+    parts = [p.strip() for p in _FLOW_ARROW.split(raw)]
+    if len(parts) != 2 or not parts[0] or not parts[1]:
+        return FlowStep(n=n, src=raw, dst="", src_is_id=is_step_id(raw), dst_is_id=False,
+                        phrase=phrase, note=note, ok=False)
+    src, dst = parts[0], parts[1]
+    return FlowStep(n=n, src=src, dst=dst, src_is_id=is_step_id(src), dst_is_id=is_step_id(dst),
+                    phrase=phrase, note=note, ok=True)
+
+
+def iter_flows(lines: list[str]):
+    """Yield a Flow per T6 use-case flow block. A block runs from its `**UCn — title**` heading to the
+    next flow heading, a `---` rule, or a `#` section heading. Shared by the validator and the parser
+    (the SAME step window both sides read), so a step is never validated against a different slice than
+    it is rendered from."""
+    i, n = 0, len(lines)
+    while i < n:
+        hm = FLOW_HEADING.match(lines[i].strip())
+        if not hm:
+            i += 1
+            continue
+        uc, title = hm.group(1), hm.group(2).strip()
+        steps: list[FlowStep] = []
+        j = i + 1
+        while j < n:
+            s = lines[j].strip()
+            if FLOW_HEADING.match(s) or s.startswith("---") or s.startswith("#"):
+                break
+            sm = FLOW_STEP.match(s)
+            if sm:
+                steps.append(parse_flow_step(int(sm.group(1)), sm.group(2)))
+            j += 1
+        yield Flow(uc=uc, title=title, steps=steps, line_no=i + 1)
         i = j

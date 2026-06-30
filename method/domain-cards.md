@@ -14,8 +14,8 @@ it beats.
 > and their **relationships**. Attributes are variable-length (an entity has 3 or 30 fields); a
 > table cell holding 30 fields is unreadable, and splitting fields / relations into their own
 > tables means an entity's identity, fields, and relations live in three places you can never see
-> together. The Golden Path already solved this once: a step has rich internal structure (STORY /
-> UNDER THE HOOD / `Touches:`) that a table can't hold, so it is a block with a dedicated parser.
+> together. A **T6 use-case flow** already solves this once: a use case has rich internal structure (an
+> ordered list of `from → to` steps) that a table can't hold, so it is a block with a dedicated parser.
 > A domain entity is the same shape — so it gets the same treatment.
 
 ---
@@ -51,7 +51,7 @@ SOURCE: [<file>](<path>#L<line>)
 
 - The heading em-dash `—` and the `*(…)*` metadata parens mirror the Golden Path heading
   (`**GP1 — title** *(UC1)*`). The parens carry "stored where" (the old T5 column). Optional.
-- Separators inside `FIELDS` / `RELATIONS` are `·` — the same separator the `Touches:` line uses.
+- Separators inside `FIELDS` / `RELATIONS` are `·` — the same separator a T6 flow step's `· note` uses.
   **Never a raw `|`** (schema-v1 rule 3 — it breaks table parsing elsewhere in the file).
 
 **An entity is a REAL named type.** A card maps to an actual `class` / dataclass / enum / struct /
@@ -175,9 +175,9 @@ that no single field implements (key-composition, a derived view) takes a `{how}
 - **Author each relation once**, on the source (`From`) side. If both `E1` and `E2` declare the
   same pair, that is a duplicate the validator warns on.
 - **`E` ids are still global and stable**, so every existing cross-reference keeps working
-  unchanged: the Golden Path `Touches:` line, the `Step | … | T5 entities` traceability column, and
-  the T6 flow `Uses` column all still resolve to a card's `E` id. Only T5's *internal*
-  representation changed (table → cards); its id contract did not.
+  unchanged: a T6 flow step's endpoint, the backbone edge list, and the `C→E` edges all still resolve
+  to a card's `E` id. Only T5's *internal* representation changed (table → cards); its id contract did
+  not.
 - **`C→E` edges are first-class — harvest them with the edge list.** A component's relationship to
   the domain model is a backbone edge `C — persists/writes/reads → E` (persists/writes = the component
   **owns** the entity, i.e. is its system of record — typically its repository; reads = it

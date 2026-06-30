@@ -88,7 +88,7 @@ carries the exact **was → now** text, not just a description of impact.
 | Modified | the new row/step text | replace the old text |
 | Added | the new row + which table/section + where | insert |
 | Deleted | which row to remove + every reference to scrub | delete + clean refs |
-| Ripple | the **new text** of each rippled element (e.g. GP4's new story), not just "GP4 affected" | apply it |
+| Ripple | the **new text** of each rippled element (e.g. UC4's new flow steps, a GP step's new `why`), not just "UC4 affected" | apply it |
 | Promotion (drill deeper) | the retired component id, the new subsystem + its child components, and every old `C — verb → X` edge **re-pointed** to a specific new component | retire the component, insert the subsystem + children, re-point the edges, scrub refs to the old id (a subsystem can't be an edge endpoint, so any leftover edge to it fails validation) |
 
 **If accept finds itself inferring or re-reading code, the report was incomplete** —
@@ -102,7 +102,7 @@ understanding.)
 1. **Header** — baseline-commit → new-commit, files changed.
 2. **Narrative summary** — functional (delta to the Golden Path / use cases) + technical
    (architectural shape). Lives here, at the top, never in the baseline.
-3. **Golden Path impact** — which steps' story changed.
+3. **Golden Path / flow impact** — which use cases entered/left the walk, and whose T6 flow changed.
 4. **Per-element annotated diff** — `was → now`, classification (modified/added/deleted), why,
    code link, confidence. *This section is also the patch applied at accept* (see above).
 5. **New / removed elements.**

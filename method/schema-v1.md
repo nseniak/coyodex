@@ -56,6 +56,8 @@ that use case rather than redefining it.
 - **Diagram edges come from the verbed component edge list** (`From | Verb | To | Why | Where`,
   IDs in From/To). T1's "Depends on" is a coarse *derived* summary of that edge list — the
   edge list is the source of truth for arrows, their verbs, and **why each dependency exists**.
+  `Where` is the **call site** — a `[file](path#Lnnn)` link to the line in `From`'s code where it
+  invokes `To` (the primary one if several), so the flow arrow's drill-to-code lands on the action.
 - The edge **`Why`** is the **canonical relationship rationale** — distinct from a node's Purpose
   (about the node) and from the Golden Path (the sequenced story). Narrative layers reference
   edges instead of re-explaining them, so the `Why` lives in exactly one place.
