@@ -435,9 +435,12 @@ reads) and false negatives (a read routed through a `C→C` dependency is invisi
 count). Treat them as strong "look here" pointers to reconcile, not facts; *read-never-created* (a read
 with no create — often external/config data) is advisory too. The known bug that motivated audit (a
 sign-in step ordered before the org it needs) surfaces here as an *advisory* — audit points, you or L2
-decide. Audit also prints an **L2 grounding worklist**: the high-risk "actually-does" claims
-(security surfaces, `enforces` / `encrypts` edges, and every `C→D` edge into an external dependency —
-any verb — the system-boundary data-flow claims) that no deterministic check can settle. Ground each
+decide. Audit also prints an **L2 grounding worklist**: the "actually-does" claims no deterministic
+check can settle — the **whole backbone edge list**, ranked most-dangerous first so a large list is
+worked top-down: security surfaces + `enforces` / `encrypts` edges, then every `C→D` external-dependency
+edge (any verb — the audit→Elastic system-boundary class), then every `C→E` ownership edge, then the
+remaining element↔element edges (an edge into a dep explicitly tagged `framework`/`library` is skipped —
+a false "uses <lib>" is benign). Ground each
 by spawning a **fresh-context skeptic** (Phase 4 below) that sees only the finished map + the code —
 never your build reasoning — and tries to *disprove* the claim; **reconcile every finding — advisory
 or blocking — (fix the map, or justify and note why)** before rendering. So the invariant after every

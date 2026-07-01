@@ -216,10 +216,11 @@ def make_l2_map() -> str:
 
 
 def make_l2_dep_map() -> str:
-    """Backbone edges into external deps: an `emits` into an EXPLICIT `datastore` (ground), a `uses`
-    into an EXPLICIT `library` (skip — a false 'uses <lib>' is benign), a `writes` into an UNTAGGED dep
-    (ground — the fail-safe, since inference would call it 'library'), plus an `enforces` edge that must
-    still rank first. The `emits`-into-a-log-dep row is the audit→Elastic false-edge class."""
+    """The whole broadened worklist on one map: an `enforces` edge (security, ranks first); a `C→D`
+    `emits` into an EXPLICIT `datastore` and a `writes` into an UNTAGGED dep (both ground); a `uses`
+    into an EXPLICIT `library` (skip — a false 'uses <lib>' is benign); a `C→E` `persists` (ownership);
+    and a plain `C→C` `calls` (remaining). The `emits`-into-a-log-dep row is the audit→Elastic
+    false-edge class."""
     return (
         "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
         "| **UC1** | Call | Andy | a -> b |\n\n"
@@ -232,6 +233,8 @@ def make_l2_dep_map() -> str:
         "| C1 | emits | D1 | ship logs | audit_repo.py#L8 |\n"
         "| C1 | uses | D2 | log lines | mod.py#L3 |\n"
         "| C1 | writes | D3 | dump | x.py#L1 |\n"
+        "| C1 | persists | E1 | store | repo.py#L2 |\n"
+        "| C1 | calls | C3 | rpc | client.py#L4 |\n"
     )
 
 
@@ -381,6 +384,27 @@ def test_l2_worklist_ranks_security_before_dep_edges() -> None:
     """Security (`enforces`) claims outrank external-dep data-flow claims in the worklist order."""
     claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
     assert claims.index("C1 enforces C2") < claims.index("C1 emits D1"), claims
+
+
+def test_l2_worklist_grounds_entity_ownership_edges() -> None:
+    """A `C→E` ownership edge is grounded — a wrong persists/writes/reads mis-wires the
+    subsystem→subdomain bridge."""
+    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    assert "C1 persists E1" in claims, claims
+
+
+def test_l2_worklist_grounds_remaining_component_edges() -> None:
+    """The broadened worklist grounds the WHOLE backbone — a plain `C→C` `calls` edge is on it too."""
+    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    assert "C1 calls C3" in claims, claims
+
+
+def test_l2_worklist_ranks_backbone_tiers() -> None:
+    """Ranking holds across every tier: security < external-dep < entity-ownership < remaining."""
+    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    order = [claims.index(c) for c in
+             ("C1 enforces C2", "C1 emits D1", "C1 persists E1", "C1 calls C3")]
+    assert order == sorted(order), claims
 
 
 # --- built-in runner ------------------------------------------------------------

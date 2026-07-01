@@ -405,13 +405,15 @@ def _folded_dep_ids(text: str) -> set[str]:
 
 
 def l2_worklist(text: str) -> list[WorkItem]:
-    """The ranked list of high-risk "actually-does" claims for L2 grounding. These are NOT checked
-    here — they are the worklist the audit hands to fresh-context skeptic sub-agents (method.md Phase
-    4), each told to DISPROVE its claim against the code. Ranked by how dangerous a FALSE claim is:
-    (1) security/auth surfaces, (2) `enforces` / `encrypts` edges, then (3) every edge INTO an external
-    dependency (`C→D`, any verb) — the system-boundary data-flow claims (the audit→Elastic false-edge
-    class) that no deterministic gate grounds. Deps EXPLICITLY tagged `framework`/`library` are skipped
-    (a false "uses <lib>" edge is benign; only an explicit fold-tag is trusted, never inference)."""
+    """The ranked list of "actually-does" claims for L2 grounding — the WHOLE backbone edge list, since
+    no deterministic gate reads From's code to confirm an edge. These are NOT checked here; they are the
+    worklist the audit hands to fresh-context skeptic sub-agents (method.md Phase 4), each told to
+    DISPROVE its claim against the code. Ranked by how dangerous a FALSE claim is, most-dangerous first,
+    so a large edge list is worked top-down: (1) security/auth surfaces + `enforces`/`encrypts` edges,
+    (2) every `C→D` edge into an external dependency (any verb — the audit→Elastic system-boundary
+    class), (3) every `C→E` ownership edge, (4) every remaining element→element edge. The ONLY thing
+    filtered out is an edge into a dep EXPLICITLY tagged `framework`/`library` (a false "uses <lib>" is
+    benign, and that is the high-count bucket); only an explicit fold-tag is trusted, never inference."""
     items: list[WorkItem] = []
 
     # (1) Security & auth table rows — each is an "actually-does" claim with a real risk if false.
@@ -433,18 +435,26 @@ def l2_worklist(text: str) -> list[WorkItem]:
                 why_risky="security boundary — a false claim here is an access-control hole."))
         break
 
-    # (2) Backbone edges that assert something the code must actually DO, security-first:
-    #       (a) `enforces` / `encrypts` — security-critical (an access-control / crypto claim that is an
-    #           outright hole if false); emitted here, ranked right after the auth surfaces.
+    # (2) Every backbone edge asserts something the code must actually DO — an "actually-does" claim no
+    #     deterministic gate can settle (validate checks well-formedness, audit-L1 checks
+    #     self-contradiction; neither reads From's code to confirm the edge). Ground the WHOLE edge list,
+    #     ranked by how dangerous a FALSE edge is so a large list can be worked top-down:
+    #       (a) `enforces` / `encrypts` — security-critical (an access-control / crypto hole if false);
+    #           emitted into `items` here, right after the auth surfaces.
     #       (b) any edge INTO an external dependency (`C→D`, ANY verb) — a system-boundary data-flow
-    #           claim ("audit repo emits to Elastic"). No deterministic gate reads From's code to
-    #           confirm it, and the "every dep needs an incoming edge" completeness rule actively
-    #           pressures the lead to author one, so a lexically-plausible but false C→D edge passes
-    #           validate + audit-L1 silently (the motivating bug). Collected separately and appended
-    #           AFTER the security tier so the ranking stays security-first. A dep EXPLICITLY tagged
-    #           `framework`/`library` is skipped (see `_folded_dep_ids`).
+    #           claim ("audit repo emits to Elastic"); the "every dep needs an incoming edge"
+    #           completeness nudge actively pressures the lead to author one (the motivating bug). A dep
+    #           EXPLICITLY tagged `framework`/`library` is SKIPPED — a false "uses <lib>" is benign and
+    #           that bucket is the high-count one the Context view folds away (see `_folded_dep_ids`).
+    #       (c) any edge INTO a domain entity (`C→E` — persists / writes / reads / …) — an ownership
+    #           claim that mis-wires the subsystem→subdomain bridge if wrong.
+    #       (d) every remaining element→element edge (`C↔C` — uses / calls / routes-to / listens-to /
+    #           extends / …) — lowest-risk, highest-count, grounded last.
+    #     (b)–(d) are collected separately and appended AFTER the security tier so the ranking holds.
     folded = _folded_dep_ids(text)
     dep_items: list[WorkItem] = []
+    entity_items: list[WorkItem] = []
+    other_items: list[WorkItem] = []
     for _start, block in iter_tables(text):
         headers = [c.lower() for c in schema_v1.split_cells(block[0])]
         if headers[:3] != ["from", "verb", "to"]:
@@ -462,19 +472,34 @@ def l2_worklist(text: str) -> list[WorkItem]:
             where = cells[wi] if wi is not None and wi < len(cells) else ""
             src_txt = src.group(0) if src else cells[0]
             dst_txt = dst.group(0) if dst else cells[2]
+            claim = f"{src_txt} {verb} {dst_txt}"
+            anchor = _anchor(where)
             if verb in ("enforces", "encrypts"):
                 items.append(WorkItem(
-                    claim=f"{src_txt} {verb} {dst_txt}",
-                    anchor=_anchor(where),
+                    claim=claim, anchor=anchor,
                     why_risky=f"'{verb}' is a security-critical relationship — verify the code actually does it."))
-            elif dst is not None and dst.group(0).startswith("D") and dst.group(0) not in folded:
+            elif dst is not None and dst.group(0).startswith("D"):
+                if dst.group(0) in folded:
+                    continue  # explicit framework/library — a false 'uses <lib>' edge is benign
                 dep_items.append(WorkItem(
-                    claim=f"{src_txt} {verb} {dst_txt}",
-                    anchor=_anchor(where),
+                    claim=claim, anchor=anchor,
                     why_risky=(f"external-dependency data-flow edge — no deterministic gate reads "
                                f"{src_txt}'s code to confirm it reaches {dst_txt}; ground the call site "
                                f"against the code (the audit→Elastic false-edge class).")))
+            elif dst is not None and dst.group(0).startswith("E"):
+                entity_items.append(WorkItem(
+                    claim=claim, anchor=anchor,
+                    why_risky=(f"domain-model ownership edge — verify {src_txt}'s code actually "
+                               f"'{verb}' {dst_txt}; a wrong persists/writes/reads mis-wires the "
+                               f"subsystem→subdomain bridge.")))
+            elif src is not None and dst is not None:
+                other_items.append(WorkItem(
+                    claim=claim, anchor=anchor,
+                    why_risky=(f"backbone edge — no deterministic gate confirms {src_txt}'s code "
+                               f"'{verb}' {dst_txt}; ground the call site against the code.")))
     items.extend(dep_items)
+    items.extend(entity_items)
+    items.extend(other_items)
     return items
 
 
