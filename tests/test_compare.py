@@ -15,6 +15,7 @@ from pathlib import Path
 
 from coyodex.eval.compare import (DEFAULT_BANDS, DRIFT, PASS, REGRESSED, Thresholds, compare,
                                   load_thresholds)
+from coyodex.eval.judge import DimensionScore, JudgeReport
 from coyodex.eval.profile import MapProfile
 
 COMPARE = [sys.executable, "-m", "coyodex.cli", "eval", "compare"]
@@ -33,6 +34,15 @@ def make_profile(**over: object) -> MapProfile:
     )
     base.update(over)
     return MapProfile(**base)  # type: ignore[arg-type]
+
+
+def make_judge(passrate: float = 1.0, overall: float = 3.0,
+               dims: list[DimensionScore] | None = None) -> JudgeReport:
+    """A representative JudgeReport; override pass-rate / overall / dimensions to build a drifting one."""
+    if dims is None:
+        dims = [DimensionScore("faithfulness", 3.0, 3), DimensionScore("completeness", 3.0, 3)]
+    return JudgeReport(n_claims=10, n_grounded=int(round(passrate * 10)), grounding_passrate=passrate,
+                       dimensions=dims, overall=overall)
 
 
 def _tight() -> Thresholds:
@@ -126,6 +136,44 @@ def test_nonexistent_band_metric_is_noted_not_crashed() -> None:
     assert any("not a numeric profile metric" in n for n in r.notes), r.notes
 
 
+# --- judge bands (drop-only, soft DRIFT) ----------------------------------------
+def test_judge_passrate_drop_beyond_allowance_drifts() -> None:
+    r = compare(make_profile(), make_profile(), None, make_judge(passrate=0.9), make_judge(passrate=0.7))
+    assert r.verdict == DRIFT, r
+    assert any(j.metric == "grounding_passrate" and not j.within for j in r.judge_bands)
+
+
+def test_judge_passrate_small_drop_is_within() -> None:
+    r = compare(make_profile(), make_profile(), None, make_judge(passrate=0.9), make_judge(passrate=0.85))
+    assert r.verdict == PASS, r
+
+
+def test_judge_score_rise_is_never_a_drift() -> None:
+    """Judge bands are drop-only — a higher score is good, not drift."""
+    r = compare(make_profile(), make_profile(), None, make_judge(overall=3.0), make_judge(overall=3.9))
+    assert r.verdict == PASS, r
+
+
+def test_dimension_score_drop_drifts() -> None:
+    base = make_judge(dims=[DimensionScore("faithfulness", 4.0, 3)])
+    cand = make_judge(dims=[DimensionScore("faithfulness", 3.0, 3)])
+    r = compare(make_profile(), make_profile(), None, base, cand)
+    assert r.verdict == DRIFT, r
+    assert any(j.metric == "dim:faithfulness" and not j.within for j in r.judge_bands)
+
+
+def test_one_sided_judge_report_is_noted_and_skipped() -> None:
+    r = compare(make_profile(), make_profile(), None, make_judge(), None)
+    assert not r.judge_bands
+    assert any("only one side" in n for n in r.notes), r.notes
+
+
+def test_hard_fail_dominates_a_judge_drift() -> None:
+    r = compare(make_profile(contradictions=0), make_profile(contradictions=1),
+                None, make_judge(passrate=0.9), make_judge(passrate=0.4))
+    assert r.verdict == REGRESSED, r
+
+
 # --- thresholds loading ---------------------------------------------------------
 def test_per_project_overrides_global() -> None:
     cfg = {
@@ -191,6 +239,21 @@ def test_cli_drift_exits_two() -> None:
                         _write(make_profile(entities=9))], capture_output=True, text=True)
     assert r.returncode == 2, r.stdout + r.stderr
     assert "DRIFT" in r.stdout
+
+
+def _write_judge(j: JudgeReport) -> str:
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+        f.write(j.to_json())
+        return f.name
+
+
+def test_cli_applies_judge_reports() -> None:
+    r = subprocess.run([*COMPARE, _write(make_profile()), _write(make_profile()),
+                        "--baseline-judge", _write_judge(make_judge(passrate=0.9)),
+                        "--candidate-judge", _write_judge(make_judge(passrate=0.5))],
+                       capture_output=True, text=True)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "Judge bands" in r.stdout and "DRIFT" in r.stdout
 
 
 # --- built-in runner ------------------------------------------------------------

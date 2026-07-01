@@ -25,6 +25,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from coyodex.eval.judge import JudgeReport
 from coyodex.eval.profile import MapProfile
 
 PASS = "PASS"
@@ -47,6 +48,13 @@ DEFAULT_BANDS: dict[str, float] = {
     "l2_claims_pct": 0.25,
 }
 
+# Judge bands are DROP-only (asymmetric): a rise in faithfulness/coverage is good, only a fall is a
+# concern. Values are allowed ABSOLUTE drops in the metric's own units (pass-rate 0..1, scores 0..4).
+DEFAULT_JUDGE_BANDS: dict[str, float] = {
+    "l2_grounding_passrate_drop": 0.10,
+    "judge_score_drop": 0.10,
+}
+
 
 @dataclass(frozen=True)
 class Thresholds:
@@ -55,6 +63,7 @@ class Thresholds:
     coverage_flags_may_increase_by: int = 0
     auth_surfaces_must_not_drop: bool = True
     bands: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_BANDS))
+    judge_bands: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_JUDGE_BANDS))
 
     @classmethod
     def from_config(cls, cfg: dict, project: str | None = None) -> "Thresholds":
@@ -63,19 +72,22 @@ class Thresholds:
         hard = dict(g.get("hard_gates", {}))
         # Bands MERGE onto the defaults (like hard_gates merge key-by-key). A partial `bands` override
         # tightening one metric must NOT silently drop the others — that would turn off drift detection
-        # on the rest and let a real regression PASS (review Finding 2).
+        # on the rest and let a real regression PASS (review Finding 2). Same for judge_bands.
         bands = dict(DEFAULT_BANDS)
         bands.update(g.get("bands", {}))
-        if project:
-            pp = cfg.get("per_project", {}).get(project, {})
-            hard.update(pp.get("hard_gates", {}))
-            bands.update(pp.get("bands", {}))
+        jbands = dict(DEFAULT_JUDGE_BANDS)
+        jbands.update(g.get("judge_bands", {}))
+        pp = cfg.get("per_project", {}).get(project, {}) if project else {}
+        hard.update(pp.get("hard_gates", {}))
+        bands.update(pp.get("bands", {}))
+        jbands.update(pp.get("judge_bands", {}))
         return cls(
             validate_must_not_regress=hard.get("validate_must_not_regress", True),
             no_new_contradictions=hard.get("no_new_contradictions", True),
             coverage_flags_may_increase_by=hard.get("coverage_flags_may_increase_by", 0),
             auth_surfaces_must_not_drop=hard.get("auth_surfaces_must_not_drop", True),
             bands=bands,
+            judge_bands=jbands,
         )
 
 
@@ -97,11 +109,22 @@ class BandResult:
 
 
 @dataclass(frozen=True)
+class JudgeBand:
+    metric: str
+    baseline: float
+    candidate: float
+    drop: float          # baseline - candidate (positive = a drop, the concern)
+    allowed_drop: float
+    within: bool
+
+
+@dataclass(frozen=True)
 class DeltaReport:
     verdict: str                  # PASS | DRIFT | REGRESSED
     gates: list[GateResult]
     bands: list[BandResult]
     notes: list[str]              # informational (skipped gates, drifted names) — never gating
+    judge_bands: list[JudgeBand] = field(default_factory=list)  # empty unless judge reports were given
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
@@ -113,9 +136,35 @@ def _band(metric: str, b_val: float, c_val: float, allowed: float) -> BandResult
     return BandResult(metric, b_val, c_val, delta, allowed, abs(delta) <= allowed + 1e-9)
 
 
-def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds | None = None) -> DeltaReport:
+def _compare_judge(baseline: JudgeReport, candidate: JudgeReport, t: Thresholds) -> list[JudgeBand]:
+    """Drop-only judge bands: grounding pass-rate, overall score, and each shared rubric dimension. A
+    rise is always within; only a drop past the allowance breaches (→ DRIFT)."""
+    out: list[JudgeBand] = []
+    pr_allowed = t.judge_bands.get("l2_grounding_passrate_drop", 0.10)
+    if baseline.grounding_passrate is not None and candidate.grounding_passrate is not None:
+        drop = baseline.grounding_passrate - candidate.grounding_passrate
+        out.append(JudgeBand("grounding_passrate", baseline.grounding_passrate,
+                             candidate.grounding_passrate, drop, pr_allowed, drop <= pr_allowed + 1e-9))
+    s_allowed = t.judge_bands.get("judge_score_drop", 0.10)
+    if baseline.overall is not None and candidate.overall is not None:
+        drop = baseline.overall - candidate.overall
+        out.append(JudgeBand("overall_score", baseline.overall, candidate.overall, drop, s_allowed,
+                             drop <= s_allowed + 1e-9))
+    base_dims = {d.dimension: d.score for d in baseline.dimensions}
+    for d in candidate.dimensions:
+        if d.dimension in base_dims:
+            drop = base_dims[d.dimension] - d.score
+            out.append(JudgeBand(f"dim:{d.dimension}", base_dims[d.dimension], d.score, drop, s_allowed,
+                                 drop <= s_allowed + 1e-9))
+    return out
+
+
+def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds | None = None,
+            baseline_judge: JudgeReport | None = None,
+            candidate_judge: JudgeReport | None = None) -> DeltaReport:
     """Apply the relative hard gates + bands, returning a ranked DeltaReport with a PASS/DRIFT/REGRESSED
-    verdict. `thresholds` defaults to the built-in defaults (all hard gates on, DEFAULT_BANDS)."""
+    verdict. `thresholds` defaults to the built-in defaults (all hard gates on, DEFAULT_BANDS). When
+    BOTH judge reports are given, drop-only judge bands are applied too (a breach → DRIFT)."""
     t = thresholds or Thresholds()
     gates: list[GateResult] = []
     notes: list[str] = []
@@ -156,13 +205,18 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
             continue
         bands.append(_band(metric, float(b_val), float(c_val), t.bands[key]))
 
+    jbands = _compare_judge(baseline_judge, candidate_judge, t) \
+        if baseline_judge is not None and candidate_judge is not None else []
+    if (baseline_judge is None) != (candidate_judge is None):
+        notes.append("judge bands skipped — a judge report was given for only one side")
+
     if any(not g.passed for g in gates):
         verdict = REGRESSED
-    elif any(not b.within for b in bands):
+    elif any(not b.within for b in bands) or any(not j.within for j in jbands):
         verdict = DRIFT
     else:
         verdict = PASS
-    return DeltaReport(verdict, gates, bands, notes)
+    return DeltaReport(verdict, gates, bands, notes, jbands)
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -178,6 +232,12 @@ def format_report(report: DeltaReport) -> str:
             tag = "ok" if b.within else "DRIFT"
             out.append(f"  [{tag}] {b.metric}: {b.baseline:g} -> {b.candidate:g} "
                        f"({b.delta_pct:+.0%}, allowed ±{b.allowed_pct:.0%})")
+    if report.judge_bands:
+        out.append("\nJudge bands (drop vs baseline):")
+        for j in report.judge_bands:
+            tag = "ok" if j.within else "DRIFT"
+            out.append(f"  [{tag}] {j.metric}: {j.baseline:g} -> {j.candidate:g} "
+                       f"(drop {j.drop:+g}, allowed {j.allowed_drop:g})")
     if report.notes:
         out.append("\nNotes:")
         for n in report.notes:
@@ -193,12 +253,16 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex eval compare <baseline.json> <candidate.json> "
-              "[--thresholds <file>] [--project <name>] [--json]\n\n"
-              "Compare two MapProfile JSON files and apply the relative regression gates.\n"
+              "[--thresholds <file>] [--project <name>]\n"
+              "       [--baseline-judge <file>] [--candidate-judge <file>] [--json]\n\n"
+              "Compare two MapProfile JSON files and apply the relative regression gates. Pass BOTH\n"
+              "judge reports to also apply the drop-only judge bands.\n"
               "Exit: 0 PASS · 2 DRIFT (band breach) · 1 REGRESSED (hard gate).")
         return 0
     project: str | None = None
     thresholds_path: Path | None = None
+    base_judge_path: Path | None = None
+    cand_judge_path: Path | None = None
     positional: list[str] = []
     i = 0
     while i < len(argv):
@@ -215,6 +279,15 @@ def main(argv: list[str] | None = None) -> int:
                 print("ERROR: --thresholds needs a path", file=sys.stderr)
                 return 2
             thresholds_path = Path(argv[i])
+        elif a in ("--baseline-judge", "--candidate-judge"):
+            i += 1
+            if i >= len(argv):
+                print(f"ERROR: {a} needs a path", file=sys.stderr)
+                return 2
+            if a == "--baseline-judge":
+                base_judge_path = Path(argv[i])
+            else:
+                cand_judge_path = Path(argv[i])
         elif a == "--json":
             pass
         elif a.startswith("-"):
@@ -231,13 +304,16 @@ def main(argv: list[str] | None = None) -> int:
         if not p.exists():
             print(f"ERROR: {p} not found", file=sys.stderr)
             return 1
-    if thresholds_path is not None and not thresholds_path.exists():
-        print(f"ERROR: --thresholds {thresholds_path} not found", file=sys.stderr)
-        return 1
+    for p in (thresholds_path, base_judge_path, cand_judge_path):
+        if p is not None and not p.exists():
+            print(f"ERROR: {p} not found", file=sys.stderr)
+            return 1
     baseline = MapProfile.from_json(base_path.read_text(encoding="utf-8"))
     candidate = MapProfile.from_json(cand_path.read_text(encoding="utf-8"))
     thresholds = load_thresholds(thresholds_path, project) if thresholds_path else Thresholds()
-    report = compare(baseline, candidate, thresholds)
+    base_judge = JudgeReport.from_json(base_judge_path.read_text(encoding="utf-8")) if base_judge_path else None
+    cand_judge = JudgeReport.from_json(cand_judge_path.read_text(encoding="utf-8")) if cand_judge_path else None
+    report = compare(baseline, candidate, thresholds, base_judge, cand_judge)
     print(report.to_json() if "--json" in argv else format_report(report))
     return _EXIT[report.verdict]
 
