@@ -117,7 +117,9 @@ let mainScene = null;
 function makeScene(root, defaultPanel) {
   // dimEls: a flat list of extra focusable elements (the Golden Path's actor figures, lifelines and
   // message text/lines) that the standard node/edge focus model doesn't cover — dimmed/restored together.
-  return { root, nodeEls: {}, edgeEls: [], dimEls: [], gpLit: new Set(), selectedKey: null, clearHighlight: null, defaultPanel };
+  // selectors: selectedKey -> a zero-arg closure that re-applies that selection (panel + glow + focus),
+  //   registered at bind time so back/forward can restore the element that was selected in this view.
+  return { root, nodeEls: {}, edgeEls: [], dimEls: [], gpLit: new Set(), selectedKey: null, selectors: {}, clearHighlight: null, defaultPanel };
 }
 function sceneSelect(scene, applyFn) {  // one highlight at a time within a scene
   if (scene.clearHighlight) scene.clearHighlight();
@@ -478,6 +480,7 @@ function bindFlow(uc) {
       gpFocus(scene, keep);
       syncTreeToNode(id);
     };
+    scene.selectors[selKey] = select;  // so back/forward can restore this participant selection
     const on = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = HOVER; };
     const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = gpRestFilter(scene, el); };
     for (const el of parts) {
@@ -513,16 +516,20 @@ function bindFlow(uc) {
     const text = texts[i] || null, line = lineByIdx[i] || null;
     const edge = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || [])[0] : null;
     const selKey = 'flowstep:' + uc + ':' + i;
-    const onClick = (ev) => {
-      if (isDrag(ev)) return;
-      ev.stopPropagation();
-      if (scene.selectedKey === selKey) { resetScene(scene); return; }
+    const doSelect = () => {
       scene.selectedKey = selKey;
       if (edge) showEdge(edge); else showFlowStep(uc, i);
       const keep = new Set(els);
       for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
       sceneSelect(scene, () => gpHighlight(scene, els));
       gpFocus(scene, keep);
+    };
+    scene.selectors[selKey] = doSelect;  // so back/forward can restore this flow-step selection
+    const onClick = (ev) => {
+      if (isDrag(ev)) return;
+      ev.stopPropagation();
+      if (scene.selectedKey === selKey) { resetScene(scene); return; }
+      doSelect();
     };
     const on = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = HOVER; };
     const off = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = gpRestFilter(scene, el); };
@@ -972,17 +979,21 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
   const hoverOn = () => { if (scene.selectedKey !== selKey) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
   const hoverOff = () => { if (scene.selectedKey !== selKey) { p.style.filter = ''; if (label) label.style.filter = ''; } };
+  const doSelect = () => {
+    scene.selectedKey = selKey;
+    showFn(); sceneSelect(scene, () => glowEdge(p, label));
+    // Dim to the edge only when its endpoints are drawn here; an aggregated arrow whose ends aren't
+    // (e.g. a neighbourhood's cross arrow) would otherwise dim the whole view.
+    if (scene.nodeEls[e.src] || scene.nodeEls[e.dst]) focusEdge(scene, e); else clearFocus(scene);
+  };
+  scene.selectors[selKey] = doSelect;  // so back/forward can restore this edge selection
   const onClick = (ev) => {
     if (isDrag(ev)) return;  // tail of a drag-pan, not a real click
     ev.stopPropagation();
     if (opts.onDrill && isDrillClick(ev)) { hoverOff(); opts.onDrill(); return; }  // ⌘-click drills in
     hoverOff();  // drop the hover glow before (de)selecting, so it can't linger under HILITE
     if (scene.selectedKey === selKey) { resetScene(scene); return; }  // click again = deselect
-    scene.selectedKey = selKey;
-    showFn(); sceneSelect(scene, () => glowEdge(p, label));
-    // Dim to the edge only when its endpoints are drawn here; an aggregated arrow whose ends aren't
-    // (e.g. a neighbourhood's cross arrow) would otherwise dim the whole view.
-    if (scene.nodeEls[e.src] || scene.nodeEls[e.dst]) focusEdge(scene, e); else clearFocus(scene);
+    doSelect();
   };
   scene.edgeEls.push({ e, path: p, label });
   attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.tipFn || (() => tipEdgeHtml(e)), !!opts.onDrill, opts.actionFn);
@@ -1035,10 +1046,12 @@ function resolveComponentEdge(m) {
 
 // --- navigation history ---------------------------------------------------------
 // A linear stack of view "states" (one per diagram-changing click); back/forward move the index.
-// Selecting a node/edge for details is NOT a navigation — it only updates the side panel.
-//   state = { kind: 'context' | 'container' | 'component' | 'subsystem' | 'edge', sid?, a?, b?, vp? }
-// vp = { zoom, pan } captured when we leave a view, so stepping back/forward through history
-// restores it exactly as it was (a fresh drill via go() has no vp yet — it fits/centers).
+// Selecting a node/edge for details is NOT a separate history entry — but the current selection is
+// remembered PER VIEW: captured on the state we leave and restored when we step back/forward to it.
+//   state = { kind: 'context' | 'container' | 'component' | 'subsystem' | 'edge', sid?, a?, b?, vp?, sel? }
+// vp = { zoom, pan } and sel = the selectedKey, both captured when we leave a view, so stepping
+// back/forward restores the view exactly as it was (a fresh drill via go() has neither — it
+// fits/centers with nothing selected).
 let history = [];
 let hi = -1;  // index of the current state
 
@@ -1046,19 +1059,21 @@ function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.gp ? ':' + s.gp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '');
 }
-function captureViewport() {  // stash the current pan/zoom on the entry we're about to leave
-  if (mainPz && hi >= 0 && history[hi]) history[hi].vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
+function captureViewState() {  // stash the current pan/zoom + selection on the entry we're about to leave
+  if (hi < 0 || !history[hi]) return;
+  if (mainPz) history[hi].vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
+  history[hi].sel = mainScene ? mainScene.selectedKey : null;
 }
 function go(state) {
   if (hi >= 0 && stateKey(history[hi]) === stateKey(state)) return;  // already here
-  captureViewport();
+  captureViewState();
   history = history.slice(0, hi + 1);  // a new branch drops any forward history
   history.push(state);
   hi = history.length - 1;
   render();
 }
-function back() { if (hi > 0) { captureViewport(); hi -= 1; render(); } }
-function fwd() { if (hi < history.length - 1) { captureViewport(); hi += 1; render(); } }
+function back() { if (hi > 0) { captureViewState(); hi -= 1; render(); } }
+function fwd() { if (hi < history.length - 1) { captureViewState(); hi += 1; render(); } }
 
 // --- per-state binding ----------------------------------------------------------
 function bindContext() {
@@ -1078,6 +1093,10 @@ function bindContext() {
   bindEdges(mainScene, resolveContextEdge);
   markSysDrill();
   markLibsDrill();
+  // The Libraries fold selects to its own roster panel (not a plain node panel), so pre-register its
+  // re-select — the generic node loop in render() then skips it, keeping back/forward faithful.
+  const libsEl = mainScene.nodeEls[LIBS_ID];
+  if (libsEl) mainScene.selectors['node:' + LIBS_ID] = () => selectLibsFold(mainScene, libsEl);
 }
 // The Libraries drill-down: the System + every folded in-process dep, same shape as Context. SYS and
 // each dep simply select to their panel (no further drill); arrows resolve via the context-edge bridge.
@@ -1430,6 +1449,7 @@ function bindGP() {
     const { text, line } = scene.gpMsg[i];
     if (!text) return;
     const gpId = step.id, selKey = 'gpstep:' + gpId;
+    scene.selectors[selKey] = () => selectGPStep(scene, i, gpId, aidOfStep[i]);  // back/forward restore
     const on = () => { if (scene.selectedKey !== selKey) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; } };
     // restore to the resting glow (an actor-selected step keeps its HILITE), not blank
     const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = gpRestFilter(scene, text); if (line) line.style.filter = gpRestFilter(scene, line); } };
@@ -1455,6 +1475,7 @@ function bindGP() {
   // actors: click the figure or anywhere on the lifeline to select the actor (no drill).
   for (const a of GP_ACTORS) {
     const rec = scene.gpActor[a.aid], selKey = 'gpactor:' + a.aid;
+    scene.selectors[selKey] = () => selectGPActor(scene, a);  // back/forward restore
     const on = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = HOVER; };
     const off = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = gpRestFilter(scene, el); };
     const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off(); selectGPActor(scene, a); };
@@ -1650,6 +1671,15 @@ async function render() {
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
   bindFor(s);
+  // Every drawn box gets a default re-select closure (plain-click select), so back/forward can restore
+  // a node selection. Edges, flow steps and GP actors/steps register their own during bindFor; a box
+  // with special select behaviour (the Libraries fold) pre-registers too, so it's skipped here.
+  for (const id in mainScene.nodeEls) {
+    if (!mainScene.selectors['node:' + id]) {
+      const el = mainScene.nodeEls[id];
+      mainScene.selectors['node:' + id] = () => selectNode(mainScene, el, id);
+    }
+  }
   applyDefaultPanel(s);
   if (mode === 'diff' && HAS_DIFF) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
@@ -1658,6 +1688,8 @@ async function render() {
     const id = pendingSelect; pendingSelect = null;
     const el = mainScene.nodeEls[id];
     if (el) selectNode(mainScene, el, id); else { showNode(id); syncTreeToNode(id); }
+  } else if (s.sel && mainScene.selectors[s.sel]) {
+    mainScene.selectors[s.sel]();  // history revisit: restore the element that was selected in this view
   }
   const svgEl = diagram.querySelector('svg');
   if (svgEl && window.svgPanZoom) {
@@ -2152,7 +2184,9 @@ zoomin.addEventListener('click', () => { if (mainPz) { mainPz.zoomIn(); updateZo
 zoomout.addEventListener('click', () => { if (mainPz) { mainPz.zoomOut(); updateZoomLevel(); } });
 zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); updateZoomLevel(); } });  // fit to screen
 if (HAS_DIFF) {
-  toggle.addEventListener('click', () => { mode = mode === 'diff' ? 'base' : 'diff'; render(); });
+  // Same view, different overlay — capture the live pan/zoom + selection first so the toggle keeps
+  // them (render() restores from the state) instead of resetting to a fresh, unselected fit.
+  toggle.addEventListener('click', () => { captureViewState(); mode = mode === 'diff' ? 'base' : 'diff'; render(); });
 }
 // Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise the
 // Context view — the highest, C4 system-in-the-world altitude.
