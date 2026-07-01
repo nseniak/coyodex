@@ -1,0 +1,29 @@
+{
+  "schema": "coyodex-eval/thresholds/v1",
+  "note": "Regression gates for `coyodex eval` — RELATIVE to the baseline, not absolute (a real baseline map carries some validate problems, so the gate is 'no NEW problems'). Hard gates trip REGRESSED; bands trip a softer DRIFT. A partial `bands`/`judge_bands` block MERGES onto the built-in defaults. `advisories` and `audit_warnings` are intentionally ungated (noisy non-blocking audit output). Starter values — tune per project via .coyodex-eval or a --thresholds override.",
+  "global": {
+    "hard_gates": {
+      "validate_must_not_regress": true,
+      "no_new_contradictions": true,
+      "coverage_flags_may_increase_by": 0,
+      "auth_surfaces_must_not_drop": true
+    },
+    "bands": {
+      "use_cases_pct": 0.20,
+      "subsystems_pct": 0.25,
+      "subdomains_pct": 0.25,
+      "components_pct": 0.20,
+      "deps_pct": 0.25,
+      "entities_pct": 0.20,
+      "edges_pct": 0.25,
+      "gp_steps_pct": 0.20,
+      "flows_pct": 0.20,
+      "l2_claims_pct": 0.25
+    },
+    "judge_bands": {
+      "l2_grounding_passrate_drop": 0.10,
+      "judge_score_drop": 0.10
+    }
+  },
+  "per_project": {}
+}

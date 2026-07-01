@@ -16,7 +16,7 @@ MIN_PY := 3.10
 # Codex and Cursor and extra copies would just show up as duplicate skills.
 SKILLS_DIRS := $(HOME)/.claude/skills $(HOME)/.agents/skills
 
-.PHONY: install uninstall deps dev venv clean
+.PHONY: install install-eval uninstall uninstall-eval deps dev venv clean
 
 # Create the repo-local venv. Requires Python $(MIN_PY)+ (the pre-index's tree-sitter deps
 # declare requires-python >=3.10); fail fast with a clear message instead of a cryptic error.
@@ -54,10 +54,28 @@ install: deps
 		echo "Installed coyodex skill -> $$dir/coyodex (home: $(REPO))"; \
 	done
 
+# Install the coyodex-eval skill globally — SEPARATE from `install`, since the eval (method-quality
+# regression) is opt-in. Same COYODEX_HOME substitution, so the skill points back at this clone for the
+# method doc (method/coyodex-eval.md), the eval config (method/eval/), and the CLI. Depends on `deps`
+# so the venv/CLI exist.
+install-eval: deps
+	@for dir in $(SKILLS_DIRS); do \
+		rm -rf "$$dir/coyodex-eval"; \
+		mkdir -p "$$dir/coyodex-eval"; \
+		sed 's|__COYODEX_HOME__|$(REPO)|g' skill/coyodex-eval/SKILL.md > "$$dir/coyodex-eval/SKILL.md"; \
+		echo "Installed coyodex-eval skill -> $$dir/coyodex-eval (home: $(REPO))"; \
+	done
+
 uninstall:
 	@for dir in $(SKILLS_DIRS); do \
 		rm -rf "$$dir/coyodex"; \
 		echo "Uninstalled coyodex skill from $$dir/coyodex"; \
+	done
+
+uninstall-eval:
+	@for dir in $(SKILLS_DIRS); do \
+		rm -rf "$$dir/coyodex-eval"; \
+		echo "Uninstalled coyodex-eval skill from $$dir/coyodex-eval"; \
 	done
 
 # Remove the repo-local venv (run `make install` again to rebuild it).

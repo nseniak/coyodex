@@ -7,6 +7,7 @@ No live LLM: the judge is the injected `ScriptedJudge` from test_judge. Stdlib-o
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -107,6 +108,17 @@ def test_cli_run_first_then_bless_then_run_again() -> None:
 def test_cli_run_requires_project_and_map() -> None:
     r = subprocess.run([*RUN, "--project", "p"], capture_output=True, text=True)
     assert r.returncode == 2 and "required" in (r.stdout + r.stderr)
+
+
+def test_cli_claims_lists_the_l2_worklist_as_json() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "map.md"
+        mp.write_text(make_map(), encoding="utf-8")
+        r = subprocess.run([sys.executable, "-m", "coyodex.cli", "eval", "claims", str(mp), "--json"],
+                           capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        claims = json.loads(r.stdout)
+        assert len(claims) >= 2 and all("claim" in c and "anchor" in c for c in claims), claims
 
 
 # --- built-in runner ------------------------------------------------------------

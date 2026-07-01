@@ -194,6 +194,28 @@ def run_cli(argv: list[str]) -> int:
     return _EXIT[result.verdict]
 
 
+def claims_cli(argv: list[str]) -> int:
+    if "-h" in argv or "--help" in argv:
+        print("usage: coyodex eval claims [<map.md>] [--json]\n\n"
+              "Print the audit's L2 worklist — the high-risk 'actually-does' claims a judge should "
+              "ground against the code. `--json` emits [{claim, anchor}], the input the judge "
+              "orchestration fans out over.")
+        return 0
+    from coyodex import audit_analysis, schema_v1  # stdlib-only
+    args = [a for a in argv if not a.startswith("-")]
+    path = Path(args[0] if args else ".coyodex/project-map.md")
+    if not path.exists():
+        print(f"ERROR: {path} not found", file=sys.stderr)
+        return 1
+    items = audit_analysis.l2_worklist(schema_v1.strip_fences(path.read_text(encoding="utf-8")))
+    if "--json" in argv:
+        print(json.dumps([{"claim": w.claim, "anchor": w.anchor} for w in items], indent=2))
+    else:
+        for i, w in enumerate(items, 1):
+            print(f"{i}. {w.claim}" + (f"  [{w.anchor}]" if w.anchor else ""))
+    return 0
+
+
 def judge_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex eval judge --map <map.md> --verdicts <raw.json> --out <judge.json>\n"
