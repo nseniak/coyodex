@@ -17,7 +17,9 @@ USAGE = """usage: coyodex <command> [args...]
 Commands:
   preindex   Build the structural pre-index (.coyodex/preindex.json). Needs the
              `preindex` extra (tree-sitter); install with: pip install -e '.[preindex]'
-  validate   Validate a project-map.md (schema-v1 checks).
+  validate   Validate a project-map.md (schema-v1 checks — is it WELL-FORMED?).
+  audit      Adversarial pass over a built map (is it SELF-CONTRADICTORY?): L1
+             deterministic contradiction checks + an L2 grounding worklist.
   render     Render a project-map.md to a standalone HTML viewer.
 
 Global:
@@ -43,6 +45,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "validate":
         from coyodex import validate_analysis  # stdlib-only
         return validate_analysis.main(rest)
+    if cmd == "audit":
+        from coyodex import audit_analysis  # stdlib-only
+        return audit_analysis.main(rest)
     if cmd == "render":
         from coyodex.viewer import render  # stdlib-only
         return render.main(rest)

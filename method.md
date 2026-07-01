@@ -304,6 +304,16 @@ synthesis → parallel trace.**
   **direct** use — so structural entity-usage is captured at component granularity, not only
   behaviorally via the flow steps. This is *additional*: the `C↔C`/`C↔D` edges
   remain the primary output and must stay complete (every dep wired, the component graph not sparse).
+- Phase 4 Adversarial verify (fan out, one skeptic per L2 worklist claim — **fresh context**). After
+  the map validates and `coyodex audit` runs (fix any blocking `why:`-ref contradiction; reconcile the
+  read-before-create / actor advisories), take the audit's
+  **L2 grounding worklist** and launch one sub-agent per high-risk claim, each told to *disprove* the
+  claim against the code (default to *refuted* on doubt; for the riskiest claims — auth, scoping,
+  encryption — use N skeptics + majority vote). This is the *breaking* twin of the parallel *build*:
+  the same fan-out shape, aimed at falsification. **Fresh context is the whole point** — a verifier
+  that can see the build reasoning inherits its blind spots, so independence comes from an isolated
+  sub-agent, not from a separate run. Reconcile every refutation (fix the map, or justify the claim
+  and record why); this reconcile is **not delegated**. Re-validate → re-audit → render after fixes.
 - Guardrails: all agents share the same schema + edge-verb vocabulary; Phase 1 produces
   the canonical node inventory FIRST (nodes before edges, agents reference nodes and
   never invent them); every agent keeps inferred-vs-verified labels + returns `file:line`;
@@ -404,8 +414,32 @@ each generate/patch and fix the map until it passes (`--check-sources` reads eac
 `SOURCE` to reject synthesized entities — names with no real named type; `--check-coverage`
 re-walks the repo and WARNS — non-blocking — when many sibling source subdirs are folded into one
 box or a significant directory is never referenced, the map-fidelity gaps the ID checks can't see).
+**Then run the adversarial pass** — `.venv/bin/coyodex audit .coyodex/project-map.md`
+([tools/coyodex/audit_analysis.py](tools/coyodex/audit_analysis.py)). Where validate asks *is the map
+well-formed*, audit asks *is it self-contradictory*: it makes the map's two layers — the narrative
+Golden Path (step order, actors) and the mechanism (T6 flows + the backbone edge list) — refute each
+other, deterministically, with no code. The map is **over-determined** (each precondition is encoded
+twice — once as narrative order, once as which entity a flow reads vs writes), so the two copies check
+each other. Audit **blocks (exit 1) only on a hard contradiction** — a *`why:` reference that points
+forward or at a nonexistent step* (unambiguous, no false positives) — which you fix like a validator
+error. Its ordering/actor checks are **ADVISORY, not blocking**, on purpose: *read-before-create* (a
+Golden-Path step reads an entity a later step first `writes`/`persists`/`creates` — `writes` is
+create-or-update ambiguous, so this is a pointer, not a verdict) and *actor-attribution* (the
+Use-cases table and the flow disagree on who drives a use case) are derived from lossy
+component-granularity attribution, so they have real false positives (a shared component leaks its
+reads) and false negatives (a read routed through a `C→C` dependency is invisible — only `C→E` edges
+count). Treat them as strong "look here" pointers to reconcile, not facts; *read-never-created* (a read
+with no create — often external/config data) is advisory too. The known bug that motivated audit (a
+sign-in step ordered before the org it needs) surfaces here as an *advisory* — audit points, you or L2
+decide. Audit also prints an **L2 grounding worklist**: the high-risk "actually-does" claims
+(security surfaces, `enforces` / `encrypts` edges) that no deterministic check can settle. Ground each
+by spawning a **fresh-context skeptic** (Phase 4 below) that sees only the finished map + the code —
+never your build reasoning — and tries to *disprove* the claim; **reconcile every finding — advisory
+or blocking — (fix the map, or justify and note why)** before rendering. So the invariant after every
+write is **validate → audit → render**.
 **Then render the diagrams** — once the
-map validates, generate the self-contained HTML viewer next to it:
+map validates and the adversarial pass has no blocking contradiction (advisories reconciled), generate
+the self-contained HTML viewer next to it:
 
 ```
 .venv/bin/coyodex render .coyodex/project-map.md .coyodex/project-map.html
@@ -423,8 +457,9 @@ are relative to the coyodex clone, like the validator above.)
 [change-impact](method/change-impact.md): report the impact against the map (modified /
 added / deleted), then accept: patch the map, bump the baseline pin, re-stamp provenance
 (`.venv/bin/python tools/map_backup.py stamp <repo> --mode accept --built-at '<YYYY-MM-DD HH:MM>'`,
-which appends this session), **re-render the diagram**
-(`coyodex render`, so it tracks the patched map), save the annotated diff under
+which appends this session), **re-run validate → audit** (a patch can introduce a fresh
+self-contradiction — e.g. a re-ordered Golden Path step now reads before it creates), **re-render the
+diagram** (`coyodex render`, so it tracks the patched map), save the annotated diff under
 `.coyodex/analysis-changes/<date>.md`, and commit the map + diagram + `provenance.json` with the code.
 
 **Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big
