@@ -14,6 +14,8 @@ import sys
 USAGE = """usage: coyodex eval <subcommand> [args...]
 
 Subcommands:
+  run       Profile a built map, compare vs its baseline, and archive the run.
+  bless     Promote a run to the baseline (map + profile.json + judge.json).
   compare   Compare a candidate MapProfile against a baseline; apply the relative regression gates.
 
 Run `coyodex eval <subcommand> --help` for command-specific options."""
@@ -28,6 +30,12 @@ def main(argv: list[str] | None = None) -> int:
     if sub == "compare":
         from coyodex.eval import compare
         return compare.main(rest)
+    if sub == "run":
+        from coyodex.eval import run
+        return run.run_cli(rest)
+    if sub == "bless":
+        from coyodex.eval import run
+        return run.bless_cli(rest)
     print(f"coyodex eval: unknown subcommand '{sub}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)
     return 2
