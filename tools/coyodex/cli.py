@@ -20,6 +20,10 @@ Commands:
   validate   Validate a project-map.md (schema-v1 checks — is it WELL-FORMED?).
   audit      Adversarial pass over a built map (is it SELF-CONTRADICTORY?): L1
              deterministic contradiction checks + an L2 grounding worklist.
+  score      Emit a map's deterministic quality PROFILE (structure / validate /
+             audit / coverage) — the reusable heart of the method-quality eval.
+  eval       Method-quality regression harness: compare a map profile against a
+             baseline and apply the gates (`coyodex eval compare`).
   render     Render a project-map.md to a standalone HTML viewer.
 
 Global:
@@ -48,6 +52,12 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "audit":
         from coyodex import audit_analysis  # stdlib-only
         return audit_analysis.main(rest)
+    if cmd == "score":
+        from coyodex.eval import profile  # stdlib-only
+        return profile.main(rest)
+    if cmd == "eval":
+        from coyodex.eval import cli as eval_cli  # stdlib-only
+        return eval_cli.main(rest)
     if cmd == "render":
         from coyodex.viewer import render  # stdlib-only
         return render.main(rest)

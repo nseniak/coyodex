@@ -983,7 +983,45 @@ def main(argv: list[str] | None = None) -> int:
     # teaching example of a malformed table) are not live content — don't read them as tables,
     # definitions, or references.
     text = strip_fences(raw)
+    problems, warnings = validate_map(
+        text, path, check_sources=check_sources, check_coverage=check_coverage)
+    _print_report(text, problems, warnings)
+    return 1 if problems else 0
 
+
+def _print_report(text: str, problems: list[str], warnings: list[str]) -> None:
+    """Print the element inventory, advisory warnings, and the PASS/FAIL verdict for `coyodex validate`.
+    Presentation only — it reads the (problems, warnings) `validate_map` produced and runs no checks."""
+    defined_counts, _ = collect_defined(text)
+    by_prefix: dict[str, list[str]] = {}
+    for i in set(defined_counts):
+        m = re.match(r"[A-Z]+", i)
+        pre = m.group(0) if m else i
+        by_prefix.setdefault(pre, []).append(i)
+    inventory = ", ".join(f"{pre}:{len(v)}" for pre, v in sorted(by_prefix.items()))
+    print(f"Inventory — {inventory}")
+    if warnings:
+        print("\nVALIDATION WARNINGS (non-blocking):")
+        for w in warnings:
+            print(f"  - {w}")
+    if problems:
+        print("\nVALIDATION FAILED:")
+        for p in problems:
+            print(f"  - {p}")
+        return
+    print("Schema v1: OK — all IDs defined once, all references resolve, every GP step names a use "
+          "case, every flow step well-formed.")
+
+
+def validate_map(text: str, map_path: Path | None = None, *, check_sources: bool = False,
+                 check_coverage: bool = False) -> tuple[list[str], list[str]]:
+    """Run every schema-v1 check over already-fence-stripped map `text` and return (problems, warnings):
+    blocking `problems` mean the map is NOT well-formed; `warnings` are advisory. This is the shared
+    orchestration the CLI `main` formats and the eval profiler scores — one implementation, one parse,
+    so validation and scoring can never drift. `map_path` is needed only for the file-reading opt-ins
+    (`check_sources`, `check_coverage`); pass it whenever either is set."""
+    if (check_sources or check_coverage) and map_path is None:
+        raise ValueError("map_path is required when check_sources or check_coverage is set")
     defined_counts, gp_order = collect_defined(text)
     defined = set(defined_counts)
     referenced = collect_referenced(text)
@@ -1042,8 +1080,9 @@ def main(argv: list[str] | None = None) -> int:
     problems.extend(domain_problems)
     warnings.extend(domain_warnings)
     if check_sources:
-        problems.extend(check_entity_sources(text, path))
-        warnings.extend(check_anchor_existence(text, path))  # advisory: anchors that don't resolve to a real file/dir
+        assert map_path is not None  # guaranteed by the guard above when check_sources is set
+        problems.extend(check_entity_sources(text, map_path))
+        warnings.extend(check_anchor_existence(text, map_path))  # advisory: anchors that don't resolve to a real file/dir
 
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column or SUBDOMAIN line.
     problems.extend(parent_problems)
@@ -1052,8 +1091,9 @@ def main(argv: list[str] | None = None) -> int:
     warnings.extend(hierarchy_warnings)
     warnings.extend(check_altitude_hints(text))  # advisory: a component that is really a group
     if check_coverage:  # opt-in map-fidelity: peer-level compression + absent modules (re-measured, GR4)
-        warnings.extend(check_compression_coverage(text, path.resolve().parent.parent))
-        warnings.extend(check_domain_coverage(text, path))  # under-harvested domain model (item 2)
+        assert map_path is not None  # guaranteed by the guard above when check_coverage is set
+        warnings.extend(check_compression_coverage(text, map_path.resolve().parent.parent))
+        warnings.extend(check_domain_coverage(text, map_path))  # under-harvested domain model (item 2)
     # Non-blocking nudge: a group whose ONLY child is another group of the same kind is a redundant
     # nesting level (it adds depth without grouping anything). Only nested maps can trigger it, so flat
     # maps stay silent.
@@ -1142,30 +1182,7 @@ def main(argv: list[str] | None = None) -> int:
             shown = ", ".join(orphan_deps[:12]) + (f", +{len(orphan_deps) - 12} more" if len(orphan_deps) > 12 else "")
             warnings.append(f"External deps with no incoming edge (un-traced — which component uses each?): {shown}")
 
-    # Summary of the element inventory, by prefix.
-    by_prefix: dict[str, list[str]] = {}
-    for i in defined:
-        m = re.match(r"[A-Z]+", i)
-        pre = m.group(0) if m else i
-        by_prefix.setdefault(pre, []).append(i)
-    inventory = ", ".join(
-        f"{pre}:{len(v)}" for pre, v in sorted(by_prefix.items())
-    )
-    print(f"Inventory — {inventory}")
-
-    if warnings:  # advisory only — printed whether or not the build passes; never changes the exit code
-        print("\nVALIDATION WARNINGS (non-blocking):")
-        for w in warnings:
-            print(f"  - {w}")
-
-    if problems:
-        print("\nVALIDATION FAILED:")
-        for p in problems:
-            print(f"  - {p}")
-        return 1
-    print("Schema v1: OK — all IDs defined once, all references resolve, every GP step names a use "
-          "case, every flow step well-formed.")
-    return 0
+    return problems, warnings
 
 
 if __name__ == "__main__":

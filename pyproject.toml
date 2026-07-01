@@ -37,7 +37,7 @@ testpaths = ["tests"]
 # skill/ — the method and the tools it drives). The package on disk is tools/coyodex/, imported
 # as `coyodex`; the dir name matches the import name, so static tools (pyright) resolve it.
 package-dir = { "" = "tools" }
-packages = ["coyodex", "coyodex.viewer"]
+packages = ["coyodex", "coyodex.viewer", "coyodex.eval"]
 
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
