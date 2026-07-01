@@ -64,10 +64,12 @@ def test_write_run_then_load_and_bless_round_trip() -> None:
         r = run_eval("p", make_map(), Path("."), judge=ScriptedJudge(), rubric="R", n_judges=1)
         write_run(run_dir, r, make_map())
         assert (run_dir / "project-map.md").exists()
+        assert (run_dir / "project-map.html").exists()   # the view is archived alongside the source
         assert (run_dir / "profile.json").exists()
         assert (run_dir / "judge.json").exists()
         assert (run_dir / "delta.md").exists()
         bless(run_dir, baseline_dir)
+        assert (baseline_dir / "project-map.html").exists()  # bless copies the view too
         bp, bj = load_baseline(baseline_dir)
         assert isinstance(bp, MapProfile) and isinstance(bj, JudgeReport)
         # the blessed baseline is what a next run compares against -> equal map -> PASS
@@ -92,6 +94,7 @@ def test_cli_run_first_then_bless_then_run_again() -> None:
         r1 = subprocess.run([*RUN, "--project", "p", "--map", str(mp), "--out", str(run_dir)],
                            capture_output=True, text=True)
         assert r1.returncode == 0 and "BASELINE" in r1.stdout, r1.stdout + r1.stderr
+        assert (run_dir / "project-map.html").exists(), "run should archive the rendered view"
         # bless it
         rb = subprocess.run([*BLESS, str(run_dir), str(baseline_dir)], capture_output=True, text=True)
         assert rb.returncode == 0, rb.stdout + rb.stderr

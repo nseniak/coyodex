@@ -93,24 +93,45 @@ def delta_md(result: RunResult) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_html(map_path: Path, html_path: Path) -> None:
+    """Render the map to a self-contained HTML view next to its source, so each run keeps its OWN
+    viewable diagram (the live `.coyodex/project-map.html` in the clone is overwritten every rebuild).
+    Best-effort: a render hiccup warns but never loses the already-written source / profile / delta."""
+    try:
+        from coyodex.viewer.build_graph import build
+        from coyodex.viewer.gen_viewer import write_html
+        write_html(build(map_path), html_path, None)
+    except Exception as e:  # archiving must survive a render failure
+        print(f"WARNING: could not render {html_path.name}: {e}", file=sys.stderr)
+
+
+# Everything a run/baseline dir holds, in write order. project-map.html is rendered (not copied) at
+# write time; bless copies whichever of these exist.
+_RUN_ARTIFACTS = ("project-map.md", "project-map.html", "profile.json", "judge.json", "delta.md")
+
+
 def write_run(out_dir: Path, result: RunResult, map_text: str,
               conversation_src: Path | None = None) -> None:
-    """Archive a run: the map, profile.json, judge.json (if any), delta.md, and the build conversation
-    (if the orchestrator captured one). This is the historical record the baseline is blessed from."""
+    """Archive a run: the map, its rendered HTML view, profile.json, judge.json (if any), delta.md, and
+    the build conversation (if the orchestrator captured one). The historical record a baseline is
+    blessed from — the view is archived so a past run stays viewable after a later rebuild."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    (out_dir / "project-map.md").write_text(map_text, encoding="utf-8")
+    map_path = out_dir / "project-map.md"
+    map_path.write_text(map_text, encoding="utf-8")
     (out_dir / "profile.json").write_text(result.profile.to_json(), encoding="utf-8")
     if result.judge is not None:
         (out_dir / "judge.json").write_text(result.judge.to_json(), encoding="utf-8")
     (out_dir / "delta.md").write_text(delta_md(result), encoding="utf-8")
+    render_html(map_path, out_dir / "project-map.html")
     if conversation_src is not None and conversation_src.exists():
         shutil.copytree(conversation_src, out_dir / "conversation", dirs_exist_ok=True)
 
 
 def bless(run_dir: Path, baseline_dir: Path) -> None:
-    """Promote a run to the baseline: copy its map + profile.json + judge.json into the baseline dir."""
+    """Promote a run to the baseline: copy its map + rendered view + profile.json + judge.json + delta
+    into the baseline dir (whichever exist)."""
     baseline_dir.mkdir(parents=True, exist_ok=True)
-    for name in ("project-map.md", "profile.json", "judge.json"):
+    for name in _RUN_ARTIFACTS:
         src = run_dir / name
         if src.exists():
             shutil.copy2(src, baseline_dir / name)
