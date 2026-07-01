@@ -15,6 +15,7 @@ USAGE = """usage: coyodex eval <subcommand> [args...]
 
 Subcommands:
   run       Profile a built map, compare vs its baseline, and archive the run.
+  judge     Aggregate orchestrated judge verdicts (grounding + rubric) into judge.json.
   bless     Promote a run to the baseline (map + profile.json + judge.json).
   compare   Compare a candidate MapProfile against a baseline; apply the relative regression gates.
 
@@ -33,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     if sub == "run":
         from coyodex.eval import run
         return run.run_cli(rest)
+    if sub == "judge":
+        from coyodex.eval import run
+        return run.judge_cli(rest)
     if sub == "bless":
         from coyodex.eval import run
         return run.bless_cli(rest)

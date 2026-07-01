@@ -11,7 +11,7 @@ from pathlib import Path
 
 from coyodex.eval.judge import (DIMENSIONS, GroundingVerdict, JudgeReport, RubricVerdict,
                                 build_grounding_prompt, build_judge_report, build_rubric_prompt,
-                                run_dimension)
+                                report_from_verdicts, run_dimension)
 
 HERE = Path(".")
 
@@ -97,6 +97,25 @@ def test_grounding_prompt_carries_claim_and_anchor_and_is_adversarial() -> None:
 def test_rubric_prompt_carries_dimension_rubric_and_map() -> None:
     p = build_rubric_prompt("faithfulness", "MY RUBRIC", "MAP TEXT")
     assert "faithfulness" in p and "MY RUBRIC" in p and "MAP TEXT" in p, p
+
+
+# --- replaying externally-produced verdicts (PrecomputedJudge) ------------------
+def test_precomputed_judge_replays_grounding_and_median_scores() -> None:
+    """report_from_verdicts feeds orchestrator verdicts through the SAME aggregation a live judge uses:
+    grounding matched per claim, each dimension the median of the N judges."""
+    grounding = [
+        {"claim": "Auth surface '/admin' is protected by: require_admin", "grounded": True, "evidence": "auth.py:10"},
+        {"claim": "C1 enforces C2", "grounded": False, "evidence": "gate.py:5"},
+    ]
+    judges = [
+        {"faithfulness": 2, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "golden_path": 3},
+        {"faithfulness": 4, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "golden_path": 3},
+        {"faithfulness": 4, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "golden_path": 3},
+    ]
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, judges)
+    assert (rep.n_claims, rep.n_grounded, rep.grounding_passrate) == (2, 1, 0.5), rep
+    faith = next(d for d in rep.dimensions if d.dimension == "faithfulness")
+    assert faith.score == 4.0 and faith.n_judges == 3, faith   # median([2, 4, 4]) == 4
 
 
 # --- serialization --------------------------------------------------------------

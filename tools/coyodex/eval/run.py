@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from coyodex.eval.compare import DeltaReport, Thresholds, compare, format_report, load_thresholds
-from coyodex.eval.judge import Judge, JudgeReport, build_judge_report
+from coyodex.eval.judge import Judge, JudgeReport, build_judge_report, report_from_verdicts
 from coyodex.eval.profile import MapProfile, build_profile
 
 BASELINE = "BASELINE"  # the "verdict" of a run with no baseline yet (it can become one via `bless`)
@@ -192,6 +192,39 @@ def run_cli(argv: list[str]) -> int:
     else:
         print(delta_md(result))
     return _EXIT[result.verdict]
+
+
+def judge_cli(argv: list[str]) -> int:
+    if "-h" in argv or "--help" in argv:
+        print("usage: coyodex eval judge --map <map.md> --verdicts <raw.json> --out <judge.json>\n"
+              "       [--repo <root>] [--rubric <file>]\n\n"
+              "Aggregate externally-produced judge verdicts — grounding [{claim, grounded, evidence}]\n"
+              "and per-judge rubric scores — into a JudgeReport, via the tested PrecomputedJudge path.\n"
+              "The orchestration layer (a workflow / sub-agents) does the real judging and writes the\n"
+              "raw JSON; this turns it into judge.json with the same pass-rate + median math.")
+        return 0
+    map_arg, verdicts, out = _opt(argv, "--map"), _opt(argv, "--verdicts"), _opt(argv, "--out")
+    if not map_arg or not verdicts or not out:
+        print("ERROR: --map, --verdicts and --out are required", file=sys.stderr)
+        return 2
+    map_path, vpath = Path(map_arg), Path(verdicts)
+    for p in (map_path, vpath):
+        if not p.exists():
+            print(f"ERROR: {p} not found", file=sys.stderr)
+            return 1
+    repo = _opt(argv, "--repo")
+    rubric_arg = _opt(argv, "--rubric")
+    rubric = Path(rubric_arg).read_text(encoding="utf-8") if rubric_arg and Path(rubric_arg).exists() else ""
+    raw = json.loads(vpath.read_text(encoding="utf-8"))
+    report = report_from_verdicts(map_path.read_text(encoding="utf-8"), Path(repo) if repo else Path("."),
+                                  rubric, raw.get("grounding", []), raw.get("judges", []))
+    out_path = Path(out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(report.to_json(), encoding="utf-8")
+    pr = "n/a" if report.grounding_passrate is None else f"{report.grounding_passrate:.0%}"
+    ov = "n/a" if report.overall is None else f"{report.overall:g}/4"
+    print(f"Wrote {out_path} — grounding {report.n_grounded}/{report.n_claims} ({pr}), overall {ov}")
+    return 0
 
 
 def bless_cli(argv: list[str]) -> int:

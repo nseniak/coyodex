@@ -147,3 +147,43 @@ def build_judge_report(map_text: str, repo_root: Path, rubric: str, judge: Judge
     overall = float(statistics.mean(d.score for d in dims)) if dims else None
     return JudgeReport(n_claims=n_claims, n_grounded=n_grounded, grounding_passrate=passrate,
                        dimensions=dims, overall=overall)
+
+
+# ── replaying externally-produced verdicts ────────────────────────────────────────────────────────────
+
+class PrecomputedJudge:
+    """A `Judge` that REPLAYS verdicts produced OUTSIDE the tool — by the orchestration layer (a
+    workflow, or fresh-context sub-agents) that did the real, model-backed judging — so they aggregate
+    through the SAME tested `build_judge_report` path a live judge would use. The tool never calls a
+    model; this adapter just hands the orchestrator's results to the pure aggregation.
+
+    `grounding` is one row per L2 claim: {"claim": str, "grounded": bool, "evidence"?: str}. `judges`
+    is one dict per judge mapping each dimension name to its 0–4 score. `score_dimension` returns the
+    k-th judge's score on the k-th call for a dimension, so `run_dimension`'s N calls see all N judges."""
+
+    def __init__(self, grounding: list[dict[str, object]], judges: list[dict[str, int]]) -> None:
+        self._grounded = {str(g["claim"]): g for g in grounding if "claim" in g}
+        self._judges = judges
+        self._asked: dict[str, int] = {}
+
+    def ground_claim(self, claim: str, anchor: str | None, repo_root: Path) -> GroundingVerdict:
+        g = self._grounded.get(claim)
+        if g is None:
+            return GroundingVerdict(claim, False, "no verdict from the orchestrator")
+        return GroundingVerdict(claim, bool(g.get("grounded")), str(g.get("evidence", "")))
+
+    def score_dimension(self, dimension: str, rubric: str, map_text: str,
+                        repo_root: Path) -> RubricVerdict:
+        k = self._asked.get(dimension, 0)
+        self._asked[dimension] = k + 1
+        judge = self._judges[k % len(self._judges)] if self._judges else {}
+        return RubricVerdict(dimension, int(judge.get(dimension, 0)), "", "")
+
+
+def report_from_verdicts(map_text: str, repo_root: Path, rubric: str,
+                         grounding: list[dict[str, object]], judges: list[dict[str, int]],
+                         dimensions: tuple[str, ...] = DIMENSIONS) -> JudgeReport:
+    """Aggregate externally-produced verdicts into a JudgeReport via the same path a live judge uses —
+    the bridge from an orchestrated judge run (raw verdicts) to the tested pass-rate + median math."""
+    return build_judge_report(map_text, repo_root, rubric, PrecomputedJudge(grounding, judges),
+                              n_judges=len(judges) or 1, dimensions=dimensions)
