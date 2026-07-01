@@ -318,7 +318,11 @@ synthesis → parallel trace.**
   the canonical node inventory FIRST (nodes before edges, agents reference nodes and
   never invent them); every agent keeps inferred-vs-verified labels + returns `file:line`;
   agents return rows (structured output), not file dumps. The final reconcile (dedup
-  names, verify cross-agent edges against code) is not delegated.
+  names, verify cross-agent edges against code) is not delegated — and the lead may **not**
+  author a `C→D` edge (or any edge into an external dependency) the trace agents did not
+  report: every backbone edge must trace to a delegated agent's finding or be grounded
+  against the code, never invented at synthesis to satisfy the "every dep needs an incoming
+  edge" nudge (the audit→Elastic false-edge class — a benign-verb edge no gate re-checks).
 
 **Harvest-prompt template (Phase 1).** Give every harvest agent the same prompt skeleton —
 only the file list and the background blurb change per agent. Reusing one contract is what makes
@@ -432,7 +436,8 @@ count). Treat them as strong "look here" pointers to reconcile, not facts; *read
 with no create — often external/config data) is advisory too. The known bug that motivated audit (a
 sign-in step ordered before the org it needs) surfaces here as an *advisory* — audit points, you or L2
 decide. Audit also prints an **L2 grounding worklist**: the high-risk "actually-does" claims
-(security surfaces, `enforces` / `encrypts` edges) that no deterministic check can settle. Ground each
+(security surfaces, `enforces` / `encrypts` edges, and every `C→D` edge into an external dependency —
+any verb — the system-boundary data-flow claims) that no deterministic check can settle. Ground each
 by spawning a **fresh-context skeptic** (Phase 4 below) that sees only the finished map + the code —
 never your build reasoning — and tries to *disprove* the claim; **reconcile every finding — advisory
 or blocking — (fix the map, or justify and note why)** before rendering. So the invariant after every

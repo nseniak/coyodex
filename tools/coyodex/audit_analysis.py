@@ -377,11 +377,41 @@ class WorkItem:
     why_risky: str
 
 
+def _folded_dep_ids(text: str) -> set[str]:
+    """The T2 deps EXPLICITLY tagged `framework` / `library` — the in-process code the Context view
+    folds into one "Libraries" box. ONLY an explicit `Kind` cell counts: an untagged or Type-inferred
+    dep is NOT treated as folded, because `classify_dep` falls back to 'library' when nothing matches
+    (schema_v1), so trusting inference here would let an unrecognised external system (a mis-/un-tagged
+    Elastic) escape grounding. These are the only `C→D` edges the L2 worklist skips. Scoped to rows
+    that define a `D` id — never the Roles table's human/service `Kind` — mirroring
+    `validate.check_dep_kinds`."""
+    folded: set[str] = set()
+    for _start, block in iter_tables(text):
+        headers = [c.lower() for c in schema_v1.split_cells(block[0])]
+        if "kind" not in headers:
+            continue
+        kcol = headers.index("kind")
+        for row in block[2:]:
+            if schema_v1.is_separator_row(row):
+                continue
+            cm = schema_v1.DEF_BOLD.match(row)
+            if not cm or not cm.group(1).startswith("D"):
+                continue  # only T2 dep rows — never the Roles table's human/service Kind
+            cells = schema_v1.split_cells(row)
+            kind = cells[kcol].strip().lower() if kcol < len(cells) else ""
+            if kind in schema_v1.DEP_KINDS_FOLDED:
+                folded.add(cm.group(1))
+    return folded
+
+
 def l2_worklist(text: str) -> list[WorkItem]:
     """The ranked list of high-risk "actually-does" claims for L2 grounding. These are NOT checked
     here — they are the worklist the audit hands to fresh-context skeptic sub-agents (method.md Phase
-    4), each told to DISPROVE its claim against the code. Highest risk first: security/auth surfaces,
-    then policy/encryption edges (the claims whose falsity is most dangerous)."""
+    4), each told to DISPROVE its claim against the code. Ranked by how dangerous a FALSE claim is:
+    (1) security/auth surfaces, (2) `enforces` / `encrypts` edges, then (3) every edge INTO an external
+    dependency (`C→D`, any verb) — the system-boundary data-flow claims (the audit→Elastic false-edge
+    class) that no deterministic gate grounds. Deps EXPLICITLY tagged `framework`/`library` are skipped
+    (a false "uses <lib>" edge is benign; only an explicit fold-tag is trusted, never inference)."""
     items: list[WorkItem] = []
 
     # (1) Security & auth table rows — each is an "actually-does" claim with a real risk if false.
@@ -403,7 +433,18 @@ def l2_worklist(text: str) -> list[WorkItem]:
                 why_risky="security boundary — a false claim here is an access-control hole."))
         break
 
-    # (2) Policy / encryption backbone edges — enforce & encrypt claims, with their call site.
+    # (2) Backbone edges that assert something the code must actually DO, security-first:
+    #       (a) `enforces` / `encrypts` — security-critical (an access-control / crypto claim that is an
+    #           outright hole if false); emitted here, ranked right after the auth surfaces.
+    #       (b) any edge INTO an external dependency (`C→D`, ANY verb) — a system-boundary data-flow
+    #           claim ("audit repo emits to Elastic"). No deterministic gate reads From's code to
+    #           confirm it, and the "every dep needs an incoming edge" completeness rule actively
+    #           pressures the lead to author one, so a lexically-plausible but false C→D edge passes
+    #           validate + audit-L1 silently (the motivating bug). Collected separately and appended
+    #           AFTER the security tier so the ranking stays security-first. A dep EXPLICITLY tagged
+    #           `framework`/`library` is skipped (see `_folded_dep_ids`).
+    folded = _folded_dep_ids(text)
+    dep_items: list[WorkItem] = []
     for _start, block in iter_tables(text):
         headers = [c.lower() for c in schema_v1.split_cells(block[0])]
         if headers[:3] != ["from", "verb", "to"]:
@@ -416,15 +457,24 @@ def l2_worklist(text: str) -> list[WorkItem]:
             if len(cells) < 3:
                 continue
             verb = cells[1].strip().lower()
-            if verb not in ("enforces", "encrypts"):
-                continue
             src = schema_v1.ID_TOKEN.search(cells[0])
             dst = schema_v1.ID_TOKEN.search(cells[2])
             where = cells[wi] if wi is not None and wi < len(cells) else ""
-            items.append(WorkItem(
-                claim=f"{src.group(0) if src else cells[0]} {verb} {dst.group(0) if dst else cells[2]}",
-                anchor=_anchor(where),
-                why_risky=f"'{verb}' is a security-critical relationship — verify the code actually does it."))
+            src_txt = src.group(0) if src else cells[0]
+            dst_txt = dst.group(0) if dst else cells[2]
+            if verb in ("enforces", "encrypts"):
+                items.append(WorkItem(
+                    claim=f"{src_txt} {verb} {dst_txt}",
+                    anchor=_anchor(where),
+                    why_risky=f"'{verb}' is a security-critical relationship — verify the code actually does it."))
+            elif dst is not None and dst.group(0).startswith("D") and dst.group(0) not in folded:
+                dep_items.append(WorkItem(
+                    claim=f"{src_txt} {verb} {dst_txt}",
+                    anchor=_anchor(where),
+                    why_risky=(f"external-dependency data-flow edge — no deterministic gate reads "
+                               f"{src_txt}'s code to confirm it reaches {dst_txt}; ground the call site "
+                               f"against the code (the audit→Elastic false-edge class).")))
+    items.extend(dep_items)
     return items
 
 

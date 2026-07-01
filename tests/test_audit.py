@@ -215,6 +215,26 @@ def make_l2_map() -> str:
     )
 
 
+def make_l2_dep_map() -> str:
+    """Backbone edges into external deps: an `emits` into an EXPLICIT `datastore` (ground), a `uses`
+    into an EXPLICIT `library` (skip — a false 'uses <lib>' is benign), a `writes` into an UNTAGGED dep
+    (ground — the fail-safe, since inference would call it 'library'), plus an `enforces` edge that must
+    still rank first. The `emits`-into-a-log-dep row is the audit→Elastic false-edge class."""
+    return (
+        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
+        "| **UC1** | Call | Andy | a -> b |\n\n"
+        "## T2\n| ID | Dependency | Type | Kind | Purpose |\n|---|---|---|---|---|\n"
+        "| **D1** | Elastic Cloud | search | datastore | log storage |\n"
+        "| **D2** | logging | stdlib | library | app logs |\n"
+        "| **D3** | Mystery | ? |  | unknown |\n\n"
+        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
+        "| C1 | enforces | C2 | policy | gate.py#L5 |\n"
+        "| C1 | emits | D1 | ship logs | audit_repo.py#L8 |\n"
+        "| C1 | uses | D2 | log lines | mod.py#L3 |\n"
+        "| C1 | writes | D3 | dump | x.py#L1 |\n"
+    )
+
+
 def run_audit(md: str) -> tuple[int, str]:
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write(md)
@@ -331,6 +351,36 @@ def test_l2_worklist_lists_security_surfaces_and_enforces_edges() -> None:
     assert "enforces" in claims, claims
     anchors = [w.anchor for w in items]
     assert "auth.py#L10" in anchors and "gate.py#L5" in anchors, anchors
+
+
+def test_l2_worklist_grounds_external_dep_edges() -> None:
+    """A `C→D` edge into an external dep is grounded regardless of verb — the system-boundary
+    data-flow claim (`emits` into a `datastore`), carrying its call site."""
+    items = audit_analysis.l2_worklist(make_l2_dep_map())
+    claims = [w.claim for w in items]
+    assert "C1 emits D1" in claims, claims
+    assert "audit_repo.py#L8" in [w.anchor for w in items], items
+
+
+def test_l2_worklist_skips_explicit_library_deps() -> None:
+    """A `C→D` edge into a dep EXPLICITLY tagged `library` is skipped — a false 'uses <lib>' is benign
+    and that bucket is the high-count one the Context view folds away."""
+    claims = " ".join(w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map()))
+    assert "D2" not in claims, claims
+
+
+def test_l2_worklist_grounds_untagged_dep_by_default() -> None:
+    """Fail-safe: ONLY an explicit fold-tag skips a dep. D3 has no `Kind` cell (inference would call it
+    'library'), yet its incoming edge is still grounded — an unrecognised external system must not slip
+    through, which is exactly how the audit→Elastic edge survived."""
+    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    assert "C1 writes D3" in claims, claims
+
+
+def test_l2_worklist_ranks_security_before_dep_edges() -> None:
+    """Security (`enforces`) claims outrank external-dep data-flow claims in the worklist order."""
+    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    assert claims.index("C1 enforces C2") < claims.index("C1 emits D1"), claims
 
 
 # --- built-in runner ------------------------------------------------------------
