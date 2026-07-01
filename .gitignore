@@ -5,6 +5,7 @@ internal/
 __pycache__/
 .playwright-mcp/
 tools/coyodex/viewer/build/
+map-backups/
 .venv/
 build/
 dist/

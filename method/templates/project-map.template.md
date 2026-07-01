@@ -7,7 +7,7 @@
 > **Schema v1** (ID-based): every element has a stable ID (`UC`/`C`/`D`/`E`/`GP`);
 > cross-references use IDs; validated by `coyodex validate`.
 > Confidence: **verified** (read/traced) vs **inferred** (naming/convention).
-> **Commit:** `<sha>` · **Committed:** `<commit-date>` · **Built:** `<date>`
+> **Commit:** `<sha>` · **Committed:** `<commit-date>` · **Built:** `<YYYY-MM-DD HH:MM>`
 
 ---
 

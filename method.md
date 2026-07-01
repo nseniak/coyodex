@@ -376,7 +376,21 @@ git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is c
   explicitly chose B.
 
 Write the pin into the map header line — the template's **Commit** / **Committed** / **Built** line
-(sha · commit date · today).
+(sha · commit date · build time). For **Built**, capture the minute once —
+`date +'%Y-%m-%d %H:%M'` — and reuse that exact string in both the header cell and the stamp below.
+
+**Stamp the conversation (provenance for backup).** After the map is written and validated, record
+which conversation built it — run (paths under the coyodex clone, like `.venv/bin/coyodex`):
+
+```
+.venv/bin/python tools/map_backup.py stamp <repo> --mode build --built-at '<YYYY-MM-DD HH:MM>'
+```
+
+It reads this session's id from `$CLAUDE_CODE_SESSION_ID` and writes `<repo>/.coyodex/provenance.json`
+(committed — session id + build time), so a later `.venv/bin/python tools/map_backup.py backup <repo>`
+can bundle the map **and** the exact transcript deterministically. Run it in the **main** build
+session, not a delegated sub-agent, so the id recorded is the driver conversation's. **Commit
+`provenance.json`** with the map + diagram.
 
 **Start from the template** —
 [`method/templates/project-map.template.md`](method/templates/project-map.template.md): fill its cells and Write the filled map to `.coyodex/project-map.md` in one write — read the
@@ -407,9 +421,11 @@ are relative to the coyodex clone, like the validator above.)
 
 **Maintaining the map.** When code changes after a baseline exists, follow
 [change-impact](method/change-impact.md): report the impact against the map (modified /
-added / deleted), then accept: patch the map, bump the baseline pin, **re-render the diagram**
+added / deleted), then accept: patch the map, bump the baseline pin, re-stamp provenance
+(`.venv/bin/python tools/map_backup.py stamp <repo> --mode accept --built-at '<YYYY-MM-DD HH:MM>'`,
+which appends this session), **re-render the diagram**
 (`coyodex render`, so it tracks the patched map), save the annotated diff under
-`.coyodex/analysis-changes/<date>.md`, and commit the map + diagram with the code.
+`.coyodex/analysis-changes/<date>.md`, and commit the map + diagram + `provenance.json` with the code.
 
 **Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big
 to detail at its altitude (e.g. a `plugins` area holding dozens of feature units), go finer **inside the
