@@ -101,6 +101,7 @@ Each relation, authored **on the source entity's card only** (one side — see "
 
 ```
 RELATIONS: contains 1→* E2 LineItem · placedBy *→1 E3 Customer · isA E9 Document
+RELATIONS: hasShipment 1→0..1 E7 Shipment · refersTo *→1 E4 Product
 ```
 
 Parse one item with:
@@ -112,8 +113,10 @@ Parse one item with:
 - `tgt` is the **ID reference** (resolved by the validator; display text may follow the id — schema
   rule 2: "display text may accompany the ID but the ID must be present").
 - the edge is `(this card's id) --verb--> tgt`, carrying cardinality `(sc, dc)` and a **kind**.
-- cardinality is optional (omit it for inheritance).
-- allowed cardinality tokens: `1`, `*`, `0..1`, `1..*`.
+- cardinality, when present, is **always a pair** `srcCard→dstCard` — both sides or neither (omit the
+  pair entirely for inheritance). A **lone** token like `contains 0..1 E2` has no `→`, so it is **not**
+  valid and fails to parse; write the pair, e.g. `contains 1→0..1 E2`.
+- each side of the pair is one of: `1`, `*`, `0..1`, `1..*` — e.g. `1→0..1`, `*→1`, `0..1→*`.
 - an optional trailing **`{how}` note** is a plain-text explanation of how a *field-less* relation is
   implemented — `tracks *→1 E11 {keyed by (org_id, upstream_id) in the connection store}`. It is
   peeled off before the grammar match and shown in the click-panel's **Implemented by** line (a `·`

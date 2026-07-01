@@ -68,16 +68,24 @@ why: needs the result of GP1
 ## Subsystems (S) — the container altitude
 
 <!-- Optional; recommended above ~15 components. Components grouped into subsystems, optionally
-     NESTED — a subsystem's `Parent` is another `S` (S3 below nests under S1). The viewer drills nested
-     levels recursively, so a big area goes finer IN THIS MAP — never a second map file. Go deeper by
-     nesting, or by promoting a leaf component into a subsystem (see method.md "Drilling deeper").
-     Membership is carried on each child (T1 `Subsystem` column / this `Parent` cell); members +
-     inter-subsystem edges are derived. Omit this whole section on small maps — ungrouped are valid. -->
+     NESTED — a subsystem's `Parent` is another `S` (S3/S4 below nest under S2). The viewer drills
+     nested levels recursively, so a big area goes finer IN THIS MAP — never a second map file. Go
+     deeper by nesting, or by promoting a leaf component into a subsystem (see method.md "Drilling
+     deeper"). Membership is carried on each child (T1 `Subsystem` column / this `Parent` cell);
+     members + inter-subsystem edges are derived. Omit this whole section on small maps — ungrouped
+     are valid.
+     To SUBDIVIDE one subsystem into several sub-parts (S2 → S3, S4 below), mint a NEW NUMERIC id for
+     each part and set its `Parent` to the big one. NEVER an outline suffix like `S2a` / `S2b`: a
+     letter-suffixed id is not a valid schema id (IDs are a prefix + digits only), so it matches
+     nothing — its definition and every membership pointing at it are SILENTLY dropped, leaving an
+     empty box. Numeric-id + `Parent` also lets you re-parent with a one-cell edit, no rename. -->
 
 | ID | Subsystem | Purpose | Parent | Anchor | Conf. |
 |---|---|---|---|---|---|
 | **S1** | <subsystem> | <one-line purpose> |  | [dir/](path/) | inferred |
-| **S3** | <nested subsystem> | <one-line purpose> | S1 | [dir/sub/](path/sub/) | inferred |
+| **S2** | <large subsystem, subdivided below> | <one-line purpose> |  | [dir2/](path2/) | inferred |
+| **S3** | <sub-part of S2> | <one-line purpose> | S2 | [dir2/a/](path2/a/) | inferred |
+| **S4** | <another sub-part of S2> | <one-line purpose> | S2 | [dir2/b/](path2/b/) | inferred |
 
 ---
 
@@ -87,7 +95,8 @@ why: needs the result of GP1
 |---|---|---|---|---|---|
 | **C1** | <component> | S1 | <purpose> | [file](path#L1) | C2 |
 | **C2** | <component> | S1 | <purpose> | [file](path#L1) |  |
-| **C3** | <nested component> | S3 | <purpose> | [file](path/sub#L1) |  |
+| **C3** | <component in S2's sub-part S3> | S3 | <purpose> | [file](path2/a#L1) |  |
+| **C4** | <component in S2's sub-part S4> | S4 | <purpose> | [file](path2/b#L1) |  |
 
 ### T1 backbone — component dependency edges (the diagram source)
 
@@ -153,13 +162,15 @@ why: needs the result of GP1
      heading defines the E id; FIELDS = attributes, RELATIONS = typed E→E edges (authored on the
      source side only, never in the backbone edge list). Renders as a Mermaid classDiagram.
      An optional `SUBDOMAIN:` line assigns the entity to one subdomain (SD) — the domain-model analog of
-     a component's `Subsystem` cell. Full spec: method/domain-cards.md. Separators are `·`, never raw `|`. -->
+     a component's `Subsystem` cell. Full spec: method/domain-cards.md. Separators are `·`, never raw `|`.
+     Cardinality is always a PAIR `sc→dc` (both sides or neither) — each side `1` / `*` / `0..1` / `1..*`;
+     the `has 1→0..1 E3` item below shows an optional side. A lone token (`contains 0..1 E2`) is invalid. -->
 
 **E1 — <Entity>** *(<stored where>)*
 SUBDOMAIN: SD1
 MEANING: <one-line meaning>
 FIELDS: <name>:<type> PK · <name>:<type> · <name>:<type>
-RELATIONS: contains 1→* E2 <display>
+RELATIONS: contains 1→* E2 <display> · has 1→0..1 E3 <display>
 SOURCE: [file](path#L1)
 
 **E2 — <Entity>** *(<stored where>)*

@@ -284,6 +284,23 @@ def test_compression_flags_small_unreferenced_fold() -> None:
     assert any("services/" in w and "subdirs" in w for w in ws), ws
 
 
+def test_compression_skips_non_product_dirs() -> None:
+    """Item 7: a conventional non-product tree (tests / internal / docs) the map never references must
+    NOT trip the absent-module warning — they have their own completeness section / are deliberately
+    unmapped — while a genuine unmapped PRODUCT module still surfaces."""
+    files = {"core/x.py": "x\n"}
+    for i in range(30):
+        files[f"tests/t{i}.py"] = "x\n"       # large unreferenced test tree — must be skipped
+        files[f"internal/i{i}.py"] = "x\n"    # deliberately-unmapped internal tree — must be skipped
+        files[f"billing/b{i}.py"] = "x\n"     # a real unmapped product module — must still surface
+    root = make_temp_repo(files, git=False)
+    m = "| **C1** | Core | S1 | x | [c](core/x.py) | |\n"  # references only core/
+    ws = validate_analysis.check_compression_coverage(m, root)
+    assert not any("tests/" in w for w in ws), ws
+    assert not any("internal/" in w for w in ws), ws
+    assert any("billing/" in w for w in ws), ws
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

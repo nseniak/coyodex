@@ -579,6 +579,81 @@ def test_validator_warns_redundant_nesting_level() -> None:
     assert "redundant nesting level" in out and "S1" in out
 
 
+# --- malformed IDs + empty subsystems (the mcpolis S12a silent failure) ---------
+def make_malformed_subsys_id_map() -> str:
+    """A frontend split into sub-subsystems with letter-suffixed IDs (`S1a`) — the real mcpolis `S12a`
+    failure. `S1a` is not a valid schema id (prefix+digits only), so the parser silently drops both the
+    definition and any membership pointing at it. C1 keeps a VALID `S1` membership so the whole-map
+    'no component assigned' guard does not fire — isolating the malformed-id signal."""
+    return (
+        "## Subsystems (S)\n"
+        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **S1** | Frontend | x |  | a | V |\n"
+        "| **S1a** | Admin | x | S1 | a | V |\n\n"
+        "## T1\n"
+        "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **C1** | Shell | S1 | x | f |  |\n"
+        "| **C2** | AdminPage | S1a | x | f |  |\n"
+    )
+
+
+def test_validator_flags_malformed_subsystem_id() -> None:
+    # `S1a` is invalid (a prefix + digits only), so it silently defines nothing and orphans C2. The
+    # validator must FAIL loudly and name both where it is defined and who points at it.
+    code, out = run_validator(make_malformed_subsys_id_map())
+    assert code == 1, out
+    assert "Malformed ID 'S1a'" in out, out
+    assert "defined at line" in out and "referenced by C2" in out, out
+
+
+def test_check_malformed_ids_ignores_glossary_terms() -> None:
+    # An ID-shaped Glossary TERM (`E2B` = the e2b.dev sandbox provider) sits in a table with no real
+    # IDs, so it must NOT be read as a malformed entity id (the false positive found on the mcpolis map).
+    text = (
+        "## Glossary\n"
+        "| Term | Meaning | Source |\n"
+        "|---|---|---|\n"
+        "| **E2B** | Hosted sandbox provider | [f](f) |\n"
+        "| **Sandbox** | Isolated env | [f](f) |\n"
+    )
+    assert validate_analysis.check_malformed_ids(text) == []
+
+
+def make_empty_subsystem_map() -> str:
+    """S2 is defined but given no members and no child subsystem — it renders as an empty box (the
+    symptom the malformed `S12a` sub-ids produced for S12 on the real map)."""
+    return (
+        "## Subsystems (S)\n"
+        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **S1** | Core | x |  | a | V |\n"
+        "| **S2** | Ghost | x |  | a | V |\n\n"
+        "## T1\n"
+        "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
+        "|---|---|---|---|---|---|\n"
+        "| **C1** | App | S1 | x | f |  |\n"
+    )
+
+
+def test_validator_warns_empty_subsystem() -> None:
+    # Advisory (exit 0): a subsystem with no member and no child subsystem is flagged, but S1 (which
+    # owns C1) is not — mirrors the "Subdomains with no entities" nudge on the subsystem side.
+    code, out = run_validator(make_empty_subsystem_map())
+    assert code == 0, out
+    line = next(l for l in out.splitlines() if "no members" in l)
+    assert "S2" in line and "S1" not in line, line
+
+
+def test_validator_clean_nested_map_no_malformed_or_empty() -> None:
+    # Regression guard: a well-formed numeric nested map (S1 parent of S2, all populated) trips neither
+    # the malformed-id check nor the empty-subsystem nudge.
+    code, out = run_validator(make_nested_subsystem_map())
+    assert code == 0, out
+    assert "Malformed ID" not in out and "no members" not in out, out
+
+
 def make_snakecase_deps_map() -> str:
     """A real component with a prose Purpose and 6 snake_case dependency names — the altitude hint must
     inspect only the Purpose, so the Depends-on list does NOT trip it (review finding #3)."""
@@ -1148,6 +1223,100 @@ def test_check_entity_sources_skips_unresolvable() -> None:
         assert validate_analysis.check_entity_sources(text, map_path) == []
 
 
+# --- domain-model coverage (--check-coverage, item 2) ---------------------------
+def make_isolated_domain_map(total: int, isolated: int) -> str:
+    """`total` entity cards of which the last `isolated` declare/receive NO E↔E relation. The first
+    (total - isolated) are wired into one `contains` chain (E1->E2->...), so they are all related; the
+    rest stand alone. SOURCE links are placeholders (won't resolve), so sub-check (b) is a no-op."""
+    wired = total - isolated  # the first `wired` entities form the relation chain
+    cards = []
+    for i in range(1, total + 1):
+        rel = f"RELATIONS: contains 1→* E{i + 1}\n" if i < wired else ""
+        cards.append(f"**E{i} — Ent{i}** *(s)*\nMEANING: m\nFIELDS: id:int\n{rel}SOURCE: [f](f#L{i})\n")
+    return "## T5 — Domain model (domain cards)\n\n" + "\n".join(cards)
+
+
+def test_domain_coverage_warns_isolated_entities() -> None:
+    # (a) map-only: when a material share of entity cards have ZERO E↔E relation, the sparse class
+    # graph is flagged — the signature of an under-harvested domain model (the thin-domain regression).
+    with tempfile.TemporaryDirectory() as d:
+        map_path = Path(d) / "project-map.md"
+        text = make_isolated_domain_map(total=10, isolated=5)  # 50% isolated -> over the 20% threshold
+        map_path.write_text(text, encoding="utf-8")
+        warns = " ".join(validate_analysis.check_domain_coverage(text, map_path))
+        assert "Isolated entities" in warns and "5 of 10" in warns, warns
+        assert "Under-harvested" not in warns, warns  # (b) is a no-op when SOURCE paths don't resolve
+
+
+def test_domain_coverage_quiet_on_well_connected_model() -> None:
+    # A small, well-connected model (only one standalone entity) stays clean — below both the fraction
+    # threshold and the absolute floor, so a healthy domain model is not nagged.
+    with tempfile.TemporaryDirectory() as d:
+        map_path = Path(d) / "project-map.md"
+        text = make_isolated_domain_map(total=10, isolated=1)
+        map_path.write_text(text, encoding="utf-8")
+        assert validate_analysis.check_domain_coverage(text, map_path) == []
+
+
+_NATO = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot",
+         "Golf", "Hotel", "India", "Juliet", "Kilo", "Lima"]  # distinct, no substring collisions
+
+
+def _domain_repo_map(d: str, class_names: list[str], modelled: list[str]) -> tuple[str, Path]:
+    """Write a one-file `model.py` defining `class_names` and a `.coyodex/` map whose entity cards
+    cover only `modelled`. Returns (map_text, map_path) for a direct check_domain_coverage call —
+    mirrors the check_entity_sources fixture (repo at the map's parent dir)."""
+    root = Path(d)
+    (root / ".coyodex").mkdir(exist_ok=True)
+    (root / "model.py").write_text(
+        "\n".join(f"class {name}:\n    pass\n" for name in class_names), encoding="utf-8")
+    cards = "\n".join(
+        f"**E{i + 1} — {name}** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [model.py](model.py#L1)\n"
+        for i, name in enumerate(modelled))
+    text = "## T5 — Domain model (domain cards)\n\n" + cards
+    map_path = root / ".coyodex" / "project-map.md"
+    map_path.write_text(text, encoding="utf-8")
+    return text, map_path
+
+
+def test_domain_coverage_warns_uncovered_types() -> None:
+    # (b) repo read: many named types in the entities' OWN source dir have no entity card -> the map
+    # under-models that dir. Types are re-extracted from the .py via stdlib `ast` (never the pre-index).
+    with tempfile.TemporaryDirectory() as d:
+        text, map_path = _domain_repo_map(d, _NATO, modelled=_NATO[:2])  # 10 of 12 types unmodelled
+        warns = " ".join(validate_analysis.check_domain_coverage(text, map_path))
+        assert "Under-harvested domain model" in warns and "10 of 12" in warns, warns
+
+
+def test_domain_coverage_quiet_when_types_modelled() -> None:
+    # Every type in the source dir has a covering entity card -> no under-harvest warning.
+    with tempfile.TemporaryDirectory() as d:
+        text, map_path = _domain_repo_map(d, _NATO[:3], modelled=_NATO[:3])
+        assert not any("Under-harvested" in w for w in validate_analysis.check_domain_coverage(text, map_path))
+
+
+def test_domain_coverage_noop_without_cards() -> None:
+    # No T5 cards -> nothing to measure -> empty, regardless of --check-coverage.
+    with tempfile.TemporaryDirectory() as d:
+        map_path = Path(d) / "project-map.md"
+        text = make_grouped_map("proper")  # components only, no domain cards
+        map_path.write_text(text, encoding="utf-8")
+        assert validate_analysis.check_domain_coverage(text, map_path) == []
+
+
+def test_validator_lone_cardinality_hint() -> None:
+    # Item 5: a single cardinality token (`contains 0..1 E2`) is malformed — cardinality is a PAIR
+    # `sc→dc` (both sides or neither). The error names that exact cause so the author fixes it once.
+    cards = (
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "RELATIONS: contains 0..1 E2\nSOURCE: [f](f#L1)\n\n"
+        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+    )
+    code, out = run_validator(make_domain_map(cards))
+    assert code == 1 and "malformed RELATIONS item" in out, out
+    assert "cardinality must be a pair" in out, out
+
+
 def test_validator_domain_cards_clean() -> None:
     code, out = run_validator(make_domain_map())
     assert code == 0, out
@@ -1174,6 +1343,8 @@ def test_validator_flags_malformed_relation() -> None:
     )
     code, out = run_validator(make_domain_map(cards))
     assert code == 1 and "malformed RELATIONS item" in out, out
+    # `2..5→*` already has a `→`, so the lone-cardinality hint (item 5) must NOT fire here.
+    assert "cardinality must be a pair" not in out, out
 
 
 def test_validator_flags_both_sided_relation() -> None:

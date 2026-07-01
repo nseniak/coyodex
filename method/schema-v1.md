@@ -28,6 +28,14 @@ definition — including a **T6 flow block** (`**UC7 — ...**`), which is keyed
 use case (the canonical `UC` definition is its Use-cases table row), so the flow heading references
 that use case rather than redefining it.
 
+**An ID is a prefix + digits ONLY** — `C1`, `S12`, `SD3` — never a letter-suffixed variant like `S12a`
+or `C3b`. A suffixed token matches no ID: the grammar requires a word boundary right after the digits,
+so `S12a` is **silently dropped** (its definition defines nothing; a membership cell pointing at it
+resolves to no parent — the empty-box / orphaned-member failure). To split a subsystem into
+sub-subsystems, give each a **new numeric `S` ID** and nest it with the child's `Parent` cell (e.g.
+`S12` → `S13`, `S14`, each with `Parent = S12`), **not** an outline suffix `S12a`/`S12b`. The same
+holds for nested subdomains (`SD`). The validator rejects a malformed ID rather than ignoring it.
+
 ## The 5 conventions
 
 1. **Stable column headers per table** — the headers are the schema; don't rename them.

@@ -40,6 +40,11 @@ Opt-in (reads the analyzed repo's source/tree, not just the map):
      65-plugins-as-one-component failure) and significant directories the map never references.
      Advisory only (intentional abstraction is a feature); it re-measures the tree and never reads
      the pre-index JSON, so generation and verification stay independent.
+  8b. --check-coverage also flags an UNDER-HARVESTED DOMAIN MODEL — the thin-domain regression a
+     directory-sliced harvest produces when no agent owns the T5 card slice: (a) entity cards with
+     ZERO E↔E relation when a material share of the model is so isolated (a sparse class graph), and
+     (b) named Python types in the entities' own source dirs that no entity card represents (a
+     re-measurement via stdlib `ast`, never the pre-index JSON). Both are advisory.
 
 Exit 0 = clean, 1 = problems found.
 
@@ -47,12 +52,14 @@ Usage:  coyodex validate [--check-sources] [--check-coverage] [.coyodex/project-
 """
 from __future__ import annotations
 
+import ast
 import re
 import sys
 from pathlib import Path
 
 # Grammar (regexes, membership rule) lives in schema_v1, shared with the parser — one grammar.
 from coyodex.schema_v1 import (
+    ALLOWED_CARDINALITY,
     DEF_BOLD,
     DEF_ENTITY,
     DEF_GP,
@@ -339,6 +346,12 @@ def check_altitude_hints(text: str) -> list[str]:
 
 _COMPRESSION_MIN = 8      # this many sibling source subdirs folded into ~one box reads as lost signal
 _ABSENT_MIN_FILES = 25    # a top-level dir this large with nothing referenced is a likely unmapped module
+# Conventional NON-PRODUCT directory basenames an absent-module warning must not nag about: test trees
+# have their own Test-completeness section, and `internal/`/`docs/`-style dirs are deliberately unmapped.
+# (Some are also walk-excluded already; listed here so the skip is explicit and self-documenting.)
+_NON_PRODUCT_DIRS = frozenset({
+    "tests", "test", "e2e", "internal", "docs", "__pycache__", "node_modules", ".git",
+})
 _REF_LINK = re.compile(r"\]\(([^)\s#]+)")                         # markdown link target ](path...)
 _REF_INLINE = re.compile(r"(?<![\w/])((?:[\w.\-]+/)+[\w.\-]+)")   # inline a/b/c path
 # Monorepo container roots — under these, a fold one level deeper is still an altitude decision
@@ -424,7 +437,8 @@ def check_compression_coverage(text: str, root: Path) -> list[str]:
     # fold the compression pass skips because the map references nothing inside it.
     absent: list[tuple[int, str]] = []
     for dpath, fc in dir_filecount.items():
-        if dpath == "." or not _fold_depth_ok(dpath) or dpath in flagged or covered_under(dpath):
+        if (dpath == "." or not _fold_depth_ok(dpath) or dpath in flagged or covered_under(dpath)
+                or dpath.rsplit("/", 1)[-1] in _NON_PRODUCT_DIRS):  # skip test / internal / docs trees
             continue
         n_subs = len(dir_children.get(dpath, ()))
         if fc >= _ABSENT_MIN_FILES or n_subs >= _COMPRESSION_MIN:
@@ -450,6 +464,72 @@ def find_glued_ids(text: str) -> set[str]:
             if m:
                 out.add(m.group(1))
     return out
+
+
+# An ID-SHAPED token with a TRAILING suffix: a legal prefix + digits + extra word chars (`S12a`, `C3b`,
+# `SD2x`). The schema's IDs are prefix+digits ONLY, so ID_TOKEN needs a word boundary right after the
+# digits — such a token matches NO id and is silently ignored. Multi-letter prefixes (`UC/GP/SD`) lead
+# the alternation so `SD2x` is read as `SD`+`2x`, never `S`+`D2x`.
+MALFORMED_ID = re.compile(r"\b(?:UC|GP|SD|C|D|E|S)\d+[A-Za-z_]\w*\b")
+_BOLD_CELL = re.compile(r"\*\*\s*([^*|]+?)\s*\*\*")  # a `**…**` cell's inner text
+
+
+def check_malformed_ids(text: str) -> list[str]:
+    """Flag an ID-shaped token with a trailing suffix (`S12a`) sitting in an ID POSITION — a table
+    row's first bold cell (a definition) or a `Subsystem` / `Parent` membership cell. Schema IDs are a
+    prefix + digits ONLY, so `S12a` matches no id and is SILENTLY dropped: the definition creates no
+    node, and every membership cell pointing at it resolves to no parent (the real mcpolis failure — a
+    frontend split into `S12a..S12e` sub-subsystems left `S12` an empty box with 27 orphaned
+    components). Scanned only in ID positions, never prose, so an `E2E` / `S3` token in a sentence is
+    never flagged. Blocks the build — a malformed id is never intentional and loses data with no other
+    trace (it is invisible even to the undefined-reference check, which never sees it as a token)."""
+    defined_at: dict[str, int] = {}           # malformed token -> 1-based definition line
+    referenced_by: dict[str, list[str]] = {}  # malformed token -> ids whose membership cell points at it
+    for start, block in iter_pipe_runs(text.splitlines()):
+        if not block:
+            continue
+        headers = [c.lower() for c in split_cells(block[0])]
+        member_cols = [headers.index(h) for h in ("subsystem", "parent") if h in headers]
+        # Only an ID-DEFINING table (some row's first cell is a VALID id) can hold a malformed id
+        # definition. A Glossary / Roles table has bold TERMS in its first cell (`**E2B**`, `**Sandbox**`)
+        # that are not ids — never scan those for a malformed-id definition (the E2B false-positive).
+        is_id_table = any(DEF_BOLD.match(r) for r in block)
+        for offset, row in enumerate(block):
+            if is_separator_row(row):
+                continue
+            cells = split_cells(row)
+            if not cells:
+                continue
+            # (a) definition position: the WHOLE first cell is `**<token>**`, in an id-defining table
+            fm = _BOLD_CELL.fullmatch(cells[0].strip())
+            if is_id_table and fm and MALFORMED_ID.fullmatch(fm.group(1).strip()):
+                defined_at.setdefault(fm.group(1).strip(), start + offset + 1)
+            # (b) membership position: a Subsystem / Parent cell value (skipped when the column is a
+            # subsystem row's own NAME — a name never matches the prefix+digits shape anyway)
+            cm = DEF_BOLD.match(row)
+            child = cm.group(1) if cm else (fm.group(1).strip() if fm else "?")
+            for ci in member_cols:
+                if ci < len(cells):
+                    for tok in MALFORMED_ID.findall(cells[ci]):
+                        referenced_by.setdefault(tok, []).append(child)
+    problems: list[str] = []
+    for tok in sorted(set(defined_at) | set(referenced_by)):
+        where: list[str] = []
+        if tok in defined_at:
+            where.append(f"defined at line {defined_at[tok]}")
+        refs = referenced_by.get(tok, [])
+        if refs:
+            shown = ", ".join(refs[:8]) + (f", +{len(refs) - 8} more" if len(refs) > 8 else "")
+            where.append(f"referenced by {shown}")
+        pm = re.match(r"UC|GP|SD|C|D|E|S", tok)
+        prefix = pm.group(0) if pm else tok
+        problems.append(
+            f"Malformed ID '{tok}' ({'; '.join(where)}): schema IDs are a prefix + digits only "
+            f"(e.g. {prefix}13, not {tok}) — this token matches no ID, so it is silently ignored (its "
+            f"definition defines nothing; a membership cell pointing at it gets no parent). Use a "
+            f"numeric ID and nest via the Parent column, not a letter suffix."
+        )
+    return problems
 
 
 def check_table_runs(text: str) -> list[str]:
@@ -613,12 +693,28 @@ def _anchor_hrefs(text: str) -> list[tuple[str, str]]:
     return out
 
 
+def _source_roots(map_path: Path) -> list[Path]:
+    """The two roots a map's SOURCE / anchor paths resolve against: the map's own dir and its parent
+    (the repo root for a `.coyodex/` map). Shared by every repo-reading check so this resolution rule
+    lives in one place."""
+    base = map_path.resolve().parent
+    return [base, base.parent]
+
+
+def _resolve_source_file(source: str, roots: list[Path]) -> Path | None:
+    """The real file a card's SOURCE points at — its `#Lnnn` anchor stripped, resolved against
+    `roots`. None when it doesn't resolve (a placeholder, or a run outside the repo), so a repo-reading
+    check skips it instead of false-flagging."""
+    rel = source.split("#", 1)[0]
+    return next((r / rel for r in roots if (r / rel).is_file()), None)
+
+
 def check_anchor_existence(text: str, map_path: Path) -> list[str]:
     """WARN on a drill-to-code anchor whose path doesn't resolve to a real file/dir in the repo — a
     moved / renamed / mistyped `file:line` (an edge `Where`, a node anchor, a card SOURCE). Opt-in
     (`--check-sources`): it reads the analyzed repo, so run it on a real `.coyodex/` map, not a template
     (where every path is a placeholder). Advisory — never blocks."""
-    roots = [map_path.resolve().parent, map_path.resolve().parent.parent]
+    roots = _source_roots(map_path)
     out: list[str] = []
     for label, href in _anchor_hrefs(text):
         rel = re.sub(r":\d+$", "", href.split("#", 1)[0])   # drop a #Lnnn anchor and a :line suffix
@@ -668,7 +764,15 @@ def check_domain_cards(text: str) -> tuple[list[str], list[str]]:
         seen_pairs: set[tuple[str, str]] = set()
         for r in c.relations:
             if not r.ok:
-                problems.append(f"Domain card {c.id} has a malformed RELATIONS item: '{r.raw}'")
+                msg = f"Domain card {c.id} has a malformed RELATIONS item: '{r.raw}'"
+                # The common trap: a LONE cardinality token (`contains 0..1 E2`). Cardinality is a
+                # PAIR `sc→dc` (both sides or neither), so a single token leaves no `→` and the item
+                # fails to parse. Name that exact cause, mirroring the alias-error hint style.
+                if ("→" not in r.raw and "->" not in r.raw
+                        and any(tok in ALLOWED_CARDINALITY for tok in r.raw.split())):
+                    msg += (" — cardinality must be a pair `sc→dc`, e.g. `contains 1→0..1 E12` "
+                            "(not a single token)")
+                problems.append(msg)
                 continue
             if r.verb.lower() in REL_ALIAS:
                 problems.append(
@@ -710,12 +814,12 @@ def check_entity_sources(text: str, map_path: Path) -> list[str]:
     stays safe on templates/fixtures. Opt-in (`--check-sources`) — it reads the analyzed repo's
     source, a deliberate departure from map-only validation."""
     problems: list[str] = []
-    roots = [map_path.resolve().parent, map_path.resolve().parent.parent]
+    roots = _source_roots(map_path)
     for c in iter_domain_cards(text.splitlines()):
         if not c.source or not c.heading_ok or c.name == c.id:
             continue  # no anchor, or a malformed heading already flagged — nothing reliable to check
         rel = c.source.split("#", 1)[0]
-        src = next((r / rel for r in roots if (r / rel).is_file()), None)
+        src = _resolve_source_file(c.source, roots)
         if src is None:
             continue  # file not resolvable (placeholder / run outside the repo) — skip, don't false-flag
         try:
@@ -729,6 +833,109 @@ def check_entity_sources(text: str, map_path: Path) -> list[str]:
                 f"synthesized or a wrong anchor; entities must be real named types"
             )
     return problems
+
+
+# Domain-model coverage thresholds (advisory). Calibrated against the two real mcpolis runs so the
+# thin-domain regression (the new run: 8/33 entities isolated, 62/103 source-dir types unmodelled)
+# warns while the richer run (6/37 isolated) stays quiet — see method retrospective. They are not a
+# blocking gate; intentional abstraction is allowed (GR6), so an over-trip is a nudge, never a failure.
+_ISOLATED_FRACTION = 0.20  # warn when MORE than this share of entity cards have zero E↔E relations
+_ISOLATED_MIN = 3          # …and at least this many are isolated (floor — quiets tiny/young models)
+_ISOLATED_MIN_ENTITIES = 5  # …and the model has at least this many entities at all
+_UNCOVERED_FRACTION = 0.40  # warn when AT LEAST this share of source-dir types have no entity card
+_UNCOVERED_MIN = 10         # …and at least this many are uncovered (floor — a strong signal only)
+_COVERAGE_SAMPLE = 12       # cap the entity / type list in a warning so it stays readable
+
+
+def _type_covered(type_name: str, entity_names: list[str]) -> bool:
+    """True if a code type is represented by some entity card — the same lenient, case-insensitive
+    substring match `check_entity_sources` uses to ground an entity in its file, run in reverse: an
+    entity's identifier token appears in the type name, or the type name appears in the entity name.
+    Tolerant on purpose (an abbreviated / compound / suffixed card name still counts as covering)."""
+    t = type_name.lower()
+    for name in entity_names:
+        low = name.lower()
+        if t in low or low in t:
+            return True
+        if any(tok.lower() in t for tok in re.findall(r"[A-Za-z_]\w{2,}", name)):
+            return True
+    return False
+
+
+def check_domain_coverage(text: str, map_path: Path) -> list[str]:
+    """Advisory (non-blocking, opt-in via --check-coverage): independently catch an UNDER-HARVESTED
+    domain model — the thin-domain regression a directory-sliced harvest produces when no agent owns
+    the T5 card slice — regardless of how the map was produced. Two sub-checks:
+
+      (a) Relation-isolated entities (map-only): entity cards with ZERO E↔E relation (neither a
+          RELATIONS line they declare nor one targeting them). A sparse class graph shows up here
+          directly; warn when a material share of the model is isolated.
+      (b) Domain-type coverage vs the real code (repo read, the independent re-measurement): the
+          named Python types in the entities' OWN source dirs that no entity card represents. Types
+          are re-extracted with stdlib `ast` (top-level ClassDef — dataclasses/enums are ClassDefs
+          too); non-`.py` files are skipped (full multi-language symbol extraction is the pre-index's
+          job, not this stdlib check), and like every coverage check it re-measures the tree and never
+          reads the pre-index JSON (GR4). A no-op when no SOURCE file resolves (a template / a map run
+          outside its repo / sources under a backup dir).
+
+    No-op when the map has no domain cards."""
+    cards = list(iter_domain_cards(text.splitlines()))
+    if not cards:
+        return []
+    out: list[str] = []
+
+    # (a) Relation-isolated entities — the undirected set of E-ids touched by ANY ok relation.
+    related: set[str] = set()
+    for c in cards:
+        for r in c.relations:
+            if r.ok:
+                related.add(c.id)
+                related.add(r.target)
+    ids = [c.id for c in cards]
+    isolated = [i for i in ids if i not in related]
+    n = len(ids)
+    if (n >= _ISOLATED_MIN_ENTITIES and len(isolated) >= _ISOLATED_MIN
+            and len(isolated) > _ISOLATED_FRACTION * n):
+        out.append(
+            f"Isolated entities: {len(isolated)} of {n} entity cards have NO E↔E relation "
+            f"({round(100 * len(isolated) / n)}% of the domain model) — a sparse class graph is the "
+            f"signature of an under-harvested domain model (did one T5 harvest agent author per-entity "
+            f"RELATIONS?): {', '.join(isolated[:_COVERAGE_SAMPLE])}"
+            + (f", +{len(isolated) - _COVERAGE_SAMPLE} more" if len(isolated) > _COVERAGE_SAMPLE else "")
+        )
+
+    # (b) Domain-type coverage — re-extract named types from the .py files in the entities' source
+    # dirs and compare to the entity names. STDLIB ONLY: Python types via `ast`; non-Python files in a
+    # domain dir are skipped here (the pre-index does multi-language symbol extraction, this does not).
+    roots = _source_roots(map_path)
+    domain_dirs: set[Path] = set()
+    for c in cards:
+        if c.source:
+            src = _resolve_source_file(c.source, roots)
+            if src is not None:
+                domain_dirs.add(src.parent)
+    types: dict[str, Path] = {}  # type name -> first file it was seen in
+    for d in sorted(domain_dirs):
+        for f in sorted(d.glob("*.py")):
+            try:
+                tree = ast.parse(f.read_text(encoding="utf-8", errors="ignore"))
+            except (OSError, SyntaxError, ValueError):
+                continue  # an unreadable / unparseable file is not counted (never a silent miscount)
+            for node in tree.body:  # top-level ClassDefs only (a nested helper class is not an entity)
+                if isinstance(node, ast.ClassDef):
+                    types.setdefault(node.name, f)
+    if types:
+        entity_names = [c.name for c in cards if c.name != c.id]
+        uncovered = sorted(t for t in types if not _type_covered(t, entity_names))
+        if len(uncovered) >= _UNCOVERED_MIN and len(uncovered) >= _UNCOVERED_FRACTION * len(types):
+            shown = ", ".join(uncovered[:_COVERAGE_SAMPLE]) + (
+                f", +{len(uncovered) - _COVERAGE_SAMPLE} more" if len(uncovered) > _COVERAGE_SAMPLE else "")
+            out.append(
+                f"Under-harvested domain model: {len(uncovered)} of {len(types)} named types in the "
+                f"entities' source dirs have no entity card (possible under-harvested domain model; "
+                f"Python types only, measured at validate time): {shown}"
+            )
+    return out
 
 
 def collect_edges(text: str) -> list[tuple[str, str, str]]:
@@ -826,6 +1033,7 @@ def main(argv: list[str] | None = None) -> int:
     problems.extend(check_flow_steps(text, collect_role_names(text)))
     problems.extend(check_roles_kind(text))
     problems.extend(check_dep_kinds(text))
+    problems.extend(check_malformed_ids(text))  # an id-shaped token with a suffix (`S12a`) — silently dropped
     problems.extend(check_table_runs(text))   # a table split by a comment/blank line (silent row loss)
     problems.extend(check_table_shape(text))
     problems.extend(check_edge_verbs(text))
@@ -845,6 +1053,7 @@ def main(argv: list[str] | None = None) -> int:
     warnings.extend(check_altitude_hints(text))  # advisory: a component that is really a group
     if check_coverage:  # opt-in map-fidelity: peer-level compression + absent modules (re-measured, GR4)
         warnings.extend(check_compression_coverage(text, path.resolve().parent.parent))
+        warnings.extend(check_domain_coverage(text, path))  # under-harvested domain model (item 2)
     # Non-blocking nudge: a group whose ONLY child is another group of the same kind is a redundant
     # nesting level (it adds depth without grouping anything). Only nested maps can trigger it, so flat
     # maps stay silent.
@@ -875,6 +1084,18 @@ def main(argv: list[str] | None = None) -> int:
             "Subsystems (S) defined but no component is assigned to one — the T1 'Subsystem' "
             "membership column is missing or unreadable"
         )
+    # Non-blocking nudge: a LEAF subsystem with no members (no component assigned, and not the parent
+    # of another subsystem) is empty — its box renders with nothing inside. Usually a membership that
+    # pointed at a malformed / typo'd id (the `S12a` class flagged above) or a leftover. Mirrors the
+    # "Subdomains with no entities" nudge. Gated on SOME subsystem having a component, so the all-
+    # ungrouped case (already the blocking guard above) is not double-reported.
+    assigned_s = {p for c, p in all_parents.items() if _is_component(c) and _is_subsystem_id(p)}
+    if assigned_s:
+        parent_s = {p for c, p in all_parents.items() if _is_subsystem_id(c) and _is_subsystem_id(p)}
+        empty_s = sorted(i for i in defined if _is_subsystem_id(i) and i not in assigned_s and i not in parent_s)
+        if empty_s:
+            warnings.append("Subsystems with no members (empty box — no component assigned, no child "
+                            f"subsystem): {', '.join(empty_s)}")
     # Same guard for the domain model: a Subdomains table with NO entity assigned is almost always
     # missing `SUBDOMAIN:` lines (disconnected subdomain boxes), not an intentional choice.
     entities_defined = any(i.startswith("E") for i in defined)

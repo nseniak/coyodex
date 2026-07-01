@@ -253,6 +253,23 @@ in several places), and — when you pass `--pairs` a `{component: [paths]}` map
   it skipped and the languages without symbol data (symbols are deep for Python; other languages
   need the tree-sitter pack). An unparsed region is a region you still owe a read.
 
+**The hand-off — read the stderr summary first; don't reverse-engineer the JSON.** `preindex` writes
+the JSON to `.coyodex/preindex.json` **and** prints a one-line human summary to **stderr** (heaviest
+top-level dirs, file/LOC totals, ambiguous-symbol count, languages without symbols, the GR1/GR2
+reminders). **Read that stderr summary** — do *not* pipe the run through `tail`/`head` and discard it,
+and don't re-derive "the largest files/dirs" by hand: the weight tree already ranks them (children are
+sorted by LOC, descending). The JSON shape, so you don't have to guess its keys:
+
+```
+{ "tool", "root",                       # provenance
+  "weight":   { "path", "loc", "file_count", "churn", "lang", "langs",
+                "children": [ …same node shape, sorted by loc desc… ] },   # the nested directory tree
+  "symbols":  { "by_name": { "<name>": [ { "file", "line", "kind" } … ] }, "ambiguous": [ … ] },
+  "imports":  { "pairs": [ … ] },        # only when --pairs {component:[paths]} was given
+  "coverage": { "files_counted", "git_available", "tree_sitter_available",
+                "languages_seen_without_extractor", "note", … } }          # what it could/couldn't parse
+```
+
 This concretises finding **G1** in
 [internal/docs/scaling-to-large-codebases.md](internal/docs/scaling-to-large-codebases.md); the
 guardrails above are **GR1/GR2/GR3/GR5** there. The validator's `--check-coverage` (below) is the
@@ -266,6 +283,18 @@ synthesis → parallel trace.**
   harvest as one concurrent batch** (all agents in a single fan-out), not in waves — the slices are
   disjoint and use pre-allocated ID ranges, so no agent needs another's output first, and they
   return compact rows (not file dumps) so reading them together is cheap.
+  - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
+    whole-domain slice: one dedicated agent reads the domain/model layer across the repo and returns
+    **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). This holds even when
+    the rest of the harvest is sliced **by directory or by subsystem** for a large repo: the
+    directory/subsystem-sliced agents return their **components / entry-points only** (Phase 1 returns
+    nodes; edges are Phase 3) and must **not** absorb (or split up) the T5 slice, and no slice may
+    silently drop it. Skipping the
+    dedicated T5 owner is the thin-domain regression — the entity graph then gets backfilled late as
+    an afterthought and comes out sparse. **Anti-pattern:** do **not** collapse T5 into an "entities
+    touched" list or a bag of `C→E` edges — those record which component uses an entity, not how the
+    entities relate; the `E↔E` RELATIONS are the domain backbone and only the T5 owner authors them.
+    (`--check-coverage` independently flags a sparse / under-harvested domain model — see below.)
 - Phase 2 Synthesize (barrier, one agent): T1 clusters/dedups all harvest outputs, and (large
   maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier.
 - Phase 3 Trace (fan out, one agent per use case/journey; large maps may instead fan out one agent
@@ -295,14 +324,26 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 >
 > For every row give `file:line` evidence and a confidence tag (**verified** = read in code /
 > **inferred** = guessed). Use only the schema-v1 IDs and edge verbs; reference nodes, never
-> invent them. Return each section in its schema shape: **markdown tables** for «the table slices
-> this agent fills — e.g. COMPONENTS (T1), ENTRY POINTS (T4), DEPENDENCIES (T2), and operational
-> rows (deployment / observability / security / config)»; and the **T5 DOMAIN MODEL as per-entity
-> cards, never a table** (`**En — Name**` + FIELDS / RELATIONS / MEANING / SOURCE — see
-> [domain-cards.md](method/domain-cards.md)). Each card is a **real named type** (class / dataclass /
-> enum) whose `SOURCE` anchors its **definition** — do NOT synthesize an entity for an unnamed
-> concept; type embedded fields by their entity (`auth:E7`) so relations carry the field name.
+> invent them. **Return exactly this fixed set of sections — one per prescribed slice — and if you
+> cannot fill one, return its header with `(none found)` and say why; never silently omit a
+> section.** Your sections: **markdown tables** for «the table slices this agent fills — e.g.
+> COMPONENTS (T1), ENTRY POINTS (T4), DEPENDENCIES (T2), and operational rows (deployment /
+> observability / security / config)».
+> **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), also return
+> the **T5 DOMAIN MODEL as per-entity cards, never a table** (`**En — Name**` + FIELDS / RELATIONS /
+> MEANING / SOURCE — see [domain-cards.md](method/domain-cards.md)), with **a RELATIONS line wherever
+> two entities relate** — the cards + their `E↔E` RELATIONS are the whole point of the slice. Each
+> card is a **real named type** (class / dataclass / enum) whose `SOURCE` anchors its **definition** —
+> do NOT synthesize an entity for an unnamed concept; type embedded fields by their entity (`auth:E7`)
+> so relations carry the field name. A directory- or subsystem-sliced agent that is **not** the T5
+> owner returns its components / entry-points only and leaves T5 to the owner.
 > (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)
+
+**Completeness check before the barrier (lead, not delegated).** Before the Phase 2 synthesis, the
+lead confirms **every prescribed slice came back with its sections** — in particular that the T5 owner
+returned per-entity cards *with* RELATIONS, and that each agent that wrote `(none found)` is genuinely
+empty rather than under-delivered. Re-ping any agent that dropped or thinned its sections; a missing
+section caught here is cheap, one discovered after synthesis is a re-trace.
 
 **Output files — map + diagrams.** Build writes a **new** baseline and overwrites any existing
 `.coyodex/project-map.md`, so you should only be here for a first map or a user-confirmed rebuild —
