@@ -56,13 +56,13 @@ install: deps
 
 # Install the coyodex-eval skill globally — SEPARATE from `install`, since the eval (method-quality
 # regression) is opt-in. Same COYODEX_HOME substitution, so the skill points back at this clone for the
-# method doc (method/coyodex-eval.md), the eval config (method/eval/), and the CLI. Depends on `deps`
+# eval bundle under tools/eval/ (method.md, thresholds.json, rubric.md) and the CLI. Depends on `deps`
 # so the venv/CLI exist.
 install-eval: deps
 	@for dir in $(SKILLS_DIRS); do \
 		rm -rf "$$dir/coyodex-eval"; \
 		mkdir -p "$$dir/coyodex-eval"; \
-		sed 's|__COYODEX_HOME__|$(REPO)|g' skill/coyodex-eval/SKILL.md > "$$dir/coyodex-eval/SKILL.md"; \
+		sed 's|__COYODEX_HOME__|$(REPO)|g' tools/eval/SKILL.md > "$$dir/coyodex-eval/SKILL.md"; \
 		echo "Installed coyodex-eval skill -> $$dir/coyodex-eval (home: $(REPO))"; \
 	done
 

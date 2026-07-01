@@ -13,7 +13,7 @@ drift). So the harness never diffs map *text* — it compares measurable **quali
 - **`/coyodex-eval` (the skill)** — the normal way. Run it inside a project and it drives the whole
   thing: guard → build a fresh map → judge it → compare to the baseline → store the run. It's the
   agent-driven orchestration (it builds a map and spawns judge sub-agents, which the tool itself can't
-  do). Install it with `make install-eval`; the recipe it follows is `method/coyodex-eval.md`.
+  do). Install it with `make install-eval`; the recipe it follows is `tools/eval/method.md`.
 - **The `coyodex` CLI commands below** — the deterministic building blocks the skill calls. You can also
   run them by hand.
 
@@ -31,7 +31,7 @@ in the orchestration layer (sub-agents) and is handed in as a `judge.json` (see 
 ## Two homes — keep them straight
 
 - **Code** (this folder, in the coyodex repo): the `coyodex score` / `coyodex eval …` commands, plus the
-  shared config `method/eval/thresholds.json` and `method/eval/rubric.md`.
+  shared config `tools/eval/thresholds.json` and `tools/eval/rubric.md`.
 - **Data** (`.coyodex-eval/` inside each evaluated project, **git-ignored**): the fresh maps, run
   archives, judge results, and a cached scoring of the baseline. The baseline map itself is the
   project's own committed `.coyodex/project-map.md`.
@@ -67,7 +67,7 @@ Run them with the CLI from the repo venv (`.venv/bin/coyodex …`, or `python -m
 **Verdict / exit code** (from `eval run` / `eval compare`): `0` = **PASS** (or **BASELINE**, first run,
 nothing to compare) · `2` = **DRIFT** (a soft band exceeded — worth a look) · `1` = **REGRESSED** (a
 hard gate tripped). Gates are **relative** to the baseline ("no *new* validate problems", not "must be
-perfect"); tune them in `method/eval/thresholds.json`.
+perfect"); tune them in `tools/eval/thresholds.json`.
 
 ## Running it (normal path)
 
@@ -86,10 +86,10 @@ the next eval re-scores the new baseline.
 
 The tool never calls an LLM (that keeps it dependency-free and testable). So the real judge runs in the
 **orchestration layer** — sub-agents that (1) try to **disprove** each L2 claim against the code → a
-grounding pass-rate, and (2) **score** the 5 rubric dimensions (`method/eval/rubric.md`) 0–4, N judges
+grounding pass-rate, and (2) **score** the 5 rubric dimensions (`tools/eval/rubric.md`) 0–4, N judges
 per dimension. They write a raw verdicts JSON; `coyodex eval judge` turns it into `judge.json` via the
 tested `PrecomputedJudge` path — so the numbers are trustworthy even though the verdicts came from live
-models. `/coyodex-eval` does all of this for you (step 4 of `method/coyodex-eval.md`).
+models. `/coyodex-eval` does all of this for you (step 4 of `tools/eval/method.md`).
 
 ## The code, briefly
 

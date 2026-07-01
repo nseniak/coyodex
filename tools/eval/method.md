@@ -11,8 +11,8 @@ its commit; this method REFUSES unless you are checked out at that commit.
 
 ## Paths — keep them straight
 - **`COYODEX_HOME`** (from the skill) — the coyodex clone: method docs, config, and the CLI
-  (`COYODEX_HOME/.venv/bin/coyodex`). Config: `COYODEX_HOME/method/eval/thresholds.json` and
-  `COYODEX_HOME/method/eval/rubric.md`.
+  (`COYODEX_HOME/.venv/bin/coyodex`). Config: `COYODEX_HOME/tools/eval/thresholds.json` and
+  `COYODEX_HOME/tools/eval/rubric.md`.
 - **Your cwd** — the project being evaluated. Baseline map: `.coyodex/project-map.md`. Eval data:
   `.coyodex-eval/`.
 
@@ -59,10 +59,10 @@ This is the real, LLM-backed judge; it runs in sub-agents (the tool never calls 
 2. **Ground** — one fresh-context skeptic sub-agent per claim, told to *disprove* it against the code
    (grounded=true only if the code clearly supports it; default to refuted when unsure). Collect
    `{claim, grounded, evidence}`. A workflow that fans these out is the efficient way.
-3. **Rubric** — 3 judge sub-agents, each scoring all 5 dimensions of `COYODEX_HOME/method/eval/rubric.md`
+3. **Rubric** — 3 judge sub-agents, each scoring all 5 dimensions of `COYODEX_HOME/tools/eval/rubric.md`
    0–4 against the code, with a `file:line` per score.
 4. Write the raw verdicts `{ "grounding": [...], "judges": [...] }` to a JSON file, then aggregate:
-   `COYODEX_HOME/.venv/bin/coyodex eval judge --map M --repo . --verdicts <raw.json> --rubric COYODEX_HOME/method/eval/rubric.md --out <judge.json>`.
+   `COYODEX_HOME/.venv/bin/coyodex eval judge --map M --repo . --verdicts <raw.json> --rubric COYODEX_HOME/tools/eval/rubric.md --out <judge.json>`.
    Keep the raw JSON as provenance (`judge-verdicts.json` in the run dir).
 
 ## Step 5 — Compare + store + report
@@ -70,7 +70,7 @@ This is the real, LLM-backed judge; it runs in sub-agents (the tool never calls 
    ```
    COYODEX_HOME/.venv/bin/coyodex eval run \
      --project <repo-name> --map .coyodex-eval/runs/<ts>/project-map.md --repo . \
-     --thresholds COYODEX_HOME/method/eval/thresholds.json \
+     --thresholds COYODEX_HOME/tools/eval/thresholds.json \
      --baseline-dir .coyodex-eval/baseline --judge <fresh judge.json> \
      --out .coyodex-eval/runs/<ts>
    ```
