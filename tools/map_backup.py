@@ -129,7 +129,9 @@ class Provenance:
             project=project if isinstance(project, str) else "",
             repo_path=repo_path if isinstance(repo_path, str) else "",
             sessions=sessions,
-            schema=raw.get("schema") if isinstance(raw.get("schema"), str) else PROVENANCE_SCHEMA,  # type: ignore[arg-type]
+            schema=raw.get("schema")
+            if isinstance(raw.get("schema"), str)
+            else PROVENANCE_SCHEMA,  # type: ignore[arg-type]
         )
 
 
@@ -199,7 +201,7 @@ def _unique_dir(base: Path) -> Path:
 
 
 # ---------------------------------------------------------------------------
-# Transcript discovery
+# Transcript discove1ry
 # ---------------------------------------------------------------------------
 
 
@@ -309,8 +311,11 @@ def _search_transcripts_that_wrote_map(repo: Path) -> list[str]:
     for jsonl in proj_dir.glob("*.jsonl"):
         try:
             with jsonl.open(encoding="utf-8", errors="ignore") as fh:
-                wrote = any(_line_wrote_map(_safe_json(line)) for line in fh
-                            if _maybe_map_line(line))
+                wrote = any(
+                    _line_wrote_map(_safe_json(line))
+                    for line in fh
+                    if _maybe_map_line(line)
+                )
         except OSError:
             continue
         if wrote:
@@ -406,7 +411,9 @@ def cmd_stamp(args: argparse.Namespace) -> int:
     # Emit the timestamp so the build can copy it verbatim into the map header
     # (the "Built:" cell), keeping header and provenance in lock-step to the minute.
     print(f"built_at={built_at}")
-    print(f"stamped {prov_path} (session {session_id}, mode {args.mode})", file=sys.stderr)
+    print(
+        f"stamped {prov_path} (session {session_id}, mode {args.mode})", file=sys.stderr
+    )
     return 0
 
 
@@ -434,7 +441,9 @@ def cmd_backup(args: argparse.Namespace) -> int:
         project = prov.project or repo.name
         built_at = latest.built_at or _map_mtime_minute(coyodex_dir) or _now_minute()
         session_ids = [s.session_id for s in prov.sessions]
-        prov_note = f"provenance: {len(session_ids)} session(s), latest built {built_at}"
+        prov_note = (
+            f"provenance: {len(session_ids)} session(s), latest built {built_at}"
+        )
     else:
         project = repo.name
         # No stamp: pin the folder to when the map was written (deterministic across
@@ -448,53 +457,63 @@ def cmd_backup(args: argparse.Namespace) -> int:
     if not session_ids and args.search:
         session_ids = _search_transcripts_that_wrote_map(repo)
         searched = True
-        prov_note += f"; --search found {len(session_ids)} transcript(s) that wrote the map"
+        prov_note += (
+            f"; --search found {len(session_ids)} transcript(s) that wrote the map"
+        )
 
-    dest = _unique_dir(MAP_BACKUPS_DIR / f"{project}-{_compact(built_at)}")
-    map_dest = dest / "map"
-    convo_dest = dest / "conversation"
+    # Which sessions actually have a transcript on disk? Resolve this UP FRONT so a
+    # refused MOVE never creates a half-made backup dir (that dir would also be left
+    # behind as litter and force a `_2` suffix on the eventual good run).
+    resolvable = [s for s in session_ids if _find_transcript_paths(s)]
+    bundled = len(resolvable)
 
     action = "MOVE" if not keep else "COPY"
-    print(f"backup: {action} {coyodex_dir}  ->  {dest}")
+    dest_base = MAP_BACKUPS_DIR / f"{project}-{_compact(built_at)}"
+    print(f"backup: {action} {coyodex_dir}  ->  {dest_base}")
     print(f"  {prov_note}")
 
     # A MOVE with no conversation defeats the feature *and* deletes the source. Refuse
-    # it unless the user opts in. (COPY is always safe — it leaves the source intact.)
-    move_needs_conversation = not keep and not args.allow_no_conversation
+    # it before creating anything. (COPY is always safe — it leaves the source intact.)
+    if not keep and bundled == 0 and not args.allow_no_conversation:
+        hint = "" if searched else " — add --search to recover it"
+        print(f"  MOVE refused: no conversation to bundle{hint}.")
+        print(
+            "  Nothing was created; the source was left in place. Re-run with --search, "
+            "or with --keep / --allow-no-conversation to proceed anyway."
+        )
+        return 3
 
     if dry_run:
+        dest = _unique_dir(dest_base)
         print("  [dry-run] would create:")
-        print(f"    {map_dest}/        <- {COYODEX_SUBDIR}/ files ({action.lower()})")
-        print(f"    {convo_dest}/      <- {len(session_ids)} conversation transcript(s)")
-        notes, bundled = _copy_transcripts(session_ids, convo_dest, dry_run=True)
+        print(f"    {dest / 'map'}/        <- {COYODEX_SUBDIR}/ files ({action.lower()})")
+        notes, _ = _copy_transcripts(session_ids, dest / "conversation", dry_run=True)
+        print(f"    {dest / 'conversation'}/      <- {bundled} conversation transcript(s)")
         for note in notes:
             print(note)
         if bundled == 0:
-            hint = "" if searched else " (try --search to recover them heuristically)"
-            print(f"  ! no conversation would be bundled{hint}")
-            if move_needs_conversation:
-                print("  [dry-run] MOVE would be REFUSED (no conversation); "
-                      "source left in place. Use --search / --keep / --allow-no-conversation")
-                return 0
-        print(f"  [dry-run] source {COYODEX_SUBDIR}/ would be "
-              f"{'left in place' if keep else 'REMOVED from ' + str(repo)}")
+            print("  ! no conversation would be bundled (map-only copy)")
+        print(
+            f"  [dry-run] source {COYODEX_SUBDIR}/ would be "
+            f"{'left in place' if keep else 'REMOVED from ' + str(repo)}"
+        )
         return 0
 
+    dest = _unique_dir(dest_base)
     dest.mkdir(parents=True, exist_ok=False)
 
     # 1) Copy the map files first (copy-then-delete, so a mid-run failure loses nothing).
     #    symlinks=True: copy links verbatim instead of crashing on a dangling one.
-    shutil.copytree(coyodex_dir, map_dest, symlinks=True)
-    print(f"  copied {COYODEX_SUBDIR}/ -> {map_dest}/")
+    shutil.copytree(coyodex_dir, dest / "map", symlinks=True)
+    print(f"  copied {COYODEX_SUBDIR}/ -> {dest / 'map'}/")
 
     # 2) Copy the conversation transcript(s).
-    convo_dest.mkdir(parents=True, exist_ok=True)
-    notes, bundled = _copy_transcripts(session_ids, convo_dest, dry_run=False)
+    (dest / "conversation").mkdir(parents=True, exist_ok=True)
+    notes, bundled = _copy_transcripts(session_ids, dest / "conversation", dry_run=False)
     for note in notes:
         print(note)
     if bundled == 0:
-        hint = "" if searched else " (re-run with --search to recover them)"
-        print(f"  ! no conversation bundled{hint}")
+        print("  ! no conversation bundled (map-only copy)")
 
     # 3) Manifest.
     manifest: dict[str, object] = {
@@ -503,26 +522,21 @@ def cmd_backup(args: argparse.Namespace) -> int:
         "source_repo": str(repo),
         "built_at": built_at,
         "backup_run_at": _now_minute(),
-        "action": "copied" if keep else ("moved" if bundled else "copied (move refused)"),
+        "action": "moved" if not keep else "copied",
         "search_fallback_used": searched,
         "sessions": [dataclasses.asdict(s) for s in prov.sessions] if prov else [],
-        "bundled_session_ids": [s for s in session_ids if _find_transcript_paths(s)],
+        "bundled_session_ids": resolvable,
     }
     (dest / "backup-manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
     )
 
-    # 4) Move => remove the source now that the copy is safely in place. But never
-    #    delete the source when no conversation was bundled unless explicitly allowed.
-    if not keep and bundled == 0 and not args.allow_no_conversation:
-        print(f"  MOVE refused: no conversation bundled, so {coyodex_dir} was NOT removed.")
-        print("  The backup holds the map only. Use --search to recover the conversation, "
-              "or --keep / --allow-no-conversation to proceed anyway.")
-        print(f"backup complete (source kept): {dest}")
-        return 3
+    # 4) Move => remove the source now that the copy is safely in place.
     if not keep:
         _remove_source(coyodex_dir)
-        print(f"  removed {coyodex_dir} (moved out; the source repo now shows it deleted)")
+        print(
+            f"  removed {coyodex_dir} (moved out; the source repo now shows it deleted)"
+        )
 
     print(f"backup complete: {dest}")
     return 0
@@ -552,42 +566,56 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_stamp = sub.add_parser(
-        "stamp", help="record session id + minute-precise build time into provenance.json"
+        "stamp",
+        help="record session id + minute-precise build time into provenance.json",
     )
-    p_stamp.add_argument("repo", help="path to the analyzed repo (the one holding .coyodex/)")
     p_stamp.add_argument(
-        "--mode", choices=["build", "accept", "rebuild"], default="build",
+        "repo", help="path to the analyzed repo (the one holding .coyodex/)"
+    )
+    p_stamp.add_argument(
+        "--mode",
+        choices=["build", "accept", "rebuild"],
+        default="build",
         help="what produced this stamp (default: build)",
     )
     p_stamp.add_argument(
-        "--session-id", default=None,
+        "--session-id",
+        default=None,
         help=f"override the session id (default: ${SESSION_ENV})",
     )
     p_stamp.add_argument(
-        "--built-at", default=None,
+        "--built-at",
+        default=None,
         help="override the build time 'YYYY-MM-DD HH:MM' so the header cell and the "
-             "stamp share one minute (default: now, local)",
+        "stamp share one minute (default: now, local)",
     )
     p_stamp.set_defaults(func=cmd_stamp)
 
     p_backup = sub.add_parser(
         "backup", help="bundle the map files + conversation into map-backups/"
     )
-    p_backup.add_argument("repo", help="path to the analyzed repo (the one holding .coyodex/)")
     p_backup.add_argument(
-        "--keep", action="store_true",
+        "repo", help="path to the analyzed repo (the one holding .coyodex/)"
+    )
+    p_backup.add_argument(
+        "--keep",
+        action="store_true",
         help="copy the map files instead of moving them (leave the source repo intact)",
     )
     p_backup.add_argument(
-        "--search", action="store_true",
+        "--search",
+        action="store_true",
         help="if the map has no stamped sessions, recover them by scanning transcripts",
     )
     p_backup.add_argument(
-        "--allow-no-conversation", action="store_true",
+        "--allow-no-conversation",
+        action="store_true",
         help="permit a MOVE (source deletion) even when no conversation was bundled",
     )
     p_backup.add_argument(
-        "--dry-run", action="store_true", help="print what would happen; change nothing",
+        "--dry-run",
+        action="store_true",
+        help="print what would happen; change nothing",
     )
     p_backup.set_defaults(func=cmd_backup)
 
