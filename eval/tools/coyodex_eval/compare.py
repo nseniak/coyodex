@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`coyodex eval compare` — score one map PROFILE against a baseline and apply the regression gates.
+"""`coyodex-eval compare` — score one map PROFILE against a baseline and apply the regression gates.
 
 A map is LLM-authored, so the comparison is RELATIVE to a blessed baseline, never absolute: a real
 baseline map carries some validate problems, so the gate is "no NEW problems", not "must pass". Two
@@ -25,8 +25,8 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from coyodex.eval.judge import JudgeReport
-from coyodex.eval.profile import MapProfile
+from coyodex_eval.judge import JudgeReport
+from coyodex_eval.profile import MapProfile
 
 PASS = "PASS"
 DRIFT = "DRIFT"
@@ -252,7 +252,7 @@ def load_thresholds(path: Path, project: str | None = None) -> Thresholds:
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex eval compare <baseline.json> <candidate.json> "
+        print("usage: coyodex-eval compare <baseline.json> <candidate.json> "
               "[--thresholds <file>] [--project <name>]\n"
               "       [--baseline-judge <file>] [--candidate-judge <file>] [--json]\n\n"
               "Compare two MapProfile JSON files and apply the relative regression gates. Pass BOTH\n"

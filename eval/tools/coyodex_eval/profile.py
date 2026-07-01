@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`coyodex score` — the deterministic quality PROFILE of a built map (the eval's reusable heart).
+"""`coyodex-eval score` — the deterministic quality PROFILE of a built map (the eval's reusable heart).
 
 A map is LLM-authored, so two runs on the same repo differ in IDs, wording, and ordering — you cannot
 regress a map by diffing its text. This module reduces a map to a `MapProfile`: a set of measurable
@@ -216,7 +216,7 @@ def _format(p: MapProfile) -> str:
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex score [.coyodex/project-map.md] [--repo <source-root>] [--json]\n\n"
+        print("usage: coyodex-eval score [.coyodex/project-map.md] [--repo <source-root>] [--json]\n\n"
               "Emit the deterministic quality profile of a built map (structure / validate / audit /\n"
               "coverage). `--repo` enables the coverage signal by re-measuring the source tree.\n"
               "`--json` prints the machine-readable MapProfile (for the eval baseline / comparator).")

@@ -13,12 +13,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.eval.compare import (DEFAULT_BANDS, DRIFT, PASS, REGRESSED, Thresholds, compare,
+from coyodex_eval.compare import (DEFAULT_BANDS, DRIFT, PASS, REGRESSED, Thresholds, compare,
                                   load_thresholds)
-from coyodex.eval.judge import DimensionScore, JudgeReport
-from coyodex.eval.profile import MapProfile
+from coyodex_eval.judge import DimensionScore, JudgeReport
+from coyodex_eval.profile import MapProfile
 
-COMPARE = [sys.executable, "-m", "coyodex.cli", "eval", "compare"]
+COMPARE = [sys.executable, "-m", "coyodex_eval.cli", "compare"]
 
 
 # --- builders -------------------------------------------------------------------

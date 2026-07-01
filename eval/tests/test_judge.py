@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coyodex.eval.judge import (DIMENSIONS, GroundingVerdict, JudgeReport, RubricVerdict,
+from coyodex_eval.judge import (DIMENSIONS, GroundingVerdict, JudgeReport, RubricVerdict,
                                 build_grounding_prompt, build_judge_report, build_rubric_prompt,
                                 report_from_verdicts, run_dimension)
 

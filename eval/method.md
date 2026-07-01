@@ -11,8 +11,8 @@ its commit; this method REFUSES unless you are checked out at that commit.
 
 ## Paths — keep them straight
 - **`COYODEX_HOME`** (from the skill) — the coyodex clone: method docs, config, and the CLI
-  (`COYODEX_HOME/.venv/bin/coyodex`). Config: `COYODEX_HOME/tools/eval/thresholds.json` and
-  `COYODEX_HOME/tools/eval/rubric.md`.
+  (`COYODEX_HOME/.venv/bin/coyodex`). Config: `COYODEX_HOME/eval/thresholds.json` and
+  `COYODEX_HOME/eval/rubric.md`.
 - **Your cwd** — the project being evaluated. Baseline map: `.coyodex/project-map.md`. Eval data:
   `.coyodex-eval/`.
 
@@ -35,7 +35,7 @@ The baseline is `.coyodex/project-map.md`; its deterministic profile is cheap bu
 expensive, so cache both, keyed by the map's hash.
 1. Compute a hash of `.coyodex/project-map.md`; compare to `.coyodex-eval/baseline/map-hash`.
 2. If missing or different (first run, or the baseline map changed):
-   - `COYODEX_HOME/.venv/bin/coyodex score .coyodex/project-map.md --repo . --json` → save as
+   - `COYODEX_HOME/.venv/bin/coyodex-eval score .coyodex/project-map.md --repo . --json` → save as
      `.coyodex-eval/baseline/profile.json`.
    - Judge `.coyodex/project-map.md` with the **Step 4** procedure → `.coyodex-eval/baseline/judge.json`.
    - Write the hash to `.coyodex-eval/baseline/map-hash`.
@@ -54,23 +54,23 @@ expensive, so cache both, keyed by the map's hash.
 
 ## Step 4 — Judge a map (used for both the baseline in Step 2 and the fresh map)
 This is the real, LLM-backed judge; it runs in sub-agents (the tool never calls a model). For a map M:
-1. `COYODEX_HOME/.venv/bin/coyodex eval claims M --json` → the L2 claims `[{claim, anchor}]`. Anchors
+1. `COYODEX_HOME/.venv/bin/coyodex-eval claims M --json` → the L2 claims `[{claim, anchor}]`. Anchors
    are relative to the map's `.coyodex[-eval/...]` dir (e.g. `../backend/x.py#L70` → `<repo>/backend/x.py`).
 2. **Ground** — one fresh-context skeptic sub-agent per claim, told to *disprove* it against the code
    (grounded=true only if the code clearly supports it; default to refuted when unsure). Collect
    `{claim, grounded, evidence}`. A workflow that fans these out is the efficient way.
-3. **Rubric** — 3 judge sub-agents, each scoring all 5 dimensions of `COYODEX_HOME/tools/eval/rubric.md`
+3. **Rubric** — 3 judge sub-agents, each scoring all 5 dimensions of `COYODEX_HOME/eval/rubric.md`
    0–4 against the code, with a `file:line` per score.
 4. Write the raw verdicts `{ "grounding": [...], "judges": [...] }` to a JSON file, then aggregate:
-   `COYODEX_HOME/.venv/bin/coyodex eval judge --map M --repo . --verdicts <raw.json> --rubric COYODEX_HOME/tools/eval/rubric.md --out <judge.json>`.
+   `COYODEX_HOME/.venv/bin/coyodex-eval judge --map M --repo . --verdicts <raw.json> --rubric COYODEX_HOME/eval/rubric.md --out <judge.json>`.
    Keep the raw JSON as provenance (`judge-verdicts.json` in the run dir).
 
 ## Step 5 — Compare + store + report
 1. Compare the fresh run against the cached baseline and archive it:
    ```
-   COYODEX_HOME/.venv/bin/coyodex eval run \
+   COYODEX_HOME/.venv/bin/coyodex-eval run \
      --project <repo-name> --map .coyodex-eval/runs/<ts>/project-map.md --repo . \
-     --thresholds COYODEX_HOME/tools/eval/thresholds.json \
+     --thresholds COYODEX_HOME/eval/thresholds.json \
      --baseline-dir .coyodex-eval/baseline --judge <fresh judge.json> \
      --out .coyodex-eval/runs/<ts>
    ```

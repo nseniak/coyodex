@@ -1,4 +1,4 @@
-# coyodex eval — method-quality regression harness
+# coyodex-eval — method-quality regression harness
 
 This package answers one question: **did a change to the coyodex method or tooling make the maps it
 produces better or worse?** You keep the project's committed `.coyodex/project-map.md` as the
@@ -13,9 +13,9 @@ drift). So the harness never diffs map *text* — it compares measurable **quali
 - **`/coyodex-eval` (the skill)** — the normal way. Run it inside a project and it drives the whole
   thing: guard → build a fresh map → judge it → compare to the baseline → store the run. It's the
   agent-driven orchestration (it builds a map and spawns judge sub-agents, which the tool itself can't
-  do). Install it with `make install-eval`; the recipe it follows is `tools/eval/method.md`.
-- **The `coyodex` CLI commands below** — the deterministic building blocks the skill calls. You can also
-  run them by hand.
+  do). Install it with `make install-eval`; the recipe it follows is `eval/method.md`.
+- **The `coyodex-eval` CLI commands below** — the deterministic building blocks the skill calls. You can
+  also run them by hand.
 
 ## The signals it compares
 
@@ -30,11 +30,20 @@ in the orchestration layer (sub-agents) and is handed in as a `judge.json` (see 
 
 ## Two homes — keep them straight
 
-- **Code** (this folder, in the coyodex repo): the `coyodex score` / `coyodex eval …` commands, plus the
-  shared config `tools/eval/thresholds.json` and `tools/eval/rubric.md`.
+- **The `eval/` bundle** (this self-contained folder in the coyodex repo): the skill (`SKILL.md`), the
+  method doc (`method.md`), the config (`thresholds.json`, `rubric.md`), and the code — a standalone
+  `coyodex_eval` package under `tools/coyodex_eval/` exposing the `coyodex-eval` command. It depends on
+  coyodex's core (schema/validate/audit) but the core has no reference back to it.
 - **Data** (`.coyodex-eval/` inside each evaluated project, **git-ignored**): the fresh maps, run
   archives, judge results, and a cached scoring of the baseline. The baseline map itself is the
   project's own committed `.coyodex/project-map.md`.
+
+```
+eval/                         # the bundle (in the coyodex repo)
+  README.md  SKILL.md  method.md  thresholds.json  rubric.md
+  tools/coyodex_eval/         profile.py · compare.py · judge.py · run.py · cli.py
+  tests/                      test_profile.py · test_compare.py · test_judge.py · test_run.py
+```
 
 ```
 <project>/
@@ -53,21 +62,21 @@ before running it: `git checkout <pin>` (the pin is in the map header), then `/c
 
 ## The commands
 
-Run them with the CLI from the repo venv (`.venv/bin/coyodex …`, or `python -m coyodex.cli …`).
+Run them with the CLI from the repo venv (`.venv/bin/coyodex-eval …`, or `python -m coyodex_eval.cli …`).
 
 | command | what it does |
 |---|---|
-| `coyodex score <map.md> [--repo <src>] [--json]` | print a map's deterministic profile (structure / validate / audit / coverage). `--repo` adds coverage. |
-| `coyodex eval run --project <name> --map <map.md> [--repo <src>] [--judge <judge.json>] [--baseline-dir <dir>] [--thresholds <file>] [--out <run-dir>]` | profile a built map, compare it to the baseline, archive the run (map + HTML view + profile + delta). |
-| `coyodex eval claims <map.md> [--json]` | print the audit's L2 worklist — the claims the judge grounds. `--json` is the judge orchestration's input. |
-| `coyodex eval judge --map <map.md> --verdicts <raw.json> --out <judge.json> [--repo <src>] [--rubric <file>]` | aggregate raw judge verdicts (from the sub-agents) into a `judge.json`, via the tested math. |
-| `coyodex eval bless <run-dir> <baseline-dir>` | copy a run's artifacts into a baseline dir (used to seed a cache; the real baseline is `.coyodex/`). |
-| `coyodex eval compare <baseline.json> <candidate.json> [--thresholds] [--baseline-judge] [--candidate-judge]` | low-level: compare two profiles directly. `eval run` uses this under the hood. |
+| `coyodex-eval score <map.md> [--repo <src>] [--json]` | print a map's deterministic profile (structure / validate / audit / coverage). `--repo` adds coverage. |
+| `coyodex-eval run --project <name> --map <map.md> [--repo <src>] [--judge <judge.json>] [--baseline-dir <dir>] [--thresholds <file>] [--out <run-dir>]` | profile a built map, compare it to the baseline, archive the run (map + HTML view + profile + delta). |
+| `coyodex-eval claims <map.md> [--json]` | print the audit's L2 worklist — the claims the judge grounds. `--json` is the judge orchestration's input. |
+| `coyodex-eval judge --map <map.md> --verdicts <raw.json> --out <judge.json> [--repo <src>] [--rubric <file>]` | aggregate raw judge verdicts (from the sub-agents) into a `judge.json`, via the tested math. |
+| `coyodex-eval bless <run-dir> <baseline-dir>` | copy a run's artifacts into a baseline dir (used to seed a cache; the real baseline is `.coyodex/`). |
+| `coyodex-eval compare <baseline.json> <candidate.json> [--thresholds] [--baseline-judge] [--candidate-judge]` | low-level: compare two profiles directly. `eval run` uses this under the hood. |
 
-**Verdict / exit code** (from `eval run` / `eval compare`): `0` = **PASS** (or **BASELINE**, first run,
+**Verdict / exit code** (from `coyodex-eval run` / `coyodex-eval compare`): `0` = **PASS** (or **BASELINE**, first run,
 nothing to compare) · `2` = **DRIFT** (a soft band exceeded — worth a look) · `1` = **REGRESSED** (a
 hard gate tripped). Gates are **relative** to the baseline ("no *new* validate problems", not "must be
-perfect"); tune them in `tools/eval/thresholds.json`.
+perfect"); tune them in `eval/thresholds.json`.
 
 ## Running it (normal path)
 
@@ -86,18 +95,18 @@ the next eval re-scores the new baseline.
 
 The tool never calls an LLM (that keeps it dependency-free and testable). So the real judge runs in the
 **orchestration layer** — sub-agents that (1) try to **disprove** each L2 claim against the code → a
-grounding pass-rate, and (2) **score** the 5 rubric dimensions (`tools/eval/rubric.md`) 0–4, N judges
-per dimension. They write a raw verdicts JSON; `coyodex eval judge` turns it into `judge.json` via the
+grounding pass-rate, and (2) **score** the 5 rubric dimensions (`eval/rubric.md`) 0–4, N judges
+per dimension. They write a raw verdicts JSON; `coyodex-eval judge` turns it into `judge.json` via the
 tested `PrecomputedJudge` path — so the numbers are trustworthy even though the verdicts came from live
-models. `/coyodex-eval` does all of this for you (step 4 of `tools/eval/method.md`).
+models. `/coyodex-eval` does all of this for you (step 4 of `eval/method.md`).
 
 ## The code, briefly
 
-- `profile.py` — `MapProfile` + `build_profile` (the deterministic signals) → `coyodex score`.
+- `profile.py` — `MapProfile` + `build_profile` (the deterministic signals) → `coyodex-eval score`.
 - `compare.py` — `Thresholds` + `compare` → the gates/bands and the PASS/DRIFT/REGRESSED verdict.
 - `judge.py` — the `Judge` seam, the aggregation, and `PrecomputedJudge` (replays orchestrated verdicts).
-- `run.py` — `run_eval` + archive + `bless` + `claims` → `coyodex eval run` / `claims` / `judge` / `bless`.
-- `cli.py` — the `coyodex eval <subcommand>` dispatcher.
+- `run.py` — `run_eval` + archive + `bless` + `claims` → `coyodex-eval run` / `claims` / `judge` / `bless`.
+- `cli.py` — the `coyodex-eval <subcommand>` dispatcher.
 
 Everything here is stdlib-only and reuses the validator's / audit's exact parse — one grammar, no drift.
-Tests: `tests/test_profile.py`, `test_compare.py`, `test_judge.py`, `test_run.py`.
+Tests: `eval/tests/test_profile.py`, `test_compare.py`, `test_judge.py`, `test_run.py`.

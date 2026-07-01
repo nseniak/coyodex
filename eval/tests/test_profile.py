@@ -12,10 +12,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.eval import profile
-from coyodex.eval.profile import MapProfile, build_profile
+from coyodex_eval import profile
+from coyodex_eval.profile import MapProfile, build_profile
 
-SCORE = [sys.executable, "-m", "coyodex.cli", "score"]
+SCORE = [sys.executable, "-m", "coyodex_eval.cli", "score"]
 
 
 # --- builders -------------------------------------------------------------------

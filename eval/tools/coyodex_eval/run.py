@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`coyodex eval run` / `coyodex eval bless` — the run orchestrator (deterministic half).
+"""`coyodex-eval run` / `coyodex-eval bless` — the run orchestrator (deterministic half).
 
 One eval run of a built map: profile it, optionally attach a judge report, compare against the blessed
 baseline, and archive everything to a run directory. `bless` promotes a run to the baseline.
@@ -17,9 +17,9 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from coyodex.eval.compare import DeltaReport, Thresholds, compare, format_report, load_thresholds
-from coyodex.eval.judge import Judge, JudgeReport, build_judge_report, report_from_verdicts
-from coyodex.eval.profile import MapProfile, build_profile
+from coyodex_eval.compare import DeltaReport, Thresholds, compare, format_report, load_thresholds
+from coyodex_eval.judge import Judge, JudgeReport, build_judge_report, report_from_verdicts
+from coyodex_eval.profile import MapProfile, build_profile
 
 BASELINE = "BASELINE"  # the "verdict" of a run with no baseline yet (it can become one via `bless`)
 _EXIT = {"PASS": 0, "REGRESSED": 1, "DRIFT": 2, BASELINE: 0}
@@ -89,7 +89,7 @@ def delta_md(result: RunResult) -> str:
     if result.delta is not None:
         lines += ["## Comparison vs baseline", "```", format_report(result.delta), "```"]
     else:
-        lines += ["_No baseline yet — `coyodex eval bless` this run to establish one._"]
+        lines += ["_No baseline yet — `coyodex-eval bless` this run to establish one._"]
     return "\n".join(lines) + "\n"
 
 
@@ -145,7 +145,7 @@ def _opt(argv: list[str], name: str) -> str | None:
 
 def run_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex eval run --project <name> --map <map.md> [--repo <root>]\n"
+        print("usage: coyodex-eval run --project <name> --map <map.md> [--repo <root>]\n"
               "       [--judge <judge.json>] [--baseline-dir <dir>] [--thresholds <file>] "
               "[--project-key <name>]\n       [--out <run-dir>] [--json]\n\n"
               "Profile a built map, attach a pre-computed judge report, compare vs the baseline, and\n"
@@ -196,7 +196,7 @@ def run_cli(argv: list[str]) -> int:
 
 def claims_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex eval claims [<map.md>] [--json]\n\n"
+        print("usage: coyodex-eval claims [<map.md>] [--json]\n\n"
               "Print the audit's L2 worklist — the high-risk 'actually-does' claims a judge should "
               "ground against the code. `--json` emits [{claim, anchor}], the input the judge "
               "orchestration fans out over.")
@@ -218,7 +218,7 @@ def claims_cli(argv: list[str]) -> int:
 
 def judge_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex eval judge --map <map.md> --verdicts <raw.json> --out <judge.json>\n"
+        print("usage: coyodex-eval judge --map <map.md> --verdicts <raw.json> --out <judge.json>\n"
               "       [--repo <root>] [--rubric <file>]\n\n"
               "Aggregate externally-produced judge verdicts — grounding [{claim, grounded, evidence}]\n"
               "and per-judge rubric scores — into a JudgeReport, via the tested PrecomputedJudge path.\n"
@@ -251,7 +251,7 @@ def judge_cli(argv: list[str]) -> int:
 
 def bless_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv or len(argv) < 2:
-        print("usage: coyodex eval bless <run-dir> <baseline-dir>\n\n"
+        print("usage: coyodex-eval bless <run-dir> <baseline-dir>\n\n"
               "Promote a run to the baseline (copy its map + profile.json + judge.json).")
         return 0 if ("-h" in argv or "--help" in argv) else 2
     run_dir, baseline_dir = Path(argv[0]), Path(argv[1])

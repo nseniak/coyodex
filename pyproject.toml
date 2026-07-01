@@ -28,16 +28,20 @@ dev = [
 
 [project.scripts]
 coyodex = "coyodex.cli:main"
+# The method-quality eval is a self-contained package (eval/tools/coyodex_eval) with its own command.
+coyodex-eval = "coyodex_eval.cli:main"
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "eval/tests"]
 
 [tool.setuptools]
 # src-layout with the source root named `tools/` (so the repo root reads as method/ + tools/ +
 # skill/ — the method and the tools it drives). The package on disk is tools/coyodex/, imported
 # as `coyodex`; the dir name matches the import name, so static tools (pyright) resolve it.
-package-dir = { "" = "tools" }
-packages = ["coyodex", "coyodex.viewer", "coyodex.eval"]
+# The eval is a SEPARATE, self-contained package under eval/tools/coyodex_eval (imported as
+# `coyodex_eval`); it depends on `coyodex` core but the core has no reference back to it.
+package-dir = { "" = "tools", "coyodex_eval" = "eval/tools/coyodex_eval" }
+packages = ["coyodex", "coyodex.viewer", "coyodex_eval"]
 
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }

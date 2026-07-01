@@ -13,13 +13,13 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.eval.judge import JudgeReport
-from coyodex.eval.profile import MapProfile, build_profile
-from coyodex.eval.run import BASELINE, bless, load_baseline, run_eval, write_run
+from coyodex_eval.judge import JudgeReport
+from coyodex_eval.profile import MapProfile, build_profile
+from coyodex_eval.run import BASELINE, bless, load_baseline, run_eval, write_run
 from test_judge import ScriptedJudge, make_l2_map
 
-RUN = [sys.executable, "-m", "coyodex.cli", "eval", "run"]
-BLESS = [sys.executable, "-m", "coyodex.cli", "eval", "bless"]
+RUN = [sys.executable, "-m", "coyodex_eval.cli", "run"]
+BLESS = [sys.executable, "-m", "coyodex_eval.cli", "bless"]
 
 
 def make_map() -> str:
@@ -114,7 +114,7 @@ def test_cli_claims_lists_the_l2_worklist_as_json() -> None:
     with tempfile.TemporaryDirectory() as d:
         mp = Path(d) / "map.md"
         mp.write_text(make_map(), encoding="utf-8")
-        r = subprocess.run([sys.executable, "-m", "coyodex.cli", "eval", "claims", str(mp), "--json"],
+        r = subprocess.run([sys.executable, "-m", "coyodex_eval.cli", "claims", str(mp), "--json"],
                            capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
         claims = json.loads(r.stdout)

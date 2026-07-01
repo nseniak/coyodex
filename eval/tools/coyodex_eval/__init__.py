@@ -1,4 +1,4 @@
-"""coyodex eval — the method-quality regression harness.
+"""coyodex-eval — the method-quality regression harness.
 
 The eval runs the whole coyodex method on pinned reference repos, extracts deterministic quality
 signals from each produced map (this package's :mod:`profile`), and compares them against a blessed
