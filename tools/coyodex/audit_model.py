@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """`coyodex audit` for a schema-v2 model map — L1 self-contradiction + the L2 grounding worklist.
 
-The same adversarial pass as the markdown audit (`audit_analysis`), reading model FIELDS instead of
-re-parsing tables: the Golden Path's narrative order vs the mechanism (T6 flows + backbone edges),
-then the ranked worklist of "actually-does" claims for fresh-context skeptics.
+The adversarial pass reads model FIELDS (never a markdown parse): the Golden Path's narrative
+order vs the mechanism (T6 flows + backbone edges), then the ranked worklist of "actually-does"
+claims for fresh-context skeptics.
 
 Two v2 upgrades to the worklist's self-describing `detail` (the F2 false-refutation fix from the
 Phase-1 boundary):
@@ -15,7 +15,9 @@ Phase-1 boundary):
     external service can't be refuted because the dep was anchored at a local wrapper module.
 
 Severity model, ranking, and the verbs-prioritize-never-gate principle are unchanged. Stdlib-only.
-A `.md` argument in `main` dispatches to the legacy markdown audit (alive until Phase 3).
+Since Phase 3 this is the ONLY audit: the v1 markdown audit is retired (a legacy map is migrated
+once with `coyodex convert`), so the audit vocabulary — severities, verb sets, Finding/WorkItem,
+the report formatter — lives here.
 """
 from __future__ import annotations
 
@@ -25,22 +27,80 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from coyodex import schema_v1
-from coyodex.audit_analysis import (
-    ADVISORY,
-    CONTRADICTION,
-    READ_VERBS,
-    WARNING,
-    WRITE_VERBS,
-    _SEV_RANK,
-    _actor_alternatives,
-    _anchor,
-    _claim_text,
-    _format,
-    _norm_actor,
-    Finding,
-    WorkItem,
-)
 from coyodex.model import ProjectModel, load_model
+
+# ── the audit vocabulary (shared with the eval, which imports it from here) ──────────────────────
+
+# WRITE = the C→E verbs that ESTABLISH or MUTATE an entity's stored state: `persists` / `writes` /
+# `creates`. Crucially `writes` is used for BOTH creates AND updates (there is no distinct create
+# verb), so the FIRST write of an entity in Golden-Path order is treated as its (possible) create,
+# and the precedence check stays ADVISORY — its message says both readings. `encrypts` is excluded:
+# encrypting a stored value is a transform, not an establishment.
+WRITE_VERBS = frozenset({"persists", "writes", "creates"})
+READ_VERBS = frozenset({"reads"})
+
+CONTRADICTION = "CONTRADICTION"
+ADVISORY = "ADVISORY"
+WARNING = "WARNING"
+_SEV_RANK = {CONTRADICTION: 0, ADVISORY: 1, WARNING: 2}
+
+_LINK = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")  # markdown link → (label, href)
+_FILEREF = re.compile(r"[\w./-]+(?:#L\d+|:\d+)")  # a bare `path#Lnnn` / `file:line` drill anchor
+
+
+def _anchor(cell: str) -> str | None:
+    """A drill-to-code anchor from a cell: the markdown-link href if present, else a bare file ref."""
+    m = _LINK.search(cell)
+    if m:
+        return m.group(2)
+    fm = _FILEREF.search(cell)
+    return fm.group(0) if fm else None
+
+
+# Split a compound Actor cell into alternatives on UNAMBIGUOUS separators (`or`, `/`, `,`). NOT on
+# `and`: it usually belongs to an atomic role name ("Research and Development"), and splitting it
+# would let a fragment ("Research") wrongly match and hide a real mismatch.
+_ACTOR_SEP = re.compile(r"\s+or\s+|\s*/\s*|\s*,\s*", re.I)
+
+
+def _norm_actor(actor: str) -> str:
+    """A role name reduced for comparison: markdown emphasis/backticks stripped, lowercased."""
+    return re.sub(r"[*`]", "", actor).strip().lower()
+
+
+def _actor_alternatives(cell: str) -> set[str]:
+    """The normalised roles a compound Actor cell allows: `Admin or Manager` → {admin, manager}."""
+    return {_norm_actor(p) for p in _ACTOR_SEP.split(cell) if p.strip()}
+
+
+def _claim_text(cell: str) -> str:
+    """Cell text with any markdown link reduced to plain words: the link's label when the cell is
+    link-only (so a claim reads 'protected by: require_admin', not the raw `[..](..)`)."""
+    stripped = _LINK.sub("", cell).strip()
+    if stripped:
+        return stripped
+    m = _LINK.search(cell)
+    return m.group(1) if m else cell
+
+
+@dataclass(frozen=True)
+class Finding:
+    check: str
+    severity: str
+    location: str
+    message: str
+
+
+@dataclass(frozen=True)
+class WorkItem:
+    claim: str
+    anchor: str | None   # a `file:line` the grounder starts from, if the map gives one
+    why_risky: str
+    # Self-describing context (G1): each endpoint's display name + source anchor(s), read straight
+    # from the model — so a fresh-context skeptic given only this item can find the code with NO
+    # map file. The short `claim` stays the stable key; `detail` is additive.
+    detail: str | None = None
+
 
 _ENTRY_POINTS_SHOWN = 6  # cap the member entry points listed in a component's claim detail
 
@@ -81,7 +141,9 @@ def _flow_opening_actor(f) -> str | None:
 
 def _touch_sets(m: ProjectModel) -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     """Per use case, the entities its flow WRITES / READS at component granularity — the same lossy
-    attribution as the markdown audit (see `audit_analysis._touch_sets` for why it is advisory)."""
+    attribution the audit has always used. It is LOSSY in both directions — a shared component
+    leaks its C→E edges into every flow that names it, and reads routed through a C→C dependency
+    are invisible — which is why the precedence check stays ADVISORY, never blocking."""
     comp_writes: dict[str, set[str]] = {}
     comp_reads: dict[str, set[str]] = {}
     for e in m.edges:
@@ -331,18 +393,53 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 
+def _format(findings: list[Finding], worklist: list[WorkItem]) -> str:
+    out: list[str] = []
+    contradictions = [f for f in findings if f.severity == CONTRADICTION]
+    if not findings:
+        out.append("L1 self-contradiction: none found.")
+    else:
+        out.append(f"L1 self-contradiction findings ({len(findings)}):")
+        for i, f in enumerate(findings, 1):
+            out.append(f"\n[{i}] {f.severity} — {f.check}")
+            out.append(f"    where: {f.location}")
+            out.append(f"    issue: {f.message}")
+    out.append("")
+    if worklist:
+        out.append(f"L2 grounding worklist ({len(worklist)} claims to disprove against the code — "
+                   "farm each to a fresh-context skeptic, method.md Phase 4):")
+        for i, w in enumerate(worklist, 1):
+            anchor = f"  [{w.anchor}]" if w.anchor else ""
+            out.append(f"  {i}. {w.claim}{anchor}")
+            if w.detail:  # G1: the claim carries its endpoints' names + files — no map needed
+                out.append(f"     who: {w.detail}")
+            out.append(f"     risk: {w.why_risky}")
+    else:
+        out.append("L2 grounding worklist: no high-risk claims detected to ground.")
+    advisories = sum(1 for f in findings if f.severity in (ADVISORY, WARNING))
+    tail = (f" {advisories} advisory/warning(s) to reconcile (non-blocking)." if advisories else "")
+    if contradictions:
+        out.append(f"\nAUDIT FAILED: {len(contradictions)} blocking contradiction(s) — fix before "
+                   f"rendering.{tail}")
+    else:
+        out.append(f"\nAUDIT PASSED (L1): no blocking contradictions.{tail} "
+                   "Reconcile advisories and run L2 grounding on the worklist above.")
+    return "\n".join(out)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex audit [.coyodex/project-map.json]\n\n"
               "The adversarial pass over a schema-v2 model map: L1 deterministic self-contradiction\n"
-              "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.\n"
-              "A `.md` argument is dispatched to the legacy schema-v1 markdown audit.")
+              "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.")
         return 0
     args = [a for a in argv if not a.startswith("-")]
     if any(a.endswith(".md") for a in args):
-        from coyodex import audit_analysis
-        return audit_analysis.main(argv)
+        print("ERROR: schema-v1 markdown maps are no longer audited directly — migrate the map "
+              "once with `coyodex convert <map.md>`, then audit project-map.json.",
+              file=sys.stderr)
+        return 2
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)

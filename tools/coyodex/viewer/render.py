@@ -4,7 +4,7 @@
 Schema v2 (`project-map.json`) renders to EITHER view — the output extension picks it:
     coyodex render .coyodex/project-map.json .coyodex/project-map.html   # interactive viewer
     coyodex render .coyodex/project-map.json .coyodex/project-map.md    # committed markdown view
-Schema-v1 markdown input still renders to HTML (the legacy path, alive until Phase 3).
+Markdown INPUT is retired (Phase 3): a schema-v1 map is migrated once with `coyodex convert`.
 
 The persisted artifacts are the model (the single source) and its generated views. The stages stay
 importable on their own (`coyodex.views`, `coyodex.viewer.gen_viewer`) for debugging.
@@ -31,25 +31,21 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {src} not found", file=sys.stderr)
         return 1
     out.parent.mkdir(parents=True, exist_ok=True)
-    if src.suffix == ".json":
-        from coyodex.model import ModelError, load_model
-        from coyodex.views import model_to_graph, model_to_markdown
-        try:
-            model = load_model(src.read_text(encoding="utf-8"))
-        except ModelError as e:
-            print(f"ERROR: {e}", file=sys.stderr)
-            return 1
-        if out.suffix == ".md":
-            out.write_text(model_to_markdown(model), encoding="utf-8")
-        else:
-            write_html(model_to_graph(model), out, report)
+    if src.suffix != ".json":
+        print("ERROR: views are generated from a schema-v2 model (project-map.json) — migrate a "
+              "legacy markdown map once with `coyodex convert`, then render.", file=sys.stderr)
+        return 2
+    from coyodex.model import ModelError, load_model
+    from coyodex.views import model_to_graph, model_to_markdown
+    try:
+        model = load_model(src.read_text(encoding="utf-8"))
+    except ModelError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+    if out.suffix == ".md":
+        out.write_text(model_to_markdown(model), encoding="utf-8")
     else:
-        if out.suffix == ".md":
-            print("ERROR: the markdown view is generated from a schema-v2 model "
-                  "(convert the map first: `coyodex convert`)", file=sys.stderr)
-            return 2
-        from coyodex.viewer.build_graph import build
-        write_html(build(src), out, report)
+        write_html(model_to_graph(model), out, report)
     print(f"Rendered {src} -> {out.resolve()}")
     return 0
 

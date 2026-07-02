@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 """Tests for `coyodex audit` — the adversarial pass (L1 self-contradiction + L2 worklist).
 
+The scenario maps are authored as schema-v1 markdown (a compact test notation) and converted
+through the one remaining v1 reader (`convert_text`) into the model the audit actually reads —
+so these tests exercise the LIVE pipeline (model audit), not the retired markdown audit.
+
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_audit.py        # built-in runner (prints pass/fail)
     pytest tests/test_audit.py         # if pytest is installed
@@ -12,9 +16,21 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import audit_analysis
+from coyodex import audit_model
+from coyodex.convert_md import convert_text
+from coyodex.model import to_canonical_json
 
-AUDIT = [sys.executable, "-m", "coyodex.audit_analysis"]
+AUDIT = [sys.executable, "-m", "coyodex.audit_model"]
+
+
+def audit_md(md: str) -> list[audit_model.Finding]:
+    """The L1 findings for a scenario map: convert the v1 test notation, audit the model."""
+    return audit_model.audit_model(convert_text(md).model)
+
+
+def l2(md: str) -> list[audit_model.WorkItem]:
+    """The L2 worklist for a scenario map, through the same convert-then-model path."""
+    return audit_model.l2_worklist_model(convert_text(md).model)
 
 
 # --- builders -------------------------------------------------------------------
@@ -263,8 +279,9 @@ def make_described_map() -> str:
 
 
 def run_audit(md: str) -> tuple[int, str]:
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
-        f.write(md)
+    """Drive the audit CLI on the scenario map, converted to a model document first."""
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+        f.write(to_canonical_json(convert_text(md).model))
         path = f.name
     r = subprocess.run([*AUDIT, path], capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
@@ -272,7 +289,7 @@ def run_audit(md: str) -> tuple[int, str]:
 
 def _checks(md: str) -> dict[str, str]:
     """{check_name: severity} for the L1 findings on a map (direct engine call, no subprocess)."""
-    return {f.check: f.severity for f in audit_analysis.audit(md)}
+    return {f.check: f.severity for f in audit_md(md)}
 
 
 # --- L1: read-before-create (advisory — lossy attribution, must not block) -------
@@ -291,7 +308,7 @@ def test_read_before_create_does_not_block_the_cli() -> None:
 
 def test_correct_order_has_no_finding() -> None:
     """Regression guard: a create-then-read Golden Path is clean — no false positive."""
-    assert audit_analysis.audit(make_precedence_map(bad=False)) == []
+    assert audit_md(make_precedence_map(bad=False)) == []
 
 
 def test_write_modeled_create_surfaces_read_before_create() -> None:
@@ -307,7 +324,7 @@ def test_write_modeled_create_surfaces_read_before_create() -> None:
 def test_read_never_created_is_deduped_per_entity() -> None:
     """Finding F4 (2nd review): a shared entity read by many steps yields ONE advisory, not one per
     step (which scales to dozens on a real map with common User/Org/Config entities)."""
-    dupes = [f for f in audit_analysis.audit(make_shared_read_map())
+    dupes = [f for f in audit_md(make_shared_read_map())
              if f.check == "read-never-created"]
     assert len(dupes) == 1, dupes
 
@@ -372,7 +389,7 @@ def test_whyless_nonfirst_step_warns() -> None:
 
 # --- L2 worklist ----------------------------------------------------------------
 def test_l2_worklist_lists_security_surfaces_and_enforces_edges() -> None:
-    items = audit_analysis.l2_worklist(make_l2_map())
+    items = l2(make_l2_map())
     claims = " ".join(w.claim for w in items)
     assert "Auth surface" in claims, claims
     assert "enforces" in claims, claims
@@ -383,7 +400,7 @@ def test_l2_worklist_lists_security_surfaces_and_enforces_edges() -> None:
 def test_l2_worklist_grounds_external_dep_edges() -> None:
     """A `C→D` edge into an external dep is grounded regardless of verb — the system-boundary
     data-flow claim (`emits` into a `datastore`), carrying its call site."""
-    items = audit_analysis.l2_worklist(make_l2_dep_map())
+    items = l2(make_l2_dep_map())
     claims = [w.claim for w in items]
     assert "C1 emits D1" in claims, claims
     assert "audit_repo.py#L8" in [w.anchor for w in items], items
@@ -392,7 +409,7 @@ def test_l2_worklist_grounds_external_dep_edges() -> None:
 def test_l2_worklist_skips_explicit_library_deps() -> None:
     """A `C→D` edge into a dep EXPLICITLY tagged `library` is skipped — a false 'uses <lib>' is benign
     and that bucket is the high-count one the Context view folds away."""
-    claims = " ".join(w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map()))
+    claims = " ".join(w.claim for w in l2(make_l2_dep_map()))
     assert "D2" not in claims, claims
 
 
@@ -400,32 +417,32 @@ def test_l2_worklist_grounds_untagged_dep_by_default() -> None:
     """Fail-safe: ONLY an explicit fold-tag skips a dep. D3 has no `Kind` cell (inference would call it
     'library'), yet its incoming edge is still grounded — an unrecognised external system must not slip
     through, which is exactly how the audit→Elastic edge survived."""
-    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    claims = [w.claim for w in l2(make_l2_dep_map())]
     assert "C1 writes D3" in claims, claims
 
 
 def test_l2_worklist_ranks_security_before_dep_edges() -> None:
     """Security (`enforces`) claims outrank external-dep data-flow claims in the worklist order."""
-    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    claims = [w.claim for w in l2(make_l2_dep_map())]
     assert claims.index("C1 enforces C2") < claims.index("C1 emits D1"), claims
 
 
 def test_l2_worklist_grounds_entity_ownership_edges() -> None:
     """A `C→E` ownership edge is grounded — a wrong persists/writes/reads mis-wires the
     subsystem→subdomain bridge."""
-    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    claims = [w.claim for w in l2(make_l2_dep_map())]
     assert "C1 persists E1" in claims, claims
 
 
 def test_l2_worklist_grounds_remaining_component_edges() -> None:
     """The broadened worklist grounds the WHOLE backbone — a plain `C→C` `calls` edge is on it too."""
-    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    claims = [w.claim for w in l2(make_l2_dep_map())]
     assert "C1 calls C3" in claims, claims
 
 
 def test_l2_worklist_ranks_backbone_tiers() -> None:
     """Ranking holds across every tier: security < external-dep < entity-ownership < remaining."""
-    claims = [w.claim for w in audit_analysis.l2_worklist(make_l2_dep_map())]
+    claims = [w.claim for w in l2(make_l2_dep_map())]
     order = [claims.index(c) for c in
              ("C1 enforces C2", "C1 emits D1", "C1 persists E1", "C1 calls C3")]
     assert order == sorted(order), claims
@@ -434,7 +451,7 @@ def test_l2_worklist_ranks_backbone_tiers() -> None:
 def test_l2_worklist_dedupes_by_claim() -> None:
     """G4: a duplicated edge row yields exactly ONE worklist claim — the first occurrence, its anchor
     kept — so the skeptic fan-out count is deterministic (no downstream ad-hoc collapse)."""
-    items = [w for w in audit_analysis.l2_worklist(make_duplicated_edge_map())
+    items = [w for w in l2(make_duplicated_edge_map())
              if w.claim == "C1 emits D1"]
     assert len(items) == 1, items
     assert items[0].anchor == "audit_repo.py#L8", items
@@ -444,7 +461,7 @@ def test_l2_worklist_claims_are_self_describing() -> None:
     """G1: each edge item's `detail` carries both endpoints' names + source files, so a fresh-context
     skeptic given only the item can locate the code with NO map file. The short claim (`C1 enforces
     C2`) stays the stable key."""
-    items = {w.claim: w for w in audit_analysis.l2_worklist(make_described_map())}
+    items = {w.claim: w for w in l2(make_described_map())}
     d = items["C1 enforces C2"].detail
     assert d is not None, items
     assert "C1 = AuthGate" in d and "src/auth/gate.py#L10" in d, d

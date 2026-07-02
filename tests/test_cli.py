@@ -88,7 +88,14 @@ def test_unknown_command_returns_2() -> None:
 def test_validate_dispatch_propagates_not_found() -> None:
     """`coyodex validate <missing>` routes to the validator, which returns 1 (file not found)."""
     with tempfile.TemporaryDirectory() as d:
-        assert cli.main(["validate", str(Path(d) / "nope.md")]) == 1
+        assert cli.main(["validate", str(Path(d) / "nope.json")]) == 1
+
+
+def test_validate_md_map_gets_the_convert_first_error() -> None:
+    """A `.md` map is retired input: usage error (2) telling the user to `coyodex convert` once."""
+    with tempfile.TemporaryDirectory() as d:
+        assert cli.main(["validate", str(Path(d) / "nope.md")]) == 2
+        assert cli.main(["audit", str(Path(d) / "nope.md")]) == 2
 
 
 def test_render_dispatch_propagates_usage_error() -> None:

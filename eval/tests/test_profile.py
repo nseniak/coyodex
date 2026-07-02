@@ -12,10 +12,16 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex_eval import profile
+from coyodex.convert_md import convert_text
+from coyodex.model import ModelError, to_canonical_json
 from coyodex_eval.profile import MapProfile, build_profile
 
 SCORE = [sys.executable, "-m", "coyodex_eval.cli", "score"]
+
+
+def as_model(md: str) -> str:
+    """The profiler reads model documents only — the md test notation converts once, like a real map."""
+    return to_canonical_json(convert_text(md).model)
 
 
 # --- builders -------------------------------------------------------------------
@@ -138,8 +144,8 @@ def make_read_before_create_map() -> str:
 
 
 def run_score(md: str, *extra: str) -> tuple[int, str]:
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
-        f.write(md)
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+        f.write(as_model(md))
         path = f.name
     r = subprocess.run([*SCORE, path, *extra], capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
@@ -147,83 +153,87 @@ def run_score(md: str, *extra: str) -> tuple[int, str]:
 
 # --- structure counts (the deterministic core) ----------------------------------
 def test_structure_counts_are_exact() -> None:
-    p = build_profile(make_counts_map())
+    p = build_profile(as_model(make_counts_map()))
     assert (p.use_cases, p.subsystems, p.subdomains, p.components, p.deps, p.entities) == (2, 1, 1, 3, 1, 2), p
     assert (p.edges, p.gp_steps, p.flows, p.security_surfaces) == (3, 3, 2, 2), p
 
 
 def test_concept_name_sets_are_captured() -> None:
-    p = build_profile(make_counts_map())
+    p = build_profile(as_model(make_counts_map()))
     assert p.auth_surfaces == ["/api/orders", "/api/lines"], p.auth_surfaces
     assert p.use_case_names == ["View order", "Create order"], p.use_case_names
     assert p.entity_names == ["Order", "Line"], p.entity_names
 
 
 def test_use_case_names_survive_a_roles_table_before_them() -> None:
-    """Regression guard for review Finding 1: a Roles table emitted before the Use-cases table must not
-    shadow it — `_use_case_names` requires an `actor` column, which the Roles table lacks."""
-    p = build_profile(make_roles_then_usecases_map())
+    """Regression guard (review Finding 1, model edition): a Roles table before the Use-cases table
+    must not shadow the use-case NAMES — the model stores them first-class, so they always survive."""
+    p = build_profile(as_model(make_roles_then_usecases_map()))
     assert p.use_case_names == ["View order", "Create order"], p.use_case_names
 
 
 # --- well-formedness (reuses validate_map) --------------------------------------
 def test_broken_map_is_not_validate_ok() -> None:
-    p = build_profile(make_broken_map())
+    p = build_profile(as_model(make_broken_map()))
     assert p.validate_ok is False and p.validate_problems > 0, p
 
 
-def test_unterminated_fence_fails_validation() -> None:
-    """A map whose only content sits under an unterminated fence: strip blanks it, so validate can't
-    see the cause — the profile still marks it not-ok with the fence as the blocking problem."""
-    p = build_profile("## Use cases\n```\n| **UC1** | View | Andy | a -> b |\n")
-    assert p.validate_ok is False and p.validate_problems >= 1, p
+def test_markdown_map_is_refused_with_a_convert_first_error() -> None:
+    """The retired input: a schema-v1 markdown map raises ModelError (migrate with `coyodex
+    convert`), never a silent zero-profile."""
+    try:
+        build_profile("## Use cases\n| **UC1** | View | Andy | a -> b |\n")
+        raise AssertionError("expected ModelError")
+    except ModelError as e:
+        assert "convert" in str(e)
 
 
 # --- self-consistency (reuses audit) --------------------------------------------
 def test_backward_why_ref_shows_up_as_a_contradiction() -> None:
-    p = build_profile(make_backward_whyref_map())
+    p = build_profile(as_model(make_backward_whyref_map()))
     assert p.contradictions == 1, p
 
 
 def test_read_before_create_shows_up_as_an_advisory() -> None:
     """The current audit rates a read-then-write ordering ADVISORY, not blocking — the profile counts
     it under `advisories`, leaving `contradictions` clean."""
-    p = build_profile(make_read_before_create_map())
+    p = build_profile(as_model(make_read_before_create_map()))
     assert p.advisories >= 1 and p.contradictions == 0, p
 
 
 def test_l2_claims_counts_security_surfaces() -> None:
     """Each Security & auth row is an L2 claim to ground — the counts_map has two surfaces."""
-    p = build_profile(make_counts_map())
+    p = build_profile(as_model(make_counts_map()))
     assert p.l2_claims >= 2, p
 
 
 # --- density (P1) ----------------------------------------------------------------
 def test_edges_per_component_is_the_density_ratio() -> None:
-    p = build_profile(make_counts_map())  # 3 edges / 3 components
+    p = build_profile(as_model(make_counts_map()))  # 3 edges / 3 components
     assert p.edges_per_component == 1.0, p
 
 
 def test_density_is_none_when_there_are_no_components() -> None:
-    p = build_profile("## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
-                      "| **UC1** | View | Andy | a -> b |\n")
+    p = build_profile(as_model(
+        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
+        "| **UC1** | View | Andy | a -> b |\n"))
     assert p.edges_per_component is None, p
 
 
 # --- coverage (needs the repo) --------------------------------------------------
 def test_coverage_is_none_without_repo_and_int_with_repo() -> None:
-    p_no = build_profile(make_counts_map())
+    p_no = build_profile(as_model(make_counts_map()))
     assert p_no.coverage_flags is None, p_no
     with tempfile.TemporaryDirectory() as d:
         (Path(d) / "order.py").write_text("x = 1\n", encoding="utf-8")
         (Path(d) / "line.py").write_text("y = 2\n", encoding="utf-8")
-        p_yes = build_profile(make_counts_map(), repo_root=Path(d))
+        p_yes = build_profile(as_model(make_counts_map()), repo_root=Path(d))
     assert isinstance(p_yes.coverage_flags, int), p_yes
 
 
 # --- serialization round-trip ---------------------------------------------------
 def test_profile_json_round_trips() -> None:
-    p = build_profile(make_counts_map())
+    p = build_profile(as_model(make_counts_map()))
     assert MapProfile.from_json(p.to_json()) == p
 
 

@@ -9,7 +9,7 @@ alongside the `MapProfile`):
     code; the claim's verdict is the MAJORITY of the usable votes, and the pass-rate is the fraction of
     claims that survived. Only the top-K risk-ranked claims are grounded (the worklist is already
     ranked, most-dangerous first); a skeptic that returns no verdict is a FAILURE, excluded from the
-    denominator — never scored as refuted. Reuses `audit_analysis.l2_worklist` — no new claim extractor.
+    denominator — never scored as refuted. Reuses `audit_model.l2_worklist_model` — no new claim extractor.
   Rubric scores — N judges independently score each rubric dimension (faithfulness, completeness,
     drill-accuracy, altitude, golden-path) 0–4 against the code; the median per dimension tames the
     noise.
@@ -28,8 +28,8 @@ from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Protocol
 
-from coyodex import audit_analysis, audit_model, schema_v1
-from coyodex.model import is_model_document, load_model
+from coyodex import audit_model
+from coyodex.model import ModelError, is_model_document, load_model
 
 # The rubric dimensions scored 0–4, in report order. Keys match config/rubric.md (external workspace);
 # the rubric TEXT is passed in, so the wording can evolve without touching this constant.
@@ -184,7 +184,7 @@ def build_rubric_prompt(dimension: str, rubric: str, map_text: str) -> str:
 
 # ── aggregation (deterministic given a Judge) ──────────────────────────────────────────────────────────
 
-def run_grounding(worklist: list[audit_analysis.WorkItem], judge: Judge, repo_root: Path,
+def run_grounding(worklist: list[audit_model.WorkItem], judge: Judge, repo_root: Path,
                   n_skeptics: int = DEFAULT_N_SKEPTICS) -> list[list[GroundingVerdict]]:
     """Ground every claim through N independent skeptics, in worklist order — one vote list per claim."""
     return [[judge.ground_claim(w.claim, w.anchor, repo_root) for _ in range(max(1, n_skeptics))]
@@ -216,12 +216,12 @@ def build_judge_report(map_text: str, repo_root: Path, rubric: str, judge: Judge
                        protocol: JudgeProtocol | None = None) -> JudgeReport:
     """Produce the full JudgeReport: ground the top-K of the audit's risk-ranked L2 worklist by
     majority-of-N skeptics, then score every rubric dimension with N judges. Deterministic given
-    `judge`; the model-facing work is entirely inside `judge`. A schema-v2 model map's worklist
-    comes from the model pipeline; markdown from the v1 audit — same claims either way."""
-    if is_model_document(map_text):
-        worklist = audit_model.l2_worklist_model(load_model(map_text))
-    else:
-        worklist = audit_analysis.l2_worklist(schema_v1.strip_fences(map_text))
+    `judge`; the model-facing work is entirely inside `judge`. Model maps only — a schema-v1
+    markdown map is migrated once with `coyodex convert` before it can be judged."""
+    if not is_model_document(map_text):
+        raise ModelError("not a schema-v2 model document — migrate a legacy markdown map once "
+                         "with `coyodex convert`, then judge project-map.json")
+    worklist = audit_model.l2_worklist_model(load_model(map_text))
     sample = worklist[:grounding_cap] if grounding_cap > 0 else worklist
     outcomes = [majority_verdict(votes) for votes in run_grounding(sample, judge, repo_root, n_skeptics)]
     n_claims = len(outcomes)

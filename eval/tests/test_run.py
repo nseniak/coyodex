@@ -16,7 +16,7 @@ from pathlib import Path
 from coyodex_eval.judge import JudgeReport
 from coyodex_eval.profile import MapProfile, build_profile
 from coyodex_eval.run import BASELINE, bless, delta_md, load_baseline, map_sha256, run_eval, write_run
-from test_judge import ScriptedJudge, make_l2_map
+from test_judge import ScriptedJudge, as_model, make_l2_map_md
 
 RUN = [sys.executable, "-m", "coyodex_eval.cli", "run"]
 BLESS = [sys.executable, "-m", "coyodex_eval.cli", "bless"]
@@ -25,11 +25,12 @@ CLAIMS = [sys.executable, "-m", "coyodex_eval.cli", "claims"]
 
 
 def make_map() -> str:
-    """A small well-formed-enough map with the two L2 sources, so profile + judge both have content."""
-    return (
+    """A small well-formed-enough map (as a model document) with the two L2 sources, so profile +
+    judge both have content."""
+    return as_model(
         "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
         "| **UC1** | Admin action | Admin | a -> b |\n\n"
-        + make_l2_map()
+        + make_l2_map_md()
     )
 
 
@@ -98,7 +99,7 @@ def test_load_baseline_missing_is_none() -> None:
 def test_cli_run_first_then_bless_then_run_again() -> None:
     with tempfile.TemporaryDirectory() as d:
         root = Path(d)
-        mp = root / "map.md"
+        mp = root / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
         run_dir, baseline_dir = root / "run1", root / "baseline"
         # first run: no baseline -> BASELINE, exit 0
@@ -123,7 +124,7 @@ def test_cli_run_requires_project_and_map() -> None:
 # --- freeze / hash (I2) ---------------------------------------------------------
 def test_cli_hash_prints_the_sha256_of_the_file() -> None:
     with tempfile.TemporaryDirectory() as d:
-        mp = Path(d) / "map.md"
+        mp = Path(d) / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
         r = subprocess.run([*HASH, str(mp)], capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
@@ -132,7 +133,7 @@ def test_cli_hash_prints_the_sha256_of_the_file() -> None:
 
 def test_cli_run_matching_map_hash_proceeds() -> None:
     with tempfile.TemporaryDirectory() as d:
-        mp = Path(d) / "map.md"
+        mp = Path(d) / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
         r = subprocess.run([*RUN, "--project", "p", "--map", str(mp),
                             "--expect-map-hash", map_sha256(mp)], capture_output=True, text=True)
@@ -143,7 +144,7 @@ def test_cli_run_refuses_a_map_edited_after_freeze() -> None:
     """The freeze guard: any post-build edit to the map invalidates the run — hard non-zero refusal,
     no profile, no comparison."""
     with tempfile.TemporaryDirectory() as d:
-        mp = Path(d) / "map.md"
+        mp = Path(d) / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
         frozen = map_sha256(mp)
         mp.write_text(make_map() + "\n<!-- silently fixed after freeze -->\n", encoding="utf-8")
@@ -160,7 +161,7 @@ def test_cli_run_expect_map_hash_without_a_value_is_a_usage_error() -> None:
     """Review-2 Finding 5: a --expect-map-hash whose value got lost (bad quoting, empty map-hash file)
     must fail CLOSED, never silently skip the freeze guard."""
     with tempfile.TemporaryDirectory() as d:
-        mp = Path(d) / "map.md"
+        mp = Path(d) / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
         r = subprocess.run([*RUN, "--project", "p", "--map", str(mp), "--expect-map-hash"],
                            capture_output=True, text=True)
@@ -170,7 +171,7 @@ def test_cli_run_expect_map_hash_without_a_value_is_a_usage_error() -> None:
 
 def test_cli_claims_top_caps_the_sample() -> None:
     with tempfile.TemporaryDirectory() as d:
-        mp = Path(d) / "map.md"
+        mp = Path(d) / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
         r = subprocess.run([*CLAIMS, str(mp), "--top", "1", "--json"], capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
@@ -193,7 +194,7 @@ def test_cli_claims_map_path_may_equal_the_top_value() -> None:
 
 def test_cli_claims_rejects_a_negative_top() -> None:
     with tempfile.TemporaryDirectory() as d:
-        mp = Path(d) / "map.md"
+        mp = Path(d) / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
         r = subprocess.run([*CLAIMS, str(mp), "--top", "-5"], capture_output=True, text=True)
         assert r.returncode == 2, r.stdout + r.stderr
@@ -202,7 +203,7 @@ def test_cli_claims_rejects_a_negative_top() -> None:
 
 def test_cli_claims_lists_the_l2_worklist_as_json() -> None:
     with tempfile.TemporaryDirectory() as d:
-        mp = Path(d) / "map.md"
+        mp = Path(d) / "map.json"
         mp.write_text(make_map(), encoding="utf-8")
         r = subprocess.run([sys.executable, "-m", "coyodex_eval.cli", "claims", str(mp), "--json"],
                            capture_output=True, text=True)

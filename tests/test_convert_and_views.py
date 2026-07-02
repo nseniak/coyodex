@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-"""Tests for the md→model converter and the generated views — including the GOLDEN EQUIVALENCE
-case: the committed real-world mcpolis map (tests/fixtures/mcpolis-project-map.md, the 2026-07-01
-backup with its historical letter-suffixed subsystem ids corrected to numeric ones so it validates)
-must come through the JSON pipeline with the SAME content the markdown pipeline reads:
+"""Tests for the md→model converter and the generated views — including the GOLDEN case: the
+committed real-world mcpolis map (tests/fixtures/mcpolis-project-map.md, the 2026-07-01 backup
+with its historical letter-suffixed subsystem ids corrected to numeric ones so it validates)
+must come through the JSON pipeline losslessly:
 
   - converter → model → canonical JSON → model is the identity;
   - model → markdown view → converter is the identity (the view loses nothing the model holds);
-  - model → graph equals the v1 parser's graph (nodes/edges/flows/roles content);
-  - audit findings + the L2 worklist are string-identical between the two pipelines.
+  - model → graph carries every defined element (the HTML view is a pure function of that dict);
+  - the model audit + L2 worklist behave deterministically on the real map.
+
+(The md-vs-json PIPELINE PARITY tests retired with the v1 parser in Phase 3 — parity was proven
+at the Phase-2 boundary and the markdown pipeline no longer exists to compare against.)
 
 Run either way (needs an editable install: `make deps`):
     python3 tests/test_convert_and_views.py
@@ -20,11 +23,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import audit_analysis, audit_model, schema_v1
+from coyodex import audit_model, schema_v1
 from coyodex.convert_md import convert_text
-from coyodex.model import load_model, to_canonical_json
+from coyodex.model import all_elements, load_model, to_canonical_json
 from coyodex.validate_analysis import validate_map
-from coyodex.viewer.build_graph import build
 from coyodex.views import model_to_graph, model_to_markdown
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mcpolis-project-map.md"
@@ -160,48 +162,31 @@ def test_golden_generated_view_validates_under_v1():
     assert problems == []
 
 
-def test_golden_graph_equivalence():
-    """model→graph must carry the same CONTENT as the v1 parser's graph (the HTML view is a pure
-    function of this dict). Compared field-by-field; `fields` compares non-empty cells (the model
-    drops empty cells — the panel renders identically), flows ignore the md-only line_no."""
-    raw = make_fixture_text()
-    g_md = build_graph_from_text(raw)
-    g_js = model_to_graph(convert_text(raw).model)
-    assert g_md["title"] == g_js["title"] and g_md["goal"] == g_js["goal"]
-    assert g_md["commit"] == g_js["commit"] and g_md["committed"] == g_js["committed"]
-    assert set(g_md["nodes"]) == set(g_js["nodes"])
-    for nid, a in g_md["nodes"].items():
-        b = g_js["nodes"][nid]
-        for key in ("kind", "name", "file", "line", "parent", "attrs", "dep_kind"):
-            assert a[key] == b[key], f"{nid}.{key}: {a[key]!r} != {b[key]!r}"
-        fa = {k: v for k, v in a["fields"].items() if str(v).strip()}  # type: ignore[union-attr]
-        fb = {k: v for k, v in b["fields"].items() if str(v).strip()}  # type: ignore[union-attr]
-        assert fa == fb, f"{nid}.fields: {fa} != {fb}"
-    assert g_md["edges"] == g_js["edges"]
-    assert g_md["gp"] == g_js["gp"]
-    strip = lambda flows: [{**f, "line_no": 0} for f in flows]  # noqa: E731
-    assert strip(g_md["flows"]) == strip(g_js["flows"])
-    assert g_md["roles"] == g_js["roles"]
+def test_golden_graph_carries_every_defined_element():
+    """model→graph must expose every defined element as a node (the HTML view is a pure function
+    of this dict), with the map's header metadata intact."""
+    m = convert_text(make_fixture_text()).model
+    g = model_to_graph(m)
+    assert g["title"] and g["commit"] == m.commit and g["goal"]
+    node_ids = set(g["nodes"])
+    for eid in all_elements(m):
+        if not eid.startswith("GP"):  # GP steps ride the `gp` list, not the node dict
+            assert eid in node_ids, f"{eid} missing from the graph"
+    assert len(g["gp"]) == len(m.golden_path)
+    assert len(g["roles"]) == len(m.roles)
+    assert g["edges"], "the fixture's backbone must survive into the graph"
 
 
-def build_graph_from_text(raw: str):
-    with tempfile.TemporaryDirectory() as td:
-        p = Path(td) / "project-map.md"
-        p.write_text(raw, encoding="utf-8")
-        return build(p)
-
-
-def test_golden_audit_and_worklist_parity():
-    raw = make_fixture_text()
-    text = schema_v1.strip_fences(raw)
-    m = convert_text(raw).model
-    md_findings = [(f.check, f.severity, f.location, f.message) for f in audit_analysis.audit(text)]
-    js_findings = [(f.check, f.severity, f.location, f.message) for f in audit_model.audit_model(m)]
-    assert md_findings == js_findings
-    wl_md = audit_analysis.l2_worklist(text)
-    wl_js = audit_model.l2_worklist_model(m)
-    assert [w.claim for w in wl_md] == [w.claim for w in wl_js]
-    assert [w.anchor for w in wl_md] == [w.anchor for w in wl_js]
+def test_golden_model_audit_is_deterministic_and_deduped():
+    """The model audit on the real map: stable across runs, worklist deduped by claim, every edge
+    claim self-describing enough to carry an anchor or a detail."""
+    m = convert_text(make_fixture_text()).model
+    f1 = [(f.check, f.severity, f.location) for f in audit_model.audit_model(m)]
+    f2 = [(f.check, f.severity, f.location) for f in audit_model.audit_model(m)]
+    assert f1 == f2
+    wl = audit_model.l2_worklist_model(m)
+    claims = [w.claim for w in wl]
+    assert wl and len(claims) == len(set(claims)), "worklist must be deduped by claim"
 
 
 def test_golden_v2_detail_describes_components_by_entry_points():

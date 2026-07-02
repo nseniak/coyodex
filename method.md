@@ -474,7 +474,7 @@ names with no real named type; `--check-coverage`
 re-walks the repo and WARNS — non-blocking — when many sibling source subdirs are folded into one
 box or a significant directory is never referenced, the map-fidelity gaps the ID checks can't see).
 **Then run the adversarial pass** — `.venv/bin/coyodex audit .coyodex/project-map.json`
-([tools/coyodex/audit_analysis.py](tools/coyodex/audit_analysis.py)). Where validate asks *is the map
+([tools/coyodex/audit_model.py](tools/coyodex/audit_model.py)). Where validate asks *is the map
 well-formed*, audit asks *is it self-contradictory*: it makes the map's two layers — the narrative
 Golden Path (step order, actors) and the mechanism (T6 flows + the backbone edge list) — refute each
 other, deterministically, with no code. The map is **over-determined** (each precondition is encoded

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Eval-side tests for the schema-v2 model pipeline: the GOLDEN EQUIVALENCE (a real map's
-markdown-pipeline profile == its JSON-pipeline profile), model-map support in score/claims/run,
-and the judge-protocol fingerprint (recorded in judge.json; a mismatch fails the cache guard and
-DRIFTs a comparison).
+"""Eval-side tests for the schema-v2 model pipeline: model-map support in score/claims/run, the
+retired-markdown refusal, and the judge-protocol fingerprint (recorded in judge.json; a mismatch
+fails the cache guard and DRIFTs a comparison). (The md-vs-json golden-equivalence test retired
+with the markdown pipeline in Phase 3 — parity was proven at the Phase-2 boundary.)
 
 Run either way (needs an editable install: `make deps` + the eval package):
     python3 eval/tests/test_model_pipeline.py
@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 from coyodex.convert_md import convert_text
-from coyodex.model import to_canonical_json
+from coyodex.model import ModelError, to_canonical_json
 from coyodex_eval.compare import compare
 from coyodex_eval.judge import JudgeProtocol, JudgeReport, report_from_verdicts, rubric_fingerprint
 from coyodex_eval.profile import build_profile, build_profile_from_model
@@ -32,22 +32,32 @@ def make_fixture_model_json() -> str:
     return to_canonical_json(convert_text(FIXTURE.read_text(encoding="utf-8")).model)
 
 
+def make_tiny_model_json() -> str:
+    """A minimal model document for tests that need a map but no claims."""
+    return to_canonical_json(convert_text(
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | X | x | f |  |\n").model)
+
+
 def make_verdicts(claims: list[str], grounded: bool = True) -> list[dict[str, object]]:
     return [{"claim": c, "grounded": grounded, "evidence": "x.py:1"} for c in claims for _ in range(3)]
 
 
 def make_judge_report(rubric: str = "rubric v1", model: str = "sonnet") -> JudgeReport:
-    return report_from_verdicts("# tiny map\n", Path("."), rubric, [], [{"faithfulness": 3}],
+    return report_from_verdicts(make_tiny_model_json(), Path("."), rubric, [], [{"faithfulness": 3}],
                                 judge_model=model)
 
 
-# --- the golden equivalence -------------------------------------------------------
+# --- the retired markdown input ----------------------------------------------------
 
-def test_golden_md_profile_equals_json_profile():
-    raw = FIXTURE.read_text(encoding="utf-8")
-    p_md = build_profile(raw)
-    p_json = build_profile(make_fixture_model_json())  # via the model-document sniff
-    assert json.loads(p_md.to_json()) == json.loads(p_json.to_json())
+def test_markdown_map_is_refused_by_the_profiler():
+    """Phase 3: the eval reads model documents only — the raw v1 fixture raises a convert-first
+    ModelError instead of profiling through a retired pipeline."""
+    try:
+        build_profile(FIXTURE.read_text(encoding="utf-8"))
+        raise AssertionError("expected ModelError")
+    except ModelError as e:
+        assert "convert" in str(e)
 
 
 def test_build_profile_from_model_matches_direct_path():
@@ -112,7 +122,7 @@ def test_protocol_cli_guards_the_baseline_cache():
             {"judge": {"grounding_model": "sonnet", "n_skeptics": 1, "grounding_cap": 40}}),
             encoding="utf-8")
         cached = Path(td) / "judge.json"
-        report = report_from_verdicts("# tiny map\n", Path("."), "rubric text v1",
+        report = report_from_verdicts(make_tiny_model_json(), Path("."), "rubric text v1",
                                       [], [{"faithfulness": 3}], judge_model="sonnet")
         cached.write_text(report.to_json(), encoding="utf-8")
         base = EVAL + ["protocol", "--thresholds", str(thresholds), "--rubric", str(rubric),
@@ -144,7 +154,7 @@ def test_protocol_cli_rejects_pre_fingerprint_cache():
 def test_compare_drifts_on_protocol_mismatch():
     baseline = make_judge_report(rubric="rubric v1")
     candidate = make_judge_report(rubric="rubric v2 — reworded")
-    profile = build_profile("# empty\n")
+    profile = build_profile(make_tiny_model_json())
     report = compare(profile, profile, None, baseline, candidate)
     assert report.verdict == "DRIFT"
     assert any(j.metric == "judge_protocol_mismatch" and not j.within for j in report.judge_bands)

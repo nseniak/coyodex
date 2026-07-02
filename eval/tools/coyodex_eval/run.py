@@ -121,45 +121,38 @@ def render_html(map_path: Path, html_path: Path) -> None:
     viewable diagram (the live `.coyodex/project-map.html` in the clone is overwritten every rebuild).
     Best-effort: a render hiccup warns but never loses the already-written source / profile / delta."""
     try:
+        from coyodex.model import load_model
         from coyodex.viewer.gen_viewer import write_html
-        if map_path.suffix == ".json":
-            from coyodex.model import load_model
-            from coyodex.views import model_to_graph
-            write_html(model_to_graph(load_model(map_path.read_text(encoding="utf-8"))),
-                       html_path, None)
-        else:
-            from coyodex.viewer.build_graph import build
-            write_html(build(map_path), html_path, None)
+        from coyodex.views import model_to_graph
+        write_html(model_to_graph(load_model(map_path.read_text(encoding="utf-8"))),
+                   html_path, None)
     except Exception as e:  # archiving must survive a render failure
         print(f"WARNING: could not render {html_path.name}: {e}", file=sys.stderr)
 
 
-# Everything a run/baseline dir holds, in write order. A schema-v2 run stores project-map.json (the
-# source) + its generated md view; a legacy run stores project-map.md only. project-map.html is
-# rendered (not copied) at write time; bless copies whichever of these exist.
+# Everything a run/baseline dir holds, in write order. A run stores project-map.json (the source)
+# + its generated md view; project-map.html is rendered (not copied) at write time; bless copies
+# whichever of these exist (a pre-migration legacy run dir may still hold project-map.md only).
 _RUN_ARTIFACTS = ("project-map.json", "project-map.md", "project-map.html", "profile.json",
                   "judge.json", "delta.md")
 
 
 def write_run(out_dir: Path, result: RunResult, map_text: str,
               conversation_src: Path | None = None) -> None:
-    """Archive a run: the map, its rendered HTML view, profile.json, judge.json (if any), delta.md, and
-    the build conversation (if the orchestrator captured one). The historical record a baseline is
-    blessed from — the view is archived so a past run stays viewable after a later rebuild."""
+    """Archive a run: the model, its generated md + HTML views, profile.json, judge.json (if any),
+    delta.md, and the build conversation (if the orchestrator captured one). The historical record
+    a baseline is blessed from — the views are archived so a past run stays viewable after a later
+    rebuild. Model documents only (run_eval's profiling already refused anything else)."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    if is_model_document(map_text):
-        map_path = out_dir / "project-map.json"
-        map_path.write_text(map_text, encoding="utf-8")
-        try:  # the generated md view rides along, like the HTML — best-effort, never blocks archiving
-            from coyodex.model import load_model
-            from coyodex.views import model_to_markdown
-            (out_dir / "project-map.md").write_text(
-                model_to_markdown(load_model(map_text)), encoding="utf-8")
-        except Exception as e:
-            print(f"WARNING: could not write the md view: {e}", file=sys.stderr)
-    else:
-        map_path = out_dir / "project-map.md"
-        map_path.write_text(map_text, encoding="utf-8")
+    map_path = out_dir / "project-map.json"
+    map_path.write_text(map_text, encoding="utf-8")
+    try:  # the generated md view rides along, like the HTML — best-effort, never blocks archiving
+        from coyodex.model import load_model
+        from coyodex.views import model_to_markdown
+        (out_dir / "project-map.md").write_text(
+            model_to_markdown(load_model(map_text)), encoding="utf-8")
+    except Exception as e:
+        print(f"WARNING: could not write the md view: {e}", file=sys.stderr)
     (out_dir / "profile.json").write_text(result.profile.to_json(), encoding="utf-8")
     if result.judge is not None:
         (out_dir / "judge.json").write_text(result.judge.to_json(), encoding="utf-8")
@@ -187,7 +180,7 @@ def _opt(argv: list[str], name: str) -> str | None:
 
 def run_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex-eval run --project <name> --map <map.md> [--repo <root>]\n"
+        print("usage: coyodex-eval run --project <name> --map <project-map.json> [--repo <root>]\n"
               "       [--expect-map-hash <sha256>] [--judge <judge.json>] [--baseline-dir <dir>]\n"
               "       [--thresholds <file>] [--project-key <name>] [--out <run-dir>] [--json]\n\n"
               "Profile a built map, attach a pre-computed judge report, compare vs the baseline, and\n"
@@ -237,9 +230,14 @@ def run_cli(argv: list[str]) -> int:
     if (tp := _opt(argv, "--thresholds")) is not None:
         thresholds = load_thresholds(Path(tp), _opt(argv, "--project-key") or project)
 
-    result = run_eval(project, map_path.read_text(encoding="utf-8"), repo_root,
-                      thresholds=thresholds, baseline_profile=baseline_profile,
-                      baseline_judge=baseline_judge, judge_report=judge_report)
+    from coyodex.model import ModelError
+    try:
+        result = run_eval(project, map_path.read_text(encoding="utf-8"), repo_root,
+                          thresholds=thresholds, baseline_profile=baseline_profile,
+                          baseline_judge=baseline_judge, judge_report=judge_report)
+    except ModelError as e:
+        print(f"ERROR: {map_path}: {e}", file=sys.stderr)
+        return 1
 
     if (out := _opt(argv, "--out")) is not None:
         write_run(Path(out), result, map_path.read_text(encoding="utf-8"))
@@ -255,13 +253,12 @@ def run_cli(argv: list[str]) -> int:
 
 def claims_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex-eval claims [<map.md>] [--top <K>] [--json]\n\n"
+        print("usage: coyodex-eval claims [<project-map.json>] [--top <K>] [--json]\n\n"
               "Print the audit's L2 worklist — the high-risk 'actually-does' claims a judge should "
               "ground against the code, risk-ranked most-dangerous first. `--top K` keeps only the "
               "first K (the grounding sample; the eval grounds top-K, not the whole list). `--json` "
               "emits [{claim, anchor, detail?}], the input the judge orchestration fans out over.")
         return 0
-    from coyodex import audit_analysis, schema_v1  # stdlib-only
     # Consume --top's value by INDEX, never by string equality — a positional map path that happens to
     # equal the K value (a file named `40`) must not be swallowed with it.
     top: int | None = None
@@ -291,19 +288,19 @@ def claims_cli(argv: list[str]) -> int:
         else:
             positional.append(a)
         i += 1
-    path = Path(positional[0] if positional else
-                (".coyodex/project-map.json" if Path(".coyodex/project-map.json").exists()
-                 else ".coyodex/project-map.md"))
+    path = Path(positional[0] if positional else ".coyodex/project-map.json")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
     text = path.read_text(encoding="utf-8")
-    if is_model_document(text):
-        from coyodex import audit_model
-        from coyodex.model import load_model
-        items = audit_model.l2_worklist_model(load_model(text))
-    else:
-        items = audit_analysis.l2_worklist(schema_v1.strip_fences(text))
+    if not is_model_document(text):
+        print(f"ERROR: {path} is not a schema-v2 model document — migrate a legacy markdown map "
+              "once with `coyodex convert`, then read claims from project-map.json",
+              file=sys.stderr)
+        return 1
+    from coyodex import audit_model
+    from coyodex.model import load_model
+    items = audit_model.l2_worklist_model(load_model(text))
     if top is not None:
         items = items[:top]
     if json_out:
@@ -335,7 +332,7 @@ def hash_cli(argv: list[str]) -> int:
 
 def judge_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex-eval judge --map <map.json|md> --verdicts <raw.json> --out <judge.json>\n"
+        print("usage: coyodex-eval judge --map <project-map.json> --verdicts <raw.json> --out <judge.json>\n"
               "       [--repo <root>] [--rubric <file>] [--judge-model <name>]\n\n"
               "Aggregate externally-produced judge verdicts — grounding [{claim, grounded, evidence}]\n"
               "with grounded one of true / false / \"unverifiable\" (a could-not-verify vote counts\n"
@@ -360,9 +357,15 @@ def judge_cli(argv: list[str]) -> int:
     rubric_arg = _opt(argv, "--rubric")
     rubric = Path(rubric_arg).read_text(encoding="utf-8") if rubric_arg and Path(rubric_arg).exists() else ""
     raw = json.loads(vpath.read_text(encoding="utf-8"))
-    report = report_from_verdicts(map_path.read_text(encoding="utf-8"), Path(repo) if repo else Path("."),
-                                  rubric, raw.get("grounding", []), raw.get("judges", []),
-                                  judge_model=_opt(argv, "--judge-model") or "")
+    from coyodex.model import ModelError
+    try:
+        report = report_from_verdicts(map_path.read_text(encoding="utf-8"),
+                                      Path(repo) if repo else Path("."),
+                                      rubric, raw.get("grounding", []), raw.get("judges", []),
+                                      judge_model=_opt(argv, "--judge-model") or "")
+    except ModelError as e:
+        print(f"ERROR: {map_path}: {e}", file=sys.stderr)
+        return 1
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report.to_json(), encoding="utf-8")

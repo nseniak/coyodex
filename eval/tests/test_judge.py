@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from coyodex.convert_md import convert_text
+from coyodex.model import to_canonical_json
 from coyodex_eval.judge import (DIMENSIONS, GROUNDING_PROMPT_VERSION, GroundingVerdict,
                                 JudgeProtocol, JudgeReport, RubricVerdict,
                                 build_grounding_prompt, build_judge_report, build_rubric_prompt,
@@ -43,7 +45,12 @@ class ScriptedJudge:
 
 
 # --- builders -------------------------------------------------------------------
-def make_l2_map(refute_surface: bool = False) -> str:
+def as_model(md: str) -> str:
+    """The judge reads model documents only — the md test notation converts once, like a real map."""
+    return to_canonical_json(convert_text(md).model)
+
+
+def make_l2_map_md(refute_surface: bool = False) -> str:
     """A map with the two L2-worklist sources: a Security & auth row and an `enforces` edge → 2 claims.
     `refute_surface` puts the marker in the surface name so the ScriptedJudge refutes that one claim."""
     surface = "REFUTE /admin" if refute_surface else "/admin"
@@ -58,16 +65,21 @@ def make_l2_map(refute_surface: bool = False) -> str:
     )
 
 
+def make_l2_map(refute_surface: bool = False) -> str:
+    return as_model(make_l2_map_md(refute_surface))
+
+
 def make_no_claims_map() -> str:
-    return ("## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-            "| **C1** | X | x | f |  |\n")
+    return as_model(
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | X | x | f |  |\n")
 
 
 def make_many_claims_map(n_uses: int = 4) -> str:
     """make_l2_map's 2 high-risk claims (auth surface, then the enforces edge — the top of the risk
     ranking) plus `n_uses` low-risk C↔C `uses` edges appended to the same edges table."""
     extra = "".join(f"| C1 | uses | C{i + 3} | w | gate.py#L{i + 3} |\n" for i in range(n_uses))
-    return make_l2_map() + extra
+    return as_model(make_l2_map_md() + extra)
 
 
 CLAIM_SURFACE = "Auth surface '/admin' is protected by: require_admin"

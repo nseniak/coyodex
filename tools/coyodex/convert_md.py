@@ -75,6 +75,17 @@ def _first_id(cell: str) -> str | None:
     return m.group(0) if m else None
 
 
+def _display_name(cells: list[str], ni: int | None, eid: str) -> str:
+    """The element's display name from its name column — falling back to the bare id when the
+    layout has no real name cell (the "agent" layout puts the ID under the `Component` header, so
+    the candidate is the id itself, possibly bold). Mirrors the v1 parser's fallback: an element
+    is never named `**C1**` or after its subsystem."""
+    cand = _cell(cells, ni)
+    if not cand or re.fullmatch(r"\*{0,2}(?:UC|GP|SD|C|D|E|S)\d+\*{0,2}", cand):
+        return eid
+    return cand
+
+
 def _hidx(headers: list[str], *needles: str, starts: bool = False) -> int | None:
     """Index of the first header matching any needle (substring, or prefix when `starts`)."""
     for i, h in enumerate(headers):
@@ -268,14 +279,17 @@ def convert_text(raw: str) -> ConvertResult:
                     headers[i]: cells[i].strip() for i in range(1, len(cells))
                     if i < len(headers) and hl[i] not in known and cells[i].strip()}
                 m.components.append(Component(
-                    id=dm.group(1), name=_cell(cells, ni),
+                    id=dm.group(1), name=_display_name(cells, ni, dm.group(1)),
                     subsystem=_membership(cells, hl, dm.group(1), warnings),
                     purpose=_cell(cells, pi), entry_point=_opt(_cell(cells, ei)),
                     depends_on=_cell(cells, di), anchor=None, confidence=_cell(cells, ci),
                     extra=extra))
         elif kind == "deps":
-            known = {"id", "name", "kind", "type", "used for", "where configured", "conf", "conf."}
-            ni, ki, ti = _hidx(hl, "name"), _hidx(hl, "kind"), _hidx(hl, "type")
+            known = {"id", "name", "dependency", "kind", "type", "used for", "where configured",
+                     "conf", "conf."}
+            # "Name" is the template header; "Dependency" is a common authored variant the lenient
+            # v1 parser accepted (name = second cell), so honor it here too.
+            ni, ki, ti = _hidx(hl, "name", "dependency"), _hidx(hl, "kind"), _hidx(hl, "type")
             ui, wi, ci = (_hidx(hl, "used for"), _hidx(hl, "where configured"),
                           _hidx(hl, "conf", starts=True))
             for cells in rows:
@@ -286,7 +300,7 @@ def convert_text(raw: str) -> ConvertResult:
                     headers[i]: cells[i].strip() for i in range(1, len(cells))
                     if i < len(headers) and hl[i] not in known and cells[i].strip()}
                 m.deps.append(Dep(
-                    id=dm.group(1), name=_cell(cells, ni), kind=_opt(_cell(cells, ki)),
+                    id=dm.group(1), name=_display_name(cells, ni, dm.group(1)), kind=_opt(_cell(cells, ki)),
                     type=_cell(cells, ti), used_for=_cell(cells, ui),
                     where_configured=_cell(cells, wi), confidence=_cell(cells, ci), extra=extra))
         elif kind == "run":

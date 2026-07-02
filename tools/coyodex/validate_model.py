@@ -17,8 +17,9 @@ Two layers, replacing schema v1's markdown-shape checks with real schema validat
 One v2-only check: the committed markdown VIEW must match the model (it is generated, never
 edited) — a stale or hand-edited `project-map.md` next to the JSON is flagged.
 
-`main` dispatches a `.md` argument to the legacy schema-v1 validator (alive until Phase 3), so
-`coyodex validate` keeps one entry point. Stdlib-only.
+Since Phase 3 the model is the only validated map format: a `.md` argument gets a convert-first
+error (the v1 validator itself stays alive INSIDE `coyodex convert`, which refuses to migrate an
+invalid v1 map). Stdlib-only.
 """
 from __future__ import annotations
 
@@ -446,7 +447,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
                    check_sources: bool = False, check_coverage: bool = False,
                    repo_root: Path | None = None) -> tuple[list[str], list[str]]:
     """Every semantic check over a structurally-valid model; returns (problems, warnings) exactly
-    like the v1 `validate_map`, so the profiler and the CLI share one orchestration."""
+    like the v1 validator did, so the profiler and the CLI share one orchestration."""
     if (check_sources or check_coverage) and model_path is None and repo_root is None:
         raise ValueError("model_path or repo_root is required when check_sources/check_coverage is set")
     problems: list[str] = []
@@ -571,10 +572,8 @@ def main(argv: list[str] | None = None) -> int:
         print("usage: coyodex validate [--check-sources] [--check-coverage] [--repo <root>] "
               "[.coyodex/project-map.json]\n\n"
               "Validate a schema-v2 model map: structural schema validation, then the semantic\n"
-              "checks (IDs resolve, hierarchy sound, cards complete, view fresh, …). A `.md`\n"
-              "argument is dispatched to the legacy schema-v1 markdown validator.")
+              "checks (IDs resolve, hierarchy sound, cards complete, view fresh, …).")
         return 0
-    # A markdown map goes to the legacy validator (alive until Phase 3 for un-migrated maps).
     positionals: list[str] = []
     skip_value = False
     for a in argv:
@@ -585,8 +584,10 @@ def main(argv: list[str] | None = None) -> int:
         elif not a.startswith("-"):
             positionals.append(a)
     if any(p.endswith(".md") for p in positionals):
-        from coyodex import validate_analysis
-        return validate_analysis.main(argv)
+        print("ERROR: schema-v1 markdown maps are no longer validated directly — migrate the map "
+              "once with `coyodex convert <map.md>` (it refuses an invalid v1 map), then validate "
+              "project-map.json.", file=sys.stderr)
+        return 2
 
     repo_root: Path | None = None
     if "--repo" in argv:

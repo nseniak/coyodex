@@ -18,8 +18,8 @@ Commands:
   preindex   Build the structural pre-index (.coyodex/preindex.json). Needs the
              `preindex` extra (tree-sitter); install with: pip install -e '.[preindex]'
   validate   Validate a map (schema + semantic checks — is it WELL-FORMED?).
-             project-map.json is the schema-v2 source; a .md argument uses the
-             legacy schema-v1 validator.
+             project-map.json (the schema-v2 source) only; a legacy .md map is
+             migrated once with `coyodex convert`.
   audit      Adversarial pass over a built map (is it SELF-CONTRADICTORY?): L1
              deterministic contradiction checks + an L2 grounding worklist.
   render     Render a map to a generated view: model → HTML viewer or → the
@@ -41,8 +41,8 @@ Run `coyodex <command> --help` for command-specific options."""
 
 def _default_map(argv: list[str]) -> list[str]:
     """When no positional map is given, default to the v2 source (`.coyodex/project-map.json`)
-    when it exists, else the legacy markdown map — so `coyodex validate` / `audit` keep working
-    bare in both migrated and un-migrated repos."""
+    when it exists, else the legacy markdown map — so a bare `coyodex validate` / `audit` in an
+    un-migrated repo hits the clear convert-first error instead of "file not found"."""
     from pathlib import Path
     flags_with_value = {"--repo"}
     expect_value = False
@@ -72,12 +72,10 @@ def main(argv: list[str] | None = None) -> int:
         from coyodex import preindex  # lazy: only this path may touch tree-sitter
         return preindex.main(rest)
     if cmd == "validate":
-        # validate_model dispatches a `.md` argument to the legacy schema-v1 validator. With no
-        # positional map, prefer the v2 source when it exists, else the legacy default.
         from coyodex import validate_model  # stdlib-only
         return validate_model.main(_default_map(rest))
     if cmd == "audit":
-        from coyodex import audit_model  # stdlib-only; dispatches .md to the legacy audit
+        from coyodex import audit_model  # stdlib-only
         return audit_model.main(_default_map(rest))
     if cmd == "render":
         from coyodex.viewer import render  # stdlib-only

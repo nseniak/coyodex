@@ -14,7 +14,10 @@ from pathlib import Path
 from typing import cast
 
 from coyodex import schema_v1, validate_analysis
+from coyodex.convert_md import convert_text
+from coyodex.model import to_canonical_json
 from coyodex.viewer import build_graph, gen_viewer
+from coyodex.views import model_to_graph
 
 # Run validator/renderer as modules so the subprocess tests hit the same entry points as the CLI.
 VALIDATOR = [sys.executable, "-m", "coyodex.validate_analysis"]
@@ -367,10 +370,16 @@ def run_validator(md: str) -> tuple[int, str]:
 
 
 def parse_map(md: str) -> build_graph.GraphDict:
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
-        f.write(md)
-        path = f.name
-    return build_graph.build(Path(path))
+    """Graph from the scenario map (md test notation), through the LIVE pipeline:
+    convert → model → model_to_graph. The v1 build() parser is retired."""
+    return model_to_graph(convert_text(md).model)
+
+
+def write_model(d: Path, md: str) -> Path:
+    """The scenario map converted and stored as a model document, for CLI render tests."""
+    out = Path(d) / "project-map.json"
+    out.write_text(to_canonical_json(convert_text(md).model), encoding="utf-8")
+    return out
 
 
 # --- grammar (schema_v1) --------------------------------------------------------
@@ -709,8 +718,7 @@ def test_render_inlines_edge_card_data() -> None:
     # The self-contained HTML must carry the edge-card diagrams AND the per-arrow component-edge
     # lists for the client to open on click / preview on hover (placeholder fully substituted).
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_card_map(), encoding="utf-8")
+        md = write_model(Path(d), make_card_map())
         out = Path(d) / "project-map.html"
         r = subprocess.run(
             [*RENDER, str(md), str(out)],
@@ -942,8 +950,7 @@ def test_template_validates_clean() -> None:
 def test_render_produces_self_contained_html() -> None:
     # render.py: map -> HTML in one step, with the pinned+SRI libs inlined.
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_grouped_map("proper"), encoding="utf-8")
+        md = write_model(Path(d), make_grouped_map("proper"))
         out = Path(d) / "project-map.html"
         r = subprocess.run(
             [*RENDER, str(md), str(out)],
@@ -959,8 +966,7 @@ def test_render_bakes_nested_drill_data() -> None:
     # End-to-end: a nested map's HTML carries an edge card for each DISJOINT cross-pair at every level
     # (S2>S3 nested, S1>S3 overview) and omits the overlapping parent-child pair (S1>S2, which navigates).
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_nested_subsystem_map(), encoding="utf-8")
+        md = write_model(Path(d), make_nested_subsystem_map())
         out = Path(d) / "project-map.html"
         r = subprocess.run(
             [*RENDER, str(md), str(out)],
@@ -987,8 +993,7 @@ def make_report_map() -> str:
 def test_render_has_no_components_tab_but_keeps_generators() -> None:
     # The flat Components map is no longer a tab; its generators stay baked so it can be restored.
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_grouped_map("proper"), encoding="utf-8")
+        md = write_model(Path(d), make_grouped_map("proper"))
         out = Path(d) / "project-map.html"
         r = subprocess.run([*RENDER, str(md), str(out)], capture_output=True, text=True)
         assert r.returncode == 0, r.stdout + r.stderr
@@ -1002,8 +1007,7 @@ def test_render_diff_overlay_wired_to_subsystems() -> None:
     # With a change-impact report the diff overlay is armed on the Subsystems views (not the removed
     # Components tab): HAS_DIFF + DIFF_STATE are baked, and the viewer lands on the Subsystems overview.
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_grouped_map("proper"), encoding="utf-8")
+        md = write_model(Path(d), make_grouped_map("proper"))
         report = Path(d) / "report.md"
         report.write_text(make_report_map(), encoding="utf-8")
         out = Path(d) / "project-map.html"
@@ -1834,8 +1838,7 @@ def test_render_inlines_context_data() -> None:
     # The self-contained HTML must carry the contexts overview + per-context cards, every new
     # placeholder substituted, and HAS_CONTEXTS flipped on, so the Domain view leads with the overview.
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_context_map(), encoding="utf-8")
+        md = write_model(Path(d), make_context_map())
         out = Path(d) / "project-map.html"
         r = subprocess.run(
             [*RENDER, str(md), str(out)],
@@ -1854,8 +1857,7 @@ def test_render_inlines_context_data() -> None:
 def test_render_no_context_data_when_ungrouped() -> None:
     # A domain map with no Subdomains table: HAS_CONTEXTS is false and the flat classDiagram still ships.
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_domain_map(), encoding="utf-8")
+        md = write_model(Path(d), make_domain_map())
         out = Path(d) / "project-map.html"
         r = subprocess.run(
             [*RENDER, str(md), str(out)],
@@ -2215,8 +2217,7 @@ def test_validator_gp_map_clean() -> None:
 def test_render_inlines_gp_data() -> None:
     # The self-contained HTML must carry the GP sequence + step diagrams so the client opens them.
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_gp_map(), encoding="utf-8")
+        md = write_model(Path(d), make_gp_map())
         out = Path(d) / "project-map.html"
         r = subprocess.run(
             [*RENDER, str(md), str(out)],
@@ -2350,8 +2351,7 @@ def test_render_inlines_libs_fold_data() -> None:
     # The self-contained HTML must carry the Libraries drill diagram + the folded-dep list, fully
     # substituted (no leftover placeholder), so the client can preview/drill the fold box.
     with tempfile.TemporaryDirectory() as d:
-        md = Path(d) / "project-map.md"
-        md.write_text(make_dep_kinds_map(), encoding="utf-8")
+        md = write_model(Path(d), make_dep_kinds_map())
         out = Path(d) / "project-map.html"
         r = subprocess.run(
             [*RENDER, str(md), str(out)],
