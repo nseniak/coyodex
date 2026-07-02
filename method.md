@@ -1,8 +1,9 @@
 # The coyodex method
 
 How an AI coding agent builds and maintains a top-down, drillable map of a codebase.
-Deliver this fixed set of tables. Every row is drillable: name a row and it expands
-to a lower table or jumps to code with clickable `file:line` links.
+Deliver this fixed set of sections, rendered as tables in the generated view. Every row is
+drillable: name a row and it expands to a lower table or jumps to code with clickable
+`file:line` links.
 
 Two linked families:
 - **Behavioral** (why/who/what): Goal → Glossary → Roles → Use cases → Golden Path.
