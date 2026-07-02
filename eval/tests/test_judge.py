@@ -9,7 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from coyodex_eval.judge import (DIMENSIONS, GroundingVerdict, JudgeReport, RubricVerdict,
+from coyodex_eval.judge import (DIMENSIONS, GROUNDING_PROMPT_VERSION, GroundingVerdict,
+                                JudgeProtocol, JudgeReport, RubricVerdict,
                                 build_grounding_prompt, build_judge_report, build_rubric_prompt,
                                 majority_verdict, report_from_verdicts, run_dimension)
 
@@ -142,6 +143,49 @@ def test_all_failures_gives_none_passrate() -> None:
     assert rep.grounding_passrate is None, rep
 
 
+# --- the unverifiable channel (P1): could-not-verify is a failure, never refuted --
+def test_unverifiable_vote_is_excluded_from_the_claims_majority() -> None:
+    """An explicit `grounded: "unverifiable"` vote (the skeptic could not locate the repo/file) is
+    not evidence: the remaining USABLE vote decides each claim — it neither refutes nor ties."""
+    grounding: list[dict[str, object]] = [
+        {"claim": CLAIM_SURFACE, "grounded": True, "evidence": "auth.py:10"},
+        {"claim": CLAIM_SURFACE, "grounded": "unverifiable", "evidence": "repo not found"},
+        {"claim": CLAIM_SURFACE, "grounded": "unverifiable", "evidence": "repo not found"},
+        {"claim": CLAIM_EDGE, "grounded": False, "evidence": "gate.py:5"},
+        {"claim": CLAIM_EDGE, "grounded": "unverifiable", "evidence": "repo not found"},
+        {"claim": CLAIM_EDGE, "grounded": "unverifiable", "evidence": "repo not found"},
+    ]
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, [])
+    assert (rep.n_claims, rep.n_grounded, rep.n_failures) == (2, 1, 0), rep
+    assert rep.grounding_passrate == 0.5, rep
+
+
+def test_all_unverifiable_votes_make_the_claim_a_judge_failure() -> None:
+    """A claim NO skeptic could verify is a judge failure: counted in n_failures, excluded from the
+    pass-rate denominator — never scored as refuted (the P1 environment-failure fix)."""
+    grounding: list[dict[str, object]] = [
+        {"claim": CLAIM_SURFACE, "grounded": "unverifiable"},
+        {"claim": CLAIM_SURFACE, "grounded": "unverifiable"},
+        {"claim": CLAIM_SURFACE, "grounded": "unverifiable"},
+        {"claim": CLAIM_EDGE, "grounded": True, "evidence": "gate.py:5"},
+    ]
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, [])
+    assert (rep.n_claims, rep.n_grounded, rep.n_failures) == (2, 1, 1), rep
+    assert rep.grounding_passrate == 1.0, rep
+
+
+def test_protocol_fingerprint_records_the_grounding_prompt_version() -> None:
+    """The prompt regime is part of the protocol fingerprint, so a cached judge.json produced under
+    the old refute-by-default prompt (no prompt_version key) mismatches and gets re-judged."""
+    rep = report_from_verdicts(make_l2_map(), HERE, "R",
+                               [{"claim": CLAIM_SURFACE, "grounded": True}], [], judge_model="m1")
+    assert rep.protocol is not None, rep
+    assert rep.protocol.prompt_version == GROUNDING_PROMPT_VERSION, rep.protocol
+    old = JudgeProtocol(model="m1", n_skeptics=rep.protocol.n_skeptics,
+                        grounding_cap=rep.protocol.grounding_cap, rubric_sha=rep.protocol.rubric_sha)
+    assert old.prompt_version == "" and old != rep.protocol
+
+
 def test_empty_judges_list_yields_no_rubric_scores_not_zeros() -> None:
     """Review-2 Finding 7 (the rubric-side G6): a crashed rubric stage (no judge dicts at all) must
     read as UNJUDGED (no dimensions, overall None) — never as all-zeros, which looks like a
@@ -192,6 +236,14 @@ def test_grounding_prompt_forbids_map_files_and_judges_relationship_only() -> No
     p = build_grounding_prompt("C1 enforces C2", "gate.py#L5")
     assert "do NOT read any project-map" in p, p
     assert "RELATIONSHIP" in p and "drill_accuracy" in p, p
+
+
+def test_grounding_prompt_offers_the_unverifiable_verdict_and_pins_the_repo() -> None:
+    """P1: the prompt states the repo's absolute root and a third, could-not-verify verdict — a
+    skeptic that cannot find the code must never report refuted."""
+    p = build_grounding_prompt("C1 enforces C2", "gate.py#L5", repo_root=Path("/abs/target-repo"))
+    assert "unverifiable" in p and "/abs/target-repo" in p, p
+    assert "NEVER return refuted for code you did not read" in p, p
 
 
 def test_grounding_prompt_carries_the_self_describing_detail() -> None:

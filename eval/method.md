@@ -179,16 +179,28 @@ For a map M:
 2. **Ground — N-skeptic majority vote.** For EACH sampled claim, fan out **3 fresh-context skeptic
    sub-agents** (`judge.n_skeptics`) on the pinned model, each told to *disprove* the claim against
    the code. The claim's verdict is the majority of the usable votes — one dissenting skeptic can't
-   flip it. Each skeptic prompt must state (this is `build_grounding_prompt`'s wording — reuse it):
-   - grounded=true ONLY if the code clearly supports the claim; default to refuted when unsure;
+   flip it. **Every skeptic sub-agent MUST run with its working directory INSIDE the target repo**
+   (the project being evaluated) — a skeptic launched elsewhere hunts the disk for the code, fails,
+   and its failure masquerades as a refutation (35/240 votes in one boundary run refuted claims
+   this way; 3 of them "verified" against stray map fixtures they stumbled on instead). Each
+   skeptic prompt must state (this is `build_grounding_prompt`'s wording — reuse it, passing
+   `repo_root` as the repo's ABSOLUTE path so the prompt names it):
+   - the verdict is one of THREE: grounded=true (the code clearly supports the claim) ·
+     grounded=false (you READ the relevant code and it does not support the claim; default here
+     when the code leaves you unsure) · grounded="unverifiable" (you could not check against the
+     code at all — repo/file not found, read failed). A lookup failure is NOT evidence: never
+     refute code you did not read;
+   - the repo's absolute root path, and that the skeptic's cwd is inside it;
    - judge ONLY the RELATIONSHIP the claim states — an imprecise/drifted anchor does not refute a true
      relationship (anchor exactness is the `drill_accuracy` rubric dimension, not grounding);
    - resolve names and ids ONLY from the claim text (+ its `detail`) and the code; **do NOT read any
      project-map file**.
-   Collect one row per VOTE: `{claim, grounded, evidence}`. If a skeptic produces no usable verdict
-   (malformed output, no `grounded` bool), retry it once; if it still fails, keep the row WITHOUT a
-   usable `grounded` value (or omit the row) — the aggregation counts it as a **judge failure**,
-   surfaced separately and excluded from the pass-rate denominator, never scored as refuted.
+   Collect one row per VOTE: `{claim, grounded, evidence}`, with `grounded` true, false, or the
+   string `"unverifiable"`. If a skeptic returns "unverifiable" or no usable verdict (malformed
+   output, no `grounded` value), retry it once — an environment hiccup is usually transient; if it
+   still fails, keep the row as returned (`"unverifiable"`, or without a usable `grounded`) — the
+   aggregation counts it as a **judge failure**, surfaced separately and excluded from the
+   pass-rate denominator, never scored as refuted.
 3. **Rubric** — 3 judge sub-agents on the pinned model, each scoring all 5 dimensions of
    `COYODEX_HOME/eval/rubric.md` 0–4 against the code, with a `file:line` per score. For a
    schema-v2 map, hand each judge the map's generated MARKDOWN VIEW (render it from the frozen
@@ -197,8 +209,9 @@ For a map M:
 4. Write the raw verdicts `{ "grounding": [...], "judges": [...] }` to a JSON file, then aggregate:
    `COYODEX_HOME/.venv/bin/coyodex-eval judge --map M --repo . --verdicts <raw.json> --rubric COYODEX_HOME/eval/rubric.md --judge-model <the pinned model> --out <judge.json>`.
    `--judge-model` (the `judge.grounding_model` pin) is recorded in the report's judge-protocol
-   fingerprint together with n_skeptics, the cap, and the rubric hash — the Step-3 cache guard
-   compares it.
+   fingerprint together with n_skeptics, the cap, the rubric hash, and the grounding-prompt regime
+   version — the Step-3 cache guard compares it (so a prompt-rule change, like the unverifiable
+   channel, automatically invalidates pre-change cached scores).
    Keep the raw JSON as provenance (`judge-verdicts.json` in the run dir). The report states the
    denominator explicitly: pass-rate over the top-K sample minus failures, with the full worklist size
    alongside.

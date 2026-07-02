@@ -21,6 +21,7 @@ from pathlib import Path
 from coyodex.model import is_model_document
 from coyodex_eval.compare import DeltaReport, Thresholds, compare, format_report, load_thresholds
 from coyodex_eval.judge import (
+    GROUNDING_PROMPT_VERSION,
     Judge,
     JudgeProtocol,
     JudgeReport,
@@ -337,6 +338,8 @@ def judge_cli(argv: list[str]) -> int:
         print("usage: coyodex-eval judge --map <map.json|md> --verdicts <raw.json> --out <judge.json>\n"
               "       [--repo <root>] [--rubric <file>] [--judge-model <name>]\n\n"
               "Aggregate externally-produced judge verdicts — grounding [{claim, grounded, evidence}]\n"
+              "with grounded one of true / false / \"unverifiable\" (a could-not-verify vote counts\n"
+              "as a judge FAILURE: excluded from the pass-rate denominator, never scored refuted) —\n"
               "and per-judge rubric scores — into a JudgeReport, via the tested PrecomputedJudge path.\n"
               "The orchestration layer (a workflow / sub-agents) does the real judging and writes the\n"
               "raw JSON; this turns it into judge.json with the same pass-rate + median math.\n"
@@ -396,7 +399,8 @@ def protocol_cli(argv: list[str]) -> int:
         model=str(cfg.get("grounding_model", "")),
         n_skeptics=int(cfg.get("n_skeptics", 0)),
         grounding_cap=int(cfg.get("grounding_cap", 0)),
-        rubric_sha=rubric_fingerprint(rpath.read_text(encoding="utf-8")))
+        rubric_sha=rubric_fingerprint(rpath.read_text(encoding="utf-8")),
+        prompt_version=GROUNDING_PROMPT_VERSION)
     print(json.dumps(current.__dict__, indent=2, sort_keys=True))
     against = _opt(argv, "--against")
     if against is None:

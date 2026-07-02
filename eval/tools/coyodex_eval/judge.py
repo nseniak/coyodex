@@ -39,14 +39,23 @@ DIMENSIONS = ("faithfulness", "completeness", "drill_accuracy", "altitude", "gol
 DEFAULT_N_SKEPTICS = 3     # majority-of-N vote per claim: one dissenting skeptic can't flip a verdict
 DEFAULT_GROUNDING_CAP = 40  # K: ground only the top-K risk-ranked claims (the worklist is ranked)
 
+# The grounding-prompt REGIME version, part of the judge-protocol fingerprint: verdicts produced
+# under different prompt rules (e.g. before/after the "unverifiable" channel) are not comparable,
+# so bump this whenever build_grounding_prompt's rules change semantically. "v2": three-verdict
+# vocabulary (grounded / refuted / unverifiable) + the pinned-repo-root statement — the fix for
+# environment failures masquerading as refutations (35/240 votes in the Phase-2 boundary run).
+GROUNDING_PROMPT_VERSION = "grounding-v2"
+
 
 # ── data model ───────────────────────────────────────────────────────────────────────────────────────
 
 @dataclass(frozen=True)
 class GroundingVerdict:
     claim: str
-    grounded: bool | None  # True = held · False = refuted · None = NO verdict (a judge failure — the
-                           # skeptic produced no usable output; never counted as refuted)
+    grounded: bool | None  # True = held · False = refuted · None = a judge FAILURE: the skeptic
+                           # either produced no usable output OR explicitly said "unverifiable"
+                           # (could not locate the repo / file — an environment failure, not
+                           # evidence). Never counted as refuted.
     evidence: str          # a file:line or a short note backing the verdict
 
 
@@ -75,6 +84,8 @@ class JudgeProtocol:
     n_skeptics: int = 0        # majority-of-N votes per claim
     grounding_cap: int = 0     # top-K sample size
     rubric_sha: str = ""       # fingerprint of the rubric TEXT (see rubric_fingerprint)
+    prompt_version: str = ""   # the grounding-prompt regime (GROUNDING_PROMPT_VERSION); "" on a
+                               # pre-v2 report, which therefore mismatches and invalidates the cache
 
 
 def rubric_fingerprint(rubric_text: str) -> str:
@@ -132,20 +143,33 @@ class Judge(Protocol):
 
 # ── prompt builders (what a REAL Judge sends; kept here so the text is reusable + testable) ────────────
 
-def build_grounding_prompt(claim: str, anchor: str | None, detail: str | None = None) -> str:
+def build_grounding_prompt(claim: str, anchor: str | None, detail: str | None = None,
+                           repo_root: Path | None = None) -> str:
+    """The skeptic prompt. `repo_root` (the ABSOLUTE path of the repo under test) is stated in the
+    prompt so a skeptic never hunts the disk for the code — pair it with running the skeptic with
+    its cwd INSIDE that repo (eval/method.md Step 4). Bump GROUNDING_PROMPT_VERSION on any change
+    to this prompt's RULES."""
     start = f"\nStart from: {anchor}" if anchor else ""
     about = f"\nClaim context (names + files, from the claim itself): {detail}" if detail else ""
+    where = (f"\nThe repository under test is at this ABSOLUTE path: {repo_root} — your working "
+             "directory is inside it, and every file path in the claim is relative to that root."
+             if repo_root is not None else "")
     return (
         "You are a skeptic. Your job is to DISPROVE the claim below by reading the actual code — not to "
-        "confirm it. If the code does not clearly and fully support the claim, it is REFUTED. Default to "
-        "refuted when genuinely unsure.\n\n"
+        "confirm it. Return exactly one of THREE verdicts:\n"
+        "  - grounded=true — you read the code and it clearly and fully supports the claim;\n"
+        "  - grounded=false (refuted) — you read the relevant code and it does not support the claim; "
+        "default to refuted when the code you read leaves you genuinely unsure;\n"
+        "  - grounded=\"unverifiable\" — you could not check the claim AGAINST THE CODE at all (the "
+        "repository or the file could not be located, or reading it failed). A lookup failure is not "
+        "evidence: NEVER return refuted for code you did not read.\n\n"
         "Judge ONLY whether the RELATIONSHIP the claim states is true in the code. An imprecise or "
         "drifted anchor (a file:line some lines off) does NOT refute a claim whose relationship is "
         "true — anchor exactness is scored separately, by the drill_accuracy rubric dimension.\n"
         "Resolve names and ids ONLY from the claim text and the code; do NOT read any project-map "
-        f"file.\n\nCLAIM: {claim}{about}{start}\n\n"
-        "Return: grounded (true only if the code clearly supports the claim), and one file:line as "
-        "evidence for your verdict."
+        f"file.{where}\n\nCLAIM: {claim}{about}{start}\n\n"
+        "Return: grounded (true / false / \"unverifiable\"), and one file:line as evidence for your "
+        "verdict (for unverifiable, a short note on what failed)."
     )
 
 
@@ -221,12 +245,14 @@ class PrecomputedJudge:
     model; this adapter just hands the orchestrator's results to the pure aggregation.
 
     `grounding` is one row per SKEPTIC VOTE — the same claim may appear N times (majority vote):
-    {"claim": str, "grounded": bool, "evidence"?: str}. A row whose `grounded` is missing or not a
-    bool is a FAILED vote (the skeptic produced no usable output) — replayed as `grounded=None`, so
-    the aggregation excludes it instead of scoring it refuted. `ground_claim` returns a claim's k-th
-    recorded vote on its k-th call; calls beyond the recorded votes are failures. `judges` is one dict
-    per judge mapping each dimension name to its 0–4 score; `score_dimension` returns the k-th judge's
-    score on the k-th call for a dimension, so `run_dimension`'s N calls see all N judges."""
+    {"claim": str, "grounded": bool | "unverifiable", "evidence"?: str}. `grounded: "unverifiable"`
+    is the skeptic's EXPLICIT could-not-verify verdict (could not locate the repo/file — an
+    environment failure, not evidence); it replays as `grounded=None`, exactly like a row whose
+    `grounded` is missing or malformed, so the aggregation excludes it instead of scoring it
+    refuted. `ground_claim` returns a claim's k-th recorded vote on its k-th call; calls beyond the
+    recorded votes are failures. `judges` is one dict per judge mapping each dimension name to its
+    0–4 score; `score_dimension` returns the k-th judge's score on the k-th call for a dimension,
+    so `run_dimension`'s N calls see all N judges."""
 
     def __init__(self, grounding: list[dict[str, object]], judges: list[dict[str, int]]) -> None:
         self._votes: dict[str, list[dict[str, object]]] = {}
@@ -249,6 +275,9 @@ class PrecomputedJudge:
             return GroundingVerdict(claim, None, "no verdict from the orchestrator")
         g = rows[k]
         verdict = g.get("grounded")
+        if verdict == "unverifiable":  # the explicit could-not-verify channel — a failure, kept
+            return GroundingVerdict(claim, None,   # with its evidence note for provenance
+                                    f"unverifiable: {g.get('evidence', '')}".rstrip(": "))
         if not isinstance(verdict, bool):
             return GroundingVerdict(claim, None, "no usable verdict (missing/malformed `grounded`)")
         return GroundingVerdict(claim, verdict, str(g.get("evidence", "")))
@@ -275,7 +304,8 @@ def report_from_verdicts(map_text: str, repo_root: Path, rubric: str,
     judge bands forever."""
     pre = PrecomputedJudge(grounding, judges)
     protocol = JudgeProtocol(model=judge_model, n_skeptics=pre.max_votes_per_claim(),
-                             grounding_cap=grounding_cap, rubric_sha=rubric_fingerprint(rubric))
+                             grounding_cap=grounding_cap, rubric_sha=rubric_fingerprint(rubric),
+                             prompt_version=GROUNDING_PROMPT_VERSION)
     return build_judge_report(map_text, repo_root, rubric, pre,
                               n_judges=len(judges) or 1,
                               dimensions=dimensions if judges else (),
