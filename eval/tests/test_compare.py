@@ -37,12 +37,15 @@ def make_profile(**over: object) -> MapProfile:
 
 
 def make_judge(passrate: float = 1.0, overall: float = 3.0,
-               dims: list[DimensionScore] | None = None) -> JudgeReport:
-    """A representative JudgeReport; override pass-rate / overall / dimensions to build a drifting one."""
+               dims: list[DimensionScore] | None = None, n_failures: int = 0) -> JudgeReport:
+    """A representative JudgeReport; override pass-rate / overall / dimensions / failures to build a
+    drifting one. The pass-rate is over the surviving denominator (n_claims - n_failures)."""
     if dims is None:
         dims = [DimensionScore("faithfulness", 3.0, 3), DimensionScore("completeness", 3.0, 3)]
-    return JudgeReport(n_claims=10, n_grounded=int(round(passrate * 10)), grounding_passrate=passrate,
-                       dimensions=dims, overall=overall)
+    denom = 10 - n_failures
+    return JudgeReport(n_claims=10, n_grounded=int(round(passrate * denom)),
+                       grounding_passrate=passrate if denom else None,
+                       dimensions=dims, overall=overall, n_worklist=10, n_failures=n_failures)
 
 
 def _tight() -> Thresholds:
@@ -162,10 +165,37 @@ def test_dimension_score_drop_drifts() -> None:
     assert any(j.metric == "dim:faithfulness" and not j.within for j in r.judge_bands)
 
 
-def test_one_sided_judge_report_is_noted_and_skipped() -> None:
+def test_missing_candidate_judge_is_a_drift_not_a_skip() -> None:
+    """Review-2 Finding 3: a judged baseline vs an UNJUDGED candidate must not PASS — skipping the
+    semantic gates is the escape hatch an unjudged (or judge-crashed) run would take."""
     r = compare(make_profile(), make_profile(), None, make_judge(), None)
+    assert r.verdict == DRIFT, r
+    assert any(j.metric == "judge_report_missing" and not j.within for j in r.judge_bands), r.judge_bands
+    assert any("NO judge report" in n for n in r.notes), r.notes
+
+
+def test_missing_baseline_judge_is_noted_and_skipped() -> None:
+    """The reverse one-sided case is harmless: there is nothing to compare the candidate's judge
+    against, so it is a note, not a penalty."""
+    r = compare(make_profile(), make_profile(), None, None, make_judge())
+    assert r.verdict == PASS, r
     assert not r.judge_bands
     assert any("only one side" in n for n in r.notes), r.notes
+
+
+def test_grounding_failure_flood_is_a_drift() -> None:
+    """Review-2 Finding 2: a candidate whose grounding mostly FAILED (no usable verdicts) must not
+    PASS just because the pass-rate over the surviving denominator looks fine."""
+    r = compare(make_profile(), make_profile(), None,
+                make_judge(passrate=1.0), make_judge(passrate=1.0, n_failures=5))  # 50% failure rate
+    assert r.verdict == DRIFT, r
+    assert any(j.metric == "grounding_failure_rate" and not j.within for j in r.judge_bands), r.judge_bands
+
+
+def test_small_grounding_failure_rate_is_within() -> None:
+    r = compare(make_profile(), make_profile(), None,
+                make_judge(passrate=1.0), make_judge(passrate=1.0, n_failures=2))  # 20% <= 25% cap
+    assert r.verdict == PASS, r
 
 
 def test_hard_fail_dominates_a_judge_drift() -> None:
@@ -194,26 +224,26 @@ def test_per_project_overrides_global() -> None:
     proj = load_thresholds(path, "mcpolis")
     assert glob.no_new_contradictions is True
     assert proj.no_new_contradictions is False
-    assert proj.bands["entities_pct"] == 0.30   # global band value carried to the project
-    assert "components_pct" in proj.bands       # a default band NOT dropped by the partial override
+    assert proj.bands["entities_pct"] == 0.30       # global band value carried to the project
+    assert "components_shrink_pct" in proj.bands    # a default band NOT dropped by the partial override
 
 
 def test_partial_bands_override_keeps_defaults() -> None:
     """Review Finding 2: tightening ONE band must not disable the others (bands merge, not replace)."""
     t = Thresholds.from_config({"global": {"bands": {"components_pct": 0.05}}})
     assert t.bands["components_pct"] == 0.05
-    assert t.bands["entities_pct"] == DEFAULT_BANDS["entities_pct"]  # still present at its default
+    assert t.bands["entities_shrink_pct"] == DEFAULT_BANDS["entities_shrink_pct"]  # still at its default
     assert set(t.bands) >= set(DEFAULT_BANDS)
 
 
 def test_every_structural_count_has_a_band() -> None:
-    """Review Finding 3: every count-like metric keeps a (wide, collapse-detector) band, so a collapse
-    can't pass silently. `l2_claims` is the deliberate exception (P1): the worklist derives from edges
-    + auth rows, so banding it double-jeopardizes movement those signals already catch."""
+    """Review Finding 3: every count-like metric keeps a (shrink-only, collapse-detector) band, so a
+    collapse can't pass silently. `l2_claims` is the deliberate exception (P1): the worklist derives
+    from edges + auth rows, so banding it double-jeopardizes movement those signals already catch."""
     for metric in ("use_cases", "subsystems", "subdomains", "components", "deps", "entities",
                    "edges", "gp_steps", "flows"):
-        assert f"{metric}_pct" in DEFAULT_BANDS, metric
-    assert "l2_claims_pct" not in DEFAULT_BANDS
+        assert f"{metric}_shrink_pct" in DEFAULT_BANDS, metric
+    assert "l2_claims_pct" not in DEFAULT_BANDS and "l2_claims_shrink_pct" not in DEFAULT_BANDS
     assert "edges_per_component_pct" in DEFAULT_BANDS
 
 
@@ -235,22 +265,32 @@ def test_finer_but_better_map_with_steady_density_passes() -> None:
 
 
 def test_density_collapse_drifts_even_when_raw_counts_hold() -> None:
-    """Same component count but far fewer edges: the raw edge count stays inside its wide collapse
-    band, and the density band is what catches the thinned-out backbone."""
+    """Same component count but a thinner backbone: the edge shrink (-27.5%) stays inside the 30%
+    shrink band, and the tight density band is what catches it."""
     base = make_profile(components=20, edges=40, edges_per_component=2.0)
-    cand = make_profile(components=20, edges=24, edges_per_component=1.2)  # -40% density
+    cand = make_profile(components=20, edges=29, edges_per_component=1.45)  # -27.5% density
     r = compare(base, cand)
     assert r.verdict == DRIFT, r
     assert any(b.metric == "edges_per_component" and not b.within for b in r.bands)
+    assert any(b.metric == "edges" and b.within for b in r.bands), r.bands
 
 
-def test_proportional_collapse_trips_the_wide_count_band() -> None:
-    """A halved map keeps density steady — the wide raw-count bands are what refuse it."""
+def test_exactly_halved_map_with_steady_density_drifts() -> None:
+    """Review-2 Finding 1: a proportionally HALVED map keeps density steady — the shrink-only count
+    bands are what refuse it (a symmetric ±50% band waved exactly this through)."""
     base = make_profile(components=20, edges=40, edges_per_component=2.0)
-    cand = make_profile(components=8, edges=16, edges_per_component=2.0)  # -60% components
+    cand = make_profile(components=10, edges=20, edges_per_component=2.0)
     r = compare(base, cand)
     assert r.verdict == DRIFT, r
     assert any(b.metric == "components" and not b.within for b in r.bands)
+
+
+def test_count_growth_never_trips_a_shrink_band() -> None:
+    """Counts are shrink-only: tripling the components with steady density is a (much) finer map, and
+    whether that fineness is right is the altitude rubric's call — not a count band's."""
+    base = make_profile(components=20, edges=40, edges_per_component=2.0)
+    cand = make_profile(components=60, edges=120, edges_per_component=2.0)
+    assert compare(base, cand).verdict == PASS
 
 
 def test_baseline_without_the_density_field_is_skipped_not_crashed() -> None:

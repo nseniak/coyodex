@@ -33,33 +33,39 @@ DRIFT = "DRIFT"
 REGRESSED = "REGRESSED"
 _EXIT = {PASS: 0, REGRESSED: 1, DRIFT: 2}
 
-# The structural bands applied by default when no thresholds file is given. Keys end in `_pct` and name
-# a numeric MapProfile field; the value is the allowed symmetric fractional drift vs baseline.
+# The structural bands applied by default when no thresholds file is given. Two key forms, both naming
+# a numeric MapProfile field: `<metric>_pct` is a symmetric band (drift past ±allowance either way
+# breaches); `<metric>_shrink_pct` is SHRINK-ONLY (only a fall past the allowance breaches).
 #
-# Two tiers by design: the DENSITY ratio (edges_per_component) is the tight drift signal — it is
-# scale-invariant, so a map that legitimately got finer (more components AND proportionally more edges)
-# stays steady and does not trip. The raw COUNTS keep wide bands as collapse detectors only: a
-# proportional collapse holds density steady, so without them a halved map would pass silently. No
-# `l2_claims` band: the worklist is derived from edges + auth rows, so banding it double-jeopardizes
-# the same movement the edges band (and the auth-surface hard gate) already catches.
+# Two tiers by design: the DENSITY ratio (edges_per_component) is the tight symmetric drift signal —
+# it is scale-invariant, so a map that legitimately got finer (more components AND proportionally more
+# edges) stays steady and does not trip. The raw COUNTS are shrink-only: growth means a finer map
+# (whether the fineness is RIGHT is the altitude/completeness rubric's job, not a count band's), while
+# a shrink is lost information — including the proportional collapse that holds density steady, which
+# a symmetric-but-wide count band would wave through (review-2 finding). No `l2_claims` band: the
+# worklist is derived from edges + auth rows, so banding it double-jeopardizes the same movement the
+# edges band (and the auth-surface hard gate) already catches.
 DEFAULT_BANDS: dict[str, float] = {
-    "use_cases_pct": 0.50,
-    "subsystems_pct": 0.50,
-    "subdomains_pct": 0.50,
-    "components_pct": 0.50,
-    "deps_pct": 0.50,
-    "entities_pct": 0.50,
-    "edges_pct": 0.50,
-    "gp_steps_pct": 0.50,
-    "flows_pct": 0.50,
+    "use_cases_shrink_pct": 0.30,
+    "subsystems_shrink_pct": 0.30,
+    "subdomains_shrink_pct": 0.30,
+    "components_shrink_pct": 0.30,
+    "deps_shrink_pct": 0.30,
+    "entities_shrink_pct": 0.30,
+    "edges_shrink_pct": 0.30,
+    "gp_steps_shrink_pct": 0.30,
+    "flows_shrink_pct": 0.30,
     "edges_per_component_pct": 0.25,
 }
 
 # Judge bands are DROP-only (asymmetric): a rise in faithfulness/coverage is good, only a fall is a
 # concern. Values are allowed ABSOLUTE drops in the metric's own units (pass-rate 0..1, scores 0..4).
+# `grounding_failure_rate_max` is the exception — an absolute CAP on the candidate's judge-failure
+# rate (n_failures/n_claims): grounding whose orchestration mostly failed must not read as PASS.
 DEFAULT_JUDGE_BANDS: dict[str, float] = {
     "l2_grounding_passrate_drop": 0.10,
     "judge_score_drop": 0.10,
+    "grounding_failure_rate_max": 0.25,
 }
 
 
@@ -113,6 +119,7 @@ class BandResult:
     delta_pct: float     # signed fractional change vs baseline
     allowed_pct: float
     within: bool
+    shrink_only: bool = False  # True: only a fall past the allowance breaches (growth is always within)
 
 
 @dataclass(frozen=True)
@@ -137,16 +144,29 @@ class DeltaReport:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
 
 
-def _band(metric: str, b_val: float, c_val: float, allowed: float) -> BandResult:
+def _band(metric: str, b_val: float, c_val: float, allowed: float,
+          shrink_only: bool = False) -> BandResult:
     denom = max(abs(b_val), 1.0)
     delta = (c_val - b_val) / denom
-    return BandResult(metric, b_val, c_val, delta, allowed, abs(delta) <= allowed + 1e-9)
+    within = delta >= -(allowed + 1e-9) if shrink_only else abs(delta) <= allowed + 1e-9
+    return BandResult(metric, b_val, c_val, delta, allowed, within, shrink_only)
 
 
 def _compare_judge(baseline: JudgeReport, candidate: JudgeReport, t: Thresholds) -> list[JudgeBand]:
     """Drop-only judge bands: grounding pass-rate, overall score, and each shared rubric dimension. A
-    rise is always within; only a drop past the allowance breaches (→ DRIFT)."""
+    rise is always within; only a drop past the allowance breaches (→ DRIFT). Plus the failure-rate
+    cap: a candidate whose grounding orchestration mostly FAILED (no usable verdicts) breaches even
+    though its pass-rate over the surviving denominator looks fine — broken judging must not PASS."""
     out: list[JudgeBand] = []
+    if candidate.n_claims:
+        # `drop` here is the signed CHANGE in failure rate (a rise is the concern); `allowed_drop` is
+        # the absolute cap on the candidate's rate — the only judge band judged against a cap, not a
+        # baseline delta, because a failure flood is a broken run regardless of what the baseline did.
+        fr_allowed = t.judge_bands.get("grounding_failure_rate_max", 0.25)
+        b_rate = (baseline.n_failures / baseline.n_claims) if baseline.n_claims else 0.0
+        c_rate = candidate.n_failures / candidate.n_claims
+        out.append(JudgeBand("grounding_failure_rate", b_rate, c_rate, c_rate - b_rate, fr_allowed,
+                             c_rate <= fr_allowed + 1e-9))
     pr_allowed = t.judge_bands.get("l2_grounding_passrate_drop", 0.10)
     if baseline.grounding_passrate is not None and candidate.grounding_passrate is not None:
         drop = baseline.grounding_passrate - candidate.grounding_passrate
@@ -204,7 +224,12 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
 
     bands: list[BandResult] = []
     for key in sorted(t.bands):
-        metric = key[:-4] if key.endswith("_pct") else key
+        if key.endswith("_shrink_pct"):
+            metric, shrink_only = key[: -len("_shrink_pct")], True
+        elif key.endswith("_pct"):
+            metric, shrink_only = key[: -len("_pct")], False
+        else:
+            metric, shrink_only = key, False
         b_val, c_val = getattr(baseline, metric, None), getattr(candidate, metric, None)
         if not isinstance(b_val, (int, float)) or isinstance(b_val, bool) or \
            not isinstance(c_val, (int, float)) or isinstance(c_val, bool):
@@ -212,12 +237,18 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
             # existed) — degrade to a note, never crash or fake a 0.
             notes.append(f"band '{key}' skipped — '{metric}' is not a numeric profile metric on both sides")
             continue
-        bands.append(_band(metric, float(b_val), float(c_val), t.bands[key]))
+        bands.append(_band(metric, float(b_val), float(c_val), t.bands[key], shrink_only))
 
     jbands = _compare_judge(baseline_judge, candidate_judge, t) \
         if baseline_judge is not None and candidate_judge is not None else []
-    if (baseline_judge is None) != (candidate_judge is None):
-        notes.append("judge bands skipped — a judge report was given for only one side")
+    if baseline_judge is not None and candidate_judge is None:
+        # NOT a skippable comparison: the baseline was judged, the candidate wasn't — leaving the
+        # semantic gates out entirely would let an unjudged (or judge-crashed) run PASS. Breach → DRIFT.
+        jbands.append(JudgeBand("judge_report_missing", 1.0, 0.0, 1.0, 0.0, False))
+        notes.append("candidate has NO judge report while the baseline does — the semantic gates were "
+                     "skipped; judge the fresh map (method.md Step 4) and re-run with --judge")
+    elif baseline_judge is None and candidate_judge is not None:
+        notes.append("judge bands skipped — a judge report was given for only one side (no baseline judge)")
 
     if any(not g.passed for g in gates):
         verdict = REGRESSED
@@ -238,7 +269,7 @@ def format_report(report: DeltaReport) -> str:
         for j in report.judge_bands:
             tag = "ok" if j.within else "DRIFT"
             out.append(f"  [{tag}] {j.metric}: {j.baseline:g} -> {j.candidate:g} "
-                       f"(drop {j.drop:+g}, allowed {j.allowed_drop:g})")
+                       f"(change {j.drop:+g}, allowed {j.allowed_drop:g})")
         out.append("")
     out.append("Hard gates (relative to baseline):")
     for g in report.gates:
@@ -247,8 +278,9 @@ def format_report(report: DeltaReport) -> str:
         out.append("\nBands (drift vs baseline):")
         for b in report.bands:
             tag = "ok" if b.within else "DRIFT"
+            allowed = f"-{b.allowed_pct:.0%} shrink" if b.shrink_only else f"±{b.allowed_pct:.0%}"
             out.append(f"  [{tag}] {b.metric}: {b.baseline:g} -> {b.candidate:g} "
-                       f"({b.delta_pct:+.0%}, allowed ±{b.allowed_pct:.0%})")
+                       f"({b.delta_pct:+.0%}, allowed {allowed})")
     if report.notes:
         out.append("\nNotes:")
         for n in report.notes:

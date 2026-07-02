@@ -1,6 +1,6 @@
 {
   "schema": "coyodex-eval/thresholds/v1",
-  "note": "Regression gates for `coyodex eval` — RELATIVE to the baseline, not absolute (a real baseline map carries some validate problems, so the gate is 'no NEW problems'). Hard gates trip REGRESSED; bands trip a softer DRIFT. A partial `bands`/`judge_bands` block MERGES onto the built-in defaults. Two band tiers: the density ratio (edges_per_component) is the tight, scale-invariant drift signal; the raw counts keep wide bands as collapse detectors only (a proportional collapse holds density steady). No `l2_claims` band — the worklist derives from edges + auth rows, so it would double-jeopardize movement the edges band and the auth-surface gate already catch. `advisories` and `audit_warnings` are intentionally ungated (noisy non-blocking audit output). Starter values — tune per project via .coyodex-eval or a --thresholds override.",
+  "note": "Regression gates for `coyodex eval` — RELATIVE to the baseline, not absolute (a real baseline map carries some validate problems, so the gate is 'no NEW problems'). Hard gates trip REGRESSED; bands trip a softer DRIFT. A partial `bands`/`judge_bands` block MERGES onto the built-in defaults. Band keys: `<metric>_pct` = symmetric drift band; `<metric>_shrink_pct` = shrink-only (growth never breaches). The raw counts are shrink-only — growth means a finer map (the altitude/completeness rubric judges whether the fineness is right), a shrink is lost information, including the proportional collapse that holds density steady. The density ratio (edges_per_component) keeps a tight symmetric band. No `l2_claims` band — the worklist derives from edges + auth rows, so it would double-jeopardize movement the edges band and the auth-surface gate already catch. `grounding_failure_rate_max` caps the candidate's judge-failure rate (a broken grounding orchestration must not PASS). `advisories` and `audit_warnings` are intentionally ungated (noisy non-blocking audit output). Starter values — tune per project via .coyodex-eval or a --thresholds override.",
   "global": {
     "hard_gates": {
       "validate_must_not_regress": true,
@@ -9,20 +9,21 @@
       "auth_surfaces_must_not_drop": true
     },
     "bands": {
-      "use_cases_pct": 0.50,
-      "subsystems_pct": 0.50,
-      "subdomains_pct": 0.50,
-      "components_pct": 0.50,
-      "deps_pct": 0.50,
-      "entities_pct": 0.50,
-      "edges_pct": 0.50,
-      "gp_steps_pct": 0.50,
-      "flows_pct": 0.50,
+      "use_cases_shrink_pct": 0.30,
+      "subsystems_shrink_pct": 0.30,
+      "subdomains_shrink_pct": 0.30,
+      "components_shrink_pct": 0.30,
+      "deps_shrink_pct": 0.30,
+      "entities_shrink_pct": 0.30,
+      "edges_shrink_pct": 0.30,
+      "gp_steps_shrink_pct": 0.30,
+      "flows_shrink_pct": 0.30,
       "edges_per_component_pct": 0.25
     },
     "judge_bands": {
       "l2_grounding_passrate_drop": 0.10,
-      "judge_score_drop": 0.10
+      "judge_score_drop": 0.10,
+      "grounding_failure_rate_max": 0.25
     }
   },
   "judge": {

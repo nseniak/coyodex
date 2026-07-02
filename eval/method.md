@@ -66,7 +66,10 @@ whenever a fresh map must be built without the builder seeing prior maps or eval
    ```
    `.coyodex/` is committed, so the worktree contains the baseline map — deleting it is what blinds
    the build. `.coyodex-eval/` is git-ignored and normally absent from a fresh worktree; remove it
-   defensively anyway.
+   defensively anyway. **Dogfooding case:** if the evaluated project is the coyodex clone itself, the
+   worktree also contains committed copies of the eval bundle (its own `eval/thresholds.json`,
+   `eval/rubric.md`) — remove those too (`rm -rf <scratch>/coyodex-eval-build/eval`); the never-read
+   rule below is path-independent, but the blinding should be filesystem-deep, not instruction-deep.
 3. **Run the build in a FRESH-context sub-agent** (never in the orchestrating context, which has read
    eval state) whose working directory is the isolated checkout, instructed to:
    - follow the FULL coyodex build method — read `COYODEX_HOME/method/dispatch.md` then
@@ -74,9 +77,11 @@ whenever a fresh map must be built without the builder seeing prior maps or eval
      to its normal path `.coyodex/project-map.md` **inside the isolated checkout**;
    - run the usual invariant there (`validate --check-sources`, `audit`, `render` via
      `COYODEX_HOME/.venv/bin/coyodex`);
-   - **never read**: any path under the original project checkout, anything under
-     `COYODEX_HOME/eval/` (in particular `thresholds.json` and `rubric.md`), or any `.coyodex-eval/`
-     directory anywhere. The builder sees ONLY the code at the pin plus the build-method docs.
+   - **never read**: any path under the original project checkout; any coyodex eval bundle under ANY
+     root — in particular any file named `thresholds.json` or `rubric.md` belonging to one (the
+     `COYODEX_HOME/eval/` originals AND any committed copy inside the worktree); any `.coyodex/` or
+     `.coyodex-eval/` directory anywhere. The builder sees ONLY the code at the pin plus the
+     build-method docs.
 4. **Copy the result out and clean up:**
    ```
    mkdir -p .coyodex-eval/runs/<YYYY-MM-DD_HHMM>
@@ -90,9 +95,12 @@ whenever a fresh map must be built without the builder seeing prior maps or eval
    COYODEX_HOME/.venv/bin/coyodex-eval hash .coyodex-eval/runs/<ts>/project-map.md \
      > .coyodex-eval/runs/<ts>/map-hash
    ```
-2. From this point the fresh map is **read-only**. Every later scoring step passes
-   `--expect-map-hash "$(cat .coyodex-eval/runs/<ts>/map-hash)"`; on a mismatch the tool refuses and
-   the run is void — rebuild (Step 2 from the top), never re-hash an edited file.
+2. From this point the fresh map is **read-only**. The tool enforces the freeze at the Step-5
+   `coyodex-eval run` via `--expect-map-hash "$(cat .coyodex-eval/runs/<ts>/map-hash)"` — on a
+   mismatch it refuses and the run is void; rebuild (Step 2 from the top), never re-hash an edited
+   file. Before judging (Step 4), re-check the hash yourself
+   (`coyodex-eval hash <map> ` vs the stored `map-hash`) and abort the run if it moved — `claims` and
+   `judge` have no built-in guard, and judging an edited map wastes the whole fan-out.
 3. Run the checks on the frozen map (from the project root, where its repo-root-relative anchors
    resolve):
    ```

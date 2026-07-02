@@ -156,6 +156,18 @@ def test_cli_run_refuses_a_map_edited_after_freeze() -> None:
         assert not out_dir.exists(), "a refused run must not archive anything"
 
 
+def test_cli_run_expect_map_hash_without_a_value_is_a_usage_error() -> None:
+    """Review-2 Finding 5: a --expect-map-hash whose value got lost (bad quoting, empty map-hash file)
+    must fail CLOSED, never silently skip the freeze guard."""
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "map.md"
+        mp.write_text(make_map(), encoding="utf-8")
+        r = subprocess.run([*RUN, "--project", "p", "--map", str(mp), "--expect-map-hash"],
+                           capture_output=True, text=True)
+        assert r.returncode == 2, r.stdout + r.stderr
+        assert "needs a value" in r.stderr, r.stderr
+
+
 def test_cli_claims_top_caps_the_sample() -> None:
     with tempfile.TemporaryDirectory() as d:
         mp = Path(d) / "map.md"
@@ -165,6 +177,27 @@ def test_cli_claims_top_caps_the_sample() -> None:
         claims = json.loads(r.stdout)
         assert len(claims) == 1, claims
         assert "Auth surface" in claims[0]["claim"], claims  # the top of the risk ranking
+
+
+def test_cli_claims_map_path_may_equal_the_top_value() -> None:
+    """Review-2 Finding 6: a map file literally named `1` must not be swallowed as --top's value —
+    the flag's value is consumed by index, not by string equality."""
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "1"
+        mp.write_text(make_map(), encoding="utf-8")
+        r = subprocess.run([*CLAIMS, "1", "--top", "1", "--json"], capture_output=True, text=True,
+                           cwd=d)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert len(json.loads(r.stdout)) == 1, r.stdout
+
+
+def test_cli_claims_rejects_a_negative_top() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "map.md"
+        mp.write_text(make_map(), encoding="utf-8")
+        r = subprocess.run([*CLAIMS, str(mp), "--top", "-5"], capture_output=True, text=True)
+        assert r.returncode == 2, r.stdout + r.stderr
+        assert "non-negative" in r.stderr, r.stderr
 
 
 def test_cli_claims_lists_the_l2_worklist_as_json() -> None:

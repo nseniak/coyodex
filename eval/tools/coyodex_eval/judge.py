@@ -241,8 +241,12 @@ def report_from_verdicts(map_text: str, repo_root: Path, rubric: str,
     """Aggregate externally-produced verdicts into a JudgeReport via the same path a live judge uses —
     the bridge from an orchestrated judge run (raw verdicts) to the tested majority-vote + median math.
     The skeptic count is inferred from the raw rows (max votes any claim received), so a single-vote
-    run and a majority-of-3 run both replay faithfully."""
+    run and a majority-of-3 run both replay faithfully. NO rubric verdicts at all → NO dimension
+    scores (overall None): a crashed rubric stage must read as "not judged", never as all-zeros —
+    zeros look like a catastrophically bad map and, blessed as a baseline, would disarm the drop-only
+    judge bands forever."""
     pre = PrecomputedJudge(grounding, judges)
     return build_judge_report(map_text, repo_root, rubric, pre,
-                              n_judges=len(judges) or 1, dimensions=dimensions,
+                              n_judges=len(judges) or 1,
+                              dimensions=dimensions if judges else (),
                               n_skeptics=pre.max_votes_per_claim(), grounding_cap=grounding_cap)

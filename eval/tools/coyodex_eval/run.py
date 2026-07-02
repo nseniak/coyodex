@@ -176,7 +176,14 @@ def run_cli(argv: list[str]) -> int:
     if not map_path.exists():
         print(f"ERROR: {map_path} not found", file=sys.stderr)
         return 1
-    if (expected := _opt(argv, "--expect-map-hash")) is not None:
+    if "--expect-map-hash" in argv:
+        expected = _opt(argv, "--expect-map-hash")
+        if expected is None or not expected.strip():
+            # Fail CLOSED: a flag that lost its value (bad quoting, empty map-hash file) must never
+            # silently skip the freeze guard the caller believes is active.
+            print("ERROR: --expect-map-hash needs a value (the sha256 from runs/<ts>/map-hash)",
+                  file=sys.stderr)
+            return 2
         actual = map_sha256(map_path)
         if actual != expected.strip():
             print(f"ERROR: map hash mismatch — {map_path} was modified after freeze.\n"
@@ -227,22 +234,43 @@ def claims_cli(argv: list[str]) -> int:
               "emits [{claim, anchor, detail?}], the input the judge orchestration fans out over.")
         return 0
     from coyodex import audit_analysis, schema_v1  # stdlib-only
+    # Consume --top's value by INDEX, never by string equality — a positional map path that happens to
+    # equal the K value (a file named `40`) must not be swallowed with it.
     top: int | None = None
-    if (top_arg := _opt(argv, "--top")) is not None:
-        try:
-            top = int(top_arg)
-        except ValueError:
-            print(f"ERROR: --top needs an integer, got '{top_arg}'", file=sys.stderr)
+    json_out = False
+    positional: list[str] = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--top":
+            i += 1
+            if i >= len(argv):
+                print("ERROR: --top needs a value", file=sys.stderr)
+                return 2
+            try:
+                top = int(argv[i])
+            except ValueError:
+                print(f"ERROR: --top needs an integer, got '{argv[i]}'", file=sys.stderr)
+                return 2
+            if top < 0:
+                print(f"ERROR: --top needs a non-negative integer, got {top}", file=sys.stderr)
+                return 2
+        elif a == "--json":
+            json_out = True
+        elif a.startswith("-"):
+            print(f"ERROR: unknown option '{a}'", file=sys.stderr)
             return 2
-    args = [a for a in argv if not a.startswith("-") and a != (top_arg or "")]
-    path = Path(args[0] if args else ".coyodex/project-map.md")
+        else:
+            positional.append(a)
+        i += 1
+    path = Path(positional[0] if positional else ".coyodex/project-map.md")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
     items = audit_analysis.l2_worklist(schema_v1.strip_fences(path.read_text(encoding="utf-8")))
-    if top is not None and top >= 0:
+    if top is not None:
         items = items[:top]
-    if "--json" in argv:
+    if json_out:
         # `detail` is the self-describing name+file context Phase-1A adds to WorkItem; emitted when
         # present so grounding never needs to resolve ids against a map file (see method.md Step 4).
         rows = [{"claim": w.claim, "anchor": w.anchor,

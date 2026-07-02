@@ -142,6 +142,16 @@ def test_all_failures_gives_none_passrate() -> None:
     assert rep.grounding_passrate is None, rep
 
 
+def test_empty_judges_list_yields_no_rubric_scores_not_zeros() -> None:
+    """Review-2 Finding 7 (the rubric-side G6): a crashed rubric stage (no judge dicts at all) must
+    read as UNJUDGED (no dimensions, overall None) — never as all-zeros, which looks like a
+    catastrophically bad map and would disarm the drop-only judge bands if blessed as a baseline."""
+    grounding = [{"claim": CLAIM_SURFACE, "grounded": True}]
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, judges=[])
+    assert rep.dimensions == [] and rep.overall is None, rep
+    assert rep.n_grounded == 1, rep  # the grounding half still aggregates
+
+
 # --- sampling cap (G5): top-K of the risk-ranked worklist ------------------------
 def test_grounding_cap_samples_exactly_top_k_and_reports_the_worklist_size() -> None:
     rep = build_judge_report(make_many_claims_map(n_uses=4), HERE, "R", ScriptedJudge(),
