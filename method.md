@@ -5,7 +5,7 @@ Deliver this fixed set of tables. Every row is drillable: name a row and it expa
 to a lower table or jumps to code with clickable `file:line` links.
 
 Two linked families:
-- **Behavioral** (why/who/what): Goal → Glossary → Roles → Use cases → Golden Path → Journeys.
+- **Behavioral** (why/who/what): Goal → Glossary → Roles → Use cases → Golden Path.
 - **Structural** (the machine): Components → Entry points / Model / Deps → Flows + Edges.
 
 They join at **use case ↔ flow**.
@@ -84,13 +84,11 @@ Deliver as:
 Give every use case, every T1/T2 row, and every T5 **card** a stable ID/anchor (the card heading +
 its `SOURCE` link) so both link directions are clickable. Each touch inherits its flow's confidence.
 
-### Journeys — the outside view of a use case
-
-`Step | User does | System responds | User sees (feedback) | Code behind (entity + file:line)`.
-The "Code behind" column bridges into the structural tables. One use case has two faces: **outside =
-journey** (what the actor does and sees, in prose) and **inside = T6 flow** (the ordered
-interactions among components/deps/entities). The journey reads like a script; the flow draws as a
-sequence diagram and reads as a numbered narrative — two views of the same use case.
+One use case has two faces: **outside** — what the actor does and sees, carried by the use case's
+`Trigger → Outcome` cell — and **inside = T6 flow** (the ordered interactions among
+components/deps/entities), drawn as a sequence diagram and read as a numbered narrative.
+(A separate prose "Journey" table existed in earlier method versions; it duplicated the flows at
+prose level, the model has no field for it, and builders rightly skipped it — dropped.)
 
 ---
 
@@ -159,7 +157,7 @@ running the suite with coverage makes it **verified**. If you don't run it (the 
 costs money — e.g. paid integration tests), state that above the table and mark every row inferred;
 never present a read-only table as if it were measured.
 Coverage % tells which lines ran, not which behaviors are tested. Start from the
-inventory (use cases/journeys, T4 entry points, failure modes, invariants, state
+inventory (use cases, T4 entry points, failure modes, invariants, state
 transitions, critical-path branches) and ask "is there a test that exercises it?" —
 gaps are the deliverable.
 - Map tests → targets as `test — covers → element`; gap = element with no incoming
@@ -222,8 +220,9 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
 **Confidence by layer.** Structure (components, entry points, data) reads reliably from
 source — mostly **verified**. Goal/Roles/intent often are NOT in the code (they live in
 README/docs/the maintainer's head) — infer from naming/structure, mark **inferred**, and
-ask rather than assert a confidently-wrong purpose. Journeys are in between: steps can be
-traced, but the "user sees" register sometimes needs the running app, not just code.
+ask rather than assert a confidently-wrong purpose. A use case's `Trigger → Outcome` sits in
+between: the trigger traces from code, but the "user sees" register sometimes needs the running
+app, not just code.
 
 **Build order (internal) ≠ present order.** Build bottom-up so each table's inputs exist
 first: T3 → harvest T4, T2, T5 (a full sweep — also the completeness checklist that
@@ -309,7 +308,7 @@ synthesis → parallel trace.**
     (`--check-coverage` independently flags a sparse / under-harvested domain model — see below.)
 - Phase 2 Synthesize (barrier, one agent): T1 clusters/dedups all harvest outputs, and (large
   maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier.
-- Phase 3 Trace (fan out, one agent per use case/journey; large maps may instead fan out one agent
+- Phase 3 Trace (fan out, one agent per use case; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
   Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps) and also
   records the **`C→E` edges** for the components in its slice — the entities they persist/write/read by

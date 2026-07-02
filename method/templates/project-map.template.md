@@ -189,7 +189,7 @@ SOURCE: [file](path/sub#L1)
 
 ## T6 — Use-case flows
 
-<!-- The INSIDE view of each use case (its outside view is the Journey). ONE BLOCK PER USE CASE:
+<!-- The INSIDE view of each use case (its outside view is the use case's Trigger → Outcome). ONE BLOCK PER USE CASE:
      a `**UCn — title**` heading + numbered step lines. A step is `from → to`, where each endpoint is
      an element ID (C/D/E) or a Role name. When BOTH ends are elements it is a pure reference to the
      backbone edge — its Verb + Why render the step (sequence message AND readable line), so DON'T
@@ -254,7 +254,7 @@ SOURCE: [file](path/sub#L1)
 
 > **Tests run for this table?** <yes, with coverage — rows verified / no, read-only — all rows inferred>
 
-<!-- Measure against the MAP, not line %. Walk the inventory (use cases / journeys / T4 entry
+<!-- Measure against the MAP, not line %. Walk the inventory (use cases / T4 entry
      points / failure modes / invariants / state transitions / critical branches) and ask "is
      there a test that exercises it?". Lead with untested critical paths (money / auth / data-loss
      / irreversible). Run the suite with a coverage tool (running beats reading); confidence
