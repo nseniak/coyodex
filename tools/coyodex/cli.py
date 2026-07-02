@@ -26,6 +26,8 @@ Commands:
              committed markdown view (picked by the output extension).
   assemble   Merge build agents' structured-row fragments into the canonical
              project-map.json (+ generated views).
+  dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
+             --record / --edges / --members). Read-only lookups over the model.
   convert    One-time migration: a schema-v1 project-map.md → project-map.json.
 
 The method-quality regression eval is a separate command: `coyodex-eval` (see eval/).
@@ -83,6 +85,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "assemble":
         from coyodex import assemble  # stdlib-only
         return assemble.main(rest)
+    if cmd == "dump":
+        from coyodex import dump  # stdlib-only; v2-only, defaults to .coyodex/project-map.json
+        return dump.main(rest)
     if cmd == "convert":
         from coyodex import convert_md  # stdlib-only
         return convert_md.main(rest)
