@@ -25,7 +25,8 @@ import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
-from coyodex import audit_analysis, schema_v1, validate_analysis
+from coyodex import audit_analysis, audit_model, schema_v1, validate_analysis, validate_model
+from coyodex.model import ProjectModel, is_model_document, load_model
 
 _PREFIX = re.compile(r"[A-Z]+")
 
@@ -143,7 +144,11 @@ def build_profile(map_text: str, repo_root: Path | None = None,
                   map_path: Path | None = None) -> MapProfile:
     """Reduce a project map to its deterministic `MapProfile`. `repo_root` (the mapped source) enables
     the coverage signal; without it `coverage_flags` is None. `map_path` is only used to resolve the
-    map's own location for validation (unused by the default checks)."""
+    map's own location for validation (unused by the default checks). A schema-v2 model document
+    (project-map.json) profiles through the model pipeline; markdown through the v1 parse — the two
+    yield the same profile for the same content (the migration's golden equivalence)."""
+    if is_model_document(map_text):
+        return build_profile_from_model(load_model(map_text), repo_root=repo_root)
     raw = map_text
     fence_line = schema_v1.unterminated_fence_line(raw)
     text = schema_v1.strip_fences(raw)
@@ -199,6 +204,54 @@ def build_profile(map_text: str, repo_root: Path | None = None,
         auth_surfaces=surfaces,
         use_case_names=_use_case_names(text),
         entity_names=[c.name for c in schema_v1.iter_domain_cards(lines)],
+    )
+
+
+def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> MapProfile:
+    """The same MapProfile, computed from a schema-v2 model — every signal through the model-side
+    twins of the checks (`validate_model`, `audit_model`), so the JSON pipeline scores a map exactly
+    as the markdown pipeline scored its v1 equivalent (the golden equivalence test pins this)."""
+    problems, warnings = validate_model.validate_model(m)  # no model_path: view-freshness is a
+    # repo-hygiene signal, not map quality — it must not shift an eval profile
+    findings = audit_model.audit_model(m)
+    contradictions = sum(1 for f in findings if f.severity == audit_analysis.CONTRADICTION)
+    advisories = sum(1 for f in findings if f.severity == audit_analysis.ADVISORY)
+    audit_warnings = sum(1 for f in findings if f.severity == audit_analysis.WARNING)
+    l2_claims = len(audit_model.l2_worklist_model(m))
+
+    coverage_flags: int | None = None
+    if repo_root is not None:
+        root = Path(repo_root).resolve()
+        coverage_flags = len(validate_analysis.compression_coverage_from_refs(
+            validate_model.referenced_paths(m, root), root))
+
+    surfaces = [s.surface for s in m.security if s.surface.strip()]
+    n_components = len({c.id for c in m.components})
+    n_edges = len(m.edges)
+
+    return MapProfile(
+        use_cases=len({u.id for u in m.use_cases}),
+        subsystems=len({s.id for s in m.subsystems}),
+        subdomains=len({s.id for s in m.subdomains}),
+        components=n_components,
+        deps=len({d.id for d in m.deps}),
+        entities=len({e.id for e in m.entities}),
+        edges=n_edges,
+        gp_steps=len(m.golden_path),
+        flows=len(m.flows),
+        security_surfaces=len(surfaces),
+        validate_ok=not problems,
+        validate_problems=len(problems),
+        validate_warnings=len(warnings),
+        contradictions=contradictions,
+        advisories=advisories,
+        audit_warnings=audit_warnings,
+        l2_claims=l2_claims,
+        coverage_flags=coverage_flags,
+        edges_per_component=round(n_edges / n_components, 3) if n_components else None,
+        auth_surfaces=surfaces,
+        use_case_names=[u.name for u in m.use_cases if u.name.strip()],
+        entity_names=[e.name for e in m.entities],
     )
 
 

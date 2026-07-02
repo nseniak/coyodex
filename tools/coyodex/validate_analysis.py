@@ -401,6 +401,14 @@ def check_compression_coverage(text: str, root: Path) -> list[str]:
         references at all.
     Both self-report their denominator. Intentional abstraction is a feature, so this only ever
     WARNS, never blocks (GR6)."""
+    root = root.resolve()
+    return compression_coverage_from_refs(_map_referenced_paths(text, root), root)
+
+
+def compression_coverage_from_refs(refs: set[str], root: Path) -> list[str]:
+    """The coverage measurement itself, from an already-extracted set of repo-relative referenced
+    paths — shared by the markdown path above and the schema-v2 model path (`validate_model`), so
+    the two pipelines measure compression/absence identically."""
     # Local import: keep the CORE GATE independent of the advisory pre-index module — the validator
     # imports nothing from it at load time, only this opt-in check pulls the shared (stdlib) walk
     # helper. Reuses CODE, never the pre-index's JSON DATA (GR4: generation != verification).
@@ -417,8 +425,6 @@ def check_compression_coverage(text: str, root: Path) -> list[str]:
             dir_filecount[dpath] = dir_filecount.get(dpath, 0) + 1
             if i + 1 < len(parts):
                 dir_children.setdefault(dpath, set()).add("/".join(parts[:i + 1]))
-
-    refs = _map_referenced_paths(text, root)
 
     def covered_under(prefix: str) -> bool:
         return any(r == prefix or r.startswith(prefix + "/") for r in refs)

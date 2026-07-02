@@ -18,8 +18,16 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from coyodex.model import is_model_document
 from coyodex_eval.compare import DeltaReport, Thresholds, compare, format_report, load_thresholds
-from coyodex_eval.judge import Judge, JudgeReport, build_judge_report, report_from_verdicts
+from coyodex_eval.judge import (
+    Judge,
+    JudgeProtocol,
+    JudgeReport,
+    build_judge_report,
+    report_from_verdicts,
+    rubric_fingerprint,
+)
 from coyodex_eval.profile import MapProfile, build_profile
 
 BASELINE = "BASELINE"  # the "verdict" of a run with no baseline yet (it can become one via `bless`)
@@ -112,16 +120,24 @@ def render_html(map_path: Path, html_path: Path) -> None:
     viewable diagram (the live `.coyodex/project-map.html` in the clone is overwritten every rebuild).
     Best-effort: a render hiccup warns but never loses the already-written source / profile / delta."""
     try:
-        from coyodex.viewer.build_graph import build
         from coyodex.viewer.gen_viewer import write_html
-        write_html(build(map_path), html_path, None)
+        if map_path.suffix == ".json":
+            from coyodex.model import load_model
+            from coyodex.views import model_to_graph
+            write_html(model_to_graph(load_model(map_path.read_text(encoding="utf-8"))),
+                       html_path, None)
+        else:
+            from coyodex.viewer.build_graph import build
+            write_html(build(map_path), html_path, None)
     except Exception as e:  # archiving must survive a render failure
         print(f"WARNING: could not render {html_path.name}: {e}", file=sys.stderr)
 
 
-# Everything a run/baseline dir holds, in write order. project-map.html is rendered (not copied) at
-# write time; bless copies whichever of these exist.
-_RUN_ARTIFACTS = ("project-map.md", "project-map.html", "profile.json", "judge.json", "delta.md")
+# Everything a run/baseline dir holds, in write order. A schema-v2 run stores project-map.json (the
+# source) + its generated md view; a legacy run stores project-map.md only. project-map.html is
+# rendered (not copied) at write time; bless copies whichever of these exist.
+_RUN_ARTIFACTS = ("project-map.json", "project-map.md", "project-map.html", "profile.json",
+                  "judge.json", "delta.md")
 
 
 def write_run(out_dir: Path, result: RunResult, map_text: str,
@@ -130,8 +146,19 @@ def write_run(out_dir: Path, result: RunResult, map_text: str,
     the build conversation (if the orchestrator captured one). The historical record a baseline is
     blessed from — the view is archived so a past run stays viewable after a later rebuild."""
     out_dir.mkdir(parents=True, exist_ok=True)
-    map_path = out_dir / "project-map.md"
-    map_path.write_text(map_text, encoding="utf-8")
+    if is_model_document(map_text):
+        map_path = out_dir / "project-map.json"
+        map_path.write_text(map_text, encoding="utf-8")
+        try:  # the generated md view rides along, like the HTML — best-effort, never blocks archiving
+            from coyodex.model import load_model
+            from coyodex.views import model_to_markdown
+            (out_dir / "project-map.md").write_text(
+                model_to_markdown(load_model(map_text)), encoding="utf-8")
+        except Exception as e:
+            print(f"WARNING: could not write the md view: {e}", file=sys.stderr)
+    else:
+        map_path = out_dir / "project-map.md"
+        map_path.write_text(map_text, encoding="utf-8")
     (out_dir / "profile.json").write_text(result.profile.to_json(), encoding="utf-8")
     if result.judge is not None:
         (out_dir / "judge.json").write_text(result.judge.to_json(), encoding="utf-8")
@@ -263,11 +290,19 @@ def claims_cli(argv: list[str]) -> int:
         else:
             positional.append(a)
         i += 1
-    path = Path(positional[0] if positional else ".coyodex/project-map.md")
+    path = Path(positional[0] if positional else
+                (".coyodex/project-map.json" if Path(".coyodex/project-map.json").exists()
+                 else ".coyodex/project-map.md"))
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
-    items = audit_analysis.l2_worklist(schema_v1.strip_fences(path.read_text(encoding="utf-8")))
+    text = path.read_text(encoding="utf-8")
+    if is_model_document(text):
+        from coyodex import audit_model
+        from coyodex.model import load_model
+        items = audit_model.l2_worklist_model(load_model(text))
+    else:
+        items = audit_analysis.l2_worklist(schema_v1.strip_fences(text))
     if top is not None:
         items = items[:top]
     if json_out:
@@ -299,12 +334,15 @@ def hash_cli(argv: list[str]) -> int:
 
 def judge_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex-eval judge --map <map.md> --verdicts <raw.json> --out <judge.json>\n"
-              "       [--repo <root>] [--rubric <file>]\n\n"
+        print("usage: coyodex-eval judge --map <map.json|md> --verdicts <raw.json> --out <judge.json>\n"
+              "       [--repo <root>] [--rubric <file>] [--judge-model <name>]\n\n"
               "Aggregate externally-produced judge verdicts — grounding [{claim, grounded, evidence}]\n"
               "and per-judge rubric scores — into a JudgeReport, via the tested PrecomputedJudge path.\n"
               "The orchestration layer (a workflow / sub-agents) does the real judging and writes the\n"
-              "raw JSON; this turns it into judge.json with the same pass-rate + median math.")
+              "raw JSON; this turns it into judge.json with the same pass-rate + median math.\n"
+              "--judge-model records the pinned model in the report's judge-protocol fingerprint\n"
+              "(model + n_skeptics + grounding_cap + rubric hash) — the Step-3 baseline cache is only\n"
+              "reusable when the fingerprint matches (see `coyodex-eval protocol`).")
         return 0
     map_arg, verdicts, out = _opt(argv, "--map"), _opt(argv, "--verdicts"), _opt(argv, "--out")
     if not map_arg or not verdicts or not out:
@@ -320,13 +358,62 @@ def judge_cli(argv: list[str]) -> int:
     rubric = Path(rubric_arg).read_text(encoding="utf-8") if rubric_arg and Path(rubric_arg).exists() else ""
     raw = json.loads(vpath.read_text(encoding="utf-8"))
     report = report_from_verdicts(map_path.read_text(encoding="utf-8"), Path(repo) if repo else Path("."),
-                                  rubric, raw.get("grounding", []), raw.get("judges", []))
+                                  rubric, raw.get("grounding", []), raw.get("judges", []),
+                                  judge_model=_opt(argv, "--judge-model") or "")
     out_path = Path(out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(report.to_json(), encoding="utf-8")
     pr = "n/a" if report.grounding_passrate is None else f"{report.grounding_passrate:.0%}"
     ov = "n/a" if report.overall is None else f"{report.overall:g}/4"
     print(f"Wrote {out_path} — grounding {report.n_grounded}/{report.n_claims} ({pr}), overall {ov}")
+    return 0
+
+
+def protocol_cli(argv: list[str]) -> int:
+    """`coyodex-eval protocol` — the CURRENT judge-protocol fingerprint, and the Step-3 cache guard:
+    with `--against <judge.json>` it exits non-zero when the cached report was produced under a
+    DIFFERENT protocol (or records none — a pre-fingerprint cache), telling the orchestrator to
+    re-judge instead of silently reusing stale scores."""
+    if "-h" in argv or "--help" in argv:
+        print("usage: coyodex-eval protocol --thresholds <file> --rubric <file> "
+              "[--against <judge.json>]\n\n"
+              "Print the current judge-protocol fingerprint {model, n_skeptics, grounding_cap,\n"
+              "rubric_sha} from the config. With --against, compare it to the fingerprint recorded\n"
+              "in a cached judge.json: exit 0 = same protocol (the cache is reusable), 1 = protocol\n"
+              "changed or not recorded (delete the cached judge.json and re-judge).")
+        return 0
+    tp, rp = _opt(argv, "--thresholds"), _opt(argv, "--rubric")
+    if not tp or not rp:
+        print("ERROR: --thresholds and --rubric are required", file=sys.stderr)
+        return 2
+    tpath, rpath = Path(tp), Path(rp)
+    for p in (tpath, rpath):
+        if not p.exists():
+            print(f"ERROR: {p} not found", file=sys.stderr)
+            return 1
+    cfg = json.loads(tpath.read_text(encoding="utf-8")).get("judge", {})
+    current = JudgeProtocol(
+        model=str(cfg.get("grounding_model", "")),
+        n_skeptics=int(cfg.get("n_skeptics", 0)),
+        grounding_cap=int(cfg.get("grounding_cap", 0)),
+        rubric_sha=rubric_fingerprint(rpath.read_text(encoding="utf-8")))
+    print(json.dumps(current.__dict__, indent=2, sort_keys=True))
+    against = _opt(argv, "--against")
+    if against is None:
+        return 0
+    apath = Path(against)
+    if not apath.exists():
+        print(f"protocol: no cached report at {apath} — judge fresh (nothing to reuse)")
+        return 1
+    cached = JudgeReport.from_json(apath.read_text(encoding="utf-8")).protocol
+    if cached is None:
+        print(f"protocol MISMATCH: {apath} records no fingerprint (pre-fingerprint cache) — "
+              "delete it and re-judge")
+        return 1
+    if cached != current:
+        print(f"protocol MISMATCH: cached {cached.__dict__} != current — delete {apath} and re-judge")
+        return 1
+    print("protocol match — the cached judge report is reusable")
     return 0
 
 

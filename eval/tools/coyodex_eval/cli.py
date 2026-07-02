@@ -16,6 +16,7 @@ Commands:
   hash     Print a map artifact's sha256 freeze hash (write it at build time; `run` enforces it).
   claims   Print the audit's L2 worklist (the judge's input) — `--json`, `--top K` for the sample.
   judge    Aggregate orchestrated judge verdicts (grounding + rubric) into judge.json.
+  protocol Print the current judge-protocol fingerprint; --against guards the baseline cache.
   bless    Promote a run to the baseline (map + rendered view + profile + judge).
   compare  Compare a candidate MapProfile against a baseline; apply the relative regression gates.
 
@@ -43,6 +44,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "judge":
         from coyodex_eval import run
         return run.judge_cli(rest)
+    if cmd == "protocol":
+        from coyodex_eval import run
+        return run.protocol_cli(rest)
     if cmd == "bless":
         from coyodex_eval import run
         return run.bless_cli(rest)

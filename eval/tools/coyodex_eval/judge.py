@@ -21,13 +21,15 @@ the aggregation math, and the data model — all deterministic given a `Judge`.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import statistics
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Protocol
 
-from coyodex import audit_analysis, schema_v1
+from coyodex import audit_analysis, audit_model, schema_v1
+from coyodex.model import is_model_document, load_model
 
 # The rubric dimensions scored 0–4, in report order. Keys match config/rubric.md (external workspace);
 # the rubric TEXT is passed in, so the wording can evolve without touching this constant.
@@ -64,6 +66,24 @@ class DimensionScore:
 
 
 @dataclass(frozen=True)
+class JudgeProtocol:
+    """The judge-protocol FINGERPRINT recorded in judge.json: which judging regime produced the
+    scores. A comparison (and the Step-3 baseline cache) is only valid when the fingerprint matches
+    — a protocol change with an unchanged map must invalidate cached scores, never silently reuse
+    them (the Phase-1 boundary had to purge a stale old-protocol cache by hand)."""
+    model: str = ""            # the pinned judge model (thresholds.json → judge.grounding_model)
+    n_skeptics: int = 0        # majority-of-N votes per claim
+    grounding_cap: int = 0     # top-K sample size
+    rubric_sha: str = ""       # fingerprint of the rubric TEXT (see rubric_fingerprint)
+
+
+def rubric_fingerprint(rubric_text: str) -> str:
+    """A short stable id of the rubric wording — scores from different rubric versions are not
+    comparable, so the fingerprint changes whenever the text does."""
+    return hashlib.sha256(rubric_text.encode("utf-8")).hexdigest()[:12] if rubric_text else ""
+
+
+@dataclass(frozen=True)
 class JudgeReport:
     """The semantic-quality artifact stored beside a MapProfile; the comparator diffs two of these."""
     n_claims: int                         # claims actually sent to grounding (the top-K sample)
@@ -74,6 +94,7 @@ class JudgeReport:
     n_worklist: int = 0                   # full worklist size the top-K sample was drawn from
     n_failures: int = 0                   # sampled claims with NO usable verdict — excluded from the
                                           # pass-rate denominator, surfaced separately (never "refuted")
+    protocol: JudgeProtocol | None = None  # the fingerprint of the judging regime (None = pre-v2 report)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
@@ -84,6 +105,8 @@ class JudgeReport:
         known = {f.name for f in fields(cls)}
         kw = {k: v for k, v in d.items() if k in known}
         kw["dimensions"] = [DimensionScore(**ds) for ds in kw.get("dimensions", [])]
+        if isinstance(kw.get("protocol"), dict):
+            kw["protocol"] = JudgeProtocol(**kw["protocol"])
         # A report written before the sampling cap existed grounded the whole worklist.
         kw.setdefault("n_worklist", kw.get("n_claims", 0))
         return cls(**kw)
@@ -165,12 +188,16 @@ def run_dimension(dimension: str, rubric: str, map_text: str, repo_root: Path, j
 def build_judge_report(map_text: str, repo_root: Path, rubric: str, judge: Judge,
                        n_judges: int = 3, dimensions: tuple[str, ...] = DIMENSIONS,
                        n_skeptics: int = DEFAULT_N_SKEPTICS,
-                       grounding_cap: int = DEFAULT_GROUNDING_CAP) -> JudgeReport:
+                       grounding_cap: int = DEFAULT_GROUNDING_CAP,
+                       protocol: JudgeProtocol | None = None) -> JudgeReport:
     """Produce the full JudgeReport: ground the top-K of the audit's risk-ranked L2 worklist by
     majority-of-N skeptics, then score every rubric dimension with N judges. Deterministic given
-    `judge`; the model-facing work is entirely inside `judge`."""
-    text = schema_v1.strip_fences(map_text)
-    worklist = audit_analysis.l2_worklist(text)
+    `judge`; the model-facing work is entirely inside `judge`. A schema-v2 model map's worklist
+    comes from the model pipeline; markdown from the v1 audit — same claims either way."""
+    if is_model_document(map_text):
+        worklist = audit_model.l2_worklist_model(load_model(map_text))
+    else:
+        worklist = audit_analysis.l2_worklist(schema_v1.strip_fences(map_text))
     sample = worklist[:grounding_cap] if grounding_cap > 0 else worklist
     outcomes = [majority_verdict(votes) for votes in run_grounding(sample, judge, repo_root, n_skeptics)]
     n_claims = len(outcomes)
@@ -182,7 +209,7 @@ def build_judge_report(map_text: str, repo_root: Path, rubric: str, judge: Judge
     overall = float(statistics.mean(d.score for d in dims)) if dims else None
     return JudgeReport(n_claims=n_claims, n_grounded=n_grounded, grounding_passrate=passrate,
                        dimensions=dims, overall=overall,
-                       n_worklist=len(worklist), n_failures=n_failures)
+                       n_worklist=len(worklist), n_failures=n_failures, protocol=protocol)
 
 
 # ── replaying externally-produced verdicts ────────────────────────────────────────────────────────────
@@ -237,7 +264,8 @@ class PrecomputedJudge:
 def report_from_verdicts(map_text: str, repo_root: Path, rubric: str,
                          grounding: list[dict[str, object]], judges: list[dict[str, int]],
                          dimensions: tuple[str, ...] = DIMENSIONS,
-                         grounding_cap: int = DEFAULT_GROUNDING_CAP) -> JudgeReport:
+                         grounding_cap: int = DEFAULT_GROUNDING_CAP,
+                         judge_model: str = "") -> JudgeReport:
     """Aggregate externally-produced verdicts into a JudgeReport via the same path a live judge uses —
     the bridge from an orchestrated judge run (raw verdicts) to the tested majority-vote + median math.
     The skeptic count is inferred from the raw rows (max votes any claim received), so a single-vote
@@ -246,7 +274,10 @@ def report_from_verdicts(map_text: str, repo_root: Path, rubric: str,
     zeros look like a catastrophically bad map and, blessed as a baseline, would disarm the drop-only
     judge bands forever."""
     pre = PrecomputedJudge(grounding, judges)
+    protocol = JudgeProtocol(model=judge_model, n_skeptics=pre.max_votes_per_claim(),
+                             grounding_cap=grounding_cap, rubric_sha=rubric_fingerprint(rubric))
     return build_judge_report(map_text, repo_root, rubric, pre,
                               n_judges=len(judges) or 1,
                               dimensions=dimensions if judges else (),
-                              n_skeptics=pre.max_votes_per_claim(), grounding_cap=grounding_cap)
+                              n_skeptics=pre.max_votes_per_claim(), grounding_cap=grounding_cap,
+                              protocol=protocol)

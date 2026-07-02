@@ -17,10 +17,16 @@ USAGE = """usage: coyodex <command> [args...]
 Commands:
   preindex   Build the structural pre-index (.coyodex/preindex.json). Needs the
              `preindex` extra (tree-sitter); install with: pip install -e '.[preindex]'
-  validate   Validate a project-map.md (schema-v1 checks — is it WELL-FORMED?).
+  validate   Validate a map (schema + semantic checks — is it WELL-FORMED?).
+             project-map.json is the schema-v2 source; a .md argument uses the
+             legacy schema-v1 validator.
   audit      Adversarial pass over a built map (is it SELF-CONTRADICTORY?): L1
              deterministic contradiction checks + an L2 grounding worklist.
-  render     Render a project-map.md to a standalone HTML viewer.
+  render     Render a map to a generated view: model → HTML viewer or → the
+             committed markdown view (picked by the output extension).
+  assemble   Merge build agents' structured-row fragments into the canonical
+             project-map.json (+ generated views).
+  convert    One-time migration: a schema-v1 project-map.md → project-map.json.
 
 The method-quality regression eval is a separate command: `coyodex-eval` (see eval/).
 
@@ -29,6 +35,25 @@ Global:
   -h/--help  Show this help and exit.
 
 Run `coyodex <command> --help` for command-specific options."""
+
+
+def _default_map(argv: list[str]) -> list[str]:
+    """When no positional map is given, default to the v2 source (`.coyodex/project-map.json`)
+    when it exists, else the legacy markdown map — so `coyodex validate` / `audit` keep working
+    bare in both migrated and un-migrated repos."""
+    from pathlib import Path
+    flags_with_value = {"--repo"}
+    expect_value = False
+    for a in argv:
+        if expect_value:
+            expect_value = False
+        elif a in flags_with_value:
+            expect_value = True
+        elif not a.startswith("-"):
+            return argv  # an explicit map was given
+    default = (".coyodex/project-map.json" if Path(".coyodex/project-map.json").exists()
+               else ".coyodex/project-map.md")
+    return argv + [default]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,14 +70,22 @@ def main(argv: list[str] | None = None) -> int:
         from coyodex import preindex  # lazy: only this path may touch tree-sitter
         return preindex.main(rest)
     if cmd == "validate":
-        from coyodex import validate_analysis  # stdlib-only
-        return validate_analysis.main(rest)
+        # validate_model dispatches a `.md` argument to the legacy schema-v1 validator. With no
+        # positional map, prefer the v2 source when it exists, else the legacy default.
+        from coyodex import validate_model  # stdlib-only
+        return validate_model.main(_default_map(rest))
     if cmd == "audit":
-        from coyodex import audit_analysis  # stdlib-only
-        return audit_analysis.main(rest)
+        from coyodex import audit_model  # stdlib-only; dispatches .md to the legacy audit
+        return audit_model.main(_default_map(rest))
     if cmd == "render":
         from coyodex.viewer import render  # stdlib-only
         return render.main(rest)
+    if cmd == "assemble":
+        from coyodex import assemble  # stdlib-only
+        return assemble.main(rest)
+    if cmd == "convert":
+        from coyodex import convert_md  # stdlib-only
+        return convert_md.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)
