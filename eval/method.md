@@ -81,7 +81,13 @@ whenever a fresh map must be built without the builder seeing prior maps or eval
      root — in particular any file named `thresholds.json` or `rubric.md` belonging to one (the
      `COYODEX_HOME/eval/` originals AND any committed copy inside the worktree); any `.coyodex/` or
      `.coyodex-eval/` directory anywhere. The builder sees ONLY the code at the pin plus the
-     build-method docs.
+     build-method docs;
+   - **run every fan-out synchronously** (wait for each batch of harvest / trace / skeptic
+     sub-agents within its own turn): a builder that spawns BACKGROUND children stops at each
+     barrier, which silently stalls an unattended run — the first boundary validation needed three
+     manual resumes for exactly this. If background fan-out is unavoidable, the orchestrator must
+     watch the build agent for stops and nudge it to continue (a stalled builder looks identical to
+     a long-running one from outside).
 4. **Copy the result out and clean up:**
    ```
    mkdir -p .coyodex-eval/runs/<YYYY-MM-DD_HHMM>
@@ -101,10 +107,12 @@ whenever a fresh map must be built without the builder seeing prior maps or eval
    file. Before judging (Step 4), re-check the hash yourself
    (`coyodex-eval hash <map> ` vs the stored `map-hash`) and abort the run if it moved — `claims` and
    `judge` have no built-in guard, and judging an edited map wastes the whole fan-out.
-3. Run the checks on the frozen map (from the project root, where its repo-root-relative anchors
-   resolve):
+3. Run the checks on the frozen map. The run-dir map sits THREE levels below the repo root, so
+   `validate` needs `--repo .` to resolve its repo-root-relative anchors — without it the anchors
+   resolve against the run dir, every one "fails" as noise (~300 spurious warnings on a real map),
+   and a genuinely broken anchor is invisible:
    ```
-   COYODEX_HOME/.venv/bin/coyodex validate --check-sources .coyodex-eval/runs/<ts>/project-map.md
+   COYODEX_HOME/.venv/bin/coyodex validate --check-sources --repo . .coyodex-eval/runs/<ts>/project-map.md
    COYODEX_HOME/.venv/bin/coyodex audit .coyodex-eval/runs/<ts>/project-map.md
    COYODEX_HOME/.venv/bin/coyodex render .coyodex-eval/runs/<ts>/project-map.md .coyodex-eval/runs/<ts>/project-map.html
    ```
