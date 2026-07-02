@@ -1,6 +1,6 @@
 {
   "schema": "coyodex-eval/thresholds/v1",
-  "note": "Regression gates for `coyodex eval` — RELATIVE to the baseline, not absolute (a real baseline map carries some validate problems, so the gate is 'no NEW problems'). Hard gates trip REGRESSED; bands trip a softer DRIFT. A partial `bands`/`judge_bands` block MERGES onto the built-in defaults. Band keys: `<metric>_pct` = symmetric drift band; `<metric>_shrink_pct` = shrink-only (growth never breaches). The raw counts are shrink-only — growth means a finer map (the altitude/completeness rubric judges whether the fineness is right), a shrink is lost information, including the proportional collapse that holds density steady. The density ratio (edges_per_component) keeps a tight symmetric band. No `l2_claims` band — the worklist derives from edges + auth rows, so it would double-jeopardize movement the edges band and the auth-surface gate already catch. `grounding_failure_rate_max` caps the candidate's judge-failure rate (a broken grounding orchestration must not PASS). `advisories` and `audit_warnings` are intentionally ungated (noisy non-blocking audit output). Starter values — tune per project via .coyodex-eval or a --thresholds override.",
+  "note": "Regression gates for `coyodex eval` — RELATIVE to the baseline, not absolute (a real baseline map carries some validate problems, so the gate is 'no NEW problems'). Hard gates trip REGRESSED; bands trip a softer DRIFT. A partial `bands`/`judge_bands` block MERGES onto the built-in defaults. Band keys: `<metric>_pct` = symmetric drift band; `<metric>_shrink_pct` = shrink-only (growth never breaches). The raw counts are shrink-only — growth means a finer map (the altitude/completeness rubric judges whether the fineness is right), a shrink is lost information, including the proportional collapse that holds density steady. The density ratio (edges_per_component) keeps a tight symmetric band (the secondary check behind granularity). `granularity_band_pct` is the ONE non-baseline-relative band: the candidate's component count vs the CODE-DERIVED expectation E (profile granularity_expected, re-computed from the tree — the leaf anchor); the report shows both maps' distance to E but only the candidate gates. No `l2_claims` band — the worklist derives from edges + auth rows, so it would double-jeopardize movement the edges band and the auth-surface gate already catch. `grounding_failure_rate_max` caps the candidate's judge-failure rate (a broken grounding orchestration must not PASS). `advisories` and `audit_warnings` are intentionally ungated (noisy non-blocking audit output). Starter values — tune per project via .coyodex-eval or a --thresholds override.",
   "global": {
     "hard_gates": {
       "validate_must_not_regress": true,
@@ -20,6 +20,7 @@
       "flows_shrink_pct": 0.30,
       "edges_per_component_pct": 0.25
     },
+    "granularity_band_pct": 0.40,
     "judge_bands": {
       "l2_grounding_passrate_drop": 0.10,
       "judge_score_drop": 0.10,

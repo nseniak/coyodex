@@ -27,6 +27,8 @@ from pathlib import Path
 
 from coyodex import audit_model, validate_model
 from coyodex.model import ModelError, ProjectModel, is_model_document, load_model
+from coyodex.preindex_lib import expected_components  # the granularity expectation E, RE-COMPUTED
+# from the repo tree at score time (shared code, never the pre-index's JSON — GR4)
 from coyodex.validate_analysis import compression_coverage_from_refs  # repo-tree coverage (not a
 # markdown parse — the same helper validate_model's --check-coverage runs)
 
@@ -60,6 +62,9 @@ class MapProfile:
     # ── density (scale-invariant ratios — the drift signal that stays steady when a map merely gets
     #    finer or coarser uniformly; None when the denominator is 0 or the profile predates the field) ──
     edges_per_component: float | None = None
+    # ── granularity (the code-derived component expectation E — the leaf anchor both maps are
+    #    measured against; None when scored without the repo, or the profile predates the field) ──
+    granularity_expected: int | None = None
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
     use_case_names: list[str] = field(default_factory=list)
@@ -105,10 +110,13 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     l2_claims = len(audit_model.l2_worklist_model(m))
 
     coverage_flags: int | None = None
+    granularity_expected: int | None = None
     if repo_root is not None:
         root = Path(repo_root).resolve()
         coverage_flags = len(compression_coverage_from_refs(
             validate_model.referenced_paths(m, root), root))
+        e = expected_components(root).expected
+        granularity_expected = e if e > 0 else None  # a tree with no component-forming source anchors nothing
 
     surfaces = [s.surface for s in m.security if s.surface.strip()]
     n_components = len({c.id for c in m.components})
@@ -134,6 +142,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         l2_claims=l2_claims,
         coverage_flags=coverage_flags,
         edges_per_component=round(n_edges / n_components, 3) if n_components else None,
+        granularity_expected=granularity_expected,
         auth_surfaces=surfaces,
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],
@@ -144,6 +153,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
 
 def _format(p: MapProfile) -> str:
     cov = "n/a (no --repo)" if p.coverage_flags is None else str(p.coverage_flags)
+    gran = ("n/a (no --repo)" if p.granularity_expected is None
+            else f"{p.components} components vs code-derived expectation ~{p.granularity_expected}")
     verdict = "OK" if p.validate_ok else f"FAILED ({p.validate_problems} problem(s))"
     return "\n".join([
         "Map profile — deterministic quality signals",
@@ -155,6 +166,7 @@ def _format(p: MapProfile) -> str:
         f"  audit       : {p.contradictions} contradiction(s) · {p.advisories} advisory · "
         f"{p.audit_warnings} warning(s) · {p.l2_claims} L2 claim(s)",
         f"  coverage    : {cov} compression/absent flag(s)",
+        f"  granularity : {gran}",
     ])
 
 

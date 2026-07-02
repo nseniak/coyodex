@@ -11,6 +11,13 @@ kinds of check:
   BANDS       → a metric that drifts past ±allowance vs baseline is a softer DRIFT (a human look, not
                 a block) — counts legitimately wander run-to-run, so this only flags the big moves.
 
+One check is NOT baseline-relative: the GRANULARITY band measures the candidate's component count
+against the CODE-DERIVED expectation E (profile `granularity_expected`, re-computed from the tree at
+score time — the leaf anchor in method.md). Fairer than baseline-relative for the component count —
+the baseline's own zoom may be off; the report shows BOTH maps' distance to the same E, but only the
+candidate gates (outside band(E) → DRIFT, named as granularity). The shrink-only count bands stay as
+collapse detectors and the density ratio stays the secondary check.
+
 Verdict precedence: REGRESSED (any hard gate) > DRIFT (any band breach) > PASS. Exit codes mirror it
 (REGRESSED=1, DRIFT=2, PASS=0) so an unattended run can gate on it.
 
@@ -69,6 +76,13 @@ DEFAULT_JUDGE_BANDS: dict[str, float] = {
 }
 
 
+# The generous band around the code-derived granularity expectation E (a fraction of E, both
+# directions). Deliberately wider than the count bands: E anchors the ZOOM, it does not decree the
+# exact component count. Mirrors preindex_lib.GRANULARITY_BAND_PCT (kept as eval config so a project
+# can tune its gate without touching the builder-facing constant).
+DEFAULT_GRANULARITY_BAND_PCT = 0.40
+
+
 @dataclass(frozen=True)
 class Thresholds:
     validate_must_not_regress: bool = True
@@ -77,6 +91,7 @@ class Thresholds:
     auth_surfaces_must_not_drop: bool = True
     bands: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_BANDS))
     judge_bands: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_JUDGE_BANDS))
+    granularity_band_pct: float = DEFAULT_GRANULARITY_BAND_PCT
 
     @classmethod
     def from_config(cls, cfg: dict, project: str | None = None) -> "Thresholds":
@@ -90,10 +105,12 @@ class Thresholds:
         bands.update(g.get("bands", {}))
         jbands = dict(DEFAULT_JUDGE_BANDS)
         jbands.update(g.get("judge_bands", {}))
+        gran = g.get("granularity_band_pct", DEFAULT_GRANULARITY_BAND_PCT)
         pp = cfg.get("per_project", {}).get(project, {}) if project else {}
         hard.update(pp.get("hard_gates", {}))
         bands.update(pp.get("bands", {}))
         jbands.update(pp.get("judge_bands", {}))
+        gran = pp.get("granularity_band_pct", gran)
         return cls(
             validate_must_not_regress=hard.get("validate_must_not_regress", True),
             no_new_contradictions=hard.get("no_new_contradictions", True),
@@ -101,6 +118,7 @@ class Thresholds:
             auth_surfaces_must_not_drop=hard.get("auth_surfaces_must_not_drop", True),
             bands=bands,
             judge_bands=jbands,
+            granularity_band_pct=float(gran),
         )
 
 
@@ -133,12 +151,28 @@ class JudgeBand:
 
 
 @dataclass(frozen=True)
+class GranularityResult:
+    """Both maps' distance to the same CODE-DERIVED component expectation E (the leaf anchor). Fairer
+    than baseline-relative for the component count — the baseline's own zoom may be off — so this is
+    what gates: the CANDIDATE outside band(E) → DRIFT, named as granularity. The baseline's distance
+    is reported alongside, informational only."""
+    expected: int                 # E, re-computed from the code tree at score time
+    baseline_components: int
+    candidate_components: int
+    baseline_delta_pct: float     # signed fractional distance of the baseline count from E
+    candidate_delta_pct: float    # … of the candidate count (the gated one)
+    allowed_pct: float
+    within: bool                  # candidate inside the band → ok
+
+
+@dataclass(frozen=True)
 class DeltaReport:
     verdict: str                  # PASS | DRIFT | REGRESSED
     gates: list[GateResult]
     bands: list[BandResult]
     notes: list[str]              # informational (skipped gates, drifted names) — never gating
     judge_bands: list[JudgeBand] = field(default_factory=list)  # empty unless judge reports were given
+    granularity: GranularityResult | None = None  # None when no profile carries E (scored without --repo)
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
@@ -222,6 +256,29 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
             notes.append("auth surfaces in baseline but not (by name) in candidate — names drift with "
                          f"LLM wording, so verify rather than trust: {', '.join(dropped)}")
 
+    # Granularity — both counts measured against the same code-derived E; only the CANDIDATE gates.
+    # The gate uses the CANDIDATE profile's E only: that is the value re-computed from the tree at
+    # check time (score --repo) — a candidate scored without the repo has no check-time E, so the
+    # band degrades to a note rather than gating against a stale baseline value. Both sides score
+    # the same pinned tree, so a baseline E that disagrees is surfaced as a note.
+    granularity: GranularityResult | None = None
+    e_b, e_c = baseline.granularity_expected, candidate.granularity_expected
+    if e_c is None or e_c <= 0:
+        notes.append("granularity band skipped — the candidate profile carries no code-derived "
+                     "component expectation (score the fresh map with --repo)")
+    else:
+        if e_b is not None and e_b != e_c:
+            notes.append(f"code-derived component expectation differs between the profiles "
+                         f"(baseline {e_b} vs candidate {e_c}) — the tree changed between scorings; "
+                         f"the candidate's E gates")
+        c_delta = (candidate.components - e_c) / e_c
+        b_delta = (baseline.components - e_c) / e_c
+        granularity = GranularityResult(
+            expected=e_c, baseline_components=baseline.components,
+            candidate_components=candidate.components, baseline_delta_pct=b_delta,
+            candidate_delta_pct=c_delta, allowed_pct=t.granularity_band_pct,
+            within=abs(c_delta) <= t.granularity_band_pct + 1e-9)
+
     bands: list[BandResult] = []
     for key in sorted(t.bands):
         if key.endswith("_shrink_pct"):
@@ -263,11 +320,12 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
 
     if any(not g.passed for g in gates):
         verdict = REGRESSED
-    elif any(not b.within for b in bands) or any(not j.within for j in jbands):
+    elif (any(not b.within for b in bands) or any(not j.within for j in jbands)
+          or (granularity is not None and not granularity.within)):
         verdict = DRIFT
     else:
         verdict = PASS
-    return DeltaReport(verdict, gates, bands, notes, jbands)
+    return DeltaReport(verdict, gates, bands, notes, jbands, granularity)
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -285,6 +343,15 @@ def format_report(report: DeltaReport) -> str:
     out.append("Hard gates (relative to baseline):")
     for g in report.gates:
         out.append(f"  [{'PASS' if g.passed else 'FAIL'}] {g.name}: {g.detail}")
+    # The E-comparison leads the count signals: both maps against the same code-derived anchor.
+    if report.granularity is not None:
+        gr = report.granularity
+        tag = "ok" if gr.within else "DRIFT"
+        out.append("\nGranularity (components vs the code-derived expectation E — the leaf anchor):")
+        out.append(f"  [{tag}] candidate: {gr.candidate_components} vs E {gr.expected} "
+                   f"({gr.candidate_delta_pct:+.0%}, allowed ±{gr.allowed_pct:.0%})")
+        out.append(f"  [info] baseline : {gr.baseline_components} vs E {gr.expected} "
+                   f"({gr.baseline_delta_pct:+.0%} — informational, only the candidate gates)")
     if report.bands:
         out.append("\nBands (drift vs baseline):")
         for b in report.bands:

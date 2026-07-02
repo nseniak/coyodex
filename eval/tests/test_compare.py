@@ -301,6 +301,85 @@ def test_baseline_without_the_density_field_is_skipped_not_crashed() -> None:
     assert any("edges_per_component" in n and "skipped" in n for n in r.notes), r.notes
 
 
+# --- granularity (candidate vs the code-derived expectation E — the leaf anchor) --
+def test_granularity_candidate_below_band_drifts() -> None:
+    """The mcpolis failure mode: an honest rebuild lands far COARSER than the code-derived E."""
+    base = make_profile(components=20, granularity_expected=20)
+    cand = make_profile(components=10, granularity_expected=20)  # -50% vs E, band is ±40%
+    r = compare(base, cand, _tight())
+    assert r.verdict == DRIFT, r
+    assert r.granularity is not None and not r.granularity.within, r.granularity
+
+
+def test_granularity_candidate_above_band_drifts() -> None:
+    base = make_profile(components=20, granularity_expected=20)
+    cand = make_profile(components=30, granularity_expected=20)  # +50% vs E
+    r = compare(base, cand, _tight())
+    assert r.verdict == DRIFT, r
+
+
+def test_granularity_within_band_passes() -> None:
+    base = make_profile(components=20, granularity_expected=20)
+    cand = make_profile(components=25, granularity_expected=20)  # +25%, inside ±40%
+    r = compare(base, cand, _tight())
+    assert r.verdict == PASS, r
+    assert r.granularity is not None and r.granularity.within
+
+
+def test_granularity_gates_the_candidate_never_the_baseline() -> None:
+    """Both maps' distance to the same E is reported, but a baseline whose own zoom is off must not
+    trip the verdict — E-relative is fairer than baseline-relative exactly because of this case.
+    (Count bands are off here: the point is the E-band's own behavior.)"""
+    base = make_profile(components=45, granularity_expected=20)   # baseline way off (+125%)
+    cand = make_profile(components=22, granularity_expected=20)   # candidate in band
+    r = compare(base, cand, _tight())
+    assert r.verdict == PASS, r
+    assert r.granularity is not None
+    assert r.granularity.baseline_delta_pct > 1.0 and r.granularity.within, r.granularity
+
+
+def test_granularity_skipped_with_a_note_when_no_profile_carries_e() -> None:
+    r = compare(make_profile(), make_profile(), _tight())  # granularity_expected defaults to None
+    assert r.verdict == PASS, r
+    assert r.granularity is None
+    assert any("granularity band skipped" in n for n in r.notes), r.notes
+
+
+def test_granularity_prefers_the_candidate_e_and_notes_a_mismatch() -> None:
+    """Both sides score the same pinned tree, so their E should agree; if they don't (the tree
+    changed between scorings), the candidate's fresher E gates and the mismatch is surfaced."""
+    base = make_profile(components=20, granularity_expected=15)
+    cand = make_profile(components=20, granularity_expected=20)
+    r = compare(base, cand, _tight())
+    assert r.granularity is not None and r.granularity.expected == 20, r.granularity
+    assert any("expectation differs" in n for n in r.notes), r.notes
+
+
+def test_granularity_band_pct_merges_from_config() -> None:
+    cfg = {
+        "global": {"granularity_band_pct": 0.10},
+        "per_project": {"mcpolis": {"granularity_band_pct": 0.60}},
+    }
+    glob = Thresholds.from_config(cfg)
+    proj = Thresholds.from_config(cfg, "mcpolis")
+    assert glob.granularity_band_pct == 0.10
+    assert proj.granularity_band_pct == 0.60
+    assert Thresholds.from_config({}).granularity_band_pct == 0.40  # the built-in default
+
+
+def test_report_shows_both_maps_distance_to_e_and_leads_the_counts() -> None:
+    """The formatted report carries a Granularity section with BOTH distances, placed before the
+    baseline-relative count bands (the E-comparison leads for counts)."""
+    base = make_profile(components=45, granularity_expected=20)
+    cand = make_profile(components=10, granularity_expected=20)
+    text = format_report(compare(base, cand, _tight()))
+    assert "Granularity" in text and "candidate: 10 vs E 20" in text \
+        and "baseline : 45 vs E 20" in text, text
+    r = compare(base, cand)  # default bands on → a Bands section exists to order against
+    text = format_report(r)
+    assert text.index("Granularity") < text.index("Bands (drift vs baseline)"), text
+
+
 # --- CLI ------------------------------------------------------------------------
 def _write(p: MapProfile) -> str:
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:

@@ -230,8 +230,10 @@ For a map M:
    Copy the fresh raw verdicts into the run dir as `judge-verdicts.json`.
 2. Report to the user, **judge/quality deltas first** (grounding pass-rate with its denominator and
    failure count, rubric scores), then the verdict (PASS / DRIFT / REGRESSED) with the gates/bands
-   that moved, then the raw structural counts last, and the path to the run's `delta.md` and
-   `project-map.html`. On REGRESSED, name the gate that tripped. Any post-freeze validate/audit
+   that moved — for the component count, lead with the **granularity line** (both maps' distance to
+   the code-derived expectation E; only the candidate gates) — then the raw structural counts last,
+   and the path to the run's `delta.md` and `project-map.html`. On REGRESSED, name the gate that
+   tripped. Any post-freeze validate/audit
    finding from Step 2 is part of this report — a finding about the method, not something to have
    fixed.
 

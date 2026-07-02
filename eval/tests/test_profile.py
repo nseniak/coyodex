@@ -231,6 +231,32 @@ def test_coverage_is_none_without_repo_and_int_with_repo() -> None:
     assert isinstance(p_yes.coverage_flags, int), p_yes
 
 
+# --- granularity (the code-derived expectation E, needs the repo) ----------------
+def test_granularity_expected_is_none_without_repo_and_e_with_repo() -> None:
+    p_no = build_profile(as_model(make_counts_map()))
+    assert p_no.granularity_expected is None, p_no
+    with tempfile.TemporaryDirectory() as d:
+        # a subsystem-shaped tree with a known E: 6 small plugin dirs + a small core dir → 7
+        for i in range(6):
+            sub = Path(d) / "plugins" / f"p{i}"
+            sub.mkdir(parents=True)
+            for j in range(3):
+                (sub / f"f{j}.py").write_text("x\n" * 100, encoding="utf-8")
+        core = Path(d) / "core"
+        core.mkdir()
+        (core / "a.py").write_text("x\n" * 60, encoding="utf-8")
+        p_yes = build_profile(as_model(make_counts_map()), repo_root=Path(d))
+    assert p_yes.granularity_expected == 7, p_yes.granularity_expected
+
+
+def test_granularity_expected_is_none_on_a_tree_with_no_source() -> None:
+    """A repo with no component-forming source anchors nothing — None, not a fake 0/1 gate."""
+    with tempfile.TemporaryDirectory() as d:
+        (Path(d) / "README.md").write_text("docs only\n" * 50, encoding="utf-8")
+        p = build_profile(as_model(make_counts_map()), repo_root=Path(d))
+    assert p.granularity_expected is None, p.granularity_expected
+
+
 # --- serialization round-trip ---------------------------------------------------
 def test_profile_json_round_trips() -> None:
     p = build_profile(as_model(make_counts_map()))
