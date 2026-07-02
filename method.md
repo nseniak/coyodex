@@ -10,7 +10,11 @@ Two linked families:
 
 They join at **use case ↔ flow**.
 
-See also: [dispatch](method/dispatch.md) · [schema v1](method/schema-v1.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
+See also: [dispatch](method/dispatch.md) · [the map model — schema v2](method/model.md) · [schema v1](method/schema-v1.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
+
+**The stored map is a structured JSON model** (`.coyodex/project-map.json`, [schema v2](method/model.md));
+the markdown map and the HTML diagram are **generated views** committed next to it. Build agents
+return structured rows; `coyodex assemble` writes the model — nobody hand-authors the stored file.
 
 The method is `method.md` and the `method/` docs (plus the `tools/coyodex/` package). The coyodex repo's
 **`internal/`** folder (design rationale, working notes) is **not** part of the method — ignore it
@@ -345,20 +349,25 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > don't re-derive it».
 >
 > For every row give `file:line` evidence and a confidence tag (**verified** = read in code /
-> **inferred** = guessed). Use only the schema-v1 IDs and edge verbs; reference nodes, never
+> **inferred** = guessed). Use only the schema IDs and edge verbs; reference nodes, never
 > invent them. **Return exactly this fixed set of sections — one per prescribed slice — and if you
 > cannot fill one, return its header with `(none found)` and say why; never silently omit a
-> section.** Your sections: **markdown tables** for «the table slices this agent fills — e.g.
-> COMPONENTS (T1), ENTRY POINTS (T4), DEPENDENCIES (T2), and operational rows (deployment /
-> observability / security / config)».
-> **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), also return
-> the **T5 DOMAIN MODEL as per-entity cards, never a table** (`**En — Name**` + FIELDS / RELATIONS /
-> MEANING / SOURCE — see [domain-cards.md](method/domain-cards.md)), with **a RELATIONS line wherever
-> two entities relate** — the cards + their `E↔E` RELATIONS are the whole point of the slice. Each
-> card is a **real named type** (class / dataclass / enum) whose `SOURCE` anchors its **definition** —
-> do NOT synthesize an entity for an unnamed concept; type embedded fields by their entity (`auth:E7`)
-> so relations carry the field name. A directory- or subsystem-sliced agent that is **not** the T5
-> owner returns its components / entry-points only and leaves T5 to the owner.
+> section.** Your output is **ONE JSON fragment** — a partial map model per
+> [method/model.md](method/model.md): an object holding only the top-level arrays your slice owns
+> («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`, `security`,
+> `config`»), each entry using that array's exact field names. Return it as a fenced ```json block
+> (the lead saves it verbatim for `coyodex assemble`); an empty slice is an empty array plus a
+> one-line note above the block.
+> **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
+> also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
+> `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
+> [domain-cards.md](method/domain-cards.md)), with **a `relations` item wherever two entities
+> relate** — the entities + their `E↔E` relations are the whole point of the slice. Each entity is a
+> **real named type** (class / dataclass / enum) whose `source` anchors its **definition** — do NOT
+> synthesize an entity for an unnamed concept; type embedded fields by their entity (`auth:E7`) so
+> relations carry the field name. Mark plumbing types you deliberately did NOT model in
+> `non_entity_types` (name + why). A directory- or subsystem-sliced agent that is **not** the T5
+> owner returns its components / entry-points only and leaves `entities` to the owner.
 > (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)
 
 **Completeness check before the barrier (lead, not delegated).** Before the Phase 2 synthesis, the
@@ -381,12 +390,14 @@ the same answer back. These are attention thresholds, not gates (a heavy *genera
 legitimately folds — the pre-index guardrail applies); a cheap deterministic backstop exists after the
 fact in `validate --check-coverage`, which flags folded sibling subdirs and never-referenced dirs.
 
-**Output files — map + diagrams.** Build writes a **new** baseline and overwrites any existing
-`.coyodex/project-map.md`, so you should only be here for a first map or a user-confirmed rebuild —
-[dispatch](method/dispatch.md) routes an existing baseline to Analyze, not Build. Write the full
-analysis to `.coyodex/project-map.md` at the root of the analyzed repo, conform to
-[schema v1](method/schema-v1.md), and record in it the commit it was built at (the baseline pin —
-see the pin gate below).
+**Output files — model + generated views.** Build writes a **new** baseline and overwrites any
+existing `.coyodex/` map, so you should only be here for a first map or a user-confirmed rebuild —
+[dispatch](method/dispatch.md) routes an existing baseline to Analyze, not Build. The committed
+source of truth is `.coyodex/project-map.json` ([the map model — schema v2](method/model.md)),
+written by `coyodex assemble` together with its two generated views, `.coyodex/project-map.md`
+(readable diffs) and `.coyodex/project-map.html` (the diagram) — all three are committed. Record
+the commit the map was built at in the model's `commit`/`committed`/`built` fields (the baseline
+pin — see the pin gate below).
 
 **Baseline pin — require committed code, or record it dirty.** The pin must mean "the map describes
 *exactly* this commit". The map you just read reflects the **working tree**, so if the code has
@@ -411,8 +422,9 @@ git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is c
   Re-run the check after each round; only continue when the code is committed (A) **or** the user
   explicitly chose B.
 
-Write the pin into the map header line — the template's **Commit** / **Committed** / **Built** line
-(sha · commit date · build time). For **Built**, capture the minute once —
+Write the pin into the model's **`commit`** / **`committed`** / **`built`** fields (sha · commit
+date · build time — the header fragment carries them; the generated views render them as the map's
+header line). For **Built**, capture the minute once —
 `date +'%Y-%m-%d %H:%M'` — and reuse that exact string in both the header cell and the stamp below.
 
 **Stamp the conversation (provenance for backup).** After the map is written and validated, record
@@ -428,19 +440,30 @@ can bundle the map **and** the exact transcript deterministically. Run it in the
 session, not a delegated sub-agent, so the id recorded is the driver conversation's. **Commit
 `provenance.json`** with the map + diagram.
 
-**Start from the template** —
-[`method/templates/project-map.template.md`](method/templates/project-map.template.md): fill its cells and Write the filled map to `.coyodex/project-map.md` in one write — read the
-template, then write; don't shell-`cp` it into place and then overwrite it (the copy is wasted and
-overwriting a freshly-created file trips the read-before-write guard), and don't author the map from
-scratch (that throws the schema-correct shapes away). It already carries every standard section with schema-correct table
-shapes (each definition's ID **alone in its own first cell**, `| **C1** | name… |`), so the map
-passes the validator on the first write instead of being reshaped afterward. Run the validator —
-`.venv/bin/coyodex validate .coyodex/project-map.md --check-sources --check-coverage` ([tools/coyodex/validate_analysis.py](tools/coyodex/validate_analysis.py)) — after
-each generate/patch and fix the map until it passes (`--check-sources` reads each domain card's
-`SOURCE` to reject synthesized entities — names with no real named type; `--check-coverage`
+**Assemble the model from the agents' fragments — never hand-author the stored file.** Save each
+agent's returned JSON fragment verbatim to a scratch dir (`.coyodex/build-fragments/<agent>.json`,
+git-ignored), write one small `header.json` fragment yourself (`title`, `goal`, the pin fields),
+then run:
+
+```
+.venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex
+```
+
+It validates every fragment against the schema (a malformed fragment fails ALONE, with its file and
+JSON path named — re-request that one agent's rows), refuses duplicate IDs across fragments, and
+writes the canonical `project-map.json` plus the generated md/HTML views. In serial (non-parallel)
+mode the same rule holds at smaller scale: author your rows as one or a few fragments and let
+`assemble` serialize — the stored JSON is always tool-written, so its validity is guaranteed by the
+serializer, not by you. (The old markdown template,
+[`method/templates/project-map.template.md`](method/templates/project-map.template.md), now only
+documents the generated view's shape — it is no longer filled in by hand.) Run the validator —
+`.venv/bin/coyodex validate .coyodex/project-map.json --check-sources --check-coverage` ([tools/coyodex/validate_model.py](tools/coyodex/validate_model.py)) — after
+each assemble/patch and fix the model (via fragments / field edits + re-assemble or re-render)
+until it passes (`--check-sources` reads each entity's `source` to reject synthesized entities —
+names with no real named type; `--check-coverage`
 re-walks the repo and WARNS — non-blocking — when many sibling source subdirs are folded into one
 box or a significant directory is never referenced, the map-fidelity gaps the ID checks can't see).
-**Then run the adversarial pass** — `.venv/bin/coyodex audit .coyodex/project-map.md`
+**Then run the adversarial pass** — `.venv/bin/coyodex audit .coyodex/project-map.json`
 ([tools/coyodex/audit_analysis.py](tools/coyodex/audit_analysis.py)). Where validate asks *is the map
 well-formed*, audit asks *is it self-contradictory*: it makes the map's two layers — the narrative
 Golden Path (step order, actors) and the mechanism (T6 flows + the backbone edge list) — refute each
@@ -467,30 +490,34 @@ by spawning a **fresh-context skeptic** (Phase 4 below) that sees only the finis
 never your build reasoning — and tries to *disprove* the claim; **reconcile every finding — advisory
 or blocking — (fix the map, or justify and note why)** before rendering. So the invariant after every
 write is **validate → audit → render**.
-**Then render the diagrams** — once the
-map validates and the adversarial pass has no blocking contradiction (advisories reconciled), generate
-the self-contained HTML viewer next to it:
+**Then render the views** — once the
+map validates and the adversarial pass has no blocking contradiction (advisories reconciled),
+regenerate both views next to the model (assemble already wrote them; re-run after any patch):
 
 ```
-.venv/bin/coyodex render .coyodex/project-map.md .coyodex/project-map.html
+.venv/bin/coyodex render .coyodex/project-map.json .coyodex/project-map.md
+.venv/bin/coyodex render .coyodex/project-map.json .coyodex/project-map.html
 ```
 
-The HTML is a *rendering* of the map (no second source) — commit it alongside the map so the two
-stay in step and a reviewer can open it. **Finish by reporting BOTH artifacts as links** — the
-map (`.coyodex/project-map.md`) and the diagram HTML (`.coyodex/project-map.html`), as relative
-paths so the reader can open either. **In addition, for the HTML give the full clickable `file://`
+Both are *renderings* of the model (no second source; never hand-edit them — `validate` flags a
+stale view) — commit them alongside the model so the three stay in step and a reviewer can open
+either. **Finish by reporting the artifacts as links** — the model (`.coyodex/project-map.json`),
+the markdown view (`.coyodex/project-map.md`), and the diagram HTML (`.coyodex/project-map.html`),
+as relative paths so the reader can open any. **In addition, for the HTML give the full clickable `file://`
 URL with the absolute path**, so the reader can open the diagram straight in a browser — e.g.
 `Open in browser: file:///abs/path/to/repo/.coyodex/project-map.html`. (Paths like `.venv/bin/coyodex`
 are relative to the coyodex clone, like the validator above.)
 
 **Maintaining the map.** When code changes after a baseline exists, follow
 [change-impact](method/change-impact.md): report the impact against the map (modified /
-added / deleted), then accept: patch the map, bump the baseline pin, re-stamp provenance
+added / deleted), then accept: patch the MODEL (`.coyodex/project-map.json` — surgical field
+edits), bump the baseline pin, re-stamp provenance
 (`.venv/bin/python tools/map_backup.py stamp <repo> --mode accept --built-at '<YYYY-MM-DD HH:MM>'`,
 which appends this session), **re-run validate → audit** (a patch can introduce a fresh
-self-contradiction — e.g. a re-ordered Golden Path step now reads before it creates), **re-render the
-diagram** (`coyodex render`, so it tracks the patched map), save the annotated diff under
-`.coyodex/analysis-changes/<date>.md`, and commit the map + diagram + `provenance.json` with the code.
+self-contradiction — e.g. a re-ordered Golden Path step now reads before it creates), **re-render
+both views** (`coyodex render` to `.md` and `.html`, so they track the patched model), save the
+annotated diff under `.coyodex/analysis-changes/<date>.md`, and commit the model + views +
+`provenance.json` with the code.
 
 **Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big
 to detail at its altitude (e.g. a `plugins` area holding dozens of feature units), go finer **inside the

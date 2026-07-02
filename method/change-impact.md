@@ -9,9 +9,9 @@ meaning), scoped to the diff.
 
 | Step | Action | Writes | Committed? |
 |---|---|---|---|
-| **1 Build** | map the repo | `.coyodex/project-map.md` | yes — pinned to the code commit it describes |
+| **1 Build** | map the repo | `.coyodex/project-map.json` (+ generated md/html views) | yes — pinned to the code commit it describes |
 | **2 Analyze** | diff the code against the baseline | `.coyodex/analysis-changes/<date>.md` (the report) | **no** — written to disk, uncommitted |
-| **3 Accept** | fold the report into the baseline | patches `project-map.md` | yes — both committed |
+| **3 Accept** | fold the report into the baseline | patches `project-map.json`, regenerates the views | yes — all committed |
 
 The change-impact report is a **file from the moment it's generated** (step 2) — just
 uncommitted. This mirrors git's own model: the report is a *working-tree change*, accept is
@@ -120,13 +120,16 @@ clean baseline.
 
 ## Accept — the four actions
 
-1. Apply the report's `was → now` blocks to `.coyodex/project-map.md` (mechanical).
-2. Bump its commit pin (and **Committed** date) to the code commit it now describes — the same
+1. Apply the report's `was → now` blocks to the MODEL, `.coyodex/project-map.json` (mechanical —
+   surgical field/array edits; the report's `was → now` text names the fields).
+2. Bump its commit pin (the model's `commit` and `committed` fields) to the code commit it now
+   describes — the same
    **pin gate** as Build applies (`method.md`): the *code* must be committed (the `.coyodex/` report
    and map you are accepting are expected to be dirty — that's what this step commits), else give the
    user the A/B choice and record the pin `-dirty` only if they pick B.
-3. Re-render the diagram (`.venv/bin/coyodex render .coyodex/project-map.md
-   .coyodex/project-map.html`) — a deterministic re-render of the patched map, no new inference.
+3. Re-render BOTH generated views (`.venv/bin/coyodex render .coyodex/project-map.json
+   .coyodex/project-map.md` and `… .coyodex/project-map.html`) — a deterministic re-render of the
+   patched model, no new inference.
 4. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).
 5. git-commit all (map + diagram + report) — so baseline-commit stays aligned with code-commit.
    The commit IS the acceptance.

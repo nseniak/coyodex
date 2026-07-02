@@ -19,13 +19,13 @@ codebase map. **Read the method doc and follow it; don't work from memory.**
   doc, and the config `eval/thresholds.json`, `eval/rubric.md`) lives under `eval/`,
   and the CLI is `.venv/bin/coyodex` — all here.
 - **The project you are evaluating** — your current working directory, a *different* path. Its
-  baseline map is `.coyodex/project-map.md`; all eval output goes in `.coyodex-eval/` (git-ignored).
+  baseline map is `.coyodex/project-map.json`; all eval output goes in `.coyodex-eval/` (git-ignored).
 
 So whenever the method doc says to read a config file or run `.venv/bin/coyodex ...`, that path is
 **under `COYODEX_HOME`** — use that absolute prefix (e.g. `__COYODEX_HOME__/eval/rubric.md`).
 Only `.coyodex/...` and `.coyodex-eval/...` paths are in the evaluated project.
 
-**Precondition:** this needs an existing `.coyodex/project-map.md`, and the working tree must be at the
+**Precondition:** this needs an existing `.coyodex/project-map.json` (a legacy `.md` baseline is migrated once with `coyodex convert`), and the working tree must be at the
 commit that map is pinned to (the method refuses otherwise — see Step 1). If there is no map yet, run
 `/coyodex` first to build one.
 

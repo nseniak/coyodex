@@ -55,7 +55,8 @@ Re-run `make install` only if you move the repo; `make uninstall` removes the sk
 /coyodex
 ```
 
-Writes `.coyodex/project-map.md` (the map) and `.coyodex/project-map.html` (an interactive, drillable
+Writes `.coyodex/project-map.json` (the map model), `.coyodex/project-map.md` (a generated,
+readable view), and `.coyodex/project-map.html` (an interactive, drillable
 [C4 viewer](tools/coyodex/viewer/)), pinned to the current commit. Commit both with your code.
 
 **3. Edit your code.** Work as usual.
@@ -89,7 +90,7 @@ agent that can read this repo.
 ## The workflow
 
 ```
-/coyodex ────────▶ .coyodex/project-map.md   (committed, commit-pinned)
+/coyodex ────────▶ .coyodex/project-map.json (committed, commit-pinned; +generated md/html views)
                    .coyodex/project-map.html (rendered interactive viewer)
    │
    ▼

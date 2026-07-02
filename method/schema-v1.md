@@ -1,5 +1,13 @@
 # Schema v1 — making the map a clean machine source
 
+> **Superseded as the STORAGE format by [schema v2 — the JSON model](model.md)**: the committed
+> source of truth is now `.coyodex/project-map.json`, and the markdown map is a **generated view**
+> of it. Everything semantic in this document — the ID scheme, the conventions, the
+> derived-not-duplicated rules, grouping, dependency Kinds, source-link pinning — carries over
+> unchanged to schema v2 and still governs the generated view's shape. What no longer applies is
+> the storage claim below (markdown as the single source) and hand-authoring the tables: a legacy
+> v1 map is migrated once with `coyodex convert`.
+
 `project-map.md` is semi-structured markdown, but to drive diagrams and tooling
 reliably it must obey a contract. Schema v1 is that contract: treat the table/ID/edge
 format as a real schema, not just a nice layout. A diagram is just another rendering of

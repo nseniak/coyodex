@@ -17,18 +17,23 @@ Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall th
 
 ## Step 1 — is there already a baseline?
 
-Look for `.coyodex/project-map.md` in the analyzed repo.
+Look for `.coyodex/project-map.json` (the schema-v2 model) in the analyzed repo.
+
+- **Only a legacy `.coyodex/project-map.md` exists** (a schema-v1 markdown source, no
+  `project-map.json`) → it must be **migrated once** before anything else:
+  `coyodex convert .coyodex/project-map.md` writes the model + regenerated views; review, commit
+  json+md+html, then continue below with the model as the baseline.
 
 ### No baseline → Build
 
-Create it. Read `method.md` (+ `method/schema-v1.md`, `method/domain-cards.md`) and start from
-`method/templates/project-map.template.md`.
+Create it. Read `method.md` (+ `method/model.md`, `method/domain-cards.md`): agents return
+structured rows and `coyodex assemble` writes the model + views.
 
 ### Baseline exists → default to Analyze (never silently rebuild)
 
 A rebuild regenerates the map from scratch and **overwrites the curated, reviewed baseline** — it
 loses manual fixes and the pin history. So it is **never** the default. Read the baseline pin from
-the header (`**Commit:**` / `**Committed:**` line), then:
+the model's `commit` / `committed` fields, then:
 
 1. **Is there anything to analyze?** Compare the pin to the **current working tree** (so a later
    commit *and* uncommitted edits both count), ignoring coyodex's own files. The tree matches the pin
@@ -58,14 +63,16 @@ the header (`**Commit:**` / `**Committed:**` line), then:
 
 ## Invariant (every mode)
 
-The map is the single source at the analyzed repo's `.coyodex/project-map.md`. After every write:
-**validate → audit → render**. Validate (`coyodex validate --check-sources`) checks it is
-well-formed; audit (`coyodex audit`) is the adversarial pass — it makes the narrative Golden Path and
+The map is the single source at the analyzed repo's `.coyodex/project-map.json`; the committed
+`.coyodex/project-map.md` and `.html` are generated views of it (never hand-edited). After every
+write: **validate → audit → render**. Validate (`coyodex validate --check-sources`) checks schema +
+semantics (and that the committed views are fresh); audit (`coyodex audit`) is the adversarial
+pass — it makes the narrative Golden Path and
 the mechanism flows/edges refute each other. It blocks only on a hard contradiction (a forward/dangling
 `why:` reference); read-before-create and actor-attribution are ADVISORY (lossy attribution — reconcile,
 don't treat as fact), and it prints an L2 grounding worklist to disprove against the code with
-fresh-context skeptics (see `method.md`); render (`coyodex render`) — the HTML is a rendering, never a
-second source.
+fresh-context skeptics (see `method.md`); render (`coyodex render` to `.md` and `.html`) — the views
+are renderings, never a second source.
 
 **Going deeper stays in the one map.** When a part of the system needs finer detail than its current
 altitude, refine it IN PLACE — nest subsystems/subdomains, or promote a leaf component into a subsystem
