@@ -35,17 +35,24 @@ _EXIT = {PASS: 0, REGRESSED: 1, DRIFT: 2}
 
 # The structural bands applied by default when no thresholds file is given. Keys end in `_pct` and name
 # a numeric MapProfile field; the value is the allowed symmetric fractional drift vs baseline.
+#
+# Two tiers by design: the DENSITY ratio (edges_per_component) is the tight drift signal — it is
+# scale-invariant, so a map that legitimately got finer (more components AND proportionally more edges)
+# stays steady and does not trip. The raw COUNTS keep wide bands as collapse detectors only: a
+# proportional collapse holds density steady, so without them a halved map would pass silently. No
+# `l2_claims` band: the worklist is derived from edges + auth rows, so banding it double-jeopardizes
+# the same movement the edges band (and the auth-surface hard gate) already catches.
 DEFAULT_BANDS: dict[str, float] = {
-    "use_cases_pct": 0.20,
-    "subsystems_pct": 0.25,
-    "subdomains_pct": 0.25,
-    "components_pct": 0.20,
-    "deps_pct": 0.25,
-    "entities_pct": 0.20,
-    "edges_pct": 0.25,
-    "gp_steps_pct": 0.20,
-    "flows_pct": 0.20,
-    "l2_claims_pct": 0.25,
+    "use_cases_pct": 0.50,
+    "subsystems_pct": 0.50,
+    "subdomains_pct": 0.50,
+    "components_pct": 0.50,
+    "deps_pct": 0.50,
+    "entities_pct": 0.50,
+    "edges_pct": 0.50,
+    "gp_steps_pct": 0.50,
+    "flows_pct": 0.50,
+    "edges_per_component_pct": 0.25,
 }
 
 # Judge bands are DROP-only (asymmetric): a rise in faithfulness/coverage is good, only a fall is a
@@ -201,7 +208,9 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         b_val, c_val = getattr(baseline, metric, None), getattr(candidate, metric, None)
         if not isinstance(b_val, (int, float)) or isinstance(b_val, bool) or \
            not isinstance(c_val, (int, float)) or isinstance(c_val, bool):
-            notes.append(f"band '{key}' skipped — '{metric}' is not a numeric profile metric")
+            # Also hit by a None ratio (0-denominator, or a baseline profile written before the field
+            # existed) — degrade to a note, never crash or fake a 0.
+            notes.append(f"band '{key}' skipped — '{metric}' is not a numeric profile metric on both sides")
             continue
         bands.append(_band(metric, float(b_val), float(c_val), t.bands[key]))
 
@@ -222,7 +231,15 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────────
 
 def format_report(report: DeltaReport) -> str:
+    # Judge/quality deltas lead; the raw structural counts come last — they are the noisiest signal.
     out = [f"Comparison verdict: {report.verdict}", ""]
+    if report.judge_bands:
+        out.append("Judge bands (drop vs baseline):")
+        for j in report.judge_bands:
+            tag = "ok" if j.within else "DRIFT"
+            out.append(f"  [{tag}] {j.metric}: {j.baseline:g} -> {j.candidate:g} "
+                       f"(drop {j.drop:+g}, allowed {j.allowed_drop:g})")
+        out.append("")
     out.append("Hard gates (relative to baseline):")
     for g in report.gates:
         out.append(f"  [{'PASS' if g.passed else 'FAIL'}] {g.name}: {g.detail}")
@@ -232,12 +249,6 @@ def format_report(report: DeltaReport) -> str:
             tag = "ok" if b.within else "DRIFT"
             out.append(f"  [{tag}] {b.metric}: {b.baseline:g} -> {b.candidate:g} "
                        f"({b.delta_pct:+.0%}, allowed ±{b.allowed_pct:.0%})")
-    if report.judge_bands:
-        out.append("\nJudge bands (drop vs baseline):")
-        for j in report.judge_bands:
-            tag = "ok" if j.within else "DRIFT"
-            out.append(f"  [{tag}] {j.metric}: {j.baseline:g} -> {j.candidate:g} "
-                       f"(drop {j.drop:+g}, allowed {j.allowed_drop:g})")
     if report.notes:
         out.append("\nNotes:")
         for n in report.notes:

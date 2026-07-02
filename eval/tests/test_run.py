@@ -15,11 +15,13 @@ from pathlib import Path
 
 from coyodex_eval.judge import JudgeReport
 from coyodex_eval.profile import MapProfile, build_profile
-from coyodex_eval.run import BASELINE, bless, load_baseline, run_eval, write_run
+from coyodex_eval.run import BASELINE, bless, delta_md, load_baseline, map_sha256, run_eval, write_run
 from test_judge import ScriptedJudge, make_l2_map
 
 RUN = [sys.executable, "-m", "coyodex_eval.cli", "run"]
 BLESS = [sys.executable, "-m", "coyodex_eval.cli", "bless"]
+HASH = [sys.executable, "-m", "coyodex_eval.cli", "hash"]
+CLAIMS = [sys.executable, "-m", "coyodex_eval.cli", "claims"]
 
 
 def make_map() -> str:
@@ -46,6 +48,14 @@ def test_run_against_equal_baseline_passes() -> None:
 def test_run_builds_judge_report_from_injected_judge() -> None:
     r = run_eval("p", make_map(), Path("."), judge=ScriptedJudge(), rubric="R", n_judges=1)
     assert r.judge is not None and r.judge.n_claims >= 1, r
+
+
+def test_delta_md_leads_with_the_judge_section() -> None:
+    """P1: the run report leads with the judge (semantic quality); raw structural counts follow."""
+    r = run_eval("p", make_map(), Path("."), judge=ScriptedJudge(), rubric="R", n_judges=1)
+    md = delta_md(r)
+    assert md.index("## Judge") < md.index("## Profile"), md
+    assert "risk-ranked" in md and "judge failure(s) excluded" in md, md
 
 
 def test_run_flags_a_judge_drop_as_drift() -> None:
@@ -108,6 +118,53 @@ def test_cli_run_first_then_bless_then_run_again() -> None:
 def test_cli_run_requires_project_and_map() -> None:
     r = subprocess.run([*RUN, "--project", "p"], capture_output=True, text=True)
     assert r.returncode == 2 and "required" in (r.stdout + r.stderr)
+
+
+# --- freeze / hash (I2) ---------------------------------------------------------
+def test_cli_hash_prints_the_sha256_of_the_file() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "map.md"
+        mp.write_text(make_map(), encoding="utf-8")
+        r = subprocess.run([*HASH, str(mp)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert r.stdout.strip() == map_sha256(mp), r.stdout
+
+
+def test_cli_run_matching_map_hash_proceeds() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "map.md"
+        mp.write_text(make_map(), encoding="utf-8")
+        r = subprocess.run([*RUN, "--project", "p", "--map", str(mp),
+                            "--expect-map-hash", map_sha256(mp)], capture_output=True, text=True)
+        assert r.returncode == 0 and "BASELINE" in r.stdout, r.stdout + r.stderr
+
+
+def test_cli_run_refuses_a_map_edited_after_freeze() -> None:
+    """The freeze guard: any post-build edit to the map invalidates the run — hard non-zero refusal,
+    no profile, no comparison."""
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "map.md"
+        mp.write_text(make_map(), encoding="utf-8")
+        frozen = map_sha256(mp)
+        mp.write_text(make_map() + "\n<!-- silently fixed after freeze -->\n", encoding="utf-8")
+        out_dir = Path(d) / "run"
+        r = subprocess.run([*RUN, "--project", "p", "--map", str(mp),
+                            "--expect-map-hash", frozen, "--out", str(out_dir)],
+                           capture_output=True, text=True)
+        assert r.returncode == 1, r.stdout + r.stderr
+        assert "hash mismatch" in r.stderr, r.stderr
+        assert not out_dir.exists(), "a refused run must not archive anything"
+
+
+def test_cli_claims_top_caps_the_sample() -> None:
+    with tempfile.TemporaryDirectory() as d:
+        mp = Path(d) / "map.md"
+        mp.write_text(make_map(), encoding="utf-8")
+        r = subprocess.run([*CLAIMS, str(mp), "--top", "1", "--json"], capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        claims = json.loads(r.stdout)
+        assert len(claims) == 1, claims
+        assert "Auth surface" in claims[0]["claim"], claims  # the top of the risk ranking
 
 
 def test_cli_claims_lists_the_l2_worklist_as_json() -> None:

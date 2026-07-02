@@ -198,6 +198,18 @@ def test_l2_claims_counts_security_surfaces() -> None:
     assert p.l2_claims >= 2, p
 
 
+# --- density (P1) ----------------------------------------------------------------
+def test_edges_per_component_is_the_density_ratio() -> None:
+    p = build_profile(make_counts_map())  # 3 edges / 3 components
+    assert p.edges_per_component == 1.0, p
+
+
+def test_density_is_none_when_there_are_no_components() -> None:
+    p = build_profile("## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
+                      "| **UC1** | View | Andy | a -> b |\n")
+    assert p.edges_per_component is None, p
+
+
 # --- coverage (needs the repo) --------------------------------------------------
 def test_coverage_is_none_without_repo_and_int_with_repo() -> None:
     p_no = build_profile(make_counts_map())

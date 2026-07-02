@@ -56,6 +56,9 @@ class MapProfile:
     l2_claims: int
     # ── coverage (None when scored without the repo) ──
     coverage_flags: int | None
+    # ── density (scale-invariant ratios — the drift signal that stays steady when a map merely gets
+    #    finer or coarser uniformly; None when the denominator is 0 or the profile predates the field) ──
+    edges_per_component: float | None = None
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
     use_case_names: list[str] = field(default_factory=list)
@@ -170,14 +173,17 @@ def build_profile(map_text: str, repo_root: Path | None = None,
     if repo_root is not None:
         coverage_flags = len(validate_analysis.check_compression_coverage(text, Path(repo_root).resolve()))
 
+    n_components = by_prefix.get("C", 0)
+    n_edges = len(validate_analysis.collect_edges(text))
+
     return MapProfile(
         use_cases=by_prefix.get("UC", 0),
         subsystems=by_prefix.get("S", 0),
         subdomains=by_prefix.get("SD", 0),
-        components=by_prefix.get("C", 0),
+        components=n_components,
         deps=by_prefix.get("D", 0),
         entities=by_prefix.get("E", 0),
-        edges=len(validate_analysis.collect_edges(text)),
+        edges=n_edges,
         gp_steps=len(gp_order),
         flows=sum(1 for _ in schema_v1.iter_flows(lines)),
         security_surfaces=len(surfaces),
@@ -189,6 +195,7 @@ def build_profile(map_text: str, repo_root: Path | None = None,
         audit_warnings=audit_warnings,
         l2_claims=l2_claims,
         coverage_flags=coverage_flags,
+        edges_per_component=round(n_edges / n_components, 3) if n_components else None,
         auth_surfaces=surfaces,
         use_case_names=_use_case_names(text),
         entity_names=[c.name for c in schema_v1.iter_domain_cards(lines)],

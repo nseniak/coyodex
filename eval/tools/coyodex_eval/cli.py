@@ -13,7 +13,8 @@ USAGE = """usage: coyodex-eval <command> [args...]
 Commands:
   score    Emit a map's deterministic quality PROFILE (structure / validate / audit / coverage).
   run      Profile a built map, compare vs its baseline, and archive the run.
-  claims   Print the audit's L2 worklist (the judge's input) — `--json` for [{claim, anchor}].
+  hash     Print a map artifact's sha256 freeze hash (write it at build time; `run` enforces it).
+  claims   Print the audit's L2 worklist (the judge's input) — `--json`, `--top K` for the sample.
   judge    Aggregate orchestrated judge verdicts (grounding + rubric) into judge.json.
   bless    Promote a run to the baseline (map + rendered view + profile + judge).
   compare  Compare a candidate MapProfile against a baseline; apply the relative regression gates.
@@ -33,6 +34,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "run":
         from coyodex_eval import run
         return run.run_cli(rest)
+    if cmd == "hash":
+        from coyodex_eval import run
+        return run.hash_cli(rest)
     if cmd == "claims":
         from coyodex_eval import run
         return run.claims_cli(rest)

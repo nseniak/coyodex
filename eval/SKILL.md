@@ -29,5 +29,7 @@ Only `.coyodex/...` and `.coyodex-eval/...` paths are in the evaluated project.
 commit that map is pinned to (the method refuses otherwise — see Step 1). If there is no map yet, run
 `/coyodex` first to build one.
 
-Read `__COYODEX_HOME__/eval/method.md` and follow it end to end (guard → baseline cache → build
-fresh map → judge → compare + store). It runs the FULL judge every time.
+Read `__COYODEX_HOME__/eval/method.md` and follow it end to end (guard → build the fresh map BLIND
+in an isolated worktree + freeze its hash → baseline cache → judge → compare + store). The order
+matters: the build comes first so no baseline numbers exist in context while the map is written, and
+the frozen map is never edited afterwards. It runs the FULL judge every time.

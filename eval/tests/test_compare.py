@@ -14,7 +14,7 @@ import tempfile
 from pathlib import Path
 
 from coyodex_eval.compare import (DEFAULT_BANDS, DRIFT, PASS, REGRESSED, Thresholds, compare,
-                                  load_thresholds)
+                                  format_report, load_thresholds)
 from coyodex_eval.judge import DimensionScore, JudgeReport
 from coyodex_eval.profile import MapProfile
 
@@ -29,7 +29,7 @@ def make_profile(**over: object) -> MapProfile:
         edges=40, gp_steps=8, flows=10, security_surfaces=5,
         validate_ok=True, validate_problems=2, validate_warnings=1,
         contradictions=0, advisories=1, audit_warnings=0, l2_claims=6,
-        coverage_flags=0,
+        coverage_flags=0, edges_per_component=2.0,
         auth_surfaces=["a", "b", "c", "d", "e"], use_case_names=[], entity_names=[],
     )
     base.update(over)
@@ -174,6 +174,13 @@ def test_hard_fail_dominates_a_judge_drift() -> None:
     assert r.verdict == REGRESSED, r
 
 
+def test_report_leads_with_the_judge_deltas() -> None:
+    """P1: the formatted report puts judge/quality deltas first; raw structural bands come last."""
+    r = compare(make_profile(), make_profile(entities=9), None, make_judge(), make_judge())
+    text = format_report(r)
+    assert text.index("Judge bands") < text.index("Hard gates") < text.index("Bands"), text
+
+
 # --- thresholds loading ---------------------------------------------------------
 def test_per_project_overrides_global() -> None:
     cfg = {
@@ -200,10 +207,14 @@ def test_partial_bands_override_keeps_defaults() -> None:
 
 
 def test_every_structural_count_has_a_band() -> None:
-    """Review Finding 3: every count-like metric is banded, so a collapse can't pass silently."""
+    """Review Finding 3: every count-like metric keeps a (wide, collapse-detector) band, so a collapse
+    can't pass silently. `l2_claims` is the deliberate exception (P1): the worklist derives from edges
+    + auth rows, so banding it double-jeopardizes movement those signals already catch."""
     for metric in ("use_cases", "subsystems", "subdomains", "components", "deps", "entities",
-                   "edges", "gp_steps", "flows", "l2_claims"):
+                   "edges", "gp_steps", "flows"):
         assert f"{metric}_pct" in DEFAULT_BANDS, metric
+    assert "l2_claims_pct" not in DEFAULT_BANDS
+    assert "edges_per_component_pct" in DEFAULT_BANDS
 
 
 def test_deps_collapse_drifts_under_default_thresholds() -> None:
@@ -211,6 +222,43 @@ def test_deps_collapse_drifts_under_default_thresholds() -> None:
     r = compare(make_profile(deps=10), make_profile(deps=1))  # default Thresholds now band deps
     assert r.verdict == DRIFT, r
     assert any(b.metric == "deps" and not b.within for b in r.bands)
+
+
+# --- density bands (P1): scale-invariant drift, counts as collapse detectors -----
+def test_finer_but_better_map_with_steady_density_passes() -> None:
+    """The motivating P1 case: a rebuild that maps FINER (more components, proportionally more edges)
+    keeps edges-per-component steady and must NOT trip DRIFT under the default thresholds."""
+    base = make_profile(components=20, edges=40, edges_per_component=2.0)
+    cand = make_profile(components=28, edges=56, edges_per_component=2.0)
+    r = compare(base, cand)
+    assert r.verdict == PASS, r
+
+
+def test_density_collapse_drifts_even_when_raw_counts_hold() -> None:
+    """Same component count but far fewer edges: the raw edge count stays inside its wide collapse
+    band, and the density band is what catches the thinned-out backbone."""
+    base = make_profile(components=20, edges=40, edges_per_component=2.0)
+    cand = make_profile(components=20, edges=24, edges_per_component=1.2)  # -40% density
+    r = compare(base, cand)
+    assert r.verdict == DRIFT, r
+    assert any(b.metric == "edges_per_component" and not b.within for b in r.bands)
+
+
+def test_proportional_collapse_trips_the_wide_count_band() -> None:
+    """A halved map keeps density steady — the wide raw-count bands are what refuse it."""
+    base = make_profile(components=20, edges=40, edges_per_component=2.0)
+    cand = make_profile(components=8, edges=16, edges_per_component=2.0)  # -60% components
+    r = compare(base, cand)
+    assert r.verdict == DRIFT, r
+    assert any(b.metric == "components" and not b.within for b in r.bands)
+
+
+def test_baseline_without_the_density_field_is_skipped_not_crashed() -> None:
+    """A baseline profile.json written before edges_per_component existed loads as None — the band is
+    skipped with a note, never crashed on or treated as 0."""
+    r = compare(make_profile(edges_per_component=None), make_profile())
+    assert r.verdict == PASS, r
+    assert any("edges_per_component" in n and "skipped" in n for n in r.notes), r.notes
 
 
 # --- CLI ------------------------------------------------------------------------
@@ -235,8 +283,9 @@ def test_cli_regressed_exits_one() -> None:
 
 
 def test_cli_drift_exits_two() -> None:
+    # entities -67%: past even the wide collapse-detector band (±50%)
     r = subprocess.run([*COMPARE, _write(make_profile(entities=15)),
-                        _write(make_profile(entities=9))], capture_output=True, text=True)
+                        _write(make_profile(entities=5))], capture_output=True, text=True)
     assert r.returncode == 2, r.stdout + r.stderr
     assert "DRIFT" in r.stdout
 

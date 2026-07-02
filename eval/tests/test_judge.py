@@ -11,7 +11,7 @@ from pathlib import Path
 
 from coyodex_eval.judge import (DIMENSIONS, GroundingVerdict, JudgeReport, RubricVerdict,
                                 build_grounding_prompt, build_judge_report, build_rubric_prompt,
-                                report_from_verdicts, run_dimension)
+                                majority_verdict, report_from_verdicts, run_dimension)
 
 HERE = Path(".")
 
@@ -62,6 +62,17 @@ def make_no_claims_map() -> str:
             "| **C1** | X | x | f |  |\n")
 
 
+def make_many_claims_map(n_uses: int = 4) -> str:
+    """make_l2_map's 2 high-risk claims (auth surface, then the enforces edge — the top of the risk
+    ranking) plus `n_uses` low-risk C↔C `uses` edges appended to the same edges table."""
+    extra = "".join(f"| C1 | uses | C{i + 3} | w | gate.py#L{i + 3} |\n" for i in range(n_uses))
+    return make_l2_map() + extra
+
+
+CLAIM_SURFACE = "Auth surface '/admin' is protected by: require_admin"
+CLAIM_EDGE = "C1 enforces C2"
+
+
 # --- grounding pass-rate --------------------------------------------------------
 def test_grounding_passrate_counts_refuted_claims() -> None:
     rep = build_judge_report(make_l2_map(refute_surface=True), HERE, "RUBRIC", ScriptedJudge(), n_judges=1)
@@ -73,6 +84,77 @@ def test_grounding_passrate_counts_refuted_claims() -> None:
 def test_no_claims_gives_none_passrate() -> None:
     rep = build_judge_report(make_no_claims_map(), HERE, "R", ScriptedJudge(), n_judges=1)
     assert rep.n_claims == 0 and rep.grounding_passrate is None, rep
+
+
+# --- majority vote (G3) ---------------------------------------------------------
+def test_majority_vote_single_dissenter_does_not_flip() -> None:
+    """3 skeptics per claim: 2-1 grounded stays grounded; 2-1 refuted stays refuted."""
+    grounding = (
+        [{"claim": CLAIM_SURFACE, "grounded": g, "evidence": "auth.py:10"} for g in (True, True, False)]
+        + [{"claim": CLAIM_EDGE, "grounded": g, "evidence": "gate.py:5"} for g in (False, False, True)]
+    )
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, [])
+    assert (rep.n_claims, rep.n_grounded, rep.n_failures) == (2, 1, 0), rep
+    assert rep.grounding_passrate == 0.5, rep
+
+
+def test_majority_tie_is_refuted_not_a_failure() -> None:
+    """A 1-1 tie means real disagreement, resolved to refuted (the skeptic's when-unsure default) —
+    never a failure row."""
+    grounding = (
+        [{"claim": CLAIM_SURFACE, "grounded": g} for g in (True, False)]
+        + [{"claim": CLAIM_EDGE, "grounded": g} for g in (True, True)]
+    )
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, [])
+    assert (rep.n_grounded, rep.n_failures) == (1, 0), rep
+
+
+def test_majority_verdict_ignores_failed_votes() -> None:
+    """One usable vote + one failed vote → the usable vote decides; the failure neither refutes nor
+    ties the claim."""
+    votes = [GroundingVerdict("c", True, "f.py:1"), GroundingVerdict("c", None, "no output")]
+    assert majority_verdict(votes) is True
+    assert majority_verdict([GroundingVerdict("c", None, "")]) is None
+
+
+# --- judge failures (G6): no verdict is NOT refuted -----------------------------
+def test_missing_verdict_is_a_failure_excluded_from_the_denominator() -> None:
+    """A claim the orchestrator produced no row for is a judge FAILURE: counted in n_failures, out of
+    the pass-rate denominator — the remaining grounded claim scores 1/1, not 1/2."""
+    grounding = [{"claim": CLAIM_SURFACE, "grounded": True, "evidence": "auth.py:10"}]
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, [])
+    assert (rep.n_claims, rep.n_grounded, rep.n_failures) == (2, 1, 1), rep
+    assert rep.grounding_passrate == 1.0, rep
+
+
+def test_malformed_grounded_value_is_a_failure_not_refuted() -> None:
+    """A row whose `grounded` is not a bool (structured-output failure) is a failure, never refuted."""
+    grounding = [{"claim": CLAIM_SURFACE, "grounded": True},
+                 {"claim": CLAIM_EDGE, "grounded": "yes"}]
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, [])
+    assert (rep.n_grounded, rep.n_failures) == (1, 1), rep
+    assert rep.grounding_passrate == 1.0, rep
+
+
+def test_all_failures_gives_none_passrate() -> None:
+    rep = report_from_verdicts(make_l2_map(), HERE, "R", [], [])
+    assert (rep.n_claims, rep.n_failures) == (2, 2), rep
+    assert rep.grounding_passrate is None, rep
+
+
+# --- sampling cap (G5): top-K of the risk-ranked worklist ------------------------
+def test_grounding_cap_samples_exactly_top_k_and_reports_the_worklist_size() -> None:
+    rep = build_judge_report(make_many_claims_map(n_uses=4), HERE, "R", ScriptedJudge(),
+                             n_judges=1, grounding_cap=2)
+    assert (rep.n_claims, rep.n_worklist) == (2, 6), rep
+
+
+def test_grounding_cap_keeps_the_highest_risk_claims() -> None:
+    """The sample is the TOP of the ranking: with the cap at 2, only the auth surface + enforces edge
+    are grounded, so refuting every `uses` edge cannot move the pass-rate."""
+    rep = build_judge_report(make_many_claims_map(n_uses=4), HERE, "R",
+                             ScriptedJudge(refute_marker="uses"), n_judges=1, grounding_cap=2)
+    assert rep.grounding_passrate == 1.0, rep
 
 
 # --- rubric median --------------------------------------------------------------
@@ -92,6 +174,20 @@ def test_overall_is_mean_of_dimension_medians_and_covers_all_dimensions() -> Non
 def test_grounding_prompt_carries_claim_and_anchor_and_is_adversarial() -> None:
     p = build_grounding_prompt("C1 enforces C2", "gate.py#L5")
     assert "C1 enforces C2" in p and "gate.py#L5" in p and "DISPROVE" in p, p
+
+
+def test_grounding_prompt_forbids_map_files_and_judges_relationship_only() -> None:
+    """G1: ids resolve from the claim text + code only — never a map file. G2: grounding is
+    relationship-truth only; anchor exactness belongs to drill_accuracy."""
+    p = build_grounding_prompt("C1 enforces C2", "gate.py#L5")
+    assert "do NOT read any project-map" in p, p
+    assert "RELATIONSHIP" in p and "drill_accuracy" in p, p
+
+
+def test_grounding_prompt_carries_the_self_describing_detail() -> None:
+    p = build_grounding_prompt("C1 enforces C2", None, detail="Gate (gate.py) -> Policy (policy.py)")
+    assert "Gate (gate.py) -> Policy (policy.py)" in p, p
+    assert "Claim context" in p, p
 
 
 def test_rubric_prompt_carries_dimension_rubric_and_map() -> None:
@@ -122,6 +218,15 @@ def test_precomputed_judge_replays_grounding_and_median_scores() -> None:
 def test_judge_report_round_trips_including_nested_dimensions() -> None:
     rep = build_judge_report(make_l2_map(), HERE, "R", ScriptedJudge(), n_judges=1)
     assert JudgeReport.from_json(rep.to_json()) == rep
+
+
+def test_judge_report_written_before_the_sampling_cap_still_loads() -> None:
+    """A baseline judge.json from before n_worklist/n_failures existed: failures default to 0 and the
+    worklist size falls back to n_claims (those runs grounded the whole worklist)."""
+    old = ('{"n_claims": 8, "n_grounded": 6, "grounding_passrate": 0.75, '
+           '"dimensions": [], "overall": null}')
+    rep = JudgeReport.from_json(old)
+    assert (rep.n_worklist, rep.n_failures) == (8, 0), rep
 
 
 # --- built-in runner ------------------------------------------------------------
