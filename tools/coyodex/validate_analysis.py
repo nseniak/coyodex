@@ -48,7 +48,13 @@ Opt-in (reads the analyzed repo's source/tree, not just the map):
 
 Exit 0 = clean, 1 = problems found.
 
-Usage:  coyodex validate [--check-sources] [--check-coverage] [.coyodex/project-map.md]
+Usage:  coyodex validate [--check-sources] [--check-coverage] [--repo <root>] [.coyodex/project-map.md]
+
+`--repo <root>` points the repo-reading checks (anchors, sources, coverage) at the analyzed repo's
+root, for a map that is NOT sitting in its repo's own `.coyodex/` (e.g. an eval's deep run dir).
+Anchors are repo-root-relative, so without it those checks resolve against the map's dir and its
+parent — correct in-repo, wrong anywhere else. The old roots remain as fallback, so in-repo runs are
+unchanged.
 """
 from __future__ import annotations
 
@@ -693,12 +699,18 @@ def _anchor_hrefs(text: str) -> list[tuple[str, str]]:
     return out
 
 
-def _source_roots(map_path: Path) -> list[Path]:
-    """The two roots a map's SOURCE / anchor paths resolve against: the map's own dir and its parent
-    (the repo root for a `.coyodex/` map). Shared by every repo-reading check so this resolution rule
-    lives in one place."""
+def _source_roots(map_path: Path, repo_root: Path | None = None) -> list[Path]:
+    """The roots a map's SOURCE / anchor paths resolve against. By default the map's own dir and its
+    parent (the repo root for a `.coyodex/` map). An explicit `repo_root` (the `--repo` flag) is tried
+    FIRST — a map validated from outside its repo (e.g. an eval's deep run dir) resolves its
+    repo-root-relative anchors against the real tree; the map-derived roots stay as fallback so
+    in-repo behavior is unchanged. Shared by every repo-reading check so this resolution rule lives in
+    one place (and survives the JSON move — the rule is about anchors, not the markdown)."""
     base = map_path.resolve().parent
-    return [base, base.parent]
+    roots = [base, base.parent]
+    if repo_root is not None:
+        roots.insert(0, repo_root.resolve())
+    return roots
 
 
 def _resolve_source_file(source: str, roots: list[Path]) -> Path | None:
@@ -709,12 +721,13 @@ def _resolve_source_file(source: str, roots: list[Path]) -> Path | None:
     return next((r / rel for r in roots if (r / rel).is_file()), None)
 
 
-def check_anchor_existence(text: str, map_path: Path) -> list[str]:
+def check_anchor_existence(text: str, map_path: Path, repo_root: Path | None = None) -> list[str]:
     """WARN on a drill-to-code anchor whose path doesn't resolve to a real file/dir in the repo — a
     moved / renamed / mistyped `file:line` (an edge `Where`, a node anchor, a card SOURCE). Opt-in
     (`--check-sources`): it reads the analyzed repo, so run it on a real `.coyodex/` map, not a template
-    (where every path is a placeholder). Advisory — never blocks."""
-    roots = _source_roots(map_path)
+    (where every path is a placeholder); pass `repo_root` (`--repo`) when the map is validated from
+    outside its repo. Advisory — never blocks."""
+    roots = _source_roots(map_path, repo_root)
     out: list[str] = []
     for label, href in _anchor_hrefs(text):
         rel = re.sub(r":\d+$", "", href.split("#", 1)[0])   # drop a #Lnnn anchor and a :line suffix
@@ -801,7 +814,7 @@ def check_domain_cards(text: str) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
-def check_entity_sources(text: str, map_path: Path) -> list[str]:
+def check_entity_sources(text: str, map_path: Path, repo_root: Path | None = None) -> list[str]:
     """Flag a domain card whose entity name has NO identifier token present in its SOURCE file — a
     strong signal it's synthesized (no real named type) or anchored to the wrong file. Tokens are any
     identifier-shaped run (CamelCase, snake_case, or lowercase — not just CamelCase), matched
@@ -812,9 +825,10 @@ def check_entity_sources(text: str, map_path: Path) -> list[str]:
     appears nowhere (`OAuthState`). The SOURCE path is resolved against the map's dir and its parent
     (the repo root for a `.coyodex/` map); a card whose file can't be resolved is skipped, so this
     stays safe on templates/fixtures. Opt-in (`--check-sources`) — it reads the analyzed repo's
-    source, a deliberate departure from map-only validation."""
+    source, a deliberate departure from map-only validation. `repo_root` (`--repo`) is tried first
+    when given (a map validated from outside its repo)."""
     problems: list[str] = []
-    roots = _source_roots(map_path)
+    roots = _source_roots(map_path, repo_root)
     for c in iter_domain_cards(text.splitlines()):
         if not c.source or not c.heading_ok or c.name == c.id:
             continue  # no anchor, or a malformed heading already flagged — nothing reliable to check
@@ -847,6 +861,36 @@ _UNCOVERED_MIN = 10         # …and at least this many are uncovered (floor —
 _COVERAGE_SAMPLE = 12       # cap the entity / type list in a warning so it stays readable
 
 
+# NON-ENTITY types the under-harvest count must exclude (V2): infrastructure / plumbing classes that
+# legitimately live in a domain dir but are not domain entities, so no entity card should represent
+# them. Matched by NAME SUFFIX (a `UserRepository` is persistence machinery, not a second User) and by
+# BASE (an `ABC` / `Protocol` subclass is an interface contract, not a stored thing). Without this
+# filter a repository/provider-heavy domain dir reads as "62 unmodelled types" when the model is fine.
+_NON_ENTITY_SUFFIXES = ("Repository", "Store", "Provider", "Protocol", "Error", "Exception",
+                        "Middleware")
+_NON_ENTITY_BASES = frozenset({"ABC", "Protocol"})
+
+
+def _base_name(base: ast.expr) -> str | None:
+    """The bare class name of a base expression: `ABC` -> 'ABC', `abc.ABC` -> 'ABC',
+    `Protocol[T]` -> 'Protocol'. None for anything else (a call, a computed base)."""
+    if isinstance(base, ast.Subscript):  # Protocol[T] / Generic[T] — look at the subscripted name
+        base = base.value
+    if isinstance(base, ast.Name):
+        return base.id
+    if isinstance(base, ast.Attribute):
+        return base.attr
+    return None
+
+
+def _is_non_entity_type(node: ast.ClassDef) -> bool:
+    """True for a class the domain-coverage count should skip: a plumbing suffix in its name, or an
+    `ABC` / `Protocol` base (an abstract contract is not an entity)."""
+    if node.name.endswith(_NON_ENTITY_SUFFIXES):
+        return True
+    return any(_base_name(b) in _NON_ENTITY_BASES for b in node.bases)
+
+
 def _type_covered(type_name: str, entity_names: list[str]) -> bool:
     """True if a code type is represented by some entity card — the same lenient, case-insensitive
     substring match `check_entity_sources` uses to ground an entity in its file, run in reverse: an
@@ -862,7 +906,7 @@ def _type_covered(type_name: str, entity_names: list[str]) -> bool:
     return False
 
 
-def check_domain_coverage(text: str, map_path: Path) -> list[str]:
+def check_domain_coverage(text: str, map_path: Path, repo_root: Path | None = None) -> list[str]:
     """Advisory (non-blocking, opt-in via --check-coverage): independently catch an UNDER-HARVESTED
     domain model — the thin-domain regression a directory-sliced harvest produces when no agent owns
     the T5 card slice — regardless of how the map was produced. Two sub-checks:
@@ -873,10 +917,13 @@ def check_domain_coverage(text: str, map_path: Path) -> list[str]:
       (b) Domain-type coverage vs the real code (repo read, the independent re-measurement): the
           named Python types in the entities' OWN source dirs that no entity card represents. Types
           are re-extracted with stdlib `ast` (top-level ClassDef — dataclasses/enums are ClassDefs
-          too); non-`.py` files are skipped (full multi-language symbol extraction is the pre-index's
-          job, not this stdlib check), and like every coverage check it re-measures the tree and never
-          reads the pre-index JSON (GR4). A no-op when no SOURCE file resolves (a template / a map run
-          outside its repo / sources under a backup dir).
+          too); NON-ENTITY types (plumbing suffixes like `*Repository`, `ABC`/`Protocol` bases — see
+          `_is_non_entity_type`) are excluded before counting, so a repository/provider-heavy dir is
+          not read as an under-modelled domain; non-`.py` files are skipped (full multi-language symbol
+          extraction is the pre-index's job, not this stdlib check), and like every coverage check it
+          re-measures the tree and never reads the pre-index JSON (GR4). A no-op when no SOURCE file
+          resolves (a template / a map run outside its repo / sources under a backup dir); pass
+          `repo_root` (`--repo`) when the map is validated from outside its repo.
 
     No-op when the map has no domain cards."""
     cards = list(iter_domain_cards(text.splitlines()))
@@ -907,7 +954,7 @@ def check_domain_coverage(text: str, map_path: Path) -> list[str]:
     # (b) Domain-type coverage — re-extract named types from the .py files in the entities' source
     # dirs and compare to the entity names. STDLIB ONLY: Python types via `ast`; non-Python files in a
     # domain dir are skipped here (the pre-index does multi-language symbol extraction, this does not).
-    roots = _source_roots(map_path)
+    roots = _source_roots(map_path, repo_root)
     domain_dirs: set[Path] = set()
     for c in cards:
         if c.source:
@@ -922,7 +969,7 @@ def check_domain_coverage(text: str, map_path: Path) -> list[str]:
             except (OSError, SyntaxError, ValueError):
                 continue  # an unreadable / unparseable file is not counted (never a silent miscount)
             for node in tree.body:  # top-level ClassDefs only (a nested helper class is not an entity)
-                if isinstance(node, ast.ClassDef):
+                if isinstance(node, ast.ClassDef) and not _is_non_entity_type(node):
                     types.setdefault(node.name, f)
     if types:
         entity_names = [c.name for c in cards if c.name != c.id]
@@ -961,6 +1008,19 @@ def collect_edges(text: str) -> list[tuple[str, str, str]]:
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    # --repo <root>: resolve anchors + coverage against this repo root (a map validated from outside
+    # its repo). Parsed FIRST — its VALUE is a bare path that must not be read as the map argument.
+    repo_root: Path | None = None
+    if "--repo" in argv:
+        i = argv.index("--repo")
+        if i + 1 >= len(argv):
+            print("ERROR: --repo needs a path (the analyzed repo's root)", file=sys.stderr)
+            return 2
+        repo_root = Path(argv[i + 1])
+        del argv[i:i + 2]
+        if not repo_root.is_dir():
+            print(f"ERROR: --repo {repo_root} is not a directory", file=sys.stderr)
+            return 2
     args = [a for a in argv if not a.startswith("-")]
     check_sources = "--check-sources" in argv  # opt-in: read SOURCE files to flag synthesized entities
     check_coverage = "--check-coverage" in argv  # opt-in: re-walk the repo to flag map-fidelity gaps
@@ -984,7 +1044,7 @@ def main(argv: list[str] | None = None) -> int:
     # definitions, or references.
     text = strip_fences(raw)
     problems, warnings = validate_map(
-        text, path, check_sources=check_sources, check_coverage=check_coverage)
+        text, path, check_sources=check_sources, check_coverage=check_coverage, repo_root=repo_root)
     _print_report(text, problems, warnings)
     return 1 if problems else 0
 
@@ -1014,12 +1074,15 @@ def _print_report(text: str, problems: list[str], warnings: list[str]) -> None:
 
 
 def validate_map(text: str, map_path: Path | None = None, *, check_sources: bool = False,
-                 check_coverage: bool = False) -> tuple[list[str], list[str]]:
+                 check_coverage: bool = False,
+                 repo_root: Path | None = None) -> tuple[list[str], list[str]]:
     """Run every schema-v1 check over already-fence-stripped map `text` and return (problems, warnings):
     blocking `problems` mean the map is NOT well-formed; `warnings` are advisory. This is the shared
     orchestration the CLI `main` formats and the eval profiler scores — one implementation, one parse,
     so validation and scoring can never drift. `map_path` is needed only for the file-reading opt-ins
-    (`check_sources`, `check_coverage`); pass it whenever either is set."""
+    (`check_sources`, `check_coverage`); pass it whenever either is set. `repo_root` (the `--repo`
+    flag) makes anchors + coverage resolve against that repo root FIRST — for a map validated from
+    outside its repo (an eval run dir); omitted, behavior is unchanged (map dir + its parent)."""
     if (check_sources or check_coverage) and map_path is None:
         raise ValueError("map_path is required when check_sources or check_coverage is set")
     defined_counts, gp_order = collect_defined(text)
@@ -1081,8 +1144,8 @@ def validate_map(text: str, map_path: Path | None = None, *, check_sources: bool
     warnings.extend(domain_warnings)
     if check_sources:
         assert map_path is not None  # guaranteed by the guard above when check_sources is set
-        problems.extend(check_entity_sources(text, map_path))
-        warnings.extend(check_anchor_existence(text, map_path))  # advisory: anchors that don't resolve to a real file/dir
+        problems.extend(check_entity_sources(text, map_path, repo_root))
+        warnings.extend(check_anchor_existence(text, map_path, repo_root))  # advisory: anchors that don't resolve to a real file/dir
 
     # Grouping checks — additive, no-op when there is no Subsystem/Parent column or SUBDOMAIN line.
     problems.extend(parent_problems)
@@ -1092,8 +1155,11 @@ def validate_map(text: str, map_path: Path | None = None, *, check_sources: bool
     warnings.extend(check_altitude_hints(text))  # advisory: a component that is really a group
     if check_coverage:  # opt-in map-fidelity: peer-level compression + absent modules (re-measured, GR4)
         assert map_path is not None  # guaranteed by the guard above when check_coverage is set
-        warnings.extend(check_compression_coverage(text, map_path.resolve().parent.parent))
-        warnings.extend(check_domain_coverage(text, map_path))  # under-harvested domain model (item 2)
+        # The tree to re-walk: the explicit --repo root when given, else the map's grandparent (the
+        # repo root for an in-repo `.coyodex/` map — the historical behavior, unchanged without --repo).
+        walk_root = repo_root if repo_root is not None else map_path.resolve().parent.parent
+        warnings.extend(check_compression_coverage(text, walk_root))
+        warnings.extend(check_domain_coverage(text, map_path, repo_root))  # under-harvested domain model (item 2)
     # Non-blocking nudge: a group whose ONLY child is another group of the same kind is a redundant
     # nesting level (it adds depth without grouping anything). Only nested maps can trigger it, so flat
     # maps stay silent.

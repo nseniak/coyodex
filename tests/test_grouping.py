@@ -1304,6 +1304,112 @@ def test_domain_coverage_noop_without_cards() -> None:
         assert validate_analysis.check_domain_coverage(text, map_path) == []
 
 
+def test_domain_coverage_excludes_non_entity_types() -> None:
+    # V2: plumbing classes (Repository/Store/Provider/Error/Exception/Middleware suffixes) and
+    # abstract contracts (ABC / Protocol bases) are NOT domain entities — a plumbing-heavy source dir
+    # must not read as an under-harvested domain model. Without the filter this dir counts 13 types
+    # with 12 uncovered (over both thresholds); with it, only `Order` remains — and it is modelled.
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        (root / ".coyodex").mkdir()
+        plumbing = "".join(
+            [f"class {n}Repository:\n    pass\n" for n in _NATO[:3]]
+            + [f"class {n}Store:\n    pass\n" for n in _NATO[3:6]]
+            + [f"class {n}Provider:\n    pass\n" for n in _NATO[6:8]]
+            + [f"class {n}Protocol:\n    pass\n" for n in _NATO[8:9]]
+            + ["class LoadError(Exception):\n    pass\n",
+               "class AuthMiddleware:\n    pass\n",
+               "import abc\nclass Port(abc.ABC):\n    pass\n",
+               "from typing import Protocol, TypeVar\nT = TypeVar('T')\n"
+               "class Reader(Protocol[T]):\n    pass\n"])
+        (root / "model.py").write_text("class Order:\n    pass\n" + plumbing, encoding="utf-8")
+        text = ("## T5 — Domain model (domain cards)\n\n"
+                "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [model.py](model.py#L1)\n")
+        map_path = root / ".coyodex" / "project-map.md"
+        map_path.write_text(text, encoding="utf-8")
+        warns = validate_analysis.check_domain_coverage(text, map_path)
+        assert not any("Under-harvested" in w for w in warns), warns
+
+
+# --- --repo root resolution (V1) --------------------------------------------------
+def make_deep_run_repo(d: str) -> tuple[str, Path, Path]:
+    """A repo (`repo/backend/src/model.py`) plus a map placed THREE levels deep OUTSIDE it (the eval's
+    run-dir shape: `runs/2026/run1/project-map.md`) whose anchors are repo-root-relative. Returns
+    (map_text, map_path, repo_root) — without `--repo` the map's dir/parent can't resolve them."""
+    root = Path(d)
+    repo = root / "repo"
+    (repo / "backend" / "src").mkdir(parents=True)
+    (repo / "backend" / "src" / "model.py").write_text("class Order:\n    pass\n", encoding="utf-8")
+    run_dir = root / "runs" / "2026" / "run1"
+    run_dir.mkdir(parents=True)
+    text = (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | Model | x | [model.py](backend/src/model.py#L1) |  |\n\n"
+        "## T5 — Domain model (domain cards)\n\n"
+        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+        "SOURCE: [model.py](backend/src/model.py#L1)\n"
+    )
+    map_path = run_dir / "project-map.md"
+    map_path.write_text(text, encoding="utf-8")
+    return text, map_path, repo
+
+
+def test_repo_root_resolves_deep_map_anchors() -> None:
+    # V1: with repo_root the deep map's `backend/src/...` anchors resolve (zero bogus "does not
+    # resolve" warnings); without it, the old two-root behavior is unchanged — and can't see the tree.
+    with tempfile.TemporaryDirectory() as d:
+        text, map_path, repo = make_deep_run_repo(d)
+        assert validate_analysis.check_anchor_existence(text, map_path, repo) == []
+        assert validate_analysis.check_anchor_existence(text, map_path) != []
+        assert validate_analysis.check_entity_sources(text, map_path, repo) == []  # Order IS in model.py
+
+
+def test_repo_root_grounds_entity_sources_from_outside() -> None:
+    # A synthesized entity is only catchable when repo_root lets the check READ the source file;
+    # without it the file is unresolvable and the check must skip (never false-flag) — so the eval's
+    # deep run dir used to silently lose this whole check.
+    with tempfile.TemporaryDirectory() as d:
+        text, map_path, repo = make_deep_run_repo(d)
+        ghost = text.replace("E1 — Order", "E1 — Ghost")
+        assert validate_analysis.check_entity_sources(ghost, map_path) == []       # unresolvable -> skipped
+        problems = validate_analysis.check_entity_sources(ghost, map_path, repo)   # resolved -> caught
+        assert problems and "Ghost" in problems[0], problems
+
+
+def test_validate_cli_repo_flag() -> None:
+    # End-to-end: `coyodex validate --check-sources --check-coverage --repo <root> <deep map>` walks
+    # the given tree (no "does not resolve" warnings); the same run without --repo warns.
+    with tempfile.TemporaryDirectory() as d:
+        _text, map_path, repo = make_deep_run_repo(d)
+        r = subprocess.run([*VALIDATOR, "--check-sources", "--check-coverage",
+                            "--repo", str(repo), str(map_path)], capture_output=True, text=True)
+        assert r.returncode == 0, r.stdout + r.stderr
+        assert "does not resolve" not in r.stdout, r.stdout
+        r2 = subprocess.run([*VALIDATOR, "--check-sources", str(map_path)],
+                            capture_output=True, text=True)
+        assert "does not resolve" in r2.stdout, r2.stdout
+
+
+def test_validate_cli_repo_flag_errors() -> None:
+    # `--repo` without a value, or with a non-directory, is a usage error (exit 2) — never a silent
+    # fallback to the wrong roots.
+    r = subprocess.run([*VALIDATOR, "--repo"], capture_output=True, text=True)
+    assert r.returncode == 2 and "--repo needs a path" in r.stderr, r.stderr
+    r2 = subprocess.run([*VALIDATOR, "--repo", "/nope/definitely/missing"],
+                        capture_output=True, text=True)
+    assert r2.returncode == 2 and "not a directory" in r2.stderr, r2.stderr
+
+
+def test_class_diagram_inheritance_arrow_labelled_inferred() -> None:
+    # Verb principle: the inheritance triangle trusts the authored `isA` verb (never code-verified),
+    # so it renders labelled inferred — a derivation, not an asserted fact (verbs prioritize, never gate).
+    md = ("## T5 — Domain model (domain cards)\n\n"
+          "**E1 — Base** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
+          "**E2 — Child** *(s)*\nMEANING: m\nFIELDS: id:int\nRELATIONS: isA E1\nSOURCE: [f](f#L2)\n")
+    mm = gen_viewer.gen_domain_mermaid(parse_map(md))
+    assert "E2 --|> E1 : isA (inferred)" in mm, mm
+
+
 def test_validator_lone_cardinality_hint() -> None:
     # Item 5: a single cardinality token (`contains 0..1 E2`) is malformed — cardinality is a PAIR
     # `sc→dc` (both sides or neither). The error names that exact cause so the author fixes it once.
@@ -1690,9 +1796,12 @@ def test_gen_domain_edge_card_two_namespaces_with_inner_and_crossing() -> None:
 def test_subsystem_card_bridges_to_contexts_owns_and_reads() -> None:
     by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_bridge_map()))
     s1 = by_sub["S1"]
-    assert "class SD1 subdomain" in s1 and "C1 -->|owns| SD1" in s1       # persists -> the subsystem OWNS the context
+    # The owns/reads split is VERB-DERIVED (persists/writes -> owns), so the label carries the
+    # inferred mark — the bridge is presented as a derivation, never asserted (verbs never gate).
+    # QUOTED: bare parens are a shape token in a flowchart edge label and fail the Mermaid parse.
+    assert "class SD1 subdomain" in s1 and 'C1 -->|"owns (inferred)"| SD1' in s1   # persists -> OWNS (inferred)
     s2 = by_sub["S2"]
-    assert "class SD1 subdomain" in s2 and "C2 -->|reads| SD1" in s2      # reads -> it merely CONSUMES it
+    assert "class SD1 subdomain" in s2 and 'C2 -->|"reads (inferred)"| SD1' in s2  # reads -> CONSUMES (inferred)
 
 
 def test_subdomain_card_bridges_to_subsystems_owns_and_reads() -> None:
@@ -1701,8 +1810,8 @@ def test_subdomain_card_bridges_to_subsystems_owns_and_reads() -> None:
     # the entity — the structure↔domain bridge seen from the domain side.
     sd1 = gen_viewer.domain_subdomain_mermaids(parse_map(make_bridge_map()))["SD1"]
     assert 'namespace SD1[' in sd1 and 'class E1["Order"] {' in sd1
-    assert 'class S1["Edge"]' in sd1 and "S1 --> E1 : owns" in sd1        # the writer subsystem OWNS the entity
-    assert 'class S2["Core"]' in sd1 and "S2 --> E1 : reads" in sd1       # the reader subsystem READS it
+    assert 'class S1["Edge"]' in sd1 and "S1 --> E1 : owns (inferred)" in sd1    # writer OWNS (verb-derived)
+    assert 'class S2["Core"]' in sd1 and "S2 --> E1 : reads (inferred)" in sd1   # reader READS (verb-derived)
     assert "style S1 fill:" in sd1                                        # subsystem box styled (amber), distinct from entities
 
 
@@ -1844,8 +1953,8 @@ def test_domain_edge_card_includes_subsystem_bridges() -> None:
     # arrow (C1 persists E1 -> S1 owns E1; C2 persists E3 -> S2 owns E3). Mirrors the subdomain card.
     card = gen_viewer.domain_edge_card_mermaids(parse_map(make_both_groupings_map()))["SD1>SD2"]
     assert 'namespace SD1[' in card and 'namespace SD2[' in card
-    assert 'class S1["Edge"]' in card and "S1 --> E1 : owns" in card
-    assert 'class S2["Core"]' in card and "S2 --> E3 : owns" in card
+    assert 'class S1["Edge"]' in card and "S1 --> E1 : owns (inferred)" in card
+    assert 'class S2["Core"]' in card and "S2 --> E3 : owns (inferred)" in card
     assert "style S1 fill:" in card                        # amber subsystem box, distinct from entities
 
 
@@ -1858,7 +1967,7 @@ def test_bridge_card_pairs_subsystem_and_subdomain() -> None:
     assert card.startswith("classDiagram")
     assert 'namespace S1["Edge"] {' in card and 'class C1["Front"]' in card    # subsystem frame + its component box
     assert 'namespace SD1[' in card and 'class E1["Order"] {' in card          # subdomain frame + entity (full, attrs)
-    assert "C1 --> E1 : owns" in card                                          # the C→E bridge edge
+    assert "C1 --> E1 : owns (inferred)" in card                               # the C→E bridge edge (verb-derived)
     assert "style C1 fill:" in card                                            # component box styled (indigo)
 
 

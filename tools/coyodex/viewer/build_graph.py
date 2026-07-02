@@ -279,6 +279,19 @@ def _backing_fields(node: Node) -> list[tuple[str, str, set[str]]]:
     return [(a.get("name", ""), a.get("type", ""), fk_targets(a.get("markers", ""))) for a in node.attrs]
 
 
+def parse_element_nodes(text: str) -> dict[str, Node]:
+    """Every DEFINED element as a parsed Node — table-defined ids (T1/T2/Subsystems/…) plus the T5
+    domain cards — keyed by id. The one id → (name, file) resolution, shared with consumers outside
+    the viewer (the audit's self-describing L2 claims), so an element is described exactly as the
+    viewer renders it — and the resolver survives the JSON-source migration with the parse layer.
+    Run on fence-free text (`strip_fences`); no default-subsystem injection, no GP/flow parsing."""
+    lines = text.splitlines()
+    nodes, _ = parse_nodes_edges(_tables(lines))
+    dnodes, _ = parse_domain(lines)
+    nodes.update(dnodes)
+    return nodes
+
+
 SERVICE_HINTS = re.compile(
     r"\b(agent|service|svc|server|system|external|idp|bot|daemon|cron|scheduler|worker|webhook|job)\b", re.I
 )

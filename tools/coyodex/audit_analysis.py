@@ -17,8 +17,9 @@ Three tiers were designed (see ``method.md`` "The adversarial pass"):
   L3  coverage oracle     — code → map enumeration of what SHOULD be mapped; extends
                             ``validate --check-coverage`` (planned, not in this module yet).
 
-Stdlib-only. Reuses the schema-v1 grammar and the validator's edge/table helpers, so audit reads the
-map through exactly the same parse the validator and renderer use — never a second, drifting grammar.
+Stdlib-only. Reuses the schema-v1 grammar, the validator's edge/table helpers, and the viewer's
+element parse (`parse_element_nodes` — for the self-describing L2 claims), so audit reads the map
+through exactly the same parse the validator and renderer use — never a second, drifting grammar.
 
 Findings are severity-ranked:
   CONTRADICTION — the two layers disagree; a defect by construction (blocks, like a validator error).
@@ -35,6 +36,7 @@ from pathlib import Path
 
 from coyodex import schema_v1
 from coyodex.validate_analysis import collect_edges, collect_role_names, iter_tables
+from coyodex.viewer.build_graph import parse_element_nodes
 
 # WRITE = the C→E verbs that ESTABLISH or MUTATE an entity's stored state: `persists` / `writes` /
 # `creates`. The method's domain-link vocabulary is `C — persists/writes/reads → E` (method.md), and
@@ -375,6 +377,34 @@ class WorkItem:
     claim: str
     anchor: str | None   # a `file:line` the grounder starts from, if the map gives one
     why_risky: str
+    # Self-describing context (G1): each endpoint's display name + source file, resolved from the
+    # SAME parse the viewer renders from — so a fresh-context skeptic given only this item can find
+    # the code with NO map file. The short `claim` stays the stable key; `detail` is additive.
+    detail: str | None = None
+
+
+def _endpoint_detail(text: str) -> "dict[str, str]":
+    """id → 'id = Name (file)' for every defined element — the G1 resolver. Built on the shared
+    parse layer (`parse_element_nodes`), never a second regex pass, so it names elements exactly as
+    the viewer does and survives the JSON-source migration."""
+    out: dict[str, str] = {}
+    for nid, node in parse_element_nodes(text).items():
+        desc = f"{nid} = {node.name}" if node.name and node.name != nid else nid
+        if node.file:
+            desc += f" ({node.file})"
+        out[nid] = desc
+    return out
+
+
+def _edge_detail(src: str | None, dst: str | None, described: "dict[str, str]") -> str | None:
+    """The `detail` string for an edge claim: 'From: <id = Name (file)>; To: <…>'. None when neither
+    endpoint resolves (a malformed row — the validator's problem, not the worklist's)."""
+    parts: list[str] = []
+    if src and src in described:
+        parts.append(f"From: {described[src]}")
+    if dst and dst in described:
+        parts.append(f"To: {described[dst]}")
+    return "; ".join(parts) if parts else None
 
 
 def _folded_dep_ids(text: str) -> set[str]:
@@ -413,7 +443,13 @@ def l2_worklist(text: str) -> list[WorkItem]:
     (2) every `C→D` edge into an external dependency (any verb — the audit→Elastic system-boundary
     class), (3) every `C→E` ownership edge, (4) every remaining element→element edge. The ONLY thing
     filtered out is an edge into a dep EXPLICITLY tagged `framework`/`library` (a false "uses <lib>" is
-    benign, and that is the high-count bucket); only an explicit fold-tag is trusted, never inference."""
+    benign, and that is the high-count bucket); only an explicit fold-tag is trusted, never inference.
+
+    Each edge item is SELF-DESCRIBING (G1): its `detail` carries both endpoints' names + source files
+    (resolved via the shared parse), so a skeptic needs no map file to locate the code. The worklist is
+    DE-DUPLICATED by claim string (G4): a map that repeats an edge row yields ONE item (first
+    occurrence, its anchor kept), so the skeptic fan-out count is deterministic."""
+    described = _endpoint_detail(text)
     items: list[WorkItem] = []
 
     # (1) Security & auth table rows — each is an "actually-does" claim with a real risk if false.
@@ -474,33 +510,44 @@ def l2_worklist(text: str) -> list[WorkItem]:
             dst_txt = dst.group(0) if dst else cells[2]
             claim = f"{src_txt} {verb} {dst_txt}"
             anchor = _anchor(where)
+            detail = _edge_detail(src.group(0) if src else None,
+                                  dst.group(0) if dst else None, described)
             if verb in ("enforces", "encrypts"):
                 items.append(WorkItem(
-                    claim=claim, anchor=anchor,
+                    claim=claim, anchor=anchor, detail=detail,
                     why_risky=f"'{verb}' is a security-critical relationship — verify the code actually does it."))
             elif dst is not None and dst.group(0).startswith("D"):
                 if dst.group(0) in folded:
                     continue  # explicit framework/library — a false 'uses <lib>' edge is benign
                 dep_items.append(WorkItem(
-                    claim=claim, anchor=anchor,
+                    claim=claim, anchor=anchor, detail=detail,
                     why_risky=(f"external-dependency data-flow edge — no deterministic gate reads "
                                f"{src_txt}'s code to confirm it reaches {dst_txt}; ground the call site "
                                f"against the code (the audit→Elastic false-edge class).")))
             elif dst is not None and dst.group(0).startswith("E"):
                 entity_items.append(WorkItem(
-                    claim=claim, anchor=anchor,
+                    claim=claim, anchor=anchor, detail=detail,
                     why_risky=(f"domain-model ownership edge — verify {src_txt}'s code actually "
                                f"'{verb}' {dst_txt}; a wrong persists/writes/reads mis-wires the "
                                f"subsystem→subdomain bridge.")))
             elif src is not None and dst is not None:
                 other_items.append(WorkItem(
-                    claim=claim, anchor=anchor,
+                    claim=claim, anchor=anchor, detail=detail,
                     why_risky=(f"backbone edge — no deterministic gate confirms {src_txt}'s code "
                                f"'{verb}' {dst_txt}; ground the call site against the code.")))
     items.extend(dep_items)
     items.extend(entity_items)
     items.extend(other_items)
-    return items
+    # G4: de-duplicate by claim string, keeping the FIRST occurrence (its anchor + rank position). A
+    # duplicated edge row otherwise yields two identical skeptic tasks — and a non-deterministic
+    # collapse downstream when a consumer dedupes ad hoc.
+    seen: set[str] = set()
+    unique: list[WorkItem] = []
+    for it in items:
+        if it.claim not in seen:
+            seen.add(it.claim)
+            unique.append(it)
+    return unique
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────────────────────────
@@ -523,6 +570,8 @@ def _format(findings: list[Finding], worklist: list[WorkItem]) -> str:
         for i, w in enumerate(worklist, 1):
             anchor = f"  [{w.anchor}]" if w.anchor else ""
             out.append(f"  {i}. {w.claim}{anchor}")
+            if w.detail:  # G1: the claim carries its endpoints' names + files — no map needed
+                out.append(f"     who: {w.detail}")
             out.append(f"     risk: {w.why_risky}")
     else:
         out.append("L2 grounding worklist: no high-risk claims detected to ground.")

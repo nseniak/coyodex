@@ -238,6 +238,30 @@ def make_l2_dep_map() -> str:
     )
 
 
+def make_duplicated_edge_map() -> str:
+    """`make_l2_dep_map` with its C→D `emits` row DUPLICATED — the G4 dedupe shape (a repeated edge
+    row must not become two skeptic tasks)."""
+    return make_l2_dep_map() + "| C1 | emits | D1 | ship logs | audit_repo.py#L8 |\n"
+
+
+def make_described_map() -> str:
+    """Named components with file anchors, a named dep, and an entity card with SOURCE — so worklist
+    claims can carry self-describing From/To detail (G1)."""
+    return (
+        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
+        "| **C1** | AuthGate | x | [gate.py](src/auth/gate.py#L10) |  |\n"
+        "| **C2** | PolicyStore | x | [policy.py](src/policy.py#L5) |  |\n\n"
+        "## T2\n| ID | Dependency | Type | Kind | Purpose |\n|---|---|---|---|---|\n"
+        "| **D1** | Elastic | search | datastore | logs |\n\n"
+        "## T5 — Domain model\n\n"
+        "**E1 — Order** *(orders)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [order.py](src/order.py#L1)\n\n"
+        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
+        "| C1 | enforces | C2 | policy | gate.py#L5 |\n"
+        "| C1 | emits | D1 | logs | gate.py#L8 |\n"
+        "| C2 | persists | E1 | store | policy.py#L9 |\n"
+    )
+
+
 def run_audit(md: str) -> tuple[int, str]:
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
         f.write(md)
@@ -405,6 +429,38 @@ def test_l2_worklist_ranks_backbone_tiers() -> None:
     order = [claims.index(c) for c in
              ("C1 enforces C2", "C1 emits D1", "C1 persists E1", "C1 calls C3")]
     assert order == sorted(order), claims
+
+
+def test_l2_worklist_dedupes_by_claim() -> None:
+    """G4: a duplicated edge row yields exactly ONE worklist claim — the first occurrence, its anchor
+    kept — so the skeptic fan-out count is deterministic (no downstream ad-hoc collapse)."""
+    items = [w for w in audit_analysis.l2_worklist(make_duplicated_edge_map())
+             if w.claim == "C1 emits D1"]
+    assert len(items) == 1, items
+    assert items[0].anchor == "audit_repo.py#L8", items
+
+
+def test_l2_worklist_claims_are_self_describing() -> None:
+    """G1: each edge item's `detail` carries both endpoints' names + source files, so a fresh-context
+    skeptic given only the item can locate the code with NO map file. The short claim (`C1 enforces
+    C2`) stays the stable key."""
+    items = {w.claim: w for w in audit_analysis.l2_worklist(make_described_map())}
+    d = items["C1 enforces C2"].detail
+    assert d is not None, items
+    assert "C1 = AuthGate" in d and "src/auth/gate.py#L10" in d, d
+    assert "C2 = PolicyStore" in d and "src/policy.py#L5" in d, d
+    e = items["C2 persists E1"].detail
+    assert e is not None and "E1 = Order" in e and "src/order.py#L1" in e, e
+    dep = items["C1 emits D1"].detail
+    assert dep is not None and "D1 = Elastic" in dep, dep
+
+
+def test_l2_worklist_detail_reaches_the_cli_output() -> None:
+    """The self-describing detail is printed (a `who:` line), so an agent driving the CLI — not the
+    Python API — can hand a skeptic a claim it can resolve without the map."""
+    code, out = run_audit(make_described_map())
+    assert code == 0, out
+    assert "who: From: C1 = AuthGate (src/auth/gate.py#L10)" in out, out
 
 
 # --- built-in runner ------------------------------------------------------------

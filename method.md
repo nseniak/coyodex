@@ -178,6 +178,14 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   `source — verb — target` so the reader drills from either end. Verb vocabulary:
   uses, calls, reads, writes, emits, listens-to, routes-to, enforces, persists, encrypts,
   extends, implements.
+- **Verbs may PRIORITIZE, never GATE.** A verb is an authored word — no deterministic check verifies
+  it against the code. So a verb may set *attention* (the audit ranks its L2 worklist by verb —
+  security verbs like `enforces`/`encrypts` first) but must never decide *truth*: no gate may branch
+  pass/fail on a verb, no claim may be dropped from grounding because its verb sounds benign, and a
+  rendered fact derived from a verb is presented as **inferred**, never asserted. Two viewer facts are
+  verb-derived and labelled `(inferred)` accordingly: the subsystem→subdomain bridge's **owns/reads**
+  split (owns = `persists`/`writes`) and the class-diagram **inheritance** arrows (`isA`). If a
+  derived fact matters, ground the underlying edge (L2), don't trust the verb.
 - **The edge list spans C↔C, C↔D, *and* C→E.** It is not only component↔component: a component's
   link to the domain model is a backbone edge `C — persists/writes/reads → E` (its repository
   `persists` the entity; a service/controller `reads` it — **direct** use only, never a transitive
@@ -358,6 +366,20 @@ lead confirms **every prescribed slice came back with its sections** — in part
 returned per-entity cards *with* RELATIONS, and that each agent that wrote `(none found)` is genuinely
 empty rather than under-delivered. Re-ping any agent that dropped or thinned its sections; a missing
 section caught here is cheap, one discovered after synthesis is a re-trace.
+
+**Expected yield per slice — judge each return against its size (under-delivery guidance).** A
+well-formed return can still be an under-delivered one: a slice that comes back with far fewer
+components than its size suggests has *abstracted where it should have harvested*. Set the
+expectation from the pre-index weight map (LOC + file count per directory — the denominators are
+already computed) **before** reading the returns, roughly: **expect at least one component per
+top-level sub-unit of the slice** (each subdirectory / module cluster that has its own purpose), and
+treat **fewer than ~1 component per 3–5 kLOC** of slice mass as suspicious. The two signals compound:
+a 40-file, 12-kLOC slice with 6 subdirs that returns 1–2 components is under-delivered even though
+every row validates. Re-ping such a slice **with the expectation stated** ("this dir holds 6 sub-units
+and ~12 kLOC; return its real units or say per unit why it folds") — a size-blind re-ping just gets
+the same answer back. These are attention thresholds, not gates (a heavy *generated* dir still
+legitimately folds — the pre-index guardrail applies); a cheap deterministic backstop exists after the
+fact in `validate --check-coverage`, which flags folded sibling subdirs and never-referenced dirs.
 
 **Output files — map + diagrams.** Build writes a **new** baseline and overwrites any existing
 `.coyodex/project-map.md`, so you should only be here for a first map or a user-confirmed rebuild —

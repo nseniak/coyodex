@@ -286,7 +286,10 @@ def _class_relation_line(e: dict[str, Any]) -> str:
     label = _relation_label(e)
     suffix = f" : {label}" if label else ""
     if kind == "inheritance":
-        return f"  {s} {arrow} {d}{suffix}"
+        # The inheritance triangle is a VERB-DERIVED fact: it trusts the authored `isA`/`extends`
+        # verb, which no gate verifies against the code — so it is labelled inferred, not asserted
+        # (method.md: verbs may prioritize, never gate). Never field-backed, so no label to clash.
+        return f"  {s} {arrow} {d} : {_safe_label(str(e.get('verb') or 'isA'))} {INFERRED_MARK}"
     left = f'"{e["src_card"]}" ' if e.get("src_card") else ""
     right = f' "{e["dst_card"]}"' if e.get("dst_card") else ""
     return f"  {s} {left}{arrow}{right} {d}{suffix}"
@@ -400,6 +403,18 @@ ELEMENT_TINT = {
 # bridge arrow label, surfacing a subdomain that many subsystems own/read as a shared kernel.
 _OWN_VERBS = {"persists", "writes"}
 
+# VERB-DERIVED facts are INFERRED, never asserted (method.md: verbs may prioritize, never gate). The
+# owns/reads split and the class-diagram inheritance arrows trust an authored verb no gate verifies
+# against code, so their rendered labels carry this mark — the reader sees a derivation, not a fact.
+INFERRED_MARK = "(inferred)"
+
+
+def _bridge_rel(verb: str) -> str:
+    """The subsystem→subdomain bridge arrow's label for a C→E edge verb: `owns`/`reads` + the inferred
+    mark. One resolution shared by every bridge drawing (subsystem card, subdomain card, bridge card),
+    so the verb-derived split is computed — and softened — in exactly one place."""
+    return f"{'owns' if verb.lower() in _OWN_VERBS else 'reads'} {INFERRED_MARK}"
+
 
 def gen_domain_container_mermaid(graph: GraphDict) -> str:
     """Domain Container altitude: each top-level subdomain (`SD`) a box labelled `Name (N)` (N = its
@@ -504,7 +519,7 @@ def _subsystem_bridge_lines(graph: GraphDict, member_ids: set[str]) -> list[str]
             sub = _top_subsystem(graph, s)
             if sub:
                 nb_subs.add(sub)
-                bridges.add((sub, d, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
+                bridges.add((sub, d, _bridge_rel(str(e["verb"]))))
     out: list[str] = []
     for sub in sorted(nb_subs):  # collapsed neighbour-subsystem boxes (indigo, like a subsystem anywhere)
         out.append(f'  class {sub}["{_safe_label(str(nodes[sub]["name"]))}"]')
@@ -662,7 +677,7 @@ def gen_bridge_card_mermaid(graph: GraphDict, sid: str, sdid: str) -> str:
         if str(nodes.get(s, {}).get("kind")) != "component" or str(nodes.get(d, {}).get("kind")) != "entity":
             continue
         if _in_subtree(graph, s, sid) and _in_subtree(graph, d, sdid):
-            rel = "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"
+            rel = _bridge_rel(str(e["verb"]))
             bridges.add((str(_child_under(graph, s, sid)), str(_child_under(graph, d, sdid)), rel))
     for bs, bd, rel in sorted(bridges):
         lines.append(f"  {bs} --> {bd} : {rel}")
@@ -833,7 +848,7 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
             if bs == s:
                 sd = _top_subdomain(graph, d)
                 if sd:
-                    bridges.add((s, sd, "owns" if str(e["verb"]).lower() in _OWN_VERBS else "reads"))
+                    bridges.add((s, sd, _bridge_rel(str(e["verb"]))))
             continue
         if ks == "entity":
             continue
@@ -872,7 +887,9 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
     for src, dst in sorted(childcross):  # nested child-subsystem arrows (aggregated; box drills in)
         lines.append(f"  {src} --> {dst}")
     for src, sd, rel in sorted(bridges):  # bridge arrows: member -> subdomain (owns / reads)
-        lines.append(f"  {src} -->|{rel}| {sd}")
+        # QUOTED label: the inferred mark's parentheses are a shape token in a bare flowchart edge
+        # label ('PS'), so unquoted they fail the whole diagram's parse; quoting renders them verbatim.
+        lines.append(f'  {src} -->|"{rel}"| {sd}')
     lines.append(f"  classDef component {COMPONENT_STYLE};")
     lines.append(f"  classDef dep {DEP_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
