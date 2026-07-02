@@ -19,6 +19,7 @@ resolved here — that is `coyodex validate`'s job on the assembled result (the 
 from __future__ import annotations
 
 import json
+import re
 import sys
 from dataclasses import fields
 from pathlib import Path
@@ -33,6 +34,8 @@ from coyodex.model import (
 )
 
 _SINGLETONS = ("title", "goal", "commit", "committed", "built", "tests_note")
+
+_MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
 def load_fragment(text: str, label: str) -> ProjectModel:
@@ -86,6 +89,77 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]]) -> tuple[ProjectModel
     return out, problems
 
 
+def normalize_anchors(m: ProjectModel, repo_root: Path | None) -> list[str]:
+    """Normalize the anchor-format asymmetry agents most often get wrong (every Phase-2 fragment
+    came back md-linked): `components[].anchor` and `entities[].source` must be BARE repo-relative
+    refs — an md link is reduced to its href; group anchors (`subsystems`/`subdomains`) must be md
+    LINKS — a bare path is wrapped, keeping an authored link's label untouched; a directory anchor
+    gets its trailing `/` when `repo_root` (best-effort: the parent of --out) shows it is a
+    directory. Returns one note per normalized field, so the fix-up is visible, never silent."""
+    notes: list[str] = []
+
+    def bare(cell: str) -> str:
+        hit = _MD_LINK.search(cell)
+        return hit.group(1).strip() if hit else cell.strip()
+
+    def with_dir_slash(href: str) -> str:
+        if repo_root is None or not href or href.endswith("/") or "#" in href:
+            return href
+        return href + "/" if (repo_root / href).is_dir() else href
+
+    def note(owner: str, field_name: str, fixed: str) -> None:
+        notes.append(f"{owner}: {field_name} normalized to '{fixed}'")
+
+    for c in m.components:
+        if c.anchor:
+            fixed = with_dir_slash(bare(c.anchor))
+            if fixed != c.anchor:
+                note(c.id, "anchor", fixed)
+                c.anchor = fixed
+    for e in m.entities:
+        if e.source:
+            fixed = bare(e.source)
+            if fixed != e.source:
+                note(e.id, "source", fixed)
+                e.source = fixed
+    for g in (*m.subsystems, *m.subdomains):
+        if not g.anchor:
+            continue
+        hit = _MD_LINK.search(g.anchor)
+        if hit:  # already a link — only repair a missing directory slash, keep the label
+            href = hit.group(1).strip()
+            fixed_href = with_dir_slash(href)
+            if fixed_href != href:
+                fixed = g.anchor.replace(f"({href})", f"({fixed_href})")
+                note(g.id, "anchor", fixed)
+                g.anchor = fixed
+        else:
+            href = with_dir_slash(g.anchor.strip())
+            label = href.rstrip("/").rsplit("/", 1)[-1] or href
+            fixed = f"[{label}]({href})"
+            note(g.id, "anchor", fixed)
+            g.anchor = fixed
+    return notes
+
+
+def ensure_fragments_ignored(out_dir: Path) -> bool:
+    """Make `<out>/.gitignore` ignore `build-fragments/` (the method's scratch dir for agents'
+    fragments) — the tool writes the ignore entry the method promises, so a build in a normal
+    checkout never leaves a dirty tree for the eval's pin guard to refuse. Returns True when the
+    entry was added (False = already present)."""
+    gi = out_dir / ".gitignore"
+    line = "build-fragments/"
+    if gi.exists():
+        content = gi.read_text(encoding="utf-8")
+        if line in (ln.strip() for ln in content.splitlines()):
+            return False
+        sep = "" if (not content or content.endswith("\n")) else "\n"
+        gi.write_text(content + sep + line + "\n", encoding="utf-8")
+    else:
+        gi.write_text(line + "\n", encoding="utf-8")
+    return True
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv or not argv:
@@ -94,7 +168,11 @@ def main(argv: list[str] | None = None) -> int:
               "(+ the generated markdown and HTML views) in <dir>. Each fragment is a PARTIAL\n"
               "model (any subset of the top-level arrays; one header fragment may carry\n"
               "title/goal/commit). A malformed fragment or a duplicate ID fails loudly with the\n"
-              "fragment named. Then run the usual invariant: validate → audit → render.")
+              "fragment named. Anchor formats are normalized (a component/entity md-link anchor\n"
+              "becomes its bare href; a bare group anchor becomes a link; a directory anchor gets\n"
+              "its trailing '/', checked against <dir>'s parent as the repo root) — each fix-up is\n"
+              "printed. <dir>/.gitignore gets a 'build-fragments/' entry so the scratch dir never\n"
+              "dirties the tree. Then run the usual invariant: validate → audit → render.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
     out_dir: Path | None = None
     frags: list[Path] = []
@@ -141,6 +219,10 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: {pr}", file=sys.stderr)
         print("ASSEMBLY FAILED: merge conflicts above; nothing was written.", file=sys.stderr)
         return 1
+    # Best-effort repo root for the directory-slash check: the map dir sits directly under the
+    # analyzed repo's root (`--out .coyodex`), so its parent is the root in the normal layout.
+    for n in normalize_anchors(model, out_dir.resolve().parent):
+        print(f"note: {n}")
     from coyodex.viewer.gen_viewer import write_html
     from coyodex.views import model_to_graph, model_to_markdown
 
@@ -148,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "project-map.json").write_text(to_canonical_json(model), encoding="utf-8")
     (out_dir / "project-map.md").write_text(model_to_markdown(model), encoding="utf-8")
     write_html(model_to_graph(model), out_dir / "project-map.html", None)
+    if ensure_fragments_ignored(out_dir):
+        print(f"note: added 'build-fragments/' to {out_dir / '.gitignore'}")
     print(f"Assembled {len(parts)} fragment(s) -> {out_dir / 'project-map.json'} "
           f"(+ generated md/html views)\n"
           f"Next: coyodex validate {out_dir / 'project-map.json'} --check-sources")

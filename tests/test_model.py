@@ -41,7 +41,7 @@ def make_model(extra_order: tuple[str, ...] = ("Zeta", "Alpha")) -> ProjectModel
     m.use_cases = [UseCase(id="UC1", name="View order", actor="Andy", trigger_outcome="opens → sees")]
     m.golden_path = [GoldenStep(id="GP1", title="Andy views the order", uc="UC1")]
     m.subsystems = [Group(id="S1", name="Core", purpose="everything")]
-    extra = {k: k.lower() for k in extra_order}
+    extra: dict[str, object] = {k: k.lower() for k in extra_order}
     m.components = [
         Component(id="C1", name="Viewer", subsystem="S1", purpose="shows orders",
                   entry_point="[viewer.py](src/viewer.py#L1)", extra=extra),

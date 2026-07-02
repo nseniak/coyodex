@@ -342,7 +342,8 @@ each agent return the same row shapes with the same verified/inferred discipline
 barrier synthesis clean. Fill the «angle-bracket» parts:
 
 > You are harvesting «structural / operational / build» facts for a coyodex codebase map.
-> Read these files completely, then return ONLY the rows below — do **not** write any files.
+> Read these files completely, then produce ONLY the rows below — the only file you may write is
+> your own fragment file (see the output rule below).
 >
 > **Files:** «absolute paths this agent owns; list a directory first, then read each file».
 > **Background:** «what the main agent already learned about this slice, handed down so you
@@ -355,9 +356,16 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > section.** Your output is **ONE JSON fragment** — a partial map model per
 > [method/model.md](method/model.md): an object holding only the top-level arrays your slice owns
 > («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`, `security`,
-> `config`»), each entry using that array's exact field names. Return it as a fenced ```json block
-> (the lead saves it verbatim for `coyodex assemble`); an empty slice is an empty array plus a
-> one-line note above the block.
+> `config`»), each entry using that array's exact field names. **WRITE the fragment to
+> `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
+> one-line inventory (row count per array)** — never inline the fragment in your reply: a large
+> fragment (a T5 return routinely exceeds 50 KB) is silently truncated by sub-agent result caps,
+> and a truncated fragment fails `assemble`. An empty slice is an empty array plus a one-line note.
+> **Anchor formats** (`assemble` normalizes the common drifts, but write them right):
+> `components[].anchor` and `entities[].source` are **bare** repo-root-relative refs
+> (`path/to/file.py#L120`; a directory anchor keeps its trailing slash, `path/dir/`); group anchors
+> (`subsystems[].anchor` / `subdomains[].anchor`) are **markdown links** `[dir](path/dir/)`; an edge
+> `where` and an `entry_points[].entity` are markdown links `[file](path#Lnnn)`.
 > **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
 > also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
 > `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
@@ -440,10 +448,12 @@ can bundle the map **and** the exact transcript deterministically. Run it in the
 session, not a delegated sub-agent, so the id recorded is the driver conversation's. **Commit
 `provenance.json`** with the map + diagram.
 
-**Assemble the model from the agents' fragments — never hand-author the stored file.** Save each
-agent's returned JSON fragment verbatim to a scratch dir (`.coyodex/build-fragments/<agent>.json`,
-git-ignored), write one small `header.json` fragment yourself (`title`, `goal`, the pin fields),
-then run:
+**Assemble the model from the agents' fragments — never hand-author the stored file.** Each agent
+wrote its JSON fragment to the scratch dir (`.coyodex/build-fragments/<agent>.json` — the harvest
+prompt's output rule); `coyodex assemble` itself writes a `.coyodex/.gitignore` entry ignoring
+`build-fragments/`, so the scratch dir never dirties the tree (you may still delete it after a
+successful assemble — the model is the record). Write one small `header.json` fragment yourself
+(`title`, `goal`, the pin fields), then run:
 
 ```
 .venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex

@@ -89,6 +89,15 @@ Semantics carried over from schema v1, stated on the fields:
   (`src_card`/`dst_card`, both or neither); `how` is the plain-text note for field-less relations.
 - **`deps[].kind`** is the closed Context vocabulary (`datastore`/`messaging`/`service`/`platform`/
   `framework`/`library`); when `null` it is inferred from `type`, as before.
+- **`extra`** (on components and deps) holds non-standard authored columns by header; its values
+  are **any JSON value** (string, number, boolean, null, list, object) — agents return natural
+  JSON, the generated views render a non-string value as compact JSON text.
+- **Anchor formats.** `components[].anchor` and `entities[].source` are **bare** repo-root-relative
+  refs (`path/file.py#L120`; a directory anchor ends with `/`); group anchors
+  (`subsystems[].anchor` / `subdomains[].anchor`) are **markdown links** `[dir](path/dir/)`;
+  `edges[].where` and `entry_points[].entity` are markdown links. `coyodex assemble` normalizes the
+  common drifts (md-linked component anchors, bare group anchors, missing directory slashes) and
+  prints each fix-up.
 
 ## New fields (schema v2 only — each closes a measured v1 gap)
 
@@ -137,5 +146,10 @@ coyodex assemble <fragment.json>… --out .coyodex/
 
 `assemble` validates every fragment against the schema (one bad fragment fails alone, with its
 path named), merges by ID (a duplicate ID across fragments is an error, never a silent overwrite),
-and serializes the canonical `project-map.json`. Validity of the stored file is guaranteed by the
-serializer, not by the LLM. Then the usual invariant runs unchanged: `validate → audit → render`.
+normalizes anchor formats (printed, never silent), and serializes the canonical
+`project-map.json`. Validity of the stored file is guaranteed by the serializer, not by the LLM.
+It also writes a `build-fragments/` entry into `<out>/.gitignore`, so the fragments scratch dir
+(`.coyodex/build-fragments/`) never dirties the tree. Agents WRITE their fragments to files in
+that dir and return only the path (a large fragment returned inline gets truncated by sub-agent
+result caps — see method.md's harvest prompt). Then the usual invariant runs unchanged:
+`validate → audit → render`.

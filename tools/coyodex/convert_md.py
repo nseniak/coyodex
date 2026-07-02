@@ -264,8 +264,9 @@ def convert_text(raw: str) -> ConvertResult:
                 dm = schema_v1.DEF_ID_CELL.search(_cell(cells, 0))
                 if not dm:
                     continue
-                extra = {headers[i]: cells[i].strip() for i in range(1, len(cells))
-                         if i < len(headers) and hl[i] not in known and cells[i].strip()}
+                extra: dict[str, object] = {
+                    headers[i]: cells[i].strip() for i in range(1, len(cells))
+                    if i < len(headers) and hl[i] not in known and cells[i].strip()}
                 m.components.append(Component(
                     id=dm.group(1), name=_cell(cells, ni),
                     subsystem=_membership(cells, hl, dm.group(1), warnings),
@@ -281,8 +282,9 @@ def convert_text(raw: str) -> ConvertResult:
                 dm = schema_v1.DEF_ID_CELL.search(_cell(cells, 0))
                 if not dm:
                     continue
-                extra = {headers[i]: cells[i].strip() for i in range(1, len(cells))
-                         if i < len(headers) and hl[i] not in known and cells[i].strip()}
+                extra: dict[str, object] = {
+                    headers[i]: cells[i].strip() for i in range(1, len(cells))
+                    if i < len(headers) and hl[i] not in known and cells[i].strip()}
                 m.deps.append(Dep(
                     id=dm.group(1), name=_cell(cells, ni), kind=_opt(_cell(cells, ki)),
                     type=_cell(cells, ti), used_for=_cell(cells, ui),

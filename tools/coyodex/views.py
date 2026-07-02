@@ -11,6 +11,7 @@ Stdlib-only. Both functions are pure (same model → same bytes).
 """
 from __future__ import annotations
 
+import json
 import re
 from dataclasses import asdict
 
@@ -38,6 +39,12 @@ def _esc(cell: str) -> str:
     """A model text value as a table cell: literal pipes re-escaped (the schema-v1 rule), newlines
     flattened so one row stays one line."""
     return cell.replace("|", r"\|").replace("\n", " ").strip()
+
+
+def _extra_str(v: object) -> str:
+    """An `extra` value as display text: a string passes through; any other JSON value (the model
+    accepts them in `extra`) renders as compact JSON."""
+    return v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
 
 
 def _row(cells: list[str]) -> str:
@@ -149,7 +156,7 @@ def model_to_markdown(m: ProjectModel) -> str:
                    c.depends_on]
             if with_conf:
                 row.append(c.confidence)
-            row += [c.extra.get(k, "") for k in extra]
+            row += [_extra_str(c.extra.get(k, "")) for k in extra]
             rows.append(row)
         section("T1 — Components", _table(headers, rows))
     if m.deps:
@@ -160,7 +167,7 @@ def model_to_markdown(m: ProjectModel) -> str:
                    d.confidence]
             if linked:
                 row.append("yes" if d.deployment_linked else "")
-            row += [d.extra.get(k, "") for k in extra]
+            row += [_extra_str(d.extra.get(k, "")) for k in extra]
             rows.append(row)
         section("T2 — External dependencies", _table(headers, rows))
     if m.run_commands:
@@ -285,14 +292,16 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     for c in m.components:
         fields = {"Component": c.name, "Subsystem": c.subsystem or "", "Purpose": c.purpose,
                   "Entry point": c.entry_point or "", "Depends on": c.depends_on,
-                  "Conf.": c.confidence, **c.extra}
+                  "Conf.": c.confidence,
+                  **{k: _extra_str(v) for k, v in c.extra.items()}}
         # `anchor` is a bare `path#Lnnn` (the v2 canonical home); the fallback is the v1 heuristic —
         # the first md link across the row's cells (usually the entry point).
         href = c.anchor or _first_href(c.entry_point, c.purpose, c.depends_on)
         nodes[c.id] = _node(c, "component", c.name, href, fields, c.subsystem)
     for d in m.deps:
         fields = {"Name": d.name, "Kind": d.kind or "", "Type": d.type, "Used for": d.used_for,
-                  "Where configured": d.where_configured, "Conf.": d.confidence, **d.extra}
+                  "Where configured": d.where_configured, "Conf.": d.confidence,
+                  **{k: _extra_str(v) for k, v in d.extra.items()}}
         node = _node(d, "dep", d.name, _first_href(d.where_configured, d.used_for), fields, None)
         node.dep_kind = schema_v1.classify_dep(d.kind or "", d.type)
         nodes[d.id] = node

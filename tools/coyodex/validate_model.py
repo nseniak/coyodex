@@ -295,12 +295,13 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for c in m.components:
         if c.anchor and not url.match(c.anchor):
             out.append((f"{c.id} anchor", c.anchor))
-        href = _first_link_of(c, [c.entry_point, c.purpose, c.depends_on, *c.extra.values()])
+        href = _first_link_of(c, [c.entry_point, c.purpose, c.depends_on,
+                                  *(v for v in c.extra.values() if isinstance(v, str))])
         if href and not url.match(href):
             out.append((c.id, href))
     for d in m.deps:
         href = _first_link_of(d, [d.name, d.type, d.used_for, d.where_configured,
-                                  *d.extra.values()])
+                                  *(v for v in d.extra.values() if isinstance(v, str))])
         if href and not url.match(href):
             out.append((d.id, href))
     for e in m.entities:

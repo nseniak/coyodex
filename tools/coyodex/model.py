@@ -84,7 +84,9 @@ class Component:
     depends_on: str = ""             # the coarse derived summary text (edge list is the source)
     anchor: str | None = None        # v2: the canonical source anchor — where the component LIVES
     confidence: str = ""
-    extra: dict[str, str] = field(default_factory=dict)  # non-standard authored columns, by header
+    extra: dict[str, object] = field(default_factory=dict)  # non-standard authored columns, by
+    # header; values are any JSON value (agents return lists/numbers/bools naturally — the views
+    # render non-string values as compact JSON)
 
 
 @dataclass
@@ -97,7 +99,7 @@ class Dep:
     where_configured: str = ""
     confidence: str = ""
     deployment_linked: bool = False  # v2: wired at deployment level only — no code call site
-    extra: dict[str, str] = field(default_factory=dict)
+    extra: dict[str, object] = field(default_factory=dict)  # any JSON values, like Component.extra
 
 
 @dataclass
@@ -328,10 +330,25 @@ def _check(value: object, hint: object, path: str) -> object:
     if origin is dict:
         if not isinstance(value, dict):
             raise ModelError(f"{path}: expected an object, got {type(value).__name__}")
-        return {str(k): _check(v, str, f"{path}.{k}") for k, v in value.items()}
+        _key_hint, val_hint = get_args(hint)
+        if val_hint is object:  # `extra`: any JSON value is welcome (str/number/bool/null/list/dict)
+            return {str(k): _check_json_value(v, f"{path}.{k}") for k, v in value.items()}
+        return {str(k): _check(v, val_hint, f"{path}.{k}") for k, v in value.items()}
     if hasattr(hint, "__dataclass_fields__"):
         return _build(value, hint, path)  # type: ignore[arg-type]
     raise ModelError(f"{path}: unsupported schema type {hint!r}")  # unreachable on the fixed model
+
+
+def _check_json_value(value: object, path: str) -> object:
+    """Any JSON value, validated recursively (dict keys coerced to str). Defensive: everything the
+    loader sees came out of json.loads, but fragments built in-process must obey the same shape."""
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+    if isinstance(value, list):
+        return [_check_json_value(v, f"{path}[{i}]") for i, v in enumerate(value)]
+    if isinstance(value, dict):
+        return {str(k): _check_json_value(v, f"{path}.{k}") for k, v in value.items()}
+    raise ModelError(f"{path}: not a JSON value ({type(value).__name__})")
 
 
 def _build(data: object, cls: type, path: str):
