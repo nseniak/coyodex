@@ -265,6 +265,22 @@ in several places), and — when you pass `--pairs` a `{component: [paths]}` map
   it skipped and the languages without symbol data (symbols are deep for Python; other languages
   need the tree-sitter pack). An unparsed region is a region you still owe a read.
 
+**Component granularity — the leaf rule (what "one component" means).** One component ≈ one
+module-/folder-/deployable-sized unit — roughly a directory of **≤ ~10 source files / ≤ ~3 kLOC**
+with one purpose. At each source folder decide: **component-shaped → stop** (it is a leaf; its
+internal files and subdirs stay abstracted — GR6) vs **subsystem-shaped → recurse** (promote it to a
+subsystem and map its units). An oversized *flat* folder (no subdirs) splits into its cohesive file
+groups instead of becoming one box. Nesting is the **output** of those decisions — how deep you group
+leaves into subsystems is free; what this rule pins is the **leaf decision only**. The pre-index
+computes the matching **expected component count E** deterministically from the code tree (same caps;
+vendored/generated, docs/config and test trees excluded), whole-repo and per-slice, with a generous
+**±40% band** — the `granularity` block in `preindex.json`. E derives from the code alone, so it is
+advice you reconcile like any pre-index signal (GR2): landing far **under** the band means you folded
+subsystem-shaped dirs into single components — make them subsystems and recurse; far **over** means
+you split module-sized units too fine. `validate --check-coverage` and the eval **re-compute E from
+the tree independently** (GR4) and nudge when the map's component count leaves the band — the nudge
+is advisory; a justified exception stays a judgement call.
+
 **The hand-off — read the stderr summary first; don't reverse-engineer the JSON.** `preindex` writes
 the JSON to `.coyodex/preindex.json` **and** prints a one-line human summary to **stderr** (heaviest
 top-level dirs, file/LOC totals, ambiguous-symbol count, languages without symbols, the GR1/GR2
@@ -278,6 +294,8 @@ sorted by LOC, descending). The JSON shape, so you don't have to guess its keys:
                 "children": [ …same node shape, sorted by loc desc… ] },   # the nested directory tree
   "symbols":  { "by_name": { "<name>": [ { "file", "line", "kind" } … ] }, "ambiguous": [ … ] },
   "imports":  { "pairs": [ … ] },        # only when --pairs {component:[paths]} was given
+  "granularity": { "expected_components", "band": [lo, hi],
+                   "per_dir": { "<dir>": E … }, "file_cap", "loc_cap" },   # the leaf anchor (rule above)
   "coverage": { "files_counted", "git_available", "tree_sitter_available",
                 "languages_seen_without_extractor", "note", … } }          # what it could/couldn't parse
 ```
@@ -349,6 +367,10 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > **Background:** «what the main agent already learned about this slice, handed down so you
 > don't re-derive it».
 >
+> **Expect roughly «the slice's E from the pre-index `granularity.per_dir`» components for your
+> slice** (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
+> out far under, you are folding subsystem-shaped dirs into single components — make those
+> subsystems and recurse into their units; far over, you are splitting module-sized units.
 > For every row give `file:line` evidence and a confidence tag (**verified** = read in code /
 > **inferred** = guessed). Use only the schema IDs and edge verbs; reference nodes, never
 > invent them. **Return exactly this fixed set of sections — one per prescribed slice — and if you
@@ -384,19 +406,18 @@ returned per-entity cards *with* RELATIONS, and that each agent that wrote `(non
 empty rather than under-delivered. Re-ping any agent that dropped or thinned its sections; a missing
 section caught here is cheap, one discovered after synthesis is a re-trace.
 
-**Expected yield per slice — judge each return against its size (under-delivery guidance).** A
+**Expected yield per slice — judge each return against its E (under-delivery guidance).** A
 well-formed return can still be an under-delivered one: a slice that comes back with far fewer
-components than its size suggests has *abstracted where it should have harvested*. Set the
-expectation from the pre-index weight map (LOC + file count per directory — the denominators are
-already computed) **before** reading the returns, roughly: **expect at least one component per
-top-level sub-unit of the slice** (each subdirectory / module cluster that has its own purpose), and
-treat **fewer than ~1 component per 3–5 kLOC** of slice mass as suspicious. The two signals compound:
-a 40-file, 12-kLOC slice with 6 subdirs that returns 1–2 components is under-delivered even though
-every row validates. Re-ping such a slice **with the expectation stated** ("this dir holds 6 sub-units
-and ~12 kLOC; return its real units or say per unit why it folds") — a size-blind re-ping just gets
-the same answer back. These are attention thresholds, not gates (a heavy *generated* dir still
-legitimately folds — the pre-index guardrail applies); a cheap deterministic backstop exists after the
-fact in `validate --check-coverage`, which flags folded sibling subdirs and never-referenced dirs.
+components than its size suggests has *abstracted where it should have harvested*. The expectation is
+already computed: the pre-index's `granularity.per_dir` carries each slice's **E** (the leaf rule
+above), and the harvest prompt hands it to the agent. **Before** reading the returns, note each
+slice's E; a return far under its E's ±40% band is under-delivered even though every row validates.
+Re-ping such a slice **with the expectation stated** ("this slice's code-derived expectation is ~E
+components; return its real units or say per unit why it folds") — a size-blind re-ping just gets the
+same answer back. E is an attention threshold, not a gate (a heavy *generated* dir still legitimately
+folds — the pre-index guardrail applies); a cheap deterministic backstop exists after the fact in
+`validate --check-coverage`, which re-computes E for the whole map and flags folded sibling subdirs
+and never-referenced dirs.
 
 **Output files — model + generated views.** Build writes a **new** baseline and overwrites any
 existing `.coyodex/` map, so you should only be here for a first map or a user-confirmed rebuild —

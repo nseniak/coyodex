@@ -48,6 +48,7 @@ from coyodex.validate_analysis import (
     _where_href,
     check_hierarchy,
     compression_coverage_from_refs,
+    granularity_advisory,
 )
 
 _WRITE_VERBS = ("persists", "writes")  # ownership verbs for the unowned-entities nudge (as in v1)
@@ -484,6 +485,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         if walk_root is not None:
             warnings.extend(compression_coverage_from_refs(
                 referenced_paths(m, walk_root.resolve()), walk_root))
+            # The granularity anchor: component (leaf) count vs the code-derived expectation E —
+            # re-computed from the tree here (GR4), advisory-only, silent inside the ±40% band.
+            warnings.extend(granularity_advisory(len(m.components), walk_root))
         warnings.extend(check_domain_coverage_model(m, roots))
 
     # Redundant nesting (a group whose only child is a group of the same kind).

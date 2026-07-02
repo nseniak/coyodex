@@ -240,6 +240,44 @@ def test_check_sources_warns_on_dead_anchor():
         assert any("does not resolve" in w for w in warnings)
 
 
+# --- granularity advisory (opt-in via check_coverage; re-computed from the tree — GR4) ---
+
+def make_subsystem_shaped_repo(td: str, n_units: int = 9) -> Path:
+    """A tree whose code-derived expectation E is n_units + 1 (n small unit dirs + a core dir)."""
+    root = Path(td)
+    for i in range(n_units):
+        sub = root / "plugins" / f"p{i}"
+        sub.mkdir(parents=True)
+        for j in range(3):
+            (sub / f"f{j}.py").write_text("x\n" * 100, encoding="utf-8")
+    core = root / "core"
+    core.mkdir()
+    (core / "a.py").write_text("x\n" * 60, encoding="utf-8")
+    return root
+
+
+def test_granularity_advisory_fires_through_check_coverage():
+    """A 1-component map over a tree expecting ~10 leaves draws the granularity nudge."""
+    m = make_valid_model()  # 1 component
+    with tempfile.TemporaryDirectory() as td:
+        root = make_subsystem_shaped_repo(td)
+        _, warnings = validate_model(m, repo_root=root, check_coverage=True)
+    assert any(w.startswith("Granularity:") for w in warnings), warnings
+
+
+def test_granularity_advisory_silent_within_band():
+    """A component count inside E's ±40% band stays silent — the anchor nudges, it never nags."""
+    m = make_valid_model()
+    m.components = [Component(id=f"C{i}", name=f"Unit {i}", purpose="one unit",
+                              entry_point="[v.py](src/v.py#L1)") for i in range(1, 11)]  # 10 ≈ E
+    m.edges = []  # the demo edges/flows reference C1 only — drop them so the model stays valid
+    m.flows = []
+    with tempfile.TemporaryDirectory() as td:
+        root = make_subsystem_shaped_repo(td)
+        _, warnings = validate_model(m, repo_root=root, check_coverage=True)
+    assert not any(w.startswith("Granularity:") for w in warnings), warnings
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

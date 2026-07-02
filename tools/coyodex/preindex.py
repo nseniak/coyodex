@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """coyodex structural pre-index — sizes and locates the codebase BEFORE the structural harvest.
 
-Emits ``.coyodex/preindex.json`` with four products (see internal/docs/scaling-to-large-codebases.md,
+Emits ``.coyodex/preindex.json`` with five products (see internal/docs/scaling-to-large-codebases.md,
 finding G1):
 
   1. weight  — a directory tree with LOC, file count and git churn (all languages). The signal that
@@ -9,7 +9,9 @@ finding G1):
   2. symbols — class/function definitions -> file:line + kind, ALL matches (ambiguity surfaced).
   3. imports — for component pairs the agent already NAMED (--pairs), the import edges between them,
                a lower-bound cross-check (absence != no-dependency).
-  4. coverage— what the tool could NOT see (GR3): unparsed = unknown, never empty.
+  4. granularity — the code-derived component expectation E (whole-repo + per-slice), the LEAF-count
+               zoom anchor the harvest plan hands each agent (method.md's component-granularity rule).
+  5. coverage— what the tool could NOT see (GR3): unparsed = unknown, never empty.
 
 This is an ADVISORY INPUT the build agent reconciles (accept/reject/abstract) — never rows copied
 into the map verbatim (GR2). Weight is a hint to where to look, never a decision to drill (GR5). The
@@ -26,14 +28,20 @@ import sys
 from pathlib import Path
 
 from coyodex.preindex_lib import (
+    GRANULARITY_BAND_PCT,
+    GRANULARITY_FILE_CAP,
+    GRANULARITY_LOC_CAP,
     SYMBOL_LANGS,
     ImportRef,
     Symbol,
     count_loc,
+    expected_components,
     git_churn,
+    granularity_band,
     imports_for,
     iter_source_files,
     lang_of,
+    slice_expectations,
     symbols_for,
     ts_available,
 )
@@ -209,6 +217,35 @@ def build_imports(files: list[Path], root: Path, pairs_path: str | None) -> tupl
 
 
 # --------------------------------------------------------------------------------------
+# 4. granularity expectation E (the leaf anchor — see method.md's component-granularity rule)
+# --------------------------------------------------------------------------------------
+
+def build_granularity(root: Path) -> dict:
+    """The code-derived component expectation E — whole-repo plus per-slice — surfaced to the
+    BUILDER. Integrity-safe by construction: E derives from the code tree the blinded builder
+    already sees, never from any map. `validate --check-coverage` and the eval RE-COMPUTE it from
+    the tree at check time (shared code, never this JSON — GR4)."""
+    tree = expected_components(root)
+    lo, hi = granularity_band(tree.expected)
+    return {
+        "rule": ("one component ≈ one module-/folder-sized unit "
+                 f"(≤ ~{GRANULARITY_FILE_CAP} source files / ≤ ~{GRANULARITY_LOC_CAP} LOC); "
+                 "component-shaped dir → stop (leaf), subsystem-shaped → recurse"),
+        "file_cap": GRANULARITY_FILE_CAP,
+        "loc_cap": GRANULARITY_LOC_CAP,
+        "expected_components": tree.expected,
+        "band_pct": GRANULARITY_BAND_PCT,
+        "band": [lo, hi],
+        "per_dir": slice_expectations(tree),
+        "note": ("Advisory zoom anchor for the LEAF decision only — subsystem count/nesting stays "
+                 "yours. Landing far under the band means subsystem-shaped dirs were folded into "
+                 "single components; far over means module-sized units were split. Derived from the "
+                 "code tree alone (docs/config/tests excluded); reconcile like any pre-index signal "
+                 "(GR2), the checkers re-measure it independently (GR4)."),
+    }
+
+
+# --------------------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------------------
 
@@ -226,6 +263,7 @@ def main(argv: list[str] | None = None) -> int:
     weight, lang_counts = build_weight(walk.files, root, churn, max_depth)
     symbols, sym_meta = build_symbols(walk.files, root)
     imports, imp_meta = build_imports(walk.files, root, pairs_path)
+    granularity = build_granularity(root)
 
     ts_ok = ts_available()
     coverage = {
@@ -253,6 +291,7 @@ def main(argv: list[str] | None = None) -> int:
         "weight": weight,
         "symbols": symbols,
         "imports": imports,
+        "granularity": granularity,
         "coverage": coverage,
     }
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -268,6 +307,9 @@ def main(argv: list[str] | None = None) -> int:
         f"  symbols: {sym_meta['files_parsed']} files parsed, "
         f"{len(symbols['ambiguous'])} ambiguous names; "
         f"languages without symbols: {list(coverage['languages_seen_without_extractor'])}\n"
+        f"  granularity: expect ~{granularity['expected_components']} components "
+        f"(band {granularity['band'][0]}–{granularity['band'][1]}; per-slice E in "
+        f"the JSON's granularity.per_dir — hand each harvest agent its slice's number)\n"
         "  NOTE: draft the behavioral layer BEFORE using this (GR1); reconcile every item, "
         "never copy verbatim (GR2).\n"
     )

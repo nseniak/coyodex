@@ -352,12 +352,9 @@ def check_altitude_hints(text: str) -> list[str]:
 
 _COMPRESSION_MIN = 8      # this many sibling source subdirs folded into ~one box reads as lost signal
 _ABSENT_MIN_FILES = 25    # a top-level dir this large with nothing referenced is a likely unmapped module
-# Conventional NON-PRODUCT directory basenames an absent-module warning must not nag about: test trees
-# have their own Test-completeness section, and `internal/`/`docs/`-style dirs are deliberately unmapped.
-# (Some are also walk-excluded already; listed here so the skip is explicit and self-documenting.)
-_NON_PRODUCT_DIRS = frozenset({
-    "tests", "test", "e2e", "internal", "docs", "__pycache__", "node_modules", ".git",
-})
+# The conventional NON-PRODUCT directory basenames (test trees, internal/docs) live in
+# `preindex_lib.NON_PRODUCT_DIRS` — one list shared with the granularity expectation E; pulled via
+# the same local import the coverage check already uses (the core gate stays import-independent).
 _REF_LINK = re.compile(r"\]\(([^)\s#]+)")                         # markdown link target ](path...)
 _REF_INLINE = re.compile(r"(?<![\w/])((?:[\w.\-]+/)+[\w.\-]+)")   # inline a/b/c path
 # Monorepo container roots — under these, a fold one level deeper is still an altitude decision
@@ -412,7 +409,7 @@ def compression_coverage_from_refs(refs: set[str], root: Path) -> list[str]:
     # Local import: keep the CORE GATE independent of the advisory pre-index module — the validator
     # imports nothing from it at load time, only this opt-in check pulls the shared (stdlib) walk
     # helper. Reuses CODE, never the pre-index's JSON DATA (GR4: generation != verification).
-    from coyodex.preindex_lib import iter_source_files
+    from coyodex.preindex_lib import NON_PRODUCT_DIRS, iter_source_files
 
     root = root.resolve()
     walk = iter_source_files(root)
@@ -450,7 +447,7 @@ def compression_coverage_from_refs(refs: set[str], root: Path) -> list[str]:
     absent: list[tuple[int, str]] = []
     for dpath, fc in dir_filecount.items():
         if (dpath == "." or not _fold_depth_ok(dpath) or dpath in flagged or covered_under(dpath)
-                or dpath.rsplit("/", 1)[-1] in _NON_PRODUCT_DIRS):  # skip test / internal / docs trees
+                or dpath.rsplit("/", 1)[-1] in NON_PRODUCT_DIRS):  # skip test / internal / docs trees
             continue
         n_subs = len(dir_children.get(dpath, ()))
         if fc >= _ABSENT_MIN_FILES or n_subs >= _COMPRESSION_MIN:
@@ -462,6 +459,44 @@ def compression_coverage_from_refs(refs: set[str], root: Path) -> list[str]:
             f"map — likely an unmapped module (measured at validate time)"
         )
     return out
+
+
+def granularity_advisory(n_components: int, root: Path) -> list[str]:
+    """Advisory (non-blocking, opt-in via --check-coverage): the map's COMPONENT (leaf) count vs the
+    code-derived granularity expectation E — the leaf anchor (one component ≈ one ≤10-file/≤3-kLOC
+    module-sized unit; see method.md). Fires only when the count sits OUTSIDE the generous ±40% band;
+    silent within it. Like every coverage check it RE-COMPUTES E from the tree (shared code in
+    `preindex_lib`, never the pre-index's JSON — GR4). Never checks the subsystem count — nesting is
+    the builder's free output; only the leaf decision is anchored."""
+    # Local import, same rule as the coverage check above: the core gate stays import-independent of
+    # the pre-index module; this opt-in check reuses its CODE, never its generated DATA (GR4).
+    from coyodex.preindex_lib import (
+        GRANULARITY_BAND_PCT,
+        GRANULARITY_FILE_CAP,
+        GRANULARITY_LOC_CAP,
+        expected_components,
+        granularity_band,
+    )
+
+    if n_components <= 0:
+        return []
+    tree = expected_components(root.resolve())
+    if tree.expected <= 0:
+        return []  # no component-forming source measured — nothing to anchor against
+    lo, hi = granularity_band(tree.expected)
+    if lo <= n_components <= hi:
+        return []
+    if n_components < lo:
+        hint = ("likely folding subsystem-shaped dirs into single components — promote them to "
+                "subsystems and map their units")
+    else:
+        hint = "likely splitting module-sized units too fine — merge cohesive siblings"
+    return [
+        f"Granularity: the map has {n_components} components vs a code-derived expectation of "
+        f"~{tree.expected} (band {lo}–{hi} at ±{GRANULARITY_BAND_PCT:.0%}; a component ≈ "
+        f"≤{GRANULARITY_FILE_CAP} source files / ≤{GRANULARITY_LOC_CAP} LOC, re-measured at validate "
+        f"time) — {hint}"
+    ]
 
 
 def find_glued_ids(text: str) -> set[str]:

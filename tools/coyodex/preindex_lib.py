@@ -18,6 +18,7 @@ silently counted as empty.
 from __future__ import annotations
 
 import ast
+import math
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -112,6 +113,14 @@ DEFAULT_EXCLUDE_NAMES: set[str] = {
     "package-lock.json", "yarn.lock", "pnpm-lock.yaml", "poetry.lock", "Pipfile.lock",
     "Cargo.lock", "composer.lock", "go.sum", ".DS_Store",
 }
+
+# Conventional NON-PRODUCT directory basenames: test trees have their own completeness section and
+# `internal/`/`docs/`-style dirs are deliberately unmapped, so neither should count toward map-fidelity
+# signals (coverage's absent-module warning, the granularity expectation E). Shared with
+# `validate_analysis.compression_coverage_from_refs` — one list, one convention.
+NON_PRODUCT_DIRS: frozenset[str] = frozenset({
+    "tests", "test", "e2e", "internal", "docs", "__pycache__", "node_modules", ".git",
+})
 
 
 def lang_of(path: Path) -> str | None:
@@ -389,3 +398,128 @@ def imports_for(path: Path, rel: str, lang: str) -> list[ImportRef]:
 
 
 SYMBOL_LANGS: set[str] = {"python", *TS_DEF_TYPES.keys()}
+
+
+# --------------------------------------------------------------------------------------
+# Component-granularity expectation E (the leaf anchor)
+# --------------------------------------------------------------------------------------
+# One component ≈ one module-/folder-/deployable-sized unit. E is the deterministic count of leaves
+# an explicit stop rule yields on the code tree alone: recurse while a directory exceeds the
+# component-size caps; at/below the caps it is component-shaped → one leaf; an oversized FLAT dir
+# (no source subdirs) counts ceil(size/cap) — it should be split by cohesive file groups. E pins the
+# LEAF decision only — how the leaves are grouped into subsystems (nesting) stays free.
+#
+# Two consumers, sharing CODE but never DATA (GR4): `preindex.py` SURFACES E (+ per-slice E) to the
+# builder at generation time; `validate --check-coverage` and the eval profiler RE-COMPUTE it from
+# the tree at check time — they never read the pre-index JSON.
+#
+# The caps are PRINCIPLED defaults (a component ≈ a ≤10-file / ≤3-kLOC cohesive unit is defensible
+# on its own) — deliberately NOT calibrated to reproduce any observed map's count, which would bake
+# one map's zoom in as truth. The ±40% band is generous on purpose: E anchors the ZOOM, it does not
+# decree the exact number.
+GRANULARITY_FILE_CAP = 10      # a component-shaped dir holds ≤ ~10 source files …
+GRANULARITY_LOC_CAP = 3000     # … or ≤ ~3 kLOC of source
+GRANULARITY_BAND_PCT = 0.40    # the generous advisory band around E (both directions)
+# Loose files sitting directly in a recursed (subsystem-shaped) dir form one residual unit — but only
+# when they are real code, not packaging glue (an `__init__.py` re-export must not add a component).
+GRANULARITY_RESIDUAL_MIN_LOC = 40
+# Languages that don't form components: docs and configuration describe the system, they aren't units
+# of it. (Unknown extensions are skipped too — lang_of returns None.)
+GRANULARITY_TEXT_LANGS: frozenset[str] = frozenset({"markdown", "text", "json", "yaml", "toml"})
+
+
+@dataclass
+class DirExpectation:
+    """The granularity expectation of one directory subtree. `children` is non-empty only when the
+    stop rule RECURSED here (the dir is subsystem-shaped); a component-shaped dir is a leaf."""
+    path: str                          # repo-relative ("." for the root)
+    files: int                         # recursive source-file count (granularity-counted files only)
+    loc: int                           # recursive LOC of those files
+    expected: int                      # E for this subtree
+    children: list["DirExpectation"]
+
+
+def _ceil_units(files: int, loc: int, file_cap: int, loc_cap: int) -> int:
+    """The oversized-flat-group rule: how many cohesive units this much mass should split into —
+    the larger of the two cap-relative ceilings, never less than one."""
+    return max(1, -(-files // file_cap), -(-loc // loc_cap))
+
+
+def expected_components(root: Path, *, file_cap: int = GRANULARITY_FILE_CAP,
+                        loc_cap: int = GRANULARITY_LOC_CAP) -> DirExpectation:
+    """Compute the component-granularity expectation E for a repo tree. Deterministic and derived
+    from the code alone: the walk is `iter_source_files` (the pre-index's exclusions), narrowed to
+    component-forming source (no docs/config text, no conventional non-product trees)."""
+    root = root.resolve()
+    # dir node: {"loc": direct LOC, "files": direct file count, "dirs": {name: node}}
+    def new_node() -> dict:
+        return {"loc": 0, "files": 0, "dirs": {}}
+    tree = new_node()
+    for f in iter_source_files(root).files:
+        rel = f.relative_to(root)
+        lang = lang_of(f)
+        if lang is None or lang in GRANULARITY_TEXT_LANGS:
+            continue
+        if any(part in NON_PRODUCT_DIRS for part in rel.parts[:-1]):
+            continue
+        node = tree
+        for part in rel.parts[:-1]:
+            node = node["dirs"].setdefault(part, new_node())
+        node["files"] += 1
+        node["loc"] += count_loc(f)
+
+    def totals(node: dict) -> tuple[int, int]:
+        tf, tl = node["files"], node["loc"]
+        for sub in node["dirs"].values():
+            sf, sl = totals(sub)
+            tf += sf
+            tl += sl
+        return tf, tl
+
+    def build(path: str, node: dict) -> DirExpectation:
+        tf, tl = totals(node)
+        if tf == 0:
+            return DirExpectation(path, 0, 0, 0, [])
+        if tf <= file_cap and tl <= loc_cap:
+            return DirExpectation(path, tf, tl, 1, [])            # component-shaped → stop (leaf)
+        # Glue-sized subdirs (a 2-LOC `__init__` package) are not units — fold their mass into the
+        # dir's own residual instead of counting a leaf each.
+        residual_files, residual_loc = node["files"], node["loc"]
+        substantial: dict[str, dict] = {}
+        for name, sub in node["dirs"].items():
+            sf, sl = totals(sub)
+            if sf == 0:
+                continue
+            if sl < GRANULARITY_RESIDUAL_MIN_LOC:
+                residual_files += sf
+                residual_loc += sl
+            else:
+                substantial[name] = sub
+        if not substantial:                                       # oversized FLAT dir → ceil(size/cap)
+            return DirExpectation(path, tf, tl, _ceil_units(tf, tl, file_cap, loc_cap), [])
+        children = [build(name if path == "." else f"{path}/{name}", sub)
+                    for name, sub in sorted(substantial.items())]  # subsystem-shaped → recurse
+        e = sum(c.expected for c in children)
+        if residual_files and residual_loc >= GRANULARITY_RESIDUAL_MIN_LOC:
+            # the dir's own loose files are a real residual unit (or several, if oversized)
+            if residual_files <= file_cap and residual_loc <= loc_cap:
+                e += 1
+            else:
+                e += _ceil_units(residual_files, residual_loc, file_cap, loc_cap)
+        return DirExpectation(path, tf, tl, e, children)
+
+    return build(".", tree)
+
+
+def granularity_band(expected: int, band_pct: float = GRANULARITY_BAND_PCT) -> tuple[int, int]:
+    """The advisory band around E: (low, high), inclusive, at ±band_pct."""
+    return math.floor(expected * (1 - band_pct)), math.ceil(expected * (1 + band_pct))
+
+
+def slice_expectations(tree: DirExpectation) -> dict[str, int]:
+    """`{repo-relative dir: E}` for the root plus every dir the stop rule visited (each recursed dir
+    and each leaf) — the per-slice expectations the harvest plan hands its agents."""
+    out = {tree.path: tree.expected}
+    for c in tree.children:
+        out.update(slice_expectations(c))
+    return out
