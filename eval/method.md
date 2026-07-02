@@ -41,10 +41,19 @@ the method — so its own integrity holes are the worst bugs it can have. Three 
    when every added/removed line does nothing but add coyodex paths (`.coyodex-eval/`, `.coyodex/`
    entries — the tool's own step-5 housekeeping below), treat the tree as clean. Any other `.gitignore`
    change still counts as dirty.
-4. If `HEAD` ≠ the pin, **or** the tree is dirty → **REFUSE** and stop:
+4. Alignment. `HEAD` equal to the pin is aligned — and so is `HEAD` sitting AHEAD of the pin by
+   **map-only commits**: once `.coyodex/` is tracked, committing the map moves HEAD past the commit
+   the map describes, so "HEAD == pin" literally never holds again (the normal state, not an error).
+   The real invariant is ZERO CODE DELTA between the pin and HEAD:
+   ```
+   git diff <pin>..HEAD -- . ':(exclude).coyodex' ':(exclude).gitignore'
+   ```
+   Empty output → aligned. Non-empty output (any code changed since the pin), **or** a dirty tree →
+   **REFUSE** and stop:
    > eval needs the source at the baseline's commit so a quality change means the *method* changed, not
-   > the code. The baseline map is pinned at `<pin>`. Run `git checkout <pin>` in a clean tree, then
-   > re-run `/coyodex-eval`.
+   > the code. The baseline map is pinned at `<pin>` and this checkout carries CODE changes on top of
+   > it. Check out a state with zero code delta vs the pin, in a clean tree, then re-run
+   > `/coyodex-eval`.
 5. Make sure `.coyodex-eval/` is git-ignored in this project (add it to `.gitignore` if absent).
 
 ## Step 2 — Build the FRESH map BLIND, then freeze it
@@ -66,9 +75,11 @@ whenever a fresh map must be built without the builder seeing prior maps or eval
    ```
    rm -rf <scratch>/coyodex-eval-build/.coyodex <scratch>/coyodex-eval-build/.coyodex-eval
    ```
-   `.coyodex/` is committed, so the worktree contains the baseline map — deleting it is what blinds
-   the build. `.coyodex-eval/` is git-ignored and normally absent from a fresh worktree; remove it
-   defensively anyway. **Dogfooding case:** if the evaluated project is the coyodex clone itself, the
+   Note the map lives at HEAD, not at the pin: when the pin PREDATES the map commit (the normal
+   state — the map is committed on top of the code it describes), the worktree at the pin contains
+   no `.coyodex/` at all and blinding holds by construction; the `rm -rf` stays as defense-in-depth
+   for the older layout where the map commit IS the pin. `.coyodex-eval/` is git-ignored and
+   normally absent from a fresh worktree; remove it defensively anyway. **Dogfooding case:** if the evaluated project is the coyodex clone itself, the
    worktree also contains committed copies of the eval bundle (its own `eval/thresholds.json`,
    `eval/rubric.md`) — remove those too (`rm -rf <scratch>/coyodex-eval-build/eval`); the never-read
    rule below is path-independent, but the blinding should be filesystem-deep, not instruction-deep.
