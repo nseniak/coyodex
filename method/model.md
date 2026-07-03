@@ -24,7 +24,7 @@ one-time converter (`coyodex convert`), not by the tools.
 
 One JSON object. Key order below is the canonical serialization order (the serializer always emits
 it, so diffs are stable); arrays keep authored order. `null` means "not stated". All text cells are
-strings that MAY contain inline markdown (a `[label](path#Lnnn)` link, backticks) — a literal `|`
+strings that MAY contain inline markdown (a `[label](path:line)` link, backticks) — a literal `|`
 needs no escaping (the markdown-view generator escapes it when rendering tables).
 
 ```
@@ -49,7 +49,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
 
   "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "anchor", "confidence" } ],
   "entities":    [ { "id": "En",  "name", "store", "meaning", "subdomain": "SDn|null",
-                     "source": "<path#Lnnn|null>",
+                     "source": "<path:line|null>",
                      "fields":    [ { "name", "type", "markers": ["PK", "FK→En", "[]", …] } ],
                      "relations": [ { "verb", "target": "En", "src_card", "dst_card",
                                       "display", "how" } ] } ],
@@ -92,12 +92,17 @@ Semantics carried over from schema v1, stated on the fields:
 - **`extra`** (on components and deps) holds non-standard authored columns by header; its values
   are **any JSON value** (string, number, boolean, null, list, object) — agents return natural
   JSON, the generated views render a non-string value as compact JSON text.
-- **Anchor formats.** `components[].anchor` and `entities[].source` are **bare** repo-root-relative
-  refs (`path/file.py#L120`; a directory anchor ends with `/`); group anchors
-  (`subsystems[].anchor` / `subdomains[].anchor`) are **markdown links** `[dir](path/dir/)`;
-  `edges[].where` and `entry_points[].entity` are markdown links. `coyodex assemble` normalizes the
-  common drifts (md-linked component anchors, bare group anchors, missing directory slashes) and
-  prints each fix-up.
+- **Anchor formats.** Every source-location string in the map uses ONE canonical line-number
+  syntax: `path:line` for a single line, `path:line-line` for a range (`domain/order.py:12`,
+  `domain/order.py:12-18`) — never the retired `path#Lnnn` / `path#Lnnn-Lmmm` form.
+  `components[].anchor` and `entities[].source` are **bare** repo-root-relative refs (a directory
+  anchor ends with `/`, no line suffix); group anchors (`subsystems[].anchor` /
+  `subdomains[].anchor`) are **markdown links** `[dir](path/dir/)`; `components[].entry_point`,
+  `deps[].where_configured`, `edges[].where`, and `entry_points[].entity` are markdown links whose
+  href follows the same `path:line` rule. `coyodex assemble` normalizes the common drifts
+  (md-linked component anchors, bare group anchors, missing directory slashes, a stray `#L` anchor
+  rewritten to `:` on every field above) and prints each fix-up; `coyodex validate` rejects any
+  anchor still written in the retired `#L` form.
 
 ## New fields (schema v2 only — each closes a measured v1 gap)
 

@@ -253,7 +253,7 @@ def test_renderer_keeps_escaped_pipe_cell_and_columns_aligned() -> None:
     g = parse_map(make_escaped_pipe_edge_map())
     e = next(x for x in g["edges"] if x["src"] == "C1" and x["dst"] == "C2")
     assert e["why"] == "run a|b mode", e["why"]          # literal pipe preserved, cell not truncated
-    assert e["where"] == "f#L9", e["where"]              # Where column not shifted out by a phantom cell
+    assert e["where"] == "f:9", e["where"]                # Where column not shifted out (#L9 normalized to :9)
     code, out = run_validator(make_escaped_pipe_edge_map())
     assert code == 0, out                                # and the validator still agrees it is well-formed
 

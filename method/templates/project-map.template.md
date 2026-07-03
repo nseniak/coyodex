@@ -21,7 +21,7 @@
 
 | Term | Meaning | Defined / used in |
 |---|---|---|
-| **<Term>** | <meaning> | [file](path#L1) |
+| **<Term>** | <meaning> | [file](path:1) |
 
 ---
 
@@ -93,10 +93,10 @@ why: needs the result of GP1
 
 | ID | Component | Subsystem | Purpose | Entry point | Depends on |
 |---|---|---|---|---|---|
-| **C1** | <component> | S1 | <purpose> | [file](path#L1) | C2 |
-| **C2** | <component> | S1 | <purpose> | [file](path#L1) |  |
-| **C3** | <component in S2's sub-part S3> | S3 | <purpose> | [file](path2/a#L1) |  |
-| **C4** | <component in S2's sub-part S4> | S4 | <purpose> | [file](path2/b#L1) |  |
+| **C1** | <component> | S1 | <purpose> | [file](path:1) | C2 |
+| **C2** | <component> | S1 | <purpose> | [file](path:1) |  |
+| **C3** | <component in S2's sub-part S3> | S3 | <purpose> | [file](path2/a:1) |  |
+| **C4** | <component in S2's sub-part S4> | S4 | <purpose> | [file](path2/b:1) |  |
 
 ### T1 backbone — component dependency edges (the diagram source)
 
@@ -106,7 +106,7 @@ why: needs the result of GP1
 
 | From | Verb | To | Why | Where |
 |---|---|---|---|---|
-| C1 | uses | C2 | <why C1 needs C2 — terse> | [file](path#L1) |
+| C1 | uses | C2 | <why C1 needs C2 — terse> | [file](path:1) |
 
 ---
 
@@ -137,7 +137,7 @@ why: needs the result of GP1
 
 | Kind | Trigger | Code entity | Component |
 |---|---|---|---|
-| <kind> | <trigger> | [entity](path#L1) | C1 |
+| <kind> | <trigger> | [entity](path:1) | C1 |
 
 ---
 
@@ -171,19 +171,19 @@ SUBDOMAIN: SD1
 MEANING: <one-line meaning>
 FIELDS: <name>:<type> PK · <name>:<type> · <name>:<type>
 RELATIONS: contains 1→* E2 <display> · has 1→0..1 E3 <display>
-SOURCE: [file](path#L1)
+SOURCE: [file](path:1)
 
 **E2 — <Entity>** *(<stored where>)*
 SUBDOMAIN: SD1
 MEANING: <one-line meaning>
 FIELDS: <name>:<type> · <name>:<type>
-SOURCE: [file](path#L1)
+SOURCE: [file](path:1)
 
 **E3 — <Entity>** *(<stored where>)*
 SUBDOMAIN: SD2
 MEANING: <one-line meaning, lives in the nested subdomain SD2>
 FIELDS: <name>:<type>
-SOURCE: [file](path/sub#L1)
+SOURCE: [file](path/sub:1)
 
 ---
 
@@ -222,7 +222,7 @@ SOURCE: [file](path/sub#L1)
 
 | Signal | Where emitted | Where viewed | Alerts |
 |---|---|---|---|
-| <signal> | [file](path#L1) | <dashboard/log> | <alert or —> |
+| <signal> | [file](path:1) | <dashboard/log> | <alert or —> |
 
 ### Security & auth
 
@@ -230,7 +230,7 @@ SOURCE: [file](path/sub#L1)
 
 | Surface | Who can reach | Auth check | Risk note |
 |---|---|---|---|
-| <surface> | <caller> | [check](path#L1) | <risk> |
+| <surface> | <caller> | [check](path:1) | <risk> |
 
 ### Config & environments
 
@@ -246,7 +246,7 @@ SOURCE: [file](path/sub#L1)
 
 | From | Verb | To | Why | Where |
 |---|---|---|---|---|
-| <source> | <verb> | <target> | <why source needs target — terse> | [file](path#L1) |
+| <source> | <verb> | <target> | <why source needs target — terse> | [file](path:1) |
 
 ---
 
@@ -263,7 +263,7 @@ SOURCE: [file](path/sub#L1)
 
 | Target | Tested? | Test(s) | Gap / risk | Confidence |
 |---|---|---|---|---|
-| UC1 <target> | yes / partial / no | [test](path#L1) | <gap or risk> | inferred / verified |
+| UC1 <target> | yes / partial / no | [test](path:1) | <gap or risk> | inferred / verified |
 
 ---
 

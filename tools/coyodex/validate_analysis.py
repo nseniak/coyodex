@@ -667,8 +667,17 @@ def check_edge_verbs(text: str) -> list[str]:
 # A `Where` / anchor cell should be a SOURCE LOCATION (the call site a flow arrow opens). These tell a
 # file reference from prose / an off-repo URL.
 _LINK_HREF = re.compile(r"\[[^\]]*\]\(([^)]+)\)")        # markdown link -> href
-_BARE_PATH = re.compile(r"^\S+\.\w+(?:[:#]L?\d+)?$")      # bare `path.ext` (+ optional :line / #Lnnn)
+# bare `path.ext` + an optional line anchor: canonical `:line` / `:line-line`, or a retired `#Lnnn` /
+# `#Lnnn-Lmmm` (still accepted here so an un-migrated map's anchors are still recognized as locations).
+_BARE_PATH = re.compile(r"^\S+\.\w+(?:(?:[:#]L?)\d+(?:-L?\d+)?)?$")
 _URL_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)  # http(s):// etc. — off-repo, not a local file
+_LINE_ANCHOR = re.compile(r"(?:#L\d+(?:-L?\d+)?|:\d+(?:-\d+)?)$")  # a trailing line anchor, either form
+
+
+def strip_anchor(href: str) -> str:
+    """The bare path from a `path:line` / `path:line-line` anchor, or a retired `path#Lnnn` /
+    `path#Lnnn-Lmmm` one — resolving a SOURCE/anchor href against the repo needs the path alone."""
+    return _LINE_ANCHOR.sub("", href)
 
 
 def _where_href(cell: str) -> str | None:
@@ -686,10 +695,10 @@ def _where_href(cell: str) -> str | None:
 
 def check_edge_where(text: str) -> list[str]:
     """WARN when a backbone edge's `Where` is not a source location — empty, prose, or an off-repo URL
-    rather than a `[file](path#Lnnn)` call-site link (or a bare `path:line`). `Where` is the line a flow
-    arrow opens, so a bad one is a dead drill-to-code link. Advisory, not blocking (an *inferred* edge
-    may lack a precise site; older maps shouldn't break). No-op when an edge table has no `Where`
-    column."""
+    rather than a `[file](path:line)` call-site link (a legacy `path#Lnnn` is still recognized, so an
+    un-migrated map doesn't false-flag). `Where` is the line a flow arrow opens, so a bad one is a dead
+    drill-to-code link. Advisory, not blocking (an *inferred* edge may lack a precise site; older maps
+    shouldn't break). No-op when an edge table has no `Where` column."""
     out: list[str] = []
     for start, block in iter_tables(text):
         headers = [c.lower() for c in split_cells(block[0])]
@@ -707,7 +716,7 @@ def check_edge_where(text: str) -> list[str]:
             where = cells[ci["where"]] if ci["where"] < len(cells) else ""
             if _where_href(where) is None:
                 out.append(f"{src.group(0)} → {dst.group(0)} (line {start + offset + 1}): `Where` is not "
-                           f"a source location (use a `[file](path#Lnnn)` call-site link)")
+                           f"a source location (use a `[file](path:line)` call-site link)")
     return out
 
 
@@ -755,10 +764,10 @@ def _source_roots(map_path: Path, repo_root: Path | None = None) -> list[Path]:
 
 
 def _resolve_source_file(source: str, roots: list[Path]) -> Path | None:
-    """The real file a card's SOURCE points at — its `#Lnnn` anchor stripped, resolved against
+    """The real file a card's SOURCE points at — its line anchor stripped, resolved against
     `roots`. None when it doesn't resolve (a placeholder, or a run outside the repo), so a repo-reading
     check skips it instead of false-flagging."""
-    rel = source.split("#", 1)[0]
+    rel = strip_anchor(source)
     return next((r / rel for r in roots if (r / rel).is_file()), None)
 
 
@@ -771,7 +780,7 @@ def check_anchor_existence(text: str, map_path: Path, repo_root: Path | None = N
     roots = _source_roots(map_path, repo_root)
     out: list[str] = []
     for label, href in _anchor_hrefs(text):
-        rel = re.sub(r":\d+$", "", href.split("#", 1)[0])   # drop a #Lnnn anchor and a :line suffix
+        rel = strip_anchor(href)
         is_dir = rel.endswith("/")
         rel = rel.rstrip("/")
         if not rel:

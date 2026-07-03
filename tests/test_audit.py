@@ -464,10 +464,10 @@ def test_l2_worklist_claims_are_self_describing() -> None:
     items = {w.claim: w for w in l2(make_described_map())}
     d = items["C1 enforces C2"].detail
     assert d is not None, items
-    assert "C1 = AuthGate" in d and "src/auth/gate.py#L10" in d, d
-    assert "C2 = PolicyStore" in d and "src/policy.py#L5" in d, d
+    assert "C1 = AuthGate" in d and "src/auth/gate.py:10" in d, d  # #L10 normalized to :10
+    assert "C2 = PolicyStore" in d and "src/policy.py:5" in d, d  # #L5 normalized to :5
     e = items["C2 persists E1"].detail
-    assert e is not None and "E1 = Order" in e and "src/order.py#L1" in e, e
+    assert e is not None and "E1 = Order" in e and "src/order.py:1" in e, e  # #L1 normalized to :1
     dep = items["C1 emits D1"].detail
     assert dep is not None and "D1 = Elastic" in dep, dep
 
@@ -477,7 +477,7 @@ def test_l2_worklist_detail_reaches_the_cli_output() -> None:
     Python API — can hand a skeptic a claim it can resolve without the map."""
     code, out = run_audit(make_described_map())
     assert code == 0, out
-    assert "who: From: C1 = AuthGate (src/auth/gate.py#L10)" in out, out
+    assert "who: From: C1 = AuthGate (src/auth/gate.py:10)" in out, out  # #L10 normalized to :10
 
 
 # --- built-in runner ------------------------------------------------------------

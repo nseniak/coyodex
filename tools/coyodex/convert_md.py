@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from coyodex import schema_v1
+from coyodex.assemble import normalize_anchors
 from coyodex.model import (
     ConfigRow,
     Component,
@@ -63,7 +64,8 @@ _RECOGNIZED = re.compile(
 @dataclass
 class ConvertResult:
     model: ProjectModel
-    warnings: list[str]
+    warnings: list[str]         # real conversion problems (a v1 shape the parser had to guess at)
+    notes: list[str]            # informational fix-ups (e.g. an anchor normalized to `path:line`)
 
 
 def _strip_bold(s: str) -> str:
@@ -358,7 +360,12 @@ def convert_text(raw: str) -> ConvertResult:
     m.extras = _collect_extras(lines, consumed)
     for ex in m.extras:
         warnings.append(f"unrecognized section preserved verbatim in extras: '{ex.heading}'")
-    return ConvertResult(model=m, warnings=warnings)
+    # A v1 map's anchors predate the `path:line` mandate (method/model.md) and are commonly the
+    # retired `path#Lnnn` form — migrate them too, the same normalization `coyodex assemble` runs,
+    # so a converted map is canonical from the start instead of failing the new validate gate. This
+    # is an informational fix-up, not a conversion problem, so it rides `notes`, not `warnings`.
+    notes = [f"anchor normalized: {n}" for n in normalize_anchors(m, repo_root=None)]
+    return ConvertResult(model=m, warnings=warnings, notes=notes)
 
 
 def _collect_extras(lines: list[str], consumed: set[int]) -> list[ExtraSection]:
@@ -449,6 +456,8 @@ def main(argv: list[str] | None = None) -> int:
     md_path.write_text(model_to_markdown(result.model), encoding="utf-8")
     html_path = dest / "project-map.html"
     write_html(model_to_graph(result.model), html_path, None)
+    for n in result.notes:
+        print(f"note: {n}")
     for w in result.warnings:
         print(f"WARNING: {w}", file=sys.stderr)
     note = (" (the hand-authored original was replaced by the generated view — the old text stays "

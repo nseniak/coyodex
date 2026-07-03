@@ -31,7 +31,7 @@ SUBDOMAIN: <SD-id>                        ← optional; the one subdomain the en
 MEANING: <one-line meaning>
 FIELDS: <field> · <field> · …            ← inline, OR a bullet list (see FIELDS)
 RELATIONS: <relation> · <relation> · …
-SOURCE: [<file>](<path>#L<line>)
+SOURCE: [<file>](<path>:<line>)
 ```
 
 | Part | Required | Holds | Parses to |
@@ -41,7 +41,7 @@ SOURCE: [<file>](<path>#L<line>)
 | `MEANING:` | yes | one-line gloss | `fields.Meaning` |
 | `FIELDS:` | yes | attribute list | `node.attrs` |
 | `RELATIONS:` | no | typed `E→E` edges | `edges` (carry `card` + `kind`) |
-| `SOURCE:` | yes | `[text](path#Lnn)` | `node.file` / `node.line` |
+| `SOURCE:` | yes | `[text](path:line)` | `node.file` / `node.line` |
 
 > **`SUBDOMAIN:` groups the entity** into a bounded context (`SD`) — the domain-model analog of a
 > component's `Subsystem` cell, single-sourced on the child. It is **optional and additive**: omit it
@@ -203,18 +203,18 @@ Three cards:
 MEANING: a customer's purchase, from cart to fulfillment
 FIELDS: id:ObjectId PK · status:string · total:money · createdAt:date · customerId:ObjectId FK→E3
 RELATIONS: contains 1→* E2 LineItem · placedBy *→1 E3 Customer
-SOURCE: [order.py](domain/order.py#L12)
+SOURCE: [order.py](domain/order.py:12)
 
 **E2 — LineItem** *(embedded in Order)*
 MEANING: one product line within an order
 FIELDS: sku:string · qty:int · unitPrice:money
 RELATIONS: refersTo *→1 E4 Product
-SOURCE: [order.py](domain/order.py#L58)
+SOURCE: [order.py](domain/order.py:58)
 
 **E3 — Customer** *(customers collection)*
 MEANING: the buyer
 FIELDS: id:ObjectId PK · email:string unique · name:string
-SOURCE: [customer.py](domain/customer.py#L9)
+SOURCE: [customer.py](domain/customer.py:9)
 ```
 
 Parse to nodes (with `attrs`) + edges (with `card` + `kind`):

@@ -119,14 +119,32 @@ def make_anchored_model(component_anchor: str | None = None, group_anchor: str |
 def test_component_md_link_anchor_is_reduced_to_its_bare_href():
     m = make_anchored_model(component_anchor="[app.py](backend/app.py#L10)")
     notes = normalize_anchors(m, None)
-    assert m.components[0].anchor == "backend/app.py#L10"
+    assert m.components[0].anchor == "backend/app.py:10"
     assert any("C1" in n for n in notes)
 
 
 def test_entity_md_link_source_is_reduced_to_its_bare_href():
     m = make_anchored_model(entity_source="[user.py](domain/user.py#L5)")
     normalize_anchors(m, None)
-    assert m.entities[0].source == "domain/user.py#L5"
+    assert m.entities[0].source == "domain/user.py:5"
+
+
+def test_component_anchor_range_is_rewritten_from_legacy_hash_syntax():
+    m = make_anchored_model(component_anchor="backend/app.py#L10-L18")
+    notes = normalize_anchors(m, None)
+    assert m.components[0].anchor == "backend/app.py:10-18"
+    assert any("C1" in n for n in notes)
+
+
+def test_edge_where_legacy_hash_anchor_is_rewritten():
+    frag = {"components": [{"id": "C1", "name": "X"}, {"id": "C2", "name": "Y"}],
+            "edges": [{"src": "C1", "verb": "uses", "dst": "C2",
+                      "where": "[app.py](backend/app.py#L20)"}]}
+    model, problems = merge_fragments([("f.json", load_fragment(json.dumps(frag), "f.json"))])
+    assert problems == []
+    notes = normalize_anchors(model, None)
+    assert model.edges[0].where == "[app.py](backend/app.py:20)"
+    assert any("where" in n for n in notes)
 
 
 def test_bare_group_anchor_is_wrapped_into_a_link():
@@ -147,10 +165,10 @@ def test_directory_anchor_gets_a_trailing_slash_when_the_repo_shows_a_dir():
         m = make_anchored_model(component_anchor="backend")
         normalize_anchors(m, Path(td))
         assert m.components[0].anchor == "backend/"
-        # a file-like anchor (has #Lnnn) is never slashed
+        # a file-like anchor (has a line suffix) is never slashed — and gets colon-normalized too
         m2 = make_anchored_model(component_anchor="backend#L1")
         normalize_anchors(m2, Path(td))
-        assert m2.components[0].anchor == "backend#L1"
+        assert m2.components[0].anchor == "backend:1"
 
 
 # --- the build-fragments gitignore -------------------------------------------------

@@ -49,6 +49,7 @@ from coyodex.validate_analysis import (
     check_hierarchy,
     compression_coverage_from_refs,
     granularity_advisory,
+    strip_anchor,
 )
 
 _WRITE_VERBS = ("persists", "writes")  # ownership verbs for the unowned-entities nudge (as in v1)
@@ -216,7 +217,7 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
             problems.append(f"Edge {e.src} → {e.dst} has an empty Verb")
         if _where_href(e.where or "") is None:
             warnings.append(f"{e.src} → {e.dst}: `Where` is not a source location "
-                            f"(use a `[file](path#Lnnn)` call-site link)")
+                            f"(use a `[file](path:line)` call-site link)")
     return problems, warnings
 
 
@@ -263,6 +264,33 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
             problems.append(f"Relation between {a} and {b} is declared on both cards — author it "
                             f"on one side only")
     return problems, warnings
+
+
+_LEGACY_HASH_LINE = re.compile(r"#L\d+(?:-L?\d+)?")  # a retired `#Lnnn` / `#Lnnn-Lmmm` anchor, anywhere
+
+
+def _check_anchor_syntax(m: ProjectModel) -> list[str]:
+    """Every source-location anchor must use the canonical `path:line` / `path:line-line` syntax
+    (method/model.md's 'Anchor formats') — a `path#Lnnn` anchor is a schema violation, not just a
+    style nit: the viewer's click-to-open can't resolve it. Checks every schema-governed anchor
+    (`_anchor_pairs`) plus free-text `extra` columns (components/deps), where an unconstrained
+    'evidence' field is the one place agents actually drift to the retired form."""
+    problems: list[str] = []
+    for label, href in _anchor_pairs(m):
+        if _LEGACY_HASH_LINE.search(href):
+            problems.append(f"{label}: '{href}' uses the retired `#Lnnn` anchor syntax — use "
+                            f"`path:line` (or `path:line-line` for a range)")
+    for c in m.components:
+        for key, val in c.extra.items():
+            if isinstance(val, str) and _LEGACY_HASH_LINE.search(val):
+                problems.append(f"{c.id} extra.{key}: '{val}' contains a retired `#Lnnn` anchor — "
+                                f"use `path:line` (or `path:line-line` for a range)")
+    for d in m.deps:
+        for key, val in d.extra.items():
+            if isinstance(val, str) and _LEGACY_HASH_LINE.search(val):
+                problems.append(f"{d.id} extra.{key}: '{val}' contains a retired `#Lnnn` anchor — "
+                                f"use `path:line` (or `path:line-line` for a range)")
+    return problems
 
 
 def _check_altitude(m: ProjectModel) -> list[str]:
@@ -315,7 +343,7 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
 def check_anchor_existence_model(m: ProjectModel, roots: list[Path]) -> list[str]:
     out: list[str] = []
     for label, href in _anchor_pairs(m):
-        rel = re.sub(r":\d+$", "", href.split("#", 1)[0])
+        rel = strip_anchor(href)
         is_dir = rel.endswith("/")
         rel = rel.rstrip("/")
         if not rel:
@@ -343,7 +371,7 @@ def check_entity_sources_model(m: ProjectModel, roots: list[Path]) -> list[str]:
             continue
         tokens = re.findall(r"[A-Za-z_]\w{2,}", e.name)
         if tokens and not any(tok.lower() in code for tok in tokens):
-            rel = e.source.split("#", 1)[0]
+            rel = strip_anchor(e.source)
             problems.append(f"Domain card {e.id} '{e.name}' is not defined in its SOURCE ({rel}) — "
                             f"likely synthesized or a wrong anchor; entities must be real named types")
     return problems
@@ -359,7 +387,7 @@ def referenced_paths(m: ProjectModel, root: Path) -> set[str]:
     rootstr = str(root)
     refs: set[str] = set()
     for c in cands:
-        c = c.split("#", 1)[0].strip()
+        c = strip_anchor(c.strip())
         if c.startswith("file://"):
             c = c[7:]
         if c.startswith(rootstr):
@@ -467,6 +495,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     card_problems, card_warnings = _check_domain_cards(m)
     problems.extend(card_problems)
     warnings.extend(card_warnings)
+    problems.extend(_check_anchor_syntax(m))
 
     roots = _source_roots(model_path, repo_root) if model_path is not None else (
         [repo_root.resolve()] if repo_root is not None else [])

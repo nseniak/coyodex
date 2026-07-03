@@ -101,10 +101,13 @@ class DiffDict(TypedDict):
     new_edges: list[dict[str, str]]
 
 
+_LINE_OF = re.compile(r"(?:#L|:)(\d+)(?:-L?\d+)?$")  # a trailing anchor's START line, either form
+
+
 def _line_of(href: str | None) -> int | None:
     if not href:
         return None
-    m = re.search(r"#L(\d+)$", href) or re.search(r":(\d+)$", href)
+    m = _LINE_OF.search(href)
     return int(m.group(1)) if m else None
 
 

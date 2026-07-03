@@ -141,7 +141,7 @@ class Entity:                        # a T5 domain card
     store: str = ""
     meaning: str = ""
     subdomain: str | None = None
-    source: str | None = None        # path#Lnnn anchoring the real named type
+    source: str | None = None        # path:line anchoring the real named type
     fields: list[EntityField] = field(default_factory=list)
     relations: list[EntityRelation] = field(default_factory=list)
 

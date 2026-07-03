@@ -35,7 +35,7 @@ from coyodex.views import model_to_markdown
 
 # --- builders -------------------------------------------------------------------
 
-def make_entity(eid: str = "E1", name: str = "Order", source: str | None = "src/order.py#L1",
+def make_entity(eid: str = "E1", name: str = "Order", source: str | None = "src/order.py:1",
                 relations: list[EntityRelation] | None = None) -> Entity:
     return Entity(id=eid, name=name, store="orders", meaning="a thing", source=source,
                   fields=[EntityField(name="id", type="str", markers=["PK"])],
@@ -48,13 +48,13 @@ def make_valid_model() -> ProjectModel:
     m.use_cases = [UseCase(id="UC1", name="View order", actor="Andy")]
     m.golden_path = [GoldenStep(id="GP1", title="View", uc="UC1")]
     m.components = [Component(id="C1", name="Viewer", purpose="shows",
-                              entry_point="[v.py](src/v.py#L1)")]
+                              entry_point="[v.py](src/v.py:1)")]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
     m.entities = [make_entity()]
     m.flows = [Flow(uc="UC1", title="View order",
                     steps=[FlowStep(n=1, src="Andy", dst="C1", phrase="opens")])]
     m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show",
-                    where="[v.py](src/v.py#L5)"),
+                    where="[v.py](src/v.py:5)"),
                Edge(src="C1", verb="uses", dst="D1", why="query", where="src/v.py:7")]
     return m
 
@@ -194,7 +194,7 @@ def test_non_entity_marker_quiets_under_harvest():
         (domain / "things.py").write_text(classes, encoding="utf-8")
         (domain / "order.py").write_text("class Order:\n    pass\n", encoding="utf-8")
         m = make_valid_model()
-        m.entities = [make_entity(source="domain/order.py#L1")]
+        m.entities = [make_entity(source="domain/order.py:1")]
         roots = [Path(td)]
         warnings = check_domain_coverage_model(m, roots)
         assert any("Under-harvested" in w for w in warnings)
@@ -224,10 +224,10 @@ def test_check_sources_flags_synthesized_entity():
         src.mkdir()
         (src / "order.py").write_text("class Order:\n    pass\n", encoding="utf-8")
         m = make_valid_model()
-        m.entities = [make_entity(name="PhantomConcept", source="src/order.py#L1")]
+        m.entities = [make_entity(name="PhantomConcept", source="src/order.py:1")]
         problems, _ = validate_model(m, repo_root=Path(td), check_sources=True)
         assert any("PhantomConcept" in p and "not defined in its SOURCE" in p for p in problems)
-        m.entities = [make_entity(name="Order", source="src/order.py#L1")]
+        m.entities = [make_entity(name="Order", source="src/order.py:1")]
         problems, _ = validate_model(m, repo_root=Path(td), check_sources=True)
         assert not any("not defined in its SOURCE" in p for p in problems)
 
@@ -235,9 +235,29 @@ def test_check_sources_flags_synthesized_entity():
 def test_check_sources_warns_on_dead_anchor():
     with tempfile.TemporaryDirectory() as td:
         m = make_valid_model()
-        m.entities[0].source = "src/nowhere.py#L1"
+        m.entities[0].source = "src/nowhere.py:1"
         _, warnings = validate_model(m, repo_root=Path(td), check_sources=True)
         assert any("does not resolve" in w for w in warnings)
+
+
+# --- anchor syntax gate: `path#Lnnn` is retired, `path:line`/`path:line-line` is mandatory ---
+
+def test_legacy_hash_anchor_is_a_blocking_problem():
+    m = make_valid_model()
+    m.entities[0].source = "src/order.py#L1"
+    assert any("retired" in p and "#Lnnn" in p for p in problems_of(m))
+
+
+def test_colon_range_anchor_is_not_flagged():
+    m = make_valid_model()
+    m.entities[0].source = "src/order.py:1-9"
+    assert problems_of(m) == []
+
+
+def test_legacy_hash_anchor_in_extra_evidence_is_flagged():
+    m = make_valid_model()
+    m.components[0].extra = {"evidence": "src/a.py:1, src/b.py#L7-L12"}
+    assert any("extra.evidence" in p and "retired" in p for p in problems_of(m))
 
 
 # --- granularity advisory (opt-in via check_coverage; re-computed from the tree — GR4) ---
@@ -269,7 +289,7 @@ def test_granularity_advisory_silent_within_band():
     """A component count inside E's ±40% band stays silent — the anchor nudges, it never nags."""
     m = make_valid_model()
     m.components = [Component(id=f"C{i}", name=f"Unit {i}", purpose="one unit",
-                              entry_point="[v.py](src/v.py#L1)") for i in range(1, 11)]  # 10 ≈ E
+                              entry_point="[v.py](src/v.py:1)") for i in range(1, 11)]  # 10 ≈ E
     m.edges = []  # the demo edges/flows reference C1 only — drop them so the model stays valid
     m.flows = []
     with tempfile.TemporaryDirectory() as td:

@@ -71,5 +71,5 @@ flowchart TB
   c2 -->|routes-to| c8[C8 Upstream]
   c8 -->|persists| c12[(C12 Persistence)]
   c12 -->|cloud| d1[(D1 Mongo)]
-  click c2 "path/to/file.py#L281" "file.py:281"
+  click c2 "path/to/file.py:281" "file.py:281"
 ```

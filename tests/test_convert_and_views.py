@@ -25,7 +25,7 @@ from pathlib import Path
 
 from coyodex import audit_model, schema_v1
 from coyodex.convert_md import convert_text
-from coyodex.model import all_elements, load_model, to_canonical_json
+from coyodex.model import Entity, EntityField, ProjectModel, all_elements, load_model, to_canonical_json
 from coyodex.validate_analysis import validate_map
 from coyodex.views import model_to_graph, model_to_markdown
 
@@ -86,7 +86,7 @@ def test_convert_small_map_captures_everything():
     assert [r.name for r in m.roles] == ["Andy"]
     assert [u.id for u in m.use_cases] == ["UC1"] and m.use_cases[0].actor == "Andy"
     assert m.golden_path[0].uc == "UC1"
-    assert m.components[0].entry_point == "[v.py](src/v.py#L1)"
+    assert m.components[0].entry_point == "[v.py](src/v.py:1)"  # #L1 normalized to the canonical :1
     assert m.deps[0].kind == "datastore" and m.deps[0].confidence == "verified"
     assert m.entities[0].fields[0].markers == ["PK"]
     assert len(m.edges) == 2 and m.edges[0].verb == "reads"
@@ -175,6 +175,25 @@ def test_golden_graph_carries_every_defined_element():
     assert len(g["gp"]) == len(m.golden_path)
     assert len(g["roles"]) == len(m.roles)
     assert g["edges"], "the fixture's backbone must survive into the graph"
+
+
+def test_graph_line_parses_colon_range_and_legacy_hash_anchors():
+    """`model_to_graph`'s node.line (build_graph._line_of) must resolve the START line of every
+    anchor form: canonical single-line, canonical range, and the retired `#Lnnn`/`#Lnnn-Lmmm`
+    (an un-migrated map's anchors must still open on click, just not be re-emitted)."""
+    m = ProjectModel(title="T", goal="G")
+    m.entities = [
+        Entity(id="E1", name="A", source="src/a.py:12",
+              fields=[EntityField(name="id", type="str")]),
+        Entity(id="E2", name="B", source="src/b.py:12-18",
+              fields=[EntityField(name="id", type="str")]),
+        Entity(id="E3", name="C", source="src/c.py#L12-L18",
+              fields=[EntityField(name="id", type="str")]),
+    ]
+    g = model_to_graph(m)
+    assert g["nodes"]["E1"]["line"] == 12 and g["nodes"]["E1"]["file"] == "src/a.py:12"
+    assert g["nodes"]["E2"]["line"] == 12 and g["nodes"]["E2"]["file"] == "src/b.py:12-18"
+    assert g["nodes"]["E3"]["line"] == 12 and g["nodes"]["E3"]["file"] == "src/c.py#L12-L18"
 
 
 def test_golden_model_audit_is_deterministic_and_deduped():

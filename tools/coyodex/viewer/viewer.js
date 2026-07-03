@@ -1945,22 +1945,25 @@ const srcRoot = () => (lsGet(LS.root) || REPO_ROOT_DEFAULT || '').replace(/\/+$/
 const openTargetId = () => lsGet(LS.editor) || (GH_BAKED ? 'github' : 'native');
 const needsRoot = (id) => id !== 'native' && id !== 'github';  // only editor/custom targets need a local root
 const customUri = () => lsGet(LS.custom) || '';
-// `file` keeps its source anchor as parsed from the map link (e.g. 'src/app.py#L42' or 'src/app.py:42');
-// the line is carried separately in `line`, so strip the anchor + any leading slash before joining the
-// path onto the repo root or the GitHub base. The `#L<n>` form is unambiguous; the `:<n>` form is
-// stripped only when it equals the parsed `line`, so a real path ending in ':<digits>' survives.
+// `file` keeps its source anchor as parsed from the map link (e.g. 'src/app.py#L42', 'src/app.py:42',
+// or a range like 'src/app.py:42-51'); the line is carried separately in `line`, so strip the anchor +
+// any leading slash before joining the path onto the repo root or the GitHub base. The `#L<n>` form
+// (with an optional `-L<m>`/`-<m>` range) is unambiguous; the `:<n>` form (with an optional `-<m>`
+// range) is stripped only when its start equals the parsed `line`, so a real path ending in
+// ':<digits>' survives.
 const cleanPath = (file, line) => {
-  let p = String(file).replace(/#L\d+$/, '');
-  if (line) p = p.replace(new RegExp(':' + line + '$'), '');
+  let p = String(file).replace(/#L\d+(?:-L?\d+)?$/, '');
+  if (line) p = p.replace(new RegExp(':' + line + '(?:-\\d+)?$'), '');
   return p.replace(/^\/+/, '');
 };
 // True when a map href is an in-repo path (a file or a directory) rather than an off-repo URL — only
 // those can be opened in the editor / on GitHub. An `http(s)://…` ref is left as plain text. The `://`
 // test (not a bare `scheme:`) is deliberate: it must NOT match the `path:line` form like `app.py:42`.
 const localRef = (file) => !!file && !/^[a-z][a-z0-9+.-]*:\/\//i.test(String(file));
-// An edge's `where` source ref ("path#Lnn" / "path:nn" / "path") -> {file, line} for openSource. The
-// full ref stays as `file` (cleanPath/editorUri/ghUrl strip the anchor themselves), like a node's file.
-const whereNode = (where) => { const m = String(where).match(/(?:#L|:)(\d+)$/); return { file: where, line: m ? +m[1] : null }; };
+// An edge's `where` source ref ("path#Lnn" / "path:nn" / "path:nn-mm" / "path") -> {file, line} for
+// openSource — `line` is the anchor's START line. The full ref stays as `file` (cleanPath/editorUri/
+// ghUrl strip the anchor themselves), like a node's file.
+const whereNode = (where) => { const m = String(where).match(/(?:#L|:)(\d+)(?:-L?\d+)?$/); return { file: where, line: m ? +m[1] : null }; };
 // A directory ref ends with `/` (the map convention `[dir/](path/)`); it opens differently from a file —
 // GitHub `/tree/` not `/blob/`, the editor without a line/column, and no `#L` anchor.
 const isDirRef = (file, line) => cleanPath(file, line).endsWith('/');
