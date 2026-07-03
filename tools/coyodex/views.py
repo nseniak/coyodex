@@ -17,6 +17,7 @@ from dataclasses import asdict
 
 from coyodex import schema_v1
 from coyodex.model import Component, Dep, Entity, Group, ProjectModel, UseCase
+from coyodex.validate_analysis import strip_anchor
 from coyodex.viewer.build_graph import (
     LINK,
     Edge as GraphEdge,
@@ -57,8 +58,9 @@ def _table(headers: list[str], rows: list[list[str]]) -> list[str]:
 
 
 def _source_line(source: str) -> str:
-    """A card SOURCE line from the stored href: labelled with the file's basename."""
-    label = source.split("#", 1)[0].rsplit("/", 1)[-1] or source
+    """A card SOURCE line from the stored href: labelled with the file's basename (its line anchor
+    stripped — leaving it in would mislabel `path:line` as `basename:line` instead of `basename`)."""
+    label = strip_anchor(source).rsplit("/", 1)[-1] or source
     return f"SOURCE: [{label}]({source})"
 
 

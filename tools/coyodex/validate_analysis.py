@@ -376,7 +376,7 @@ def _map_referenced_paths(text: str, root: Path) -> set[str]:
     rootstr = str(root)
     refs: set[str] = set()
     for c in cands:
-        c = c.split("#", 1)[0].strip()
+        c = strip_anchor(c.strip())
         if c.startswith("file://"):
             c = c[7:]
         if c.startswith(rootstr):
@@ -882,7 +882,7 @@ def check_entity_sources(text: str, map_path: Path, repo_root: Path | None = Non
     for c in iter_domain_cards(text.splitlines()):
         if not c.source or not c.heading_ok or c.name == c.id:
             continue  # no anchor, or a malformed heading already flagged — nothing reliable to check
-        rel = c.source.split("#", 1)[0]
+        rel = strip_anchor(c.source)
         src = _resolve_source_file(c.source, roots)
         if src is None:
             continue  # file not resolvable (placeholder / run outside the repo) — skip, don't false-flag
