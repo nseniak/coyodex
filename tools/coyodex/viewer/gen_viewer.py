@@ -368,21 +368,33 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
 # differ by hue (indigo vs fuchsia), so subsystem≠subdomain AND component≠entity (the old clash, where
 # the entity used Mermaid's default lavender ≈ the component's indigo, is gone). Defined once, reused as
 # flowchart `classDef`s and as classDiagram per-id `style`s (classDiagram has no classDef-by-name).
+# A container's border is also drawn thicker AND dashed (`stroke-width` + `stroke-dasharray`) — a
+# SECOND, colour-blind-safe signal (on top of the JS-injected corner icon) that a box is a container,
+# not a leaf, since fill depth alone is easy to miss. Only subsystem/subdomain carry it.
+_CONTAINER_BORDER = "stroke-width:2.5px,stroke-dasharray:6 3"
 COMPONENT_STYLE = "fill:#eef2ff,stroke:#3730a3,color:#1e1b4b"  # indigo-50   — component (C), light member
-SUBSYSTEM_STYLE = "fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b"  # indigo-200  — subsystem (S), deep container
+SUBSYSTEM_STYLE = f"fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b,{_CONTAINER_BORDER}"  # indigo-200  — subsystem (S), deep container
 ENTITY_STYLE    = "fill:#fdf4ff,stroke:#86198f,color:#581c87"  # fuchsia-50  — entity (E), light member
-SUBDOMAIN_STYLE = "fill:#f5d0fe,stroke:#86198f,color:#581c87"  # fuchsia-200 — subdomain (SD), deep container
+SUBDOMAIN_STYLE = f"fill:#f5d0fe,stroke:#86198f,color:#581c87,{_CONTAINER_BORDER}"  # fuchsia-200 — subdomain (SD), deep container
 DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     — external dependency (D)
 DOMAIN_SUBDOMAIN_CLASSDEF = f"  classDef subdomain {SUBDOMAIN_STYLE};"
 
 
 def _fill_stroke(style: str) -> dict[str, str]:
-    """`{'fill':…, 'stroke':…}` parsed from a `fill:…,stroke:…,color:…` style string."""
+    """`{'fill':…, 'stroke':…, 'strokeWidth':…, 'strokeDasharray':…}` parsed from a
+    `fill:…,stroke:…,color:…[,stroke-width:…,stroke-dasharray:…]` style string — the stroke-width/dasharray
+    keys only present for a container style, so the viewer can tell a drilled subsystem/subdomain CLUSTER
+    frame (which `style`/classDef can't reach) apart from a member's."""
     d: dict[str, str] = {}
     for part in style.split(","):
         k, _, v = part.partition(":")
         d[k.strip()] = v.strip()
-    return {"fill": d["fill"], "stroke": d["stroke"]}
+    out = {"fill": d["fill"], "stroke": d["stroke"]}
+    if "stroke-width" in d:
+        out["strokeWidth"] = d["stroke-width"]
+    if "stroke-dasharray" in d:
+        out["strokeDasharray"] = d["stroke-dasharray"]
+    return out
 
 
 # Per-kind fill/stroke, injected into the viewer so it can recolour elements Mermaid renders with a
@@ -1426,7 +1438,7 @@ __STYLE__
       <li><b>Select a view</b> in the top bar</li>
       <li><b>Scroll</b> to zoom, <b>drag</b> to move</li>
       <li><b>Click</b> a box or arrow &mdash; shows its details</li>
-      <li><b>&#8984;-click</b> (Ctrl-click) &mdash; drills in</li>
+      <li><b>Double-click</b> a box (or click its corner icon) &mdash; drills in / opens the source file</li>
     </ul>
     <div class="modal-btns">
       <button id="coachok" type="button" class="primary">Got it</button>

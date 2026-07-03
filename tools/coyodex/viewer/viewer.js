@@ -108,6 +108,11 @@ for (const f of GRAPH.flows || []) {
 // change-impact summary), the node id to select is stashed here and applied once that view has rendered.
 let pendingSelect = null;
 
+// node id -> its injected corner-action icon element (see decorateActionIcons), so a ⌘-click / double
+// click drill (isDrillClick) can flash the SAME icon a direct icon-click would have used — one visual
+// language regardless of which of the three ways you triggered it.
+const ACTION_ICONS = {};
+
 // --- scene ----------------------------------------------------------------------
 // A "scene" wraps the diagram currently shown: its root, the bound node/edge elements, the active
 // selection, and what the side panel shows when nothing is selected. There's one scene at a time;
@@ -152,6 +157,11 @@ function applyTint(rect, kind) {
   if (!rect || !tint) return;
   rect.style.setProperty('fill', tint.fill, 'important');
   rect.style.setProperty('stroke', tint.stroke, 'important');
+  // Only a container's (subsystem/subdomain) tint carries a width/dasharray — the second, colour-blind-
+  // safe signal that this frame is a container, matching the thicker dashed border its collapsed box
+  // gets from its Mermaid classDef (`style`/classDef can't reach a cluster frame directly, hence the JS tint).
+  if (tint.strokeWidth) rect.style.setProperty('stroke-width', tint.strokeWidth, 'important');
+  if (tint.strokeDasharray) rect.style.setProperty('stroke-dasharray', tint.strokeDasharray, 'important');
 }
 // An EXPANDED group (a drilled subsystem / subdomain) renders as a Mermaid CLUSTER frame, which
 // defaults to pale yellow. Tint each cluster to its family so a group reads the SAME colour collapsed (a
@@ -164,6 +174,150 @@ function tintClusters(root) {
     const node = m && GRAPH.nodes[m[1]];
     applyTint(g.querySelector('rect'), node && node.kind);
   });
+}
+
+// --- corner action icon -----------------------------------------------------------
+// Every drawn box gets AT MOST ONE corner icon — whatever its one useful secondary action is: a
+// container (subsystem/subdomain) drills into the diagram, a leaf with a source ref (component/entity)
+// opens that file. Nothing shown otherwise (a dep, or a leaf with no file, has no secondary action).
+// Clicking the icon fires the action directly; isDrillClick's ⌘-click / double-click paths flash this
+// SAME icon (via ACTION_ICONS) so all three routes teach the one visual language. Hidden until the box
+// is hovered (see viewer.css) — keeps a busy diagram uncluttered; double-click-anywhere-on-the-box
+// stays the reliably-discoverable path regardless of whether anyone ever notices the icon.
+function primaryActionFor(id) {
+  if (id === 'SYS') { const t = sysDrillTarget(); return t ? { kind: 'drill', run: () => go(t) } : null; }
+  if (id === LIBS_ID) return { kind: 'drill', run: () => go({ kind: 'libs' }) };
+  const n = GRAPH.nodes[id];
+  if (!n) return null;
+  if (n.kind === 'subsystem') return { kind: 'drill', run: () => go({ kind: 'subsystem', sid: id }) };
+  if (n.kind === 'subdomain') return { kind: 'drill', run: () => go({ kind: 'domsub', sd: id }) };
+  const src = srcNode(id);
+  return src ? { kind: 'open', run: () => openSource(src) } : null;
+}
+// Re-triggerable pulse on the icon (double-click / ⌘-click drilled via the BOX, not the icon itself) —
+// closes the loop so the icon's meaning rubs off even on someone who never clicks it directly.
+function flashIcon(icon) {
+  if (!icon) return;
+  clearTimeout(icon._flashTimer);  // a fast repeat (e.g. double-click firing right after an icon click) shouldn't let an earlier timer cut the new flash short
+  icon.classList.remove('flash');
+  void icon.getBBox();  // force reflow so re-adding the class restarts the animation
+  icon.classList.add('flash');
+  // `.flash` forces the icon visible (see viewer.css) — MUST be removed once the moment has passed, or
+  // an action that doesn't re-render the view (opening a source file, unlike drilling) leaves the icon
+  // permanently visible from then on. A timer (not 'animationend') so this still cleans up under
+  // prefers-reduced-motion, where the animation itself is disabled and would never fire that event.
+  icon._flashTimer = setTimeout(() => icon.classList.remove('flash'), 550);
+}
+// A drawn vector glyph per action kind, not a text character — a unicode glyph reads as a blurry dot at
+// small sizes (font hinting varies by system); a path is crisp at any zoom. `drill` draws a magnifying
+// glass with a plus — the exact "zoom in" metaphor the app's own drill cursor already uses (viewer.css
+// `body.cmd .drill { cursor: zoom-in }`). `open` draws a diagonal arrow with a corner arrowhead — the
+// standard "open externally" shape — and viewer.css's `.opensrc` cursor is hand-drawn to match it, so
+// the icon and the ⌘-held cursor still agree on what the action means.
+function buildGlyph(kind) {
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('class', 'glyph');
+  if (kind === 'drill') {
+    const lens = document.createElementNS(SVGNS, 'circle');
+    lens.setAttribute('cx', '-2'); lens.setAttribute('cy', '-2'); lens.setAttribute('r', '4.5');
+    const handle = document.createElementNS(SVGNS, 'path');
+    handle.setAttribute('d', 'M 1.2,1.2 L 6,6');
+    const plus = document.createElementNS(SVGNS, 'path');
+    plus.setAttribute('d', 'M -4.2,-2 L 0.2,-2 M -2,-4.2 L -2,0.2');
+    g.append(lens, handle, plus);
+  } else {
+    // The standard "open externally" glyph: a diagonal shaft with a corner arrowhead at the tip (the
+    // same shape as the common external-link icon). Scale + stroke-width are carried over unchanged
+    // from the bracket glyph this replaced — that weight was tuned against the drill glyph's solid lens
+    // (a thin stroke reads visually smaller than a filled shape at the same bounding-box size), and this
+    // shape has the same "a few open line segments" character, so the same fix still applies. Scaling
+    // the whole `.glyph` group (safe here: unlike the outer `.action-icon` group, it carries no
+    // position-critical transform of its own to clobber) keeps the shaft-to-arrowhead ratio exactly as
+    // drawn, regardless of the scale factor.
+    const arrow = document.createElementNS(SVGNS, 'path');
+    // The arrowhead legs (3.5) stay well above the stroke width (3.4) on purpose — shortening the SHAFT
+    // (tail) is safe, but shortening the arrowhead legs much past the stroke's own width is what turns
+    // the corner into a solid blob instead of a readable chevron (that's what happened at legs=1.5).
+    arrow.setAttribute('d', 'M -3.5,3.5 L 4,-4 M 4,-0.5 L 4,-4 L 0.5,-4');
+    g.append(arrow);
+    g.setAttribute('transform', 'scale(1.3)');
+  }
+  return g;
+}
+// Paint values per action kind. Applied via inline style + 'important' in addActionIcon, NOT via a CSS
+// class — a container (subsystem/subdomain) box carries Mermaid-generated classDef rules like
+// `#coyodexGraph7 .subsystem > * { fill: …; stroke-dasharray: 6,3; … !important }` (its own dashed-
+// border styling), scoped by an id. An id in a selector outranks any number of classes NO MATTER WHAT,
+// and here Mermaid's rule is ALSO `!important` — so a same-!important class-based override can never
+// win, and an unset property (fill/stroke/stroke-width/dasharray) simply falls through and inherits
+// whatever the container painted itself with. An inline `!important` style is the one thing that beats
+// an author stylesheet's `!important` regardless of selector specificity, which is exactly why
+// `applyTint` elsewhere in this file already uses the same trick for cluster-frame recolouring.
+// Both kinds share the same indigo — the icon SHAPE (magnifying glass vs. arrow) is what tells drill
+// and open apart now, not colour. glyphWidth stays thicker for `open`: a few open line segments (the
+// arrow) read as visually thinner/smaller than the drill glyph's filled lens ring at the same
+// bounding-box size, even at matched colour.
+const ICON_PAINT = {
+  drill: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.1px' },
+  open: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.6px' },
+};
+function paintImportant(el, props) {
+  for (const k in props) el.style.setProperty(k, props[k], 'important');
+}
+// Inject `action`'s icon (circle + glyph) into `el`'s own top-left corner, in `el`'s local coordinate
+// space (getBBox), so it rides along with whatever transform Mermaid gave the node/cluster group.
+function addActionIcon(el, id, action) {
+  let bbox; try { bbox = el.getBBox(); } catch (_) { return; }
+  const paint = ICON_PAINT[action.kind];
+  const icon = document.createElementNS(SVGNS, 'g');
+  icon.setAttribute('class', 'action-icon ' + (action.kind === 'drill' ? 'is-drill' : 'is-open'));
+  // The anchor point in DIAGRAM units, kept around so rescaleActionIcons can recompute the transform
+  // (translate + a counter-zoom scale) on every zoom change without re-measuring the box.
+  icon._anchor = { x: bbox.x, y: bbox.y };
+  icon.setAttribute('transform', `translate(${bbox.x},${bbox.y})`);
+  // A container's own box sits exactly where the icon is anchored (its top-left corner) — with a
+  // dashed border (see gen_viewer.py _CONTAINER_BORDER), that border's dashes run directly behind/
+  // through the badge at that corner, visually merging with the badge's own thin ring and making it
+  // read as dashed too even though its own stroke is solid (confirmed: moving the icon away from the
+  // corner alone made it render cleanly). A borderless "halo" plate slightly bigger than the badge,
+  // painted first (underneath), gives the badge a clean, opaque area to sit on regardless of what's
+  // behind it — the common fix for any icon badge placed over a busy background.
+  const halo = document.createElementNS(SVGNS, 'circle');
+  halo.setAttribute('r', '16.5');
+  paintImportant(halo, { fill: '#fff', stroke: 'none' });
+  const circle = document.createElementNS(SVGNS, 'circle');
+  circle.setAttribute('r', '13');
+  paintImportant(circle, { fill: '#fff', stroke: paint.stroke, 'stroke-width': '1.6px', 'stroke-dasharray': 'none' });
+  const glyph = buildGlyph(action.kind);
+  glyph.querySelectorAll('circle, path').forEach((shape) => {
+    paintImportant(shape, { fill: 'none', stroke: paint.glyphStroke, 'stroke-width': paint.glyphWidth, 'stroke-dasharray': 'none' });
+  });
+  const title = document.createElementNS(SVGNS, 'title');
+  title.textContent = action.kind === 'drill' ? 'Drill in' : 'Open source';
+  icon.append(halo, circle, glyph, title);
+  // The hover tint also goes through JS + !important (not a CSS :hover rule) for the same reason as the
+  // base paint above — it's just fill, so it hits the exact same Mermaid collision.
+  icon.addEventListener('mouseenter', () => paintImportant(circle, { fill: paint.hoverFill }));
+  icon.addEventListener('mouseleave', () => paintImportant(circle, { fill: '#fff' }));
+  icon.addEventListener('click', (e) => {
+    if (isDrag(e)) return;  // tail of a drag-pan, not a real click
+    e.stopPropagation();
+    flashIcon(icon);
+    action.run();
+  });
+  el.appendChild(icon);
+  ACTION_ICONS[id] = icon;
+}
+// One pass over every box `render()` just bound (scene.nodeEls) — called once per render, alongside
+// tintClusters. Cluster frames (drilled containers shown as a NEIGHBOUR, not the card you're already
+// inside) get their icon from bindFrameDrill instead, which already knows which frames are drillable —
+// that runs INSIDE bindFor, before this, so ACTION_ICONS is reset once in render() before bindFor, not
+// here (resetting here would wipe the cluster icons bindFrameDrill just registered).
+function decorateActionIcons(scene) {
+  for (const id in scene.nodeEls) {
+    const action = primaryActionFor(id);
+    if (action) addActionIcon(scene.nodeEls[id], id, action);
+  }
 }
 function clearFocus(scene) {
   for (const nid in scene.nodeEls) scene.nodeEls[nid].style.opacity = '';
@@ -181,8 +335,20 @@ function resetScene(scene) {  // clear selection + focus, restore the scene's de
 // A click whose pointer moved far from its mousedown is the tail of a drag-pan — ignore it,
 // so panning never deselects.
 function isDrag(e) { return Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5; }
-// A ⌘-click (⌃-click off Mac) — the modifier that turns a select into a drill-in on subsystems/arrows.
-function isDrillClick(e) { return !!e && (e.metaKey || e.ctrlKey); }
+// A ⌘-click (⌃-click off Mac), OR a double-click — a native `click` event's second firing reports
+// `detail >= 2`, and svg-pan-zoom's own double-click-to-zoom is disabled (see render()) precisely so
+// this gesture is free for the diagram to use — turns a select into a drill-in / open-source. Flashes
+// that node's corner icon (if it has one) so double-clicking teaches the icon's meaning even to someone
+// who never clicks the icon directly; a direct icon click flashes itself already, so this only needs to
+// cover the ⌘-click / double-click paths.
+function isDrillClick(e) {
+  const drill = !!e && (e.metaKey || e.ctrlKey || e.detail >= 2);
+  if (drill && e.currentTarget) {
+    const id = idOf(e.currentTarget);
+    if (id && ACTION_ICONS[id]) flashIcon(ACTION_ICONS[id]);
+  }
+  return drill;
+}
 
 // --- side panel -----------------------------------------------------------------
 // Leaves (components under a subsystem, entities under a subdomain) anywhere beneath `id`, any depth —
@@ -854,12 +1020,36 @@ function topSubdomainOf(id) {
 }
 
 // --- shared binding -------------------------------------------------------------
+// The box's own drawn shape (rect/polygon/path/circle) — the first such descendant in document order,
+// which is always the shape Mermaid draws before any label and before the corner action icon (see
+// addActionIcon, appended last). A glow filter belongs on THIS, never on the group itself: `filter` on
+// an SVG group is a post-process pass over its whole rendered subtree, so a filter on the group would
+// bleed onto the action icon (a child of the same group) — there is no way for the icon to "opt out"
+// of an ancestor's filter, the filter has to simply not be applied above it in the first place.
+function shapeOf(el) { return el.querySelector('rect, polygon, path, circle') || el; }
+// Selection highlight for a node/frame — HILITE filter (on the shape, not the group — see shapeOf) +
+// an `is-selected` class on the group, so a selected box's corner action icon (if it has one) stays
+// visible after the cursor leaves it, instead of only ever showing on hover. The node analog of
+// glowEdge (edges have no action icon, so no class needed there).
+function glowNode(el) {
+  shapeOf(el).style.filter = HILITE;
+  el.classList.add('is-selected');
+  return () => { shapeOf(el).style.filter = ''; el.classList.remove('is-selected'); };
+}
+// Hover glow — same shape-only rule as glowNode, so hovering a box's corner action icon (visually
+// inside the box) never tints the icon itself; the icon has its own :hover reaction (viewer.css).
+// Skipped while the node is the active selection, so glowNode's HILITE wins over a lingering hover.
+function bindHoverGlow(scene, el, id) {
+  const shape = shapeOf(el);
+  el.addEventListener('mouseenter', () => { if (scene.selectedKey !== 'node:' + id) shape.style.filter = HOVER; });
+  el.addEventListener('mouseleave', () => { if (scene.selectedKey !== 'node:' + id) shape.style.filter = ''; });
+}
 // Select a normal node within a scene: toggle off if already selected, else show + highlight + focus.
 function selectNode(scene, el, id) {
   if (scene.selectedKey === 'node:' + id) { resetScene(scene); return; }
   scene.selectedKey = 'node:' + id;
   showNode(id);
-  sceneSelect(scene, () => { el.style.filter = HILITE; return () => { el.style.filter = ''; }; });
+  sceneSelect(scene, () => glowNode(el));
   // Dim to this node's neighbourhood only when the node is drawn in this scene; a box that isn't
   // registered (e.g. a neighbourhood's external subsystem) would otherwise dim everything around it.
   if (scene.nodeEls[id]) focusNode(scene, id); else clearFocus(scene);
@@ -876,7 +1066,7 @@ function selectLibsFold(scene, el) {
   if (scene.selectedKey === selKey) { resetScene(scene); return; }
   scene.selectedKey = selKey;
   showLibsFold();
-  sceneSelect(scene, () => { el.style.filter = HILITE; return () => { el.style.filter = ''; }; });
+  sceneSelect(scene, () => glowNode(el));
   if (scene.nodeEls[LIBS_ID]) focusNode(scene, LIBS_ID); else clearFocus(scene);
 }
 // Tag the Libraries box with the drill cursor (it ⌘-drills into the full list), like subsystem boxes.
@@ -907,9 +1097,7 @@ function bindNodes(scene, onActivate) {
     scene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
     markOpenSrc(el, id);  // leaf with a source ref -> ⌘-held cursor shows the open-source affordance
-    // Hover affordance — skip while this node is the active selection, so HILITE wins.
-    el.addEventListener('mouseenter', () => { if (scene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
-    el.addEventListener('mouseleave', () => { if (scene.selectedKey !== 'node:' + id) el.style.filter = ''; });
+    bindHoverGlow(scene, el, id);  // hover affordance — skip while this node is the active selection, so HILITE wins
     attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // hover -> meaning; ⌘ -> the action
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;  // tail of a drag-pan, not a real click
@@ -1119,8 +1307,7 @@ function bindGroupContainer(drillFor, edgeBinder) {
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
     el.classList.add('drill');
-    el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
-    el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
+    bindHoverGlow(mainScene, el, id);
     attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;
@@ -1161,8 +1348,7 @@ function bindDomainSub(sd) {
     seen.add(id);
     mainScene.nodeEls[id] = el;  // every drawn box joins the focus set — members + collapsed neighbours
     el.style.cursor = 'pointer';
-    el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
-    el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
+    bindHoverGlow(mainScene, el, id);
     attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));
     const k = GRAPH.nodes[id].kind;
     if (k === 'subdomain' || k === 'subsystem') {  // a collapsed neighbour box: ⌘ walks into its own card
@@ -1279,11 +1465,13 @@ function bindFrameDrill(scene) {
       : k === 'subdomain' ? { kind: 'domsub', sd: id } : null;
     if (!target) return;
     c.classList.add('drill');
+    const run = () => go(target);
     c.addEventListener('click', (ev) => {
-      if (isDrag(ev) || !isDrillClick(ev)) return;  // only ⌘-click drills the frame
+      if (isDrag(ev) || !isDrillClick(ev)) return;  // only ⌘-click / double-click drills the frame
       ev.stopPropagation();
-      go(target);
+      run();
     });
+    addActionIcon(c, id, { kind: 'drill', run });  // this frame IS a neighbour box here (not the card you're already in), so drilling it is meaningful
   });
 }
 
@@ -1330,8 +1518,7 @@ function bindDomain() {
     if (!id || !GRAPH.nodes[id] || mainScene.nodeEls[id]) return;
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
-    el.addEventListener('mouseenter', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = HOVER; });
-    el.addEventListener('mouseleave', () => { if (mainScene.selectedKey !== 'node:' + id) el.style.filter = ''; });
+    bindHoverGlow(mainScene, el, id);
     attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // hover -> meaning; ⌘ -> the action
     if (GRAPH.nodes[id].kind === 'subsystem') {  // a bridge box (domain edge card): ⌘ drills into its card
       el.classList.add('drill');
@@ -1606,11 +1793,12 @@ function renderChrome(s) {
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
   // One shared hint pill across every view: a plain click focuses (dims to the clicked element's own
-  // links + connected boxes), and ⌘-click drills down — into the next altitude where one exists, or to
-  // the source at a leaf (Components / Domain entities / a GP step). Both are "drilling in", so the pill
-  // reads the same everywhere instead of splitting "drill down" vs "open source".
+  // links + connected boxes); a double-click, its corner icon, or a ⌘-click all drill down — into the
+  // next altitude where one exists, or to the source at a leaf (Components / Domain entities / a GP
+  // step). All three are "drilling in", so the pill reads the same everywhere instead of splitting
+  // "drill down" vs "open source" (⌘-click stays as a shortcut for anyone who already learned it).
   drillhint.hidden = false;
-  drillhint.innerHTML = 'Click to focus · &#8984;-click to drill down';
+  drillhint.innerHTML = 'Click to focus · double-click (or its icon) to drill in';
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it
@@ -1627,8 +1815,30 @@ function renderChrome(s) {
   });
 }
 
-function updateZoomLevel() {  // reflect the current pan-zoom scale in the header control
+// Icons are drawn in DIAGRAM units, so without this they'd shrink right along with the boxes as the
+// view zooms out — at a crowded overview (many boxes fitted on screen) that makes them a near-invisible,
+// near-unclickable speck. Counter-scaled against the current pan-zoom level (like a map pin that stays
+// the same size no matter how far out you zoom the map) so they read as a constant on-screen size at
+// any zoom. `_anchor` (set in addActionIcon) is the translate; only the extra `scale` term changes here.
+function rescaleActionIcons() {
+  // getSizes().realZoom, NOT getZoom() — getZoom() is ALWAYS 1 right after a fresh fit, no matter the
+  // diagram's size or node count: it's relative to THAT diagram's own fit, not an absolute scale. A
+  // confirmed real bug: on a small test diagram this went unnoticed (a few dozen nodes still fit at a
+  // large-enough per-node scale), but a large real diagram (hundreds of nodes) has to shrink FAR more
+  // just to fit on screen at its own "100%" — 1/getZoom() never saw that shrink, so the icon rendered
+  // at just a few CSS pixels there even though it looked fine on the small diagram. realZoom is the
+  // library's own true diagram-units-to-CSS-pixel ratio (confirmed: doubles when you call zoomBy(2),
+  // unlike getZoom() which resets to 1 on every fresh fit) — 1/realZoom makes 1 local SVG unit render
+  // as exactly 1 CSS pixel always, regardless of diagram size or current zoom.
+  const inv = mainPz ? 1 / mainPz.getSizes().realZoom : 1;
+  for (const id in ACTION_ICONS) {
+    const a = ACTION_ICONS[id]._anchor;
+    if (a) ACTION_ICONS[id].setAttribute('transform', `translate(${a.x},${a.y}) scale(${inv})`);
+  }
+}
+function updateZoomLevel() {  // reflect the current pan-zoom scale in the header control + the icons
   if (zoomlevel) zoomlevel.textContent = mainPz ? Math.round(mainPz.getZoom() * 100) + '%' : '100%';
+  rescaleActionIcons();
 }
 
 // Keep the diagram fitted to the stage as the side bars (or the window) resize it. svg-pan-zoom caches
@@ -1670,7 +1880,9 @@ async function render() {
   diagram.innerHTML = svg;
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
+  for (const id in ACTION_ICONS) delete ACTION_ICONS[id];  // reset before bindFor's bindFrameDrill re-populates it
   bindFor(s);
+  decorateActionIcons(mainScene);  // corner icon = each drawn box's one useful secondary action
   // Every drawn box gets a default re-select closure (plain-click select), so back/forward can restore
   // a node selection. Edges, flow steps and GP actors/steps register their own during bindFor; a box
   // with special select behaviour (the Libraries fold) pre-registers too, so it's skipped here.
