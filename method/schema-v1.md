@@ -5,8 +5,9 @@
 > of it. Everything semantic in this document — the ID scheme, the conventions, the
 > derived-not-duplicated rules, grouping, dependency Kinds, source-link pinning — carries over
 > unchanged to schema v2 and still governs the generated view's shape. What no longer applies is
-> the storage claim below (markdown as the single source) and hand-authoring the tables: a legacy
-> v1 map is migrated once with `coyodex convert`.
+> the storage claim below (markdown as the single source) and hand-authoring the tables — the
+> tools no longer read schema-v1 markdown at all; this document survives only as the semantic
+> reference the generated view's shape still follows.
 
 `project-map.md` is semi-structured markdown, but to drive diagrams and tooling
 reliably it must obey a contract. Schema v1 is that contract: treat the table/ID/edge

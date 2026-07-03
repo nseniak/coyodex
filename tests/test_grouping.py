@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Tests for the schema-v1 grammar, the parser, and the validator's grouping checks.
+"""Tests for the schema-v2 grouping/rendering pipeline: the graph builder (build_graph), the view
+derivation (views.model_to_graph), the Mermaid/HTML card generators (gen_viewer), and the
+self-contained HTML renderer (viewer.render).
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_grouping.py        # built-in runner (prints pass/fail)
@@ -13,82 +15,308 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
-from coyodex import schema_v1, validate_analysis
-from coyodex.convert_md import convert_text
-from coyodex.model import to_canonical_json
+from coyodex import schema_v1
+from coyodex.model import load_model
 from coyodex.viewer import build_graph, gen_viewer
 from coyodex.views import model_to_graph
 
-# Run validator/renderer as modules so the subprocess tests hit the same entry points as the CLI.
-VALIDATOR = [sys.executable, "-m", "coyodex.validate_analysis"]
+# Render as a module so the subprocess tests hit the same entry point as the CLI.
 RENDER = [sys.executable, "-m", "coyodex.viewer.render"]
-REPO = Path(__file__).resolve().parent.parent  # repo root; tests/ sits directly under it
 
 
-# --- builders -------------------------------------------------------------------
 def make_grouped_map(layout: str = "proper") -> str:
     """A two-subsystem grouped map. layout='proper' has an ID + Component(name) column;
     layout='agent' drops them (id in col 0, Subsystem at index 1) — the regression case."""
-    s_table = (
-        "## Subsystems (S)\n"
-        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **S1** | Edge | x |  | a | V |\n"
-        "| **S2** | Core | x |  | a | V |\n\n"
-    )
     if layout == "agent":
-        t1 = (
-            "## T1\n"
-            "| Component | Subsystem | Purpose | Entry point | Depends on |\n"
-            "|---|---|---|---|---|\n"
-            "| **C1** | S1 | x | f | C2 |\n"
-            "| **C2** | S2 | x | f |  |\n\n"
-        )
-    else:
-        t1 = (
-            "## T1\n"
-            "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-            "|---|---|---|---|---|---|\n"
-            "| **C1** | Front door | S1 | x | f | C2 |\n"
-            "| **C2** | Engine | S2 | x | f |  |\n\n"
-        )
-    edges = (
-        "### edges\n"
-        "| From | Verb | To | Why | Where |\n"
-        "|---|---|---|---|---|\n"
-        "| C1 | uses | C2 | reach engine | f |\n"
-    )
-    return s_table + t1 + edges
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Edge",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "S2",
+      "name": "Core",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "C1",
+      "subsystem": "S1",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "C2",
+      "subsystem": "S2",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "C2",
+      "why": "reach engine",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Edge",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "S2",
+      "name": "Core",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Front door",
+      "subsystem": "S1",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Engine",
+      "subsystem": "S2",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "C2",
+      "why": "reach engine",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_card_map() -> str:
     """A grouped map exercising the card generators: S1 has two components wired internally
     (C1->C3), both cross into S2's component C2, and C2 touches a dep D1. Lets the tests assert
     a subsystem card keeps internal wiring + deps, while an edge card keeps ONLY the cross edges."""
-    return (
-        "## Subsystems (S)\n"
-        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **S1** | Edge | front | | a | V |\n"
-        "| **S2** | Core | brains | | a | V |\n\n"
-        "## Dependencies\n"
-        "| ID | Dependency | Purpose | Anchor |\n"
-        "|---|---|---|---|\n"
-        "| **D1** | Cache | speed | f |\n\n"
-        "## T1\n"
-        "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **C1** | Front door | S1 | x | f | C2 |\n"
-        "| **C3** | Router | S1 | x | f | C2 |\n"
-        "| **C2** | Engine | S2 | x | f | D1 |\n\n"
-        "### edges\n"
-        "| From | Verb | To | Why | Where |\n"
-        "|---|---|---|---|---|\n"
-        "| C1 | calls | C2 | reach engine | f |\n"
-        "| C1 | routes | C3 | dispatch | f |\n"
-        "| C3 | calls | C2 | reach engine | f |\n"
-        "| C2 | reads | D1 | cache | f |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Edge",
+      "purpose": "front",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "S2",
+      "name": "Core",
+      "purpose": "brains",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Front door",
+      "subsystem": "S1",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C3",
+      "name": "Router",
+      "subsystem": "S1",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Engine",
+      "subsystem": "S2",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "D1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [
+    {
+      "id": "D1",
+      "name": "Cache",
+      "kind": null,
+      "type": "",
+      "used_for": "",
+      "where_configured": "",
+      "confidence": "",
+      "deployment_linked": false,
+      "extra": {
+        "Anchor": "f",
+        "Purpose": "speed"
+      }
+    }
+  ],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "calls",
+      "dst": "C2",
+      "why": "reach engine",
+      "where": "f"
+    },
+    {
+      "src": "C1",
+      "verb": "routes",
+      "dst": "C3",
+      "why": "dispatch",
+      "where": "f"
+    },
+    {
+      "src": "C3",
+      "verb": "calls",
+      "dst": "C2",
+      "why": "reach engine",
+      "where": "f"
+    },
+    {
+      "src": "C2",
+      "verb": "reads",
+      "dst": "D1",
+      "why": "cache",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": [
+    {
+      "heading": "Dependencies",
+      "body": ""
+    }
+  ]
+}"""
 
 
 def make_nested_subsystem_map() -> str:
@@ -97,308 +325,1216 @@ def make_nested_subsystem_map() -> str:
     -> sibling subsystem). Exercises level-relative drill: S1's card must show S2 as a drillable box
     (not S2's components flattened in), and the C2->C3 crossing must resolve to the S3 box at S1's
     altitude."""
-    return (
-        "## Subsystems (S)\n"
-        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **S1** | Platform | x |  | a | V |\n"
-        "| **S2** | Inner | x | S1 | a | V |\n"
-        "| **S3** | Other | x |  | a | V |\n\n"
-        "## T1\n"
-        "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **C1** | Gate | S1 | x | f | C2 |\n"
-        "| **C2** | Worker | S2 | x | f | C3 |\n"
-        "| **C3** | Sink | S3 | x | f |  |\n\n"
-        "### edges\n"
-        "| From | Verb | To | Why | Where |\n"
-        "|---|---|---|---|---|\n"
-        "| C1 | calls | C2 | dispatch | f |\n"
-        "| C2 | calls | C3 | forward | f |\n"
-    )
-
-
-def make_empty_verb_map() -> str:
-    """An edge row with a blank Verb cell — renders as `C1 -->|| C2`, which can drop the Mermaid
-    label and desync the viewer's positional path/label zip. The validator must reject it."""
-    return (
-        "## T1\n"
-        "| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n"
-        "| **C1** | A | x | f | C2 |\n"
-        "| **C2** | B | x | f |  |\n\n"
-        "### edges\n"
-        "| From | Verb | To | Why | Where |\n"
-        "|---|---|---|---|---|\n"
-        "| C1 |  | C2 | reason | f |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Platform",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "S2",
+      "name": "Inner",
+      "purpose": "x",
+      "parent": "S1",
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "S3",
+      "name": "Other",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Gate",
+      "subsystem": "S1",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Worker",
+      "subsystem": "S2",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C3",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C3",
+      "name": "Sink",
+      "subsystem": "S3",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "calls",
+      "dst": "C2",
+      "why": "dispatch",
+      "where": "f"
+    },
+    {
+      "src": "C2",
+      "verb": "calls",
+      "dst": "C3",
+      "why": "forward",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_ungrouped_map() -> str:
     """No S table; prose mentions AWS S3/S4 (must not be treated as references)."""
-    return (
-        "# X\nUses AWS S3 and S4 buckets.\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n| **C1** | App | x | f |  |\n"
-    )
-
-
-def make_guard_map() -> str:
-    """S table present but T1 has no membership column — the silent-failure case."""
-    return (
-        "## Subsystems\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **S1** | A | x |  | a | V |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n| **C1** | App | x | f |  |\n"
-    )
-
-
-def make_cycle_map() -> str:
-    return (
-        "## S\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **S1** | A | x | S2 | a | V |\n| **S2** | B | x | S1 | a | V |\n\n"
-        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n| **C1** | x | S1 | p | f |  |\n"
-    )
-
-
-def make_glued_id_map() -> str:
-    """A Use-cases definition row with the id glued to the name (`| **UC1** Search… |`) — the
-    real regression from the mercatus build: the id reads as undefined, not actually missing."""
-    return (
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** Search a product | Shopper | types -> list |\n\n"
-        "## Golden Path\n"
-        "**GP1 — Search** *(UC1)*\n"
-        "STORY: x\n"
-        "`Touches:` UC1\n"
-    )
-
-
-def make_bad_columns_map() -> str:
-    """T1 whose separator has one more column than the header — the malformed-separator class."""
-    return (
-        "## T1\n"
-        "| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n"  # 6 separator cols vs 5 header cols
-        "| **C1** | App | x | f |  |\n"
-    )
-
-
-_VALID_HEAD = (
-    "## Use cases\n"
-    "| ID | Use case | Actor | Trigger → Outcome |\n"
-    "|---|---|---|---|\n"
-    "| **UC1** | Search | Shopper | types -> list |\n\n"
-    "## Golden Path\n"
-    "**GP1 — Search** *(UC1)*\n"
-    "STORY: x\n"
-    "`Touches:` UC1\n\n"
-)
-
-
-def make_fenced_ragged_table_map() -> str:
-    """A valid map plus a fenced block whose example table is ragged — must NOT be parsed."""
-    return _VALID_HEAD + (
-        "## Example output\n"
-        "```\n"
-        "| Name | Score |\n"
-        "|---|---|\n"
-        "| alice | 10 | extra |\n"   # 3 cols vs 2 — but it's inside a fence
-        "```\n"
-    )
-
-
-def make_fenced_dup_def_map() -> str:
-    """C1 defined once for real, shown a 2nd time inside a fence — not a duplicate (bug class)."""
-    return (
-        "## T1\n"
-        "| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n"
-        "| **C1** | App | x | f |  |\n\n"
-        "## How a row looks\n"
-        "```\n"
-        "| **C1** | App | x | f |  |\n"  # verbatim example, must be ignored
-        "```\n"
-    )
-
-
-def make_escaped_pipe_map() -> str:
-    r"""A cell uses the schema-sanctioned ``\|`` escape — must not inflate the column count."""
-    return (
-        "## T3\n"
-        "| Action | Command | Source |\n"
-        "|---|---|---|\n"
-        "| grep | `a \\| b` | [f](f) |\n"
-    )
-
-
-def make_escaped_pipe_edge_map() -> str:
-    r"""An edge whose Why cell contains an escaped pipe (`run a\|b`). The renderer must split on
-    UNescaped pipes only, so the cell keeps its literal `|` and the later Where column is not shifted
-    — the sibling of the validator's escaped-pipe test, on the parser/renderer side."""
-    return (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | A | x | f |  |\n| **C2** | B | x | f |  |\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | uses | C2 | run a\\|b mode | [f](f#L9) |\n"
-    )
-
-
-def test_renderer_keeps_escaped_pipe_cell_and_columns_aligned() -> None:
-    # The escaped pipe stays literal in the Why cell, and Where still resolves to its link (not shifted
-    # by a phantom column). Before the shared split_cells, the renderer split on `\|` and mangled both.
-    g = parse_map(make_escaped_pipe_edge_map())
-    e = next(x for x in g["edges"] if x["src"] == "C1" and x["dst"] == "C2")
-    assert e["why"] == "run a|b mode", e["why"]          # literal pipe preserved, cell not truncated
-    assert e["where"] == "f:9", e["where"]                # Where column not shifted out (#L9 normalized to :9)
-    code, out = run_validator(make_escaped_pipe_edge_map())
-    assert code == 0, out                                # and the validator still agrees it is well-formed
-
-
-def make_glued_inner_map() -> str:
-    """Id and name share the bold (`**C8 Upstream**`) — the glued hint must still fire."""
-    return (
-        "## T1\n"
-        "| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n"
-        "| **C1** | App | x | f | C8 |\n\n"
-        "## Notes\n"
-        "The upstream is C8.\n"
-        "| **C8 Upstream** | the upstream | x | f |  |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "X",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "App",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_fenced_node_map() -> str:
     """A real C1 plus a fenced example mentioning C9 — the parser must not graph C9."""
-    return (
-        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n| **C1** | Real | S1 | x | f |  |\n\n"
-        "## S\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **S1** | A | x |  | a | V |\n\n"
-        "## Example\n```\n| **C9** | Fake | S1 | x | f |  |\n```\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "A",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Real",
+      "subsystem": "S1",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": [
+    {
+      "heading": "S",
+      "body": ""
+    },
+    {
+      "heading": "Example",
+      "body": ""
+    }
+  ]
+}"""
+
+
+_CARDS_EMBEDDED_ENTITY_TYPE = (
+    "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: mode:E2 · id:int\nSOURCE: [f](f#L1)\n\n"
+    "**E2 — AuthMode**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+)
+
+
+_CARDS_COLLECTION_MARKER = (
+    "**E1 — Snapshot** *(s)*\nMEANING: m\n"
+    "FIELDS: refresh_tokens:E2[] · expires_at:int ? · id:int PK\n"
+    "RELATIONS: contains 1→* E2 StoredRefreshToken\nSOURCE: [f](f#L1)\n\n"
+    "**E2 — StoredRefreshToken**\nMEANING: m\nFIELDS: token:string\nSOURCE: [f](f#L2)\n"
+)
+
+
+_CARDS_RELATION_LABELS = (
+    "**E1 — Org** *(s)*\nMEANING: m\nFIELDS: id:string PK · subscription:E3\n"
+    "RELATIONS: has 1→* E2 Membership · contains 1→1 E3 Subscription\nSOURCE: [f](f#L1)\n\n"
+    "**E2 — Membership**\nMEANING: m\nFIELDS: org_id:string FK→E1 · email:string\nSOURCE: [f](f#L2)\n\n"
+    "**E3 — Subscription**\nMEANING: m\nFIELDS: tier:string\nSOURCE: [f](f#L3)\n"
+)
+
+
+_CARDS_UNGROUNDED_VERB = (
+    "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int\n"
+    "RELATIONS: authorizes *→1 E2\nSOURCE: [f](f#L1)\n\n"
+    "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
+)
+
+
+_CARDS_FORWARD_FK = (
+    "**E1 — Membership** *(s)*\nMEANING: m\nFIELDS: email:string · role:string FK→E2\n"
+    "RELATIONS: assignedRole *→1 E2 RoleDefinition\nSOURCE: [f](f#L1)\n\n"
+    "**E2 — RoleDefinition**\nMEANING: m\nFIELDS: name:string\nSOURCE: [f](f#L2)\n"
+)
+
+
+_CARDS_BACKING_HOW = (
+    "**E1 — Org** *(s)*\nMEANING: m\nFIELDS: id:string PK\n"
+    "RELATIONS: contains 1→* E2 Membership · tracks *→1 E3 Token {keyed by (org, upstream)}\n"
+    "SOURCE: [f](f#L1)\n\n"
+    "**E2 — Membership**\nMEANING: m\nFIELDS: org_id:string FK→E1\nSOURCE: [f](f#L2)\n\n"
+    "**E3 — Token**\nMEANING: m\nFIELDS: value:string\nSOURCE: [f](f#L3)\n"
+)
 
 
 def make_domain_map(cards: str | None = None) -> str:
     """A minimal valid map whose T5 is domain CARDS. `cards` overrides the default two-entity body
     (Order contains LineItem; LineItem uses a bullet-list FIELDS)."""
-    body = cards if cards is not None else (
-        "**E1 — Order** *(orders collection)*\n"
-        "MEANING: a purchase\n"
-        "FIELDS: id:ObjectId PK · status:string\n"
-        "RELATIONS: contains 1→* E2 LineItem\n"
-        "SOURCE: [order.py](order.py#L12)\n\n"
-        "**E2 — LineItem**\n"
-        "MEANING: a line\n"
-        "FIELDS:\n"
-        "  - sku: string\n"
-        "  - qty: int\n"
-        "SOURCE: [order.py](order.py#L58)\n"
-    )
-    return _VALID_HEAD + "## T5 — Domain model (domain cards)\n\n" + body
+    if cards is None:
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "orders collection",
+      "meaning": "a purchase",
+      "subdomain": null,
+      "source": "order.py:12",
+      "fields": [
+        {
+          "name": "id",
+          "type": "ObjectId",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "LineItem",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "LineItem",
+      "store": "",
+      "meaning": "a line",
+      "subdomain": null,
+      "source": "order.py:58",
+      "fields": [
+        {
+          "name": "sku",
+          "type": "string",
+          "markers": []
+        },
+        {
+          "name": "qty",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    if cards == _CARDS_EMBEDDED_ENTITY_TYPE:
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "mode",
+          "type": "E2",
+          "markers": []
+        },
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "E2",
+      "name": "AuthMode",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "x",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    if cards == _CARDS_COLLECTION_MARKER:
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Snapshot",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "refresh_tokens",
+          "type": "E2",
+          "markers": [
+            "[]"
+          ]
+        },
+        {
+          "name": "expires_at",
+          "type": "int",
+          "markers": [
+            "?"
+          ]
+        },
+        {
+          "name": "id",
+          "type": "int",
+          "markers": [
+            "PK"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "StoredRefreshToken",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "StoredRefreshToken",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "token",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    if cards == _CARDS_RELATION_LABELS:
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Org",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "subscription",
+          "type": "E3",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "has",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "Membership",
+          "how": null
+        },
+        {
+          "verb": "contains",
+          "target": "E3",
+          "src_card": "1",
+          "dst_card": "1",
+          "display": "Subscription",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "Membership",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "org_id",
+          "type": "string",
+          "markers": [
+            "FK→E1"
+          ]
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "E3",
+      "name": "Subscription",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:3",
+      "fields": [
+        {
+          "name": "tier",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    if cards == _CARDS_UNGROUNDED_VERB:
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "A",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "authorizes",
+          "target": "E2",
+          "src_card": "*",
+          "dst_card": "1",
+          "display": "",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "B",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "x",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    if cards == _CARDS_FORWARD_FK:
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Membership",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "email",
+          "type": "string",
+          "markers": []
+        },
+        {
+          "name": "role",
+          "type": "string",
+          "markers": [
+            "FK→E2"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "assignedRole",
+          "target": "E2",
+          "src_card": "*",
+          "dst_card": "1",
+          "display": "RoleDefinition",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "RoleDefinition",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    if cards == _CARDS_BACKING_HOW:
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Org",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "Membership",
+          "how": null
+        },
+        {
+          "verb": "tracks",
+          "target": "E3",
+          "src_card": "*",
+          "dst_card": "1",
+          "display": "Token",
+          "how": "keyed by (org, upstream)"
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "Membership",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "org_id",
+          "type": "string",
+          "markers": [
+            "FK→E1"
+          ]
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "E3",
+      "name": "Token",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:3",
+      "fields": [
+        {
+          "name": "value",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    raise ValueError("make_domain_map: unrecognised `cards` fixture")
 
 
 def make_gp_map() -> str:
     """A two-step Golden Path (GP1=UC1 actor Andy, GP2=UC2 actor Adam) + the two use-case T6 flows.
     Exercises the GP overview sequence (actors from the UCs) and each use case's flow sequence."""
-    return (
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** | Submit | Andy | submits -> stored |\n"
-        "| **UC2** | Approve | Adam | approves -> done |\n\n"
-        "## T1\n"
-        "| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n"
-        "| **C1** | Gateway | x | f | C2 |\n"
-        "| **C2** | Engine | x | f | D1 |\n\n"
-        "## T2\n"
-        "| ID | Name | Type | Used for | Where configured | Conf. |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **D1** | Cache | store | speed | env | V |\n\n"
-        "## Golden Path\n"
-        "**GP1 — Submit order** *(UC1)*\n"
-        "**GP2 — Approve order** *(UC2)*\n"
-        "why: needs the order from GP1\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC1 — Submit order**\n"
-        "1. Andy → C1 : submits the order\n"
-        "2. C1 → C2\n\n"
-        "**UC2 — Approve order**\n"
-        "1. Adam → C2 : approves the order\n"
-        "2. C2 → D1\n\n"
-        "### edges\n"
-        "| From | Verb | To | Why | Where |\n"
-        "|---|---|---|---|---|\n"
-        "| C1 | calls | C2 | reach engine | f |\n"
-        "| C2 | reads | D1 | cache | f |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Submit",
+      "actor": "Andy",
+      "trigger_outcome": "submits -> stored"
+    },
+    {
+      "id": "UC2",
+      "name": "Approve",
+      "actor": "Adam",
+      "trigger_outcome": "approves -> done"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Submit order",
+      "uc": "UC1",
+      "why": null
+    },
+    {
+      "id": "GP2",
+      "title": "Approve order",
+      "uc": "UC2",
+      "why": "needs the order from GP1"
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Gateway",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Engine",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "D1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [
+    {
+      "id": "D1",
+      "name": "Cache",
+      "kind": null,
+      "type": "store",
+      "used_for": "speed",
+      "where_configured": "env",
+      "confidence": "V",
+      "deployment_linked": false,
+      "extra": {}
+    }
+  ],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [
+    {
+      "uc": "UC1",
+      "title": "Submit order",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "submits the order",
+          "note": ""
+        },
+        {
+          "n": 2,
+          "src": "C1",
+          "dst": "C2",
+          "phrase": "",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "uc": "UC2",
+      "title": "Approve order",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Adam",
+          "dst": "C2",
+          "phrase": "approves the order",
+          "note": ""
+        },
+        {
+          "n": 2,
+          "src": "C2",
+          "dst": "D1",
+          "phrase": "",
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "calls",
+      "dst": "C2",
+      "why": "reach engine",
+      "where": "f"
+    },
+    {
+      "src": "C2",
+      "verb": "reads",
+      "dst": "D1",
+      "why": "cache",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
     """A Golden Path step whose use case's actor matches a defined Role, so gp_actors can join the
-    lifeline to the Roles table (wants + kind). The T6 flow opens with an actor step; `flow_actor` lets a
-    test inject a bad value to exercise the flow actor-step Role check."""
-    return (
-        "## Roles (actors)\n"
-        "| Role | Kind | What they want | Use cases they drive |\n"
-        "|---|---|---|---|\n"
-        "| **Org admin** | human | manage | UC22 |\n\n"
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC22** | Create org | Org admin | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | A | x | f |  |\n\n"
-        "## Golden Path\n"
-        "**GP1 — Admin creates the org** *(UC22)*\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC22 — Create org**\n"
-        f"1. {flow_actor} → C1 : creates the org\n"
-    )
+    lifeline to the Roles table (wants + kind). The T6 flow opens with an actor step; every kept test
+    uses the default Role-matching actor (the undefined-actor variant only served the retired
+    validator test)."""
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [
+    {
+      "name": "Org admin",
+      "kind": "human",
+      "wants": "manage",
+      "drives": "UC22"
+    }
+  ],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC22",
+      "name": "Create org",
+      "actor": "Org admin",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Admin creates the org",
+      "uc": "UC22",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "A",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [
+    {
+      "uc": "UC22",
+      "title": "Create org",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Org admin",
+          "dst": "C1",
+          "phrase": "creates the org",
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
-def run_validator(md: str) -> tuple[int, str]:
-    with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as f:
-        f.write(md)
-        path = f.name
-    r = subprocess.run([*VALIDATOR, path], capture_output=True, text=True)
-    return r.returncode, r.stdout + r.stderr
+def parse_map(json_text: str) -> build_graph.GraphDict:
+    """Graph from the scenario map (a schema-v2 JSON model document), through the LIVE pipeline:
+    load_model → model_to_graph."""
+    return model_to_graph(load_model(json_text))
 
 
-def parse_map(md: str) -> build_graph.GraphDict:
-    """Graph from the scenario map (md test notation), through the LIVE pipeline:
-    convert → model → model_to_graph. The v1 build() parser is retired."""
-    return model_to_graph(convert_text(md).model)
-
-
-def write_model(d: Path, md: str) -> Path:
-    """The scenario map converted and stored as a model document, for CLI render tests."""
+def write_model(d: Path, json_text: str) -> Path:
+    """The scenario map (already a schema-v2 JSON model document) stored as-is, for CLI render tests."""
     out = Path(d) / "project-map.json"
-    out.write_text(to_canonical_json(convert_text(md).model), encoding="utf-8")
+    out.write_text(json_text, encoding="utf-8")
     return out
 
 
-# --- grammar (schema_v1) --------------------------------------------------------
-def test_membership_picks_subsystem_for_components_any_position() -> None:
-    # 'subsystem' is the membership column for a component wherever it sits.
-    assert schema_v1.membership_ids("C1", ["**C1**", "S1", "x"], ["component", "subsystem", "purpose"]) == ["S1"]
-    assert schema_v1.membership_ids("C1", ["**C1**", "Name", "S1"], ["id", "component", "subsystem"]) == ["S1"]
-
-
-def test_membership_picks_parent_for_subsystem_rows() -> None:
-    # a subsystem row's 'subsystem' header is its NAME column; its pointer is 'parent'.
-    assert schema_v1.membership_ids("S2", ["**S2**", "Core", "x", "S1"], ["id", "subsystem", "purpose", "parent"]) == ["S1"]
-
-
-def test_membership_flags_multiparent() -> None:
-    assert schema_v1.membership_ids("C8", ["**C8**", "S1, S2"], ["component", "subsystem"]) == ["S1", "S2"]
-
-
-# --- parser (build_graph) -------------------------------------------------------
 def test_parser_proper_layout_names_and_parents() -> None:
     g = parse_map(make_grouped_map("proper"))
     comps = {k: v for k, v in g["nodes"].items() if v["kind"] == "component"}
@@ -419,7 +1555,6 @@ def test_parser_subsystem_nodes_and_edges() -> None:
     assert any(e["src"] == "C1" and e["dst"] == "C2" for e in g["edges"])
 
 
-# --- default subsystem (always expose a subsystem altitude) ---------------------
 def test_default_subsystem_injected_when_ungrouped() -> None:
     # A map with components but no Subsystem table gets ONE synthetic subsystem named after the project,
     # with every component reparented under it — so the component-level view always sits under a
@@ -446,7 +1581,6 @@ def test_no_default_subsystem_for_pure_domain_map() -> None:
     assert not any(v["kind"] == "subsystem" for v in g["nodes"].values())
 
 
-# --- card generators (gen_viewer) -----------------------------------------------
 def test_subsystem_card_keeps_internal_wiring_and_deps() -> None:
     # Q1=B: a subsystem card shows the subsystem's own components, their internal edges, and the
     # deps they touch — but never a sibling subsystem's component.
@@ -540,159 +1674,109 @@ def test_nested_container_edges_keyed_per_level() -> None:
     assert {(r["src"], r["dst"]) for r in ce["S2>S3"]} == {("C2", "C3")}
 
 
-def make_coarse_component_map() -> str:
-    """One component whose Purpose cell lists 7 plugin-like sub-units — the altitude smell."""
-    return (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | Social plugins | twitch, youtube, reddit, instagram, tiktok, kick, bluesky | f |  |\n"
-    )
-
-
-def make_deep_nesting_map(levels: int = 7) -> str:
-    """A straight subsystem chain S1<-S2<-...<-S{levels} with one component at the bottom — depth > 5."""
-    rows = "".join(f"| **S{i}** | s{i} | x | {('S' + str(i - 1)) if i > 1 else ''} | a | V |\n"
-                   for i in range(1, levels + 1))
-    s_table = "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n|---|---|---|---|---|---|\n" + rows + "\n"
-    t1 = ("## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n|---|---|---|---|---|---|\n"
-          f"| **C1** | App | S{levels} | x | f |  |\n")
-    return s_table + t1
-
-
-def make_redundant_level_map() -> str:
-    """S1's only child is the subsystem S2 (a redundant wrapper); S2 holds the real components."""
-    return (
-        "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n|---|---|---|---|---|---|\n"
-        "| **S1** | Wrapper | x |  | a | V |\n| **S2** | Real | x | S1 | a | V |\n\n"
-        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n|---|---|---|---|---|---|\n"
-        "| **C1** | A | S2 | x | f |  |\n| **C2** | B | S2 | x | f |  |\n"
-    )
-
-
-def test_validator_warns_coarse_component() -> None:
-    # advisory only (exit 0); the component that lists many sub-units is nudged toward a subsystem.
-    code, out = run_validator(make_coarse_component_map())
-    assert code == 0
-    assert "C1" in out and "consider promoting" in out
-
-
-def test_validator_deep_nesting_warns_not_blocks() -> None:
-    # arbitrary depth is allowed — a > 5-level chain WARNS but does not fail the build (was a hard error).
-    code, out = run_validator(make_deep_nesting_map(7))
-    assert code == 0
-    assert "Deep nesting" in out
-
-
-def test_validator_warns_redundant_nesting_level() -> None:
-    code, out = run_validator(make_redundant_level_map())
-    assert code == 0
-    assert "redundant nesting level" in out and "S1" in out
-
-
-# --- malformed IDs + empty subsystems (the mcpolis S12a silent failure) ---------
-def make_malformed_subsys_id_map() -> str:
-    """A frontend split into sub-subsystems with letter-suffixed IDs (`S1a`) — the real mcpolis `S12a`
-    failure. `S1a` is not a valid schema id (prefix+digits only), so the parser silently drops both the
-    definition and any membership pointing at it. C1 keeps a VALID `S1` membership so the whole-map
-    'no component assigned' guard does not fire — isolating the malformed-id signal."""
-    return (
-        "## Subsystems (S)\n"
-        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **S1** | Frontend | x |  | a | V |\n"
-        "| **S1a** | Admin | x | S1 | a | V |\n\n"
-        "## T1\n"
-        "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **C1** | Shell | S1 | x | f |  |\n"
-        "| **C2** | AdminPage | S1a | x | f |  |\n"
-    )
-
-
-def test_validator_flags_malformed_subsystem_id() -> None:
-    # `S1a` is invalid (a prefix + digits only), so it silently defines nothing and orphans C2. The
-    # validator must FAIL loudly and name both where it is defined and who points at it.
-    code, out = run_validator(make_malformed_subsys_id_map())
-    assert code == 1, out
-    assert "Malformed ID 'S1a'" in out, out
-    assert "defined at line" in out and "referenced by C2" in out, out
-
-
-def test_check_malformed_ids_ignores_glossary_terms() -> None:
-    # An ID-shaped Glossary TERM (`E2B` = the e2b.dev sandbox provider) sits in a table with no real
-    # IDs, so it must NOT be read as a malformed entity id (the false positive found on the mcpolis map).
-    text = (
-        "## Glossary\n"
-        "| Term | Meaning | Source |\n"
-        "|---|---|---|\n"
-        "| **E2B** | Hosted sandbox provider | [f](f) |\n"
-        "| **Sandbox** | Isolated env | [f](f) |\n"
-    )
-    assert validate_analysis.check_malformed_ids(text) == []
-
-
-def make_empty_subsystem_map() -> str:
-    """S2 is defined but given no members and no child subsystem — it renders as an empty box (the
-    symptom the malformed `S12a` sub-ids produced for S12 on the real map)."""
-    return (
-        "## Subsystems (S)\n"
-        "| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **S1** | Core | x |  | a | V |\n"
-        "| **S2** | Ghost | x |  | a | V |\n\n"
-        "## T1\n"
-        "| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **C1** | App | S1 | x | f |  |\n"
-    )
-
-
-def test_validator_warns_empty_subsystem() -> None:
-    # Advisory (exit 0): a subsystem with no member and no child subsystem is flagged, but S1 (which
-    # owns C1) is not — mirrors the "Subdomains with no entities" nudge on the subsystem side.
-    code, out = run_validator(make_empty_subsystem_map())
-    assert code == 0, out
-    line = next(l for l in out.splitlines() if "no members" in l)
-    assert "S2" in line and "S1" not in line, line
-
-
-def test_validator_clean_nested_map_no_malformed_or_empty() -> None:
-    # Regression guard: a well-formed numeric nested map (S1 parent of S2, all populated) trips neither
-    # the malformed-id check nor the empty-subsystem nudge.
-    code, out = run_validator(make_nested_subsystem_map())
-    assert code == 0, out
-    assert "Malformed ID" not in out and "no members" not in out, out
-
-
-def make_snakecase_deps_map() -> str:
-    """A real component with a prose Purpose and 6 snake_case dependency names — the altitude hint must
-    inspect only the Purpose, so the Depends-on list does NOT trip it (review finding #3)."""
-    return (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | Gateway | routes requests to backends | f | auth_svc, billing_svc, user_svc, mail_svc, log_svc, cron_svc |\n"
-    )
-
-
-def test_validator_altitude_hint_inspects_purpose_only() -> None:
-    code, out = run_validator(make_snakecase_deps_map())
-    assert code == 0
-    assert "consider promoting" not in out  # 6 snake_case names in Depends-on must NOT trip the hint
-
-
 def make_nested_bridge_map() -> str:
     """A nested subsystem (S2<-S1) and nested subdomain (SD2<-SD1) joined by a C->E owns edge — so a
     bridge arrow can be drawn on a NESTED subsystem card AND a nested subdomain card (review finding #1)."""
-    return (
-        "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n|---|---|---|---|---|---|\n"
-        "| **S1** | Outer | x |  | a | V |\n| **S2** | Inner | x | S1 | a | V |\n\n"
-        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n|---|---|---|---|---|---|\n"
-        "| **C1** | Repo | S2 | x | f |  |\n\n"
-        "## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n|---|---|---|---|---|---|\n"
-        "| **SD1** | DomOuter | x |  | [f](f#L1) | inferred |\n| **SD2** | DomInner | x | SD1 | [f](f#L1) | inferred |\n\n"
-        "## T5 — Domain model (domain cards)\n\n"
-        "**E1 — Order** *(orders)*\nSUBDOMAIN: SD2\nMEANING: x\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | persists | E1 | store | f |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Outer",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "S2",
+      "name": "Inner",
+      "purpose": "x",
+      "parent": "S1",
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Repo",
+      "subsystem": "S2",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "DomOuter",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[f](f#L1)",
+      "confidence": "inferred"
+    },
+    {
+      "id": "SD2",
+      "name": "DomInner",
+      "purpose": "x",
+      "parent": "SD1",
+      "anchor": "[f](f#L1)",
+      "confidence": "inferred"
+    }
+  ],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "orders",
+      "meaning": "x",
+      "subdomain": "SD2",
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "persists",
+      "dst": "E1",
+      "why": "store",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def test_nested_bridge_cards_keyed_per_level() -> None:
@@ -729,222 +1813,10 @@ def test_render_inlines_edge_card_data() -> None:
         assert "S1>S2" in html and "__CONTAINER_EDGES__" not in html
 
 
-# --- validator (end-to-end via the CLI) -----------------------------------------
-def test_validator_grouped_ok_both_layouts() -> None:
-    for layout in ("proper", "agent"):
-        code, out = run_validator(make_grouped_map(layout))
-        assert code == 0, f"{layout}: {out}"
-
-
-def test_validator_ungrouped_and_prose_s3_ok() -> None:
-    code, out = run_validator(make_ungrouped_map())
-    assert code == 0, out
-
-
-def test_validator_guard_fires_on_missing_membership() -> None:
-    code, out = run_validator(make_guard_map())
-    assert code == 1 and "no component is assigned" in out, out
-
-
-def test_validator_catches_cycle() -> None:
-    code, out = run_validator(make_cycle_map())
-    assert code == 1 and "cycle" in out.lower(), out
-
-
-def test_validator_hints_glued_id_cell() -> None:
-    # The undefined id is reported as a glued-ID-cell mistake, not a generic "undefined ID".
-    code, out = run_validator(make_glued_id_map())
-    assert code == 1, out
-    assert "glued into the ID cell" in out, out
-    assert "References to undefined IDs" not in out, out  # not the generic message
-
-
-def test_validator_catches_column_mismatch() -> None:
-    code, out = run_validator(make_bad_columns_map())
-    assert code == 1 and "columns" in out, out
-
-
-def make_comment_split_edge_map(placement: str = "between_sep_rows") -> str:
-    """An edge table with an HTML comment placed at `placement`:
-      'above_header'      — comment before the `From|Verb|To` header (Variant A: harmless, table intact)
-      'between_sep_rows'  — comment between the separator and the first data row (Variant B: the bug)
-      'between_header_sep'— comment between the header and the separator (also splits the table)
-      'between_rows_blank'— a blank line between two data rows (the comment-free sibling: still splits)
-    The components are defined so the only difference between variants is the split, not undefined ids."""
-    head = (
-        "## T1\n"
-        "| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n"
-        "| **C1** | Alpha | x | f | C2 |\n"
-        "| **C2** | Beta | x | f | C3 |\n"
-        "| **C3** | Gamma | x | f |  |\n\n"
-        "### T1 backbone — component dependency edges\n\n"
-    )
-    note = "<!-- a two-line\n     explanatory note -->\n"
-    hdr, sep = "| From | Verb | To |\n", "|---|---|---|\n"
-    rows = "| C1 | uses | C2 | \n| C2 | calls | C3 | \n"
-    if placement == "above_header":
-        body = note + hdr + sep + rows
-    elif placement == "between_header_sep":
-        body = hdr + note + sep + rows
-    elif placement == "between_rows_blank":
-        body = hdr + sep + "| C1 | uses | C2 | \n\n| C2 | calls | C3 | \n"
-    else:  # between_sep_rows — the reported bug
-        body = hdr + sep + note + "\n" + rows
-    return head + body
-
-
-def test_comment_above_header_keeps_all_edges() -> None:
-    # Variant A: a comment BEFORE the edge header leaves the table run intact — both edges parse and
-    # the validator passes (the control that isolates comment PLACEMENT as the single variable).
-    g = parse_map(make_comment_split_edge_map("above_header"))
-    assert len(g["edges"]) == 2   # both backbone edges parse (the only edges in this map)
-    code, out = run_validator(make_comment_split_edge_map("above_header"))
-    assert code == 0, out
-
-
-def test_comment_between_separator_and_rows_drops_edges_silently_then_caught() -> None:
-    # Variant B (the reported silent-data-loss bug): a comment between the separator and the rows
-    # splits the table — the parser drops EVERY edge, and the validator must now FAIL on the split
-    # (before this check it passed green while the render lost all component arrows).
-    g = parse_map(make_comment_split_edge_map("between_sep_rows"))
-    assert g["edges"] == []   # silent row loss in the parse: every backbone edge dropped
-    code, out = run_validator(make_comment_split_edge_map("between_sep_rows"))
-    assert code == 1, out
-    assert "Empty table" in out and "Detached table rows" in out, out
-
-
-def test_comment_between_header_and_separator_is_caught() -> None:
-    # A comment between the header and the separator also splits the run (header alone + separator+rows);
-    # the parser drops the edges and the validator flags the detached block.
-    g = parse_map(make_comment_split_edge_map("between_header_sep"))
-    assert g["edges"] == []
-    code, out = run_validator(make_comment_split_edge_map("between_header_sep"))
-    assert code == 1 and "Detached table row" in out, out
-
-
-def test_blank_line_between_rows_is_caught() -> None:
-    # The comment-free sibling: a blank line between two data rows orphans the trailing row(s). The
-    # parser drops the row after the blank, and the validator flags the lone detached row.
-    g = parse_map(make_comment_split_edge_map("between_rows_blank"))
-    assert len(g["edges"]) == 1   # only the row before the blank survives
-    code, out = run_validator(make_comment_split_edge_map("between_rows_blank"))
-    assert code == 1 and "Detached table row" in out, out
-
-
-def test_table_runs_no_false_positive_on_clean_maps() -> None:
-    # Every well-formed map (header + separator + rows) must stay clean under the split-table check —
-    # the regression guard against false positives that would block valid maps.
-    for md in (make_grouped_map("proper"), make_grouped_map("agent"), make_card_map(),
-               make_gp_map(), make_domain_map(), make_ungrouped_map()):
-        assert validate_analysis.check_table_runs(schema_v1.strip_fences(md)) == [], md
-
-
-def make_unterminated_fence_map() -> str:
-    """An opening ``` that is never closed — strip_fences then swallows the rest (C1, GP1), which used
-    to validate green. The fence guard must fail it (Fix B)."""
-    return (
-        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
-        "| **UC1** | Search | Shopper | a -> b |\n\n"
-        "## Example (fence never closed)\n```\nsome example\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | App | x | f |  |\n\n"
-        "## Golden Path\n**GP1 — Search** *(UC1)*\nSTORY: x\n`Touches:` UC1, C1\n"
-    )
-
-
-def test_validator_fails_unterminated_fence() -> None:
-    # An open code fence with no close swallows everything after it; the guard must catch the silent
-    # loss (before this, the validator passed the truncated map green).
-    code, out = run_validator(make_unterminated_fence_map())
-    assert code == 1 and "Unterminated code fence" in out, out
-
-
-def test_validator_balanced_fence_not_flagged() -> None:
-    # No false positive: a normal closed fence must NOT trip the unterminated-fence guard.
-    code, out = run_validator(make_fenced_dup_def_map())
-    assert code == 0 and "Unterminated code fence" not in out, out
-
-
-def test_validator_gp_missing_uc_tag_fails() -> None:
-    # A Golden Path step IS a use case, so it must name one: a step with no `*(UCn)*` tag fails.
-    md = make_gp_map().replace("**GP1 — Submit order** *(UC1)*", "**GP1 — Submit order**")
-    code, out = run_validator(md)
-    assert code == 1 and "missing a `*(UCn)*` use-case tag" in out, out
-
-
-def test_validator_rejects_empty_verb() -> None:
-    # A blank Verb cell would render as `C1 -->|| C2` and desync the viewer's edge zip.
-    code, out = run_validator(make_empty_verb_map())
-    assert code == 1 and "empty Verb" in out, out
-
-
-def _where_edge_map(where: str) -> str:
-    return (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | A | x | f |  |\n| **C2** | B | x | f |  |\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        f"| C1 | uses | C2 | reach B | {where} |\n"
-    )
-
-
-def test_validator_warns_on_non_file_where() -> None:
-    # A prose `Where` (not a file link / path:line) is a dead drill-to-code link -> advisory WARNING,
-    # never a failure (an inferred edge may lack a precise site).
-    code, out = run_validator(_where_edge_map("in the handler"))
-    assert code == 0, out
-    assert "`Where` is not a source location" in out, out
-
-
-def test_validator_accepts_file_where() -> None:
-    # A `[file](path#Lnnn)` call-site link is the expected shape -> no warning.
-    code, out = run_validator(_where_edge_map("[gw.py](src/gw.py#L42)"))
-    assert code == 0 and "not a source location" not in out, out
-
-
-def test_validator_clean_maps_pass_table_shape() -> None:
-    # The known-good maps must stay shape-clean (regression guard for false positives).
-    for md in (make_grouped_map("proper"), make_grouped_map("agent"), make_ungrouped_map()):
-        code, out = run_validator(md)
-        assert code == 0, out
-
-
-def test_validator_ignores_ragged_table_in_fence() -> None:
-    # A ragged example table inside a ``` fence must not trigger a column-count failure.
-    code, out = run_validator(make_fenced_ragged_table_map())
-    assert code == 0, out
-
-
-def test_validator_ignores_definition_in_fence() -> None:
-    # A definition row shown verbatim inside a fence is not a real (duplicate) definition.
-    code, out = run_validator(make_fenced_dup_def_map())
-    assert code == 0, out
-
-
-def test_validator_allows_escaped_pipe_in_cell() -> None:
-    # `\|` is the schema's sanctioned literal pipe; it must not count as a column separator.
-    code, out = run_validator(make_escaped_pipe_map())
-    assert code == 0, out
-
-
-def test_validator_hints_glued_id_inside_bold() -> None:
-    code, out = run_validator(make_glued_inner_map())
-    assert code == 1, out
-    assert "glued into the ID cell" in out, out
-
-
 def test_parser_ignores_fenced_nodes() -> None:
     # The graph parser must also skip fenced examples — no phantom C9 node from the example.
     g = parse_map(make_fenced_node_map())
     assert "C1" in g["nodes"] and "C9" not in g["nodes"], list(g["nodes"])
-
-
-def test_template_validates_clean() -> None:
-    # The template is what the agent copies to start a map, so it must stay schema-correct
-    # (resolvable refs, ID-alone cells, consistent columns). Guards against template drift.
-    template = REPO / "method" / "templates" / "project-map.template.md"
-    code, out = run_validator(template.read_text(encoding="utf-8"))
-    assert code == 0, out
 
 
 def test_render_produces_self_contained_html() -> None:
@@ -1020,53 +1892,92 @@ def test_render_diff_overlay_wired_to_subsystems() -> None:
         assert 'data-view="component"' not in html        # never resurrects the flat map
 
 
-# --- domain cards (T5) ----------------------------------------------------------
-def test_parse_card_fields_markers() -> None:
-    fs = schema_v1.parse_card_fields(["id: ObjectId PK", "email: string unique", "note"])
-    assert (fs[0].name, fs[0].type, fs[0].markers) == ("id", "ObjectId", ["PK"])
-    assert fs[1].markers == ["unique"]
-    assert fs[2].type == ""   # missing type -> empty, so the validator can flag it
-
-
-def test_parse_card_fields_glued_suffix_markers() -> None:
-    """`[]` / `?` glued to the type (no space) must normalize to a bare type + marker, identical to
-    the spaced form — else an `E`-typed collection field's box type and its relation arrow label
-    both break silently. Regression for OAuthStateSnapshot.access_tokens:E28[]."""
-    glued = schema_v1.parse_card_fields(["access_tokens: E28[]", "expires_at: int?", "scopes: string[]"])
-    assert (glued[0].type, glued[0].markers) == ("E28", ["[]"])     # entity-typed collection
-    assert (glued[1].type, glued[1].markers) == ("int", ["?"])      # nullable scalar
-    assert (glued[2].type, glued[2].markers) == ("string", ["[]"])  # scalar collection
-    # glued and spaced forms parse identically
-    spaced = schema_v1.parse_card_fields(["access_tokens: E28 []"])
-    assert (spaced[0].type, spaced[0].markers) == ("E28", ["[]"])
-    # a glued marker followed by a normal marker still works
-    both = schema_v1.parse_card_fields(["tags: string[] unique"])
-    assert (both[0].type, both[0].markers) == ("string", ["[]", "unique"])
-
-
 def test_glued_collection_relation_is_labelled() -> None:
     """An entity-typed collection field written glued (`tokens:E28[]`) must still BACK its relation,
     so the composition arrow renders its real field name as the label (not blank)."""
-    cards = (
-        "**E1 — Snapshot** *(s)*\nMEANING: m\n"
-        "FIELDS: clients:json · access_tokens:E28[]\n"
-        "RELATIONS: contains 1→* E28 StoredAccessToken\nSOURCE: [f](f#L1)\n\n"
-        "**E28 — StoredAccessToken**\nMEANING: m\nFIELDS: token:string PK\nSOURCE: [f](f#L2)\n"
-    )
+    cards = """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Snapshot",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "clients",
+          "type": "json",
+          "markers": []
+        },
+        {
+          "name": "access_tokens",
+          "type": "E28",
+          "markers": [
+            "[]"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E28",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "StoredAccessToken",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E28",
+      "name": "StoredAccessToken",
+      "store": "",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "token",
+          "type": "string",
+          "markers": [
+            "PK"
+          ]
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
     g = parse_map(cards)
     rel = [e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E28"][0]
     assert rel["fk_field"] == "access_tokens" and rel["fk_side"] == "src"
-
-
-def test_parse_card_relations_kinds_and_cardinality() -> None:
-    rels = schema_v1.parse_card_relations("contains 1→* E2 · isA E9 · uses *→1 E3 · 2..5→* E4")
-    assert [(r.verb, r.kind, r.target, r.ok) for r in rels[:3]] == [
-        ("contains", "composition", "E2", True),
-        ("isA", "inheritance", "E9", True),
-        ("uses", "association", "E3", True),
-    ]
-    assert rels[1].src_card is None and rels[1].dst_card is None  # isA: no cardinality
-    assert rels[3].ok is False   # `2..5` is not an allowed cardinality token
 
 
 def test_parser_domain_cards_nodes_attrs_edges() -> None:
@@ -1094,11 +2005,7 @@ def test_gen_domain_mermaid_classdiagram() -> None:
 
 def test_gen_domain_mermaid_resolves_embedded_entity_type() -> None:
     # a field typed by an entity id (`mode:E2`) renders with the entity's NAME, not the raw id.
-    cards = (
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: mode:E2 · id:int\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — AuthMode**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(_CARDS_EMBEDDED_ENTITY_TYPE)))
     assert "AuthMode mode" in mm and "E2 mode" not in mm
 
 
@@ -1106,13 +2013,7 @@ def test_gen_domain_mermaid_shows_collection_marker_in_box() -> None:
     # a `[]` (collection) marker is part of the type SHAPE, so it renders in the box member —
     # `StoredRefreshToken[] refresh_tokens`, not a single-valued-looking `StoredRefreshToken …`.
     # `?`/PK/FK stay out of the box (annotations, panel-only).
-    cards = (
-        "**E1 — Snapshot** *(s)*\nMEANING: m\n"
-        "FIELDS: refresh_tokens:E2[] · expires_at:int ? · id:int PK\n"
-        "RELATIONS: contains 1→* E2 StoredRefreshToken\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — StoredRefreshToken**\nMEANING: m\nFIELDS: token:string\nSOURCE: [f](f#L2)\n"
-    )
-    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(_CARDS_COLLECTION_MARKER)))
     assert "StoredRefreshToken[] refresh_tokens" in mm   # collection shown in the box
     assert "int expires_at" in mm and "int? " not in mm  # nullable marker stays out of the box
     assert "int id" in mm                                # PK stays out of the box
@@ -1120,13 +2021,7 @@ def test_gen_domain_mermaid_shows_collection_marker_in_box() -> None:
 
 def test_gen_domain_mermaid_relation_labels() -> None:
     # forward field -> plain name; reverse FK (FK→E1) -> "↩ field"; the redundant verb is dropped.
-    cards = (
-        "**E1 — Org** *(s)*\nMEANING: m\nFIELDS: id:string PK · subscription:E3\n"
-        "RELATIONS: has 1→* E2 Membership · contains 1→1 E3 Subscription\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Membership**\nMEANING: m\nFIELDS: org_id:string FK→E1 · email:string\nSOURCE: [f](f#L2)\n\n"
-        "**E3 — Subscription**\nMEANING: m\nFIELDS: tier:string\nSOURCE: [f](f#L3)\n"
-    )
-    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(_CARDS_RELATION_LABELS)))
     assert ": subscription" in mm     # forward: E1.subscription typed E3
     assert ": ↩ org_id" in mm          # reverse: E2.org_id FK→E1
     assert ": has" not in mm           # the redundant aggregation verb is not drawn
@@ -1134,12 +2029,7 @@ def test_gen_domain_mermaid_relation_labels() -> None:
 
 def test_gen_domain_mermaid_drops_ungrounded_verb() -> None:
     # an association not backed by any field gets NO label — the verb is interpretive, not grounded.
-    cards = (
-        "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "RELATIONS: authorizes *→1 E2\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(_CARDS_UNGROUNDED_VERB)))
     assert "authorizes" not in mm     # ungrounded association verb is not drawn as a label
 
 
@@ -1147,12 +2037,7 @@ def test_gen_domain_mermaid_forward_fk_label() -> None:
     # A foreign key on the SOURCE (`role:string FK→E2`) labels the arrow with the field name — the
     # symmetric counterpart of the reverse `↩` case, so a marked FK is represented whichever side
     # authored the relation (the asymmetry that left all but one mcpolis FK arrow blank is gone).
-    cards = (
-        "**E1 — Membership** *(s)*\nMEANING: m\nFIELDS: email:string · role:string FK→E2\n"
-        "RELATIONS: assignedRole *→1 E2 RoleDefinition\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — RoleDefinition**\nMEANING: m\nFIELDS: name:string\nSOURCE: [f](f#L2)\n"
-    )
-    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(cards)))
+    mm = gen_viewer.gen_domain_mermaid(parse_map(make_domain_map(_CARDS_FORWARD_FK)))
     assert ": role" in mm                  # forward FK -> the plain field name
     assert "↩" not in mm                   # not a back-reference (the field is on the source/tail)
     assert ": assignedRole" not in mm      # the verb itself is never drawn as the label
@@ -1165,427 +2050,522 @@ def test_fk_targets_token_exact() -> None:
     assert "E1" not in schema_v1.fk_targets("FK→E11")
 
 
-def test_parse_card_relations_how_note() -> None:
-    rels = schema_v1.parse_card_relations(
-        "tracks *→1 E3 Token {keyed by (org, upstream)} · contains 1→* E2")
-    assert rels[0].how == "keyed by (org, upstream)" and rels[0].target == "E3" and rels[0].ok
-    assert rels[1].how is None                                  # no note -> None
-
-
 def test_parser_domain_edge_carries_backing_and_how() -> None:
     # The resolved backing (fk_field/fk_side) and the authored {how} note ride the serialized edge,
     # so the canvas label and the panel's "Implemented by" line come from one resolution.
-    cards = (
-        "**E1 — Org** *(s)*\nMEANING: m\nFIELDS: id:string PK\n"
-        "RELATIONS: contains 1→* E2 Membership · tracks *→1 E3 Token {keyed by (org, upstream)}\n"
-        "SOURCE: [f](f#L1)\n\n"
-        "**E2 — Membership**\nMEANING: m\nFIELDS: org_id:string FK→E1\nSOURCE: [f](f#L2)\n\n"
-        "**E3 — Token**\nMEANING: m\nFIELDS: value:string\nSOURCE: [f](f#L3)\n"
-    )
-    g = parse_map(make_domain_map(cards))
+    g = parse_map(make_domain_map(_CARDS_BACKING_HOW))
     e12 = next(e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E2")
     assert e12["fk_field"] == "org_id" and e12["fk_side"] == "dst"      # reverse FK on the target
     e13 = next(e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E3")
     assert e13["fk_field"] is None and e13["how"] == "keyed by (org, upstream)"  # indirect -> how-note
 
 
-def test_check_entity_sources_flags_synthesized() -> None:
-    # --check-sources reads each card's SOURCE file: an entity whose NAME isn't there is synthesized.
-    with tempfile.TemporaryDirectory() as d:
-        root = Path(d)
-        (root / ".coyodex").mkdir()
-        (root / "model.py").write_text(
-            "class Order:\n    pass\nclass ServiceTokenRecord:\n    pass\nclass Settings:\n    pass\n"
-            "user_profile = dict  # a non-CamelCase type alias\n",
-            encoding="utf-8",
-        )
-        map_path = root / ".coyodex" / "project-map.md"
-        text = (
-            "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [model.py](model.py#L1)\n\n"
-            "**E2 — OAuthState** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n\n"
-            "**E3 — ServiceToken** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n\n"
-            "**E4 — Settings (app env)** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n\n"
-            "**E5 — user_profile** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n\n"
-            "**E6 — ghost_state** *(s)*\nMEANING: m\nFIELDS: x:int\nSOURCE: [model.py](model.py#L1)\n"
-        )
-        map_path.write_text(text, encoding="utf-8")
-        problems = " ".join(validate_analysis.check_entity_sources(text, map_path))
-        assert "E2" in problems and "OAuthState" in problems   # absent entirely -> flagged
-        assert "E1" not in problems                            # Order defined -> not flagged
-        assert "E3" not in problems                            # ServiceToken ⊂ ServiceTokenRecord -> grounded
-        assert "E4" not in problems                            # 'Settings (app env)' -> token Settings present
-        assert "E5" not in problems                            # snake_case name present -> grounded
-        assert "E6" in problems                                # snake_case name absent -> synthesized
-
-
-def test_check_entity_sources_skips_unresolvable() -> None:
-    # template/fixture SOURCE paths don't resolve to real files -> no-op (never false-flag).
-    with tempfile.TemporaryDirectory() as d:
-        map_path = Path(d) / "project-map.md"
-        text = "**E1 — Ghost** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [x.py](x.py#L1)\n"
-        map_path.write_text(text, encoding="utf-8")
-        assert validate_analysis.check_entity_sources(text, map_path) == []
-
-
-# --- domain-model coverage (--check-coverage, item 2) ---------------------------
-def make_isolated_domain_map(total: int, isolated: int) -> str:
-    """`total` entity cards of which the last `isolated` declare/receive NO E↔E relation. The first
-    (total - isolated) are wired into one `contains` chain (E1->E2->...), so they are all related; the
-    rest stand alone. SOURCE links are placeholders (won't resolve), so sub-check (b) is a no-op."""
-    wired = total - isolated  # the first `wired` entities form the relation chain
-    cards = []
-    for i in range(1, total + 1):
-        rel = f"RELATIONS: contains 1→* E{i + 1}\n" if i < wired else ""
-        cards.append(f"**E{i} — Ent{i}** *(s)*\nMEANING: m\nFIELDS: id:int\n{rel}SOURCE: [f](f#L{i})\n")
-    return "## T5 — Domain model (domain cards)\n\n" + "\n".join(cards)
-
-
-def test_domain_coverage_warns_isolated_entities() -> None:
-    # (a) map-only: when a material share of entity cards have ZERO E↔E relation, the sparse class
-    # graph is flagged — the signature of an under-harvested domain model (the thin-domain regression).
-    with tempfile.TemporaryDirectory() as d:
-        map_path = Path(d) / "project-map.md"
-        text = make_isolated_domain_map(total=10, isolated=5)  # 50% isolated -> over the 20% threshold
-        map_path.write_text(text, encoding="utf-8")
-        warns = " ".join(validate_analysis.check_domain_coverage(text, map_path))
-        assert "Isolated entities" in warns and "5 of 10" in warns, warns
-        assert "Under-harvested" not in warns, warns  # (b) is a no-op when SOURCE paths don't resolve
-
-
-def test_domain_coverage_quiet_on_well_connected_model() -> None:
-    # A small, well-connected model (only one standalone entity) stays clean — below both the fraction
-    # threshold and the absolute floor, so a healthy domain model is not nagged.
-    with tempfile.TemporaryDirectory() as d:
-        map_path = Path(d) / "project-map.md"
-        text = make_isolated_domain_map(total=10, isolated=1)
-        map_path.write_text(text, encoding="utf-8")
-        assert validate_analysis.check_domain_coverage(text, map_path) == []
-
-
-_NATO = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot",
-         "Golf", "Hotel", "India", "Juliet", "Kilo", "Lima"]  # distinct, no substring collisions
-
-
-def _domain_repo_map(d: str, class_names: list[str], modelled: list[str]) -> tuple[str, Path]:
-    """Write a one-file `model.py` defining `class_names` and a `.coyodex/` map whose entity cards
-    cover only `modelled`. Returns (map_text, map_path) for a direct check_domain_coverage call —
-    mirrors the check_entity_sources fixture (repo at the map's parent dir)."""
-    root = Path(d)
-    (root / ".coyodex").mkdir(exist_ok=True)
-    (root / "model.py").write_text(
-        "\n".join(f"class {name}:\n    pass\n" for name in class_names), encoding="utf-8")
-    cards = "\n".join(
-        f"**E{i + 1} — {name}** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [model.py](model.py#L1)\n"
-        for i, name in enumerate(modelled))
-    text = "## T5 — Domain model (domain cards)\n\n" + cards
-    map_path = root / ".coyodex" / "project-map.md"
-    map_path.write_text(text, encoding="utf-8")
-    return text, map_path
-
-
-def test_domain_coverage_warns_uncovered_types() -> None:
-    # (b) repo read: many named types in the entities' OWN source dir have no entity card -> the map
-    # under-models that dir. Types are re-extracted from the .py via stdlib `ast` (never the pre-index).
-    with tempfile.TemporaryDirectory() as d:
-        text, map_path = _domain_repo_map(d, _NATO, modelled=_NATO[:2])  # 10 of 12 types unmodelled
-        warns = " ".join(validate_analysis.check_domain_coverage(text, map_path))
-        assert "Under-harvested domain model" in warns and "10 of 12" in warns, warns
-
-
-def test_domain_coverage_quiet_when_types_modelled() -> None:
-    # Every type in the source dir has a covering entity card -> no under-harvest warning.
-    with tempfile.TemporaryDirectory() as d:
-        text, map_path = _domain_repo_map(d, _NATO[:3], modelled=_NATO[:3])
-        assert not any("Under-harvested" in w for w in validate_analysis.check_domain_coverage(text, map_path))
-
-
-def test_domain_coverage_noop_without_cards() -> None:
-    # No T5 cards -> nothing to measure -> empty, regardless of --check-coverage.
-    with tempfile.TemporaryDirectory() as d:
-        map_path = Path(d) / "project-map.md"
-        text = make_grouped_map("proper")  # components only, no domain cards
-        map_path.write_text(text, encoding="utf-8")
-        assert validate_analysis.check_domain_coverage(text, map_path) == []
-
-
-def test_domain_coverage_excludes_non_entity_types() -> None:
-    # V2: plumbing classes (Repository/Store/Provider/Error/Exception/Middleware suffixes) and
-    # abstract contracts (ABC / Protocol bases) are NOT domain entities — a plumbing-heavy source dir
-    # must not read as an under-harvested domain model. Without the filter this dir counts 13 types
-    # with 12 uncovered (over both thresholds); with it, only `Order` remains — and it is modelled.
-    with tempfile.TemporaryDirectory() as d:
-        root = Path(d)
-        (root / ".coyodex").mkdir()
-        plumbing = "".join(
-            [f"class {n}Repository:\n    pass\n" for n in _NATO[:3]]
-            + [f"class {n}Store:\n    pass\n" for n in _NATO[3:6]]
-            + [f"class {n}Provider:\n    pass\n" for n in _NATO[6:8]]
-            + [f"class {n}Protocol:\n    pass\n" for n in _NATO[8:9]]
-            + ["class LoadError(Exception):\n    pass\n",
-               "class AuthMiddleware:\n    pass\n",
-               "import abc\nclass Port(abc.ABC):\n    pass\n",
-               "from typing import Protocol, TypeVar\nT = TypeVar('T')\n"
-               "class Reader(Protocol[T]):\n    pass\n"])
-        (root / "model.py").write_text("class Order:\n    pass\n" + plumbing, encoding="utf-8")
-        text = ("## T5 — Domain model (domain cards)\n\n"
-                "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [model.py](model.py#L1)\n")
-        map_path = root / ".coyodex" / "project-map.md"
-        map_path.write_text(text, encoding="utf-8")
-        warns = validate_analysis.check_domain_coverage(text, map_path)
-        assert not any("Under-harvested" in w for w in warns), warns
-
-
-# --- --repo root resolution (V1) --------------------------------------------------
-def make_deep_run_repo(d: str) -> tuple[str, Path, Path]:
-    """A repo (`repo/backend/src/model.py`) plus a map placed THREE levels deep OUTSIDE it (the eval's
-    run-dir shape: `runs/2026/run1/project-map.md`) whose anchors are repo-root-relative. Returns
-    (map_text, map_path, repo_root) — without `--repo` the map's dir/parent can't resolve them."""
-    root = Path(d)
-    repo = root / "repo"
-    (repo / "backend" / "src").mkdir(parents=True)
-    (repo / "backend" / "src" / "model.py").write_text("class Order:\n    pass\n", encoding="utf-8")
-    run_dir = root / "runs" / "2026" / "run1"
-    run_dir.mkdir(parents=True)
-    text = (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | Model | x | [model.py](backend/src/model.py#L1) |  |\n\n"
-        "## T5 — Domain model (domain cards)\n\n"
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "SOURCE: [model.py](backend/src/model.py#L1)\n"
-    )
-    map_path = run_dir / "project-map.md"
-    map_path.write_text(text, encoding="utf-8")
-    return text, map_path, repo
-
-
-def test_repo_root_resolves_deep_map_anchors() -> None:
-    # V1: with repo_root the deep map's `backend/src/...` anchors resolve (zero bogus "does not
-    # resolve" warnings); without it, the old two-root behavior is unchanged — and can't see the tree.
-    with tempfile.TemporaryDirectory() as d:
-        text, map_path, repo = make_deep_run_repo(d)
-        assert validate_analysis.check_anchor_existence(text, map_path, repo) == []
-        assert validate_analysis.check_anchor_existence(text, map_path) != []
-        assert validate_analysis.check_entity_sources(text, map_path, repo) == []  # Order IS in model.py
-
-
-def test_repo_root_grounds_entity_sources_from_outside() -> None:
-    # A synthesized entity is only catchable when repo_root lets the check READ the source file;
-    # without it the file is unresolvable and the check must skip (never false-flag) — so the eval's
-    # deep run dir used to silently lose this whole check.
-    with tempfile.TemporaryDirectory() as d:
-        text, map_path, repo = make_deep_run_repo(d)
-        ghost = text.replace("E1 — Order", "E1 — Ghost")
-        assert validate_analysis.check_entity_sources(ghost, map_path) == []       # unresolvable -> skipped
-        problems = validate_analysis.check_entity_sources(ghost, map_path, repo)   # resolved -> caught
-        assert problems and "Ghost" in problems[0], problems
-
-
-def test_validate_cli_repo_flag() -> None:
-    # End-to-end: `coyodex validate --check-sources --check-coverage --repo <root> <deep map>` walks
-    # the given tree (no "does not resolve" warnings); the same run without --repo warns.
-    with tempfile.TemporaryDirectory() as d:
-        _text, map_path, repo = make_deep_run_repo(d)
-        r = subprocess.run([*VALIDATOR, "--check-sources", "--check-coverage",
-                            "--repo", str(repo), str(map_path)], capture_output=True, text=True)
-        assert r.returncode == 0, r.stdout + r.stderr
-        assert "does not resolve" not in r.stdout, r.stdout
-        r2 = subprocess.run([*VALIDATOR, "--check-sources", str(map_path)],
-                            capture_output=True, text=True)
-        assert "does not resolve" in r2.stdout, r2.stdout
-
-
-def test_validate_cli_repo_flag_errors() -> None:
-    # `--repo` without a value, or with a non-directory, is a usage error (exit 2) — never a silent
-    # fallback to the wrong roots.
-    r = subprocess.run([*VALIDATOR, "--repo"], capture_output=True, text=True)
-    assert r.returncode == 2 and "--repo needs a path" in r.stderr, r.stderr
-    r2 = subprocess.run([*VALIDATOR, "--repo", "/nope/definitely/missing"],
-                        capture_output=True, text=True)
-    assert r2.returncode == 2 and "not a directory" in r2.stderr, r2.stderr
-
-
 def test_class_diagram_inheritance_arrow_labelled_inferred() -> None:
     # Verb principle: the inheritance triangle trusts the authored `isA` verb (never code-verified),
     # so it renders labelled inferred — a derivation, not an asserted fact (verbs prioritize, never gate).
-    md = ("## T5 — Domain model (domain cards)\n\n"
-          "**E1 — Base** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
-          "**E2 — Child** *(s)*\nMEANING: m\nFIELDS: id:int\nRELATIONS: isA E1\nSOURCE: [f](f#L2)\n")
+    md = """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Base",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "E2",
+      "name": "Child",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "isA",
+          "target": "E1",
+          "src_card": null,
+          "dst_card": null,
+          "display": "",
+          "how": null
+        }
+      ]
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
     mm = gen_viewer.gen_domain_mermaid(parse_map(md))
     assert "E2 --|> E1 : isA (inferred)" in mm, mm
 
 
-def test_validator_lone_cardinality_hint() -> None:
-    # Item 5: a single cardinality token (`contains 0..1 E2`) is malformed — cardinality is a PAIR
-    # `sc→dc` (both sides or neither). The error names that exact cause so the author fixes it once.
-    cards = (
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "RELATIONS: contains 0..1 E2\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "malformed RELATIONS item" in out, out
-    assert "cardinality must be a pair" in out, out
-
-
-def test_validator_domain_cards_clean() -> None:
-    code, out = run_validator(make_domain_map())
-    assert code == 0, out
-
-
-def test_validator_flags_malformed_card_heading() -> None:
-    # `**E1 — Order** (orders)` (plain parens, not *( )*) silently drops name+store — must fail loud.
-    cards = "**E1 — Order** (orders)\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "heading is malformed" in out, out
-
-
-def test_validator_flags_untyped_field() -> None:
-    cards = "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id\nSOURCE: [f](f#L1)\n"
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "has no type" in out, out
-
-
-def test_validator_flags_malformed_relation() -> None:
-    cards = (
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "RELATIONS: contains 2..5→* E2\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "malformed RELATIONS item" in out, out
-    # `2..5→*` already has a `→`, so the lone-cardinality hint (item 5) must NOT fire here.
-    assert "cardinality must be a pair" not in out, out
-
-
-def test_validator_flags_both_sided_relation() -> None:
-    cards = (
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "RELATIONS: contains 1→* E2\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\n"
-        "RELATIONS: partOf *→1 E1\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "declared on both cards" in out, out
-
-
-def test_validator_flags_duplicate_relation_same_card() -> None:
-    cards = (
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "RELATIONS: refersTo 1→1 E2 · refersTo 1→1 E2\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "twice" in out, out
-
-
-def test_validator_flags_noncanonical_relation_verb() -> None:
-    # `composedOf` is a non-canonical alias for composition — the validator demands `contains`.
-    cards = (
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "RELATIONS: composedOf 1→* E2\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "non-canonical" in out and "contains" in out, out
-
-
-def test_validator_flags_undefined_relation_target() -> None:
-    cards = "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nRELATIONS: contains 1→* E9\nSOURCE: [f](f#L1)\n"
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "E9" in out, out
-
-
-def test_validator_flags_duplicate_card_id() -> None:
-    cards = (
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
-        "**E1 — Dup**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 1 and "Duplicate" in out, out
-
-
-def test_validator_warns_unbacked_association() -> None:
-    # An association with no backing field and no {how} note draws nothing + explains nothing: warn
-    # (non-blocking — the build still passes) so the author marks the FK or writes a how-note.
-    cards = (
-        "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "RELATIONS: authorizes *→1 E2\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 0, out                                     # advisory only — does not fail the build
-    assert "WARNINGS" in out and "not backed by a field" in out, out
-
-
-def test_validator_how_note_silences_unbacked_warning() -> None:
-    # A {how} note is the author's explanation of how a field-less relation is implemented -> no warning.
-    cards = (
-        "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int\n"
-        "RELATIONS: authorizes *→1 E2 {linked via an external id map}\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 0 and "not backed by a field" not in out, out
-
-
-def test_validator_forward_fk_not_flagged_unbacked() -> None:
-    # A marked forward FK (`role:string FK→E2`) IS a backing field — the completeness nudge stays quiet.
-    cards = (
-        "**E1 — A** *(s)*\nMEANING: m\nFIELDS: id:int · role:string FK→E2\n"
-        "RELATIONS: assignedRole *→1 E2\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — B**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(make_domain_map(cards))
-    assert code == 0 and "not backed by a field" not in out, out
-
-
-# --- domain contexts (SD) -------------------------------------------------------
 def make_context_map(cards: str | None = None, contexts: str | None = None) -> str:
     """A domain map with a Subdomains (SD) table + `SUBDOMAIN:` lines on the cards. Default: two contexts
     (SD1 Ordering, SD2 Catalog); E1/E2 live in SD1, E4 in SD2; E1 contains E2 (intra-context) and
     refersTo E4 (the one CROSS-context relation), so the tests exercise membership + a crossing edge."""
-    ctx = contexts if contexts is not None else (
-        "## Subdomains (SD)\n"
-        "| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **SD1** | Ordering | purchase lifecycle |  | [order.py](order.py#L1) | inferred |\n"
-        "| **SD2** | Catalog | products |  | [product.py](product.py#L1) | inferred |\n\n"
-    )
-    body = cards if cards is not None else (
-        "**E1 — Order** *(orders)*\nSUBDOMAIN: SD1\nMEANING: a purchase\n"
-        "FIELDS: id:ObjectId PK · product:E4\n"
-        "RELATIONS: contains 1→* E2 LineItem · refersTo *→1 E4 Product\nSOURCE: [order.py](order.py#L12)\n\n"
-        "**E2 — LineItem**\nSUBDOMAIN: SD1\nMEANING: a line\nFIELDS: sku:string\nSOURCE: [order.py](order.py#L58)\n\n"
-        "**E4 — Product**\nSUBDOMAIN: SD2\nMEANING: a product\nFIELDS: name:string\nSOURCE: [product.py](product.py#L9)\n"
-    )
-    return _VALID_HEAD + ctx + "## T5 — Domain model (domain cards)\n\n" + body
+    if cards is not None and contexts is not None:
+        return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "Ordering",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[order.py](order.py#L1)",
+      "confidence": "inferred"
+    },
+    {
+      "id": "SD2",
+      "name": "Inner",
+      "purpose": "x",
+      "parent": "SD1",
+      "anchor": "[order.py](order.py#L1)",
+      "confidence": "inferred"
+    },
+    {
+      "id": "SD3",
+      "name": "Catalog",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[product.py](product.py#L1)",
+      "confidence": "inferred"
+    }
+  ],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "orders",
+      "meaning": "a purchase",
+      "subdomain": "SD1",
+      "source": "order.py:12",
+      "fields": [
+        {
+          "name": "id",
+          "type": "ObjectId",
+          "markers": [
+            "PK"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "LineItem",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "LineItem",
+      "store": "",
+      "meaning": "a line",
+      "subdomain": "SD2",
+      "source": "order.py:58",
+      "fields": [
+        {
+          "name": "sku",
+          "type": "string",
+          "markers": []
+        },
+        {
+          "name": "prod",
+          "type": "E3",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "refersTo",
+          "target": "E3",
+          "src_card": "*",
+          "dst_card": "1",
+          "display": "Product",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E3",
+      "name": "Product",
+      "store": "",
+      "meaning": "a product",
+      "subdomain": "SD3",
+      "source": "product.py:9",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "Ordering",
+      "purpose": "purchase lifecycle",
+      "parent": null,
+      "anchor": "[order.py](order.py#L1)",
+      "confidence": "inferred"
+    },
+    {
+      "id": "SD2",
+      "name": "Catalog",
+      "purpose": "products",
+      "parent": null,
+      "anchor": "[product.py](product.py#L1)",
+      "confidence": "inferred"
+    }
+  ],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "orders",
+      "meaning": "a purchase",
+      "subdomain": "SD1",
+      "source": "order.py:12",
+      "fields": [
+        {
+          "name": "id",
+          "type": "ObjectId",
+          "markers": [
+            "PK"
+          ]
+        },
+        {
+          "name": "product",
+          "type": "E4",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "LineItem",
+          "how": null
+        },
+        {
+          "verb": "refersTo",
+          "target": "E4",
+          "src_card": "*",
+          "dst_card": "1",
+          "display": "Product",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "LineItem",
+      "store": "",
+      "meaning": "a line",
+      "subdomain": "SD1",
+      "source": "order.py:58",
+      "fields": [
+        {
+          "name": "sku",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "E4",
+      "name": "Product",
+      "store": "",
+      "meaning": "a product",
+      "subdomain": "SD2",
+      "source": "product.py:9",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_nested_subdomain_map() -> str:
     """SD1 (top) nests SD2; SD3 is a top-level sibling. E1 is a DIRECT entity of SD1, E2 a grandchild
     (in SD2), E3 in SD3. E1 contains E2 (direct entity -> child-subdomain box), E2 refersTo E3
     (grandchild -> sibling subdomain). The domain mirror of make_nested_subsystem_map."""
-    contexts = (
-        "## Subdomains (SD)\n"
-        "| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n"
-        "| **SD1** | Ordering | x |  | [order.py](order.py#L1) | inferred |\n"
-        "| **SD2** | Inner | x | SD1 | [order.py](order.py#L1) | inferred |\n"
-        "| **SD3** | Catalog | x |  | [product.py](product.py#L1) | inferred |\n\n"
-    )
-    cards = (
-        "**E1 — Order** *(orders)*\nSUBDOMAIN: SD1\nMEANING: a purchase\nFIELDS: id:ObjectId PK\n"
-        "RELATIONS: contains 1→* E2 LineItem\nSOURCE: [order.py](order.py#L12)\n\n"
-        "**E2 — LineItem**\nSUBDOMAIN: SD2\nMEANING: a line\nFIELDS: sku:string · prod:E3\n"
-        "RELATIONS: refersTo *→1 E3 Product\nSOURCE: [order.py](order.py#L58)\n\n"
-        "**E3 — Product**\nSUBDOMAIN: SD3\nMEANING: a product\nFIELDS: name:string\nSOURCE: [product.py](product.py#L9)\n"
-    )
-    return make_context_map(cards=cards, contexts=contexts)
-
-
-def test_nested_subdomain_validates_clean() -> None:
-    code, out = run_validator(make_nested_subdomain_map())
-    assert code == 0, out
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "Ordering",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[order.py](order.py#L1)",
+      "confidence": "inferred"
+    },
+    {
+      "id": "SD2",
+      "name": "Inner",
+      "purpose": "x",
+      "parent": "SD1",
+      "anchor": "[order.py](order.py#L1)",
+      "confidence": "inferred"
+    },
+    {
+      "id": "SD3",
+      "name": "Catalog",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[product.py](product.py#L1)",
+      "confidence": "inferred"
+    }
+  ],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "orders",
+      "meaning": "a purchase",
+      "subdomain": "SD1",
+      "source": "order.py:12",
+      "fields": [
+        {
+          "name": "id",
+          "type": "ObjectId",
+          "markers": [
+            "PK"
+          ]
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "LineItem",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "LineItem",
+      "store": "",
+      "meaning": "a line",
+      "subdomain": "SD2",
+      "source": "order.py:58",
+      "fields": [
+        {
+          "name": "sku",
+          "type": "string",
+          "markers": []
+        },
+        {
+          "name": "prod",
+          "type": "E3",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "refersTo",
+          "target": "E3",
+          "src_card": "*",
+          "dst_card": "1",
+          "display": "Product",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E3",
+      "name": "Product",
+      "store": "",
+      "meaning": "a product",
+      "subdomain": "SD3",
+      "source": "product.py:9",
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def test_nested_subdomain_has_card_at_every_level() -> None:
@@ -1629,17 +2609,6 @@ def test_nested_domain_edge_cards_for_disjoint_pairs_only() -> None:
     assert {(r["src"], r["dst"]) for r in ce["SD2>SD3"]} == {("E2", "E3")}
 
 
-def test_iter_domain_cards_parses_context() -> None:
-    by_id = {c.id: c for c in schema_v1.iter_domain_cards(make_context_map().splitlines())}
-    assert by_id["E1"].subdomain == "SD1" and by_id["E2"].subdomain == "SD1" and by_id["E4"].subdomain == "SD2"
-
-
-def test_membership_picks_parent_for_context_rows() -> None:
-    # a Subdomains-table row's 'Context' header is its NAME column; its parent pointer is 'parent'.
-    assert schema_v1.membership_ids(
-        "SD2", ["**SD2**", "Catalog", "x", "SD1"], ["id", "subdomain", "purpose", "parent"]) == ["SD1"]
-
-
 def test_parser_entity_gets_context_parent_and_context_nodes() -> None:
     g = parse_map(make_context_map())
     assert g["nodes"]["E1"]["parent"] == "SD1" and g["nodes"]["E4"]["parent"] == "SD2"
@@ -1652,88 +2621,119 @@ def test_parser_entity_without_context_has_no_parent() -> None:
     assert parse_map(make_domain_map())["nodes"]["E1"]["parent"] is None
 
 
-def test_validator_context_map_clean() -> None:
-    code, out = run_validator(make_context_map())
-    assert code == 0, out
-
-
-def test_validator_flags_undefined_context() -> None:
-    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD9\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
-    code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
-    assert code == 1 and "SD9" in out, out
-
-
-def test_validator_contexts_guard_fires_on_missing_membership() -> None:
-    # A Subdomains table with NO card assigned (no CONTEXT line) is the silent disconnected-boxes case.
-    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
-    code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
-    assert code == 1 and "no entity is assigned" in out, out
-
-
-def test_validator_warns_ungrouped_entity() -> None:
-    # Some entities carry a context, one doesn't -> non-blocking warning, build still passes.
-    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n\n")
-    cards = (
-        "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n"
-    )
-    code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
-    assert code == 0, out
-    assert "ungrouped" in out.lower() and "E2" in out, out
-
-
-def test_validator_catches_context_cycle() -> None:
-    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n"
-           "| **SD1** | A | x | SD2 | a | V |\n| **SD2** | B | x | SD1 | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
-    code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
-    assert code == 1 and "cycle" in out.lower(), out
-
-
-def test_validator_flags_context_parent_wrong_kind() -> None:
-    # A Subdomains row whose Parent is a subsystem (S1), not another context — caught by the kind check.
-    pre = (
-        "## Subsystems\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **S1** | Edge | x |  | a | V |\n\n"
-        "## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **SD1** | A | x | S1 | a | V |\n\n"
-        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n| **C1** | App | S1 | x | f |  |\n\n"
-    )
-    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
-    code, out = run_validator(_VALID_HEAD + pre + "## T5\n\n" + cards)
-    assert code == 1 and "is not a subdomain" in out, out
-
-
-def test_validator_ignores_prose_cx_without_contexts() -> None:
-    # No Subdomains table / CONTEXT line: a stray "SD1" in prose is not treated as a reference (additive).
-    md = ("# X\nThe SD1 module is internal.\n"
-          "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n"
-          "|---|---|---|---|---|\n| **C1** | App | x | f |  |\n")
-    code, out = run_validator(md)
-    assert code == 0, out
-
-
 def make_bridge_map() -> str:
     """Subsystems S1/S2 + context SD1 with entity E1; C1 (S1) persists E1, C2 (S2) reads E1. Exercises
     the S→SD bridge: the owning subsystem's card shows an `owns` arrow, the reader's a `reads` arrow."""
-    return (
-        "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **S1** | Edge | x |  | a | V |\n| **S2** | Core | x |  | a | V |\n\n"
-        "## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n\n"
-        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n| **C1** | Writer | S1 | x | f |  |\n| **C2** | Reader | S2 | x | f |  |\n\n"
-        "## T5\n\n**E1 — Order** *(orders)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | persists | E1 | store | f |\n| C2 | reads | E1 | load | f |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Edge",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "S2",
+      "name": "Core",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Writer",
+      "subsystem": "S1",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Reader",
+      "subsystem": "S2",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "Ordering",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "orders",
+      "meaning": "m",
+      "subdomain": "SD1",
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "persists",
+      "dst": "E1",
+      "why": "store",
+      "where": "f"
+    },
+    {
+      "src": "C2",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "load",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def test_has_subdomains() -> None:
@@ -1869,11 +2869,85 @@ def test_render_no_context_data_when_ungrouped() -> None:
 
 
 def _two_context_map(cards_extra: str = "") -> str:
-    """SD1 (Ordering, has E1) + SD2 (Catalog, EMPTY — no card assigned to it)."""
-    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n| **SD2** | Catalog | x |  | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n" + cards_extra
-    return _VALID_HEAD + ctx + "## T5\n\n" + cards
+    """SD1 (Ordering, has E1) + SD2 (Catalog, EMPTY — no card assigned to it). `cards_extra` is unused
+    by the surviving (kept) callers, which all take the default — a defined-but-empty SD2."""
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Search",
+      "actor": "Shopper",
+      "trigger_outcome": "types -> list"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Search",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "Ordering",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "SD2",
+      "name": "Catalog",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": "SD1",
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def test_gen_domain_subdomain_card_empty_context_is_valid_mermaid() -> None:
@@ -1886,45 +2960,190 @@ def test_gen_domain_subdomain_card_empty_context_is_valid_mermaid() -> None:
     assert "EmptySubdomain" in card
 
 
-def test_validator_warns_empty_context() -> None:
-    # A leaf context with no member entities -> non-blocking warning (likely a leftover / typo'd id).
-    code, out = run_validator(_two_context_map())
-    assert code == 0, out                                          # advisory only
-    assert "Subdomains with no entities" in out and "SD2" in out, out
-
-
-def test_validator_no_empty_warning_for_parent_context() -> None:
-    # A non-leaf context (parent of another) with no DIRECT entities is NOT empty -> no false warning.
-    ctx = ("## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-           "|---|---|---|---|---|---|\n| **SD1** | Domain | x |  | a | V |\n| **SD2** | Ordering | x | SD1 | a | V |\n\n")
-    cards = "**E1 — Order** *(s)*\nSUBDOMAIN: SD2\nMEANING: m\nFIELDS: id:int\nSOURCE: [f](f#L1)\n"
-    code, out = run_validator(_VALID_HEAD + ctx + "## T5\n\n" + cards)
-    assert code == 0, out
-    assert "Subdomains with no entities" not in out, out             # SD1 is a parent, not empty
-
-
 def make_both_groupings_map() -> str:
     """A map with BOTH groupings + the cross-altitude edges that triggered the leak: S1{C1}, S2{C2};
     SD1{E1,E2}, SD2{E3}; a C1->C2 component edge (S→S crossing), C1 persists E1 + C2 persists E3
     (C→E bridge edges), and E1 refersTo E3 (an E→E relation crossing SD1→SD2). The Subsystems overview
     must show ONLY S→S and never a SD box; the Domain overview ONLY SD→SD and never an S box."""
-    return (
-        "## Subsystems (S)\n| ID | Subsystem | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **S1** | Edge | x |  | a | V |\n| **S2** | Core | x |  | a | V |\n\n"
-        "## Subdomains (SD)\n| ID | Subdomain | Purpose | Parent | Anchor | Conf. |\n"
-        "|---|---|---|---|---|---|\n| **SD1** | Ordering | x |  | a | V |\n| **SD2** | Catalog | x |  | a | V |\n\n"
-        "## T1\n| ID | Component | Subsystem | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|---|\n| **C1** | Front | S1 | x | f | C2 |\n| **C2** | Core | S2 | x | f |  |\n\n"
-        "## T5\n\n"
-        "**E1 — Order** *(s)*\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: id:int · product:E3\n"
-        "RELATIONS: contains 1→* E2 Line · refersTo *→1 E3 Product\nSOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nSUBDOMAIN: SD1\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n\n"
-        "**E3 — Product**\nSUBDOMAIN: SD2\nMEANING: m\nFIELDS: y:int\nSOURCE: [f](f#L3)\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | calls | C2 | reach core | f |\n"
-        "| C1 | persists | E1 | store order | f |\n"
-        "| C2 | persists | E3 | store product | f |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Edge",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "S2",
+      "name": "Core",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Front",
+      "subsystem": "S1",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Core",
+      "subsystem": "S2",
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "Ordering",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    },
+    {
+      "id": "SD2",
+      "name": "Catalog",
+      "purpose": "x",
+      "parent": null,
+      "anchor": "[a](a)",
+      "confidence": "V"
+    }
+  ],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "s",
+      "meaning": "m",
+      "subdomain": "SD1",
+      "source": "f:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        },
+        {
+          "name": "product",
+          "type": "E3",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "Line",
+          "how": null
+        },
+        {
+          "verb": "refersTo",
+          "target": "E3",
+          "src_card": "*",
+          "dst_card": "1",
+          "display": "Product",
+          "how": null
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "name": "Line",
+      "store": "",
+      "meaning": "m",
+      "subdomain": "SD1",
+      "source": "f:2",
+      "fields": [
+        {
+          "name": "x",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    },
+    {
+      "id": "E3",
+      "name": "Product",
+      "store": "",
+      "meaning": "m",
+      "subdomain": "SD2",
+      "source": "f:3",
+      "fields": [
+        {
+          "name": "y",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "calls",
+      "dst": "C2",
+      "why": "reach core",
+      "where": "f"
+    },
+    {
+      "src": "C1",
+      "verb": "persists",
+      "dst": "E1",
+      "why": "store order",
+      "where": "f"
+    },
+    {
+      "src": "C2",
+      "verb": "persists",
+      "dst": "E3",
+      "why": "store product",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def test_container_overview_excludes_contexts() -> None:
@@ -1973,70 +3192,6 @@ def test_bridge_card_pairs_subsystem_and_subdomain() -> None:
     assert "style C1 fill:" in card                                            # component box styled (indigo)
 
 
-# --- C->E ownership nudge --------------------------------------------------------
-def make_owner_map(e2_embedded: bool = False) -> str:
-    """C1 persists E1 (an owner). E2 has no owner; embedded in E1 (contains) only when e2_embedded."""
-    rel = "RELATIONS: contains 1→* E2 Line\n" if e2_embedded else ""
-    return (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | OrderRepo | x | f |  |\n\n"
-        "## T5\n\n"
-        "**E1 — Order** *(s)*\nMEANING: m\nFIELDS: id:int\n" + rel + "SOURCE: [f](f#L1)\n\n"
-        "**E2 — Line**\nMEANING: m\nFIELDS: x:int\nSOURCE: [f](f#L2)\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | persists | E1 | store | f |\n"
-    )
-
-
-def test_validator_warns_unowned_entity() -> None:
-    # E1 has an owner (C1 persists E1); E2 has none and isn't embedded -> non-blocking nudge lists E2.
-    code, out = run_validator(make_owner_map())
-    assert code == 0, out
-    assert "no owning component" in out and "E2" in out, out
-
-
-def test_validator_no_owner_warning_when_nothing_owned() -> None:
-    # No persists/writes C→E edge at all -> the map doesn't author ownership -> silent (don't nag).
-    # Drop the whole edge table (not just its row) so the map has no dangling header+separator — an
-    # empty table is its own malformed shape (check_table_runs), unrelated to the ownership nudge.
-    md = make_owner_map().split("### edges")[0]
-    code, out = run_validator(md)
-    assert code == 0 and "no owning component" not in out, out
-
-
-def test_validator_embedded_entity_exempt_from_owner_warning() -> None:
-    # E2 is embedded in E1 (contains) -> persisted via its container -> not flagged as unowned.
-    code, out = run_validator(make_owner_map(e2_embedded=True))
-    assert code == 0 and "no owning component" not in out, out
-
-
-def make_orphan_dep_map(d1_wired: bool = False) -> str:
-    """Components C1/C2 with a C1->C2 edge; dep D1. D1 gets an incoming edge only when d1_wired."""
-    dep_edge = "| C1 | uses | D1 | cache | f |\n" if d1_wired else ""
-    return (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | App | x | f | C2 |\n| **C2** | Core | x | f |  |\n\n"
-        "## T2\n| ID | Name | Type | Used for | Where configured | Conf. |\n|---|---|---|---|---|---|\n"
-        "| **D1** | Cache | store | speed | env | V |\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | calls | C2 | reach core | f |\n" + dep_edge
-    )
-
-
-def test_validator_warns_orphan_dep() -> None:
-    # D1 defined but nothing connects to it -> an un-traced C→D, the thin-trace symptom -> nudge.
-    code, out = run_validator(make_orphan_dep_map())
-    assert code == 0, out
-    assert "no incoming edge" in out and "D1" in out, out
-
-
-def test_validator_no_orphan_warning_when_dep_wired() -> None:
-    # D1 has an incoming `C1 uses D1` edge -> not orphaned -> silent.
-    code, out = run_validator(make_orphan_dep_map(d1_wired=True))
-    assert code == 0 and "no incoming edge" not in out, out
-
-
-# --- Golden Path (GP) -----------------------------------------------------------
 def test_parser_gp_captures_uc_and_why() -> None:
     g = parse_map(make_gp_map())
     steps = {s["id"]: s for s in g["gp"]}
@@ -2069,11 +3224,54 @@ def test_gen_gp_mermaid_black_box_sequence() -> None:
 
 def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
     # A GP step with no `*(UCn)*` tag falls back to a generic 'Actor' lifeline (no crash).
-    md = (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | A | x | f |  |\n\n"
-        "## Golden Path\n**GP1 — Do a thing**\n"
-    )
+    md = """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Do a thing",
+      "uc": null,
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "A",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
     mm = gen_viewer.gen_gp_mermaid(parse_map(md))
     assert "actor GPA0 as Actor" in mm and "GPA0->>GPSYS: Do a thing" in mm
 
@@ -2104,19 +3302,79 @@ def test_gp_actors_without_matching_role_has_blank_wants() -> None:
 def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
     # A step tagged with several UCs (`*(UC1, UC2)*`) or trailing text (`*(UC3 follow-on)*`) must
     # resolve to its FIRST UC — not fall back to a generic 'Actor' lifeline (the multi-UC regression).
-    md = (
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** | Sign in | Org admin | a -> b |\n"
-        "| **UC2** | Create | Org admin | a -> b |\n"
-        "| **UC3** | Renew | End user | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | A | x | f |  |\n\n"
-        "## Golden Path\n"
-        "**GP1 — Sign in and create** *(UC1, UC2)*\n\n"
-        "**GP2 — Renewal flow** *(UC3 follow-on)*\n"
-    )
+    md = """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Sign in",
+      "actor": "Org admin",
+      "trigger_outcome": "a -> b"
+    },
+    {
+      "id": "UC2",
+      "name": "Create",
+      "actor": "Org admin",
+      "trigger_outcome": "a -> b"
+    },
+    {
+      "id": "UC3",
+      "name": "Renew",
+      "actor": "End user",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Sign in and create",
+      "uc": "UC1",
+      "why": null
+    },
+    {
+      "id": "GP2",
+      "title": "Renewal flow",
+      "uc": "UC3",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "A",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
     g = parse_map(md)
     steps = {s["id"]: s for s in g["gp"]}
     assert steps["GP1"]["uc"] == "UC1"           # first id of the multi-UC tag
@@ -2130,18 +3388,6 @@ def test_gp_actor_is_use_case_actor() -> None:
     # A step IS one use case, so its driving actor is that use case's Actor cell (no separate signal).
     g = parse_map(make_gp_role_actor_map())
     assert gen_viewer._gp_actor(g, g["gp"][0]) == "Org admin"
-
-
-def test_validator_accepts_defined_flow_actor() -> None:
-    # A flow actor step whose Role is defined in the Roles table validates clean.
-    code, out = run_validator(make_gp_role_actor_map())
-    assert code == 0, out
-
-
-def test_validator_rejects_undefined_flow_actor() -> None:
-    # A flow actor step naming an undefined Role fails (the actor endpoint can't resolve).
-    code, out = run_validator(make_gp_role_actor_map("Sysadmin"))
-    assert code == 1 and "not a defined Role" in out, out
 
 
 def test_flow_mermaid_sequence_from_use_case() -> None:
@@ -2169,49 +3415,12 @@ def test_flow_narrative_derives_why_from_edge() -> None:
 def test_flow_uses_arrow_shows_why() -> None:
     # The catch-all `uses` carries no meaning on its own: when the edge has a Why, the arrow shows the
     # Why instead. A sharper verb (calls / reads / …) stays as-is.
-    md = make_gp_map().replace("| C1 | calls | C2 | reach engine | f |",
-                               "| C1 | uses | C2 | reach engine | f |")
+    md = make_gp_map().replace('"verb": "calls",', '"verb": "uses",')
     s1 = gen_viewer.flow_mermaids(parse_map(md))["UC1"]
     assert "C1->>C2: reach engine" in s1      # generic 'uses' -> the Why
     assert "C1->>C2: uses" not in s1
     s2 = gen_viewer.flow_mermaids(parse_map(md))["UC2"]
     assert "C2->>D1: reads" in s2             # a sharp verb is untouched
-
-
-def test_parse_flow_step_variants() -> None:
-    pf = schema_v1.parse_flow_step
-    s = pf(1, "Member → C2 : opens the page")          # actor step: phrase kept, endpoints split
-    assert s.ok and s.src == "Member" and not s.src_is_id and s.dst == "C2" and s.dst_is_id
-    assert s.phrase == "opens the page"
-    s = pf(2, "C5 → E3 · members list")                # element step: note after '·', no phrase
-    assert s.ok and s.src == "C5" and s.dst == "E3" and s.note == "members list" and s.phrase == ""
-    assert pf(3, "C1 -> C2").ok                          # ASCII arrow works
-    s = pf(4, "Member → C2 : clicks -> then: opens")   # arrow/colon inside the phrase don't confuse it
-    assert s.ok and s.src == "Member" and s.dst == "C2" and s.phrase == "clicks -> then: opens"
-    assert not pf(5, "C1 does a thing").ok               # no arrow -> malformed
-    assert not pf(6, "C1 → C2 → C3").ok                  # F1: >1 arrow -> a step is one interaction
-
-
-def test_validator_rejects_multi_arrow_flow_step() -> None:
-    # F1 regression: a step bundling several interactions (>1 arrow) must fail even on a roleless map.
-    md = make_gp_map().replace("2. C1 → C2\n", "2. C1 → C2 → D1\n")
-    code, out = run_validator(md)
-    assert code == 1 and "from → to" in out, out
-
-
-def test_validator_rejects_duplicate_uc_flow() -> None:
-    # F2 regression: two flow blocks for one use case would silently overwrite in the render -> fail.
-    md = make_gp_map().replace(
-        "## T6 — Use-case flows\n",
-        "## T6 — Use-case flows\n**UC1 — Dup flow**\n1. Andy → C1 : dup\n\n",
-    )
-    code, out = run_validator(md)
-    assert code == 1 and "more than one T6 flow" in out, out
-
-
-def test_validator_gp_map_clean() -> None:
-    code, out = run_validator(make_gp_map())
-    assert code == 0, out
 
 
 def test_render_inlines_gp_data() -> None:
@@ -2228,46 +3437,177 @@ def test_render_inlines_gp_data() -> None:
         assert "sequenceDiagram" in html and "Submit order" in html
 
 
-# --- external-dependency Kind (Context library-fold) ----------------------------
 def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> str:
     """A map whose T2 exercises dep Kinds: D1 is explicit (param), the rest inferred from Type. D3
     (library) + D4 (framework) are the in-process deps that fold into the Context 'Libraries' box; the
-    others are external systems drawn by name. `with_kind=False` drops the Kind column (heuristic-only)."""
-    deps = [
-        ("D1", "PostgreSQL", kind_d1, "Relational database", "store", "env"),
-        ("D2", "RabbitMQ", "", "Message broker", "queue", "env"),
-        ("D3", "pydantic", "", "Validation library", "validate", "dep"),
-        ("D4", "React", "", "UI framework", "ui", "dep"),
-        ("D5", "Stripe", "", "Payments API (SaaS)", "billing", "env"),
-        ("D7", "Docker", "", "Container runtime", "packaging", "dockerfile"),
-    ]
-    if with_kind:
-        hdr = ("| ID | Name | Kind | Type | Used for | Where configured | Conf. |\n"
-               "|---|---|---|---|---|---|---|\n")
-        rows = "".join(f"| **{i}** | {n} | {k} | {t} | {u} | {w} | V |\n" for i, n, k, t, u, w in deps)
-    else:
-        hdr = ("| ID | Name | Type | Used for | Where configured | Conf. |\n"
-               "|---|---|---|---|---|---|\n")
-        rows = "".join(f"| **{i}** | {n} | {t} | {u} | {w} | V |\n" for i, n, _k, t, u, w in deps)
-    edges = "".join(f"| C1 | uses | {d[0]} | x | f |\n" for d in deps)
-    return (
-        "## Roles (actors)\n"
-        "| Role | Kind | What they want | Use cases they drive |\n"
-        "|---|---|---|---|\n"
-        "| **User** | human | use it | UC1 |\n\n"
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** | Use | User | a -> b |\n\n"
-        "## T1\n"
-        "| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n"
-        "| **C1** | App | x | f | D1 |\n\n"
-        "## T2 — External dependencies\n" + hdr + rows + "\n"
-        "### edges\n"
-        "| From | Verb | To | Why | Where |\n"
-        "|---|---|---|---|---|\n" + edges
-    )
+    others are external systems drawn by name. Every kept test uses the default explicit-D1 +
+    Kind-column shape (the invalid-Kind and Kind-column-optional variants only served the retired
+    validator tests)."""
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [
+    {
+      "name": "User",
+      "kind": "human",
+      "wants": "use it",
+      "drives": "UC1"
+    }
+  ],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Use",
+      "actor": "User",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "App",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "D1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [
+    {
+      "id": "D1",
+      "name": "PostgreSQL",
+      "kind": "datastore",
+      "type": "Relational database",
+      "used_for": "store",
+      "where_configured": "env",
+      "confidence": "V",
+      "deployment_linked": false,
+      "extra": {}
+    },
+    {
+      "id": "D2",
+      "name": "RabbitMQ",
+      "kind": null,
+      "type": "Message broker",
+      "used_for": "queue",
+      "where_configured": "env",
+      "confidence": "V",
+      "deployment_linked": false,
+      "extra": {}
+    },
+    {
+      "id": "D3",
+      "name": "pydantic",
+      "kind": null,
+      "type": "Validation library",
+      "used_for": "validate",
+      "where_configured": "dep",
+      "confidence": "V",
+      "deployment_linked": false,
+      "extra": {}
+    },
+    {
+      "id": "D4",
+      "name": "React",
+      "kind": null,
+      "type": "UI framework",
+      "used_for": "ui",
+      "where_configured": "dep",
+      "confidence": "V",
+      "deployment_linked": false,
+      "extra": {}
+    },
+    {
+      "id": "D5",
+      "name": "Stripe",
+      "kind": null,
+      "type": "Payments API (SaaS)",
+      "used_for": "billing",
+      "where_configured": "env",
+      "confidence": "V",
+      "deployment_linked": false,
+      "extra": {}
+    },
+    {
+      "id": "D7",
+      "name": "Docker",
+      "kind": null,
+      "type": "Container runtime",
+      "used_for": "packaging",
+      "where_configured": "dockerfile",
+      "confidence": "V",
+      "deployment_linked": false,
+      "extra": {}
+    }
+  ],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "D1",
+      "why": "x",
+      "where": "f"
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "D2",
+      "why": "x",
+      "where": "f"
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "D3",
+      "why": "x",
+      "where": "f"
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "D4",
+      "why": "x",
+      "where": "f"
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "D5",
+      "why": "x",
+      "where": "f"
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "D7",
+      "why": "x",
+      "where": "f"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def test_classify_dep_explicit_wins() -> None:
@@ -2333,20 +3673,6 @@ def test_context_no_libraries_box_when_none_folded() -> None:
     assert gen_viewer.gen_libs_mermaid(g) == ""
 
 
-def test_validator_dep_kinds_clean_and_invalid() -> None:
-    assert run_validator(make_dep_kinds_map())[0] == 0                  # valid explicit + inferred -> OK
-    code, out = run_validator(make_dep_kinds_map("nonsense"))
-    assert code == 1 and "invalid dependency Kind" in out, out
-
-
-def test_validator_dep_kind_column_optional() -> None:
-    # Dropping the Kind column entirely is a no-op for the validator (Kind is then inferred from Type).
-    code, out = run_validator(make_dep_kinds_map(with_kind=False))
-    assert code == 0, out
-    # ...and the heuristic still classifies, so the fold still happens.
-    assert gen_viewer.folded_libs(parse_map(make_dep_kinds_map(with_kind=False)))
-
-
 def test_render_inlines_libs_fold_data() -> None:
     # The self-contained HTML must carry the Libraries drill diagram + the folded-dep list, fully
     # substituted (no leftover placeholder), so the client can preview/drill the fold box.
@@ -2362,8 +3688,6 @@ def test_render_inlines_libs_fold_data() -> None:
         assert "__MERMAID_LIBS__" not in html and "__FOLDED_LIBS__" not in html
         # the emoji is JSON-escaped (📚) when inlined, so assert on the text after it
         assert "pydantic" in html and "Libraries (2)" in html
-
-
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

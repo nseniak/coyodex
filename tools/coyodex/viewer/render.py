@@ -4,7 +4,7 @@
 Schema v2 (`project-map.json`) renders to EITHER view — the output extension picks it:
     coyodex render .coyodex/project-map.json .coyodex/project-map.html   # interactive viewer
     coyodex render .coyodex/project-map.json .coyodex/project-map.md    # committed markdown view
-Markdown INPUT is retired (Phase 3): a schema-v1 map is migrated once with `coyodex convert`.
+Markdown INPUT is not supported: only a schema-v2 model (project-map.json) can be rendered.
 
 The persisted artifacts are the model (the single source) and its generated views. The stages stay
 importable on their own (`coyodex.views`, `coyodex.viewer.gen_viewer`) for debugging.
@@ -22,7 +22,7 @@ from coyodex.viewer.gen_viewer import write_html
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if len(argv) < 2:
-        print("usage: coyodex render <project-map.json|md> <out.html|out.md> [change-report.md]",
+        print("usage: coyodex render <project-map.json> <out.html|out.md> [change-report.md]",
               file=sys.stderr)
         return 2
     src, out = Path(argv[0]), Path(argv[1])
@@ -32,8 +32,8 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     out.parent.mkdir(parents=True, exist_ok=True)
     if src.suffix != ".json":
-        print("ERROR: views are generated from a schema-v2 model (project-map.json) — migrate a "
-              "legacy markdown map once with `coyodex convert`, then render.", file=sys.stderr)
+        print("ERROR: views are generated from a schema-v2 model (project-map.json) only — "
+              "markdown maps are not supported.", file=sys.stderr)
         return 2
     from coyodex.model import ModelError, load_model
     from coyodex.views import model_to_graph, model_to_markdown

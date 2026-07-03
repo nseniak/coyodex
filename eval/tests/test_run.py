@@ -16,7 +16,7 @@ from pathlib import Path
 from coyodex_eval.judge import JudgeReport
 from coyodex_eval.profile import MapProfile, build_profile
 from coyodex_eval.run import BASELINE, bless, delta_md, load_baseline, map_sha256, run_eval, write_run
-from test_judge import ScriptedJudge, as_model, make_l2_map_md
+from test_judge import ScriptedJudge
 
 RUN = [sys.executable, "-m", "coyodex_eval.cli", "run"]
 BLESS = [sys.executable, "-m", "coyodex_eval.cli", "bless"]
@@ -25,13 +25,82 @@ CLAIMS = [sys.executable, "-m", "coyodex_eval.cli", "claims"]
 
 
 def make_map() -> str:
-    """A small well-formed-enough map (as a model document) with the two L2 sources, so profile +
-    judge both have content."""
-    return as_model(
-        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
-        "| **UC1** | Admin action | Admin | a -> b |\n\n"
-        + make_l2_map_md()
-    )
+    """A small well-formed-enough map (a schema-v2 JSON model document) with the two L2 sources
+    (a Security & auth row + an `enforces` edge), so profile + judge both have content."""
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Admin action",
+      "actor": "Admin",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Gate",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Policy",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "enforces",
+      "dst": "C2",
+      "why": "policy",
+      "where": "gate.py#L5"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [
+    {
+      "surface": "/admin",
+      "who": "admins",
+      "check": "[require_admin](auth.py#L10)",
+      "risk": "escalation"
+    }
+  ],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 # --- run_eval -------------------------------------------------------------------

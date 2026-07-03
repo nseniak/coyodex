@@ -18,8 +18,8 @@ Commands:
   preindex   Build the structural pre-index (.coyodex/preindex.json). Needs the
              `preindex` extra (tree-sitter); install with: pip install -e '.[preindex]'
   validate   Validate a map (schema + semantic checks — is it WELL-FORMED?).
-             project-map.json (the schema-v2 source) only; a legacy .md map is
-             migrated once with `coyodex convert`.
+             project-map.json (the schema-v2 source) only; markdown maps are
+             not supported.
   audit      Adversarial pass over a built map (is it SELF-CONTRADICTORY?): L1
              deterministic contradiction checks + an L2 grounding worklist.
   render     Render a map to a generated view: model → HTML viewer or → the
@@ -28,7 +28,6 @@ Commands:
              project-map.json (+ generated views).
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
-  convert    One-time migration: a schema-v1 project-map.md → project-map.json.
 
 The method-quality regression eval is a separate command: `coyodex-eval` (see eval/).
 
@@ -40,10 +39,7 @@ Run `coyodex <command> --help` for command-specific options."""
 
 
 def _default_map(argv: list[str]) -> list[str]:
-    """When no positional map is given, default to the v2 source (`.coyodex/project-map.json`)
-    when it exists, else the legacy markdown map — so a bare `coyodex validate` / `audit` in an
-    un-migrated repo hits the clear convert-first error instead of "file not found"."""
-    from pathlib import Path
+    """When no positional map is given, default to the v2 source (`.coyodex/project-map.json`)."""
     flags_with_value = {"--repo"}
     expect_value = False
     for a in argv:
@@ -53,9 +49,7 @@ def _default_map(argv: list[str]) -> list[str]:
             expect_value = True
         elif not a.startswith("-"):
             return argv  # an explicit map was given
-    default = (".coyodex/project-map.json" if Path(".coyodex/project-map.json").exists()
-               else ".coyodex/project-map.md")
-    return argv + [default]
+    return argv + [".coyodex/project-map.json"]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -86,9 +80,6 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "dump":
         from coyodex import dump  # stdlib-only; v2-only, defaults to .coyodex/project-map.json
         return dump.main(rest)
-    if cmd == "convert":
-        from coyodex import convert_md  # stdlib-only
-        return convert_md.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)

@@ -1,50 +1,22 @@
 #!/usr/bin/env python3
-"""Schema v1 grammar — the single source of the project-map token/definition rules.
+"""Shared token/grammar helpers behind the schema-v2 pipeline.
 
-Imported by the validator (``tools/coyodex/validate_analysis.py``) and the parser
-(``tools/coyodex/viewer/build_graph.py``) so there is ONE grammar, never two that can drift.
+Originally the schema-v1 markdown-map grammar (shared by the retired v1 parser and validator);
+what remains here is the subset the CURRENT tooling still needs: the id vocabulary, the dependency
+Kind classifier, the markdown table-splitting grammar (used by the change-impact report parser in
+`viewer/build_graph.py`), and the domain-relation vocabulary (`views.py` derives graph edges and
+flow steps straight from the schema-v2 model, reusing this vocabulary rather than a second one).
 Stdlib-only.
 """
 from __future__ import annotations
 
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 # IDs by prefix. Multi-letter prefixes (UC, GP, SD) must precede the single-letter ones (so `SD1`
-# never reads as `S` + stray text). `E` (domain entity) is a reference token here but is DEFINED in a
-# card heading (DEF_ENTITY below), not a table row — so it is intentionally ABSENT from the
-# table-definition patterns that follow. `SD` (domain SUBDOMAIN — a cluster of T5 entities; the domain
-# analog of a Subsystem `S`) IS table-defined (its own Subdomains table, like `S`), so it appears in
-# those patterns alongside `S`.
+# never reads as `S` + stray text).
 ID_TOKEN = re.compile(r"\b(?:UC\d+|GP\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)\b")
-
-# A definition is the FIRST cell of a table row, bolded: `| **C1** | ... |`
-# — not an inline bold reference in prose. (E is card-defined; see DEF_ENTITY.)
-DEF_BOLD = re.compile(r"^\|\s*\*\*(UC\d+|SD\d+|C\d+|D\d+|S\d+)\*\*\s*\|")
-
-# A bold id anywhere in a cell — a parser uses this to find a row's defining id.
-DEF_ID_CELL = re.compile(r"\*\*(UC\d+|SD\d+|C\d+|D\d+|S\d+)\*\*")
-
-# A bold id at the START of a first cell but with extra text glued after it — i.e. NOT a clean
-# `| **C1** |` definition. Id and name sharing the cell is the most common reason an id reads as
-# "undefined"; the validator uses these to name that exact cause. Two glue forms:
-#   GLUED_DEF       — name OUTSIDE the bold:  `| **UC1** Search… |`
-#   GLUED_DEF_INNER — name INSIDE the bold:   `| **C8 Upstream** |`
-GLUED_DEF = re.compile(r"^\|\s*\*\*(UC\d+|SD\d+|C\d+|D\d+|S\d+)\*\*\s+[^|]")
-GLUED_DEF_INNER = re.compile(r"^\|\s*\*\*(UC\d+|SD\d+|C\d+|D\d+|S\d+)\s+[^*|]+\*\*")
-
-# Block-heading definitions (NOT table rows): a Golden Path step `**GP1 — ...` and a T5 domain card
-# `**E1 — ...` (see method/domain-cards.md). Each DEFINES its id in the heading.
-DEF_GP = re.compile(r"^\*\*(GP\d+)\s+—")
-DEF_ENTITY = re.compile(r"^\*\*(E\d+)\s+—")
-
-# A Golden Path step heading: `**GPn — title** *(UCn)*`. The step IS a use-case occurrence — the
-# `*(UCn)*` tag (REQUIRED) names the use case it realizes; `GPn` is its position in the walk and the
-# step carries no STORY/Touches (those live in the use case's T6 flow). GP_HEADING captures (id,
-# title); GP_UC_TAG captures the realized use case from the trailing `*(...)*` tag.
-GP_HEADING = re.compile(r"^\*\*(GP\d+)\s+—\s*(.+?)\s*\*\*")
-GP_UC_TAG = re.compile(r"\*\(\s*(UC\d+)")
 
 # Grouping: membership is ONE parent pointer carried on the child.
 # Nesting depth is ADVISORY, not capped: the viewer renders arbitrary depth, and the cycle check (not a
@@ -57,11 +29,7 @@ DEEP_NEST_WARN = 5  # warn (non-blocking) when a membership chain is deeper than
 # name); framework + library are in-process code deps that FOLD into one collapsed "Libraries" box.
 # Authored in an OPTIONAL T2 `Kind` column; when absent, classify_dep() infers it from `Type`.
 DEP_KINDS = ("datastore", "messaging", "service", "platform", "framework", "library")
-DEP_KINDS_SHOWN = ("datastore", "messaging", "service", "platform")  # external systems — drawn at Context
 DEP_KINDS_FOLDED = ("framework", "library")                          # in-process — fold into "Libraries"
-# Display label per shown Kind, used for any per-kind grouping/headers in the viewer.
-DEP_KIND_LABEL = {"datastore": "Datastores", "messaging": "Messaging",
-                  "service": "External services", "platform": "Platform"}
 
 # Keyword signatures for the heuristic fallback, in PRIORITY order (first hit wins). Distinctive
 # categories precede broad ones so a multi-signal Type lands right: "AWS SQS" -> messaging (not
@@ -107,10 +75,8 @@ def classify_dep(kind_cell: str, type_cell: str) -> str:
 
 def strip_fences(text: str) -> str:
     """Blank out fenced code blocks (``` or ~~~), keeping the line COUNT so reported line numbers
-    stay accurate. Both consumers (validator, parser) read tables/IDs from prose; a verbatim
-    example inside a code fence (a Mermaid diagram, a shell snippet, a teaching example of a
-    *malformed* table) is not live content and must not be parsed as a table or as ID
-    definitions/references. Shared here so the two tools strip fences identically — one grammar."""
+    stay accurate. A verbatim example inside a code fence (a Mermaid diagram, a shell snippet) is
+    not live content and must not be parsed as a table."""
     out: list[str] = []
     in_fence = False
     for line in text.splitlines():
@@ -123,32 +89,13 @@ def strip_fences(text: str) -> str:
     return "\n".join(out)
 
 
-def unterminated_fence_line(text: str) -> int | None:
-    """The 1-based line number of a code fence (``` or ~~~) that is never closed, or None if every
-    fence is balanced. strip_fences toggles in/out of a fence on each marker line, so an ODD number of
-    markers leaves the final fence open — and strip_fences then blanks the ENTIRE remainder of the
-    document, silently swallowing every table / definition / GP step after the stray fence. Mirrors
-    strip_fences's own toggling so the two agree on exactly which fence is dangling. Run on RAW text
-    (before strip_fences)."""
-    in_fence = False
-    opened_at: int | None = None
-    for idx, line in enumerate(text.splitlines(), start=1):
-        stripped = line.lstrip()
-        if stripped.startswith("```") or stripped.startswith("~~~"):
-            in_fence = not in_fence
-            opened_at = idx if in_fence else None
-    return opened_at if in_fence else None
-
-
 _UNESCAPED_PIPE = re.compile(r"(?<!\\)\|")  # a column separator: a `|` NOT preceded by a backslash
 
 
 def split_cells(row: str) -> list[str]:
     r"""Stripped cells of a markdown table row. An escaped pipe (``\|`` — the schema's sanctioned way
     to put a literal pipe inside a cell) is NOT a column separator: the row is split only on UNescaped
-    pipes, and each cell's ``\|`` is then restored to a literal ``|``. Shared by the validator and the
-    parser/renderer so column counting AND cell content agree in one place — previously the validator
-    stripped ``\|`` (correct count) while the renderer split on it (mangled cells), a silent drift."""
+    pipes, and each cell's ``\|`` is then restored to a literal ``|``."""
     core = row.strip()
     core = core[1:] if core.startswith("|") else core      # drop the one leading table delimiter…
     core = core[:-1] if core.endswith("|") else core        # …and the one trailing delimiter
@@ -157,19 +104,16 @@ def split_cells(row: str) -> list[str]:
 
 def is_separator_row(line: str) -> bool:
     r"""A markdown table separator row like ``|---|:--:|`` — dashes / colons / pipes / spaces only,
-    with at least one dash. Shared by the validator and the parser/renderer so 'is this the separator
-    line' is decided in exactly one place (it used to be re-implemented in each)."""
+    with at least one dash."""
     return "-" in line and bool(re.fullmatch(r"[\s|:\-]+", line.strip()))
 
 
 def iter_pipe_runs(lines: list[str]) -> list[tuple[int, list[str]]]:
     """Each maximal run of ``|``-prefixed lines as ``(start_index, block_lines)`` (0-based start).
 
-    This is THE table grouping shared by the validator and the parser/renderer — the single source of
-    'where does one table start and end'. A markdown table is a contiguous run of ``|``-lines, so ANY
-    non-pipe line inside it (a blank line, stray prose, an HTML comment) breaks the run into two. That
-    is the silent-split class the validator's ``check_table_runs`` guards; keeping the grouping in one
-    place is what stops the validator and renderer from disagreeing about it. Run on fence-free text
+    This is the table grouping the change-impact report parser (`viewer/build_graph.build_diff`)
+    reads: a markdown table is a contiguous run of ``|``-lines, so ANY non-pipe line inside it (a
+    blank line, stray prose, an HTML comment) breaks the run into two. Run on fence-free text
     (``strip_fences``) so a ``|`` row inside a code fence is never grouped as a table."""
     out: list[tuple[int, list[str]]] = []
     i, n = 0, len(lines)
@@ -186,57 +130,15 @@ def iter_pipe_runs(lines: list[str]) -> list[tuple[int, list[str]]]:
     return out
 
 
-def membership_col(headers_lower: list[str], child_id: str) -> int | None:
-    """Index of a row's membership column, chosen by the row's OWN id kind (robust to column
-    order): a subsystem (`S`) or subdomain (`SD`) row's name header ('Subsystem' / 'Subdomain') is its
-    *name* column, so its parent pointer is 'Parent'; a component (or other) row's membership IS the
-    'Subsystem' column. (Entity→subdomain membership is NOT a table cell — it is the card's
-    `SUBDOMAIN:` line, parsed in iter_domain_cards — so only the Subdomains table's own `Parent`
-    nesting comes through here for `SD`.)"""
-    sub = headers_lower.index("subsystem") if "subsystem" in headers_lower else None
-    par = headers_lower.index("parent") if "parent" in headers_lower else None
-    return par if child_id.startswith(("S", "SD")) else (sub if sub is not None else par)
-
-
-def membership_ids(child_id: str, cells: list[str], headers_lower: list[str]) -> list[str]:
-    """All id-tokens in a row's membership column ([] if none / no such column). ``len > 1`` is a
-    malformed multi-parent cell; the first id is the parent. Shared by validator and parser so the
-    membership rule lives in exactly one place."""
-    col = membership_col(headers_lower, child_id)
-    if col is None or col >= len(cells):
-        return []
-    return ID_TOKEN.findall(cells[col])
-
-
-# ---- Domain cards (T5) -------------------------------------------------------------------------
-# T5 is authored as per-entity CARDS (blocks), not a table — see method/domain-cards.md. A card's
-# heading DEFINES the E id (DEF_ENTITY); FIELDS/RELATIONS/MEANING/SOURCE are labeled lines. This
-# grammar is shared by the validator and the parser/renderer so there is ONE source of the format.
-
-# Full heading parse: `**E1 — Order** *(orders collection)*` -> id, name, store(optional).
-ENTITY_HEADING = re.compile(r"^\*\*(E\d+)\s+—\s*(.+?)\s*\*\*\s*(?:\*\((.*?)\)\*)?\s*$")
-
-# A card's optional `SUBDOMAIN:` line carries the one parent subdomain (a `SD` id) the entity belongs
-# to — the domain-model analog of a component's `Subsystem` cell. Display text may follow the id
-# (`SUBDOMAIN: SD2 Ordering`); only the id is captured. Membership is single-source on the child,
-# exactly like component → subsystem; the member list and the derived SD→SD / S→SD edges are computed.
-SUBDOMAIN_ID = re.compile(r"\bSD\d+\b")
-
-ALLOWED_CARDINALITY = {"1", "*", "0..1", "1..*"}
-_CARD = r"\*|\d+|0\.\.1|1\.\.\*"
-# One RELATIONS item: `verb [sc→dc] Eid [display]`. Cardinality pair is optional (omit for isA).
-RELATION_ITEM = re.compile(rf"^(?P<verb>[\w-]+)(?:\s+(?P<sc>{_CARD})→(?P<dc>{_CARD}))?\s+(?P<tgt>E\d+)\b")
-# Optional trailing `{how}` note on a RELATIONS item — a plain-text explanation of how an
-# indirect / field-less relation is implemented (e.g. `… E20 {keyed by (org, upstream) in the store}`).
-REL_HOW = re.compile(r"\{(?P<how>[^}]*)\}\s*$")
-# A field's `FK→Ex` / `FK->Ex` marker, captured as a whole id token (so `FK→E1` never matches `E11`).
-FK_MARKER = re.compile(r"FK(?:→|->)(E\d+)")
+# ── Domain-relation vocabulary ────────────────────────────────────────────────────────────────────
+# `views.py` derives every domain-relation edge and its arrow-backing straight from the schema-v2
+# model (`Entity.relations`, `EntityField.markers`) — this vocabulary (verb -> relationship kind,
+# the canonical-vs-alias verb map, and the FK-marker/backing-resolution helpers) is what it reuses,
+# so there is still ONE place that decides what a relation verb means.
 
 # Each structural kind has ONE canonical verb (association is free-form — any other verb).
 CANONICAL_VERB = {"composition": "contains", "aggregation": "has", "inheritance": "isA"}
 # verb -> classDiagram relationship kind; verbs outside the map render as plain associations.
-# Aliases are still recognised (so an un-canonicalised map renders with the right marker) but the
-# validator rejects them in favour of the canonical verb — see REL_ALIAS.
 REL_KIND = {
     "contains": "composition", "owns": "composition", "composedof": "composition",
     "has": "aggregation", "aggregates": "aggregation",
@@ -245,107 +147,14 @@ REL_KIND = {
 # non-canonical structural verb -> the canonical verb to use instead (drives the validator hint).
 REL_ALIAS = {v: CANONICAL_VERB[k] for v, k in REL_KIND.items() if v != CANONICAL_VERB[k].lower()}
 
-_CARD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href (for SOURCE:)
-
-
-@dataclass
-class CardField:
-    name: str
-    type: str
-    markers: list[str] = field(default_factory=list)
-
-
-@dataclass
-class CardRelation:
-    verb: str
-    target: str
-    src_card: str | None
-    dst_card: str | None
-    kind: str
-    ok: bool          # False = the item did not match the grammar (validator flags, parser skips)
-    raw: str
-    how: str | None = None  # plain-text `{how}` note: how a field-less relation is implemented
-
-
-@dataclass
-class DomainCard:
-    id: str
-    name: str
-    store: str
-    meaning: str
-    source: str | None
-    fields: list[CardField]
-    relations: list[CardRelation]
-    line: int  # 1-based heading line, for error messages
-    heading_ok: bool = True  # False = heading matched DEF_ENTITY but not the full `**En — Name** *(store)*`
-    subdomain: str | None = None  # the one parent subdomain (a `SD` id) from a `SUBDOMAIN:` line; None = ungrouped
-
-
-def _split_glued_markers(typ: str) -> tuple[str, list[str]]:
-    """Peel collection `[]` and nullable `?` markers glued to the type token into the marker list.
-    Authors may write a marker spaced (`access_tokens:E28 []`) or glued (`access_tokens:E28[]`); both
-    must normalize to type=`E28` + marker `[]`. A glued marker otherwise leaves the type as `E28[]`,
-    which silently fails to resolve to the entity's name in the box AND fails the relation-backing
-    match (so the arrow renders unlabelled) — with no validator error. Returns (bare_type, markers)."""
-    glued: list[str] = []
-    while True:
-        if typ.endswith("[]"):
-            glued.insert(0, "[]")
-            typ = typ[:-2]
-        elif typ.endswith("?"):
-            glued.insert(0, "?")
-            typ = typ[:-1]
-        else:
-            return typ, glued
-
-
-def parse_card_fields(items: list[str]) -> list[CardField]:
-    """Parse FIELDS items (`name: type markers`, inline or as `- ` bullets). An empty/missing type
-    yields a CardField with ``type=''`` so the validator can flag it. Markers (`PK`/`FK→Ex`/`unique`/
-    `?`/`[]`) may be space-separated OR glued to the type (`E28[]`); both normalize identically."""
-    out: list[CardField] = []
-    for item in items:
-        item = item.strip()
-        if item.startswith("- "):
-            item = item[2:].strip()
-        if not item:
-            continue
-        name, _, rest = item.partition(":")
-        toks = rest.split()
-        typ, glued = _split_glued_markers(toks[0] if toks else "")
-        out.append(CardField(name=name.strip(), type=typ, markers=glued + toks[1:]))
-    return out
-
-
-def parse_card_relations(spec: str) -> list[CardRelation]:
-    """Parse a RELATIONS line value (`verb sc→dc Eid display [{how}] · …`). A single trailing `{…}` is
-    peeled off as the relation's how-note (a `·` may not appear inside it — it is the item separator;
-    a `·` inside braces splits the item, and the trailing fragment is then flagged ``ok=False``). A
-    `·`-item that doesn't match the grammar yields ``ok=False`` (validator flags it; parser skips it)."""
-    out: list[CardRelation] = []
-    for raw in spec.split("·"):
-        raw = raw.strip()
-        if not raw:
-            continue
-        how: str | None = None
-        hm = REL_HOW.search(raw)
-        if hm:
-            how = hm.group("how").strip() or None
-            raw = raw[: hm.start()].strip()  # peel `{how}` before matching the grammar
-        m = RELATION_ITEM.match(raw)
-        if not m:
-            out.append(CardRelation("", "", None, None, "association", False, raw, how=how))
-            continue
-        kind = REL_KIND.get(m.group("verb").lower(), "association")
-        out.append(CardRelation(m.group("verb"), m.group("tgt"), m.group("sc"), m.group("dc"),
-                                kind, True, raw, how=how))
-    return out
+# A field's `FK→Ex` / `FK->Ex` marker, captured as a whole id token (so `FK→E1` never matches `E11`).
+FK_MARKER = re.compile(r"FK(?:→|->)(E\d+)")
 
 
 def fk_targets(markers: Iterable[str] | str) -> set[str]:
     """Entity ids a field points at via an `FK→Ex` / `FK->Ex` marker — matched as a whole id token
-    (so `FK→E1` never matches `E11`). Accepts the marker list (``CardField.markers``) or a
-    space-joined string (the ``markers`` on a parsed ``Node.attrs`` entry)."""
+    (so `FK→E1` never matches `E11`). Accepts a marker list (``EntityField.markers``) or a
+    space-joined string."""
     text = markers if isinstance(markers, str) else " ".join(markers)
     return set(FK_MARKER.findall(text))
 
@@ -373,62 +182,10 @@ def resolve_backing(
     return None, None
 
 
-def iter_domain_cards(lines: list[str]):
-    """Yield a DomainCard for each T5 card in `lines`. A card runs from its heading to the next card
-    heading, a `---` rule, or a `#` section heading. Shared by the validator and the parser."""
-    i, n = 0, len(lines)
-    while i < n:
-        head = lines[i].strip()
-        hm = DEF_ENTITY.match(head)
-        if not hm:
-            i += 1
-            continue
-        fm = ENTITY_HEADING.match(head)
-        eid = hm.group(1)
-        name, store = (fm.group(2).strip(), (fm.group(3) or "").strip()) if fm else (eid, "")
-        meaning, source, subdomain = "", None, None
-        fields_out: list[CardField] = []
-        relations: list[CardRelation] = []
-        line_no = i + 1
-        j = i + 1
-        while j < n:
-            s = lines[j].strip()
-            if DEF_ENTITY.match(s) or s.startswith("---") or s.startswith("#"):
-                break
-            if s.startswith("MEANING:"):
-                meaning = s[len("MEANING:"):].strip()
-            elif s.startswith("SUBDOMAIN:"):
-                cm = SUBDOMAIN_ID.search(s)
-                subdomain = cm.group(0) if cm else None
-            elif s.startswith("SOURCE:"):
-                lm = _CARD_LINK.search(s)
-                source = lm.group(1) if lm else (s[len("SOURCE:"):].strip() or None)
-            elif s.startswith("RELATIONS:"):
-                relations = parse_card_relations(s[len("RELATIONS:"):])
-            elif s.startswith("FIELDS:"):
-                items = s[len("FIELDS:"):].split("·")
-                k = j + 1
-                while k < n and lines[k].strip().startswith("- "):  # consume bullet-list fields
-                    items.append(lines[k].strip())
-                    k += 1
-                fields_out = parse_card_fields(items)
-                j = k - 1
-            j += 1
-        yield DomainCard(eid, name, store, meaning, source, fields_out, relations, line_no,
-                         heading_ok=fm is not None, subdomain=subdomain)
-        i = j
-
-
 # ── T6 use-case flows ─────────────────────────────────────────────────────────────────────────────
-# A flow is the INSIDE view of one use case: a block headed `**UCn — title**` followed by numbered
-# step lines. Each step is an ordered interaction `from → to [: phrase] [· note]`. An endpoint is
-# either an element ID (C/D/E/…) or a Role display name (an actor step — the backbone has no actor
-# edges, so actor steps carry an authored phrase). When BOTH ends are element IDs the step is a pure
-# reference to the backbone edge between them, so its verb + Why render the step from one source.
-# Shared by the parser and the validator, so the rendered flow and the validated flow are one parse.
-FLOW_HEADING = re.compile(r"^\*\*(UC\d+)\s+—\s*(.+?)\s*\*\*\s*$")
-FLOW_STEP = re.compile(r"^\s*(\d+)\.\s+(.+?)\s*$")
-_FLOW_ARROW = re.compile(r"\s*(?:→|->)\s*")
+# `views.py` builds a Flow/FlowStep per use case straight from the schema-v2 model's `Flow`/`FlowStep`
+# records (not from a markdown parse); `is_step_id` classifies each endpoint (an element ID vs a Role
+# display name) so the viewer knows whether a step is a backbone reference or an actor interaction.
 _STEP_ENDPOINT_ID = re.compile(r"^(?:UC\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)$")
 
 
@@ -455,51 +212,3 @@ class Flow:
     title: str
     steps: list[FlowStep]
     line_no: int
-
-
-def parse_flow_step(n: int, body: str) -> FlowStep:
-    """Parse one `from → to [: phrase] [· note]` step body. Split order: note (`·`), then the inline
-    phrase (`:`), THEN the arrow — so a note or a phrase that itself contains `:` / `·` / `->` never
-    confuses the from→to split. A body without EXACTLY one arrow comes back ok=False (the validator
-    flags it): zero arrows is malformed, and ≥2 means several interactions were bundled into one step
-    (a step is a single interaction)."""
-    raw = body.strip()
-    note = ""
-    if "·" in raw:
-        raw, note = (p.strip() for p in raw.split("·", 1))
-    phrase = ""
-    if ":" in raw:
-        raw, phrase = (p.strip() for p in raw.split(":", 1))
-    parts = [p.strip() for p in _FLOW_ARROW.split(raw)]
-    if len(parts) != 2 or not parts[0] or not parts[1]:
-        return FlowStep(n=n, src=raw, dst="", src_is_id=is_step_id(raw), dst_is_id=False,
-                        phrase=phrase, note=note, ok=False)
-    src, dst = parts[0], parts[1]
-    return FlowStep(n=n, src=src, dst=dst, src_is_id=is_step_id(src), dst_is_id=is_step_id(dst),
-                    phrase=phrase, note=note, ok=True)
-
-
-def iter_flows(lines: list[str]):
-    """Yield a Flow per T6 use-case flow block. A block runs from its `**UCn — title**` heading to the
-    next flow heading, a `---` rule, or a `#` section heading. Shared by the validator and the parser
-    (the SAME step window both sides read), so a step is never validated against a different slice than
-    it is rendered from."""
-    i, n = 0, len(lines)
-    while i < n:
-        hm = FLOW_HEADING.match(lines[i].strip())
-        if not hm:
-            i += 1
-            continue
-        uc, title = hm.group(1), hm.group(2).strip()
-        steps: list[FlowStep] = []
-        j = i + 1
-        while j < n:
-            s = lines[j].strip()
-            if FLOW_HEADING.match(s) or s.startswith("---") or s.startswith("#"):
-                break
-            sm = FLOW_STEP.match(s)
-            if sm:
-                steps.append(parse_flow_step(int(sm.group(1)), sm.group(2)))
-            j += 1
-        yield Flow(uc=uc, title=title, steps=steps, line_no=i + 1)
-        i = j

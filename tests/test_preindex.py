@@ -17,9 +17,36 @@ import tempfile
 from pathlib import Path
 
 from coyodex import preindex, preindex_lib, validate_analysis  # tool #4: compression-coverage check
+from coyodex.validate_analysis import _REF_INLINE, _REF_LINK, strip_anchor
 
 
 # --- builders -------------------------------------------------------------------
+def refs_from_markdown(text: str, root: Path) -> set[str]:
+    """Repo-relative paths (files AND dirs) a markdown snippet points at — markdown link targets +
+    inline paths, kept only when they actually exist under root. Mirrors what the retired v1 map
+    reader used to hand `check_compression_coverage`; `compression_coverage_from_refs` is the real
+    (kept) entry point, so tests build the ref set directly instead of parsing markdown for it."""
+    cands: set[str] = set(_REF_LINK.findall(text)) | set(_REF_INLINE.findall(text))
+    rootstr = str(root)
+    refs: set[str] = set()
+    for c in cands:
+        c = strip_anchor(c.strip())
+        if c.startswith("file://"):
+            c = c[7:]
+        if c.startswith(rootstr):
+            c = c[len(rootstr):]
+        c = c.strip("/")
+        if c and not c.startswith(".coyodex") and (root / c).exists():
+            refs.add(c)
+    return refs
+
+
+def check_compression_coverage(text: str, root: Path) -> list[str]:
+    root = root.resolve()
+    return validate_analysis.compression_coverage_from_refs(refs_from_markdown(text, root), root)
+
+
+
 def make_temp_repo(files: dict[str, str], git: bool = True) -> Path:
     """Write a throwaway tree; optionally make it a git repo with one commit."""
     root = Path(tempfile.mkdtemp(prefix="coyodex_preindex_"))
@@ -202,7 +229,7 @@ def make_plugin_repo(n_plugins: int, n_files_each: int = 2) -> Path:
 def test_compression_flags_collapsed_plugins() -> None:
     root = make_plugin_repo(12)
     collapsed = "| **C1** | Plugins | S1 | all ~12 plugins as one box | [plugins/](plugins/) | |\n"
-    ws = validate_analysis.check_compression_coverage(collapsed, root)
+    ws = check_compression_coverage(collapsed, root)
     comp = [w for w in ws if w.startswith("Compression") and "plugins/ holds" in w]
     assert comp, ws
     assert "12 subdirs, measured at validate time" in comp[0], comp[0]  # self-reported denominator
@@ -213,7 +240,7 @@ def test_compression_quiet_when_plugins_drilled() -> None:
     drilled = "\n".join(
         f"| **C{i}** | P{i} | S1 | one plugin | [f](plugins/p{i}/f0.py) | |" for i in range(12)
     )
-    ws = validate_analysis.check_compression_coverage(drilled, root)
+    ws = check_compression_coverage(drilled, root)
     plug = [w for w in ws if "plugins/ holds" in w]
     assert not plug, f"drilled plugins must not warn (GR6 — abstraction is a feature): {plug}"
 
@@ -221,7 +248,7 @@ def test_compression_quiet_when_plugins_drilled() -> None:
 def test_compression_is_advisory_only_returns_list() -> None:
     # never raises, never blocks — it returns warnings the validator appends to `warnings` (GR6).
     root = make_temp_repo({"a.py": "x\n"}, git=False)
-    assert isinstance(validate_analysis.check_compression_coverage("", root), list)
+    assert isinstance(check_compression_coverage("", root), list)
 
 
 def test_validator_does_not_read_preindex_json_gr4() -> None:
@@ -229,12 +256,12 @@ def test_validator_does_not_read_preindex_json_gr4() -> None:
     the validator re-measures and never consumes the generated artifact."""
     root = make_plugin_repo(12)
     collapsed = "| **C1** | Plugins | S1 | one box | [plugins/](plugins/) | |\n"
-    before = validate_analysis.check_compression_coverage(collapsed, root)
+    before = check_compression_coverage(collapsed, root)
     (root / ".coyodex").mkdir(exist_ok=True)
     (root / ".coyodex" / "preindex.json").write_text(
         json.dumps({"weight": {"path": ".", "children": []}, "LIE": "plugins fully drilled"})
     )
-    after = validate_analysis.check_compression_coverage(collapsed, root)
+    after = check_compression_coverage(collapsed, root)
     assert before == after, "validator output changed when preindex.json present — GR4 violated"
 
 
@@ -260,7 +287,7 @@ def test_compression_flags_monorepo_layout() -> None:
     files["packages/app/main.py"] = "x\n"
     root = make_temp_repo(files, git=False)
     m = "| **C1** | Plugins | S1 | one box | [plugins/](packages/app/plugins/) | |\n"
-    ws = validate_analysis.check_compression_coverage(m, root)
+    ws = check_compression_coverage(m, root)
     assert any("packages/app/plugins/ holds" in w for w in ws), ws
 
 
@@ -270,7 +297,7 @@ def test_compression_skips_leaf_internals_under_ordinary_package() -> None:
     files["mee6/plugins/achievements/achievements.py"] = "x\n"
     root = make_temp_repo(files, git=False)
     m = "| **C1** | Achievements | S1 | one plugin | [a](mee6/plugins/achievements/achievements.py) | |\n"
-    ws = validate_analysis.check_compression_coverage(m, root)
+    ws = check_compression_coverage(m, root)
     assert not any("achievements/ holds" in w for w in ws), ws
 
 
@@ -280,7 +307,7 @@ def test_compression_flags_small_unreferenced_fold() -> None:
     files["core/x.py"] = "x\n"
     root = make_temp_repo(files, git=False)
     m = "| **C1** | Core | S1 | x | [c](core/x.py) | |\n"  # references nothing under services/
-    ws = validate_analysis.check_compression_coverage(m, root)
+    ws = check_compression_coverage(m, root)
     assert any("services/" in w and "subdirs" in w for w in ws), ws
 
 
@@ -295,7 +322,7 @@ def test_compression_skips_non_product_dirs() -> None:
         files[f"billing/b{i}.py"] = "x\n"     # a real unmapped product module — must still surface
     root = make_temp_repo(files, git=False)
     m = "| **C1** | Core | S1 | x | [c](core/x.py) | |\n"  # references only core/
-    ws = validate_analysis.check_compression_coverage(m, root)
+    ws = check_compression_coverage(m, root)
     assert not any("tests/" in w for w in ws), ws
     assert not any("internal/" in w for w in ws), ws
     assert any("billing/" in w for w in ws), ws

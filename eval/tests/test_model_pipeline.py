@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Eval-side tests for the schema-v2 model pipeline: model-map support in score/claims/run, the
-retired-markdown refusal, and the judge-protocol fingerprint (recorded in judge.json; a mismatch
+non-model-input refusal, and the judge-protocol fingerprint (recorded in judge.json; a mismatch
 fails the cache guard and DRIFTs a comparison). (The md-vs-json golden-equivalence test retired
 with the markdown pipeline in Phase 3 — parity was proven at the Phase-2 boundary.)
 
@@ -16,27 +16,64 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.convert_md import convert_text
-from coyodex.model import ModelError, to_canonical_json
+from coyodex.model import ModelError, load_model
 from coyodex_eval.compare import compare
 from coyodex_eval.judge import JudgeProtocol, JudgeReport, report_from_verdicts, rubric_fingerprint
 from coyodex_eval.profile import build_profile, build_profile_from_model
 
-FIXTURE = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "mcpolis-project-map.md"
+FIXTURE = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "mcpolis-project-map.json"
 EVAL = [sys.executable, "-m", "coyodex_eval.cli"]
 
 
 # --- builders -------------------------------------------------------------------
 
 def make_fixture_model_json() -> str:
-    return to_canonical_json(convert_text(FIXTURE.read_text(encoding="utf-8")).model)
+    return FIXTURE.read_text(encoding="utf-8")
 
 
 def make_tiny_model_json() -> str:
     """A minimal model document for tests that need a map but no claims."""
-    return to_canonical_json(convert_text(
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | X | x | f |  |\n").model)
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "X",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_verdicts(claims: list[str], grounded: bool = True) -> list[dict[str, object]]:
@@ -48,20 +85,20 @@ def make_judge_report(rubric: str = "rubric v1", model: str = "sonnet") -> Judge
                                 judge_model=model)
 
 
-# --- the retired markdown input ----------------------------------------------------
+# --- non-model input -------------------------------------------------------------
 
 def test_markdown_map_is_refused_by_the_profiler():
-    """Phase 3: the eval reads model documents only — the raw v1 fixture raises a convert-first
-    ModelError instead of profiling through a retired pipeline."""
+    """The eval reads model documents only — arbitrary markdown raises ModelError instead of
+    profiling through a retired pipeline."""
     try:
-        build_profile(FIXTURE.read_text(encoding="utf-8"))
+        build_profile("# Some markdown\n\n| a | b |\n|---|---|\n| 1 | 2 |\n")
         raise AssertionError("expected ModelError")
     except ModelError as e:
-        assert "convert" in str(e)
+        assert "not supported" in str(e)
 
 
 def test_build_profile_from_model_matches_direct_path():
-    m = convert_text(FIXTURE.read_text(encoding="utf-8")).model
+    m = load_model(make_fixture_model_json())
     assert build_profile_from_model(m).to_json() == build_profile(make_fixture_model_json()).to_json()
 
 

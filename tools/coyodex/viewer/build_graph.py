@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """The viewer's graph data model + the change-impact report parser.
 
-The graph (`GraphDict`) is what `gen_viewer.write_html` renders; since Phase 3 it is produced ONLY
-from the schema-v2 model (`coyodex.views.model_to_graph`) — the v1 markdown-map parse that used to
-live here is retired (`coyodex convert` is the one remaining v1 reader; it imports `parse_gp` /
-`parse_goal` from here). `build_diff` still parses the change-impact REPORT, which is a current
-markdown artifact, not a v1 map.
+The graph (`GraphDict`) is what `gen_viewer.write_html` renders; it is produced ONLY from the
+schema-v2 model (`coyodex.views.model_to_graph`) — the v1 markdown-map parse that used to live here
+is retired. `build_diff` still parses the change-impact REPORT, which is a current markdown
+artifact, not a v1 map.
 """
 from __future__ import annotations
 
@@ -14,18 +13,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict
 
-# Shared schema-v1 grammar lives in tools/coyodex/schema_v1.py (one grammar; `parse_gp`/`parse_goal`
-# serve the convert path, the table helpers serve the change-impact report parser).
-from coyodex.schema_v1 import (
-    DEF_GP,
-    GP_HEADING,
-    GP_UC_TAG,
-    ID_TOKEN,
-    is_separator_row,
-    iter_pipe_runs,
-    split_cells,
-    strip_fences,
-)
+# Shared schema-v1 grammar lives in tools/coyodex/schema_v1.py (one grammar; the table helpers serve
+# the change-impact report parser below).
+from coyodex.schema_v1 import ID_TOKEN, is_separator_row, iter_pipe_runs, split_cells, strip_fences
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href
 
@@ -130,34 +120,6 @@ def _tables(lines: list[str]) -> list[tuple[list[str], list[list[str]]]]:
     return tables
 
 
-def parse_gp(lines: list[str]) -> list[GPStep]:
-    steps: list[GPStep] = []
-    i = 0
-    while i < len(lines):
-        m = DEF_GP.match(lines[i])
-        if not m:
-            i += 1
-            continue
-        gp_id = m.group(1)
-        hm = GP_HEADING.match(lines[i])
-        title = hm.group(2).strip() if hm else ""
-        # The `*(UCn)*` tag (required) names the use case this step realizes. It may carry trailing
-        # text (`*(UC16 follow-on)*`); take the first id. The step's detail lives in that use case's
-        # flow, so the only thing harvested from the body is the optional `why:` line.
-        ut = GP_UC_TAG.search(lines[i])
-        uc = ut.group(1) if ut else None
-        why = ""
-        j = i + 1
-        while j < len(lines) and not DEF_GP.match(lines[j]):
-            s = lines[j].strip()
-            if s.lower().startswith("why:"):
-                why = s[len("why:"):].strip()
-            j += 1
-        steps.append(GPStep(id=gp_id, title=title, uc=uc, why=why))
-        i = j
-    return steps
-
-
 SERVICE_HINTS = re.compile(
     r"\b(agent|service|svc|server|system|external|idp|bot|daemon|cron|scheduler|worker|webhook|job)\b", re.I
 )
@@ -168,21 +130,6 @@ def _role_kind(name: str, explicit: str) -> str:
     if explicit:
         return "service" if explicit.strip().lower().startswith("s") else "human"
     return "service" if SERVICE_HINTS.search(name) else "human"
-
-
-GOAL_HDR = re.compile(r"^##\s+T0\b[^\n]*$", re.M)  # the "## T0 — Goal …" heading
-
-
-def parse_goal(text: str) -> str | None:
-    """The T0 — Goal prose: the system's overall functionality, surfaced as the System node's overview.
-    Captures everything between the T0 heading and the next `## ` heading (or `---` rule)."""
-    m = GOAL_HDR.search(text)
-    if not m:
-        return None
-    rest = text[m.end():]
-    stop = re.search(r"^(?:##\s|---\s*$)", rest, re.M)
-    body = (rest[:stop.start()] if stop else rest).strip()
-    return body or None
 
 
 def _ensure_default_subsystem(nodes: dict[str, Node], title: str | None) -> None:

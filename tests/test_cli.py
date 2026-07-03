@@ -91,8 +91,8 @@ def test_validate_dispatch_propagates_not_found() -> None:
         assert cli.main(["validate", str(Path(d) / "nope.json")]) == 1
 
 
-def test_validate_md_map_gets_the_convert_first_error() -> None:
-    """A `.md` map is retired input: usage error (2) telling the user to `coyodex convert` once."""
+def test_validate_md_map_is_refused() -> None:
+    """A `.md` map is unsupported input: usage error (2), not a validate/audit run."""
     with tempfile.TemporaryDirectory() as d:
         assert cli.main(["validate", str(Path(d) / "nope.md")]) == 2
         assert cli.main(["audit", str(Path(d) / "nope.md")]) == 2

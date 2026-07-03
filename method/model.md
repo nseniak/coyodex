@@ -17,8 +17,9 @@ the model; the LLM never hand-authors the stored file.
 What did NOT change: the ID scheme, the element kinds, the edge-verb vocabulary and its
 "verbs may prioritize, never gate" principle, the single-source membership rules, and everything
 "derived, not duplicated" — all of [schema-v1.md](schema-v1.md)'s semantic contract carries over.
-Only the storage format and the authoring path changed. Schema-v1 markdown remains readable by the
-one-time converter (`coyodex convert`), not by the tools.
+Only the storage format and the authoring path changed. Schema-v1 markdown is no longer readable by
+the tools at all — the one-time migration path (`coyodex convert`) was retired once every project
+had moved to the JSON model.
 
 ## The document
 

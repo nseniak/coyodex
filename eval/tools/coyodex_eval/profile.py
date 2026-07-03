@@ -14,9 +14,9 @@ quality signals that ARE comparable run-to-run:
                      "an auth surface must not silently disappear" gate
 
 Everything here is DETERMINISTIC and stdlib-only. It reads the map through the model pipeline
-(`load_model` + `validate_model` + `audit_model`) — never a second grammar; a schema-v1 markdown
-map is migrated once with `coyodex convert` before it can be scored. The comparator (baseline vs
-candidate → verdict) and the LLM-judge layer build ON this profile; they are separate modules.
+(`load_model` + `validate_model` + `audit_model`) — never a second grammar; markdown maps are not
+supported. The comparator (baseline vs candidate → verdict) and the LLM-judge layer build ON this
+profile; they are separate modules.
 """
 from __future__ import annotations
 
@@ -89,11 +89,11 @@ def build_profile(map_text: str, repo_root: Path | None = None,
     """Reduce a project map to its deterministic `MapProfile`. `repo_root` (the mapped source) enables
     the coverage signal; without it `coverage_flags` is None. `map_path` is kept for signature
     compatibility (unused — view freshness is repo hygiene, not map quality). Model documents only:
-    a schema-v1 markdown map raises ModelError (migrate once with `coyodex convert`)."""
+    a schema-v1 markdown map raises ModelError (markdown maps are not supported)."""
     del map_path
     if not is_model_document(map_text):
-        raise ModelError("not a schema-v2 model document — a legacy markdown map is migrated once "
-                         "with `coyodex convert`, then scored as project-map.json")
+        raise ModelError("not a schema-v2 model document — markdown maps are not supported; "
+                         "score project-map.json")
     return build_profile_from_model(load_model(map_text), repo_root=repo_root)
 
 

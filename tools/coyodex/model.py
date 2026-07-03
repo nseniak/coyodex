@@ -383,7 +383,7 @@ def load_model(text: str) -> ProjectModel:
     fmt = data.get("format")
     if fmt != FORMAT:
         raise ModelError(f"format: expected '{FORMAT}', got {fmt!r} — not a schema-v2 map "
-                         "(an old markdown map is converted once with `coyodex convert`)")
+                         "(coyodex reads project-map.json only; markdown maps are not supported)")
     m = _build(data, ProjectModel, "$")
     for attr, prefix in ID_ARRAYS.items():
         for i, el in enumerate(getattr(m, attr)):

@@ -25,7 +25,7 @@ So whenever the method doc says to read a config file or run `.venv/bin/coyodex 
 **under `COYODEX_HOME`** — use that absolute prefix (e.g. `__COYODEX_HOME__/eval/rubric.md`).
 Only `.coyodex/...` and `.coyodex-eval/...` paths are in the evaluated project.
 
-**Precondition:** this needs an existing `.coyodex/project-map.json` (a legacy `.md` baseline is migrated once with `coyodex convert`), and the working tree must be at the
+**Precondition:** this needs an existing `.coyodex/project-map.json` (markdown maps are not supported), and the working tree must be at the
 commit that map is pinned to (the method refuses otherwise — see Step 1). If there is no map yet, run
 `/coyodex` first to build one.
 

@@ -294,9 +294,8 @@ def claims_cli(argv: list[str]) -> int:
         return 1
     text = path.read_text(encoding="utf-8")
     if not is_model_document(text):
-        print(f"ERROR: {path} is not a schema-v2 model document — migrate a legacy markdown map "
-              "once with `coyodex convert`, then read claims from project-map.json",
-              file=sys.stderr)
+        print(f"ERROR: {path} is not a schema-v2 model document — markdown maps are not "
+              "supported; claims are read from project-map.json", file=sys.stderr)
         return 1
     from coyodex import audit_model
     from coyodex.model import load_model

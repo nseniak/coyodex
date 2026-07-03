@@ -17,12 +17,10 @@ Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall th
 
 ## Step 1 — is there already a baseline?
 
-Look for `.coyodex/project-map.json` (the schema-v2 model) in the analyzed repo.
-
-- **Only a legacy `.coyodex/project-map.md` exists** (a schema-v1 markdown source, no
-  `project-map.json`) → it must be **migrated once** before anything else:
-  `coyodex convert .coyodex/project-map.md` writes the model + regenerated views; review, commit
-  json+md+html, then continue below with the model as the baseline.
+Look for `.coyodex/project-map.json` (the schema-v2 model) in the analyzed repo. A legacy
+`.coyodex/project-map.md` with no `project-map.json` next to it is NOT a baseline — schema-v1
+markdown is no longer readable by the tools; treat the repo as having no baseline and fall through
+to Build below.
 
 ### No baseline → Build
 

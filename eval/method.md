@@ -30,10 +30,8 @@ the method — so its own integrity holes are the worst bugs it can have. Three 
   `.coyodex-eval/`.
 
 ## Step 1 — Guard: baseline + pin (refuse if not aligned)
-1. Require `.coyodex/project-map.json` (the schema-v2 model). If missing → a legacy
-   `.coyodex/project-map.md` baseline must be migrated once first (`coyodex convert`, then commit
-   json+md+html and re-pin nothing — content is unchanged); if there is no map at all → tell the
-   user to run `/coyodex` first to build a baseline, then stop.
+1. Require `.coyodex/project-map.json` (the schema-v2 model) — markdown maps are not supported. If
+   missing → tell the user to run `/coyodex` first to build a baseline, then stop.
 2. Read the pin from the model's `commit` / `committed` fields — the bare short sha.
 3. `git rev-parse --short HEAD`. Also check the tree is clean, ignoring coyodex's own dirs:
    `git status --porcelain -- . ':(exclude).coyodex' ':(exclude).coyodex-eval'`.

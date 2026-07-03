@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Tests for `coyodex audit` — the adversarial pass (L1 self-contradiction + L2 worklist).
 
-The scenario maps are authored as schema-v1 markdown (a compact test notation) and converted
-through the one remaining v1 reader (`convert_text`) into the model the audit actually reads —
-so these tests exercise the LIVE pipeline (model audit), not the retired markdown audit.
+The scenario maps are authored directly as schema-v2 JSON model documents — the format the audit
+actually reads — so these tests exercise the LIVE pipeline (model audit), not the retired markdown
+audit.
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_audit.py        # built-in runner (prints pass/fail)
@@ -14,123 +14,514 @@ from __future__ import annotations
 import subprocess
 import sys
 import tempfile
-from pathlib import Path
 
 from coyodex import audit_model
-from coyodex.convert_md import convert_text
-from coyodex.model import to_canonical_json
+from coyodex.model import load_model
 
 AUDIT = [sys.executable, "-m", "coyodex.audit_model"]
 
 
-def audit_md(md: str) -> list[audit_model.Finding]:
-    """The L1 findings for a scenario map: convert the v1 test notation, audit the model."""
-    return audit_model.audit_model(convert_text(md).model)
+def audit_md(json_text: str) -> list[audit_model.Finding]:
+    """The L1 findings for a scenario map: load the model document, audit it."""
+    return audit_model.audit_model(load_model(json_text))
 
 
-def l2(md: str) -> list[audit_model.WorkItem]:
-    """The L2 worklist for a scenario map, through the same convert-then-model path."""
-    return audit_model.l2_worklist_model(convert_text(md).model)
+def l2(json_text: str) -> list[audit_model.WorkItem]:
+    """The L2 worklist for a scenario map, through the same model-loading path."""
+    return audit_model.l2_worklist_model(load_model(json_text))
 
 
-# --- builders -------------------------------------------------------------------
+# --- builders (schema-v2 JSON model documents) -----------------------------------
 def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
     """Two use cases over one entity E1: UC1 READS the order, UC2 CREATES it (`create_verb`).
     `bad=True` orders the Golden Path read-then-create (the read-before-create shape); `bad=False`
     orders it create-then-read (clean). `create_verb` lets a test use a MUTATION verb (`writes`) to
     prove an update is NOT mistaken for a create. No `why:` lines, so the why-less check is a no-op."""
     gp = (
-        "## Golden Path\n"
-        + ("**GP1 — Andy views the order** *(UC1)*\n**GP2 — Adam creates the order** *(UC2)*\n\n"
-           if bad else
-           "**GP1 — Adam creates the order** *(UC2)*\n**GP2 — Andy views the order** *(UC1)*\n\n")
+        """[
+    {
+      "id": "GP1",
+      "title": "Andy views the order",
+      "uc": "UC1",
+      "why": null
+    },
+    {
+      "id": "GP2",
+      "title": "Adam creates the order",
+      "uc": "UC2",
+      "why": null
+    }
+  ]""" if bad else
+        """[
+    {
+      "id": "GP1",
+      "title": "Adam creates the order",
+      "uc": "UC2",
+      "why": null
+    },
+    {
+      "id": "GP2",
+      "title": "Andy views the order",
+      "uc": "UC1",
+      "why": null
+    }
+  ]"""
     )
-    return (
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** | View order | Andy | opens -> sees |\n"
-        "| **UC2** | Create order | Adam | submits -> stored |\n\n"
-        "## T1\n"
-        "| ID | Component | Purpose | Entry point | Depends on |\n"
-        "|---|---|---|---|---|\n"
-        "| **C1** | Viewer | x | f | E1 |\n"
-        "| **C2** | Creator | x | f | E1 |\n\n"
-        + gp +
-        "## T5 — Domain model\n"
-        "**E1 — Order** *(orders)*\n"
-        "MEANING: a customer order\n"
-        "SOURCE: [order.py](order.py#L1)\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC1 — View order**\n"
-        "1. Andy → C1 : views the order\n\n"
-        "**UC2 — Create order**\n"
-        "1. Adam → C2 : creates the order\n\n"
-        "### edges\n"
-        "| From | Verb | To | Why | Where |\n"
-        "|---|---|---|---|---|\n"
-        "| C1 | reads | E1 | show it | f#L1 |\n"
-        f"| C2 | {create_verb} | E1 | store it | f#L2 |\n"
-    )
+    return f"""{{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {{
+      "id": "UC1",
+      "name": "View order",
+      "actor": "Andy",
+      "trigger_outcome": "opens -> sees"
+    }},
+    {{
+      "id": "UC2",
+      "name": "Create order",
+      "actor": "Adam",
+      "trigger_outcome": "submits -> stored"
+    }}
+  ],
+  "golden_path": {gp},
+  "subsystems": [],
+  "components": [
+    {{
+      "id": "C1",
+      "name": "Viewer",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "E1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {{}}
+    }},
+    {{
+      "id": "C2",
+      "name": "Creator",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "E1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {{}}
+    }}
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {{
+      "id": "E1",
+      "name": "Order",
+      "store": "orders",
+      "meaning": "a customer order",
+      "subdomain": null,
+      "source": "order.py:1",
+      "fields": [],
+      "relations": []
+    }}
+  ],
+  "non_entity_types": [],
+  "flows": [
+    {{
+      "uc": "UC1",
+      "title": "View order",
+      "steps": [
+        {{
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "views the order",
+          "note": ""
+        }}
+      ]
+    }},
+    {{
+      "uc": "UC2",
+      "title": "Create order",
+      "steps": [
+        {{
+          "n": 1,
+          "src": "Adam",
+          "dst": "C2",
+          "phrase": "creates the order",
+          "note": ""
+        }}
+      ]
+    }}
+  ],
+  "edges": [
+    {{
+      "src": "C1",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "show it",
+      "where": "f#L1"
+    }},
+    {{
+      "src": "C2",
+      "verb": "{create_verb}",
+      "dst": "E1",
+      "why": "store it",
+      "where": "f#L2"
+    }}
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}}"""
 
 
 def make_actor_mismatch_map(flow_actor: str = "Zoe") -> str:
     """UC1's declared Actor is Andy, but its flow opens with `flow_actor` — a mismatch when it isn't
     Andy (the two layers disagree about who drives the use case)."""
-    return (
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** | View order | Andy | opens -> sees |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | Viewer | x | f |  |\n\n"
-        "## Golden Path\n**GP1 — View the order** *(UC1)*\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC1 — View order**\n"
-        f"1. {flow_actor} → C1 : views the order\n"
-    )
+    return f"""{{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {{
+      "id": "UC1",
+      "name": "View order",
+      "actor": "Andy",
+      "trigger_outcome": "opens -> sees"
+    }}
+  ],
+  "golden_path": [
+    {{
+      "id": "GP1",
+      "title": "View the order",
+      "uc": "UC1",
+      "why": null
+    }}
+  ],
+  "subsystems": [],
+  "components": [
+    {{
+      "id": "C1",
+      "name": "Viewer",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {{}}
+    }}
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [
+    {{
+      "uc": "UC1",
+      "title": "View order",
+      "steps": [
+        {{
+          "n": 1,
+          "src": "{flow_actor}",
+          "dst": "C1",
+          "phrase": "views the order",
+          "note": ""
+        }}
+      ]
+    }}
+  ],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}}"""
 
 
 def make_actor_variant_map(declared: str, opening: str, roles: bool = False) -> str:
     """UC1's declared Actor is `declared`; its flow opens with `opening`. `roles=True` adds a Roles
-    table containing only 'Andy', so an opener that is not a defined Role (a background trigger) is
+    list containing only 'Andy', so an opener that is not a defined Role (a background trigger) is
     skipped. Covers the markdown / compound / background-trigger false-positive cases."""
-    roles_tbl = (
-        "## Roles (actors)\n| Role | Kind | What they want | Use cases they drive |\n"
-        "|---|---|---|---|\n| **Andy** | human | see it | UC1 |\n\n" if roles else "")
-    return (
-        roles_tbl +
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        f"| **UC1** | View order | {declared} | opens -> sees |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | Viewer | x | f |  |\n\n"
-        "## Golden Path\n**GP1 — View the order** *(UC1)*\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC1 — View order**\n"
-        f"1. {opening} → C1 : views the order\n"
-    )
+    roles_list = (
+        """[
+    {
+      "name": "Andy",
+      "kind": "human",
+      "wants": "see it",
+      "drives": "UC1"
+    }
+  ]""" if roles else "[]")
+    return f"""{{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": {roles_list},
+  "glossary": [],
+  "use_cases": [
+    {{
+      "id": "UC1",
+      "name": "View order",
+      "actor": "{declared}",
+      "trigger_outcome": "opens -> sees"
+    }}
+  ],
+  "golden_path": [
+    {{
+      "id": "GP1",
+      "title": "View the order",
+      "uc": "UC1",
+      "why": null
+    }}
+  ],
+  "subsystems": [],
+  "components": [
+    {{
+      "id": "C1",
+      "name": "Viewer",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {{}}
+    }}
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [
+    {{
+      "uc": "UC1",
+      "title": "View order",
+      "steps": [
+        {{
+          "n": 1,
+          "src": "{opening}",
+          "dst": "C1",
+          "phrase": "views the order",
+          "note": ""
+        }}
+      ]
+    }}
+  ],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}}"""
 
 
 def make_shared_read_map() -> str:
     """Three use cases whose flows all read E1 (via a component that reads it); E1 is never written on
     the path. Exercises per-entity dedup: exactly ONE read-never-created advisory, not three."""
-    return (
-        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
-        "| **UC1** | A | Andy | a -> b |\n| **UC2** | B | Andy | a -> b |\n"
-        "| **UC3** | C | Andy | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | A | x | f | E1 |\n| **C2** | B | x | f | E1 |\n| **C3** | C | x | f | E1 |\n\n"
-        "## Golden Path\n**GP1 — A** *(UC1)*\n**GP2 — B** *(UC2)*\n**GP3 — C** *(UC3)*\n\n"
-        "## T5 — Domain model\n**E1 — User** *(users)*\nMEANING: a user\nSOURCE: [u.py](u.py#L1)\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC1 — A**\n1. Andy → C1 : reads the user\n\n"
-        "**UC2 — B**\n1. Andy → C2 : reads the user\n\n"
-        "**UC3 — C**\n1. Andy → C3 : reads the user\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | reads | E1 | x | f#L1 |\n| C2 | reads | E1 | x | f#L2 |\n| C3 | reads | E1 | x | f#L3 |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "A",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    },
+    {
+      "id": "UC2",
+      "name": "B",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    },
+    {
+      "id": "UC3",
+      "name": "C",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "A",
+      "uc": "UC1",
+      "why": null
+    },
+    {
+      "id": "GP2",
+      "title": "B",
+      "uc": "UC2",
+      "why": null
+    },
+    {
+      "id": "GP3",
+      "title": "C",
+      "uc": "UC3",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "A",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "E1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "B",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "E1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C3",
+      "name": "C",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "E1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "User",
+      "store": "users",
+      "meaning": "a user",
+      "subdomain": null,
+      "source": "u.py:1",
+      "fields": [],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [
+    {
+      "uc": "UC1",
+      "title": "A",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "reads the user",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "uc": "UC2",
+      "title": "B",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C2",
+          "phrase": "reads the user",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "uc": "UC3",
+      "title": "C",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C3",
+          "phrase": "reads the user",
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "x",
+      "where": "f#L1"
+    },
+    {
+      "src": "C2",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "x",
+      "where": "f#L2"
+    },
+    {
+      "src": "C3",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "x",
+      "where": "f#L3"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_cc_routed_read_map() -> str:
@@ -138,97 +529,521 @@ def make_cc_routed_read_map() -> str:
     flow names only C1; C1 reads C3 (C→C); C3 reads E1 (C→E, but C3 is NOT in the flow). E1 is created
     at GP2. Audit CANNOT see the read (only C→E edges of flow-named components count) — a documented
     false negative that pins the limitation."""
-    return (
-        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
-        "| **UC1** | Sign in | Andy | a -> b |\n| **UC2** | Create org | Adam | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | SignIn | x | f | C3 |\n| **C2** | OrgSvc | x | f | E1 |\n"
-        "| **C3** | MemberStore | x | f | E1 |\n\n"
-        "## Golden Path\n**GP1 — Sign in** *(UC1)*\n**GP2 — Create org** *(UC2)*\n\n"
-        "## T5 — Domain model\n**E1 — Organization** *(orgs)*\nMEANING: tenant\nSOURCE: [o.py](o.py#L1)\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC1 — Sign in**\n1. Andy → C1 : signs in\n\n"
-        "**UC2 — Create org**\n1. Adam → C2 : creates org\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | reads | C3 | resolve membership | f#L1 |\n"
-        "| C3 | reads | E1 | membership→org | f#L2 |\n"
-        "| C2 | persists | E1 | create org | f#L3 |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Sign in",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    },
+    {
+      "id": "UC2",
+      "name": "Create org",
+      "actor": "Adam",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Sign in",
+      "uc": "UC1",
+      "why": null
+    },
+    {
+      "id": "GP2",
+      "title": "Create org",
+      "uc": "UC2",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "SignIn",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C3",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "OrgSvc",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "E1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C3",
+      "name": "MemberStore",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "E1",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Organization",
+      "store": "orgs",
+      "meaning": "tenant",
+      "subdomain": null,
+      "source": "o.py:1",
+      "fields": [],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [
+    {
+      "uc": "UC1",
+      "title": "Sign in",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "signs in",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "uc": "UC2",
+      "title": "Create org",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Adam",
+          "dst": "C2",
+          "phrase": "creates org",
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "reads",
+      "dst": "C3",
+      "why": "resolve membership",
+      "where": "f#L1"
+    },
+    {
+      "src": "C3",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "membership→org",
+      "where": "f#L2"
+    },
+    {
+      "src": "C2",
+      "verb": "persists",
+      "dst": "E1",
+      "why": "create org",
+      "where": "f#L3"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_backward_whyref_map() -> str:
     """GP1's `why:` cites GP2, which comes after it (a backward reference)."""
-    return (
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** | A | Andy | a -> b |\n"
-        "| **UC2** | B | Andy | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | A | x | f |  |\n\n"
-        "## Golden Path\n"
-        "**GP1 — First** *(UC1)*\n"
-        "why: needs the thing from GP2\n"
-        "**GP2 — Second** *(UC2)*\n"
-        "why: follows GP1\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC1 — A**\n1. Andy → C1 : does a\n\n"
-        "**UC2 — B**\n1. Andy → C1 : does b\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "A",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    },
+    {
+      "id": "UC2",
+      "name": "B",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "First",
+      "uc": "UC1",
+      "why": "needs the thing from GP2"
+    },
+    {
+      "id": "GP2",
+      "title": "Second",
+      "uc": "UC2",
+      "why": "follows GP1"
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "A",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [
+    {
+      "uc": "UC1",
+      "title": "A",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "does a",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "uc": "UC2",
+      "title": "B",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "does b",
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_read_never_created_map() -> str:
     """A single step reads E9, which no step ever creates (an external/config entity) — advisory."""
-    return (
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** | Load config | Andy | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | Loader | x | f | E9 |\n\n"
-        "## Golden Path\n**GP1 — Load the config** *(UC1)*\n\n"
-        "## T5 — Domain model\n"
-        "**E9 — AppConfig** *(config)*\nMEANING: config\nSOURCE: [c.py](c.py#L1)\n\n"
-        "## T6 — Use-case flows\n**UC1 — Load config**\n1. Andy → C1 : loads config\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | reads | E9 | config | f#L1 |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Load config",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "Load the config",
+      "uc": "UC1",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Loader",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "E9",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E9",
+      "name": "AppConfig",
+      "store": "config",
+      "meaning": "config",
+      "subdomain": null,
+      "source": "c.py:1",
+      "fields": [],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [
+    {
+      "uc": "UC1",
+      "title": "Load config",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "loads config",
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "reads",
+      "dst": "E9",
+      "why": "config",
+      "where": "f#L1"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_whyless_map() -> str:
     """GP1 has a `why:`, GP2 does not — a non-initial step missing its precondition (warning)."""
-    return (
-        "## Use cases\n"
-        "| ID | Use case | Actor | Trigger → Outcome |\n"
-        "|---|---|---|---|\n"
-        "| **UC1** | A | Andy | a -> b |\n"
-        "| **UC2** | B | Andy | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | A | x | f |  |\n\n"
-        "## Golden Path\n"
-        "**GP1 — First** *(UC1)*\n"
-        "why: the start\n"
-        "**GP2 — Second** *(UC2)*\n\n"
-        "## T6 — Use-case flows\n"
-        "**UC1 — A**\n1. Andy → C1 : does a\n\n"
-        "**UC2 — B**\n1. Andy → C1 : does b\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "A",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    },
+    {
+      "id": "UC2",
+      "name": "B",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [
+    {
+      "id": "GP1",
+      "title": "First",
+      "uc": "UC1",
+      "why": "the start"
+    },
+    {
+      "id": "GP2",
+      "title": "Second",
+      "uc": "UC2",
+      "why": null
+    }
+  ],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "A",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [
+    {
+      "uc": "UC1",
+      "title": "A",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "does a",
+          "note": ""
+        }
+      ]
+    },
+    {
+      "uc": "UC2",
+      "title": "B",
+      "steps": [
+        {
+          "n": 1,
+          "src": "Andy",
+          "dst": "C1",
+          "phrase": "does b",
+          "note": ""
+        }
+      ]
+    }
+  ],
+  "edges": [],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_l2_map() -> str:
-    """A Security & auth table plus an `enforces` edge — the two L2-worklist sources."""
-    return (
-        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
-        "| **UC1** | Call | Andy | a -> b |\n\n"
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | Gate | x | f | C2 |\n| **C2** | Policy | x | f |  |\n\n"
-        "### Security & auth\n"
-        "| Surface | Who can reach | Auth check | Risk note |\n"
-        "|---|---|---|---|\n"
-        "| /api | admins | [require_admin](auth.py#L10) | escalation |\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | enforces | C2 | policy | gate.py#L5 |\n"
-    )
+    """A Security & auth entry plus an `enforces` edge — the two L2-worklist sources."""
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Call",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Gate",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "C2",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Policy",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "f",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "enforces",
+      "dst": "C2",
+      "why": "policy",
+      "where": "gate.py#L5"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [
+    {
+      "surface": "/api",
+      "who": "admins",
+      "check": "[require_admin](auth.py#L10)",
+      "risk": "escalation"
+    }
+  ],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_l2_dep_map() -> str:
@@ -237,59 +1052,380 @@ def make_l2_dep_map() -> str:
     into an EXPLICIT `library` (skip — a false 'uses <lib>' is benign); a `C→E` `persists` (ownership);
     and a plain `C→C` `calls` (remaining). The `emits`-into-a-log-dep row is the audit→Elastic
     false-edge class."""
-    return (
-        "## Use cases\n| ID | Use case | Actor | Trigger → Outcome |\n|---|---|---|---|\n"
-        "| **UC1** | Call | Andy | a -> b |\n\n"
-        "## T2\n| ID | Dependency | Type | Kind | Purpose |\n|---|---|---|---|---|\n"
-        "| **D1** | Elastic Cloud | search | datastore | log storage |\n"
-        "| **D2** | logging | stdlib | library | app logs |\n"
-        "| **D3** | Mystery | ? |  | unknown |\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | enforces | C2 | policy | gate.py#L5 |\n"
-        "| C1 | emits | D1 | ship logs | audit_repo.py#L8 |\n"
-        "| C1 | uses | D2 | log lines | mod.py#L3 |\n"
-        "| C1 | writes | D3 | dump | x.py#L1 |\n"
-        "| C1 | persists | E1 | store | repo.py#L2 |\n"
-        "| C1 | calls | C3 | rpc | client.py#L4 |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Call",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [],
+  "deps": [
+    {
+      "id": "D1",
+      "name": "Elastic Cloud",
+      "kind": "datastore",
+      "type": "search",
+      "used_for": "",
+      "where_configured": "",
+      "confidence": "",
+      "deployment_linked": false,
+      "extra": {
+        "Purpose": "log storage"
+      }
+    },
+    {
+      "id": "D2",
+      "name": "logging",
+      "kind": "library",
+      "type": "stdlib",
+      "used_for": "",
+      "where_configured": "",
+      "confidence": "",
+      "deployment_linked": false,
+      "extra": {
+        "Purpose": "app logs"
+      }
+    },
+    {
+      "id": "D3",
+      "name": "Mystery",
+      "kind": null,
+      "type": "?",
+      "used_for": "",
+      "where_configured": "",
+      "confidence": "",
+      "deployment_linked": false,
+      "extra": {
+        "Purpose": "unknown"
+      }
+    }
+  ],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "enforces",
+      "dst": "C2",
+      "why": "policy",
+      "where": "gate.py#L5"
+    },
+    {
+      "src": "C1",
+      "verb": "emits",
+      "dst": "D1",
+      "why": "ship logs",
+      "where": "audit_repo.py#L8"
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "D2",
+      "why": "log lines",
+      "where": "mod.py#L3"
+    },
+    {
+      "src": "C1",
+      "verb": "writes",
+      "dst": "D3",
+      "why": "dump",
+      "where": "x.py#L1"
+    },
+    {
+      "src": "C1",
+      "verb": "persists",
+      "dst": "E1",
+      "why": "store",
+      "where": "repo.py#L2"
+    },
+    {
+      "src": "C1",
+      "verb": "calls",
+      "dst": "C3",
+      "why": "rpc",
+      "where": "client.py#L4"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_duplicated_edge_map() -> str:
     """`make_l2_dep_map` with its C→D `emits` row DUPLICATED — the G4 dedupe shape (a repeated edge
     row must not become two skeptic tasks)."""
-    return make_l2_dep_map() + "| C1 | emits | D1 | ship logs | audit_repo.py#L8 |\n"
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Call",
+      "actor": "Andy",
+      "trigger_outcome": "a -> b"
+    }
+  ],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [],
+  "deps": [
+    {
+      "id": "D1",
+      "name": "Elastic Cloud",
+      "kind": "datastore",
+      "type": "search",
+      "used_for": "",
+      "where_configured": "",
+      "confidence": "",
+      "deployment_linked": false,
+      "extra": {
+        "Purpose": "log storage"
+      }
+    },
+    {
+      "id": "D2",
+      "name": "logging",
+      "kind": "library",
+      "type": "stdlib",
+      "used_for": "",
+      "where_configured": "",
+      "confidence": "",
+      "deployment_linked": false,
+      "extra": {
+        "Purpose": "app logs"
+      }
+    },
+    {
+      "id": "D3",
+      "name": "Mystery",
+      "kind": null,
+      "type": "?",
+      "used_for": "",
+      "where_configured": "",
+      "confidence": "",
+      "deployment_linked": false,
+      "extra": {
+        "Purpose": "unknown"
+      }
+    }
+  ],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "enforces",
+      "dst": "C2",
+      "why": "policy",
+      "where": "gate.py#L5"
+    },
+    {
+      "src": "C1",
+      "verb": "emits",
+      "dst": "D1",
+      "why": "ship logs",
+      "where": "audit_repo.py#L8"
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "D2",
+      "why": "log lines",
+      "where": "mod.py#L3"
+    },
+    {
+      "src": "C1",
+      "verb": "writes",
+      "dst": "D3",
+      "why": "dump",
+      "where": "x.py#L1"
+    },
+    {
+      "src": "C1",
+      "verb": "persists",
+      "dst": "E1",
+      "why": "store",
+      "where": "repo.py#L2"
+    },
+    {
+      "src": "C1",
+      "verb": "calls",
+      "dst": "C3",
+      "why": "rpc",
+      "where": "client.py#L4"
+    },
+    {
+      "src": "C1",
+      "verb": "emits",
+      "dst": "D1",
+      "why": "ship logs",
+      "where": "audit_repo.py#L8"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
 def make_described_map() -> str:
     """Named components with file anchors, a named dep, and an entity card with SOURCE — so worklist
     claims can carry self-describing From/To detail (G1)."""
-    return (
-        "## T1\n| ID | Component | Purpose | Entry point | Depends on |\n|---|---|---|---|---|\n"
-        "| **C1** | AuthGate | x | [gate.py](src/auth/gate.py#L10) |  |\n"
-        "| **C2** | PolicyStore | x | [policy.py](src/policy.py#L5) |  |\n\n"
-        "## T2\n| ID | Dependency | Type | Kind | Purpose |\n|---|---|---|---|---|\n"
-        "| **D1** | Elastic | search | datastore | logs |\n\n"
-        "## T5 — Domain model\n\n"
-        "**E1 — Order** *(orders)*\nMEANING: m\nFIELDS: id:int\nSOURCE: [order.py](src/order.py#L1)\n\n"
-        "### edges\n| From | Verb | To | Why | Where |\n|---|---|---|---|---|\n"
-        "| C1 | enforces | C2 | policy | gate.py#L5 |\n"
-        "| C1 | emits | D1 | logs | gate.py#L8 |\n"
-        "| C2 | persists | E1 | store | policy.py#L9 |\n"
-    )
+    return """{
+  "format": "coyodex-map/2",
+  "title": "",
+  "goal": "",
+  "commit": null,
+  "committed": null,
+  "built": null,
+  "roles": [],
+  "glossary": [],
+  "use_cases": [],
+  "golden_path": [],
+  "subsystems": [],
+  "components": [
+    {
+      "id": "C1",
+      "name": "AuthGate",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "[gate.py](src/auth/gate.py:10)",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "PolicyStore",
+      "subsystem": null,
+      "purpose": "x",
+      "entry_point": "[policy.py](src/policy.py:5)",
+      "depends_on": "",
+      "anchor": null,
+      "confidence": "",
+      "extra": {}
+    }
+  ],
+  "deps": [
+    {
+      "id": "D1",
+      "name": "Elastic",
+      "kind": "datastore",
+      "type": "search",
+      "used_for": "",
+      "where_configured": "",
+      "confidence": "",
+      "deployment_linked": false,
+      "extra": {
+        "Purpose": "logs"
+      }
+    }
+  ],
+  "run_commands": [],
+  "entry_points": [],
+  "subdomains": [],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Order",
+      "store": "orders",
+      "meaning": "m",
+      "subdomain": null,
+      "source": "src/order.py:1",
+      "fields": [
+        {
+          "name": "id",
+          "type": "int",
+          "markers": []
+        }
+      ],
+      "relations": []
+    }
+  ],
+  "non_entity_types": [],
+  "flows": [],
+  "edges": [
+    {
+      "src": "C1",
+      "verb": "enforces",
+      "dst": "C2",
+      "why": "policy",
+      "where": "gate.py#L5"
+    },
+    {
+      "src": "C1",
+      "verb": "emits",
+      "dst": "D1",
+      "why": "logs",
+      "where": "gate.py#L8"
+    },
+    {
+      "src": "C2",
+      "verb": "persists",
+      "dst": "E1",
+      "why": "store",
+      "where": "policy.py#L9"
+    }
+  ],
+  "deployment": [],
+  "observability": [],
+  "security": [],
+  "config": [],
+  "tests_note": "",
+  "tests": [],
+  "extras": []
+}"""
 
 
-def run_audit(md: str) -> tuple[int, str]:
-    """Drive the audit CLI on the scenario map, converted to a model document first."""
+def run_audit(json_text: str) -> tuple[int, str]:
+    """Drive the audit CLI on the scenario map, written to a JSON model file."""
     with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
-        f.write(to_canonical_json(convert_text(md).model))
+        f.write(json_text)
         path = f.name
     r = subprocess.run([*AUDIT, path], capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr
 
 
-def _checks(md: str) -> dict[str, str]:
+def _checks(json_text: str) -> dict[str, str]:
     """{check_name: severity} for the L1 findings on a map (direct engine call, no subprocess)."""
-    return {f.check: f.severity for f in audit_md(md)}
+    return {f.check: f.severity for f in audit_md(json_text)}
 
 
 # --- L1: read-before-create (advisory — lossy attribution, must not block) -------

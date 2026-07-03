@@ -216,11 +216,11 @@ def build_judge_report(map_text: str, repo_root: Path, rubric: str, judge: Judge
                        protocol: JudgeProtocol | None = None) -> JudgeReport:
     """Produce the full JudgeReport: ground the top-K of the audit's risk-ranked L2 worklist by
     majority-of-N skeptics, then score every rubric dimension with N judges. Deterministic given
-    `judge`; the model-facing work is entirely inside `judge`. Model maps only — a schema-v1
-    markdown map is migrated once with `coyodex convert` before it can be judged."""
+    `judge`; the model-facing work is entirely inside `judge`. Model maps only — schema-v1
+    markdown maps are not supported."""
     if not is_model_document(map_text):
-        raise ModelError("not a schema-v2 model document — migrate a legacy markdown map once "
-                         "with `coyodex convert`, then judge project-map.json")
+        raise ModelError("not a schema-v2 model document — markdown maps are not supported; "
+                         "judge project-map.json")
     worklist = audit_model.l2_worklist_model(load_model(map_text))
     sample = worklist[:grounding_cap] if grounding_cap > 0 else worklist
     outcomes = [majority_verdict(votes) for votes in run_grounding(sample, judge, repo_root, n_skeptics)]

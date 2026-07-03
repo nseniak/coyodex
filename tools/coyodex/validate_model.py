@@ -17,9 +17,8 @@ Two layers, replacing schema v1's markdown-shape checks with real schema validat
 One v2-only check: the committed markdown VIEW must match the model (it is generated, never
 edited) — a stale or hand-edited `project-map.md` next to the JSON is flagged.
 
-Since Phase 3 the model is the only validated map format: a `.md` argument gets a convert-first
-error (the v1 validator itself stays alive INSIDE `coyodex convert`, which refuses to migrate an
-invalid v1 map). Stdlib-only.
+The model is the only validated map format: a `.md` argument is refused outright — markdown maps
+are not supported. Stdlib-only.
 """
 from __future__ import annotations
 
@@ -356,8 +355,8 @@ def check_anchor_existence_model(m: ProjectModel, roots: list[Path]) -> list[str
 
 
 def check_entity_sources_model(m: ProjectModel, roots: list[Path]) -> list[str]:
-    """Each entity's name must appear in its SOURCE file — the anti-synthesized-entity gate, the
-    same lenient token-substring match as v1 (`check_entity_sources`)."""
+    """Each entity's name must appear in its SOURCE file — the anti-synthesized-entity gate, a
+    lenient token-substring match against the file's text."""
     problems: list[str] = []
     for e in m.entities:
         if not e.source or e.name == e.id:
@@ -378,8 +377,9 @@ def check_entity_sources_model(m: ProjectModel, roots: list[Path]) -> list[str]:
 
 
 def referenced_paths(m: ProjectModel, root: Path) -> set[str]:
-    """Repo-relative paths the model points at — the analog of v1's `_map_referenced_paths`,
-    extracted from every stored string (link targets + inline paths), kept only when they exist."""
+    """Repo-relative paths the model points at, extracted from every stored string (link targets +
+    inline paths), kept only when they exist. The model-native analog of the retired markdown
+    reader's per-map referenced-paths scan."""
     cands: set[str] = set()
     for s in _strings(m):
         cands.update(_REF_LINK.findall(s))
@@ -617,9 +617,8 @@ def main(argv: list[str] | None = None) -> int:
         elif not a.startswith("-"):
             positionals.append(a)
     if any(p.endswith(".md") for p in positionals):
-        print("ERROR: schema-v1 markdown maps are no longer validated directly — migrate the map "
-              "once with `coyodex convert <map.md>` (it refuses an invalid v1 map), then validate "
-              "project-map.json.", file=sys.stderr)
+        print("ERROR: schema-v1 markdown maps are not supported — coyodex validates "
+              "project-map.json only.", file=sys.stderr)
         return 2
 
     repo_root: Path | None = None

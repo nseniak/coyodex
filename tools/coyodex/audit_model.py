@@ -15,9 +15,8 @@ Phase-1 boundary):
     external service can't be refuted because the dep was anchored at a local wrapper module.
 
 Severity model, ranking, and the verbs-prioritize-never-gate principle are unchanged. Stdlib-only.
-Since Phase 3 this is the ONLY audit: the v1 markdown audit is retired (a legacy map is migrated
-once with `coyodex convert`), so the audit vocabulary — severities, verb sets, Finding/WorkItem,
-the report formatter — lives here.
+This is the ONLY audit: the retired v1 markdown audit is gone, so the audit vocabulary —
+severities, verb sets, Finding/WorkItem, the report formatter — lives here.
 """
 from __future__ import annotations
 
@@ -436,9 +435,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     args = [a for a in argv if not a.startswith("-")]
     if any(a.endswith(".md") for a in args):
-        print("ERROR: schema-v1 markdown maps are no longer audited directly — migrate the map "
-              "once with `coyodex convert <map.md>`, then audit project-map.json.",
-              file=sys.stderr)
+        print("ERROR: schema-v1 markdown maps are not supported — coyodex audits "
+              "project-map.json only.", file=sys.stderr)
         return 2
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():
