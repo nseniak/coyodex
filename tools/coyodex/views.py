@@ -283,16 +283,20 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     drill file prefers its v2 canonical `anchor` and falls back to the entry-point link (the v1
     first-row-link heuristic, so converted maps render identically)."""
     nodes: dict[str, Node] = {}
+    subsystem_names = {s.id: s.name for s in m.subsystems}
+    subdomain_names = {sd.id: sd.name for sd in m.subdomains}
     for u in m.use_cases:
         nodes[u.id] = _node(u, "usecase", u.name, _first_href(u.trigger_outcome),
                             {"Use case": u.name, "Actor": u.actor,
                              "Trigger → Outcome": u.trigger_outcome}, None)
     for s in m.subsystems:
+        parent_name = subsystem_names.get(s.parent, s.parent) if s.parent else ""
         nodes[s.id] = _node(s, "subsystem", s.name, _first_href(s.anchor),
-                            {"Subsystem": s.name, "Purpose": s.purpose, "Parent": s.parent or "",
+                            {"Subsystem": s.name, "Purpose": s.purpose, "Parent": parent_name,
                              "Anchor": s.anchor or "", "Conf.": s.confidence}, s.parent)
     for c in m.components:
-        fields = {"Component": c.name, "Subsystem": c.subsystem or "", "Purpose": c.purpose,
+        subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""
+        fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
                   "Entry point": c.entry_point or "", "Depends on": c.depends_on,
                   "Conf.": c.confidence,
                   **{k: _extra_str(v) for k, v in c.extra.items()}}
@@ -308,9 +312,10 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         node.dep_kind = schema_v1.classify_dep(d.kind or "", d.type)
         nodes[d.id] = node
     for sd in m.subdomains:
+        parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""
         nodes[sd.id] = _node(sd, "subdomain", sd.name, _first_href(sd.anchor),
                              {"Subdomain": sd.name, "Purpose": sd.purpose,
-                              "Parent": sd.parent or "", "Anchor": sd.anchor or "",
+                              "Parent": parent_name, "Anchor": sd.anchor or "",
                               "Conf.": sd.confidence}, sd.parent)
     for e in m.entities:
         meta: dict[str, str] = {}
