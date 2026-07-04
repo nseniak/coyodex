@@ -1392,6 +1392,12 @@ __STYLE__
   </aside>
   <!-- Drag handle to resize the file browser (width persisted in localStorage). -->
   <div id="treeresizer" title="Drag to resize"></div>
+  <!-- The details pane sits right after the file browser (not after the diagram) — drilling from a
+       file/folder into what it anchors reads as "browser -> details", with the diagram as the third,
+       wider pane rather than sitting between the two. -->
+  <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
+  <!-- Drag handle to resize the side panel (width persisted in localStorage). -->
+  <div id="resizer" title="Drag to resize"></div>
   <div id="stage">
     <div id="diagram"></div>
     <div id="legend"></div>
@@ -1399,9 +1405,6 @@ __STYLE__
          Lives over the diagram, not in the header chrome users skip. Not interactive (pointer-events:none). -->
     <div id="drillhint" hidden></div>
   </div>
-  <!-- Drag handle to resize the side panel (width persisted in localStorage). -->
-  <div id="resizer" title="Drag to resize"></div>
-  <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
 </main>
 <div id="tip"></div>
 <div id="modal" class="modal" hidden>

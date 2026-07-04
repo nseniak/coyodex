@@ -107,6 +107,10 @@ for (const f of GRAPH.flows || []) {
 // When a click navigates to another view to reveal a node (the file browser, a flow element link, the
 // change-impact summary), the node id to select is stashed here and applied once that view has rendered.
 let pendingSelect = null;
+// A file-tree click on a path with MULTIPLE anchored elements (node_path_index collision) navigates to
+// their shared view (if one exists) without selecting anything — the ids to list in the panel once that
+// view has rendered are stashed here (see selectFromTreeAnchors / showElementsList).
+let pendingElementsList = null;
 
 // node id -> its injected corner-action icon element (see decorateActionIcons), so a ⌘-click / double
 // click drill (isDrillClick) can flash the SAME icon a direct icon-click would have used — one visual
@@ -390,9 +394,12 @@ function usedInHtml(id) {
     + esc(GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc) + '</a>').join(', ');
   return '<dt>Used in</dt><dd>' + links + '</dd>';
 }
-function showNode(id) {
+// A node's full detail as an HTML string (title + badges + fields + source link) — no DOM writes, no
+// handler wiring. Shared by showNode (one node fills the whole panel) and showElementsList (several
+// nodes stack in one panel, each block needing this same markup).
+function nodeDetailHtml(id) {
   const n = GRAPH.nodes[id];
-  if (!n) return;
+  if (!n) return '';
   const chg = n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '';
   const rows = Object.entries(n.fields || {})
     // a subsystem's / subdomain's first field IS its name (already in the title) — don't repeat it
@@ -413,14 +420,61 @@ function showNode(id) {
   const src = !n.file ? ''
     : localRef(n.file) ? `<button type="button" class="src srclink" title="Open in editor or on GitHub">${ref}</button>`
     : `<div class="src">${ref}</div>`;
-  panel.innerHTML = `<h2>${esc(n.name)}</h2>`
+  return `<h2>${esc(n.name)}</h2>`
     + `<div class="badges"><span class="badge kind">${n.kind}</span>${chg}</div>`
     + `<dl>${rows}${attrs}${usedInHtml(id)}${groupMembersHtml(id)}</dl>${src}`;
-  const sl = panel.querySelector('.srclink');
+}
+// Wire the interactive bits inside a just-written detail block: the source-open button + any
+// use-case-flow refs. `root` is the panel itself (single-node case) or one `.pblock` div (list case).
+function bindNodeDetailHandlers(root, id) {
+  const n = GRAPH.nodes[id];
+  const sl = root.querySelector('.srclink');
   if (sl) sl.addEventListener('click', () => openSource(n));
-  panel.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
+  root.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
   }));
+}
+function showNode(id) {
+  if (!GRAPH.nodes[id]) return;
+  panel.innerHTML = nodeDetailHtml(id);
+  bindNodeDetailHandlers(panel, id);
+}
+// `id`'s file/folder collision set (node_path_index — filetree.py), primary + others, for ANY id in
+// that set (not just the primary) — [id] alone when it didn't collide with anything.
+function anchorSetFor(id) { return siblingsByNode[id] || [id]; }
+// A file/folder anchoring MULTIPLE elements (node_path_index collision): rather than guessing which one
+// the reader meant, show all of them — full detail, stacked, separated by a rule — so nothing is hidden
+// behind an arbitrary pick. Each block's title is clickable and re-selects that one (selectFromTree),
+// which — since it shares this same anchor set — lands right back here with `selectedId` set. Passing
+// `selectedId` dims every OTHER block (the same DIM opacity the diagram itself uses for "not focused")
+// and scrolls that one block into view, so a long sibling list doesn't leave it hidden off-screen.
+// Called with no `selectedId` for the "just landed here, nothing picked yet" state (selectFromTreeAnchors).
+function showElementsList(ids, selectedId) {
+  const known = ids.filter((id) => GRAPH.nodes[id]);
+  panel.innerHTML = known.map((id) =>
+    `<div class="pblock" data-id="${esc(id)}">${nodeDetailHtml(id)}</div>`).join('<hr>');
+  let activeBlock = null;
+  panel.querySelectorAll('.pblock').forEach((block) => {
+    const id = block.getAttribute('data-id');
+    bindNodeDetailHandlers(block, id);
+    const h2 = block.querySelector('h2');
+    if (h2) { h2.classList.add('pblock-title'); h2.addEventListener('click', () => selectFromTree(id)); }
+    if (selectedId) {
+      const active = id === selectedId;
+      block.style.opacity = active ? '' : DIM;
+      if (active) activeBlock = block;
+    }
+  });
+  if (activeBlock) activeBlock.scrollIntoView({ block: 'nearest' });
+}
+// The single choke point behind every node selection's panel content: `id`'s OWN plain detail, unless
+// it shares an exact file/folder anchor with other elements (anchorSetFor), in which case the full
+// sibling list is shown instead — with `id` itself the undimmed, scrolled-to one. So "selecting a box"
+// always reads as "here's the file it came from", regardless of whether it was reached via the file
+// tree, a sibling's list-title link, or a plain click on the box itself.
+function showNodeDetail(id) {
+  const ids = anchorSetFor(id);
+  if (ids.length > 1) showElementsList(ids, id); else showNode(id);
 }
 
 function showEdge(e) {
@@ -634,7 +688,6 @@ function bindFlow(uc) {
     const parts = partsById[id], selKey = 'node:' + id;
     const myMsg = steps.map((st, i) => (st.srcId === id || st.dstId === id) ? i : -1).filter((i) => i >= 0);
     const select = () => {
-      if (scene.selectedKey === selKey) { resetScene(scene); return; }
       scene.selectedKey = selKey;
       showNode(id);
       const keep = new Set(parts);
@@ -694,7 +747,6 @@ function bindFlow(uc) {
     const onClick = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
-      if (scene.selectedKey === selKey) { resetScene(scene); return; }
       doSelect();
     };
     const on = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = HOVER; };
@@ -1044,11 +1096,12 @@ function bindHoverGlow(scene, el, id) {
   el.addEventListener('mouseenter', () => { if (scene.selectedKey !== 'node:' + id) shape.style.filter = HOVER; });
   el.addEventListener('mouseleave', () => { if (scene.selectedKey !== 'node:' + id) shape.style.filter = ''; });
 }
-// Select a normal node within a scene: toggle off if already selected, else show + highlight + focus.
+// Select a normal node within a scene: show + highlight + focus. Re-selecting the current node just
+// re-applies the same state (a harmless no-op) — clicking an already-selected element never deselects
+// it; a click on empty canvas space or Escape are the only ways back to the default panel.
 function selectNode(scene, el, id) {
-  if (scene.selectedKey === 'node:' + id) { resetScene(scene); return; }
   scene.selectedKey = 'node:' + id;
-  showNode(id);
+  showNodeDetail(id);
   sceneSelect(scene, () => glowNode(el));
   // Dim to this node's neighbourhood only when the node is drawn in this scene; a box that isn't
   // registered (e.g. a neighbourhood's external subsystem) would otherwise dim everything around it.
@@ -1056,14 +1109,74 @@ function selectNode(scene, el, id) {
   syncTreeToNode(id);  // mirror the selection into the file browser (graph -> tree)
 }
 
+// Canvas-click selection: applies the selection, then decides what (if anything) happens to the
+// camera. A plain click holds the view perfectly still — auto-panning would fight a reader who clicked
+// a box precisely BECAUSE it was already comfortably in view. Only a shift-click reframes, zooming to
+// match the sidebar's text size (matchTextSize). selectFromTree applies matchTextSize unconditionally
+// for a file-tree-driven selection — there's no modifier key on a tree row to gate it on.
+function selectNodeFromCanvas(el, id, e) {
+  selectNode(mainScene, el, id);
+  if (e && e.shiftKey) matchTextSize(el);
+}
+
+// The zoom-by-`scale`-then-recenter step behind matchTextSize (scale === 1 skips straight to just
+// centering). Measures el/stage BEFORE any mutation: svg-pan-zoom's zoom() only updates its internal
+// state synchronously — the CTM it actually paints is applied on the NEXT animation frame (see
+// `updateCTMOnNextFrame` in the vendored lib) — so a getBoundingClientRect() taken right after would
+// still read the OLD, pre-zoom geometry. zoomAtPoint anchors on the SVG's own center, which
+// #diagram/#stage's CSS (width/height:100%, no padding) makes exactly `stageRect`'s center — so the
+// post-zoom position is derived analytically (every point scales toward/away from that shared center
+// by `scale`) instead of re-measured.
+function applyZoomAndCenter(el, scale) {
+  const stageRect = stage.getBoundingClientRect();
+  const stageCx = stageRect.left + stageRect.width / 2, stageCy = stageRect.top + stageRect.height / 2;
+  const elRect = el.getBoundingClientRect();
+  let elCx = elRect.left + elRect.width / 2, elCy = elRect.top + elRect.height / 2;
+  if (scale !== 1) {
+    mainPz.zoom(mainPz.getZoom() * scale);
+    elCx = stageCx + (elCx - stageCx) * scale;
+    elCy = stageCy + (elCy - stageCy) * scale;
+  }
+  const dx = stageCx - elCx;
+  const dy = stageCy - elCy;
+  if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;  // already centered — skip the no-op pan (+ its animation)
+  const vp = diagram.querySelector('.svg-pan-zoom_viewport');
+  // A brief transition on the pan/zoom transform (svg-pan-zoom sets it via inline `style.transform`),
+  // toggled on JUST for this programmatic move — never left on during a drag-pan, or every mousemove
+  // frame would visibly lag behind the cursor. Disabled under prefers-reduced-motion by the matching
+  // viewer.css rule, the same way flashIcon's own animation already is.
+  if (vp) { vp.classList.add('pan-anim'); setTimeout(() => vp.classList.remove('pan-anim'), 300); }
+  mainPz.panBy({ x: dx, y: dy });
+}
+
+// Every node's (or container's) zoom-to-match-sidebar-text-size move: reads the panel's normal text
+// size and the box's OWN name label's current on-screen size, then zooms so the two match exactly
+// (even if that then runs the box past the visible edges — matching the text size wins over fitting on
+// screen). Triggered by a shift-click on a box, or ANY file-tree click that resolves to one — a plain
+// canvas click never calls this (see selectNodeFromCanvas): it holds the view still instead.
+function matchTextSize(el) {
+  if (!mainPz || !el) return;
+  // The box's own name label: Mermaid renders a flowchart/namespace box's label as HTML — a
+  // `.nodeLabel` span inside a `foreignObject` — not an SVG `<text>` element; `text` is only a fallback
+  // for any collapsed-box rendering that draws its label directly in SVG.
+  const textEl = el.querySelector('.nodeLabel') || el.querySelector('text');
+  const vp = diagram.querySelector('.svg-pan-zoom_viewport');
+  if (!textEl || !vp) return;
+  const rawScale = new DOMMatrixReadOnly(vp.style.transform).a;  // current SVG-unit -> CSS-px scale
+  // The label's OWN font-size is in SVG user units and unaffected by the pan/zoom transform (computed
+  // style ignores ancestor `transform`) — multiplying by rawScale gives its actual on-screen size.
+  const onScreenFontSize = parseFloat(getComputedStyle(textEl).fontSize) * rawScale;
+  const targetFontSize = parseFloat(getComputedStyle(panel).fontSize);  // the sidebar's normal text size
+  if (!onScreenFontSize || !targetFontSize) return;
+  applyZoomAndCenter(el, targetFontSize / onScreenFontSize);
+}
+
 // Select the collapsed Libraries box: highlight + show its roster (showLibsFold), and dim to its
 // neighbourhood (the System + the SYS→box arrow) just like selecting a dependency — the bundles arrow
 // is a registered context edge, so focusNode resolves the connection. Reuses the node selKey so
-// bindNodes' hover guard matches and the selection glow isn't overwritten by a passing hover. Toggles
-// off on re-click.
+// bindNodes' hover guard matches and the selection glow isn't overwritten by a passing hover.
 function selectLibsFold(scene, el) {
   const selKey = 'node:' + LIBS_ID;
-  if (scene.selectedKey === selKey) { resetScene(scene); return; }
   scene.selectedKey = selKey;
   showLibsFold();
   sceneSelect(scene, () => glowNode(el));
@@ -1179,8 +1292,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
     if (isDrag(ev)) return;  // tail of a drag-pan, not a real click
     ev.stopPropagation();
     if (opts.onDrill && isDrillClick(ev)) { hoverOff(); opts.onDrill(); return; }  // ⌘-click drills in
-    hoverOff();  // drop the hover glow before (de)selecting, so it can't linger under HILITE
-    if (scene.selectedKey === selKey) { resetScene(scene); return; }  // click again = deselect
+    hoverOff();  // drop the hover glow before selecting, so it can't linger under HILITE
     doSelect();
   };
   scene.edgeEls.push({ e, path: p, label });
@@ -1268,7 +1380,7 @@ function bindContext() {
   bindNodes(mainScene, (id, el, e) => {
     if (id === 'SYS') {  // the System box: ⌘-click drills in, a plain click selects (shows its overview)
       if (isDrillClick(e)) { const t = sysDrillTarget(); if (t) go(t); return; }
-      selectNode(mainScene, el, id);
+      selectNodeFromCanvas(el, id, e);
       return;
     }
     if (id === LIBS_ID) {  // collapsed Libraries box: ⌘-click drills to the full list, plain click previews it
@@ -1276,7 +1388,7 @@ function bindContext() {
       selectLibsFold(mainScene, el);
       return;
     }
-    selectNode(mainScene, el, id);
+    selectNodeFromCanvas(el, id, e);
   });
   bindEdges(mainScene, resolveContextEdge);
   markSysDrill();
@@ -1289,11 +1401,11 @@ function bindContext() {
 // The Libraries drill-down: the System + every folded in-process dep, same shape as Context. SYS and
 // each dep simply select to their panel (no further drill); arrows resolve via the context-edge bridge.
 function bindLibs() {
-  bindNodes(mainScene, (id, el) => selectNode(mainScene, el, id));
+  bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
   bindEdges(mainScene, resolveContextEdge);
 }
 function bindComponent() {
-  bindNodes(mainScene, (id, el) => selectNode(mainScene, el, id));
+  bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
   bindEdges(mainScene, resolveComponentEdge);
 }
 // A "container" altitude (Subsystems or the Domain Subdomains overview): group boxes that
@@ -1313,7 +1425,7 @@ function bindGroupContainer(drillFor, edgeBinder) {
       if (isDrag(e)) return;
       e.stopPropagation();
       if (isDrillClick(e)) { go(drillFor(id)); return; }  // ⌘-click drills in
-      selectNode(mainScene, el, id);
+      selectNodeFromCanvas(el, id, e);
     });
   });
   eachEdge(mainScene.root, (p, label, m) => {
@@ -1357,14 +1469,14 @@ function bindDomainSub(sd) {
       el.addEventListener('click', (ev) => {
         if (isDrag(ev)) return; ev.stopPropagation();
         if (isDrillClick(ev)) { go(target); return; }
-        selectNode(mainScene, el, id);
+        selectNodeFromCanvas(el, id, ev);
       });
     } else {  // the focal subdomain's own entity: select / ⌘-open-source, like the flat Domain view
       markOpenSrc(el, id);
       el.addEventListener('click', (ev) => {
         if (isDrag(ev)) return; ev.stopPropagation();
         if (openSrcClick(id, ev)) return;
-        selectNode(mainScene, el, id);
+        selectNodeFromCanvas(el, id, ev);
       });
     }
   });
@@ -1415,7 +1527,7 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
     // box: ⌘-click crosses into that subdomain's card (the structural↔domain bridge). A component: select.
     if (GRAPH.nodes[id].kind === 'subsystem' && isDrillClick(ev)) { go({ kind: 'subsystem', sid: id }); return; }
     if (GRAPH.nodes[id].kind === 'subdomain' && isDrillClick(ev)) { go({ kind: 'domsub', sd: id }); return; }
-    selectNode(mainScene, el, id);
+    selectNodeFromCanvas(el, id, ev);
   });
   // Neighbour subsystem + bridge subdomain boxes drill on ⌘-click, so tag them `drill` for the cursor.
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
@@ -1449,7 +1561,7 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
   });
 }
 function bindEdgePair() {  // both subsystems framed; arrows are component edges
-  bindNodes(mainScene, (id, el) => selectNode(mainScene, el, id));
+  bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
   bindEdges(mainScene, resolveComponentEdge);
   bindFrameDrill(mainScene);  // ⌘-click either subsystem frame to open its card
 }
@@ -1525,11 +1637,11 @@ function bindDomain() {
       el.addEventListener('click', (ev) => {
         if (isDrag(ev)) return; ev.stopPropagation();
         if (isDrillClick(ev)) { go({ kind: 'subsystem', sid: id }); return; }
-        selectNode(mainScene, el, id);
+        selectNodeFromCanvas(el, id, ev);
       });
     } else {  // a domain entity: select / ⌘-open-source
       markOpenSrc(el, id);
-      el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); if (openSrcClick(id, ev)) return; selectNode(mainScene, el, id); });
+      el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); if (openSrcClick(id, ev)) return; selectNodeFromCanvas(el, id, ev); });
     }
   });
   eachClassEdge(mainScene.root, (p, label, src, dst) => {
@@ -1572,10 +1684,9 @@ function gpRestFilter(scene, el) {
 function gpFocus(scene, keep) {  // dim every focusable GP element not in the keep set (system stays lit)
   for (const el of scene.dimEls) el.style.opacity = keep.has(el) ? '' : DIM;
 }
-// Select an actor: its figure + lifeline + every step it drives glow; the rest dims. Toggle off if re-clicked.
+// Select an actor: its figure + lifeline + every step it drives glow; the rest dims.
 function selectGPActor(scene, a) {
   const selKey = 'gpactor:' + a.aid;
-  if (scene.selectedKey === selKey) { resetScene(scene); return; }
   scene.selectedKey = selKey;
   showGPActor(a);
   const stepEls = [];
@@ -1587,7 +1698,6 @@ function selectGPActor(scene, a) {
 // Select a step: the step (text + line) glows and its driving actor stays lit; the rest dims.
 function selectGPStep(scene, i, gpId, aid) {
   const selKey = 'gpstep:' + gpId;
-  if (scene.selectedKey === selKey) { resetScene(scene); return; }
   scene.selectedKey = selKey;
   showGPStep(gpId);
   const m = scene.gpMsg[i] || {};
@@ -1896,10 +2006,21 @@ async function render() {
   if (mode === 'diff' && HAS_DIFF) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
+  // pendingMatchTextId: a node reached this way ALWAYS gets the zoom-to-match-sidebar-text-size move
+  // (see matchTextSize) — but mainPz doesn't exist yet at this point (it's still the PREVIOUS view's
+  // instance, or null, on a fresh navigation), so it's applied below, once svgPanZoom has been
+  // (re)constructed for the new view.
+  let pendingMatchTextId = null;
   if (pendingSelect) {
     const id = pendingSelect; pendingSelect = null;
     const el = mainScene.nodeEls[id];
-    if (el) selectNode(mainScene, el, id); else { showNode(id); syncTreeToNode(id); }
+    if (el) selectNode(mainScene, el, id); else { showNodeDetail(id); syncTreeToNode(id); }
+    if (el) pendingMatchTextId = id;
+  } else if (pendingElementsList) {
+    // A file/folder anchoring several elements shares this view — land here with nothing selected
+    // (see selectFromTreeAnchors) and list them all instead of guessing which one was meant.
+    const ids = pendingElementsList; pendingElementsList = null;
+    showElementsList(ids);
   } else if (s.sel && mainScene.selectors[s.sel]) {
     mainScene.selectors[s.sel]();  // history revisit: restore the element that was selected in this view
   }
@@ -1916,6 +2037,7 @@ async function render() {
     // history revisit: restore the pan/zoom we left this view with (zoom first, then absolute pan)
     if (s.vp) { mainPz.zoom(s.vp.zoom); mainPz.pan(s.vp.pan); }
     updateZoomLevel();
+    if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
   }
   if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e)) resetScene(mainScene); });  // empty space deselects
   renderChrome(s);
@@ -1933,6 +2055,11 @@ const treeToggleBtn = document.getElementById('treetoggle');
 const treeResizer = document.getElementById('treeresizer');
 const rowByPath = {};   // path (no trailing slash) -> { row, kids, entry, depth, built }
 const pathByNode = {};  // node id -> its exact tree path (graph -> tree highlight for a mapped node)
+// node id -> the FULL node_path_index collision set at its exact path (primary + others), for any id
+// that collided with at least one other — built eagerly from FILE_TREE (unlike rowByPath, which only
+// exists for a path once its row has been lazily expanded/built), so a selection can look this up
+// regardless of what the tree happens to have rendered so far. See anchorSetFor.
+const siblingsByNode = {};
 let treeSelPath = null; // path of the currently highlighted row
 
 // A dir anchor in the map keeps a trailing slash ('src/api/'); the walked dir row does not ('src/api').
@@ -1993,9 +2120,13 @@ function onRowClick(key) {
     // An intermediate folder that merely sits under a mapped one just expands — opening it must not
     // hijack the selection to the containing subsystem.
     toggleDir(key);
-    if (e.node) selectFromTree(e.node);
+    // e.node set -> this exact path collided in node_path_index (filetree.py): e.others carries the
+    // rest, kept instead of dropped — selectFromTreeAnchors decides whether that's one thing or several.
+    if (e.node) selectFromTreeAnchors([e.node, ...e.others], key);
+  } else if (e.node) {
+    selectFromTreeAnchors([e.node, ...e.others], key);  // this exact file collided — e.others carries the rest
   } else if (e.sel) {
-    selectFromTree(e.sel);     // a file selects its component, else its owning subsystem (finer grain)
+    selectFromTree(e.sel);     // no exact match here — its owning subsystem/entity (finer grain), single target
   } else {
     flashNoMap(rec.row);       // unmapped file: a click does nothing -> brief hint
   }
@@ -2052,16 +2183,42 @@ function selectTargetFor(id) {
       return { state: { kind: 'context' }, selectId: id };  // unknown kind -> the always-present root
   }
 }
+// `allIds`: the full node_path_index collision set at the path this navigation came from (undefined /
+// [] for callers that aren't file-tree-driven, e.g. a flow narrative link — no "Also defined here" then).
 function selectFromTree(nodeId) {
   const t = selectTargetFor(nodeId);
   if (!t) return;
   const cur = history[hi];
   if (cur && stateKey(cur) === stateKey(t.state)) {       // already in the right view — select in place
     const el = mainScene && mainScene.nodeEls[t.selectId];
-    if (el) selectNode(mainScene, el, t.selectId); else { showNode(t.selectId); syncTreeToNode(t.selectId); }
+    if (el) selectNode(mainScene, el, t.selectId); else { showNodeDetail(t.selectId); syncTreeToNode(t.selectId); }
+    // A node reached via the file tree ALWAYS gets the zoom-to-match-sidebar-text-size move — there's
+    // no modifier key on a tree row to gate it on, unlike a canvas click (see selectNodeFromCanvas).
+    if (el) matchTextSize(el);
   } else {                                                // navigate, then render() consumes pendingSelect
     pendingSelect = t.selectId;
     go(t.state);
+  }
+}
+// A file/folder row whose exact path anchors one or more elements (node_path_index — filetree.py).
+// One element: select it directly, same as ever (which highlights the row via syncTreeToNode, same as
+// any other selection). Several: never guess which one was meant — list every one's full detail in the
+// panel instead (showElementsList; each title re-selects that one for real), and switch the diagram to
+// their shared view ONLY when they all genuinely live on the exact same one; otherwise leave whatever
+// diagram is currently showing untouched. Nothing gets selected in that case, so nothing would
+// otherwise mark this row as the source — highlight `path` (this row itself) directly instead.
+function selectFromTreeAnchors(allIds, path) {
+  if (allIds.length <= 1) { if (allIds.length) selectFromTree(allIds[0]); return; }
+  highlightTreePath(path);
+  const states = allIds.map((id) => selectTargetFor(id)).filter(Boolean).map((t) => t.state);
+  const shared = states.length === allIds.length && states.every((s) => stateKey(s) === stateKey(states[0]))
+    ? states[0] : null;
+  const cur = history[hi];
+  if (shared && (!cur || stateKey(cur) !== stateKey(shared))) {
+    pendingElementsList = allIds;  // render() shows the list once the shared view has finished rendering
+    go(shared);
+  } else {
+    showElementsList(allIds);  // already on the shared view (or there isn't one) — just update the panel
   }
 }
 
@@ -2087,7 +2244,14 @@ function highlightTreePath(path) {
 }
 function buildFileTree() {
   if (!FILE_TREE) { document.body.classList.add('no-tree'); return; }
-  (function index(e) { if (e.node) pathByNode[e.node] = treeKey(e.path); for (const c of e.children) index(c); })(FILE_TREE);
+  (function index(e) {
+    if (e.node) {
+      pathByNode[e.node] = treeKey(e.path);
+      const all = [e.node, ...(e.others || [])];
+      if (all.length > 1) for (const id of all) siblingsByNode[id] = all;
+    }
+    for (const c of e.children) index(c);
+  })(FILE_TREE);
   const kids = FILE_TREE.children || [];
   if (!kids.length) { treeBody.innerHTML = '<div class="tempty">No files found.</div>'; return; }
   renderChildrenInto(treeBody, kids, 0);
@@ -2355,7 +2519,9 @@ const savedPanelW = parseInt(lsGet(LS.panelW) || '', 10);
 if (savedPanelW) panel.style.width = clampPanelW(savedPanelW) + 'px';
 let resizing = false;
 resizer.addEventListener('mousedown', (e) => { e.preventDefault(); resizing = true; document.body.classList.add('resizing'); });
-document.addEventListener('mousemove', (e) => { if (resizing) { panel.style.width = clampPanelW(window.innerWidth - e.clientX) + 'px'; refitStage(); } });
+// The panel now sits between the file browser and the diagram (not flush against the window's right
+// edge), so its width is the distance from ITS OWN left edge to the cursor — not from the window edge.
+document.addEventListener('mousemove', (e) => { if (resizing) { panel.style.width = clampPanelW(e.clientX - panel.getBoundingClientRect().left) + 'px'; refitStage(); } });
 document.addEventListener('mouseup', () => {
   if (!resizing) return;
   resizing = false; document.body.classList.remove('resizing');

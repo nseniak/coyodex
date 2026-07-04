@@ -13,9 +13,11 @@ each entry tagged by how the project map covers it:
 
 So the browser doubles as a coverage view: at a glance you see what the map describes and what it
 misses. `sel` is the node a click on the row selects — the exact node, else the nearest ANCESTOR
-folder-node (the "finer grain" rule), else None for an unmapped row. `node` is the exact node id
-(set only when cov == 'self'). The viewer wires this both ways: focusing a graph node highlights
-its row; clicking a mapped row navigates to and selects the node.
+folder-node (the "finer grain" rule), else None for an unmapped row. `node` is the exact (primary)
+node id (set only when cov == 'self'); `others` carries any further node ids that ALSO anchor this
+exact path (e.g. a component and an entity sharing one file), so a path collision surfaces every
+match instead of only the tie-break winner. The viewer wires this both ways: focusing a graph node
+highlights its row; clicking a mapped row navigates to and selects the node (+ its `others`, if any).
 """
 from __future__ import annotations
 
@@ -36,6 +38,8 @@ class FileTreeNode(TypedDict):
     path: str            # repo-relative, posix; "" for the root
     dir: bool
     node: str | None     # exact node id mapping to this path (set iff cov == 'self')
+    others: list[str]    # other node ids that ALSO exactly anchor this path (a path collision node_path_index
+                          # no longer silently drops) — empty unless `node` is set and collided
     sel: str | None      # node to select on a click (exact, else nearest ancestor folder-node)
     cov: str             # 'self' | 'under' | 'has' | 'none'
     mapped: int          # count of exact-mapped nodes strictly INSIDE (descendants) — the folder's badge
@@ -57,11 +61,15 @@ def _is_local_ref(file: str) -> bool:
     return not _URL_RE.match(file)
 
 
-def node_path_index(graph: GraphDict) -> dict[str, str]:
-    """Map each in-repo path a node anchors -> that node's id. On a collision a leaf node
-    (component/entity/dep) wins over a group node (subsystem/subdomain), matching the
-    'finer grain' selection rule."""
-    out: dict[str, str] = {}
+def node_path_index(graph: GraphDict) -> dict[str, list[str]]:
+    """Map each in-repo path a node anchors -> ALL node ids that anchor it, primary first. On a
+    collision (two+ nodes anchored at the same path — most often two leaves legitimately sharing a
+    file) a leaf node (component/entity/dep) is the PRIMARY over a group node (subsystem/subdomain),
+    matching the 'finer grain' selection rule, and ties within the same category keep insertion order
+    (`graph["nodes"]` iteration order) — same tie-break the old single-id index used. Unlike that old
+    index, the rest of the collision is kept (not dropped), so the viewer can surface every node a
+    file maps to instead of only the winner."""
+    by_path: dict[str, list[str]] = {}
     for nid, node in graph["nodes"].items():
         file = node.get("file")
         if not isinstance(file, str) or not _is_local_ref(file):
@@ -70,14 +78,15 @@ def node_path_index(graph: GraphDict) -> dict[str, str]:
         path = _clean_node_path(file, line if isinstance(line, int) else None)
         if not path:
             continue
-        prev = out.get(path)
-        if prev is None:
-            out[path] = nid
+        by_path.setdefault(path, []).append(nid)
+    out: dict[str, list[str]] = {}
+    for path, ids in by_path.items():
+        if len(ids) == 1:
+            out[path] = ids
             continue
-        prev_group = str(graph["nodes"][prev].get("kind")) in _GROUP_KINDS
-        cur_group = str(node.get("kind")) in _GROUP_KINDS
-        if prev_group and not cur_group:  # a leaf is finer than a group — let it take the path
-            out[path] = nid
+        leaves = [nid for nid in ids if str(graph["nodes"][nid].get("kind")) not in _GROUP_KINDS]
+        groups = [nid for nid in ids if str(graph["nodes"][nid].get("kind")) in _GROUP_KINDS]
+        out[path] = leaves + groups
     return out
 
 
@@ -95,19 +104,22 @@ def _to_node(d: _Dir) -> FileTreeNode:
     """Freeze a `_Dir` into a JSON tree node: child dirs (alpha) before child files (alpha)."""
     children: list[FileTreeNode] = [_to_node(d.dirs[name]) for name in sorted(d.dirs, key=str.lower)]
     for name in sorted(d.files, key=str.lower):
-        children.append({"name": name, "path": d.files[name], "dir": False,
-                         "node": None, "sel": None, "cov": "none", "mapped": 0, "children": []})
-    return {"name": d.name, "path": d.path, "dir": True,
-            "node": None, "sel": None, "cov": "none", "mapped": 0, "children": children}
+        children.append({"name": name, "path": d.files[name], "dir": False, "node": None, "others": [],
+                         "sel": None, "cov": "none", "mapped": 0, "children": []})
+    return {"name": d.name, "path": d.path, "dir": True, "node": None, "others": [],
+            "sel": None, "cov": "none", "mapped": 0, "children": children}
 
 
-def _annotate(entry: FileTreeNode, node_paths: dict[str, str], ancestor_node: str | None) -> tuple[str, int]:
-    """Tag `entry` (and its subtree) with `node`/`sel`/`cov`/`mapped`. `ancestor_node` is the id of the
-    nearest ANCESTOR folder a node anchors (None if none) — it both flows the 'under' coverage down
-    and is the click target for a row no node points at directly. Returns (cov, mapped-nodes-in-subtree
-    INCLUDING self) so a parent dir can roll its children up to 'has' and sum the badge count."""
-    exact = node_paths.get(entry["path"]) if entry["path"] else None
+def _annotate(entry: FileTreeNode, node_paths: dict[str, list[str]], ancestor_node: str | None) -> tuple[str, int]:
+    """Tag `entry` (and its subtree) with `node`/`others`/`sel`/`cov`/`mapped`. `ancestor_node` is the
+    id of the nearest ANCESTOR folder a node anchors (None if none) — it both flows the 'under'
+    coverage down and is the click target for a row no node points at directly. Returns (cov,
+    mapped-nodes-in-subtree INCLUDING self) so a parent dir can roll its children up to 'has' and sum
+    the badge count."""
+    ids = node_paths.get(entry["path"]) if entry["path"] else None
+    exact = ids[0] if ids else None
     entry["node"] = exact
+    entry["others"] = ids[1:] if ids else []  # the rest of a path collision — kept, not dropped
     entry["sel"] = exact if exact is not None else ancestor_node
     nxt = exact if exact is not None else ancestor_node
     self_mapped = 1 if exact is not None else 0
@@ -128,7 +140,7 @@ def _annotate(entry: FileTreeNode, node_paths: dict[str, str], ancestor_node: st
     return entry["cov"], self_mapped
 
 
-def build_tree(rel_paths: list[str], node_paths: dict[str, str], root_name: str = "") -> FileTreeNode:
+def build_tree(rel_paths: list[str], node_paths: dict[str, list[str]], root_name: str = "") -> FileTreeNode:
     """Pure tree builder (no IO): nest `rel_paths` (repo-relative posix files) into folders, then
     overlay map coverage from `node_paths`. Split out from the git walk so it unit-tests directly."""
     root = _Dir(root_name, "")

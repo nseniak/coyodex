@@ -58,20 +58,28 @@ def test_node_path_index_strips_anchors_and_skips_urls() -> None:
         make_node("D1", "dep", "https://example.com/pkg"),  # off-repo URL -> excluded
     )
     idx = node_path_index(graph)
-    assert idx["src/api.py"] == "C1"
-    assert idx["src/db.py"] == "C2"      # #L10 stripped
-    assert idx["src/q.py"] == "C3"       # :5 stripped
-    assert idx["src"] == "S1"            # dir anchor, trailing slash stripped
+    assert idx["src/api.py"] == ["C1"]
+    assert idx["src/db.py"] == ["C2"]      # #L10 stripped
+    assert idx["src/q.py"] == ["C3"]       # :5 stripped
+    assert idx["src"] == ["S1"]            # dir anchor, trailing slash stripped
     assert all(not k.startswith("http") for k in idx)  # the URL dep is not indexed
 
 
 def test_node_path_index_leaf_wins_collision_either_order() -> None:
     # A leaf (component) and a group (subsystem) claim the same path — the leaf is "finer grain"
-    # and must win regardless of insertion order.
+    # and must be PRIMARY (first) regardless of insertion order, but the group is kept, not dropped.
     g1 = make_graph(make_node("S1", "subsystem", "src/x.py"), make_node("C1", "component", "src/x.py"))
     g2 = make_graph(make_node("C1", "component", "src/x.py"), make_node("S1", "subsystem", "src/x.py"))
-    assert node_path_index(g1)["src/x.py"] == "C1"
-    assert node_path_index(g2)["src/x.py"] == "C1"
+    assert node_path_index(g1)["src/x.py"] == ["C1", "S1"]
+    assert node_path_index(g2)["src/x.py"] == ["C1", "S1"]
+
+
+def test_node_path_index_keeps_both_leaves_on_collision() -> None:
+    # Two leaves (component + entity) legitimately anchored to the same file: neither is dropped, and
+    # the first one inserted (graph["nodes"] iteration order) stays primary — same as before this
+    # collision was ever kept, just no longer silently discarding the second one.
+    graph = make_graph(make_node("C1", "component", "src/x.py"), make_node("E1", "entity", "src/x.py"))
+    assert node_path_index(graph)["src/x.py"] == ["C1", "E1"]
 
 
 # --- build_tree: structure ------------------------------------------------------
@@ -88,7 +96,7 @@ def test_build_tree_nests_and_orders_dirs_before_files() -> None:
 
 # --- build_tree: coverage shading + click target --------------------------------
 def test_coverage_self_under_has_none() -> None:
-    node_paths = {"src": "S1", "src/api.py": "C1"}
+    node_paths = {"src": ["S1"], "src/api.py": ["C1"]}
     tree = build_tree(["src/api.py", "src/util.py", "README.md", "docs/guide.md"], node_paths)
 
     src = find_entry(tree, "src")
@@ -109,7 +117,7 @@ def test_coverage_self_under_has_none() -> None:
 
 def test_dir_with_only_some_covered_children_is_partial() -> None:
     # 'src' itself isn't a node and isn't under one, but contains a mapped file -> 'has' (partial).
-    tree = build_tree(["src/api.py", "src/util.py"], {"src/api.py": "C1"})
+    tree = build_tree(["src/api.py", "src/util.py"], {"src/api.py": ["C1"]})
     src = find_entry(tree, "src")
     util = find_entry(tree, "src/util.py")
     assert src and util
@@ -121,7 +129,7 @@ def test_dir_with_only_some_covered_children_is_partial() -> None:
 
 def test_mapped_count_sums_descendants_at_each_level() -> None:
     # The badge count is the number of exact-mapped nodes strictly inside, summed at every level.
-    tree = build_tree(["a/x.py", "a/b/y.py", "a/b/z.py"], {"a/x.py": "C1", "a/b/y.py": "C2"})
+    tree = build_tree(["a/x.py", "a/b/y.py", "a/b/z.py"], {"a/x.py": ["C1"], "a/b/y.py": ["C2"]})
     a = find_entry(tree, "a")
     ab = find_entry(tree, "a/b")
     x = find_entry(tree, "a/x.py")
@@ -134,10 +142,26 @@ def test_mapped_count_sums_descendants_at_each_level() -> None:
 
 def test_sel_picks_finest_ancestor_folder_node() -> None:
     # Nested folder-nodes: a deep file selects the NEAREST (longest-prefix) ancestor node, not the top one.
-    tree = build_tree(["a/b/c.py"], {"a": "S1", "a/b": "C1"})
+    tree = build_tree(["a/b/c.py"], {"a": ["S1"], "a/b": ["C1"]})
     leaf = find_entry(tree, "a/b/c.py")
     assert leaf is not None
     assert (leaf["cov"], leaf["sel"]) == ("under", "C1")  # 'a/b' (C1) is finer than 'a' (S1)
+
+
+def test_others_carries_the_rest_of_a_path_collision() -> None:
+    # A file with more than one node anchored to it: `node` is the primary (first in the list), and
+    # `others` keeps the rest instead of silently dropping them (the bug this index used to have).
+    tree = build_tree(["src/x.py"], {"src/x.py": ["C1", "E1", "S1"]})
+    x = find_entry(tree, "src/x.py")
+    assert x is not None
+    assert (x["node"], x["others"], x["sel"]) == ("C1", ["E1", "S1"], "C1")
+
+
+def test_others_empty_when_no_collision() -> None:
+    tree = build_tree(["src/x.py"], {"src/x.py": ["C1"]})
+    x = find_entry(tree, "src/x.py")
+    assert x is not None
+    assert x["others"] == []
 
 
 # --- build_file_tree: end-to-end over a real directory --------------------------
