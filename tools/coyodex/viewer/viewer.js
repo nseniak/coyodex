@@ -438,6 +438,10 @@ function showNode(id) {
   if (!GRAPH.nodes[id]) return;
   panel.innerHTML = nodeDetailHtml(id);
   bindNodeDetailHandlers(panel, id);
+  // Mirror into the file browser here (not just in selectNode) — showNode is also how a subsystem's/
+  // subdomain's OWN card lands on its default panel (applyDefaultPanel) and how a bridge arrow shows its
+  // collapsed box (bindBridgeEdge), neither of which went through selectNode before.
+  syncTreeToNode(id);
 }
 // `id`'s file/folder collision set (node_path_index — filetree.py), primary + others, for ANY id in
 // that set (not just the primary) — [id] alone when it didn't collide with anything.
@@ -465,7 +469,20 @@ function showElementsList(ids, selectedId) {
       if (active) activeBlock = block;
     }
   });
-  if (activeBlock) activeBlock.scrollIntoView({ block: 'nearest' });
+  if (activeBlock) {
+    // Center it, not just scroll it into view — but a block near the END of the list has no content
+    // below it for the viewport to scroll into, so plain block:'center' would leave it stuck low. Pad
+    // the bottom with exactly the shortfall so even the last block can still be centered.
+    const panelRect = panel.getBoundingClientRect(), blockRect = activeBlock.getBoundingClientRect();
+    const blockCenter = panel.scrollTop + (blockRect.top - panelRect.top) + blockRect.height / 2;
+    const shortfall = blockCenter + panel.clientHeight / 2 - panel.scrollHeight;
+    if (shortfall > 0) {
+      const spacer = document.createElement('div');
+      spacer.style.height = Math.ceil(shortfall) + 'px';
+      panel.appendChild(spacer);
+    }
+    activeBlock.scrollIntoView({ block: 'center' });
+  }
 }
 // The single choke point behind every node selection's panel content: `id`'s OWN plain detail, unless
 // it shares an exact file/folder anchor with other elements (anchorSetFor), in which case the full
@@ -475,6 +492,15 @@ function showElementsList(ids, selectedId) {
 function showNodeDetail(id) {
   const ids = anchorSetFor(id);
   if (ids.length > 1) showElementsList(ids, id); else showNode(id);
+}
+// showNodeDetail already mirrors into the tree for the single-anchor case (showNode does it); only the
+// multi-anchor case (showElementsList, which doesn't sync itself) still needs an explicit call. A caller
+// that always called both unconditionally was a real bug, not just noise: highlightTreePath's near/far
+// centering compares against the PREVIOUS row, so a redundant second call for the same id compared the
+// row against itself (trivially "near") and undid the first call's correct centering.
+function showNodeDetailSynced(id) {
+  showNodeDetail(id);
+  if (anchorSetFor(id).length > 1) syncTreeToNode(id);
 }
 
 function showEdge(e) {
@@ -508,6 +534,9 @@ function showEdge(e) {
     + srcHtml;
   const sl = panel.querySelector('.srclink');
   if (sl) sl.addEventListener('click', () => openSource(wn));
+  // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
+  // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
+  highlightTreePath(refTreePath(wn && wn.file, wn && wn.line));
 }
 
 // Context-edge panel: actor→system shows the role's wants; system→dep shows what it's used for
@@ -697,7 +726,6 @@ function bindFlow(uc) {
       }
       sceneSelect(scene, () => gpHighlight(scene, parts));
       gpFocus(scene, keep);
-      syncTreeToNode(id);
     };
     scene.selectors[selKey] = select;  // so back/forward can restore this participant selection
     const on = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = HOVER; };
@@ -1101,12 +1129,11 @@ function bindHoverGlow(scene, el, id) {
 // it; a click on empty canvas space or Escape are the only ways back to the default panel.
 function selectNode(scene, el, id) {
   scene.selectedKey = 'node:' + id;
-  showNodeDetail(id);
+  showNodeDetailSynced(id);  // mirrors into the file browser (graph -> tree) as a side effect
   sceneSelect(scene, () => glowNode(el));
   // Dim to this node's neighbourhood only when the node is drawn in this scene; a box that isn't
   // registered (e.g. a neighbourhood's external subsystem) would otherwise dim everything around it.
   if (scene.nodeEls[id]) focusNode(scene, id); else clearFocus(scene);
-  syncTreeToNode(id);  // mirror the selection into the file browser (graph -> tree)
 }
 
 // Canvas-click selection: applies the selection, then decides what (if anything) happens to the
@@ -2002,7 +2029,11 @@ async function render() {
       mainScene.selectors['node:' + id] = () => selectNode(mainScene, el, id);
     }
   }
-  applyDefaultPanel(s);
+  // Skip the plain landing panel when a more specific selection below is about to override it anyway —
+  // it would just be thrown away, and (since showNode/syncTreeToNode mirror into the file browser) it'd
+  // also plant a spurious intermediate tree-highlight that throws off the near/far centering heuristic
+  // in highlightTreePath (the REAL previous selection stops being `prevRow` for the one that matters).
+  if (!pendingSelect && !pendingElementsList && !(s.sel && mainScene.selectors[s.sel])) applyDefaultPanel(s);
   if (mode === 'diff' && HAS_DIFF) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
@@ -2014,7 +2045,7 @@ async function render() {
   if (pendingSelect) {
     const id = pendingSelect; pendingSelect = null;
     const el = mainScene.nodeEls[id];
-    if (el) selectNode(mainScene, el, id); else { showNodeDetail(id); syncTreeToNode(id); }
+    if (el) selectNode(mainScene, el, id); else showNodeDetailSynced(id);
     if (el) pendingMatchTextId = id;
   } else if (pendingElementsList) {
     // A file/folder anchoring several elements shares this view — land here with nothing selected
@@ -2061,6 +2092,7 @@ const pathByNode = {};  // node id -> its exact tree path (graph -> tree highlig
 // regardless of what the tree happens to have rendered so far. See anchorSetFor.
 const siblingsByNode = {};
 let treeSelPath = null; // path of the currently highlighted row
+let treeSpacer = null;  // bottom filler div added when centering a row near the end of the tree (see highlightTreePath)
 
 // A dir anchor in the map keeps a trailing slash ('src/api/'); the walked dir row does not ('src/api').
 // Strip it so the two always match.
@@ -2191,7 +2223,7 @@ function selectFromTree(nodeId) {
   const cur = history[hi];
   if (cur && stateKey(cur) === stateKey(t.state)) {       // already in the right view — select in place
     const el = mainScene && mainScene.nodeEls[t.selectId];
-    if (el) selectNode(mainScene, el, t.selectId); else { showNodeDetail(t.selectId); syncTreeToNode(t.selectId); }
+    if (el) selectNode(mainScene, el, t.selectId); else showNodeDetailSynced(t.selectId);
     // A node reached via the file tree ALWAYS gets the zoom-to-match-sidebar-text-size move — there's
     // no modifier key on a tree row to gate it on, unlike a canvas click (see selectNodeFromCanvas).
     if (el) matchTextSize(el);
@@ -2222,16 +2254,21 @@ function selectFromTreeAnchors(allIds, path) {
   }
 }
 
+// A source ref (a node's `file`/`line`, an edge's `where`) -> the tree path it resolves to, or null when
+// it isn't a local repo-relative path (an off-repo URL, or no ref at all) — the same test `openSource`
+// uses to decide whether a ref is clickable.
+function refTreePath(file, line) { return file && localRef(file) ? treeKey(cleanPath(file, line)) : null; }
 // graph -> tree: highlight the row for `id`'s source path (exact map, else its file/dir path), expanding
 // ancestor folders so the row exists and is visible. No path / no row -> just clear the highlight.
 function syncTreeToNode(id) {
   const n = GRAPH.nodes[id];
-  let path = pathByNode[id];
-  if (!path && n && n.file && localRef(n.file)) path = treeKey(cleanPath(n.file, n.line));
+  const path = pathByNode[id] || (n ? refTreePath(n.file, n.line) : null);
   highlightTreePath(path);
 }
 function highlightTreePath(path) {
-  if (treeSelPath && rowByPath[treeSelPath]) rowByPath[treeSelPath].row.classList.remove('sel');
+  if (treeSpacer) { treeSpacer.remove(); treeSpacer = null; }  // drop any previous centering filler first
+  const prevRow = treeSelPath && rowByPath[treeSelPath] ? rowByPath[treeSelPath].row : null;
+  if (prevRow) prevRow.classList.remove('sel');
   treeSelPath = null;
   if (!path) return;
   const parts = path.split('/');
@@ -2240,7 +2277,26 @@ function highlightTreePath(path) {
   if (!rec) return;  // node points at a path not in the walk (excluded / deleted) — nothing to highlight
   rec.row.classList.add('sel');
   treeSelPath = path;
-  rec.row.scrollIntoView({ block: 'nearest' });
+  // A big jump centers the new row so it's easy to find; a move to a row already right next to the
+  // PREVIOUS selection (e.g. the next sibling file) would make that same centering a jarring, pointless
+  // jump — just nudge it into view instead. `prevRow.offsetParent` is null when its folder got collapsed
+  // in the meantime, so there's nothing visible to compare against — treat that as "not near".
+  const NEAR_PX = 48;  // ~2 tree rows
+  const near = prevRow && prevRow.offsetParent !== null
+    && Math.abs(prevRow.getBoundingClientRect().top - rec.row.getBoundingClientRect().top) < NEAR_PX;
+  if (near) { rec.row.scrollIntoView({ block: 'nearest' }); return; }
+  // Same shortfall trick as showElementsList: a row near the END of the tree has no content below it
+  // for the viewport to scroll into, so plain block:'center' would leave it stuck low. Pad the bottom
+  // with exactly the shortfall so even the last row can still be centered.
+  const bodyRect = treeBody.getBoundingClientRect(), rowRect = rec.row.getBoundingClientRect();
+  const rowCenter = treeBody.scrollTop + (rowRect.top - bodyRect.top) + rowRect.height / 2;
+  const shortfall = rowCenter + treeBody.clientHeight / 2 - treeBody.scrollHeight;
+  if (shortfall > 0) {
+    treeSpacer = document.createElement('div');
+    treeSpacer.style.height = Math.ceil(shortfall) + 'px';
+    treeBody.appendChild(treeSpacer);
+  }
+  rec.row.scrollIntoView({ block: 'center' });
 }
 function buildFileTree() {
   if (!FILE_TREE) { document.body.classList.add('no-tree'); return; }
