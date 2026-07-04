@@ -103,6 +103,12 @@ body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #treetoggle { displa
    selects that one element for real, so it reads as a link despite still being an <h2>. */
 #panel h2.pblock-title { color: #2563eb; cursor: pointer; }
 #panel h2.pblock-title:hover { text-decoration: underline; }
+/* name + kind tag (and any change badge) on one line — the identity a box/edge keeps even once its
+   other fields are pruned down to what isn't already visible on the diagram. */
+#panel .pane-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+#panel .pane-title h2 { margin: 0; }
+/* the element's one free-text description (Purpose/Used for/Meaning/Wants/Why) — plain prose, no label. */
+#panel .explain { color: #374151; line-height: 1.4; margin: 0 0 12px; }
 #panel .badges { margin-bottom: 12px; }
 #panel .badge { display: inline-block; font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
                 padding: 1px 7px; border-radius: 10px; margin-right: 6px; }

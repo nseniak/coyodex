@@ -355,35 +355,6 @@ function isDrillClick(e) {
 }
 
 // --- side panel -----------------------------------------------------------------
-// Leaves (components under a subsystem, entities under a subdomain) anywhere beneath `id`, any depth —
-// the size hint shown next to a collapsed child group in the panel. Seen-set guards a malformed cycle.
-function descendantLeafCount(id, parentKind) {
-  const leaf = parentKind === 'subsystem' ? 'component' : 'entity';
-  let c = 0;
-  for (const k in GRAPH.nodes) {
-    if (GRAPH.nodes[k].kind !== leaf) continue;
-    let cur = GRAPH.nodes[k].parent; const seen = new Set();
-    while (cur && !seen.has(cur)) { if (cur === id) { c += 1; break; } seen.add(cur); cur = GRAPH.nodes[cur] && GRAPH.nodes[cur].parent; }
-  }
-  return c;
-}
-// A group node's panel lists its IMMEDIATE children (child groups first, each tagged with how many
-// leaves nest under it, then direct leaves) — so the panel mirrors the card: one level down, with a
-// size hint for what a child box would expand into. Empty for a non-group or a leaf group.
-function groupMembersHtml(id) {
-  const n = GRAPH.nodes[id];
-  if (!n || (n.kind !== 'subsystem' && n.kind !== 'subdomain')) return '';
-  const kids = Object.keys(GRAPH.nodes).filter((k) => GRAPH.nodes[k].parent === id);
-  if (!kids.length) return '';
-  const order = (k) => (GRAPH.nodes[k].kind === n.kind ? 0 : 1);  // child groups before leaves
-  kids.sort((a, b) => order(a) - order(b) || (GRAPH.nodes[a].name || '').localeCompare(GRAPH.nodes[b].name || ''));
-  const items = kids.map((k) => {
-    const kn = GRAPH.nodes[k];
-    const tag = kn.kind === n.kind ? ` <span class="muted">(${descendantLeafCount(k, n.kind)})</span>` : '';
-    return `<dd>• ${esc(kn.name)}${tag}</dd>`;
-  }).join('');
-  return '<dt>Contains</dt>' + items;
-}
 // The "Used in UC" backward view for an element: the use cases whose T6 flow steps through it, as
 // links into each use case's flow. Derived from USES_BY_NODE; '' when no flow touches this element.
 function usedInHtml(id) {
@@ -394,17 +365,44 @@ function usedInHtml(id) {
     + esc(GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc) + '</a>').join(', ');
   return '<dt>Used in</dt><dd>' + links + '</dd>';
 }
-// A node's full detail as an HTML string (title + badges + fields + source link) — no DOM writes, no
-// handler wiring. Shared by showNode (one node fills the whole panel) and showElementsList (several
-// nodes stack in one panel, each block needing this same markup).
+// The one free-text "what/why" field a node kind carries — Purpose (subsystem/subdomain/component),
+// Used for (dep), Meaning (entity). Shown as plain prose with no label, since the field IS the
+// description (mirrors how showContextEdge/showGPActor treat Wants, and showEdge/showFlowPanel treat Why).
+const EXPLANATION_KEYS = ['purpose', 'used for', 'meaning'];
+function explanationKey(fields) {
+  for (const want of EXPLANATION_KEYS)
+    for (const k in fields)
+      if (k.toLowerCase() === want && String(fields[k]).trim()) return k;
+  return null;
+}
+// Fields that would just restate what the diagram already shows for this box: its own name (a
+// subsystem's/subdomain's "Subsystem"/"Subdomain" field mirrors the <h2>), which box it nests inside
+// (the diagram shows that by literally nesting the box there — see kindTagFor for why "Kind" drops too).
+// A field whose value equals the node's own name (Subsystem/Subdomain/Component/"Name") is dropped
+// unconditionally below — no need to list it here too.
+const REDUNDANT_FIELD_BY_KIND = {
+  subsystem: ['parent'], subdomain: ['parent'],
+  component: ['subsystem'], dep: ['kind'],
+};
+// The name-tag's label: a dependency's authored sub-type (datastore/service/…) — already what the
+// diagram's shape/colour encodes — is more useful than the generic "dep"; fall back to the raw kind
+// when none was recorded. Every other kind just shows its own kind.
+function kindTagFor(n) {
+  return (n.kind === 'dep' && n.fields && n.fields.Kind) || n.kind;
+}
+// A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
+// writes, no handler wiring. Shared by showNode (one node fills the whole panel) and showElementsList
+// (several nodes stack in one panel, each block needing this same markup).
 function nodeDetailHtml(id) {
   const n = GRAPH.nodes[id];
   if (!n) return '';
+  const fields = n.fields || {};
   const chg = n.change ? `<span class="badge ${n.change}">${n.change}</span>` : '';
-  const rows = Object.entries(n.fields || {})
-    // a subsystem's / subdomain's first field IS its name (already in the title) — don't repeat it
-    .filter(([k]) => !((n.kind === 'subsystem' && k.toLowerCase() === 'subsystem')
-                       || (n.kind === 'subdomain' && k.toLowerCase() === 'subdomain')))
+  const explainKey = explanationKey(fields);
+  const explain = explainKey ? `<p class="explain">${mdInline(fields[explainKey])}</p>` : '';
+  const dropped = new Set(REDUNDANT_FIELD_BY_KIND[n.kind] || []);
+  const rows = Object.entries(fields)
+    .filter(([k, v]) => k !== explainKey && v !== n.name && !dropped.has(k.toLowerCase()))
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${mdInline(v)}</dd>`).join('');
   // entity attributes (T5 domain cards): `type name` + any markers (PK/FK/unique/…)
   const attrs = (n.attrs && n.attrs.length)
@@ -420,9 +418,9 @@ function nodeDetailHtml(id) {
   const src = !n.file ? ''
     : localRef(n.file) ? `<button type="button" class="src srclink" title="Open in editor or on GitHub">${ref}</button>`
     : `<div class="src">${ref}</div>`;
-  return `<h2>${esc(n.name)}</h2>`
-    + `<div class="badges"><span class="badge kind">${n.kind}</span>${chg}</div>`
-    + `<dl>${rows}${attrs}${usedInHtml(id)}${groupMembersHtml(id)}</dl>${src}`;
+  return `<div class="pane-title"><h2>${esc(n.name)}</h2><span class="badge kind">${esc(kindTagFor(n))}</span>${chg}</div>`
+    + explain
+    + `<dl>${rows}${attrs}${usedInHtml(id)}</dl>${src}`;
 }
 // Wire the interactive bits inside a just-written detail block: the source-open button + any
 // use-case-flow refs. `root` is the panel itself (single-node case) or one `.pblock` div (list case).
@@ -524,13 +522,10 @@ function showEdge(e) {
         ? '<button type="button" class="src srclink" title="Open in editor or on GitHub">'
           + esc(cleanPath(wn.file, wn.line) + (wn.line ? ':' + wn.line : '')) + '</button>'
         : '<div class="src">' + esc(e.where) + '</div>');
-  panel.innerHTML = '<h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
-    + '<div class="badges"><span class="badge edge">' + esc(e.verb) + '</span>' + kindBadge + '</div>'
-    + '<dl>'
-    + (e.why ? '<dt>Why</dt><dd>' + mdInline(e.why) + '</dd>' : '')
-    + card
-    + implRow
-    + '</dl>'
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
+    + '<span class="badge edge">' + esc(e.verb) + '</span>' + kindBadge + '</div>'
+    + (e.why ? '<p class="explain">' + mdInline(e.why) + '</p>' : '')
+    + '<dl>' + card + implRow + '</dl>'
     + srcHtml;
   const sl = panel.querySelector('.srclink');
   if (sl) sl.addEventListener('click', () => openSource(wn));
@@ -543,18 +538,19 @@ function showEdge(e) {
 // and the component edges (with their Why) that realize the dependency.
 function showContextEdge(ce) {
   if (ce.type === 'libs') { showLibsFold(); return; }  // SYS→Libraries arrow: same roster panel as the box
-  let body = '';
+  let explain = '', rows = '';
   if (ce.type === 'actor') {
-    body = ce.wants ? '<dt>Wants</dt><dd>' + mdInline(ce.wants) + '</dd>' : '';
+    explain = ce.wants ? '<p class="explain">' + mdInline(ce.wants) + '</p>' : '';
   } else {
-    const rows = (ce.realizedBy || []).map((r) =>
+    const realized = (ce.realizedBy || []).map((r) =>
       '<dd>• ' + esc(r.srcName) + ' — ' + esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : '') + '</dd>').join('');
-    body = (ce.usedFor ? '<dt>Used for</dt><dd>' + mdInline(ce.usedFor) + '</dd>' : '')
-      + (rows ? '<dt>Realized by</dt>' + rows : '');
+    explain = ce.usedFor ? '<p class="explain">' + mdInline(ce.usedFor) + '</p>' : '';
+    rows = realized ? '<dt>Realized by</dt>' + realized : '';
   }
-  panel.innerHTML = '<h2>' + esc(ce.from) + ' → ' + esc(ce.to) + '</h2>'
-    + '<div class="badges"><span class="badge edge">uses</span></div>'
-    + '<dl>' + body + '</dl>';
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(ce.from) + ' → ' + esc(ce.to) + '</h2>'
+    + '<span class="badge edge">uses</span></div>'
+    + explain
+    + (rows ? '<dl>' + rows + '</dl>' : '');
 }
 
 // The collapsed "Libraries" box: a roster of the in-process deps (frameworks + libraries) folded out
@@ -563,8 +559,7 @@ function showContextEdge(ce) {
 function showLibsFold() {
   const items = FOLDED_LIBS.map((d) =>
     '<dd>• ' + esc(d.name) + (d.type ? ' <span class="muted">— ' + esc(d.type) + '</span>' : '') + '</dd>').join('');
-  panel.innerHTML = '<h2>Libraries</h2>'
-    + '<div class="badges"><span class="badge kind">' + FOLDED_LIBS.length + ' in-process</span></div>'
+  panel.innerHTML = '<div class="pane-title"><h2>Libraries</h2><span class="badge kind">' + FOLDED_LIBS.length + ' in-process</span></div>'
     + '<p class="empty">Frameworks &amp; libraries linked into the process — folded out of the Context view. ⌘-click to drill in.</p>'
     + (items ? '<dl><dt>Bundled</dt>' + items + '</dl>' : '');
 }
@@ -576,7 +571,7 @@ function subsystemBlock(id) {
   if (!n) return '';
   const purpose = n.fields && (n.fields.Purpose || n.fields.purpose);
   return '<h3>' + esc(n.name) + '</h3>'
-    + (purpose ? '<dl><dt>Purpose</dt><dd>' + mdInline(purpose) + '</dd></dl>' : '');
+    + (purpose ? '<p class="explain">' + mdInline(purpose) + '</p>' : '');
 }
 function showTwoSubsystems(a, b) {
   panel.innerHTML = '<div class="badges"><span class="badge edge">connection</span></div>'
@@ -651,10 +646,10 @@ function showFlowPanel(uc, title, why) {
   const f = (ucNode && ucNode.fields) || {};
   const actor = f.Actor || f.actor || '';
   const narr = flowNarrativeHtml(uc);
-  panel.innerHTML = '<h2>' + esc(title || ucName) + '</h2>'
-    + '<div class="badges">' + (ucName ? '<span class="badge kind">' + esc(ucName) + '</span>' : '')
-      + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
-    + (why ? '<dl><dt>Why here</dt><dd>' + mdInline(why) + '</dd></dl>' : '')
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(title || ucName) + '</h2>'
+    + (ucName ? '<span class="badge kind">' + esc(ucName) + '</span>' : '')
+    + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
+    + (why ? '<p class="explain">' + mdInline(why) + '</p>' : '')
     + (narr || '<p class="empty">No T6 flow recorded for this use case.</p>');
   // Each step's element links locate that element in its home view; there is no flat full-map view to
   // spotlight the whole flow on, so the "Locate in full map" link is gone with the Components tab.
@@ -735,7 +730,7 @@ function bindFlow(uc) {
       markOpenSrc(el, id);  // </> cursor on a component/entity leaf with a source ref, like the other diagrams
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
-      attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // ⌘-hover shows the open-source action
+      attachTip(el, () => actionTipNode(id));  // ⌘-hover shows the open-source action
       el.addEventListener('click', (e) => {
         if (isDrag(e)) return;
         e.stopPropagation();
@@ -743,16 +738,6 @@ function bindFlow(uc) {
         select();
       });
     }
-  }
-
-  // role actor: a meaning tooltip (what the role wants). The figure isn't a graph node — no focus/drill.
-  const wantsByName = {};
-  for (const r of GRAPH.roles || []) wantsByName[(r.name || '').trim().toLowerCase()] = r.wants;
-  const roleNames = new Set();
-  for (const st of steps) if (!st.srcId && st.src) roleNames.add(st.src.toLowerCase());
-  for (const t of root.querySelectorAll('text.actor-man')) {
-    const nm = (t.textContent || '').trim().toLowerCase();
-    if (roleNames.has(nm) && wantsByName[nm]) attachTip(t, () => '<div class="tm">' + mdInline(wantsByName[nm]) + '</div>');
   }
 
   // messages: select (the backbone edge for an element↔element step, else the step's own panel) / focus /
@@ -779,126 +764,37 @@ function bindFlow(uc) {
     };
     const on = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = HOVER; };
     const off = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = gpRestFilter(scene, el); };
-    if (line) attachEdgeHandlers(line, text, onClick, on, off, () => flowStepTip(st), false);
-    else { text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important'); text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off); attachTip(text, () => flowStepTip(st)); }
+    if (line) attachEdgeHandlers(line, text, onClick, on, off, false);
+    else { text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important'); text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off); }
   });
 }
 // A flow message's side panel for an ACTOR step (an element↔element step shows its backbone edge instead).
+// `Why` is this step's one explanation field — plain prose, no label, like every other panel now.
 function showFlowStep(uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
   const end = (label, id) => id ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
-  panel.innerHTML = '<h2>' + end(st.src, st.srcId) + ' &rarr; ' + end(st.dst, st.dstId) + '</h2>'
-    + '<div class="badges"><span class="badge edge">' + esc(st.verb) + '</span></div>'
-    + '<dl>' + (st.why ? '<dt>Why</dt><dd>' + mdInline(st.why) + '</dd>' : '')
-    + (st.note ? '<dt>Note</dt><dd>' + mdInline(st.note) + '</dd>' : '') + '</dl>';
+  panel.innerHTML = '<div class="pane-title"><h2>' + end(st.src, st.srcId) + ' &rarr; ' + end(st.dst, st.dstId) + '</h2>'
+    + '<span class="badge edge">' + esc(st.verb) + '</span></div>'
+    + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
+    + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '');
   bindFlowRefs();
-}
-// A flow message's hover tooltip: the explanation only (why for an element step, else a note). The verb
-// is already drawn on the arrow, so — like every other edge tooltip — show only what isn't on screen.
-function flowStepTip(st) {
-  const m = st.why || st.note || '';
-  return m ? '<div class="tm">' + mdInline(m) + '</div>' : '';
 }
 // One actor's card: its kind, what its role wants (the explanation), and the Golden Path steps it drives.
 function showGPActor(a) {
   const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
   const drives = (a.steps || []).map((st) =>
     '<dd>' + esc(st.title || st.id) + '</dd>').join('');
-  panel.innerHTML = '<h2>' + esc(a.name) + '</h2>'
-    + '<div class="badges">' + kindBadge + '</div>'
-    + '<dl>'
-    + (a.wants ? '<dt>Wants</dt><dd>' + mdInline(a.wants) + '</dd>' : '')
-    + (drives ? '<dt>Drives</dt>' + drives : '')
-    + '</dl>';
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>' + kindBadge + '</div>'
+    + (a.wants ? '<p class="explain">' + mdInline(a.wants) + '</p>' : '')
+    + (drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '');
 }
 
 // --- hover tooltip --------------------------------------------------------------
-// A floating card that previews an element's MEANING on hover, so you can read it without
-// selecting (selecting is what fills the side panel). One reused <div id="tip">; pointer-events:none
-// in CSS so it never steals the hover or the click. All graph text goes through esc().
-const MEANING_KEYS = ['purpose', 'used for', 'meaning', 'wants'];  // the per-kind "meaning" column, by priority
-function meaningOf(n) {
-  const f = n.fields || {};
-  for (const want of MEANING_KEYS)
-    for (const k in f)
-      if (k.toLowerCase() === want && String(f[k]).trim()) return String(f[k]);  // raw; rendered by mdInline in the builder
-  return null;
-}
-// Hover the collapsed Libraries box -> the names it folds (capped), so you can read them without drilling.
-const TIP_LIBS_CAP = 16;
-function tipLibsHtml() {
-  if (!FOLDED_LIBS.length) return '<div class="tn">no libraries</div>';
-  const names = FOLDED_LIBS.map((d) => d.name);
-  const shown = names.slice(0, TIP_LIBS_CAP);
-  const more = names.length > TIP_LIBS_CAP
-    ? '<div class="tn">+' + (names.length - TIP_LIBS_CAP) + ' more…</div>' : '';
-  return '<ul class="tl">' + shown.map((nm) => '<li>' + esc(nm) + '</li>').join('') + '</ul>' + more;
-}
-function tipNodeHtml(id) {
-  if (id === LIBS_ID) return tipLibsHtml();  // the synthetic fold box has no fields — list its members
-  const n = GRAPH.nodes[id];
-  if (!n) return '';
-  const meaning = meaningOf(n);
-  // The box you're hovering already prints its name, and its kind reads from the shape/colour, so a
-  // name header + kind tag only restate what's on screen — show just the explanatory text. No meaning
-  // recorded -> no tooltip at all (don't pop a bare "no description" placeholder).
-  return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>' : '';
-}
-function tipEdgeHtml(e) {
-  // Tooltips show only the explanation — you're hovering the arrow, so its endpoints (and, for most
-  // edges, its verb) are already on screen. Context edges explain via wants/usedFor (the Libraries fold
-  // arrow has neither); component edges via why. With nothing to explain, show no tooltip at all rather
-  // than a bare placeholder. DOMAIN relations are the deliberate exception: the verb/kind is their
-  // content and is NOT drawn on the arrow (the label is the backing field name) — so keep that card.
-  if (e.type === 'actor' || e.type === 'dep' || e.type === 'libs') {
-    const meaning = e.type === 'actor' ? e.wants : e.usedFor;  // libs has neither -> no tooltip
-    return meaning ? '<div class="tm">' + mdInline(meaning) + '</div>' : '';
-  }
-  if (e.kind) {  // domain relation — keep endpoints + verb (the relation's content, not on the arrow)
-    const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-    return '<div class="tt">' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</div>'
-      + '<div class="tk">' + esc(e.verb) + '</div>'
-      + (e.why ? '<div class="tm">' + mdInline(e.why) + '</div>' : '');
-  }
-  // component edge: endpoints + verb are already on the diagram — show only the why (none -> no tooltip).
-  return e.why ? '<div class="tm">' + mdInline(e.why) + '</div>' : '';
-}
-// Hover an inter-subsystem arrow (Subsystems view) -> just the explanation (Why) of every
-// component→component edge it aggregates. You're already on that arrow, so no subsystem/component
-// names: a single link reads as plain text, several as a bullet list. Capped so a busy pair stays legible.
-const TIP_EDGE_CAP = 14;
-function tipContainerEdgeHtml(a, b) {
-  const list = CONTAINER_EDGES[a + '>' + b] || [];
-  const whys = list.map((r) => r.why).filter((w) => w && String(w).trim());
-  if (!whys.length) return '';  // nothing recorded -> no tooltip
-  const shown = whys.slice(0, TIP_EDGE_CAP);
-  const more = whys.length > TIP_EDGE_CAP
-    ? '<div class="tn">+' + (whys.length - TIP_EDGE_CAP) + ' more…</div>' : '';
-  if (shown.length === 1) return '<div class="tm">' + mdInline(shown[0]) + '</div>' + more;
-  return '<ul class="tl">' + shown.map((w) => '<li>' + mdInline(w) + '</li>').join('') + '</ul>' + more;
-}
-// Hover an inter-subdomain arrow (Domain overview) -> the crossing entity→entity relations (from → to ·
-// verb). The domain analog of tipContainerEdgeHtml; capped so a busy pair stays legible.
-function tipDomainContainerEdgeHtml(a, b) {
-  const list = DOMAIN_CONTAINER_EDGES[a + '>' + b] || [];
-  if (!list.length) return '';  // nothing recorded -> no tooltip
-  const shown = list.slice(0, TIP_EDGE_CAP);
-  const more = list.length > TIP_EDGE_CAP ? '<div class="tn">+' + (list.length - TIP_EDGE_CAP) + ' more…</div>' : '';
-  return '<ul class="tl">' + shown.map((r) =>
-    '<li>' + esc(r.srcName) + ' → ' + esc(r.dstName) + ' · ' + esc(r.verb) + '</li>').join('') + '</ul>' + more;
-}
-function tipGPHtml(gpId) {  // hover a GP step (message) -> its use case's trigger→outcome (the explanation)
-  const s = GP_BY_ID[gpId];
-  if (!s) return '';
-  const f = (s.uc && GRAPH.nodes[s.uc] && GRAPH.nodes[s.uc].fields) || {};
-  let txt = '';
-  for (const k in f) { const kl = k.toLowerCase(); if (kl.includes('outcome') || kl.includes('trigger')) { txt = String(f[k]); break; } }
-  return txt ? '<div class="tm">' + mdInline(txt) + '</div>' : '';  // nothing recorded -> no tooltip
-}
-function tipGPActorHtml(a) {  // hover an actor / its lifeline -> just what its role wants (the explanation)
-  return a && a.wants ? '<div class="tm">' + mdInline(a.wants) + '</div>' : '';  // no wants -> no tooltip
-}
+// A floating card that, while ⌘ is held, previews the ⌘-click action ("Open in <editor>", "Drill into
+// subsystem", …) — a plain hover (no ⌘) shows nothing, since selecting (which fills the side panel) is
+// where an element's own description lives. One reused <div id="tip">; pointer-events:none in CSS so it
+// never steals the hover or the click. All graph text goes through esc().
 function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor if it would overflow the viewport
   const pad = 14, w = tip.offsetWidth, h = tip.offsetHeight;
   let nx = x + pad, ny = y + pad;
@@ -907,23 +803,22 @@ function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor i
   tip.style.left = Math.max(6, nx) + 'px';
   tip.style.top = Math.max(6, ny) + 'px';
 }
-function showTip(html, x, y) { if (!html) return; tip.innerHTML = html; tip.classList.add('on'); moveTip(x, y); }
 function hideTip() { tip.classList.remove('on'); }
-// The element currently under the cursor and how to describe it: `htmlFn` is the meaning preview,
-// `actionFn` (optional) the "what a ⌘-click does here" text. Held so pressing/releasing ⌘ can swap the
-// tooltip live, without waiting for a new mouse event (see setCmd).
+// The element currently under the cursor and its `actionFn` (what a ⌘-click does here, or null). Held so
+// pressing/releasing ⌘ can swap the tooltip live, without waiting for a new mouse event (see setCmd).
 let hover = null;
 function renderHoverTip() {
-  if (!hover) return;
-  let html = '', action = false;
-  if (document.body.classList.contains('cmd') && hover.actionFn) { const a = hover.actionFn(); if (a) { html = a; action = true; } }
-  if (!html) html = hover.htmlFn() || '';
-  if (html) { tip.innerHTML = html; tip.classList.toggle('action', action); tip.classList.add('on'); moveTip(hover.x, hover.y); }
-  else hideTip();
+  if (!hover || !hover.actionFn || !document.body.classList.contains('cmd')) { hideTip(); return; }
+  const html = hover.actionFn();
+  if (!html) { hideTip(); return; }
+  tip.innerHTML = html;
+  tip.classList.add('action');
+  tip.classList.add('on');
+  moveTip(hover.x, hover.y);
 }
-// Wire an element to preview `htmlFn()` while hovered (and, while ⌘ is held, `actionFn()` instead).
-function attachTip(el, htmlFn, actionFn) {
-  el.addEventListener('mouseenter', (ev) => { hover = { htmlFn, actionFn: actionFn || null, x: ev.clientX, y: ev.clientY }; renderHoverTip(); });
+// Wire an element so, while ⌘ is held, it previews `actionFn()`. No `actionFn` -> never shows a tooltip.
+function attachTip(el, actionFn) {
+  el.addEventListener('mouseenter', (ev) => { hover = { actionFn: actionFn || null, x: ev.clientX, y: ev.clientY }; renderHoverTip(); });
   el.addEventListener('mousemove', (ev) => { if (hover) { hover.x = ev.clientX; hover.y = ev.clientY; } moveTip(ev.clientX, ev.clientY); });
   el.addEventListener('mouseleave', () => { hover = null; hideTip(); });
 }
@@ -1238,7 +1133,7 @@ function bindNodes(scene, onActivate) {
     el.style.cursor = 'pointer';
     markOpenSrc(el, id);  // leaf with a source ref -> ⌘-held cursor shows the open-source affordance
     bindHoverGlow(scene, el, id);  // hover affordance — skip while this node is the active selection, so HILITE wins
-    attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // hover -> meaning; ⌘ -> the action
+    attachTip(el, () => actionTipNode(id));  // ⌘-hover shows the open-source action
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;  // tail of a drag-pan, not a real click
       e.stopPropagation();
@@ -1253,7 +1148,7 @@ function bindNodes(scene, onActivate) {
 
 // Give an edge's visible path a wide transparent hit-path + make its label clickable.
 // `tipHtml` (optional) wires a hover meaning-preview on the same hit-area + label.
-function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml, drillable, actionFn) {
+function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, drillable, actionFn) {
   const hit = p.cloneNode(false);
   hit.removeAttribute('id'); hit.removeAttribute('marker-end'); hit.removeAttribute('class');
   hit.style.setProperty('stroke', 'transparent', 'important');
@@ -1274,7 +1169,7 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, tipHtml, drill
     label.addEventListener('mouseenter', hoverOn);
     label.addEventListener('mouseleave', hoverOff);
   }
-  if (tipHtml) { attachTip(hit, tipHtml, actionFn); if (label) attachTip(label, tipHtml, actionFn); }
+  if (actionFn) { attachTip(hit, actionFn); if (label) attachTip(label, actionFn); }
 }
 
 // Iterate a diagram's edges, pairing each path with its label by index. Mermaid emits one label
@@ -1301,8 +1196,8 @@ function glowEdge(p, label) {
 }
 
 // Wire one edge for the SELECT model (highlight + focus + panel) — context, components, internal edges.
-// `opts.onDrill` (optional) makes a ⌘-click drill instead of select, and marks the arrow with the
-// drill cursor; `opts.tipFn` overrides the hover preview (defaults to the plain edge tip).
+// `opts.onDrill` (optional) makes a ⌘-click drill instead of select, and marks the arrow with the drill
+// cursor; `opts.actionFn` (optional) is what a ⌘-hover previews for that drill.
 function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
   const hoverOn = () => { if (scene.selectedKey !== selKey) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
@@ -1323,7 +1218,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
     doSelect();
   };
   scene.edgeEls.push({ e, path: p, label });
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.tipFn || (() => tipEdgeHtml(e)), !!opts.onDrill, opts.actionFn);
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, !!opts.onDrill, opts.actionFn);
 }
 
 // An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
@@ -1336,8 +1231,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
 function bindContainerEdge(scene, p, label, a, b, focusE) {
   bindSelectEdge(scene, p, label, focusE || { src: a, dst: b }, 'sedge:' + a + '>' + b,
     () => showContainerEdge(a, b),
-    { onDrill: () => go({ kind: 'edge', a, b }), tipFn: () => tipContainerEdgeHtml(a, b),
-      actionFn: () => actionTipEdge(a, b) });
+    { onDrill: () => go({ kind: 'edge', a, b }), actionFn: () => actionTipEdge(a, b) });
 }
 // A bridge arrow across the structural↔domain groupings (component↔subdomain in a subsystem card,
 // subsystem↔entity in a subdomain card, labelled owns/reads). Registered as an edge with its DRAWN
@@ -1447,7 +1341,7 @@ function bindGroupContainer(drillFor, edgeBinder) {
     el.style.cursor = 'pointer';
     el.classList.add('drill');
     bindHoverGlow(mainScene, el, id);
-    attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));
+    attachTip(el, () => actionTipNode(id));
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;
       e.stopPropagation();
@@ -1471,8 +1365,7 @@ function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', s
 function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
   bindSelectEdge(scene, p, label, focusE || { src: a, dst: b }, 'dctxedge:' + a + '>' + b,
     () => showDomainContainerEdge(a, b),
-    { onDrill: () => go({ kind: 'domedge', a, b }), tipFn: () => tipDomainContainerEdgeHtml(a, b),
-      actionFn: () => actionTipEdge(a, b) });
+    { onDrill: () => go({ kind: 'domedge', a, b }), actionFn: () => actionTipEdge(a, b) });
 }
 // Subdomain neighbourhood (a classDiagram): the focal subdomain's entities (framed in a namespace)
 // SELECT / open-source like the flat Domain view; each collapsed neighbour-subdomain box ⌘-drills
@@ -1488,7 +1381,7 @@ function bindDomainSub(sd) {
     mainScene.nodeEls[id] = el;  // every drawn box joins the focus set — members + collapsed neighbours
     el.style.cursor = 'pointer';
     bindHoverGlow(mainScene, el, id);
-    attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));
+    attachTip(el, () => actionTipNode(id));
     const k = GRAPH.nodes[id].kind;
     if (k === 'subdomain' || k === 'subsystem') {  // a collapsed neighbour box: ⌘ walks into its own card
       el.classList.add('drill');
@@ -1658,7 +1551,7 @@ function bindDomain() {
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
     bindHoverGlow(mainScene, el, id);
-    attachTip(el, () => tipNodeHtml(id), () => actionTipNode(id));  // hover -> meaning; ⌘ -> the action
+    attachTip(el, () => actionTipNode(id));  // ⌘-hover shows the open-source action
     if (GRAPH.nodes[id].kind === 'subsystem') {  // a bridge box (domain edge card): ⌘ drills into its card
       el.classList.add('drill');
       el.addEventListener('click', (ev) => {
@@ -1792,7 +1685,7 @@ function bindGP() {
       el.addEventListener('click', click);
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
-      attachTip(el, () => tipGPHtml(gpId), () => actionTipGP(gpId));
+      attachTip(el, () => actionTipGP(gpId));
     }
   });
 
@@ -1809,10 +1702,9 @@ function bindGP() {
       el.addEventListener('click', click);
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
-      attachTip(el, () => tipGPActorHtml(a));
     }
     const life = rec.els.find((el) => el.tagName === 'line');
-    if (life) attachEdgeHandlers(life, null, click, on, off, () => tipGPActorHtml(a), false);
+    if (life) attachEdgeHandlers(life, null, click, on, off, false);
   }
 }
 
