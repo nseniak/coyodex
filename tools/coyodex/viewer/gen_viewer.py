@@ -1352,17 +1352,6 @@ __STYLE__
   <h1>coyodex viewer</h1>
   <button id="treetoggle" title="Toggle file browser">&#9776; Files</button>
   <span class="meta" id="meta"></span>
-  <span id="viewsw">
-    <button data-view="context">Context</button>
-    <button data-view="gp">Golden Path</button>
-    <button data-view="container">Subsystems</button>
-    <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
-
-    <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
-         landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's
-         `component` machinery are kept dormant so the tab can be restored by re-adding this button.
-         Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
-  </span>
   <span id="nav">
     <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
     <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
@@ -1375,7 +1364,6 @@ __STYLE__
   <button id="setbtn" title="Source link settings (editor + repo root)">&#9881;</button>
   <button id="toggle" style="display:none"></button>
 </header>
-<div class="hint"><span id="crumb"></span></div>
 <main>
   <!-- File browser: the mapped repo's real tree, shaded by map coverage. Selecting a graph element
        highlights its file here; clicking a file/folder selects the matching component/subsystem. -->
@@ -1399,6 +1387,25 @@ __STYLE__
   <!-- Drag handle to resize the side panel (width persisted in localStorage). -->
   <div id="resizer" title="Drag to resize"></div>
   <div id="stage">
+    <!-- Fixed header overlaid on the graph pane: the view selector, with the breadcrumb directly below
+         it. Absolutely positioned (like #legend/#drillhint) so it stays put while the diagram itself
+         pans/zooms underneath — #diagram still fills the whole #stage box regardless. -->
+    <div id="stagehead">
+      <div id="stageheadrow">
+        <span id="viewsw">
+          <button data-view="context">Context</button>
+          <button data-view="gp">Golden Path</button>
+          <button data-view="container">Subsystems</button>
+          <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
+
+          <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
+               landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's
+               `component` machinery are kept dormant so the tab can be restored by re-adding this button.
+               Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
+        </span>
+      </div>
+      <div class="hint"><span id="crumb"></span></div>
+    </div>
     <div id="diagram"></div>
     <div id="legend"></div>
     <!-- Always-on, informational navigation caption overlaid on the canvas bottom-left (filled in JS).
@@ -1438,7 +1445,7 @@ __STYLE__
   <div class="modal-card">
     <h2>Getting around the map</h2>
     <ul class="coach-list">
-      <li><b>Select a view</b> in the top bar</li>
+      <li><b>Select a view</b> at the top of the graph pane</li>
       <li><b>Scroll</b> to zoom, <b>drag</b> to move</li>
       <li><b>Click</b> a box or arrow &mdash; shows its details</li>
       <li><b>Double-click</b> a box (or click its corner icon) &mdash; drills in / opens the source file</li>

@@ -1,7 +1,8 @@
 * { box-sizing: border-box; }
-/* Flex column so `main` fills the real space left under the header + breadcrumb bar (whatever their
-   heights) — a fixed `calc(100vh - …)` undercounts the breadcrumb and pushes the stage bottom (and
-   anything pinned there: the diagram hint, the diff legend) below the fold. */
+/* Flex column so `main` fills the real space left under the header (whatever its height) — a fixed
+   `calc(100vh - …)` undercounts it and pushes the stage bottom (and anything pinned there: the diagram
+   hint, the diff legend) below the fold. The breadcrumb bar lives inside #stage now (see #stagehead),
+   not at page level, so it no longer factors into this. */
 body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #111;
        height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 header { padding: 8px 14px; background: #1e1b4b; color: #fff; display: flex; gap: 12px; align-items: center; }
@@ -14,16 +15,24 @@ header button:hover { background: #818cf8; }
 #nav { display: inline-flex; gap: 4px; flex: 0 0 auto; }
 #nav button { font-size: 13px; line-height: 1; padding: 4px 9px; }
 #nav button:disabled { background: #3730a3; color: #818cf8; opacity: .55; cursor: default; }
-#viewsw { display: inline-flex; border: 1px solid #6366f1; border-radius: 6px; overflow: hidden; }
-#viewsw button { background: transparent; color: #c7d2fe; border-radius: 0; padding: 4px 10px; }
-#viewsw button:hover { background: #312e81; }
-#viewsw button.active { background: #6366f1; color: #fff; }
 #zoomctl { display: inline-flex; gap: 4px; flex: 0 0 auto; align-items: center; }
 #zoomctl button { font-size: 13px; line-height: 1; padding: 4px 9px; }
 #zoomctl #zoomlevel { min-width: 52px; font-size: 12px; font-variant-numeric: tabular-nums; }
 main { display: flex; flex: 1; min-height: 0; }
 #stage { flex: 1; min-width: 0; position: relative; overflow: hidden; background: #fafafa; }
 #diagram { width: 100%; height: 100%; }
+/* Fixed header on the graph pane: the view selector + breadcrumb, overlaid on the canvas (like
+   #legend/#drillhint below) rather than pushed into normal page flow — so #diagram still exactly fills
+   #stage (applyZoomAndCenter in viewer.js relies on that). Stays put while the diagram pans/zooms
+   underneath it. */
+#stagehead { position: absolute; left: 0; right: 0; top: 0; z-index: 6; }
+#stageheadrow { background: #fff; padding: 8px 14px; border-bottom: 1px solid #e5e7eb; }
+#viewsw { display: inline-flex; border: 1px solid #c7d2fe; border-radius: 6px; overflow: hidden; }
+#viewsw button { font: inherit; font-size: 12px; padding: 4px 10px; border: 0; background: transparent;
+                 color: #4338ca; border-radius: 0; cursor: pointer; }
+#viewsw button:hover { background: #eef2ff; }
+#viewsw button.active { background: #6366f1; color: #fff; }
+#stagehead .hint { border-bottom: 1px solid #e5e7eb; }
 #diagram svg { width: 100%; height: 100%; }
 /* svg-pan-zoom sets pan/zoom via inline `style.transform` on its own `.svg-pan-zoom_viewport` group —
    this transition is toggled on JUST for centerOnSelection's programmatic move (viewer.js), never left
