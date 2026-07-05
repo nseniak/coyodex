@@ -401,16 +401,10 @@ function nodeDetailHtml(id) {
   const explainKey = explanationKey(fields);
   const explain = explainKey ? `<p class="explain">${mdInline(fields[explainKey])}</p>` : '';
   const dropped = new Set(REDUNDANT_FIELD_BY_KIND[n.kind] || []);
+  // an entity's own fields aren't listed here — the class-diagram box already shows them as compartments.
   const rows = Object.entries(fields)
     .filter(([k, v]) => k !== explainKey && v !== n.name && !dropped.has(k.toLowerCase()))
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${mdInline(v)}</dd>`).join('');
-  // entity attributes (T5 domain cards): `type name` + any markers (PK/FK/unique/…)
-  const attrs = (n.attrs && n.attrs.length)
-    ? '<dt>Fields</dt><dd>' + n.attrs.map((a) => {
-        const ty = (a.type && GRAPH.nodes[a.type]) ? GRAPH.nodes[a.type].name : a.type;  // embedded entity id -> name
-        return esc(((ty ? ty + ' ' : '') + (a.name || '') + (a.markers ? '  ·  ' + a.markers : '')).trim());
-      }).join('<br>') + '</dd>'
-    : '';
   // Any node with a local source ref — a component/entity FILE or a subsystem/subdomain entry DIRECTORY —
   // gets a clickable link that opens it exactly the way the diagram's ⌘-click does (editor or GitHub). An
   // off-repo URL (e.g. a dep pointing at a website) stays plain text, since openSource can't resolve it.
@@ -420,7 +414,7 @@ function nodeDetailHtml(id) {
     : `<div class="src">${ref}</div>`;
   return `<div class="pane-title"><h2>${esc(n.name)}</h2><span class="badge kind">${esc(kindTagFor(n))}</span>${chg}</div>`
     + explain
-    + `<dl>${rows}${attrs}${usedInHtml(id)}</dl>${src}`;
+    + `<dl>${rows}${usedInHtml(id)}</dl>${src}`;
 }
 // Wire the interactive bits inside a just-written detail block: the source-open button + any
 // use-case-flow refs. `root` is the panel itself (single-node case) or one `.pblock` div (list case).
@@ -1985,6 +1979,11 @@ const pathByNode = {};  // node id -> its exact tree path (graph -> tree highlig
 const siblingsByNode = {};
 let treeSelPath = null; // path of the currently highlighted row
 let treeSpacer = null;  // bottom filler div added when centering a row near the end of the tree (see highlightTreePath)
+// Set by onRowClick right before a click leads to a selection: a row the reader just clicked is already
+// visible (that's how they clicked it) — highlightTreePath consumes this to skip its own scroll entirely,
+// tree -> graph, distinct from a graph -> tree sync (selecting a node/edge on the canvas), which still
+// needs to scroll the row into view since the reader never looked at the tree to begin with.
+let suppressTreeScroll = false;
 
 // A dir anchor in the map keeps a trailing slash ('src/api/'); the walked dir row does not ('src/api').
 // Strip it so the two always match.
@@ -2046,10 +2045,12 @@ function onRowClick(key) {
     toggleDir(key);
     // e.node set -> this exact path collided in node_path_index (filetree.py): e.others carries the
     // rest, kept instead of dropped — selectFromTreeAnchors decides whether that's one thing or several.
-    if (e.node) selectFromTreeAnchors([e.node, ...e.others], key);
+    if (e.node) { suppressTreeScroll = true; selectFromTreeAnchors([e.node, ...e.others], key); }
   } else if (e.node) {
+    suppressTreeScroll = true;
     selectFromTreeAnchors([e.node, ...e.others], key);  // this exact file collided — e.others carries the rest
   } else if (e.sel) {
+    suppressTreeScroll = true;
     selectFromTree(e.sel);     // no exact match here — its owning subsystem/entity (finer grain), single target
   } else {
     flashNoMap(rec.row);       // unmapped file: a click does nothing -> brief hint
@@ -2111,7 +2112,7 @@ function selectTargetFor(id) {
 // [] for callers that aren't file-tree-driven, e.g. a flow narrative link — no "Also defined here" then).
 function selectFromTree(nodeId) {
   const t = selectTargetFor(nodeId);
-  if (!t) return;
+  if (!t) { suppressTreeScroll = false; return; }  // no selection follows — don't leave the flag stuck for later
   const cur = history[hi];
   if (cur && stateKey(cur) === stateKey(t.state)) {       // already in the right view — select in place
     const el = mainScene && mainScene.nodeEls[t.selectId];
@@ -2158,6 +2159,8 @@ function syncTreeToNode(id) {
   highlightTreePath(path);
 }
 function highlightTreePath(path) {
+  const skipScroll = suppressTreeScroll;
+  suppressTreeScroll = false;  // one-shot: consume it here, whether this call ran sync or after a navigation
   if (treeSpacer) { treeSpacer.remove(); treeSpacer = null; }  // drop any previous centering filler first
   const prevRow = treeSelPath && rowByPath[treeSelPath] ? rowByPath[treeSelPath].row : null;
   if (prevRow) prevRow.classList.remove('sel');
@@ -2169,6 +2172,8 @@ function highlightTreePath(path) {
   if (!rec) return;  // node points at a path not in the walk (excluded / deleted) — nothing to highlight
   rec.row.classList.add('sel');
   treeSelPath = path;
+  // A row the reader just clicked in THIS tree is already visible (tree -> graph) — nothing to scroll to.
+  if (skipScroll) return;
   // A big jump centers the new row so it's easy to find; a move to a row already right next to the
   // PREVIOUS selection (e.g. the next sibling file) would make that same centering a jarring, pointless
   // jump — just nudge it into view instead. `prevRow.offsetParent` is null when its folder got collapsed
