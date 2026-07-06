@@ -1538,9 +1538,26 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
     if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
   });
 }
-function bindEdgePair() {  // both subsystems framed; arrows are component edges
+// `a`/`b` are the two framed subsystems. Most arrows are direct member<->member links (real component
+// edges, resolved below) — but one reaching into a NESTED child subsystem of `a` or `b` is drawn as an
+// unlabelled, aggregated box arrow (gen_edge_card_mermaid's `agg` set), the same as a subsystem card's
+// own cross arrows (see bindSubsystem's box-vs-member branching). Without this branch such an arrow
+// never resolves via resolveComponentEdge (its endpoints aren't a real edge) and bindEdges silently
+// drops it — never registered in scene.edgeEls, so it never dims and never responds to clicks.
+function bindEdgePair(a, b) {
   bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
-  bindEdges(mainScene, resolveComponentEdge);
+  eachEdge(diagram, (p, label, m) => {
+    const s1 = m[1], s2 = m[2];
+    const k1 = GRAPH.nodes[s1] && GRAPH.nodes[s1].kind, k2 = GRAPH.nodes[s2] && GRAPH.nodes[s2].kind;
+    if (k1 === 'subsystem' || k2 === 'subsystem') {  // aggregated: at least one end elevated to a child-subsystem box
+      const pa = k1 === 'subsystem' ? s1 : a, pb = k2 === 'subsystem' ? s2 : b;
+      if (disjointBoxes(pa, pb) && MERMAID_EDGE_CARD[pa + '>' + pb]) bindContainerEdge(mainScene, p, label, pa, pb, { src: s1, dst: s2 });
+      else bindNavEdge(p, label, s1, s2, k1 === 'subsystem' ? s1 : s2);
+      return;
+    }
+    const r = resolveComponentEdge(m);
+    if (r) bindSelectEdge(mainScene, p, label, r.e, r.selKey, r.showFn);
+  });
   bindFrameDrill(mainScene);  // ⌘-click either subsystem frame to open its card
 }
 // An edge card frames two groups (subsystem subgraphs / subdomain namespaces) as Mermaid clusters.
@@ -1816,7 +1833,7 @@ function bindFor(s) {
   if (s.kind === 'context') bindContext();
   else if (s.kind === 'container') bindContainer();
   else if (s.kind === 'subsystem') bindSubsystem(s.sid);
-  else if (s.kind === 'edge') bindEdgePair();
+  else if (s.kind === 'edge') bindEdgePair(s.a, s.b);
   else if (s.kind === 'domain') (HAS_SUBDOMAINS ? bindDomainContainer : bindDomain)();
   else if (s.kind === 'domsub') bindDomainSub(s.sd);  // neighbourhood: framed entities + collapsed neighbour boxes + cross arrows
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
