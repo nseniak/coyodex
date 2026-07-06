@@ -185,6 +185,10 @@ body.cmd .opensrc, body.cmd .opensrc * {
 .action-icon { cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
 g.node:hover .action-icon, g.cluster:hover .action-icon,
 g.node.is-selected .action-icon, g.cluster.is-selected .action-icon { opacity: 1; pointer-events: auto; }
+/* A dimmed box (`.dim`, set alongside the DIM opacity in applyFocus when focus is on something else)
+   isn't a candidate for a next action — hovering it just to read a label while dimmed shouldn't
+   surface the pill. Wins over the plain :hover rule above on specificity (one extra class). */
+g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; pointer-events: none; }
 /* transform-box/transform-origin here (not repeated below) because a CSS `transform` on an SVG element
    scales/animates around the SVG viewport's origin by default, not the shape's own center — needed by
    both the hover grow and the flash pulse further down. transform-box:fill-box; transform-origin:center

@@ -135,7 +135,14 @@ function sceneSelect(scene, applyFn) {  // one highlight at a time within a scen
   scene.clearHighlight = applyFn ? applyFn() : null;
 }
 function applyFocus(scene, keepNode, keepEdge) {
-  for (const nid in scene.nodeEls) scene.nodeEls[nid].style.opacity = keepNode(nid) ? '' : DIM;
+  // `.dim` mirrors the opacity (see viewer.css) so a dimmed box's corner pill stays hidden even on
+  // hover — a box you're not focused on shouldn't invite drilling into it just because the cursor
+  // passed over it while dimmed.
+  for (const nid in scene.nodeEls) {
+    const el = scene.nodeEls[nid], keep = keepNode(nid);
+    el.style.opacity = keep ? '' : DIM;
+    el.classList.toggle('dim', !keep);
+  }
   for (const x of scene.edgeEls) {
     const on = keepEdge(x.e);
     x.path.style.opacity = on ? '' : DIM;
@@ -265,20 +272,24 @@ const ICON_PAINT = {
   drill: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.1px' },
   open: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.6px' },
 };
+const ACTION_ICON_R = 16.5;  // the halo's radius — shared with addMessageActionIcon so its offset can clear the badge without a magic number of its own
 function paintImportant(el, props) {
   for (const k in props) el.style.setProperty(k, props[k], 'important');
 }
 // Inject `action`'s icon (circle + glyph) into `el`'s own top-left corner, in `el`'s local coordinate
 // space (getBBox), so it rides along with whatever transform Mermaid gave the node/cluster group.
-function addActionIcon(el, id, action) {
-  let bbox; try { bbox = el.getBBox(); } catch (_) { return; }
+// `opts.anchor` + `opts.host` override where the icon is placed/attached — for a label that has no box
+// of its own to sit in the corner of (see addMessageActionIcon), the caller supplies both instead.
+function addActionIcon(el, id, action, opts) {
+  let anchor = opts && opts.anchor;
+  if (!anchor) { let bbox; try { bbox = el.getBBox(); } catch (_) { return; } anchor = { x: bbox.x, y: bbox.y }; }
   const paint = ICON_PAINT[action.kind];
   const icon = document.createElementNS(SVGNS, 'g');
   icon.setAttribute('class', 'action-icon ' + (action.kind === 'drill' ? 'is-drill' : 'is-open'));
   // The anchor point in DIAGRAM units, kept around so rescaleActionIcons can recompute the transform
   // (translate + a counter-zoom scale) on every zoom change without re-measuring the box.
-  icon._anchor = { x: bbox.x, y: bbox.y };
-  icon.setAttribute('transform', `translate(${bbox.x},${bbox.y})`);
+  icon._anchor = anchor;
+  icon.setAttribute('transform', `translate(${anchor.x},${anchor.y})`);
   // A container's own box sits exactly where the icon is anchored (its top-left corner) — with a
   // dashed border (see gen_viewer.py _CONTAINER_BORDER), that border's dashes run directly behind/
   // through the badge at that corner, visually merging with the badge's own thin ring and making it
@@ -287,7 +298,7 @@ function addActionIcon(el, id, action) {
   // painted first (underneath), gives the badge a clean, opaque area to sit on regardless of what's
   // behind it — the common fix for any icon badge placed over a busy background.
   const halo = document.createElementNS(SVGNS, 'circle');
-  halo.setAttribute('r', '16.5');
+  halo.setAttribute('r', String(ACTION_ICON_R));
   paintImportant(halo, { fill: '#fff', stroke: 'none' });
   const circle = document.createElementNS(SVGNS, 'circle');
   circle.setAttribute('r', '13');
@@ -309,9 +320,62 @@ function addActionIcon(el, id, action) {
     flashIcon(icon);
     action.run();
   });
-  el.appendChild(icon);
+  (opts && opts.host || el).appendChild(icon);
   ACTION_ICONS[id] = icon;
 }
+// A message label has no box to anchor a corner badge to — sit the pill just before the label's left
+// edge instead (so it reads first, like a bullet), vertically centered on it. Appended to the text's
+// own parent (not the text itself: an SVG <text> can't usefully host a child <g>), which shares the
+// text's coordinate space since Mermaid gives message text no transform of its own.
+//
+// The gap to the label must be a CONSTANT SCREEN distance, not a constant diagram-unit one: the pill's
+// own SIZE is already held constant on screen regardless of zoom (rescaleActionIcons counter-scales
+// it), so a fixed diagram-unit gap would drift — shrinking toward (and past, on a wide Golden Path
+// that needs a lot of shrink just to fit) zero as the diagram zooms out, overlapping the very label
+// it's meant to sit clear of. `_msgRef` (the zoom-invariant point this pill hangs off) + `_msgGap`
+// (the desired screen-px clearance) let rescaleActionIcons redo this placement — and the bridge below
+// — with the real zoom factor every time it changes, not just once here with an inv=1 guess.
+function addMessageActionIcon(text, id, action) {
+  let bbox; try { bbox = text.getBBox(); } catch (_) { return; }
+  const ref = { x: bbox.x, y: bbox.y + bbox.height / 2 };  // the label's own left-middle, in raw diagram units
+  const gap = ACTION_ICON_R + 10;
+  const anchor = { x: ref.x - gap, y: ref.y };  // inv=1 placeholder for this first paint, before mainPz exists
+  // Bridge the gap with an invisible hit area BEFORE the pill exists (so the pill, appended after by
+  // addActionIcon below, paints on top and still wins hit-testing over the sliver where the two
+  // overlap) — one continuous hoverable strip from label to pill, so there's never a moment the
+  // cursor is over neither. Starts exactly at the pill's own anchor point (its centre) rather than its
+  // rendered edge — a rect starting at the centre overlaps the pill's hit-circle at ANY radius, so it
+  // stays correct across rescales without itself needing the zoom-corrected radius.
+  const bridge = document.createElementNS(SVGNS, 'rect');
+  bridge.style.setProperty('fill', 'transparent');
+  bridge.style.setProperty('pointer-events', 'all');
+  text.parentNode.appendChild(bridge);
+  addActionIcon(text, id, action, { host: text.parentNode, anchor });
+  const icon = ACTION_ICONS[id];
+  // Lets gpGlow (viewer.js selectGPStep/selectGPActor path) find this pill from the text element alone,
+  // so selecting the step shows it without bindGP threading the icon through separately.
+  text._actionIcon = icon;
+  icon._bridge = bridge;
+  icon._msgRef = ref;
+  icon._msgGap = gap;
+  icon._msgTextRight = bbox.x + 5;  // bridge's far edge: a little past the label's own left edge
+  placeMessageBridge(icon);
+}
+// (Re)size the bridge from the pill's CURRENT anchor (already zoom-corrected by the caller) out to
+// just past the label — kept in sync with rescaleActionIcons so it never lags the pill it bridges to.
+function placeMessageBridge(icon) {
+  const b = icon._bridge; if (!b) return;
+  const x = icon._anchor.x;
+  b.setAttribute('x', String(x));
+  b.setAttribute('y', String(icon._msgRef.y - 40));
+  b.setAttribute('width', String(Math.max(0, icon._msgTextRight - x)));
+  b.setAttribute('height', '80');
+}
+// Message pills have no enclosing g.node/g.cluster to hang the CSS :hover/.is-selected reveal rule off
+// (viewer.css), so their visibility is plain JS opacity/pointer-events toggling instead — called from
+// the same hover handlers already glowing the message's text/line.
+function showIcon(icon) { if (icon) { icon.style.setProperty('opacity', '1'); icon.style.setProperty('pointer-events', 'auto'); } }
+function hideIcon(icon) { if (icon) { icon.style.removeProperty('opacity'); icon.style.removeProperty('pointer-events'); } }
 // One pass over every box `render()` just bound (scene.nodeEls) — called once per render, alongside
 // tintClusters. Cluster frames (drilled containers shown as a NEIGHBOUR, not the card you're already
 // inside) get their icon from bindFrameDrill instead, which already knows which frames are drillable —
@@ -324,7 +388,7 @@ function decorateActionIcons(scene) {
   }
 }
 function clearFocus(scene) {
-  for (const nid in scene.nodeEls) scene.nodeEls[nid].style.opacity = '';
+  for (const nid in scene.nodeEls) { scene.nodeEls[nid].style.opacity = ''; scene.nodeEls[nid].classList.remove('dim'); }
   for (const x of scene.edgeEls) { x.path.style.opacity = ''; if (x.label) x.label.style.opacity = ''; }
   for (const el of scene.dimEls) el.style.opacity = '';
 }
@@ -1579,7 +1643,8 @@ function bindDomain() {
 // above the hover glow, never the heavy stroke-recolour the click used to apply. Returns a cleanup.
 function gpGlow(el) {
   el.style.filter = GP_SEL;
-  return () => { el.style.filter = ''; };
+  if (el._actionIcon) showIcon(el._actionIcon);  // a selected step's pill stays put, not just its glow
+  return () => { el.style.filter = ''; if (el._actionIcon) hideIcon(el._actionIcon); };
 }
 // Glow a set of elements and remember them in scene.gpLit (a step driven by a selected actor is
 // glowed but isn't itself the selection, so its own hover handlers must restore THIS glow on leave —
@@ -1661,9 +1726,13 @@ function bindGP() {
     if (!text) return;
     const gpId = step.id, selKey = 'gpstep:' + gpId;
     scene.selectors[selKey] = () => selectGPStep(scene, i, gpId, aidOfStep[i]);  // back/forward restore
-    const on = () => { if (scene.selectedKey !== selKey) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; } };
+    addMessageActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'gpstep', gp: gpId }) });
+    const icon = ACTION_ICONS[selKey];
+    // A dimmed step (gpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
+    // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
+    const on = () => { if (scene.selectedKey !== selKey) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
     // restore to the resting glow (an actor-selected step keeps its HILITE), not blank
-    const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = gpRestFilter(scene, text); if (line) line.style.filter = gpRestFilter(scene, line); } };
+    const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = gpRestFilter(scene, text); if (line) line.style.filter = gpRestFilter(scene, line); hideIcon(icon); } };
     const click = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
@@ -1675,12 +1744,18 @@ function bindGP() {
       if (!el) continue;
       el.style.cursor = 'pointer';
       el.style.setProperty('pointer-events', el === text ? 'all' : 'stroke', 'important');
-      if (el === text) el.classList.add('drill');  // ⌘-held cursor affordance
+      el.classList.add('drill');  // ⌘-held cursor affordance
       el.addEventListener('click', click);
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
       attachTip(el, () => actionTipGP(gpId));
     }
+    // The pill and its bridge (see addMessageActionIcon) get the same on/off as the text/line, so the
+    // whole step — label, arrow, gap, pill — behaves as one continuous hover zone with an instant,
+    // lag-free show/hide (no gap ever left uncovered means no grace timer is needed to paper over one).
+    icon.addEventListener('mouseenter', on);
+    icon.addEventListener('mouseleave', off);
+    if (icon._bridge) { icon._bridge.addEventListener('mouseenter', on); icon._bridge.addEventListener('mouseleave', off); }
   });
 
   // actors: click the figure or anywhere on the lifeline to select the actor (no drill).
@@ -1855,8 +1930,14 @@ function rescaleActionIcons() {
   // as exactly 1 CSS pixel always, regardless of diagram size or current zoom.
   const inv = mainPz ? 1 / mainPz.getSizes().realZoom : 1;
   for (const id in ACTION_ICONS) {
-    const a = ACTION_ICONS[id]._anchor;
-    if (a) ACTION_ICONS[id].setAttribute('transform', `translate(${a.x},${a.y}) scale(${inv})`);
+    const icon = ACTION_ICONS[id];
+    let a = icon._anchor;
+    // A message pill's gap to its label is a constant SCREEN distance (see addMessageActionIcon), so
+    // its anchor is re-derived here from the zoom-invariant `_msgRef` point every time inv changes —
+    // a one-off anchor (like a box's own corner, which needs no such correction) would let the gap
+    // drift with zoom instead of staying put. The bridge is re-synced right after so it never lags.
+    if (icon._msgRef) { a = { x: icon._msgRef.x - icon._msgGap * inv, y: icon._msgRef.y }; icon._anchor = a; placeMessageBridge(icon); }
+    if (a) icon.setAttribute('transform', `translate(${a.x},${a.y}) scale(${inv})`);
   }
 }
 function updateZoomLevel() {  // reflect the current pan-zoom scale in the header control + the icons
