@@ -116,6 +116,7 @@ let pendingElementsList = null;
 // click drill (isDrillClick) can flash the SAME icon a direct icon-click would have used — one visual
 // language regardless of which of the three ways you triggered it.
 const ACTION_ICONS = {};
+let EDGE_ICON_SEQ = 0;  // fallback ACTION_ICONS key for a drillable edge path with no (or a stripped) DOM id
 
 // --- scene ----------------------------------------------------------------------
 // A "scene" wraps the diagram currently shown: its root, the bound node/edge elements, the active
@@ -272,14 +273,14 @@ const ICON_PAINT = {
   drill: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.1px' },
   open: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.6px' },
 };
-const ACTION_ICON_R = 16.5;  // the halo's radius — shared with addMessageActionIcon so its offset can clear the badge without a magic number of its own
+const ACTION_ICON_R = 16.5;  // the halo's radius — shared with addLabelActionIcon so its offset can clear the badge without a magic number of its own
 function paintImportant(el, props) {
   for (const k in props) el.style.setProperty(k, props[k], 'important');
 }
 // Inject `action`'s icon (circle + glyph) into `el`'s own top-left corner, in `el`'s local coordinate
 // space (getBBox), so it rides along with whatever transform Mermaid gave the node/cluster group.
 // `opts.anchor` + `opts.host` override where the icon is placed/attached — for a label that has no box
-// of its own to sit in the corner of (see addMessageActionIcon), the caller supplies both instead.
+// of its own to sit in the corner of (see addLabelActionIcon), the caller supplies both instead.
 function addActionIcon(el, id, action, opts) {
   let anchor = opts && opts.anchor;
   if (!anchor) { let bbox; try { bbox = el.getBBox(); } catch (_) { return; } anchor = { x: bbox.x, y: bbox.y }; }
@@ -324,51 +325,65 @@ function addActionIcon(el, id, action, opts) {
   ACTION_ICONS[id] = icon;
 }
 // A message label has no box to anchor a corner badge to — sit the pill just before the label's left
-// edge instead (so it reads first, like a bullet), vertically centered on it. Appended to the text's
-// own parent (not the text itself: an SVG <text> can't usefully host a child <g>), which shares the
-// text's coordinate space since Mermaid gives message text no transform of its own.
+// edge instead (so it reads first, like a bullet), vertically centered on it. Used for a Golden Path
+// message's text AND (see bindEdgeActionIcon) any drillable edge with a real label — same convention
+// either way: one fixed spot, not one that chases the cursor. Appended to the label's own parent (not
+// the label itself: an SVG <text> can't usefully host a child <g>), which shares its coordinate space
+// since Mermaid gives these labels no transform of their own.
 //
 // The gap to the label must be a CONSTANT SCREEN distance, not a constant diagram-unit one: the pill's
 // own SIZE is already held constant on screen regardless of zoom (rescaleActionIcons counter-scales
 // it), so a fixed diagram-unit gap would drift — shrinking toward (and past, on a wide Golden Path
 // that needs a lot of shrink just to fit) zero as the diagram zooms out, overlapping the very label
-// it's meant to sit clear of. `_msgRef` (the zoom-invariant point this pill hangs off) + `_msgGap`
+// it's meant to sit clear of. `_labelRef` (the zoom-invariant point this pill hangs off) + `_labelGap`
 // (the desired screen-px clearance) let rescaleActionIcons redo this placement — and the bridge below
 // — with the real zoom factor every time it changes, not just once here with an inv=1 guess.
-function addMessageActionIcon(text, id, action) {
-  let bbox; try { bbox = text.getBBox(); } catch (_) { return; }
-  const ref = { x: bbox.x, y: bbox.y + bbox.height / 2 };  // the label's own left-middle, in raw diagram units
+function addLabelActionIcon(label, id, action) {
+  let bbox; try { bbox = label.getBBox(); } catch (_) { return; }
+  const host = label.parentNode;
+  // bbox is in the LABEL's own local space — pointToHostSpace carries its left-middle point (and, a
+  // little further right, the bridge's far edge) into `host`'s space, whatever the relationship
+  // between the two turns out to be (see pointToHostSpace).
+  const ref = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, host);
+  const rightEdge = pointToHostSpace(label, bbox.x + 5, bbox.y + bbox.height / 2, host);
+  if (!ref || !rightEdge) return;
   const gap = ACTION_ICON_R + 10;
   const anchor = { x: ref.x - gap, y: ref.y };  // inv=1 placeholder for this first paint, before mainPz exists
-  // Bridge the gap with an invisible hit area BEFORE the pill exists (so the pill, appended after by
-  // addActionIcon below, paints on top and still wins hit-testing over the sliver where the two
-  // overlap) — one continuous hoverable strip from label to pill, so there's never a moment the
-  // cursor is over neither. Starts exactly at the pill's own anchor point (its centre) rather than its
-  // rendered edge — a rect starting at the centre overlaps the pill's hit-circle at ANY radius, so it
-  // stays correct across rescales without itself needing the zoom-corrected radius.
+  // Bridge the gap with an invisible hit area — one continuous hoverable strip from label to pill, so
+  // there's never a moment the cursor is over neither. It deliberately overlaps BOTH ends by a few
+  // units rather than trying to land exactly on their edges (see `rightEdge`/the pill's own anchor
+  // below), so DOM order is what decides who wins each overlap, not exact geometry:
+  //  - inserted BEFORE the label (not appended after) so the label — a real, pre-existing, clickable
+  //    Mermaid element — stays on top and keeps receiving its own clicks. Appending the bridge after
+  //    it was a real bug: the bridge has no click handler, so a click landing in that overlap (a few
+  //    units is often most of a short label like a bare connection count) silently went nowhere.
+  //  - the pill itself (added last, below) is appended AFTER the bridge, so it wins the OTHER overlap,
+  //    at its own end — starting the bridge exactly at the pill's centre guarantees that overlap
+  //    regardless of the pill's actual on-screen radius (see the comment above), without needing the
+  //    bridge to also be perfectly sized to it.
   const bridge = document.createElementNS(SVGNS, 'rect');
   bridge.style.setProperty('fill', 'transparent');
   bridge.style.setProperty('pointer-events', 'all');
-  text.parentNode.appendChild(bridge);
-  addActionIcon(text, id, action, { host: text.parentNode, anchor });
+  host.insertBefore(bridge, label);
+  addActionIcon(label, id, action, { host, anchor });
   const icon = ACTION_ICONS[id];
-  // Lets gpGlow (viewer.js selectGPStep/selectGPActor path) find this pill from the text element alone,
-  // so selecting the step shows it without bindGP threading the icon through separately.
-  text._actionIcon = icon;
+  // Lets gpGlow / glowEdge find this pill from the label/path element alone, so selecting the step or
+  // edge shows it without the caller threading the icon through separately.
+  label._actionIcon = icon;
   icon._bridge = bridge;
-  icon._msgRef = ref;
-  icon._msgGap = gap;
-  icon._msgTextRight = bbox.x + 5;  // bridge's far edge: a little past the label's own left edge
-  placeMessageBridge(icon);
+  icon._labelRef = ref;
+  icon._labelGap = gap;
+  icon._labelRight = rightEdge.x;  // bridge's far edge: a little past the label's own left edge
+  placeLabelBridge(icon);
 }
 // (Re)size the bridge from the pill's CURRENT anchor (already zoom-corrected by the caller) out to
 // just past the label — kept in sync with rescaleActionIcons so it never lags the pill it bridges to.
-function placeMessageBridge(icon) {
+function placeLabelBridge(icon) {
   const b = icon._bridge; if (!b) return;
   const x = icon._anchor.x;
   b.setAttribute('x', String(x));
-  b.setAttribute('y', String(icon._msgRef.y - 40));
-  b.setAttribute('width', String(Math.max(0, icon._msgTextRight - x)));
+  b.setAttribute('y', String(icon._labelRef.y - 40));
+  b.setAttribute('width', String(Math.max(0, icon._labelRight - x)));
   b.setAttribute('height', '80');
 }
 // Message pills have no enclosing g.node/g.cluster to hang the CSS :hover/.is-selected reveal rule off
@@ -822,7 +837,7 @@ function bindFlow(uc) {
     };
     const on = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = HOVER; };
     const off = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = gpRestFilter(scene, el); };
-    if (line) attachEdgeHandlers(line, text, onClick, on, off, false);
+    if (line) attachEdgeHandlers(line, text, onClick, on, off, null);
     else { text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important'); text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off); }
   });
 }
@@ -1204,9 +1219,116 @@ function bindNodes(scene, onActivate) {
   });
 }
 
+// Convert a real mouse position (client/screen px) into `referenceEl`'s own local coordinate space —
+// the same space its `transform="translate(x,y)"` is interpreted in. getScreenCTM() already folds in
+// EVERY transform between here and the screen (pan, zoom, nested groups), so this works at any zoom
+// without knowing anything about svg-pan-zoom's internals, unlike the counter-scale math elsewhere in
+// this file (which has to, because it's deliberately UNDOING one specific transform, not converting
+// between spaces). Returns null if the element isn't laid out yet (detached, or a zero-size viewport).
+function clientToLocal(referenceEl, clientX, clientY) {
+  const svg = referenceEl.ownerSVGElement;
+  const ctm = svg && referenceEl.getScreenCTM();
+  if (!svg || !ctm) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = clientX; pt.y = clientY;
+  const local = pt.matrixTransform(ctm.inverse());
+  return { x: local.x, y: local.y };
+}
+// Convert a point given in `fromEl`'s own local space (e.g. straight out of `fromEl.getBBox()`) into
+// `toEl`'s local space instead — needed whenever the two don't share a coordinate system. A Golden
+// Path message's <text> carries no transform of its own, so its bbox already happens to line up with
+// its parent's space (addLabelActionIcon relied on exactly that, harmlessly). A Mermaid edge label
+// (`g.edgeLabel`) is NOT so simple — Mermaid positions it via a transform on the group itself, so its
+// bbox is in a DIFFERENT space than its parent's, and anchoring a pill there with the naive bbox math
+// placed it nowhere near the label. Routing through screen space via getScreenCTM (twice) sidesteps
+// the question of whose transform is whose entirely — it folds in every transform on both ends,
+// whatever they turn out to be, the same trick clientToLocal uses for a real cursor position.
+function pointToHostSpace(fromEl, x, y, toEl) {
+  const svg = fromEl.ownerSVGElement;
+  const fromCtm = svg && fromEl.getScreenCTM();
+  const toCtm = svg && toEl.getScreenCTM();
+  if (!svg || !fromCtm || !toCtm) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = x; pt.y = y;
+  const screenPt = pt.matrixTransform(fromCtm);
+  const hostPt = screenPt.matrixTransform(toCtm.inverse());
+  return { x: hostPt.x, y: hostPt.y };
+}
+// Fallback anchor for an edge's drill pill: the arrow's own midpoint, nudged off to the side (along
+// the perpendicular to the line there) so the pill doesn't sit right on top of the stroke. Only used
+// when the pill has to show WITHOUT ever having been hovered (see bindEdgeActionIcon) — the normal
+// case anchors to the cursor instead, which needs no such geometry.
+function edgeMidpointAnchor(p) {
+  let len; try { len = p.getTotalLength(); } catch (_) { return null; }
+  if (!len) return null;
+  const mid = len / 2;
+  const a = p.getPointAtLength(Math.max(0, mid - 1));
+  const b = p.getPointAtLength(Math.min(len, mid + 1));
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const segLen = Math.hypot(dx, dy) || 1;
+  const OFFSET = 20;
+  const c = p.getPointAtLength(mid);
+  return { x: c.x + (-dy / segLen) * OFFSET, y: c.y + (dx / segLen) * OFFSET };
+}
+// A real label (not Mermaid's empty placeholder group every unlabelled arrow still gets) — content
+// check, not just existence, since an empty label would otherwise read as "has a label" and anchor a
+// pill to a bbox with no actual size.
+function edgeLabelHasContent(label) {
+  return !!(label && (label.textContent || '').trim());
+}
+// A drillable edge's pill has no box corner to anchor to. Two cases:
+//  - A real label: same fixed convention as a Golden Path message (addLabelActionIcon) — sits just
+//    left of the label, one constant spot, not one that chases the cursor around as it moves along
+//    the arrow (a moving target is harder to click, not easier, once the label already tells you
+//    where to look).
+//  - No label at all: there's no fixed spot that makes sense, so the pill appears wherever the cursor
+//    first lands on the arrow instead — the pill IS the cursor's own position, so there's no gap to
+//    travel and no bridge needed. Falls back to the arrow's own midpoint the one time it has to show
+//    without a hover to anchor to (a selection restored from back/forward, or lit up by something else
+//    being selected).
+// `p` is the real (visible, styled, dimmable) path — its id and its opacity (dim state) are what
+// matter for the pill's identity and visibility. `hit` is the wide invisible clone that actually
+// catches the pointer (see attachEdgeHandlers) — hovering/leaving THAT, not the thin original stroke,
+// is what should show/hide the pill, so listeners go on it, not on `p`. `isSelected` (from
+// bindSelectEdge, matching gpGlow's `scene.selectedKey !== selKey` guard) is what lets the pill stay
+// up after a selection even once the cursor leaves — without it, hide() would blank a pill glowEdge
+// just pinned the moment the mouse moved off the arrow.
+function bindEdgeActionIcon(p, hit, label, onDrill, isSelected) {
+  const id = p.id || ('edgepill' + (EDGE_ICON_SEQ++));
+  const action = { kind: 'drill', run: onDrill };
+  const isDim = () => p.style.opacity === DIM || (label && label.style.opacity === DIM);
+  const hide = () => { if (!isSelected || !isSelected()) hideIcon(icon); };
+  let icon, showAt;
+  if (edgeLabelHasContent(label)) {
+    addLabelActionIcon(label, id, action);
+    icon = ACTION_ICONS[id];
+    showAt = () => { if (!isDim()) showIcon(icon); };
+    if (icon._bridge) { icon._bridge.addEventListener('mouseenter', showAt); icon._bridge.addEventListener('mouseleave', hide); }
+  } else {
+    const host = p.parentNode;
+    const fallback = edgeMidpointAnchor(p) || { x: 0, y: 0 };
+    addActionIcon(p, id, action, { host, anchor: fallback });
+    icon = ACTION_ICONS[id];
+    const moveTo = (anchor) => {
+      icon._anchor = anchor;
+      icon.setAttribute('transform', `translate(${anchor.x},${anchor.y}) scale(${curIconInv()})`);
+    };
+    showAt = (ev) => { if (isDim()) return; moveTo(clientToLocal(host, ev.clientX, ev.clientY) || fallback); showIcon(icon); };
+  }
+  icon.addEventListener('mouseenter', showAt);
+  icon.addEventListener('mouseleave', hide);
+  hit.addEventListener('mouseenter', showAt);
+  hit.addEventListener('mouseleave', hide);
+  if (label) { label.addEventListener('mouseenter', showAt); label.addEventListener('mouseleave', hide); }
+  // Lets glowEdge (selection) show/hide this pill the same way gpGlow does for a Golden Path step.
+  p._actionIcon = icon;
+}
 // Give an edge's visible path a wide transparent hit-path + make its label clickable.
 // `tipHtml` (optional) wires a hover meaning-preview on the same hit-area + label.
-function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, drillable, actionFn) {
+// `onDrill` (falsy for a non-drillable edge) doubles as the drill callback for the corner pill AND the
+// flag for the ⌘-held cursor affordance — a drillable edge always gets both together. `isSelected`
+// (only meaningful alongside onDrill) is passed straight through to bindEdgeActionIcon.
+function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn, isSelected) {
   const hit = p.cloneNode(false);
   hit.removeAttribute('id'); hit.removeAttribute('marker-end'); hit.removeAttribute('class');
   hit.style.setProperty('stroke', 'transparent', 'important');
@@ -1214,7 +1336,7 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, drillable, act
   hit.style.setProperty('fill', 'none', 'important');
   hit.style.setProperty('marker-end', 'none', 'important');
   hit.style.pointerEvents = 'stroke'; hit.style.cursor = 'pointer';
-  if (drillable) hit.classList.add('drill');  // ⌘-held cursor affordance
+  if (onDrill) hit.classList.add('drill');  // ⌘-held cursor affordance
   hit.addEventListener('click', onClick);
   hit.addEventListener('mouseenter', hoverOn);
   hit.addEventListener('mouseleave', hoverOff);
@@ -1222,12 +1344,13 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, drillable, act
   if (label) {
     label.style.cursor = 'pointer';
     label.style.setProperty('pointer-events', 'all', 'important');
-    if (drillable) label.classList.add('drill');
+    if (onDrill) label.classList.add('drill');
     label.addEventListener('click', onClick);
     label.addEventListener('mouseenter', hoverOn);
     label.addEventListener('mouseleave', hoverOff);
   }
   if (actionFn) { attachTip(hit, actionFn); if (label) attachTip(label, actionFn); }
+  if (onDrill) bindEdgeActionIcon(p, hit, label, onDrill, isSelected);
 }
 
 // Iterate a diagram's edges, pairing each path with its label by index. Mermaid emits one label
@@ -1247,9 +1370,14 @@ function glowEdge(p, label) {
   p.style.setProperty('stroke', '#2563eb', 'important');
   p.style.setProperty('stroke-width', '3px', 'important');
   if (label) label.style.filter = HILITE;
+  // A drillable edge's pill (see bindEdgeActionIcon) sticks while selected, same as gpGlow does for a
+  // Golden Path step — otherwise selecting the edge (without ever hovering it) would leave no way to
+  // see its drill option short of hovering again.
+  if (p._actionIcon) showIcon(p._actionIcon);
   return () => {
     p.style.removeProperty('stroke'); p.style.removeProperty('stroke-width');
     if (label) label.style.filter = '';
+    if (p._actionIcon) hideIcon(p._actionIcon);
   };
 }
 
@@ -1276,7 +1404,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
     doSelect();
   };
   scene.edgeEls.push({ e, path: p, label });
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, !!opts.onDrill, opts.actionFn);
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn, () => scene.selectedKey === selKey);
 }
 
 // An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
@@ -1743,7 +1871,7 @@ function bindGP() {
     if (!text) return;
     const gpId = step.id, selKey = 'gpstep:' + gpId;
     scene.selectors[selKey] = () => selectGPStep(scene, i, gpId, aidOfStep[i]);  // back/forward restore
-    addMessageActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'gpstep', gp: gpId }) });
+    addLabelActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'gpstep', gp: gpId }) });
     const icon = ACTION_ICONS[selKey];
     // A dimmed step (gpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
     // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
@@ -1767,7 +1895,7 @@ function bindGP() {
       el.addEventListener('mouseleave', off);
       attachTip(el, () => actionTipGP(gpId));
     }
-    // The pill and its bridge (see addMessageActionIcon) get the same on/off as the text/line, so the
+    // The pill and its bridge (see addLabelActionIcon) get the same on/off as the text/line, so the
     // whole step — label, arrow, gap, pill — behaves as one continuous hover zone with an instant,
     // lag-free show/hide (no gap ever left uncovered means no grace timer is needed to paper over one).
     icon.addEventListener('mouseenter', on);
@@ -1790,7 +1918,7 @@ function bindGP() {
       el.addEventListener('mouseleave', off);
     }
     const life = rec.els.find((el) => el.tagName === 'line');
-    if (life) attachEdgeHandlers(life, null, click, on, off, false);
+    if (life) attachEdgeHandlers(life, null, click, on, off, null);
   }
 }
 
@@ -1935,25 +2063,29 @@ function renderChrome(s) {
 // near-unclickable speck. Counter-scaled against the current pan-zoom level (like a map pin that stays
 // the same size no matter how far out you zoom the map) so they read as a constant on-screen size at
 // any zoom. `_anchor` (set in addActionIcon) is the translate; only the extra `scale` term changes here.
+// getSizes().realZoom, NOT getZoom() — getZoom() is ALWAYS 1 right after a fresh fit, no matter the
+// diagram's size or node count: it's relative to THAT diagram's own fit, not an absolute scale. A
+// confirmed real bug: on a small test diagram this went unnoticed (a few dozen nodes still fit at a
+// large-enough per-node scale), but a large real diagram (hundreds of nodes) has to shrink FAR more
+// just to fit on screen at its own "100%" — 1/getZoom() never saw that shrink, so the icon rendered
+// at just a few CSS pixels there even though it looked fine on the small diagram. realZoom is the
+// library's own true diagram-units-to-CSS-pixel ratio (confirmed: doubles when you call zoomBy(2),
+// unlike getZoom() which resets to 1 on every fresh fit) — 1/realZoom makes 1 local SVG unit render
+// as exactly 1 CSS pixel always, regardless of diagram size or current zoom. Shared by rescaleActionIcons
+// (every icon, on a zoom change) and bindEdgeActionIcon (one icon, the moment it's repositioned to the
+// cursor) — both need the SAME factor so a freshly-moved icon doesn't render at the wrong size for the
+// instant before the next zoom event happens to re-run the loop.
+function curIconInv() { return mainPz ? 1 / mainPz.getSizes().realZoom : 1; }
 function rescaleActionIcons() {
-  // getSizes().realZoom, NOT getZoom() — getZoom() is ALWAYS 1 right after a fresh fit, no matter the
-  // diagram's size or node count: it's relative to THAT diagram's own fit, not an absolute scale. A
-  // confirmed real bug: on a small test diagram this went unnoticed (a few dozen nodes still fit at a
-  // large-enough per-node scale), but a large real diagram (hundreds of nodes) has to shrink FAR more
-  // just to fit on screen at its own "100%" — 1/getZoom() never saw that shrink, so the icon rendered
-  // at just a few CSS pixels there even though it looked fine on the small diagram. realZoom is the
-  // library's own true diagram-units-to-CSS-pixel ratio (confirmed: doubles when you call zoomBy(2),
-  // unlike getZoom() which resets to 1 on every fresh fit) — 1/realZoom makes 1 local SVG unit render
-  // as exactly 1 CSS pixel always, regardless of diagram size or current zoom.
-  const inv = mainPz ? 1 / mainPz.getSizes().realZoom : 1;
+  const inv = curIconInv();
   for (const id in ACTION_ICONS) {
     const icon = ACTION_ICONS[id];
     let a = icon._anchor;
-    // A message pill's gap to its label is a constant SCREEN distance (see addMessageActionIcon), so
-    // its anchor is re-derived here from the zoom-invariant `_msgRef` point every time inv changes —
-    // a one-off anchor (like a box's own corner, which needs no such correction) would let the gap
+    // A label-anchored pill's gap to its label is a constant SCREEN distance (see addLabelActionIcon),
+    // so its anchor is re-derived here from the zoom-invariant `_labelRef` point every time inv changes
+    // — a one-off anchor (like a box's own corner, which needs no such correction) would let the gap
     // drift with zoom instead of staying put. The bridge is re-synced right after so it never lags.
-    if (icon._msgRef) { a = { x: icon._msgRef.x - icon._msgGap * inv, y: icon._msgRef.y }; icon._anchor = a; placeMessageBridge(icon); }
+    if (icon._labelRef) { a = { x: icon._labelRef.x - icon._labelGap * inv, y: icon._labelRef.y }; icon._anchor = a; placeLabelBridge(icon); }
     if (a) icon.setAttribute('transform', `translate(${a.x},${a.y}) scale(${inv})`);
   }
 }
