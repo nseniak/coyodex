@@ -31,30 +31,30 @@ who want a curated, governed set of MCP tools shared across their AI assistants.
 
 | Term | Meaning | Defined / used in |
 |---|---|---|
-| **MCP Hero** | User-facing brand for the gateway product | [README.md](README.md#L10) |
+| **MCP Hero** | User-facing brand for the gateway product | [README.md](README.md:10) |
 | **mcpolis** | Internal codename for every technical artifact (modules, DBs, env vars) | [CLAUDE.md](CLAUDE.md) |
-| **Organization (org)** | A tenant — the top-level isolation boundary everything is scoped to | [organization_repository.py](backend/src/mcpolis/domain/ports/organization_repository.py#L41) |
-| **Upstream MCP** | A backend MCP server added to the gateway whose tools are proxied | [upstream.py](backend/src/mcpolis/domain/model/upstream.py#L84) |
-| **Remote HTTP MCP** | Upstream reached at a URL (streamable-http transport) | [upstream.py](backend/src/mcpolis/domain/model/upstream.py#L79) |
-| **Hosted stdio MCP** | `command:`-style upstream the gateway runs in a sandbox | [upstream.py](backend/src/mcpolis/domain/model/upstream.py#L45) |
-| **Gateway** | The single MCP endpoint exposed to clients at `/mcp` or `/mcp/<slug>` | [gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py#L281) |
-| **Tool** | An action an upstream exposes; surfaced through the gateway with a prefixed name | [upstream.py](backend/src/mcpolis/domain/model/upstream.py#L161) |
-| **Tool category** | readOnly / destructive / other annotation buckets used for role toggles | [policy_engine.py](backend/src/mcpolis/domain/services/policy_engine.py#L61) |
-| **Role** | Named permission set deciding which MCPs and tools a member may use | [settings.py](backend/src/mcpolis/domain/model/settings.py#L47) |
-| **Policy / argument check** | Per-tool regex allow/forbid rule on argument values, enforced before forwarding | [policy.py](backend/src/mcpolis/domain/model/settings.py#L8) |
-| **Auth mode** | How an upstream authenticates: service-account, admin OAuth, or per-user OAuth | [policy.py](backend/src/mcpolis/domain/model/policy.py#L8) |
-| **Per-user OAuth** | Each member signs in to the upstream as themselves; tokens stored encrypted | [connection_store.py](backend/src/mcpolis/adapters/repositories/connection_store.py#L9) |
-| **Service token** | Revocable `svct_` bearer bound to one org and one role, for headless agents | [service_token.py](backend/src/mcpolis/domain/model/service_token.py#L35) |
-| **Sandbox** | Isolated environment that runs a stdio MCP command | [sandbox_service.py](backend/src/mcpolis/domain/services/sandbox_service.py#L277) |
-| **E2B** | Hosted sandbox provider (production default) for stdio MCPs | [service.py](backend/src/mcpolis/adapters/sandbox_e2b/service.py#L123) |
-| **Template variable / password** | Per-MCP `${NAME}` value (plain or secret) substituted at launch | [template_var.py](backend/src/mcpolis/domain/model/template_var.py#L66) |
-| **Sandbox file** | Per-MCP uploaded credential file written into the sandbox at session start | [sandbox_file.py](backend/src/mcpolis/domain/model/sandbox_file.py#L73) |
-| **Admin MCP** | A second MCP at `/admin-mcp` for managing MCP Hero itself conversationally | [admin_mcp_controller.py](backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py#L99) |
-| **Superadmin / operator** | Email-allowlisted operator with cross-org support access | [superadmin_controller.py](backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py#L19) |
-| **Standalone vs cloud** | Single-org file-backed mode vs multi-org Mongo/Redis SaaS | [config.py](backend/src/mcpolis/entrypoints/config.py#L15) |
-| **Plan / subscription** | Per-org seat + feature limits (FREE vs TEAM) | [plan_policy.py](backend/src/mcpolis/domain/services/plan_policy.py#L34) |
-| **Audit entry** | A logged gateway action: who, what tool, policy decision, outcome, latency | [audit.py](backend/src/mcpolis/domain/model/audit.py#L8) |
-| **Slug** | URL-safe org name forming the gateway path `/mcp/<slug>` | [org_context.py](backend/src/mcpolis/entrypoints/middleware/org_context.py#L84) |
+| **Organization (org)** | A tenant — the top-level isolation boundary everything is scoped to | [organization_repository.py](backend/src/mcpolis/domain/ports/organization_repository.py:41) |
+| **Upstream MCP** | A backend MCP server added to the gateway whose tools are proxied | [upstream.py](backend/src/mcpolis/domain/model/upstream.py:84) |
+| **Remote HTTP MCP** | Upstream reached at a URL (streamable-http transport) | [upstream.py](backend/src/mcpolis/domain/model/upstream.py:79) |
+| **Hosted stdio MCP** | `command:`-style upstream the gateway runs in a sandbox | [upstream.py](backend/src/mcpolis/domain/model/upstream.py:45) |
+| **Gateway** | The single MCP endpoint exposed to clients at `/mcp` or `/mcp/<slug>` | [gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:281) |
+| **Tool** | An action an upstream exposes; surfaced through the gateway with a prefixed name | [upstream.py](backend/src/mcpolis/domain/model/upstream.py:161) |
+| **Tool category** | readOnly / destructive / other annotation buckets used for role toggles | [policy_engine.py](backend/src/mcpolis/domain/services/policy_engine.py:61) |
+| **Role** | Named permission set deciding which MCPs and tools a member may use | [settings.py](backend/src/mcpolis/domain/model/settings.py:47) |
+| **Policy / argument check** | Per-tool regex allow/forbid rule on argument values, enforced before forwarding | [settings.py](backend/src/mcpolis/domain/model/settings.py:8) |
+| **Auth mode** | How an upstream authenticates: service-account, admin OAuth, or per-user OAuth | [policy.py](backend/src/mcpolis/domain/model/policy.py:8) |
+| **Per-user OAuth** | Each member signs in to the upstream as themselves; tokens stored encrypted | [connection_store.py](backend/src/mcpolis/adapters/repositories/connection_store.py:9) |
+| **Service token** | Revocable `svct_` bearer bound to one org and one role, for headless agents | [service_token.py](backend/src/mcpolis/domain/model/service_token.py:35) |
+| **Sandbox** | Isolated environment that runs a stdio MCP command | [sandbox_service.py](backend/src/mcpolis/domain/services/sandbox_service.py:277) |
+| **E2B** | Hosted sandbox provider (production default) for stdio MCPs | [service.py](backend/src/mcpolis/adapters/sandbox_e2b/service.py:123) |
+| **Template variable / password** | Per-MCP `${NAME}` value (plain or secret) substituted at launch | [template_var.py](backend/src/mcpolis/domain/model/template_var.py:66) |
+| **Sandbox file** | Per-MCP uploaded credential file written into the sandbox at session start | [sandbox_file.py](backend/src/mcpolis/domain/model/sandbox_file.py:73) |
+| **Admin MCP** | A second MCP at `/admin-mcp` for managing MCP Hero itself conversationally | [admin_mcp_controller.py](backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99) |
+| **Superadmin / operator** | Email-allowlisted operator with cross-org support access | [superadmin_controller.py](backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:19) |
+| **Standalone vs cloud** | Single-org file-backed mode vs multi-org Mongo/Redis SaaS | [config.py](backend/src/mcpolis/entrypoints/config.py:15) |
+| **Plan / subscription** | Per-org seat + feature limits (FREE vs TEAM) | [plan_policy.py](backend/src/mcpolis/domain/services/plan_policy.py:34) |
+| **Audit entry** | A logged gateway action: who, what tool, policy decision, outcome, latency | [audit.py](backend/src/mcpolis/domain/model/audit.py:8) |
+| **Slug** | URL-safe org name forming the gateway path `/mcp/<slug>` | [org_context.py](backend/src/mcpolis/entrypoints/middleware/org_context.py:84) |
 
 ---
 

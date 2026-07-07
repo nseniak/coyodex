@@ -48,7 +48,8 @@ class Edge:
     src_card: str | None = None   # cardinality at the source end (domain relations only)
     dst_card: str | None = None   # cardinality at the destination end
     how: str | None = None        # plain-text note: how a field-less domain relation is implemented
-    fk_field: str | None = None   # the REAL field that backs the relation (drives the arrow label)
+    fk_fields: list[str] = field(default_factory=list)  # REAL field(s) backing the relation (drive the
+                                  # arrow label) — more than one is a composite key, e.g. (user_id, page_id)
     fk_side: str | None = None    # 'src' = field on the tail (forward), 'dst' = FK on the head (reverse)
 
 
@@ -73,6 +74,8 @@ class GraphDict(TypedDict):
     gp: list[dict[str, object]]
     flows: list[dict[str, object]]  # T6 use-case flows (one per use case): the ordered inside view
     roles: list[dict[str, str]]
+    glossary: list[dict[str, str]]  # ubiquitous-language terms: {term, meaning, where} (where = bare
+                                    # `path:line`/`path/` anchor, or "" when the term has no code home)
 
 
 class DiffChange(TypedDict):

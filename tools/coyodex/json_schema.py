@@ -48,7 +48,9 @@ _EXTRA_DESC = ("freeform authored columns — any JSON value, agent-chosen keys.
 FIELD_META: dict[tuple[str, str], dict] = {
     ("Role", "kind"): {"description": "human | service, free text (not a closed vocabulary)."},
     ("Role", "drives"): {"description": "the use cases this role drives — free text, ids inside."},
-    ("GlossaryRow", "where"): {"description": "markdown link to where the term is defined/used."},
+    ("GlossaryRow", "where"): {"description": _DIR_OR_FILE_DESC + " The term's canonical code home "
+                               "(where it is defined); null when the concept has no single code home "
+                               "(a pure product-level term)."},
     ("GoldenStep", "id"): {"pattern": r"^GP\d+$", "description": "this step's position in the "
                            "ordered walk."},
     ("GoldenStep", "uc"): {"pattern": r"^UC\d+$", "description": "the use case this step realizes."},

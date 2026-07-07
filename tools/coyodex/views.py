@@ -155,7 +155,7 @@ def model_to_markdown(m: ProjectModel) -> str:
     if m.glossary:
         section("Glossary — the ubiquitous language",
                 _table(["Term", "Meaning", "Defined / used in"],
-                       [[f"**{g.term}**", g.meaning, g.where] for g in m.glossary]))
+                       [[f"**{g.term}**", g.meaning, _anchor_link(g.where)] for g in m.glossary]))
     if m.roles:
         section("Roles (actors)",
                 _table(["Role", "Kind", "What they want", "Use cases they drive"],
@@ -390,7 +390,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                for e in m.entities}
     for ge in edges:
         if ge.kind and ge.kind != "inheritance" and ge.src in backing and ge.dst in backing:
-            ge.fk_field, ge.fk_side = grammar.resolve_backing(
+            ge.fk_fields, ge.fk_side = grammar.resolve_backing(
                 ge.src, ge.dst, backing[ge.src], backing[ge.dst])
 
     flows = [grammar.Flow(
@@ -414,4 +414,6 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         "flows": [asdict(f) for f in flows],
         "roles": [{"name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind)}
                   for r in m.roles],
+        "glossary": [{"term": g.term, "meaning": g.meaning, "where": g.where or ""}
+                     for g in m.glossary],
     }

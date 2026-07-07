@@ -27,6 +27,7 @@ from coyodex.model import (
     Component,
     Entity,
     EntityField,
+    GlossaryRow,
     ProjectModel,
     all_elements,
     load_model,
@@ -87,7 +88,22 @@ def test_golden_graph_carries_every_defined_element():
             assert eid in node_ids, f"{eid} missing from the graph"
     assert len(g["gp"]) == len(m.golden_path)
     assert len(g["roles"]) == len(m.roles)
+    assert len(g["glossary"]) == len(m.glossary)
     assert g["edges"], "the fixture's backbone must survive into the graph"
+
+
+def test_glossary_where_renders_as_link_and_reaches_graph():
+    """The bare `where` anchor becomes a clickable basename link in the md view, and the glossary
+    (with `where` preserved, "" for a null home) rides into the graph the Glossary tab reads."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.glossary = [GlossaryRow(term="Order", meaning="a customer order", where="src/order.py:12"),
+                  GlossaryRow(term="Brand", meaning="the product itself", where=None)]
+    md = model_to_markdown(m)
+    assert "| **Order** | a customer order | [order.py](src/order.py:12) |" in md
+    assert "| **Brand** | the product itself |  |" in md  # null home -> empty cell, no broken link
+    g = model_to_graph(m)
+    assert g["glossary"] == [{"term": "Order", "meaning": "a customer order", "where": "src/order.py:12"},
+                             {"term": "Brand", "meaning": "the product itself", "where": ""}]
 
 
 def test_graph_line_parses_colon_range_and_legacy_hash_anchors():

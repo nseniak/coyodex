@@ -248,9 +248,9 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
             directed.add((e.id, r.target))
             kind = grammar.REL_KIND.get(r.verb.lower(), "association")
             if kind == "association" and r.target in backing and not r.how:
-                name, _side = grammar.resolve_backing(e.id, r.target, backing[e.id],
+                names, _side = grammar.resolve_backing(e.id, r.target, backing[e.id],
                                                         backing[r.target])
-                if name is None:
+                if not names:
                     warnings.append(
                         f"Domain card {e.id}: relation '{r.verb} … {r.target}' is not backed by a "
                         f"field and has no {{…}} note — mark the implementing field `FK→{r.target}` "
@@ -303,6 +303,8 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
         bad_file(f"entry_points[{ep.component} {ep.kind}].entity", ep.entity)
     for e in m.entities:
         bad_anchor(f"{e.id} source", e.source)
+    for g in m.glossary:
+        bad_anchor(f"glossary '{g.term}' where", g.where)
     for group in (*m.subsystems, *m.subdomains):
         bad_group_anchor(f"{group.id} anchor", group.anchor)
     return problems
@@ -401,6 +403,9 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for e in m.entities:
         if e.source and not url.match(e.source):
             out.append((e.id, e.source))
+    for g in m.glossary:
+        if g.where and not url.match(g.where):
+            out.append((f"glossary '{g.term}'", g.where))
     for ep in m.entry_points:
         if ep.entity and not url.match(ep.entity):
             out.append((f"entry_points[{ep.component} {ep.kind}]", ep.entity))

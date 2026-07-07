@@ -93,6 +93,10 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   - Click an `SD→SD` **arrow** (overview or neighbourhood) → its edge view: the two subdomains both
     framed, showing each one's inner relations plus the concrete entity relations that cross between
     them. Class boxes ⌘-click to open source; relation arrows click for kind + cardinality.
+- **Glossary** *(when the map has glossary terms)* — the ubiquitous-language terms as a table, not a
+  diagram: each term with its meaning and a link to its code home (the term's bare `where` anchor,
+  opened in the editor / on GitHub exactly like a node's source ⌘-click). A term with no single code
+  home shows no link.
 - **Diff overlay** *(on the Subsystems views)* — pass a change-impact report and the viewer lands on
   the Subsystems overview in **diff** mode: each subsystem box is badged with its subtree's change
   (added/modified/deleted/rippled), drilling a subsystem badges its changed components, and the side

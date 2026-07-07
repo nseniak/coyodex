@@ -44,7 +44,9 @@ class Role:
 class GlossaryRow:
     term: str
     meaning: str = ""
-    where: str = ""           # "Defined / used in" (md link)
+    where: str | None = None  # the term's canonical code home: a bare `path:line` or `path/`
+                              # anchor (like Component.anchor / Entity.source), or None when the
+                              # concept has no single code home (a pure product-level term)
 
 
 @dataclass

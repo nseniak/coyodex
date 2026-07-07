@@ -196,8 +196,11 @@
           "type": "string"
         },
         "where": {
-          "type": "string",
-          "description": "markdown link to where the term is defined/used."
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. The term's canonical code home (where it is defined); null when the concept has no single code home (a pure product-level term)."
         }
       },
       "required": [

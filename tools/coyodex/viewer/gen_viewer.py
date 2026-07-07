@@ -241,15 +241,16 @@ def _safe_member(s: str) -> str:
 
 
 def _relation_label(edge: dict[str, Any]) -> str:
-    """Arrow label — a REAL field name only (an invented relationship verb isn't grounded in code).
-    The backing field is resolved once in build_graph (`fk_field` / `fk_side`); here we only format it:
-    forward (field on the source / arrow-tail) -> the field name (`subscription`, `org_id`);
-    reverse (FK on the target / arrow-head) -> `↩ field` (`↩ org_id`);
-    blank when no field backs the relation (the `{how}` note then explains it in the click-panel)."""
-    field = edge.get("fk_field")
-    if not field:
+    """Arrow label — REAL field name(s) only (an invented relationship verb isn't grounded in code).
+    The backing field(s) are resolved once in build_graph (`fk_fields` / `fk_side`); here we only
+    format them: forward (fields on the source / arrow-tail) -> the field name (`subscription`,
+    `org_id`), or a comma-joined list for a composite key (`user_id, page_id`); reverse (FK on the
+    target / arrow-head) -> `↩ field`; blank when no field backs the relation (the `{how}` note then
+    explains it in the click-panel)."""
+    fields = edge.get("fk_fields") or []
+    if not fields:
         return ""
-    label = _safe_label(str(field))
+    label = _safe_label(", ".join(str(f) for f in fields))
     return label if edge.get("fk_side") == "src" else "↩ " + label
 
 
@@ -1438,6 +1439,7 @@ __STYLE__
           <button data-view="gp">Golden Path</button>
           <button data-view="container">Subsystems</button>
           <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
+          <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
 
           <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
                landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's

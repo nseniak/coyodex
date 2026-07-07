@@ -23,6 +23,7 @@ from coyodex.model import (
     EvidenceItem,
     Flow,
     FlowStep,
+    GlossaryRow,
     GoldenStep,
     Group,
     NonEntityType,
@@ -247,6 +248,31 @@ def test_legacy_hash_anchor_is_a_blocking_problem():
     m = make_valid_model()
     m.entities[0].source = "src/order.py#L1"
     assert any("source" in p and "not a valid" in p for p in problems_of(m))
+
+
+# --- glossary `where`: a nullable file-OR-directory source anchor, like entities[].source ---
+
+def test_glossary_where_accepts_bare_file_dir_and_null():
+    m = make_valid_model()
+    m.glossary = [GlossaryRow(term="Order", meaning="a thing", where="src/order.py:12"),
+                  GlossaryRow(term="Domain", meaning="the dir", where="src/domain/"),
+                  GlossaryRow(term="Product", meaning="no code home", where=None)]
+    assert problems_of(m) == []
+
+
+def test_glossary_where_rejects_markdown_link():
+    m = make_valid_model()
+    m.glossary = [GlossaryRow(term="Order", meaning="a thing",
+                              where="[order.py](src/order.py:12)")]
+    assert any("glossary 'Order' where" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_glossary_where_dead_anchor_warns_with_check_sources():
+    with tempfile.TemporaryDirectory() as td:
+        m = make_valid_model()
+        m.glossary = [GlossaryRow(term="Ghost", meaning="gone", where="src/nowhere.py:1")]
+        _, warnings = validate_model(m, repo_root=Path(td), check_sources=True)
+        assert any("glossary 'Ghost'" in w and "does not resolve" in w for w in warnings)
 
 
 def test_colon_range_anchor_is_not_flagged():

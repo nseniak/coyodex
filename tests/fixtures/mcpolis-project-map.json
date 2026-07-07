@@ -41,122 +41,122 @@
     {
       "term": "MCP Hero",
       "meaning": "User-facing brand for the gateway product",
-      "where": "[README.md](README.md#L10)"
+      "where": "README.md:10"
     },
     {
       "term": "mcpolis",
       "meaning": "Internal codename for every technical artifact (modules, DBs, env vars)",
-      "where": "[CLAUDE.md](CLAUDE.md)"
+      "where": "CLAUDE.md"
     },
     {
       "term": "Organization (org)",
       "meaning": "A tenant — the top-level isolation boundary everything is scoped to",
-      "where": "[organization_repository.py](backend/src/mcpolis/domain/ports/organization_repository.py#L41)"
+      "where": "backend/src/mcpolis/domain/ports/organization_repository.py:41"
     },
     {
       "term": "Upstream MCP",
       "meaning": "A backend MCP server added to the gateway whose tools are proxied",
-      "where": "[upstream.py](backend/src/mcpolis/domain/model/upstream.py#L84)"
+      "where": "backend/src/mcpolis/domain/model/upstream.py:84"
     },
     {
       "term": "Remote HTTP MCP",
       "meaning": "Upstream reached at a URL (streamable-http transport)",
-      "where": "[upstream.py](backend/src/mcpolis/domain/model/upstream.py#L79)"
+      "where": "backend/src/mcpolis/domain/model/upstream.py:79"
     },
     {
       "term": "Hosted stdio MCP",
       "meaning": "`command:`-style upstream the gateway runs in a sandbox",
-      "where": "[upstream.py](backend/src/mcpolis/domain/model/upstream.py#L45)"
+      "where": "backend/src/mcpolis/domain/model/upstream.py:45"
     },
     {
       "term": "Gateway",
       "meaning": "The single MCP endpoint exposed to clients at `/mcp` or `/mcp/<slug>`",
-      "where": "[gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py#L281)"
+      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:281"
     },
     {
       "term": "Tool",
       "meaning": "An action an upstream exposes; surfaced through the gateway with a prefixed name",
-      "where": "[upstream.py](backend/src/mcpolis/domain/model/upstream.py#L161)"
+      "where": "backend/src/mcpolis/domain/model/upstream.py:161"
     },
     {
       "term": "Tool category",
       "meaning": "readOnly / destructive / other annotation buckets used for role toggles",
-      "where": "[policy_engine.py](backend/src/mcpolis/domain/services/policy_engine.py#L61)"
+      "where": "backend/src/mcpolis/domain/services/policy_engine.py:61"
     },
     {
       "term": "Role",
       "meaning": "Named permission set deciding which MCPs and tools a member may use",
-      "where": "[settings.py](backend/src/mcpolis/domain/model/settings.py#L47)"
+      "where": "backend/src/mcpolis/domain/model/settings.py:47"
     },
     {
       "term": "Policy / argument check",
       "meaning": "Per-tool regex allow/forbid rule on argument values, enforced before forwarding",
-      "where": "[policy.py](backend/src/mcpolis/domain/model/settings.py#L8)"
+      "where": "backend/src/mcpolis/domain/model/settings.py:8"
     },
     {
       "term": "Auth mode",
       "meaning": "How an upstream authenticates: service-account, admin OAuth, or per-user OAuth",
-      "where": "[policy.py](backend/src/mcpolis/domain/model/policy.py#L8)"
+      "where": "backend/src/mcpolis/domain/model/policy.py:8"
     },
     {
       "term": "Per-user OAuth",
       "meaning": "Each member signs in to the upstream as themselves; tokens stored encrypted",
-      "where": "[connection_store.py](backend/src/mcpolis/adapters/repositories/connection_store.py#L9)"
+      "where": "backend/src/mcpolis/adapters/repositories/connection_store.py:9"
     },
     {
       "term": "Service token",
       "meaning": "Revocable `svct_` bearer bound to one org and one role, for headless agents",
-      "where": "[service_token.py](backend/src/mcpolis/domain/model/service_token.py#L35)"
+      "where": "backend/src/mcpolis/domain/model/service_token.py:35"
     },
     {
       "term": "Sandbox",
       "meaning": "Isolated environment that runs a stdio MCP command",
-      "where": "[sandbox_service.py](backend/src/mcpolis/domain/services/sandbox_service.py#L277)"
+      "where": "backend/src/mcpolis/domain/services/sandbox_service.py:277"
     },
     {
       "term": "E2B",
       "meaning": "Hosted sandbox provider (production default) for stdio MCPs",
-      "where": "[service.py](backend/src/mcpolis/adapters/sandbox_e2b/service.py#L123)"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123"
     },
     {
       "term": "Template variable / password",
       "meaning": "Per-MCP `${NAME}` value (plain or secret) substituted at launch",
-      "where": "[template_var.py](backend/src/mcpolis/domain/model/template_var.py#L66)"
+      "where": "backend/src/mcpolis/domain/model/template_var.py:66"
     },
     {
       "term": "Sandbox file",
       "meaning": "Per-MCP uploaded credential file written into the sandbox at session start",
-      "where": "[sandbox_file.py](backend/src/mcpolis/domain/model/sandbox_file.py#L73)"
+      "where": "backend/src/mcpolis/domain/model/sandbox_file.py:73"
     },
     {
       "term": "Admin MCP",
       "meaning": "A second MCP at `/admin-mcp` for managing MCP Hero itself conversationally",
-      "where": "[admin_mcp_controller.py](backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py#L99)"
+      "where": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99"
     },
     {
       "term": "Superadmin / operator",
       "meaning": "Email-allowlisted operator with cross-org support access",
-      "where": "[superadmin_controller.py](backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py#L19)"
+      "where": "backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:19"
     },
     {
       "term": "Standalone vs cloud",
       "meaning": "Single-org file-backed mode vs multi-org Mongo/Redis SaaS",
-      "where": "[config.py](backend/src/mcpolis/entrypoints/config.py#L15)"
+      "where": "backend/src/mcpolis/entrypoints/config.py:15"
     },
     {
       "term": "Plan / subscription",
       "meaning": "Per-org seat + feature limits (FREE vs TEAM)",
-      "where": "[plan_policy.py](backend/src/mcpolis/domain/services/plan_policy.py#L34)"
+      "where": "backend/src/mcpolis/domain/services/plan_policy.py:34"
     },
     {
       "term": "Audit entry",
       "meaning": "A logged gateway action: who, what tool, policy decision, outcome, latency",
-      "where": "[audit.py](backend/src/mcpolis/domain/model/audit.py#L8)"
+      "where": "backend/src/mcpolis/domain/model/audit.py:8"
     },
     {
       "term": "Slug",
       "meaning": "URL-safe org name forming the gateway path `/mcp/<slug>`",
-      "where": "[org_context.py](backend/src/mcpolis/entrypoints/middleware/org_context.py#L84)"
+      "where": "backend/src/mcpolis/entrypoints/middleware/org_context.py:84"
     }
   ],
   "use_cases": [
@@ -593,6 +593,8 @@
       "depends_on": "C8 C21 C2 C3",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -604,6 +606,8 @@
       "depends_on": "C72 C5 C12 C111",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -615,6 +619,8 @@
       "depends_on": "C72 C6 C23",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -626,6 +632,8 @@
       "depends_on": "C72 C7",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -637,6 +645,8 @@
       "depends_on": "C21 C24 C25 C45",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -648,6 +658,8 @@
       "depends_on": "C21 C26 C22 C33",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -659,6 +671,8 @@
       "depends_on": "C22 C55",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -670,6 +684,8 @@
       "depends_on": "C49 C108 C109 C107",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -681,6 +697,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -692,6 +710,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -703,6 +723,8 @@
       "depends_on": "C55 C21",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -714,6 +736,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -725,6 +749,8 @@
       "depends_on": "C109",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -736,6 +762,8 @@
       "depends_on": "C21 C26 C22 C41",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -747,6 +775,8 @@
       "depends_on": "C101 C110",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -758,6 +788,8 @@
       "depends_on": "C72",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -769,6 +801,8 @@
       "depends_on": "C22",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -780,6 +814,8 @@
       "depends_on": "C100 C27",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -791,6 +827,8 @@
       "depends_on": "C37 C62",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -802,6 +840,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -813,6 +853,8 @@
       "depends_on": "C23 C24 C25 C64",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -824,6 +866,8 @@
       "depends_on": "C55 C54 C57 C62",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -835,6 +879,8 @@
       "depends_on": "C42 C54",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -846,6 +892,8 @@
       "depends_on": "C64 C61",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -857,6 +905,8 @@
       "depends_on": "C23 C64 C62 C104",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -868,6 +918,8 @@
       "depends_on": "C53 C40 C64 C24",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -879,6 +931,8 @@
       "depends_on": "C64 C47 C28 C100",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -890,6 +944,8 @@
       "depends_on": "C47 C107 C103",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -901,6 +957,8 @@
       "depends_on": "C64 C27",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -912,6 +970,8 @@
       "depends_on": "C47 C103",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -923,6 +983,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -934,6 +996,8 @@
       "depends_on": "C52",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -945,6 +1009,8 @@
       "depends_on": "C34 C104",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -956,6 +1022,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -967,6 +1035,8 @@
       "depends_on": "C111 C24",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -978,6 +1048,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -989,6 +1061,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1000,6 +1074,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1011,6 +1087,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1022,6 +1100,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1033,6 +1113,8 @@
       "depends_on": "C57",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1044,6 +1126,8 @@
       "depends_on": "C54",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1055,6 +1139,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1066,6 +1152,8 @@
       "depends_on": "C58",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1077,6 +1165,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1088,6 +1178,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1099,6 +1191,8 @@
       "depends_on": "C46 C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1110,6 +1204,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1121,6 +1217,8 @@
       "depends_on": "C48",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1132,6 +1230,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1143,6 +1243,8 @@
       "depends_on": "C52",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1154,6 +1256,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1165,6 +1269,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1176,6 +1282,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1187,6 +1295,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1198,6 +1308,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1209,6 +1321,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1220,6 +1334,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1231,6 +1347,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1242,6 +1360,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1253,6 +1373,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1264,6 +1386,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1275,6 +1399,8 @@
       "depends_on": "C49",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1286,6 +1412,8 @@
       "depends_on": "C65 C66 C67 C44",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1297,6 +1425,8 @@
       "depends_on": "C67 C45",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1308,6 +1438,8 @@
       "depends_on": "C36 C43",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1319,6 +1451,8 @@
       "depends_on": "C45",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1330,6 +1464,8 @@
       "depends_on": "C36 C70 C60",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1341,6 +1477,8 @@
       "depends_on": "C60 C38",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1352,6 +1490,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1363,6 +1503,8 @@
       "depends_on": "C36",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1374,6 +1516,8 @@
       "depends_on": "C41 C56",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1385,6 +1529,8 @@
       "depends_on": "C74 C76",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1396,6 +1542,8 @@
       "depends_on": "C14 C15 C17",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1407,6 +1555,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1418,6 +1568,8 @@
       "depends_on": "C74 C99",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1429,6 +1581,8 @@
       "depends_on": "C75 C98 C97",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1440,6 +1594,8 @@
       "depends_on": "C74 C84 C85",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1451,6 +1607,8 @@
       "depends_on": "C80 C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1462,6 +1620,8 @@
       "depends_on": "C92",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1473,6 +1633,8 @@
       "depends_on": "C74 C80 C93",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1484,6 +1646,8 @@
       "depends_on": "C74 C93",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1495,6 +1659,8 @@
       "depends_on": "C74 C97",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1506,6 +1672,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1517,6 +1685,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1528,6 +1698,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1539,6 +1711,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1550,6 +1724,8 @@
       "depends_on": "C73",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1561,6 +1737,8 @@
       "depends_on": "C73",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1572,6 +1750,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1583,6 +1763,8 @@
       "depends_on": "C74 C97",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1594,6 +1776,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1605,6 +1789,8 @@
       "depends_on": "C92",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1616,6 +1802,8 @@
       "depends_on": "C76 C86",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1627,6 +1815,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1638,6 +1828,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1649,6 +1841,8 @@
       "depends_on": "C14",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1660,6 +1854,8 @@
       "depends_on": "C74",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1671,6 +1867,8 @@
       "depends_on": "D8 D7",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1682,6 +1880,8 @@
       "depends_on": "C27",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1693,6 +1893,8 @@
       "depends_on": "D4",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1704,6 +1906,8 @@
       "depends_on": "C46",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1715,6 +1919,8 @@
       "depends_on": "D6",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1726,6 +1932,8 @@
       "depends_on": "D8",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1737,6 +1945,8 @@
       "depends_on": "D7",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1748,6 +1958,8 @@
       "depends_on": "D20",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1759,6 +1971,8 @@
       "depends_on": "D1",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1770,6 +1984,8 @@
       "depends_on": "D2",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1781,6 +1997,8 @@
       "depends_on": "D2",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1792,6 +2010,8 @@
       "depends_on": "D2",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1803,6 +2023,8 @@
       "depends_on": "",
       "anchor": null,
       "confidence": "",
+      "files": [],
+      "evidence": [],
       "extra": {}
     }
   ],
@@ -1816,6 +2038,9 @@
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:89",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1827,6 +2052,9 @@
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:91",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1838,6 +2066,9 @@
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:207",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1849,6 +2080,9 @@
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:28",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1860,6 +2094,9 @@
       "where_configured": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1871,6 +2108,9 @@
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:148",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1882,6 +2122,9 @@
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:117",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1893,6 +2136,9 @@
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:123",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1904,6 +2150,9 @@
       "where_configured": "compose/vector/vector.toml:248",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1915,6 +2164,9 @@
       "where_configured": "docker-compose.yml:192",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1926,6 +2178,9 @@
       "where_configured": "docker-compose.yml:1",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1937,6 +2192,9 @@
       "where_configured": "docker/nginx.conf:1",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1948,6 +2206,9 @@
       "where_configured": "backend/pyproject.toml:14",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1959,6 +2220,9 @@
       "where_configured": "backend/pyproject.toml:21",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1970,6 +2234,9 @@
       "where_configured": "backend/pyproject.toml:12",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1981,6 +2248,9 @@
       "where_configured": "backend/pyproject.toml:22",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -1992,6 +2262,9 @@
       "where_configured": "backend/pyproject.toml:36",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -2003,6 +2276,9 @@
       "where_configured": "backend/pyproject.toml:44",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -2014,6 +2290,9 @@
       "where_configured": "backend/pyproject.toml:51",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -2025,6 +2304,9 @@
       "where_configured": "backend/pyproject.toml:27",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -2036,6 +2318,9 @@
       "where_configured": "backend/pyproject.toml:55",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     },
     {
@@ -2047,6 +2332,9 @@
       "where_configured": "frontend/package.json:16",
       "confidence": "verified",
       "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
       "extra": {}
     }
   ],

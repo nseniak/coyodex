@@ -27,6 +27,7 @@ const HAS_GROUPING = __HAS_GROUPING__;
 const HAS_DOMAIN = __HAS_DOMAIN__;
 const HAS_SUBDOMAINS = __HAS_SUBDOMAINS__;  // domain model grouped into subdomains -> Domain view leads with the overview
 const HAS_GP = __HAS_GP__;
+const HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;  // gates the Glossary tab
 const CONTEXT_EDGES = __CONTEXT_EDGES__;
 const HAS_DIFF = __HAS_DIFF__;
 const META = __META__;
@@ -583,8 +584,10 @@ function showEdge(e) {
     ? '<dt>Cardinality</dt><dd>' + esc((e.src_card || '') + ' → ' + (e.dst_card || '')) + '</dd>' : '';
   // How the relation is implemented: the backing field (resolved in build_graph; `↩`-named when it
   // lives on the target/head), else the authored `{how}` note for a field-less / indirect relation.
-  const impl = e.fk_field
-    ? esc((e.fk_side === 'dst' ? nm(e.dst) : nm(e.src)) + '.' + e.fk_field)
+  const fkFields = e.fk_fields || [];
+  const fkText = fkFields.length > 1 ? '(' + fkFields.join(', ') + ')' : fkFields[0];
+  const impl = fkFields.length
+    ? esc((e.fk_side === 'dst' ? nm(e.dst) : nm(e.src)) + '.' + fkText)
       + (e.fk_side === 'dst' ? ' <span class="muted">(back-reference)</span>' : '')
     : (e.how ? mdInline(e.how) : '');
   const implRow = impl ? '<dt>Implemented by</dt><dd>' + impl + '</dd>' : '';
@@ -2041,7 +2044,7 @@ function bindFor(s) {
   else bindComponent();
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
-  if (kind === 'context' || kind === 'component' || kind === 'domain') return kind;
+  if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary') return kind;
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
   if (kind === 'gp' || kind === 'gpstep' || kind === 'usecase') return 'gp';
@@ -2054,6 +2057,7 @@ function stateTitle(s) {
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
+  if (s.kind === 'glossary') return 'Glossary';
   if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
   if (s.kind === 'bridge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.sid) + ' → ' + nm(s.sd); }
@@ -2088,6 +2092,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
+  if (s.kind === 'glossary') return [{ kind: 'glossary' }];
   const trail = [{ kind: 'container' }];                  // the Subsystems overview is the root of this branch
   if (s.kind === 'subsystem') trail.push(...groupChain('subsystem', 'sid', s.sid));  // full nesting path top → sid
   else if (s.kind === 'edge') trail.push({ kind: 'edge', a: s.a, b: s.b });  // a pair lives beside the subsystems
@@ -2108,7 +2113,8 @@ function renderChrome(s) {
   // next altitude where one exists, or to the source at a leaf (Components / Domain entities / a GP
   // step). All three are "drilling in", so the pill reads the same everywhere instead of splitting
   // "drill down" vs "open source" (⌘-click stays as a shortcut for anyone who already learned it).
-  drillhint.hidden = false;
+  // The Glossary table has no focus/drill affordance — hide the pill there; every diagram view shows it.
+  drillhint.hidden = s.kind === 'glossary';
   drillhint.innerHTML = 'Click to focus · double-click (or its icon) to drill in';
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
@@ -2178,11 +2184,45 @@ function refitStage() {
   });
 }
 
+// The Glossary tab: the ubiquitous-language terms as a scrollable table (term · meaning · a link to
+// the term's code home). Not a diagram — written straight into #diagram. Each `where` is a bare
+// `path:line`/`path/` anchor; a local one becomes a source-open button (editor/GitHub, exactly like a
+// node's ⌘-click), an off-repo/absent one stays plain text.
+function renderGlossary() {
+  const rows = (GRAPH.glossary || []).map((g) => {
+    const where = g.where || '';
+    const { file, line } = where ? whereNode(where) : { file: '', line: null };
+    let cell = '<span class="gloss-none">—</span>';
+    if (where && localRef(where)) {
+      const rel = cleanPath(file, line);
+      const base = rel.replace(/\/+$/, '').split('/').pop() + (line ? ':' + line : '');
+      cell = `<button type="button" class="src srclink gloss-src" data-where="${esc(where)}"`
+        + ` title="Open in editor or on GitHub">${esc(base)}</button>`;
+    } else if (where) {
+      cell = `<span class="gloss-plain">${esc(cleanPath(file, line))}</span>`;
+    }
+    return `<tr><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${cell}</td></tr>`;
+  }).join('');
+  const head = document.getElementById('stagehead');
+  const pad = head ? head.offsetHeight + 12 : 60;  // clear the absolutely-positioned tab/breadcrumb bar
+  diagram.innerHTML = `<div class="glossary-wrap" style="padding-top:${pad}px">`
+    + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
+    + `<tbody>${rows}</tbody></table></div>`;
+  diagram.querySelectorAll('.gloss-src').forEach((btn) => {
+    const where = btn.getAttribute('data-where');
+    btn.addEventListener('click', () => openSource(whereNode(where)));
+  });
+}
+
 async function render() {
   const seq = ++renderSeq;
   hideTip();  // a re-render replaces the diagram — drop any tooltip from the old one
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   const s = history[hi];
+  // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
+  // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
+  // before the diagram path, the same shape as the degraded "could not render" branch below.
+  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; renderChrome(s); return; }
   // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,
   // not throw an unhandled rejection that freezes the view mid-navigation. Show a message + keep the
   // chrome (back/forward still work) so the user can step out.
@@ -2808,6 +2848,7 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'gp' && !HAS_GP) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'glossary' && !HAS_GLOSSARY) { b.style.display = 'none'; return; }
   b.addEventListener('click', () => go({ kind: b.dataset.view }));
 });
 navback.addEventListener('click', back);

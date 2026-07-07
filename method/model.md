@@ -46,7 +46,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "commit": "<short sha>", "committed": "<YYYY-MM-DD>", "built": "<YYYY-MM-DD HH:MM>",
 
   "roles":       [ { "name", "kind": "human|service", "wants", "drives" } ],
-  "glossary":    [ { "term", "meaning", "where" } ],
+  "glossary":    [ { "term", "meaning", "where": "<path:line|path/|null>" } ],
   "use_cases":   [ { "id": "UCn", "name", "actor", "trigger_outcome" } ],
   "golden_path": [ { "id": "GPn", "title", "uc": "UCn", "why": "<prerequisite or null>" } ],
 
@@ -135,8 +135,11 @@ Semantics, stated on the fields:
     whether the fact belongs in the Deployment or Config table instead of a per-element note.
 - **Anchor formats.** Every source-location string in the map uses ONE canonical, bare `path:line`
   syntax (see the schema for the exact shape). `components[].anchor`, `entities[].source`,
-  `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `entry_points[].entity`,
-  and `evidence[].file` all use it. The one exception is group anchors (`subsystems[].anchor` /
+  `glossary[].where`, `components[].entry_point`, `deps[].where_configured`, `edges[].where`,
+  `entry_points[].entity`, and `evidence[].file` all use it — `glossary[].where` and the two file
+  OR directory fields (`components[].anchor`, `entities[].source`) may also be a bare directory ref
+  `path/`, and `glossary[].where` is additionally nullable (a pure product-level term with no single
+  code home). The one exception is group anchors (`subsystems[].anchor` /
   `subdomains[].anchor`), which stay **markdown links** `[dir](path/dir/)` since a directory needs
   an authored label. `coyodex validate` rejects any anchor written some other way.
 - **`components[].anchor`** is where the component *lives*, distinct from `entry_point` (where it's
