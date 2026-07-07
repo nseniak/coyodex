@@ -134,6 +134,11 @@ body:not(.served) #treetoggle { display: none; }
 /* folded away via the header toggle, or absent when the repo has no walkable tree */
 body.tree-hidden #tree, body.tree-hidden #treeresizer { display: none; }
 body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #treetoggle { display: none; }
+/* Folder peek: while the browser is folded away, selecting a folder element reveals it IN the code
+   viewer's slot so the reader can drill into that folder (picking a file there commits it to the code
+   viewer and ends the peek). The browser grows to fill the slot; the code viewer steps aside. */
+body.tree-hidden.tree-peek #tree { display: flex; flex: 1 1 0; width: auto; }
+body.tree-hidden.tree-peek #codeview { display: none; }
 
 /* Info pane: now the BOTTOM of the left column (was a fixed-width side pane). Full column width; its
    HEIGHT is the resizable dimension (dragged via #vsplit, persisted). */

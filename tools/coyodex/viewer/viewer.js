@@ -415,6 +415,7 @@ function resetScene(scene) {  // clear selection + focus, restore the scene's de
   scene.selectedKey = null;
   scene.defaultPanel();
   highlightTreePath(null);  // drop the file-browser highlight too
+  setTreePeek(false);       // and close any transient folder peek
 }
 
 // A click whose pointer moved far from its mousedown is the tail of a drag-pan — ignore it,
@@ -574,6 +575,7 @@ function showNodeDetail(id) {
 function showNodeDetailSynced(id) {
   showNodeDetail(id);
   if (anchorSetFor(id).length > 1) syncTreeToNode(id);
+  updateFolderPeek(id);  // a folder element peeks the file browser open when it's folded (see setTreePeek)
 }
 
 function showEdge(e) {
@@ -2281,7 +2283,10 @@ async function render() {
   // it would just be thrown away, and (since showNode/syncTreeToNode mirror into the file browser) it'd
   // also plant a spurious intermediate tree-highlight that throws off the near/far centering heuristic
   // in highlightTreePath (the REAL previous selection stops being `prevRow` for the one that matters).
-  if (!pendingSelect && !pendingElementsList && !(s.sel && mainScene.selectors[s.sel])) applyDefaultPanel(s);
+  // Landing on a view with nothing selected (a tab / drill, not a folder element click): show its
+  // default panel and close any folder peek carried over from the previous view. An explicit selection
+  // (pendingSelect below) instead runs through updateFolderPeek, which re-peeks if it's a folder.
+  if (!pendingSelect && !pendingElementsList && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setTreePeek(false); }
   if (mode === 'diff' && HAS_DIFF) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
@@ -2354,6 +2359,36 @@ let suppressTreeScroll = false;
 // Strip it so the two always match.
 function treeKey(p) { return String(p || '').replace(/\/+$/, ''); }
 
+// --- folder peek ----------------------------------------------------------------
+// When the file browser is folded away (tree-hidden), selecting a diagram element that anchors a FOLDER
+// reveals the browser IN the code viewer's slot (the CSS `tree-peek` state), expanded to that folder,
+// so the reader can drill into it. Picking a file there commits it to the code viewer and ends the peek.
+// The fold flag itself (tree-hidden / its localStorage) is never touched — the browser folds right back
+// once a file is chosen. Peek only applies to the folded state; when the browser is unfolded it's a no-op.
+let treePeek = false;
+let suppressPeek = false;  // one-shot: a file the reader just picked in the browser is loading — the
+                           // owning-folder reselection that follows must NOT re-peek the browser over it.
+function setTreePeek(on) {
+  if (on === treePeek) return;
+  treePeek = on;
+  document.body.classList.toggle('tree-peek', on);
+  // The header toggle reads "off" (dimmed) when the browser is folded — but during a peek the browser is
+  // visible, so it shouldn't look off then.
+  treeToggleBtn.classList.toggle('off', document.body.classList.contains('tree-hidden') && !on);
+}
+// After an active selection (showNodeDetailSynced): peek the browser open for a folder element, or end
+// the peek for one that shows a real file (or the suppress flag, when the reader just picked a file).
+function updateFolderPeek(id) {
+  if (!SERVED) return;
+  const consumed = suppressPeek; suppressPeek = false;
+  if (!document.body.classList.contains('tree-hidden')) { setTreePeek(false); return; }  // browser unfolded
+  const n = GRAPH.nodes[id];
+  const showsFile = !!(n && n.file && localRef(n.file) && !isDirRef(n.file, n.line));
+  if (showsFile || consumed) { setTreePeek(false); return; }
+  const path = pathByNode[id] || (n ? refTreePath(n.file, n.line) : null);
+  if (path && rowByPath[path] && rowByPath[path].entry.dir) { expandDir(path); setTreePeek(true); }
+}
+
 // One row: a twisty (folders only), the name, and an id chip when a node points exactly here.
 function makeRow(entry, depth) {
   const row = document.createElement('div');
@@ -2406,12 +2441,17 @@ function onRowClick(key) {
   if (e.dir) {
     // A folder expands; it selects ONLY when it is itself a mapped subsystem/component (e.node set).
     // An intermediate folder that merely sits under a mapped one just expands — opening it must not
-    // hijack the selection to the containing subsystem.
+    // hijack the selection to the containing subsystem. A folder click stays in a folder peek.
     toggleDir(key);
     // e.node set -> this exact path collided in node_path_index (filetree.py): e.others carries the
     // rest, kept instead of dropped — selectFromTreeAnchors decides whether that's one thing or several.
     if (e.node) { suppressTreeScroll = true; selectFromTreeAnchors([e.node, ...e.others], key); }
-  } else if (e.node) {
+    return;
+  }
+  // A file row: the reader wants its source in the code viewer, so end any folder peek and show it.
+  const wasPeeking = treePeek;
+  if (wasPeeking) setTreePeek(false);
+  if (e.node) {
     // A mapped file: selecting its node also loads it into the code viewer AT the node's line
     // (syncTreeToNode -> syncCodeView), so no separate loadCode is needed here.
     suppressTreeScroll = true;
@@ -2419,7 +2459,8 @@ function onRowClick(key) {
   } else {
     // A file that is not itself a node: show its source directly (no line). If it sits under a mapped
     // folder, also select that owning subsystem/entity — but the file the reader clicked is what the
-    // code viewer shows, not the owner's own anchor.
+    // code viewer shows, not the owner's own anchor, and it must NOT re-peek the browser over that file.
+    if (wasPeeking) suppressPeek = true;
     loadCode(e.path, null);
     if (e.sel) { suppressTreeScroll = true; selectFromTree(e.sel); }
   }
@@ -3044,6 +3085,7 @@ treeToggleBtn.addEventListener('click', () => {
   const hidden = document.body.classList.toggle('tree-hidden');
   treeToggleBtn.classList.toggle('off', hidden);
   lsSet(LS.treeHidden, hidden ? '1' : '0');
+  if (!hidden) setTreePeek(false);  // unfolding the browser for real ends any transient folder peek
   refitStage();  // the stage just got wider/narrower — re-fit the diagram into it
 });
 let treeResizing = false;
