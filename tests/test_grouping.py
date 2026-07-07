@@ -1977,7 +1977,7 @@ def test_glued_collection_relation_is_labelled() -> None:
 }"""
     g = parse_map(cards)
     rel = [e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E28"][0]
-    assert rel["fk_field"] == "access_tokens" and rel["fk_side"] == "src"
+    assert rel["fk_fields"] == ["access_tokens"] and rel["fk_side"] == "src"
 
 
 def test_parser_domain_cards_nodes_attrs_edges() -> None:
@@ -2050,14 +2050,33 @@ def test_fk_targets_token_exact() -> None:
     assert "E1" not in grammar.fk_targets("FK→E11")
 
 
+def test_resolve_backing_composite_key_keeps_all_fields() -> None:
+    # A composite foreign key — Snapshot's (user_id, page_id) both `FK→TrackedPage` — must resolve to
+    # BOTH backing fields, not arbitrarily just the first, so the label shows the whole key.
+    snapshot = [("user_id", "string", {"E1"}), ("page_id", "string", {"E1"}),
+                ("snapshot_id", "string", set())]
+    trackedpage = [("user_id", "string", set()), ("page_id", "string", set())]
+    fields, side = grammar.resolve_backing("E2", "E1", snapshot, trackedpage)
+    assert fields == ["user_id", "page_id"] and side == "src"
+
+
+def test_relation_label_composite_key_joins_fields() -> None:
+    # The canvas arrow label lists every backing field of a composite key, comma-joined.
+    assert gen_viewer._relation_label({"fk_fields": ["user_id", "page_id"], "fk_side": "src"}) \
+        == "user_id, page_id"
+    # Reverse (FK on the head) keeps the back-reference marker in front of the joined list.
+    assert gen_viewer._relation_label({"fk_fields": ["user_id", "page_id"], "fk_side": "dst"}) \
+        == "↩ user_id, page_id"
+
+
 def test_parser_domain_edge_carries_backing_and_how() -> None:
-    # The resolved backing (fk_field/fk_side) and the authored {how} note ride the serialized edge,
+    # The resolved backing (fk_fields/fk_side) and the authored {how} note ride the serialized edge,
     # so the canvas label and the panel's "Implemented by" line come from one resolution.
     g = parse_map(make_domain_map(_CARDS_BACKING_HOW))
     e12 = next(e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E2")
-    assert e12["fk_field"] == "org_id" and e12["fk_side"] == "dst"      # reverse FK on the target
+    assert e12["fk_fields"] == ["org_id"] and e12["fk_side"] == "dst"   # reverse FK on the target
     e13 = next(e for e in g["edges"] if e["src"] == "E1" and e["dst"] == "E3")
-    assert e13["fk_field"] is None and e13["how"] == "keyed by (org, upstream)"  # indirect -> how-note
+    assert e13["fk_fields"] == [] and e13["how"] == "keyed by (org, upstream)"  # indirect -> how-note
 
 
 def test_class_diagram_inheritance_arrow_labelled_inferred() -> None:

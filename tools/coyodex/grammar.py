@@ -159,23 +159,24 @@ def resolve_backing(
     src: str, dst: str,
     src_fields: list[tuple[str, str, set[str]]],
     dst_fields: list[tuple[str, str, set[str]]],
-) -> tuple[str | None, str | None]:
-    """Which REAL field implements a domain relation `src --> dst`, and on which side. Each field is a
-    `(name, type, fk_targets)` triple. Forward (the field lives on the source / arrow-tail) wins over
+) -> tuple[list[str], str | None]:
+    """Which REAL field(s) implement a domain relation `src --> dst`, and on which side. Each field is
+    a `(name, type, fk_targets)` triple. Forward (the field lives on the source / arrow-tail) wins over
     reverse, mirroring how the relation is authored on the source card:
-      - a SOURCE field typed by the target (`subscription:E15`) or marked `FK→dst` -> (name, 'src');
-      - else a TARGET field marked `FK→src` (the back-reference) -> (name, 'dst');
-      - else (None, None) — no field backs it (indirect / key-composition; carry a `{how}` note).
-    When several fields qualify (e.g. two source fields typed by the same target), the FIRST in
-    declaration order wins — arbitrary, but never wrong (every candidate points at the target).
-    The canvas label and the panel's "Implemented by" line both derive from this one resolution."""
-    for name, typ, fks in src_fields:
-        if typ == dst or dst in fks:
-            return name, "src"
-    for name, _typ, fks in dst_fields:
-        if src in fks:
-            return name, "dst"
-    return None, None
+      - SOURCE fields typed by the target (`subscription:E15`) or marked `FK→dst` -> (names, 'src');
+      - else TARGET fields marked `FK→src` (the back-reference) -> (names, 'dst');
+      - else ([], None) — no field backs it (indirect / key-composition; carry a `{how}` note).
+    ALL qualifying fields on the winning side are returned, in declaration order — a composite key
+    (e.g. Snapshot's (user_id, page_id) both `FK→TrackedPage`) yields both, so the label shows the
+    whole key instead of arbitrarily keeping just the first field. The canvas label and the panel's
+    "Implemented by" line both derive from this one resolution."""
+    fwd = [name for name, typ, fks in src_fields if typ == dst or dst in fks]
+    if fwd:
+        return fwd, "src"
+    rev = [name for name, _typ, fks in dst_fields if src in fks]
+    if rev:
+        return rev, "dst"
+    return [], None
 
 
 # ── T6 use-case flows ─────────────────────────────────────────────────────────────────────────────
