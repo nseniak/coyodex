@@ -96,6 +96,16 @@ class RecentsStore:
             self.folders = kept
             self.save()
 
+    def set_order(self, order: list[str]) -> None:
+        """Reorder the recents to match `order` (existing paths, in the new sequence). Unknown paths are
+        ignored; any current entry missing from `order` is appended (safety against a concurrent add)."""
+        known = set(self.folders)
+        new = [p for p in order if p in known]
+        seen = set(new)
+        new += [f for f in self.folders if f not in seen]
+        self.folders = new
+        self.save()
+
     def list(self) -> list[str]:
         return list(self.folders)
 
@@ -351,8 +361,10 @@ class Handler(BaseHTTPRequestHandler):
         if self.headers.get("X-Coyodex") != "serve":
             return self._send(403, "text/plain; charset=utf-8", b"missing X-Coyodex header")
         parts = [unquote(p) for p in urlparse(self.path).path.split("/") if p]
-        if parts[:1] == ["api"] and len(parts) == 2 and parts[1] in ("open", "forget"):
+        if parts[:1] == ["api"] and len(parts) == 2 and parts[1] in ("open", "forget", "reorder"):
             body = self._read_json()
+            if parts[1] == "reorder":
+                return self._reorder(body)
             path = str(body.get("path") or "") if isinstance(body, dict) else ""
             return self._open(path) if parts[1] == "open" else self._forget(path)
         return self._send(404, "text/plain; charset=utf-8", b"not found")
@@ -392,6 +404,15 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, "text/plain; charset=utf-8", b"missing path")
         with _STATE_LOCK:
             self.store.remove(path)
+            Handler.projects = build_projects(self.store.list())
+        return self._json({"ok": True})
+
+    def _reorder(self, body: object) -> None:
+        folders = body.get("folders") if isinstance(body, dict) else None
+        if not isinstance(folders, list):
+            return self._send(400, "text/plain; charset=utf-8", b"missing folders")
+        with _STATE_LOCK:
+            self.store.set_order([f for f in folders if isinstance(f, str)])
             Handler.projects = build_projects(self.store.list())
         return self._json({"ok": True})
 
@@ -577,10 +598,13 @@ input:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:tr
 .mini{padding:3px 9px;font-size:12px}
 .dir.empty{color:var(--faint);cursor:default}.dir.empty:hover{background:none}
 .cards{display:flex;flex-direction:column;gap:10px}
-.card{position:relative;border:1px solid var(--line);border-radius:12px;padding:14px 40px 14px 16px;background:var(--card);transition:border-color .12s,box-shadow .12s}
+.card{position:relative;border:1px solid var(--line);border-radius:12px;padding:14px 40px 14px 30px;background:var(--card);transition:border-color .12s,box-shadow .12s}
 .card:hover{border-color:var(--ring);box-shadow:0 2px 12px rgba(80,70,229,.08)}
 .card.clickable{cursor:pointer}
 .card.disabled{opacity:.6}.card.disabled:hover{border-color:var(--line);box-shadow:none}.card.disabled .x{opacity:1}
+.card.drag{opacity:.4}
+.grip{position:absolute;left:8px;top:0;bottom:0;display:flex;align-items:center;color:var(--faint);opacity:0;cursor:grab;font-size:13px;user-select:none}
+.card:hover .grip{opacity:.7}.grip:active{cursor:grabbing}
 .card .title{font-size:15px;font-weight:650;color:var(--accent)}
 .card.clickable:hover .title{text-decoration:underline}.card .title.dead{color:var(--fg)}
 .iconbtn{border:0;background:none;color:var(--faint);font-size:14px;padding:2px 7px;line-height:1}.iconbtn:hover{color:var(--fg)}
@@ -626,7 +650,7 @@ async function jpost(u,body){return fetch(u,{method:'POST',headers:H,body:JSON.s
 // cur = the folder currently DISPLAYED (may be a live preview while typing); curBase = the COMMITTED
 // current folder — changed only by an explicit click or Enter, never by typing. Relative paths resolve
 // against curBase, and clearing the input snaps the view back to it.
-let home=null,recents=[],cur=null,entries=[],curParent=null,typeSeq=0,curBase=null,dirRows=[],selIdx=-1;
+let home=null,recents=[],cur=null,entries=[],curParent=null,typeSeq=0,curBase=null,dirRows=[],selIdx=-1,dragSrc=null,dragging=false;
 const shorten=p=>home&&(p===home||p.startsWith(home+'/'))?'~'+p.slice(home.length):p;
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1400);}
 
@@ -636,22 +660,34 @@ async function loadRecents(){
   if(!recents.length){box.innerHTML='<div class="empty">No projects yet — add one above.</div>';renderQuick();return;}
   box.innerHTML='';
   for(const it of recents){
-    const c=document.createElement('div');c.className='card';
+    const c=document.createElement('div');c.className='card';c.draggable=true;c.dataset.path=it.path;
     const goal=it.goal?'<p class="goal">'+esc(it.goal)+'</p>':'';
     let meta='<span class="cpath" title="'+esc(it.path)+'">'+esc(shorten(it.path))+'</span>';
     if(it.commit)meta+='<span class="csha">'+esc(it.commit.slice(0,10))+'</span>';
     if(!it.ok)meta+='<span class="warn">No valid map yet</span>';
     else if(!it.rendered)meta+='<span class="warn">not rendered</span><button class="copy" data-path="'+esc(it.path)+'">Copy render cmd</button>';
-    c.innerHTML='<span class="title'+(it.ok&&it.rendered?'':' dead')+'">'+esc(it.title)+'</span>'+goal
+    c.innerHTML='<span class="grip" title="Drag to reorder">⠿</span><span class="title'+(it.ok&&it.rendered?'':' dead')+'">'+esc(it.title)+'</span>'+goal
       +'<div class="cmeta">'+meta+'</div><button class="x" title="Remove from list">✕</button>';
     if(!it.ok)c.classList.add('disabled');                                                                 // .coyodex present but no valid map -> dimmed, not clickable
-    if(it.ok&&it.rendered){c.classList.add('clickable');c.onclick=()=>{location.href='/p/'+encodeURIComponent(it.slug)+'/';};}  // whole card opens the map
+    if(it.ok&&it.rendered){c.classList.add('clickable');c.onclick=()=>{if(dragging){dragging=false;return;}location.href='/p/'+encodeURIComponent(it.slug)+'/';};}  // whole card opens the map (unless we just dragged)
+    // Drag to reorder. mousedown resets the flag so a plain click still opens; a drag sets it so the
+    // click that may follow the drop is swallowed. Order is persisted on drop.
+    c.addEventListener('mousedown',()=>{dragging=false;});
+    c.addEventListener('dragstart',e=>{dragSrc=c;dragging=true;c.classList.add('drag');e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain',it.path);});
+    c.addEventListener('dragend',()=>{c.classList.remove('drag');dragSrc=null;persistOrder();});
+    c.addEventListener('dragover',e=>{e.preventDefault();if(!dragSrc||dragSrc===c)return;const b=c.getBoundingClientRect();const before=(e.clientY-b.top)<b.height/2;c.parentNode.insertBefore(dragSrc,before?c:c.nextSibling);});
     c.querySelector('.x').onclick=async e=>{e.stopPropagation();await jpost('/api/forget',{path:it.path});loadRecents();};
     const cp=c.querySelector('.copy');
     if(cp)cp.onclick=e=>{e.stopPropagation();const cmd='cd "'+cp.dataset.path+'" && coyodex render .coyodex/project-map.json .coyodex/project-map.html';if(navigator.clipboard)navigator.clipboard.writeText(cmd);toast('Render command copied');};
     box.appendChild(c);
   }
   renderQuick();
+}
+// Persist the current card order (after a drag) to the server, and keep the local recents[] in sync.
+async function persistOrder(){
+  const order=[...$('recents').querySelectorAll('.card')].map(c=>c.dataset.path);
+  jpost('/api/reorder',{folders:order});
+  recents.sort((a,b)=>order.indexOf(a.path)-order.indexOf(b.path));
 }
 
 async function addPath(path){

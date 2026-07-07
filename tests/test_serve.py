@@ -153,6 +153,23 @@ def test_recents_store_missing_file_is_empty() -> None:
         assert RecentsStore(Path(td) / "does-not-exist.json").list() == []
 
 
+def test_recents_store_set_order() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        store_path = Path(td) / "recents.json"
+        s = RecentsStore(store_path)
+        for n in ("a", "b", "c"):
+            s.add(str(Path(td) / n))
+        names = lambda st: [Path(p).name for p in st.list()]
+        assert names(s) == ["c", "b", "a"]                       # most-recent first
+        stored = {Path(p).name: p for p in s.list()}             # the actual resolved paths (what the client sends)
+        s.set_order([stored["a"], stored["b"], stored["c"]])     # explicit reorder
+        assert names(s) == ["a", "b", "c"]
+        assert names(RecentsStore(store_path)) == ["a", "b", "c"]  # persisted
+        # A partial order: an unknown path is ignored; entries missing from it are appended in place.
+        s.set_order([stored["c"], "/nope/zzz"])
+        assert names(s) == ["c", "a", "b"]
+
+
 def test_recents_store_dedupes_same_dir_via_symlink() -> None:
     # The same directory reached two ways (here a symlink; on macOS/Windows also a case difference) must
     # collapse to ONE recents entry — samefile dedup, not string-equality.
