@@ -1528,6 +1528,11 @@ function resolveComponentEdge(m) {
 // fits/centers with nothing selected).
 let history = [];
 let hi = -1;  // index of the current state
+// A diagram's last pan/zoom, keyed by its view identity (stateKey), NOT by its history slot. So the
+// same diagram reached any way — back/forward, a tab, a breadcrumb crumb, or a fresh drill — reopens at
+// the zoom + position it was last left at, instead of a fresh fit. (Per-entry `vp` below covers only the
+// exact history slot; this covers the diagram wherever it reappears.)
+const vpByView = {};
 
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
@@ -1535,7 +1540,11 @@ function stateKey(s) {
 }
 function captureViewState() {  // stash the current pan/zoom + selection on the entry we're about to leave
   if (hi < 0 || !history[hi]) return;
-  if (mainPz) history[hi].vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
+  if (mainPz) {
+    const vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
+    history[hi].vp = vp;
+    vpByView[stateKey(history[hi])] = vp;  // remember this diagram's view so any later return reuses it
+  }
   history[hi].sel = mainScene ? mainScene.selectedKey : null;
 }
 function go(state) {
@@ -2118,9 +2127,12 @@ function renderChrome(s) {
   drillhint.innerHTML = 'Click to focus · double-click (or its icon) to drill in';
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
-  // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it
+  // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it.
+  // Only show the bar once it actually branches (a `›` between crumbs) — a lone crumb (a tab's own
+  // overview) is just the tab name repeated, so hide the whole bar there.
   crumb.innerHTML = '';
   const chain = ancestors(s);
+  if (crumb.parentElement) crumb.parentElement.hidden = chain.length < 2;
   chain.forEach((node, i) => {
     if (i) crumb.appendChild(document.createTextNode(' › '));
     const cur = i === chain.length - 1;
@@ -2289,8 +2301,11 @@ async function render() {
       dblClickZoomEnabled: false,  // double-click is for selecting/reading nodes, not zooming
       onZoom: updateZoomLevel,
     });
-    // history revisit: restore the pan/zoom we left this view with (zoom first, then absolute pan)
-    if (s.vp) { mainPz.zoom(s.vp.zoom); mainPz.pan(s.vp.pan); }
+    // Restore the pan/zoom this diagram was last left at (zoom first, then absolute pan). `s.vp` is the
+    // exact history slot (back/forward); `vpByView` catches the same diagram reached any other way — a
+    // tab, a breadcrumb crumb, or a re-drill — so it reopens where it was instead of a fresh fit.
+    const vp = s.vp || vpByView[stateKey(s)];
+    if (vp) { mainPz.zoom(vp.zoom); mainPz.pan(vp.pan); }
     updateZoomLevel();
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
   }
