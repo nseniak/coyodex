@@ -153,6 +153,23 @@ def test_recents_store_missing_file_is_empty() -> None:
         assert RecentsStore(Path(td) / "does-not-exist.json").list() == []
 
 
+def test_recents_store_dedupes_same_dir_via_symlink() -> None:
+    # The same directory reached two ways (here a symlink; on macOS/Windows also a case difference) must
+    # collapse to ONE recents entry — samefile dedup, not string-equality.
+    with tempfile.TemporaryDirectory() as td:
+        real = Path(td) / "real"
+        real.mkdir()
+        link = Path(td) / "link"
+        try:
+            link.symlink_to(real)
+        except OSError:
+            return  # platform without symlink support -> skip
+        s = RecentsStore(Path(td) / "recents.json")
+        s.add(str(real))
+        s.add(str(link))  # same dir via the symlink -> should replace, not duplicate
+        assert len(s.list()) == 1
+
+
 # --- load_project / build_projects ----------------------------------------------
 def test_load_project_valid_and_invalid() -> None:
     with tempfile.TemporaryDirectory() as td:

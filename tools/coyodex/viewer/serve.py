@@ -70,9 +70,23 @@ class RecentsStore:
             print(f"coyodex serve: could not save recents to {self.path} ({e})", file=sys.stderr)
 
     def add(self, folder: str) -> None:
-        """Add (or bump to front) a folder — stored as its resolved absolute path, deduplicated."""
+        """Add (or bump to front) a folder — stored as its resolved absolute path, deduplicated. Dedup
+        is by SAME DIRECTORY, not just an equal string: on a case-insensitive filesystem (macOS/Windows)
+        ``resolve()`` doesn't normalize case, so the same folder typed two ways would otherwise be added
+        twice — ``samefile`` collapses those (and symlinks to the same target)."""
         resolved = str(Path(folder).resolve())
-        self.folders = [resolved] + [f for f in self.folders if f != resolved]
+        target = Path(resolved)
+        kept: list[str] = []
+        for f in self.folders:
+            if f == resolved:
+                continue
+            try:
+                if target.samefile(f):  # same dir via a different spelling / a symlink -> drop the old entry
+                    continue
+            except OSError:
+                pass  # a stale entry whose folder is gone: keep it (the user can still remove it)
+            kept.append(f)
+        self.folders = [resolved] + kept
         self.save()
 
     def remove(self, folder: str) -> None:
@@ -590,7 +604,6 @@ input:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:tr
   <div class="bhead">
     <button id="up" title="Parent folder">↑</button>
     <div id="crumbs" class="crumbs"></div>
-    <button id="openfolder" class="primary" disabled>Add this folder</button>
     <button id="closebrowser" class="iconbtn" title="Close browser">✕</button>
   </div>
   <div id="quick" class="quick"></div>
@@ -641,7 +654,7 @@ async function loadRecents(){
 async function addPath(path){
   if(!path)return false;
   const r=await jpost('/api/open',{path});
-  if(r.ok){$('adderr').textContent='';await loadRecents();toast('Added');return true;}
+  if(r.ok){$('adderr').textContent='';await loadRecents();if(!$('browser').hidden)renderList();toast('Added');return true;}
   $('adderr').textContent=await r.text();return false;
 }
 
@@ -697,7 +710,6 @@ $('pathbar').addEventListener('keydown',e=>{
   else if(e.key==='Enter'){if(selIdx>=0&&dirRows[selIdx])dirRows[selIdx].click();else goPath();}
 });
 $('up').onclick=()=>{if(curParent)browse(curParent);};
-$('openfolder').onclick=()=>addPath(cur);
 $('closebrowser').onclick=closeBrowser;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('browser').hidden)closeBrowser();});
 // Click anywhere outside the browser (and not on the path bar that opens it) closes it — like Esc.
@@ -707,7 +719,6 @@ async function fetchBrowse(path){return jget('/api/browse'+(path?'?path='+encode
 function applyBrowse(d){
   home=d.home;cur=d.path;curParent=d.parent;entries=d.entries;
   $('up').disabled=!d.parent;
-  const of=$('openfolder');of.disabled=!d.hasMap;of.textContent=d.hasMap?'Add this folder':'No map here';
   renderCrumbs();renderList();
 }
 // A COMMITTED navigation (click / Up / crumb / chip): clear the typed text, show the folder, and make
@@ -734,14 +745,17 @@ function renderQuick(){
 }
 function renderList(){
   const q=filterFrag();const box=$('dirs');box.innerHTML='';selIdx=-1;dirRows=[];
+  const added=new Set(recents.map(r=>r.path));  // map folders already in the recents list
   const ordered=[...entries.filter(e=>e.hasMap),...entries.filter(e=>!e.hasMap)].filter(e=>e.name.toLowerCase().includes(q));
   if(!ordered.length){box.innerHTML='<div class="dir empty">'+(entries.length?'No matching folders.':'(no subfolders)')+'</div>';return;}
   for(const e of ordered){
     const row=document.createElement('div');row.className='dir'+(e.hasMap?' hasmap':'');
-    row.innerHTML='<span class="ic">'+(e.hasMap?'🗺️':'📁')+'</span><span class="dn">'+esc(e.name)+'</span>'
-      +(e.hasMap?'<span class="mapbadge">map</span><button class="mini primary add">+ Add</button>':'');
+    let tail='';
+    if(e.hasMap)tail='<span class="mapbadge">map</span>'
+      +(added.has(e.path)?'<button class="mini add" disabled>Added</button>':'<button class="mini primary add">+ Add</button>');
+    row.innerHTML='<span class="ic">'+(e.hasMap?'🗺️':'📁')+'</span><span class="dn">'+esc(e.name)+'</span>'+tail;
     row.onclick=()=>browse(e.path);  // a click commits into the folder (browse clears the filter)
-    const a=row.querySelector('.add');if(a)a.onclick=ev=>{ev.stopPropagation();addPath(e.path);};
+    const a=row.querySelector('.add');if(a&&!a.disabled)a.onclick=ev=>{ev.stopPropagation();addPath(e.path);};
     box.appendChild(row);
   }
   dirRows=[...box.querySelectorAll('.dir:not(.empty)')];  // for ↑/↓ keyboard selection
