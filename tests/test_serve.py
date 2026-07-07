@@ -20,14 +20,18 @@ from pathlib import Path
 from coyodex.viewer.filetree import FileTreeNode
 from coyodex.viewer.serve import (
     Project,
+    RecentsStore,
+    _has_map,
     _loopback_host,
     _safe_rel,
     _strip_dirty,
     _valid_commit,
-    discover_projects,
+    build_projects,
     git_blob_size,
     git_ls_files,
     git_show,
+    list_dirs,
+    load_project,
     project_tree,
 )
 
@@ -127,39 +131,64 @@ def test_git_reads_empty_commit_is_safe() -> None:
 
 
 # --- discovery ------------------------------------------------------------------
-def test_discover_projects_finds_maps_and_slugs() -> None:
+# --- recents store --------------------------------------------------------------
+def test_recents_store_add_remove_dedupe_persist() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        store_path = Path(td) / "recents.json"
+        s = RecentsStore(store_path)
+        assert s.list() == []
+        s.add(str(Path(td) / "a"))
+        s.add(str(Path(td) / "b"))
+        s.add(str(Path(td) / "a"))                 # re-add -> dedup + bump to front
+        assert [Path(p).name for p in s.list()] == ["a", "b"]
+        # Persisted + reloaded by a fresh store over the same file.
+        assert [Path(p).name for p in RecentsStore(store_path).list()] == ["a", "b"]
+        s.remove(str(Path(td) / "a"))
+        assert [Path(p).name for p in s.list()] == ["b"]
+        assert [Path(p).name for p in RecentsStore(store_path).list()] == ["b"]
+
+
+def test_recents_store_missing_file_is_empty() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        assert RecentsStore(Path(td) / "does-not-exist.json").list() == []
+
+
+# --- load_project / build_projects ----------------------------------------------
+def test_load_project_valid_and_invalid() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        good = make_project_dir(Path(td), "alpha")
+        assert load_project(str(good)) is not None
+        assert load_project(str(Path(td) / "nope")) is None          # no such folder
+        (Path(td) / "bare").mkdir()
+        assert load_project(str(Path(td) / "bare")) is None          # folder, but no .coyodex map
+        broken = Path(td) / "broken"
+        (broken / ".coyodex").mkdir(parents=True)
+        (broken / ".coyodex" / "project-map.json").write_text("{ not json", encoding="utf-8")
+        assert load_project(str(broken)) is None                     # map won't parse
+
+
+def test_build_projects_slug_collision_and_skips_invalid() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        one = make_project_dir(Path(td) / "one", "app")   # .../one/app
+        two = make_project_dir(Path(td) / "two", "app")   # .../two/app  -> same folder name
+        found = build_projects([str(one), str(two), str(Path(td) / "gone")])
+        assert set(found) == {"app", "app-2"}             # collision disambiguated; missing one skipped
+        assert found["app"].repo_root == one              # recents order decides who wins the bare name
+
+
+# --- filesystem browser ---------------------------------------------------------
+def test_list_dirs_flags_maps_and_parent() -> None:
     with tempfile.TemporaryDirectory() as td:
         parent = Path(td)
-        make_project_dir(parent, "alpha")
-        make_project_dir(parent, "beta")
-        (parent / "empty").mkdir()  # a plain dir with no .coyodex -> ignored
-        found = discover_projects([parent])
-        assert set(found) == {"alpha", "beta"}
-        assert found["alpha"].repo_root == (parent / "alpha").resolve()
-        assert found["alpha"].map_html.name == "project-map.html"
-
-
-def test_discover_projects_does_not_descend_into_project() -> None:
-    with tempfile.TemporaryDirectory() as td:
-        parent = Path(td)
-        proj = make_project_dir(parent, "alpha")
-        # A nested .coyodex inside a discovered project must NOT be registered as a second project.
-        (proj / "sub").mkdir()
-        (proj / "sub" / ".coyodex").mkdir()
-        shutil.copy(_FIXTURE_MAP, proj / "sub" / ".coyodex" / "project-map.json")
-        found = discover_projects([parent])
-        assert set(found) == {"alpha"}  # the nested one is below the stop point
-
-
-def test_discover_projects_slug_collision() -> None:
-    with tempfile.TemporaryDirectory() as td:
-        parent = Path(td)
-        make_project_dir(parent / "one", "app")   # parent/one/app
-        make_project_dir(parent / "two", "app")   # parent/two/app  -> same folder name
-        (parent / "one").mkdir(exist_ok=True)
-        found = discover_projects([parent])
-        assert len(found) == 2
-        assert "app" in found and "app-2" in found  # collision disambiguated
+        make_project_dir(parent, "withmap")               # has .coyodex/project-map.json
+        (parent / "plain").mkdir()                        # no map
+        data = list_dirs(parent)
+        assert data["path"] == str(parent)
+        assert data["parent"] == str(parent.parent)
+        by_name = {e["name"]: e for e in data["entries"]}  # type: ignore[union-attr]
+        assert by_name["withmap"]["hasMap"] is True
+        assert by_name["plain"]["hasMap"] is False
+        assert _has_map(parent / "withmap") and not _has_map(parent / "plain")
 
 
 # --- git-backed file-browser tree -----------------------------------------------

@@ -42,22 +42,26 @@ The same HTML adapts to how it's opened:
 - **Opened as a file** (double-click, `file://`, or committed and shared) — **DEGRADED**: the
   diagram + info panel. Self-contained and portable: it opens on any machine with nothing installed,
   because a `file://` page can't read your local source files.
-- **Opened through the map server** (`http://…/<project>/`) — **FULL**: the diagram + info panel
+- **Opened through the map server** (`http://…/p/<project>/`) — **FULL**: the diagram + info panel
   **plus** a live file browser and a syntax-highlighted code viewer. Both read their files from git
   **at the map's commit** (via `git ls-tree` / `git show`), so what you see always matches the map
   and edits on disk never leak in.
 
-Start the server (one server serves every project it finds — any folder with a `.coyodex/`):
+Start the server:
 
 ```bash
-make start                       # scans the parent dir; opens the project list in a browser
-# or directly, choosing what to scan and the port:
-.venv/bin/coyodex serve ~/code --port 8765 --open
+make start                       # opens the landing page in a browser
+# or directly:
+.venv/bin/coyodex serve --port 8765 --open
+.venv/bin/coyodex serve ~/code/myrepo   # add + serve a folder right away
 ```
 
-Then open `http://127.0.0.1:8765/` and pick a project (or go straight to `…/<project>/`). Nothing is
-embedded for these panes — the browser tree and code both come from the server on demand, so the
-committed HTML stays lean. highlight.js is lazy-loaded from a pinned + SRI CDN on first use.
+The server does **not** scan the disk. Open `http://127.0.0.1:8765/` and use **+ Add a project…** to
+browse to a folder containing a `.coyodex/project-map.json`; your choices are remembered in
+`~/.coyodex/serve-recents.json` and shown as a recents list on the next start (each openable, or
+removable with the ✕). Nothing is embedded for these panes — the browser tree and code both come from
+the server on demand, so the committed HTML stays lean. highlight.js is lazy-loaded from a pinned +
+SRI CDN on first use.
 
 ## What it shows — the C4 altitudes
 
