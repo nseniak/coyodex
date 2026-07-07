@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Render a map to a generated view in one step.
 
-Schema v2 (`project-map.json`) renders to EITHER view — the output extension picks it:
+`project-map.json` renders to EITHER view — the output extension picks it:
     coyodex render .coyodex/project-map.json .coyodex/project-map.html   # interactive viewer
     coyodex render .coyodex/project-map.json .coyodex/project-map.md    # committed markdown view
-Markdown INPUT is not supported: only a schema-v2 model (project-map.json) can be rendered.
+Markdown INPUT is not supported: only a model (project-map.json) can be rendered.
 
 The persisted artifacts are the model (the single source) and its generated views. The stages stay
 importable on their own (`coyodex.views`, `coyodex.viewer.gen_viewer`) for debugging.
@@ -32,7 +32,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     out.parent.mkdir(parents=True, exist_ok=True)
     if src.suffix != ".json":
-        print("ERROR: views are generated from a schema-v2 model (project-map.json) only — "
+        print("ERROR: views are generated from a model (project-map.json) only — "
               "markdown maps are not supported.", file=sys.stderr)
         return 2
     from coyodex.model import ModelError, load_model

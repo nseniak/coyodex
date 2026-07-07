@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""The canonical map model — schema v2 (JSON source). See method/model.md.
+"""The canonical map model (JSON source). See method/model.md.
 
-From schema v2 on, `.coyodex/project-map.json` is the committed source of truth; the markdown map
-and the HTML diagram are generated views. This module is the model's single definition: the typed
-dataclasses, the DETERMINISTIC serializer (same model → byte-identical JSON, so the committed file
-diffs cleanly), and the structural loader (`load_model`), which validates shape/types field-by-field
-and reports the exact path of a violation — the "schema validation" half of `coyodex validate`.
+`.coyodex/project-map.json` is the committed source of truth; the markdown map and the HTML
+diagram are generated views. This module is the model's single definition: the typed dataclasses,
+the DETERMINISTIC serializer (same model → byte-identical JSON, so the committed file diffs
+cleanly), and the structural loader (`load_model`), which validates shape/types field-by-field and
+reports the exact path of a violation — the "schema validation" half of `coyodex validate`.
 
 Stdlib-only, like every core tool. Semantic checks (IDs resolve, hierarchy sound, code anchors
 exist) are NOT here — they are `validate_model.py`'s job; this module only guarantees that a loaded
@@ -19,7 +19,7 @@ import types
 from dataclasses import dataclass, field, fields
 from typing import Union, get_args, get_origin, get_type_hints
 
-FORMAT = "coyodex-map/2"
+FORMAT = "coyodex-map"
 
 # Each element array's required id prefix — structural (a `Cn` in `deps` is a shape error, caught at
 # load), while uniqueness/resolution stay semantic (validate_model).
@@ -382,8 +382,7 @@ def load_model(text: str) -> ProjectModel:
         raise ModelError("top level: expected an object")
     fmt = data.get("format")
     if fmt != FORMAT:
-        raise ModelError(f"format: expected '{FORMAT}', got {fmt!r} — not a schema-v2 map "
-                         "(coyodex reads project-map.json only; markdown maps are not supported)")
+        raise ModelError(f"format: expected '{FORMAT}', got {fmt!r}")
     m = _build(data, ProjectModel, "$")
     for attr, prefix in ID_ARRAYS.items():
         for i, el in enumerate(getattr(m, attr)):
@@ -393,13 +392,6 @@ def load_model(text: str) -> ProjectModel:
                 raise ModelError(f"$.{attr}[{i}].id: '{eid}' is not a valid {prefix}-id "
                                  f"(a schema id is the prefix + digits only, e.g. {prefix}3)")
     return m
-
-
-def is_model_document(text: str) -> bool:
-    """Cheap sniff: is this artifact a schema-v2 model (vs a schema-v1 markdown map)? Used by the
-    consumers that accept either during the migration window (the eval scores both generations)."""
-    head = text.lstrip()[:2000]
-    return head.startswith("{") and '"coyodex-map/' in head
 
 
 def load_model_path(path) -> ProjectModel:

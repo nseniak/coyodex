@@ -24,7 +24,7 @@ By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 - **`method.md`** — the single source of truth for the method. The skill follows
   it; it is not a mirror of the code. Changes to behavior usually start here.
-- **`method/`** — the supporting method docs (`schema-v1.md`, `domain-cards.md`,
+- **`method/`** — the supporting method docs (`model.md`, `domain-cards.md`,
   `change-impact.md`, `diagrams.md`) and templates.
 - **`skill/coyodex/`** — the agent skill (`SKILL.md`) that drives the method; works on
   Claude Code, Codex, and Cursor.

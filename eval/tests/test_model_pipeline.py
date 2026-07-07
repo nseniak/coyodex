@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Eval-side tests for the schema-v2 model pipeline: model-map support in score/claims/run, the
+"""Eval-side tests for the model pipeline: model-map support in score/claims/run, the
 non-model-input refusal, and the judge-protocol fingerprint (recorded in judge.json; a mismatch
 fails the cache guard and DRIFTs a comparison). (The md-vs-json golden-equivalence test retired
 with the markdown pipeline in Phase 3 — parity was proven at the Phase-2 boundary.)
@@ -34,7 +34,7 @@ def make_fixture_model_json() -> str:
 def make_tiny_model_json() -> str:
     """A minimal model document for tests that need a map but no claims."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -88,13 +88,13 @@ def make_judge_report(rubric: str = "rubric v1", model: str = "sonnet") -> Judge
 # --- non-model input -------------------------------------------------------------
 
 def test_markdown_map_is_refused_by_the_profiler():
-    """The eval reads model documents only — arbitrary markdown raises ModelError instead of
-    profiling through a retired pipeline."""
+    """The eval reads model documents only — arbitrary markdown raises ModelError (a normal JSON
+    parse failure), not a silent zero-profile."""
     try:
         build_profile("# Some markdown\n\n| a | b |\n|---|---|\n| 1 | 2 |\n")
         raise AssertionError("expected ModelError")
     except ModelError as e:
-        assert "not supported" in str(e)
+        assert "not valid JSON" in str(e)
 
 
 def test_build_profile_from_model_matches_direct_path():

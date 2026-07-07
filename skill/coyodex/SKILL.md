@@ -20,7 +20,7 @@ truth — this skill only points at it. Read the method docs and follow them; do
 - **The repo you are mapping** — your current working directory, a *different* path. Its only
   coyodex content is `.coyodex/` (the map + report you produce).
 
-So whenever a doc says to read `method.md`, `method/schema-v1.md`, a template, or to run
+So whenever a doc says to read `method.md`, `method/model.md`, a template, or to run
 `.venv/bin/coyodex ...`, that path is **under `COYODEX_HOME`** — read/run it with that absolute
 prefix (e.g. `__COYODEX_HOME__/method.md`). **Never look for method docs or tools in the repo you
 are mapping; they are not there.** Only `.coyodex/...` paths are relative to the analyzed repo.

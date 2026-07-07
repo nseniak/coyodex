@@ -44,15 +44,14 @@ SOURCE: [<file>](<path>:<line>)
 | `SOURCE:` | yes | `[text](path:line)` | `node.file` / `node.line` |
 
 > **`SUBDOMAIN:` groups the entity** into a bounded context (`SD`) — the domain-model analog of a
-> component's `Subsystem` cell, single-sourced on the child. It is **optional and additive**: omit it
-> and the entity is ungrouped (top-level). Subdomains are defined in their own `ID | Subdomain | Purpose |
-> Parent | Anchor | Conf.` table; clustering, the derived `SD→SD` / `S→SD` edges, and the Domain
-> bounded-contexts overview are specified in [schema v1](schema-v1.md#domain-grouping-is-the-same-machine-on-the-entity-graph-optional-additive).
+> component's `subsystem` field, single-sourced on the child. It is **optional and additive**: omit
+> it and the entity is ungrouped (top-level). Subdomains are their own array (`id`, `name`,
+> `purpose`, `parent`, `anchor`, `confidence`); the derived `SD→SD` / `S→SD` edges and the Domain
+> bounded-contexts overview are never authored (see [the map model](model.md)).
 
 - The heading em-dash `—` and the `*(…)*` metadata parens mirror the Golden Path heading
   (`**GP1 — title** *(UC1)*`). The parens carry "stored where" (the old T5 column). Optional.
 - Separators inside `FIELDS` / `RELATIONS` are `·` — the same separator a T6 flow step's `· note` uses.
-  **Never a raw `|`** (schema-v1 rule 3 — it breaks table parsing elsewhere in the file).
 
 **An entity is a REAL named type.** A card maps to an actual `class` / dataclass / enum / struct /
 typed-dict in the code, and its `SOURCE` anchors that **definition** (the `class X` / `@dataclass` /
@@ -315,16 +314,17 @@ validates clean and the Domain `classDiagram` renders with a working click-bridg
 browser: clicking a class shows its fields + source, clicking a relation shows its kind +
 cardinality).
 
-1. **`tools/coyodex/schema_v1.py`** — `DEF_ENTITY` heading definition (`E` is card-defined, removed from the
-   table-row patterns); shared `iter_domain_cards` / `parse_card_fields` / `parse_card_relations`
-   grammar (`RELATION_ITEM`, `REL_HOW`, `ALLOWED_CARDINALITY`, `REL_KIND`); the shared relation
-   backing resolver `resolve_backing` + `fk_targets` (token-exact `FK→` matching).
-2. **`tools/coyodex/validate_analysis.py`** — `check_domain_cards` (MEANING/SOURCE/FIELDS present, every
+1. **`tools/coyodex/model.py`** — `Entity` / `EntityField` / `EntityRelation` are the model's own
+   typed fields (`fields`, `relations`), not a parsed card; `grammar.py` holds the shared relation
+   vocabulary (`REL_KIND`, the backing resolver `resolve_backing` + `fk_targets`, token-exact `FK→`
+   matching).
+2. **`tools/coyodex/validate_model.py`** — `_check_domain_cards` (MEANING/SOURCE/FIELDS present, every
    field typed, every relation well-formed, single-side); plus a non-blocking warning for a
    field-less, note-less association. Card ids ride the generic duplicate/undefined-reference checks.
-3. **`tools/coyodex/viewer/build_graph.py`** — `parse_domain` (modeled on `parse_gp`); `Node.attrs`,
-   `Edge.kind` / `src_card` / `dst_card`; a second pass resolves each relation's backing field into
-   `Edge.fk_field` / `Edge.fk_side`, and carries the `{how}` note as `Edge.how`.
+3. **`tools/coyodex/views.py`** — `model_to_graph` builds each entity's `Node.attrs` and each
+   relation's `Edge.kind` / `src_card` / `dst_card` straight from the model, resolving each
+   relation's backing field into `Edge.fk_field` / `Edge.fk_side` and carrying the `{how}` note as
+   `Edge.how`.
 4. **`tools/coyodex/viewer/gen_viewer.py`** — `gen_domain_mermaid` emits the `classDiagram`; `_relation_label`
    formats the resolved `fk_field` / `fk_side` into the arrow label (plain forward, `↩` reverse); a
    **Domain** view button (hidden when the map has no entities).

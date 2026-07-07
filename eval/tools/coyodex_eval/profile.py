@@ -14,9 +14,9 @@ quality signals that ARE comparable run-to-run:
                      "an auth surface must not silently disappear" gate
 
 Everything here is DETERMINISTIC and stdlib-only. It reads the map through the model pipeline
-(`load_model` + `validate_model` + `audit_model`) — never a second grammar; markdown maps are not
-supported. The comparator (baseline vs candidate → verdict) and the LLM-judge layer build ON this
-profile; they are separate modules.
+(`load_model` + `validate_model` + `audit_model`) — never a second grammar. The comparator
+(baseline vs candidate → verdict) and the LLM-judge layer build ON this profile; they are separate
+modules.
 """
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 from coyodex import audit_model, validate_model
-from coyodex.model import ModelError, ProjectModel, is_model_document, load_model
+from coyodex.model import ModelError, ProjectModel, load_model
 from coyodex.preindex_lib import expected_components  # the granularity expectation E, RE-COMPUTED
 # from the repo tree at score time (shared code, never the pre-index's JSON — GR4)
 from coyodex.validate_analysis import compression_coverage_from_refs  # repo-tree coverage (not a
@@ -88,17 +88,13 @@ def build_profile(map_text: str, repo_root: Path | None = None,
                   map_path: Path | None = None) -> MapProfile:
     """Reduce a project map to its deterministic `MapProfile`. `repo_root` (the mapped source) enables
     the coverage signal; without it `coverage_flags` is None. `map_path` is kept for signature
-    compatibility (unused — view freshness is repo hygiene, not map quality). Model documents only:
-    a schema-v1 markdown map raises ModelError (markdown maps are not supported)."""
+    compatibility (unused — view freshness is repo hygiene, not map quality)."""
     del map_path
-    if not is_model_document(map_text):
-        raise ModelError("not a schema-v2 model document — markdown maps are not supported; "
-                         "score project-map.json")
     return build_profile_from_model(load_model(map_text), repo_root=repo_root)
 
 
 def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> MapProfile:
-    """The MapProfile computed from a schema-v2 model — every signal through the model-side checks
+    """The MapProfile computed from a model — every signal through the model-side checks
     (`validate_model`, `audit_model`). The Phase-2 golden-equivalence run proved these score a map
     exactly as the (now retired) markdown pipeline scored its v1 equivalent."""
     problems, warnings = validate_model.validate_model(m)  # no model_path: view-freshness is a

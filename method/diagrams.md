@@ -1,8 +1,8 @@
 # Diagrams
 
-A diagram is just another **rendering** of the map the markdown already encodes — not a new
-analysis. Because the markdown obeys [schema v1](schema-v1.md), a renderer parses it into a
-graph; no separate persisted model is needed.
+A diagram is just another **rendering** of the map the model ([the map model](model.md)) already
+encodes — not a new analysis. The renderer builds the graph straight from `project-map.json`; no
+separate persisted model is needed.
 
 ## Drill-down maps onto C4 + a behavioral view
 
@@ -38,12 +38,12 @@ show/hide toggle. The element-keyed deltas are the data.
 
 ## Realization tiers
 
-- **Tier A — diagram-as-code (Mermaid / D2), generated from the markdown.** One diagram per
+- **Tier A — diagram-as-code (Mermaid / D2), generated from the model.** One diagram per
   level + a Golden Path sequence diagram, with `click`→source and diff via styled
   regeneration. Cheap, in-repo, version-controlled; "drill-down" is hyperlinked per-level
   diagrams rather than true zoom.
 - **Tier B — a small self-contained HTML viewer**, available in [`tools/coyodex/viewer/`](../tools/coyodex/viewer/).
-  Parses the markdown (via the shared `tools/coyodex/schema_v1.py` grammar) and renders the C4 altitudes —
+  Builds its graph straight from `project-map.json` and renders the C4 altitudes —
   Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges; drill a
   subsystem for its components → code) — plus the **Entities** view (the T5 domain model; when grouped
   into subdomains, a bounded-contexts overview that ⌘-drills into one subdomain's `classDiagram`; a

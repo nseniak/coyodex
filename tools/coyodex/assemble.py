@@ -32,23 +32,8 @@ from coyodex.model import (
     _build,
     to_canonical_json,
 )
-from coyodex.validate_analysis import strip_anchor
 
 _SINGLETONS = ("title", "goal", "commit", "committed", "built", "tests_note")
-
-_MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
-_HASH_LINE = re.compile(r"#L(\d+)(?:-L?(\d+))?$")  # retired `#Lnnn` / `#Lnnn-Lmmm` anchor suffix
-
-
-def _to_colon_line(href: str) -> str:
-    """Rewrite a retired `path#Lnnn` / `path#Lnnn-Lmmm` anchor to the canonical `path:line` /
-    `path:line-line` — the one line-number syntax the method now mandates (method/model.md's
-    'Anchor formats')."""
-    m = _HASH_LINE.search(href)
-    if not m:
-        return href
-    start, end = m.groups()
-    return href[:m.start()] + (f":{start}-{end}" if end else f":{start}")
 
 
 def load_fragment(text: str, label: str) -> ProjectModel:
@@ -102,97 +87,6 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]]) -> tuple[ProjectModel
     return out, problems
 
 
-def normalize_anchors(m: ProjectModel, repo_root: Path | None) -> list[str]:
-    """Normalize the anchor-format asymmetry agents most often get wrong (every Phase-2 fragment
-    came back md-linked): `components[].anchor` and `entities[].source` must be BARE repo-relative
-    refs — an md link is reduced to its href; group anchors (`subsystems`/`subdomains`) must be md
-    LINKS — a bare path is wrapped, keeping an authored link's label untouched; a directory anchor
-    gets its trailing `/` when `repo_root` (best-effort: the parent of --out) shows it is a
-    directory; a retired `path#Lnnn` / `path#Lnnn-Lmmm` line anchor (on any of these fields, plus
-    `edges[].where` / `entry_points[].entity` hrefs) is rewritten to the canonical `path:line` /
-    `path:line-line`. Returns one note per normalized field, so the fix-up is visible, never silent."""
-    notes: list[str] = []
-
-    def bare(cell: str) -> str:
-        hit = _MD_LINK.search(cell)
-        return _to_colon_line((hit.group(1).strip() if hit else cell.strip()))
-
-    def with_dir_slash(href: str) -> str:
-        # `bare()` already colon-normalizes, so a file-like ref no longer carries a `#` — the
-        # "already anchored" guard has to recognize the canonical `:line`/`:line-line` suffix instead
-        # (shared with the validator's anchor stripping: `strip_anchor` changed something → it had one).
-        if repo_root is None or not href or href.endswith("/") or strip_anchor(href) != href:
-            return href
-        return href + "/" if (repo_root / href).is_dir() else href
-
-    def note(owner: str, field_name: str, fixed: str) -> None:
-        notes.append(f"{owner}: {field_name} normalized to '{fixed}'")
-
-    def fix_link(cell: str) -> str | None:
-        """`cell` is an md link; return the cell with its href colon-normalized, or None if
-        unchanged."""
-        hit = _MD_LINK.search(cell)
-        if not hit:
-            return None
-        href = hit.group(1).strip()
-        fixed_href = _to_colon_line(href)
-        return cell.replace(f"({href})", f"({fixed_href})") if fixed_href != href else None
-
-    for c in m.components:
-        if c.anchor:
-            fixed = with_dir_slash(bare(c.anchor))
-            if fixed != c.anchor:
-                note(c.id, "anchor", fixed)
-                c.anchor = fixed
-        if c.entry_point:
-            fixed = fix_link(c.entry_point)
-            if fixed is not None:
-                note(c.id, "entry_point", fixed)
-                c.entry_point = fixed
-    for d in m.deps:
-        if d.where_configured:
-            fixed = fix_link(d.where_configured)
-            if fixed is not None:
-                note(d.id, "where_configured", fixed)
-                d.where_configured = fixed
-    for e in m.entities:
-        if e.source:
-            fixed = bare(e.source)
-            if fixed != e.source:
-                note(e.id, "source", fixed)
-                e.source = fixed
-    for g in (*m.subsystems, *m.subdomains):
-        if not g.anchor:
-            continue
-        hit = _MD_LINK.search(g.anchor)
-        if hit:  # already a link — only repair a missing directory slash, keep the label
-            href = hit.group(1).strip()
-            fixed_href = with_dir_slash(href)
-            if fixed_href != href:
-                fixed = g.anchor.replace(f"({href})", f"({fixed_href})")
-                note(g.id, "anchor", fixed)
-                g.anchor = fixed
-        else:
-            href = with_dir_slash(g.anchor.strip())
-            label = href.rstrip("/").rsplit("/", 1)[-1] or href
-            fixed = f"[{label}]({href})"
-            note(g.id, "anchor", fixed)
-            g.anchor = fixed
-    for edge in m.edges:
-        if edge.where:
-            fixed = fix_link(edge.where)
-            if fixed is not None:
-                note(f"{edge.src} → {edge.dst}", "where", fixed)
-                edge.where = fixed
-    for ep in m.entry_points:
-        if ep.entity:
-            fixed = fix_link(ep.entity)
-            if fixed is not None:
-                note(ep.component or ep.kind, "entity", fixed)
-                ep.entity = fixed
-    return notes
-
-
 def ensure_fragments_ignored(out_dir: Path) -> bool:
     """Make `<out>/.gitignore` ignore `build-fragments/` (the method's scratch dir for agents'
     fragments) — the tool writes the ignore entry the method promises, so a build in a normal
@@ -219,10 +113,8 @@ def main(argv: list[str] | None = None) -> int:
               "(+ the generated markdown and HTML views) in <dir>. Each fragment is a PARTIAL\n"
               "model (any subset of the top-level arrays; one header fragment may carry\n"
               "title/goal/commit). A malformed fragment or a duplicate ID fails loudly with the\n"
-              "fragment named. Anchor formats are normalized (a component/entity md-link anchor\n"
-              "becomes its bare href; a bare group anchor becomes a link; a directory anchor gets\n"
-              "its trailing '/', checked against <dir>'s parent as the repo root; a retired\n"
-              "'path#Lnnn' line anchor becomes the canonical 'path:line') — each fix-up is printed.\n"
+              "fragment named — nothing is silently fixed up; run `coyodex validate` on the\n"
+              "result to catch anything else wrong.\n"
               "<dir>/.gitignore gets a 'build-fragments/' entry so the scratch dir never\n"
               "dirties the tree. Then run the usual invariant: validate → audit → render.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
@@ -271,10 +163,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: {pr}", file=sys.stderr)
         print("ASSEMBLY FAILED: merge conflicts above; nothing was written.", file=sys.stderr)
         return 1
-    # Best-effort repo root for the directory-slash check: the map dir sits directly under the
-    # analyzed repo's root (`--out .coyodex`), so its parent is the root in the normal layout.
-    for n in normalize_anchors(model, out_dir.resolve().parent):
-        print(f"note: {n}")
     from coyodex.viewer.gen_viewer import write_html
     from coyodex.views import model_to_graph, model_to_markdown
 

@@ -30,8 +30,8 @@ the method — so its own integrity holes are the worst bugs it can have. Three 
   `.coyodex-eval/`.
 
 ## Step 1 — Guard: baseline + pin (refuse if not aligned)
-1. Require `.coyodex/project-map.json` (the schema-v2 model) — markdown maps are not supported. If
-   missing → tell the user to run `/coyodex` first to build a baseline, then stop.
+1. Require `.coyodex/project-map.json` — markdown maps are not supported. If missing → tell the
+   user to run `/coyodex` first to build a baseline, then stop.
 2. Read the pin from the model's `commit` / `committed` fields — the bare short sha.
 3. `git rev-parse --short HEAD`. Also check the tree is clean, ignoring coyodex's own dirs:
    `git status --porcelain -- . ':(exclude).coyodex' ':(exclude).coyodex-eval'`.
@@ -200,9 +200,9 @@ For a map M:
    aggregation counts it as a **judge failure**, surfaced separately and excluded from the
    pass-rate denominator, never scored as refuted.
 3. **Rubric** — 3 judge sub-agents on the pinned model, each scoring all 5 dimensions of
-   `COYODEX_HOME/eval/rubric.md` 0–4 against the code, with a `file:line` per score. For a
-   schema-v2 map, hand each judge the map's generated MARKDOWN VIEW (render it from the frozen
-   model: `coyodex render <M.json> <tmp.md>`), not the raw JSON — the view is the readable,
+   `COYODEX_HOME/eval/rubric.md` 0–4 against the code, with a `file:line` per score. Hand each
+   judge the map's generated MARKDOWN VIEW (render it from the frozen model:
+   `coyodex render <M.json> <tmp.md>`), not the raw JSON — the view is the readable,
    content-identical rendering.
 4. Write the raw verdicts `{ "grounding": [...], "judges": [...] }` to a JSON file, then aggregate:
    `COYODEX_HOME/.venv/bin/coyodex-eval judge --map M --repo . --verdicts <raw.json> --rubric COYODEX_HOME/eval/rubric.md --judge-model <the pinned model> --out <judge.json>`.

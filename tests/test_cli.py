@@ -26,9 +26,9 @@ CORE_MODULES = [
     "coyodex.viewer.build_graph",
     "coyodex.viewer.gen_viewer",
     "coyodex.viewer.filetree",
-    "coyodex.schema_v1",
+    "coyodex.grammar",
 ]
-CORE_SOURCES = ["validate_analysis.py", "schema_v1.py",
+CORE_SOURCES = ["validate_analysis.py", "grammar.py",
                 "viewer/render.py", "viewer/build_graph.py", "viewer/gen_viewer.py", "viewer/filetree.py"]
 
 
@@ -91,11 +91,13 @@ def test_validate_dispatch_propagates_not_found() -> None:
         assert cli.main(["validate", str(Path(d) / "nope.json")]) == 1
 
 
-def test_validate_md_map_is_refused() -> None:
-    """A `.md` map is unsupported input: usage error (2), not a validate/audit run."""
+def test_validate_and_audit_reject_a_markdown_file_like_any_other_bad_input() -> None:
+    """There's no special-cased `.md` guard — a markdown file just fails the normal JSON parse."""
     with tempfile.TemporaryDirectory() as d:
-        assert cli.main(["validate", str(Path(d) / "nope.md")]) == 2
-        assert cli.main(["audit", str(Path(d) / "nope.md")]) == 2
+        md = Path(d) / "nope.md"
+        md.write_text("## Not JSON\n", encoding="utf-8")
+        assert cli.main(["validate", str(md)]) == 1
+        assert cli.main(["audit", str(md)]) == 1
 
 
 def test_render_dispatch_propagates_usage_error() -> None:

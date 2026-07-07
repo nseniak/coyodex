@@ -11,9 +11,9 @@ Two linked families:
 
 They join at **use case ↔ flow**.
 
-See also: [dispatch](method/dispatch.md) · [the map model — schema v2](method/model.md) · [schema v1](method/schema-v1.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
+See also: [dispatch](method/dispatch.md) · [the map model](method/model.md) · [domain cards](method/domain-cards.md) · [change-impact](method/change-impact.md) · [diagrams](method/diagrams.md).
 
-**The stored map is a structured JSON model** (`.coyodex/project-map.json`, [schema v2](method/model.md));
+**The stored map is a structured JSON model** (`.coyodex/project-map.json`, [the map model](method/model.md));
 the markdown map and the HTML diagram are **generated views** committed next to it. Build agents
 return structured rows; `coyodex assemble` writes the model — nobody hand-authors the stored file.
 
@@ -210,8 +210,8 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   definition. An edge `A — verb → B` is *evidenced* by the line in **A** where A uses B, so `Where`
   points there. This is also the line a flow arrow opens (the drill-to-code link), so it should land on
   the action. When the relationship fires at several sites, pick the **primary / most representative**
-  one (the edge is an aggregate — one `Where` per edge). Format it as a clickable `[file](path#Lnnn)`
-  link, pinned to the analysis commit (see [schema v1](method/schema-v1.md) source-link pinning).
+  one (the edge is an aggregate — one `Where` per edge). Format it as a bare `path:line` anchor
+  (never a markdown link — see [the map model](method/model.md)'s Anchor formats).
 - Convenience = inline "Uses" column on T6 (the most-used slice of the edge list).
 
 ---
@@ -383,11 +383,12 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > one-line inventory (row count per array)** — never inline the fragment in your reply: a large
 > fragment (a T5 return routinely exceeds 50 KB) is silently truncated by sub-agent result caps,
 > and a truncated fragment fails `assemble`. An empty slice is an empty array plus a one-line note.
-> **Anchor formats** (`assemble` normalizes the common drifts, but write them right):
-> `components[].anchor` and `entities[].source` are **bare** repo-root-relative refs
-> (`path/to/file.py#L120`; a directory anchor keeps its trailing slash, `path/dir/`); group anchors
-> (`subsystems[].anchor` / `subdomains[].anchor`) are **markdown links** `[dir](path/dir/)`; an edge
-> `where` and an `entry_points[].entity` are markdown links `[file](path#Lnnn)`.
+> **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
+> rejects them): `components[].anchor`, `entities[].source`, `components[].entry_point`,
+> `deps[].where_configured`, `edges[].where`, and `entry_points[].entity` are all **bare**
+> repo-root-relative refs (`path/to/file.py:120`; a directory anchor keeps its trailing slash,
+> `path/dir/`). The one exception is group anchors (`subsystems[].anchor` /
+> `subdomains[].anchor`), which are **markdown links** `[dir](path/dir/)`.
 > **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
 > also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
 > `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
@@ -422,7 +423,7 @@ and never-referenced dirs.
 **Output files — model + generated views.** Build writes a **new** baseline and overwrites any
 existing `.coyodex/` map, so you should only be here for a first map or a user-confirmed rebuild —
 [dispatch](method/dispatch.md) routes an existing baseline to Analyze, not Build. The committed
-source of truth is `.coyodex/project-map.json` ([the map model — schema v2](method/model.md)),
+source of truth is `.coyodex/project-map.json` ([the map model](method/model.md)),
 written by `coyodex assemble` together with its two generated views, `.coyodex/project-map.md`
 (readable diffs) and `.coyodex/project-map.html` (the diagram) — all three are committed. Record
 the commit the map was built at in the model's `commit`/`committed`/`built` fields (the baseline

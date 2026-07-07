@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `coyodex.validate_model` — the semantic checks over a schema-v2 model, including the
+"""Tests for `coyodex.validate_model` — the semantic checks over a model, including the
 v2-only behaviors: the deployment_linked orphan-dep exemption, the non_entity_types under-harvest
 marker, and the generated-view freshness check.
 
@@ -19,6 +19,7 @@ from coyodex.model import (
     Entity,
     EntityField,
     EntityRelation,
+    EntryPoint,
     Flow,
     FlowStep,
     GoldenStep,
@@ -48,13 +49,12 @@ def make_valid_model() -> ProjectModel:
     m.use_cases = [UseCase(id="UC1", name="View order", actor="Andy")]
     m.golden_path = [GoldenStep(id="GP1", title="View", uc="UC1")]
     m.components = [Component(id="C1", name="Viewer", purpose="shows",
-                              entry_point="[v.py](src/v.py:1)")]
+                              entry_point="src/v.py:1")]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
     m.entities = [make_entity()]
     m.flows = [Flow(uc="UC1", title="View order",
                     steps=[FlowStep(n=1, src="Andy", dst="C1", phrase="opens")])]
-    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show",
-                    where="[v.py](src/v.py:5)"),
+    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show", where="src/v.py:5"),
                Edge(src="C1", verb="uses", dst="D1", why="query", where="src/v.py:7")]
     return m
 
@@ -245,7 +245,7 @@ def test_check_sources_warns_on_dead_anchor():
 def test_legacy_hash_anchor_is_a_blocking_problem():
     m = make_valid_model()
     m.entities[0].source = "src/order.py#L1"
-    assert any("retired" in p and "#Lnnn" in p for p in problems_of(m))
+    assert any("source" in p and "not a valid" in p for p in problems_of(m))
 
 
 def test_colon_range_anchor_is_not_flagged():
@@ -254,10 +254,103 @@ def test_colon_range_anchor_is_not_flagged():
     assert problems_of(m) == []
 
 
-def test_legacy_hash_anchor_in_extra_evidence_is_flagged():
+def test_legacy_hash_anchor_in_extra_evidence_item_is_flagged():
     m = make_valid_model()
-    m.components[0].extra = {"evidence": "src/a.py:1, src/b.py#L7-L12"}
-    assert any("extra.evidence" in p and "retired" in p for p in problems_of(m))
+    m.components[0].extra = {"evidence": [{"file": "src/b.py#L7-L12", "why": "because"}]}
+    assert any("extra.evidence[0]" in p and "path:line" in p for p in problems_of(m))
+
+
+# --- anchor format gate: entry_point / where_configured / edges.where / entry_points.entity ---
+# must be bare `path:line`, never a markdown link (the label was always just the file's basename).
+
+def test_component_entry_point_md_link_is_a_blocking_problem():
+    m = make_valid_model()
+    m.components[0].entry_point = "[v.py](src/v.py:1)"
+    assert any("entry_point" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_dep_where_configured_md_link_is_a_blocking_problem():
+    m = make_valid_model()
+    m.deps[0].where_configured = "[cfg.py](cfg.py:1)"
+    assert any("where_configured" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_edge_where_md_link_is_a_blocking_problem():
+    m = make_valid_model()
+    m.edges[0].where = "[v.py](src/v.py:5)"
+    assert any("where" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_entry_point_entity_md_link_is_a_blocking_problem():
+    m = make_valid_model()
+    m.entry_points = [EntryPoint(kind="http", trigger="GET /x", entity="[api.py](src/api.py:1)",
+                                 component="C1")]
+    assert any("entity" in p and "not a valid" in p for p in problems_of(m))
+
+
+# --- `extra` conventions: components[]/deps[]' freeform columns, standardized shapes/names ---
+
+def test_extra_files_must_be_a_list_of_strings():
+    m = make_valid_model()
+    m.components[0].extra = {"files": 3}
+    assert any("extra.files" in p and "list of file-path strings" in p for p in problems_of(m))
+
+
+def test_extra_files_count_and_members_are_retired():
+    m = make_valid_model()
+    m.components[0].extra = {"files_count": 3}
+    assert any("extra.files_count" in p and "extra.files" in p for p in problems_of(m))
+    m.components[0].extra = {"members": ["a.py"]}
+    assert any("extra.members" in p and "extra.files" in p for p in problems_of(m))
+
+
+def test_extra_evidence_must_be_a_list_of_file_why_objects():
+    m = make_valid_model()
+    m.components[0].extra = {"evidence": "policy.py:1 the reason"}
+    assert any("extra.evidence" in p and "list of {file, why}" in p for p in problems_of(m))
+
+
+def test_extra_evidence_item_needs_file_and_why():
+    m = make_valid_model()
+    m.components[0].extra = {"evidence": [{"file": "policy.py:1"}]}
+    assert any("evidence[0]" in p and "'why'" in p for p in problems_of(m))
+    m.components[0].extra = {"evidence": [{"why": "the reason"}]}
+    assert any("evidence[0]" in p and "'file'" in p for p in problems_of(m))
+
+
+def test_extra_evidence_valid_shape_has_no_problems():
+    m = make_valid_model()
+    m.components[0].extra = {"evidence": [{"file": "policy.py:1", "why": "the reason"}]}
+    assert problems_of(m) == []
+
+
+def test_extra_sdk_and_client_library_are_retired_in_favor_of_package():
+    m = make_valid_model()
+    m.deps[0].extra = {"sdk": "e2b ^2.20.0"}
+    assert any("extra.sdk" in p and "extra.package" in p for p in problems_of(m))
+    m.deps[0].extra = {"client_library": "motor ^3.7.0"}
+    assert any("extra.client_library" in p and "extra.package" in p for p in problems_of(m))
+
+
+def test_extra_standalone_alternative_is_retired_in_favor_of_alternative():
+    m = make_valid_model()
+    m.deps[0].extra = {"standalone_alternative": "dev_stub"}
+    assert any("extra.standalone_alternative" in p and "extra.alternative" in p
+              for p in problems_of(m))
+
+
+def test_extra_loc_is_forbidden():
+    m = make_valid_model()
+    m.components[0].extra = {"loc": 1692}
+    assert any("extra.loc" in p and "compute it" in p for p in problems_of(m))
+
+
+def test_extra_deployment_flavored_key_is_advisory_only():
+    m = make_valid_model()
+    m.components[0].extra = {"sticky_sessions": "hash $http_mcp_session_id"}
+    assert problems_of(m) == []
+    assert any("extra.sticky_sessions" in w and "Deployment or Config" in w
+              for w in warnings_of(m))
 
 
 # --- granularity advisory (opt-in via check_coverage; re-computed from the tree — GR4) ---
@@ -289,7 +382,7 @@ def test_granularity_advisory_silent_within_band():
     """A component count inside E's ±40% band stays silent — the anchor nudges, it never nags."""
     m = make_valid_model()
     m.components = [Component(id=f"C{i}", name=f"Unit {i}", purpose="one unit",
-                              entry_point="[v.py](src/v.py:1)") for i in range(1, 11)]  # 10 ≈ E
+                              entry_point="src/v.py:1") for i in range(1, 11)]  # 10 ≈ E
     m.edges = []  # the demo edges/flows reference C1 only — drop them so the model stays valid
     m.flows = []
     with tempfile.TemporaryDirectory() as td:

@@ -13,8 +13,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.assemble import (ensure_fragments_ignored, load_fragment, merge_fragments,
-                              normalize_anchors)
+from coyodex.assemble import ensure_fragments_ignored, load_fragment, merge_fragments
 from coyodex.model import ModelError, load_model, to_canonical_json
 
 ASSEMBLE = [sys.executable, "-m", "coyodex.assemble"]
@@ -100,75 +99,26 @@ def test_extra_non_string_values_render_as_compact_json_in_the_md_view():
     assert "[8080, 8443]" in md, md
 
 
-# --- anchor normalization ----------------------------------------------------------
+# --- anchors are not fixed up ------------------------------------------------------
+# `assemble` no longer normalizes anchor drift (a markdown-linked anchor, a missing directory
+# slash, a retired `#Lnnn` suffix) — a fragment's fields pass through unchanged, and
+# `coyodex validate`'s `_check_anchor_format` (tests/test_validate_model.py) is what rejects a
+# wrong shape. These guard that no silent fix-up regrows here.
 
-def make_anchored_model(component_anchor: str | None = None, group_anchor: str | None = None,
-                        entity_source: str | None = None):
-    frag: dict[str, object] = {"components": [{"id": "C1", "name": "X"}]}
-    if component_anchor is not None:
-        frag = {"components": [{"id": "C1", "name": "X", "anchor": component_anchor}]}
-    if group_anchor is not None:
-        frag["subsystems"] = [{"id": "S1", "name": "Core", "anchor": group_anchor}]
-    if entity_source is not None:
-        frag["entities"] = [{"id": "E1", "name": "Thing", "source": entity_source}]
+def test_component_anchor_passes_through_unchanged():
+    frag = {"components": [{"id": "C1", "name": "X", "anchor": "[app.py](backend/app.py#L10)"}]}
     model, problems = merge_fragments([("f.json", load_fragment(json.dumps(frag), "f.json"))])
     assert problems == []
-    return model
+    assert model.components[0].anchor == "[app.py](backend/app.py#L10)"
 
 
-def test_component_md_link_anchor_is_reduced_to_its_bare_href():
-    m = make_anchored_model(component_anchor="[app.py](backend/app.py#L10)")
-    notes = normalize_anchors(m, None)
-    assert m.components[0].anchor == "backend/app.py:10"
-    assert any("C1" in n for n in notes)
-
-
-def test_entity_md_link_source_is_reduced_to_its_bare_href():
-    m = make_anchored_model(entity_source="[user.py](domain/user.py#L5)")
-    normalize_anchors(m, None)
-    assert m.entities[0].source == "domain/user.py:5"
-
-
-def test_component_anchor_range_is_rewritten_from_legacy_hash_syntax():
-    m = make_anchored_model(component_anchor="backend/app.py#L10-L18")
-    notes = normalize_anchors(m, None)
-    assert m.components[0].anchor == "backend/app.py:10-18"
-    assert any("C1" in n for n in notes)
-
-
-def test_edge_where_legacy_hash_anchor_is_rewritten():
+def test_edge_where_passes_through_unchanged():
     frag = {"components": [{"id": "C1", "name": "X"}, {"id": "C2", "name": "Y"}],
             "edges": [{"src": "C1", "verb": "uses", "dst": "C2",
                       "where": "[app.py](backend/app.py#L20)"}]}
     model, problems = merge_fragments([("f.json", load_fragment(json.dumps(frag), "f.json"))])
     assert problems == []
-    notes = normalize_anchors(model, None)
-    assert model.edges[0].where == "[app.py](backend/app.py:20)"
-    assert any("where" in n for n in notes)
-
-
-def test_bare_group_anchor_is_wrapped_into_a_link():
-    m = make_anchored_model(group_anchor="backend/core/")
-    normalize_anchors(m, None)
-    assert m.subsystems[0].anchor == "[core](backend/core/)"
-
-
-def test_authored_group_link_label_is_kept():
-    m = make_anchored_model(group_anchor="[Core services](backend/core/)")
-    notes = normalize_anchors(m, None)
-    assert m.subsystems[0].anchor == "[Core services](backend/core/)" and notes == []
-
-
-def test_directory_anchor_gets_a_trailing_slash_when_the_repo_shows_a_dir():
-    with tempfile.TemporaryDirectory() as td:
-        (Path(td) / "backend").mkdir()
-        m = make_anchored_model(component_anchor="backend")
-        normalize_anchors(m, Path(td))
-        assert m.components[0].anchor == "backend/"
-        # a file-like anchor (has a line suffix) is never slashed — and gets colon-normalized too
-        m2 = make_anchored_model(component_anchor="backend#L1")
-        normalize_anchors(m2, Path(td))
-        assert m2.components[0].anchor == "backend:1"
+    assert model.edges[0].where == "[app.py](backend/app.py#L20)"
 
 
 # --- the build-fragments gitignore -------------------------------------------------

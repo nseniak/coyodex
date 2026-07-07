@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the schema-v2 grouping/rendering pipeline: the graph builder (build_graph), the view
+"""Tests for the grouping/rendering pipeline: the graph builder (build_graph), the view
 derivation (views.model_to_graph), the Mermaid/HTML card generators (gen_viewer), and the
 self-contained HTML renderer (viewer.render).
 
@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
-from coyodex import schema_v1
+from coyodex import grammar
 from coyodex.model import load_model
 from coyodex.viewer import build_graph, gen_viewer
 from coyodex.views import model_to_graph
@@ -29,7 +29,7 @@ def make_grouped_map(layout: str = "proper") -> str:
     layout='agent' drops them (id in col 0, Subsystem at index 1) — the regression case."""
     if layout == "agent":
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -106,7 +106,7 @@ def make_grouped_map(layout: str = "proper") -> str:
   "extras": []
 }"""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -189,7 +189,7 @@ def make_card_map() -> str:
     (C1->C3), both cross into S2's component C2, and C2 touches a dep D1. Lets the tests assert
     a subsystem card keeps internal wiring + deps, while an edge card keeps ONLY the cross edges."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -326,7 +326,7 @@ def make_nested_subsystem_map() -> str:
     (not S2's components flattened in), and the C2->C3 crossing must resolve to the S3 box at S1's
     altitude."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -433,7 +433,7 @@ def make_nested_subsystem_map() -> str:
 def make_ungrouped_map() -> str:
     """No S table; prose mentions AWS S3/S4 (must not be treated as references)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "X",
   "goal": "",
   "commit": null,
@@ -478,7 +478,7 @@ def make_ungrouped_map() -> str:
 def make_fenced_node_map() -> str:
     """A real C1 plus a fenced example mentioning C9 — the parser must not graph C9."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -588,7 +588,7 @@ def make_domain_map(cards: str | None = None) -> str:
     (Order contains LineItem; LineItem uses a bullet-list FIELDS)."""
     if cards is None:
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -686,7 +686,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_EMBEDDED_ENTITY_TYPE:
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -768,7 +768,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_COLLECTION_MARKER:
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -870,7 +870,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_RELATION_LABELS:
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -994,7 +994,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_UNGROUNDED_VERB:
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1080,7 +1080,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_FORWARD_FK:
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1173,7 +1173,7 @@ def make_domain_map(cards: str | None = None) -> str:
 }"""
     if cards == _CARDS_BACKING_HOW:
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1292,7 +1292,7 @@ def make_gp_map() -> str:
     """A two-step Golden Path (GP1=UC1 actor Andy, GP2=UC2 actor Adam) + the two use-case T6 flows.
     Exercises the GP overview sequence (actors from the UCs) and each use case's flow sequence."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1445,7 +1445,7 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
     uses the default Role-matching actor (the undefined-actor variant only served the retired
     validator test)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1523,13 +1523,13 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
 
 
 def parse_map(json_text: str) -> build_graph.GraphDict:
-    """Graph from the scenario map (a schema-v2 JSON model document), through the LIVE pipeline:
+    """Graph from the scenario map (a JSON model document), through the LIVE pipeline:
     load_model → model_to_graph."""
     return model_to_graph(load_model(json_text))
 
 
 def write_model(d: Path, json_text: str) -> Path:
-    """The scenario map (already a schema-v2 JSON model document) stored as-is, for CLI render tests."""
+    """The scenario map (already a JSON model document) stored as-is, for CLI render tests."""
     out = Path(d) / "project-map.json"
     out.write_text(json_text, encoding="utf-8")
     return out
@@ -1678,7 +1678,7 @@ def make_nested_bridge_map() -> str:
     """A nested subsystem (S2<-S1) and nested subdomain (SD2<-SD1) joined by a C->E owns edge — so a
     bridge arrow can be drawn on a NESTED subsystem card AND a nested subdomain card (review finding #1)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1896,7 +1896,7 @@ def test_glued_collection_relation_is_labelled() -> None:
     """An entity-typed collection field written glued (`tokens:E28[]`) must still BACK its relation,
     so the composition arrow renders its real field name as the label (not blank)."""
     cards = """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2045,9 +2045,9 @@ def test_gen_domain_mermaid_forward_fk_label() -> None:
 
 def test_fk_targets_token_exact() -> None:
     # `FK→E1` must resolve to exactly {E1} — never match inside `E11` (the substring bug class).
-    assert schema_v1.fk_targets("FK→E1") == {"E1"}
-    assert schema_v1.fk_targets(["?", "FK->E5"]) == {"E5"}      # ascii arrow + nullable marker
-    assert "E1" not in schema_v1.fk_targets("FK→E11")
+    assert grammar.fk_targets("FK→E1") == {"E1"}
+    assert grammar.fk_targets(["?", "FK->E5"]) == {"E5"}      # ascii arrow + nullable marker
+    assert "E1" not in grammar.fk_targets("FK→E11")
 
 
 def test_parser_domain_edge_carries_backing_and_how() -> None:
@@ -2064,7 +2064,7 @@ def test_class_diagram_inheritance_arrow_labelled_inferred() -> None:
     # Verb principle: the inheritance triangle trusts the authored `isA` verb (never code-verified),
     # so it renders labelled inferred — a derivation, not an asserted fact (verbs prioritize, never gate).
     md = """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2144,7 +2144,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     refersTo E4 (the one CROSS-context relation), so the tests exercise membership + a crossing edge."""
     if cards is not None and contexts is not None:
         return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2286,7 +2286,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
   "extras": []
 }"""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2425,7 +2425,7 @@ def make_nested_subdomain_map() -> str:
     (in SD2), E3 in SD3. E1 contains E2 (direct entity -> child-subdomain box), E2 refersTo E3
     (grandchild -> sibling subdomain). The domain mirror of make_nested_subsystem_map."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2625,7 +2625,7 @@ def make_bridge_map() -> str:
     """Subsystems S1/S2 + context SD1 with entity E1; C1 (S1) persists E1, C2 (S2) reads E1. Exercises
     the S→SD bridge: the owning subsystem's card shows an `owns` arrow, the reader's a `reads` arrow."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2872,7 +2872,7 @@ def _two_context_map(cards_extra: str = "") -> str:
     """SD1 (Ordering, has E1) + SD2 (Catalog, EMPTY — no card assigned to it). `cards_extra` is unused
     by the surviving (kept) callers, which all take the default — a defined-but-empty SD2."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -2966,7 +2966,7 @@ def make_both_groupings_map() -> str:
     (C→E bridge edges), and E1 refersTo E3 (an E→E relation crossing SD1→SD2). The Subsystems overview
     must show ONLY S→S and never a SD box; the Domain overview ONLY SD→SD and never an S box."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3225,7 +3225,7 @@ def test_gen_gp_mermaid_black_box_sequence() -> None:
 def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
     # A GP step with no `*(UCn)*` tag falls back to a generic 'Actor' lifeline (no crash).
     md = """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3303,7 +3303,7 @@ def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
     # A step tagged with several UCs (`*(UC1, UC2)*`) or trailing text (`*(UC3 follow-on)*`) must
     # resolve to its FIRST UC — not fall back to a generic 'Actor' lifeline (the multi-UC regression).
     md = """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3444,7 +3444,7 @@ def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> st
     Kind-column shape (the invalid-Kind and Kind-column-optional variants only served the retired
     validator tests)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -3612,25 +3612,25 @@ def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> st
 
 def test_classify_dep_explicit_wins() -> None:
     # A valid explicit Kind cell overrides whatever the Type text would infer (case/space-insensitive).
-    assert schema_v1.classify_dep("platform", "Relational database") == "platform"
-    assert schema_v1.classify_dep("  Service  ", "a plain library") == "service"
+    assert grammar.classify_dep("platform", "Relational database") == "platform"
+    assert grammar.classify_dep("  Service  ", "a plain library") == "service"
 
 
 def test_classify_dep_heuristic_per_kind() -> None:
-    assert schema_v1.classify_dep("", "Relational database") == "datastore"
-    assert schema_v1.classify_dep("", "Redis cache") == "datastore"
-    assert schema_v1.classify_dep("", "Message broker") == "messaging"
-    assert schema_v1.classify_dep("", "AWS SQS") == "messaging"          # distinctive beats platform 'aws'
-    assert schema_v1.classify_dep("", "Payments API (SaaS)") == "service"
-    assert schema_v1.classify_dep("", "Observability SaaS") == "service"
-    assert schema_v1.classify_dep("", "Container runtime") == "platform"
-    assert schema_v1.classify_dep("", "UI framework") == "framework"
+    assert grammar.classify_dep("", "Relational database") == "datastore"
+    assert grammar.classify_dep("", "Redis cache") == "datastore"
+    assert grammar.classify_dep("", "Message broker") == "messaging"
+    assert grammar.classify_dep("", "AWS SQS") == "messaging"          # distinctive beats platform 'aws'
+    assert grammar.classify_dep("", "Payments API (SaaS)") == "service"
+    assert grammar.classify_dep("", "Observability SaaS") == "service"
+    assert grammar.classify_dep("", "Container runtime") == "platform"
+    assert grammar.classify_dep("", "UI framework") == "framework"
 
 
 def test_classify_dep_falls_back_to_library() -> None:
     # An unrecognised Type — and an INVALID explicit Kind — both fall back to 'library' (folds at Context).
-    assert schema_v1.classify_dep("", "some helper utility") == "library"
-    assert schema_v1.classify_dep("db", "totally unknown thing") == "library"
+    assert grammar.classify_dep("", "some helper utility") == "library"
+    assert grammar.classify_dep("db", "totally unknown thing") == "library"
 
 
 def test_parser_sets_dep_kind() -> None:

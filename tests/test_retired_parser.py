@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Guard: the schema-v1 markdown-MAP parse (the full grammar/validator the retired `coyodex convert`
-command depended on) must stay fully deleted — not just confined to one file, since there is no
-longer any legitimate reader of it anywhere in production.
+"""Guard: the old hand-authored markdown-MAP parse (the full grammar/validator the deleted
+`coyodex convert` command depended on) must stay fully deleted — not just confined to one file,
+since there is no longer any legitimate reader of it anywhere in production.
 
-`schema_v1.py` and `validate_analysis.py` still exist (they host grammar/helpers the CURRENT
-schema-v2 pipeline reuses directly: table-splitting for the change-impact report parser, anchor
-resolution, hierarchy/coverage/granularity advisories) — this guard checks that the v1-map-ONLY
+`grammar.py` and `validate_analysis.py` still exist (they host grammar/helpers the CURRENT
+pipeline reuses directly: table-splitting for the change-impact report parser, anchor resolution,
+hierarchy/coverage/granularity advisories) — this guard checks that the old markdown-map-ONLY
 surface never regrows inside them or anywhere else.
 
 Run either way (needs an editable install: `make deps`):
@@ -22,8 +22,8 @@ REPO = Path(__file__).resolve().parent.parent
 # Production sources that must stay free of the v1 map parse.
 PRODUCTION_DIRS = (REPO / "tools" / "coyodex", REPO / "eval" / "tools" / "coyodex_eval")
 
-# The v1 markdown-map parse surface: the schema-v1 grammar's card/flow/definition-table constructs,
-# the whole-map validator, the retired graph/audit parse functions, and the deleted modules' names.
+# The old markdown-map parse surface: the card/flow/definition-table grammar constructs, the
+# whole-map validator, the retired graph/audit parse functions, and the deleted modules' names.
 # NOTHING in production may reference any of these — the whole surface is gone, not just isolated.
 FORBIDDEN = (
     "audit_analysis", "convert_md", "convert_text",

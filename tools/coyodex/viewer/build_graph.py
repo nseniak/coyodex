@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """The viewer's graph data model + the change-impact report parser.
 
-The graph (`GraphDict`) is what `gen_viewer.write_html` renders; it is produced ONLY from the
-schema-v2 model (`coyodex.views.model_to_graph`) — the v1 markdown-map parse that used to live here
-is retired. `build_diff` still parses the change-impact REPORT, which is a current markdown
-artifact, not a v1 map.
+The graph (`GraphDict`) is what `gen_viewer.write_html` renders; it is produced by
+`coyodex.views.model_to_graph`, straight from the model. `build_diff` separately parses the
+change-impact REPORT, a markdown artifact distinct from the map itself.
 """
 from __future__ import annotations
 
@@ -13,9 +12,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TypedDict
 
-# Shared schema-v1 grammar lives in tools/coyodex/schema_v1.py (one grammar; the table helpers serve
+# Shared schema grammar lives in tools/coyodex/grammar.py (one grammar; the table helpers serve
 # the change-impact report parser below).
-from coyodex.schema_v1 import ID_TOKEN, is_separator_row, iter_pipe_runs, split_cells, strip_fences
+from coyodex.grammar import ID_TOKEN, is_separator_row, iter_pipe_runs, split_cells, strip_fences
 
 LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")  # markdown link -> href
 
@@ -108,7 +107,7 @@ def _first_id(cell: str) -> str | None:
 
 def _tables(lines: list[str]) -> list[tuple[list[str], list[list[str]]]]:
     """Group consecutive `|`-prefixed lines into (headers, rows) tables, via the shared
-    schema_v1.iter_pipe_runs grouping — the SAME table model the validator uses, so the parser and the
+    grammar.iter_pipe_runs grouping — the SAME table model the validator uses, so the parser and the
     gate cannot drift on where a table begins and ends. A run of < 2 lines is not a table; separator
     rows are dropped from the body."""
     tables: list[tuple[list[str], list[list[str]]]] = []

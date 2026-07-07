@@ -18,7 +18,6 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from coyodex.model import is_model_document
 from coyodex_eval.compare import DeltaReport, Thresholds, compare, format_report, load_thresholds
 from coyodex_eval.judge import (
     GROUNDING_PROMPT_VERSION,
@@ -293,10 +292,6 @@ def claims_cli(argv: list[str]) -> int:
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
     text = path.read_text(encoding="utf-8")
-    if not is_model_document(text):
-        print(f"ERROR: {path} is not a schema-v2 model document — markdown maps are not "
-              "supported; claims are read from project-map.json", file=sys.stderr)
-        return 1
     from coyodex import audit_model
     from coyodex.model import load_model
     items = audit_model.l2_worklist_model(load_model(text))

@@ -38,19 +38,19 @@ def make_model() -> ProjectModel:
     m.components = [
         Component(id="C1", name="Viewer", subsystem="S1", anchor="backend/viewer.py#L1"),
         Component(id="C2", name="Store", subsystem="S1",
-                  entry_point="[store.py](backend/store.py#L5)"),
+                  entry_point="backend/store.py#L5"),
         Component(id="C3", name="Umbrella", subsystem="S2"),
     ]
     m.entry_points = [
-        EntryPoint(kind="http", trigger="GET /orders", entity="[api.py](backend/api.py#L10)",
+        EntryPoint(kind="http", trigger="GET /orders", entity="backend/api.py#L10",
                    component="C3"),
-        EntryPoint(kind="queue", trigger="orders.created", entity="[sub.py](backend/sub.py#L3)",
+        EntryPoint(kind="queue", trigger="orders.created", entity="backend/sub.py#L3",
                    component="C3"),
     ]
     m.subdomains = [Group(id="SD1", name="Orders")]
     m.entities = [Entity(id="E1", name="Order", subdomain="SD1", source="backend/order.py#L7")]
     m.edges = [Edge(src="C1", verb="uses", dst="C2", why="reads",
-                    where="[viewer.py](backend/viewer.py#L20)"),
+                    where="backend/viewer.py#L20"),
                Edge(src="C2", verb="persists", dst="E1")]
     return m
 
@@ -71,8 +71,8 @@ def test_resolve_component_falls_back_to_the_entry_point_href():
 def test_resolve_component_lists_its_member_entry_points():
     r = resolve_id(make_model(), "C3")
     assert r is not None
-    assert r["members"] == [{"trigger": "GET /orders", "entity": "[api.py](backend/api.py#L10)"},
-                            {"trigger": "orders.created", "entity": "[sub.py](backend/sub.py#L3)"}]
+    assert r["members"] == [{"trigger": "GET /orders", "entity": "backend/api.py#L10"},
+                            {"trigger": "orders.created", "entity": "backend/sub.py#L3"}]
 
 
 def test_resolve_group_lists_member_ids_and_link_href():
@@ -96,7 +96,7 @@ def test_resolve_unknown_id_is_none():
 def test_record_is_the_full_stored_element():
     r = record_of(make_model(), "C2")
     assert r is not None
-    assert r["entry_point"] == "[store.py](backend/store.py#L5)" and r["subsystem"] == "S1"
+    assert r["entry_point"] == "backend/store.py#L5" and r["subsystem"] == "S1"
 
 
 # --- --edges ---------------------------------------------------------------------
@@ -105,7 +105,7 @@ def test_edges_slice_splits_in_and_out():
     e = edges_of(make_model(), "C2")
     assert [x["src"] for x in e["in"]] == ["C1"]
     assert [x["dst"] for x in e["out"]] == ["E1"]
-    assert e["in"][0]["where"] == "[viewer.py](backend/viewer.py#L20)"
+    assert e["in"][0]["where"] == "backend/viewer.py#L20"
 
 
 def test_edges_slice_of_an_unwired_node_is_empty():

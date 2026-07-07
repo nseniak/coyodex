@@ -267,4 +267,4 @@ SOURCE: [file](path/sub:1)
 
 ---
 
-*Generated with coyodex. Since schema v2 this file documents the GENERATED markdown view's shape — the committed source is `.coyodex/project-map.json` (see method/model.md); do not fill this template by hand.*
+*Generated with coyodex. This file documents the GENERATED markdown view's shape — the committed source is `.coyodex/project-map.json` (see method/model.md); do not fill this template by hand.*

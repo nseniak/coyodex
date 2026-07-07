@@ -1,20 +1,25 @@
 # coyodex viewer
 
-An interactive, self-contained HTML rendering of a `project-map.md` — the Tier-B viewer from
-[diagrams](../../method/diagrams.md). A diagram is a *rendering* of the map, so this tool parses the
-committed markdown (no second source) and draws it; the markdown stays the single source of truth.
+An interactive, self-contained HTML rendering of `project-map.json` — the Tier-B viewer from
+[diagrams](../../method/diagrams.md). A diagram is a *rendering* of the map: this tool builds a
+graph straight from the model (no second source) and draws it; `project-map.json` stays the single
+source of truth.
 
 ## Pipeline
 
 ```
-.coyodex/project-map.md          schema-v1 map (single source)
-   │  build_graph.py             parser — uses the shared grammar in tools/coyodex/schema_v1.py
+.coyodex/project-map.json        the model (single source)
+   │  views.model_to_graph       model → GraphDict (the viewer's input)
    ▼
-graph.json                       ephemeral parse result (parser ↔ renderer interface)
+GraphDict                        in-memory graph (no persisted intermediate file)
    │  gen_viewer.py              inlines viewer.css + viewer.js → one self-contained HTML file
    ▼                             (Mermaid + pan/zoom, pinned + SRI)
 project-map.html                 render · pan/zoom · click→panel · diff overlay
 ```
+
+`build_graph.py` additionally hosts the change-impact report parser (`build_diff`), reusing the
+same table-splitting grammar (`tools/coyodex/grammar.py`) — a genuinely separate, still-markdown
+input (the diff overlay's report), not the map itself.
 
 The viewer's front-end lives in **`viewer.css`** and **`viewer.js`** (edited as normal CSS/JS);
 `gen_viewer.py` reads and **inlines** them at build time. The emitted HTML stays standalone — it
@@ -23,18 +28,8 @@ machine that has never seen coyodex (the only external load is the pinned + SRI 
 
 ## Run
 
-One step (what the method calls) — map straight to HTML, parsed and rendered in process (no
-temp `graph.json`):
-
 ```bash
-.venv/bin/coyodex render .coyodex/project-map.md .coyodex/project-map.html [analysis-changes/<date>.md]
-```
-
-Or the two stages explicitly (e.g. to inspect the parsed graph), run as modules:
-
-```bash
-python -m coyodex.viewer.build_graph .coyodex/project-map.md build/graph.json   # parse → graph.json
-python -m coyodex.viewer.gen_viewer  build/graph.json build/project-map.html    # graph.json → HTML
+.venv/bin/coyodex render .coyodex/project-map.json .coyodex/project-map.html [analysis-changes/<date>.md]
 ```
 
 To view, serve over http (file:// can't fetch the CDN libs cleanly):

@@ -1,16 +1,12 @@
 #!/usr/bin/env python3
-"""Shared helpers behind `coyodex validate`'s semantic checks (`tools/coyodex/validate_model.py`).
-
-Originally the whole schema-v1 markdown-map validator; what remains here is the subset the
-schema-v2 model validator reuses directly on model DATA rather than re-implementing:
+"""Shared helpers behind `coyodex validate`'s semantic checks (`tools/coyodex/validate_model.py`):
   - `check_hierarchy` — grouping/nesting: right-kind parent, defined, no cycles, deep-nest advisory.
   - anchor/source resolution — `strip_anchor`, `_where_href`, `_source_roots`, `_resolve_source_file`.
   - coverage/granularity advisories — `compression_coverage_from_refs` (peer-level compression +
     absent modules, re-measuring the repo tree) and `granularity_advisory` (component count vs the
     code-derived expectation E), plus the domain-coverage building blocks (`_is_non_entity_type`,
     `_type_covered`, the `_ISOLATED_*`/`_UNCOVERED_*` thresholds) and the altitude-hint building
-    blocks (`_LIST_ITEM`, `_ALTITUDE_MIN`) that `validate_model.py` runs against `ProjectModel`
-    fields instead of markdown table text.
+    blocks (`_LIST_ITEM`, `_ALTITUDE_MIN`) `validate_model.py` runs against `ProjectModel` fields.
 Stdlib-only.
 """
 from __future__ import annotations
@@ -19,8 +15,8 @@ import ast
 import re
 from pathlib import Path
 
-# Grammar (regexes, membership rule) lives in schema_v1, shared with the parser — one grammar.
-from coyodex.schema_v1 import DEEP_NEST_WARN
+# Grammar (regexes, membership rule) lives in grammar, shared with the parser — one grammar.
+from coyodex.grammar import DEEP_NEST_WARN
 
 
 def _is_subsystem_id(i: str) -> bool:  # an `S` id, never a subdomain (`SD1` also starts with "S")
@@ -201,32 +197,26 @@ def granularity_advisory(n_components: int, root: Path) -> list[str]:
     ]
 
 
-# A `Where` / anchor cell should be a SOURCE LOCATION (the call site a flow arrow opens). These tell a
-# file reference from prose / an off-repo URL.
-_LINK_HREF = re.compile(r"\[[^\]]*\]\(([^)]+)\)")        # markdown link -> href
-# bare `path.ext` + an optional line anchor: canonical `:line` / `:line-line`, or a retired `#Lnnn` /
-# `#Lnnn-Lmmm` (still accepted here so an un-migrated map's anchors are still recognized as locations).
-_BARE_PATH = re.compile(r"^\S+\.\w+(?:(?:[:#]L?)\d+(?:-L?\d+)?)?$")
-_URL_SCHEME = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)  # http(s):// etc. — off-repo, not a local file
-_LINE_ANCHOR = re.compile(r"(?:#L\d+(?:-L?\d+)?|:\d+(?:-\d+)?)$")  # a trailing line anchor, either form
+# A `Where` / anchor cell is a SOURCE LOCATION (the call site a flow arrow opens) — a bare
+# `path.ext` with an optional `:line` / `:line-line` suffix. A markdown link is not a valid
+# `Where`/anchor shape — `_check_anchor_format` (validate_model.py) rejects it outright rather than
+# this function silently extracting its href.
+_BARE_PATH = re.compile(r"^\S+\.\w+(?::\d+(?:-\d+)?)?$")
+_LINE_ANCHOR = re.compile(r":\d+(?:-\d+)?$")  # a trailing `:line`/`:line-line` suffix
 
 
 def strip_anchor(href: str) -> str:
-    """The bare path from a `path:line` / `path:line-line` anchor, or a retired `path#Lnnn` /
-    `path#Lnnn-Lmmm` one — resolving a SOURCE/anchor href against the repo needs the path alone."""
+    """The bare path from a `path:line` / `path:line-line` anchor — resolving a SOURCE/anchor href
+    against the repo needs the path alone."""
     return _LINE_ANCHOR.sub("", href)
 
 
 def _where_href(cell: str) -> str | None:
-    """The file href a `Where` / anchor cell points to: a markdown link's target, or the cell itself
-    when it is a bare `path.ext[:line]` token. None for an empty / prose / off-repo-URL cell."""
+    """The file location a `Where` / anchor cell points to: the cell itself when it is a bare
+    `path.ext[:line]` token. None for an empty / prose / non-anchor-shaped cell."""
     cell = cell.strip()
     if not cell:
         return None
-    m = _LINK_HREF.search(cell)
-    if m:
-        href = m.group(1).strip()
-        return href if href and not _URL_SCHEME.match(href) else None
     return cell if _BARE_PATH.match(cell) else None
 
 

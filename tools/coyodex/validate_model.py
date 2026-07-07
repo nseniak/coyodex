@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
-"""Validate a schema-v2 model map (`project-map.json`) — the JSON pipeline's `coyodex validate`.
+"""Validate a model (`project-map.json`) — `coyodex validate`.
 
-Two layers, replacing schema v1's markdown-shape checks with real schema validation:
+Two layers:
 
-  1. STRUCTURE — `model.load_model` already validated shape/types/id-prefixes (the whole malformed-
-     table / glued-id / split-run / fence bug class cannot exist in the model). This module starts
+  1. STRUCTURE — `model.load_model` already validated shape/types/id-prefixes. This module starts
      where structure ends.
-  2. SEMANTICS — the checks that carried over 1:1 from the markdown validator: every referenced ID
-     resolves, hierarchy sound (right-kind parents, no cycles, deep-nest advisory), GP steps name
-     their use case, flow actors resolve to Roles, dep Kinds in the closed vocabulary, domain-card
-     completeness, plus every advisory nudge (altitude, empty groups, unowned entities, orphan
-     deps — now honoring the v2 `deployment_linked` marker) and the opt-in repo-reading checks
-     (`--check-sources` anchors + entity grounding, `--check-coverage` compression + under-harvest,
-     with `--repo` carried over).
+  2. SEMANTICS — every referenced ID resolves, hierarchy sound (right-kind parents, no cycles,
+     deep-nest advisory), GP steps name their use case, flow actors resolve to Roles, dep Kinds in
+     the closed vocabulary, domain-card completeness, plus every advisory nudge (altitude, empty
+     groups, unowned entities, orphan deps honoring the `deployment_linked` marker) and the opt-in
+     repo-reading checks (`--check-sources` anchors + entity grounding, `--check-coverage`
+     compression + under-harvest, with `--repo` carried over).
 
-One v2-only check: the committed markdown VIEW must match the model (it is generated, never
-edited) — a stale or hand-edited `project-map.md` next to the JSON is flagged.
+One extra check: the committed markdown VIEW must match the model (it is generated, never edited)
+— a stale or hand-edited `project-map.md` next to the JSON is flagged.
 
-The model is the only validated map format: a `.md` argument is refused outright — markdown maps
-are not supported. Stdlib-only.
+Stdlib-only.
 """
 from __future__ import annotations
 
@@ -27,7 +24,7 @@ import re
 import sys
 from pathlib import Path
 
-from coyodex import schema_v1
+from coyodex import grammar
 from coyodex.model import ID_ARRAYS, ID_SHAPE, ModelError, ProjectModel, all_elements, load_model
 from coyodex.validate_analysis import (
     _ALTITUDE_MIN,
@@ -78,7 +75,7 @@ def _strings(value: object, skip_keys: frozenset[str] = frozenset({"format"})) -
 
 def _parents(m: ProjectModel) -> dict[str, str]:
     """child id -> parent id, across both forests (C→S, S→S, SD→SD, E→SD) — single-source, on the
-    child, exactly as schema v1 carried it."""
+    child."""
     out: dict[str, str] = {}
     for c in m.components:
         if c.subsystem:
@@ -96,7 +93,7 @@ def _parents(m: ProjectModel) -> dict[str, str]:
 
 
 def _first_link_of(el: object, cells: list[str | None]) -> str | None:
-    """A definition's first drill link, mirroring the v1 'first markdown link in the row' rule."""
+    """A definition's first markdown link, across a set of candidate free-text cells."""
     link = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
     for c in cells:
         if c:
@@ -149,7 +146,7 @@ def _check_references(m: ProjectModel) -> list[str]:
     """Every ID token stored anywhere in the model must resolve to a defined element — with schema
     v1's additivity rule: stray S/SD tokens are ignored while the map has no grouping/subdomains."""
     defined = set(all_elements(m)) | {g.id for g in m.golden_path}
-    referenced = {tok for s in _strings(m) for tok in schema_v1.ID_TOKEN.findall(s)}
+    referenced = {tok for s in _strings(m) for tok in grammar.ID_TOKEN.findall(s)}
     parents = _parents(m)
     grouping_present = (any(_is_subsystem_id(i) for i in defined)
                         or any(_is_subsystem_id(p) for p in parents.values()))
@@ -191,7 +188,7 @@ def _check_flows(m: ProjectModel) -> list[str]:
                 continue
             if role_names:
                 for end in (st.src, st.dst):
-                    if not schema_v1.is_step_id(end) and end.lower() not in role_names:
+                    if not grammar.is_step_id(end) and end.lower() not in role_names:
                         problems.append(f"{tag}: actor '{end}' is not a defined Role")
     return problems
 
@@ -204,8 +201,8 @@ def _check_roles(m: ProjectModel) -> list[str]:
 
 def _check_dep_kinds(m: ProjectModel) -> list[str]:
     return [f"{d.id} has an invalid dependency Kind '{d.kind}' — use one of: "
-            f"{', '.join(schema_v1.DEP_KINDS)}"
-            for d in m.deps if d.kind and d.kind.strip().lower() not in schema_v1.DEP_KINDS]
+            f"{', '.join(grammar.DEP_KINDS)}"
+            for d in m.deps if d.kind and d.kind.strip().lower() not in grammar.DEP_KINDS]
 
 
 def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
@@ -216,7 +213,7 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
             problems.append(f"Edge {e.src} → {e.dst} has an empty Verb")
         if _where_href(e.where or "") is None:
             warnings.append(f"{e.src} → {e.dst}: `Where` is not a source location "
-                            f"(use a `[file](path:line)` call-site link)")
+                            f"(use a bare `path:line` call-site anchor)")
     return problems, warnings
 
 
@@ -224,7 +221,7 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     warnings: list[str] = []
     directed: set[tuple[str, str]] = set()
-    backing = {e.id: [(f.name, f.type, schema_v1.fk_targets(f.markers)) for f in e.fields]
+    backing = {e.id: [(f.name, f.type, grammar.fk_targets(f.markers)) for f in e.fields]
                for e in m.entities}
     for e in m.entities:
         if not e.meaning:
@@ -238,9 +235,9 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
                 problems.append(f"Domain card {e.id} field '{f.name}' has no type")
         seen_pairs: set[tuple[str, str]] = set()
         for r in e.relations:
-            if r.verb.lower() in schema_v1.REL_ALIAS:
+            if r.verb.lower() in grammar.REL_ALIAS:
                 problems.append(f"Domain card {e.id}: relation verb '{r.verb}' is a non-canonical "
-                                f"alias — use '{schema_v1.REL_ALIAS[r.verb.lower()]}'")
+                                f"alias — use '{grammar.REL_ALIAS[r.verb.lower()]}'")
             if (r.src_card is None) != (r.dst_card is None):
                 problems.append(f"Domain card {e.id}: relation '{r.verb} … {r.target}' has a "
                                 f"half-stated cardinality — state both sides (`sc→dc`) or neither")
@@ -249,9 +246,9 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
                                 f"'{r.verb} … {r.target}' twice")
             seen_pairs.add((r.verb, r.target))
             directed.add((e.id, r.target))
-            kind = schema_v1.REL_KIND.get(r.verb.lower(), "association")
+            kind = grammar.REL_KIND.get(r.verb.lower(), "association")
             if kind == "association" and r.target in backing and not r.how:
-                name, _side = schema_v1.resolve_backing(e.id, r.target, backing[e.id],
+                name, _side = grammar.resolve_backing(e.id, r.target, backing[e.id],
                                                         backing[r.target])
                 if name is None:
                     warnings.append(
@@ -265,31 +262,108 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
-_LEGACY_HASH_LINE = re.compile(r"#L\d+(?:-L?\d+)?")  # a retired `#Lnnn` / `#Lnnn-Lmmm` anchor, anywhere
+# The one canonical anchor shape (method/model.md's 'Anchor formats'): a bare repo-relative file
+# ref, optionally with `:line` or `:line-line`. A bare directory ref (`_DIR_ANCHOR`) is additionally
+# valid for `anchor`/`source`, which may point at a component's/entity's home directory. Group
+# anchors are the one exception that stay markdown links, since a directory needs an authored label
+# a bare ref can't carry.
+_ANCHOR_LINE = re.compile(r"^\S+\.\w+(?::\d+(?:-\d+)?)?$")
+_DIR_ANCHOR = re.compile(r"^\S+/$")
+_MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
-def _check_anchor_syntax(m: ProjectModel) -> list[str]:
-    """Every source-location anchor must use the canonical `path:line` / `path:line-line` syntax
-    (method/model.md's 'Anchor formats') — a `path#Lnnn` anchor is a schema violation, not just a
-    style nit: the viewer's click-to-open can't resolve it. Checks every schema-governed anchor
-    (`_anchor_pairs`) plus free-text `extra` columns (components/deps), where an unconstrained
-    'evidence' field is the one place agents actually drift to the retired form."""
+def _check_anchor_format(m: ProjectModel) -> list[str]:
+    """Every source-location field matches the one shape it's required to have."""
     problems: list[str] = []
-    for label, href in _anchor_pairs(m):
-        if _LEGACY_HASH_LINE.search(href):
-            problems.append(f"{label}: '{href}' uses the retired `#Lnnn` anchor syntax — use "
-                            f"`path:line` (or `path:line-line` for a range)")
+
+    def bad_file(label: str, val: str | None) -> None:
+        if val and not _ANCHOR_LINE.match(val):
+            problems.append(f"{label}: '{val}' is not a valid `path:line` anchor")
+
+    def bad_anchor(label: str, val: str | None) -> None:  # a file OR a directory
+        if val and not (_ANCHOR_LINE.match(val) or _DIR_ANCHOR.match(val)):
+            problems.append(f"{label}: '{val}' is not a valid anchor (bare `path:line` or `path/`)")
+
+    def bad_group_anchor(label: str, val: str | None) -> None:
+        # A directory home is the common case, but a representative file is also authored in
+        # practice (and was never rejected) — only require an actual markdown link, not a
+        # specific href shape.
+        if val and not _MD_LINK.search(val):
+            problems.append(f"{label}: '{val}' is not a valid group anchor "
+                            f"(a markdown link, `[label](path)`)")
+
     for c in m.components:
-        for key, val in c.extra.items():
-            if isinstance(val, str) and _LEGACY_HASH_LINE.search(val):
-                problems.append(f"{c.id} extra.{key}: '{val}' contains a retired `#Lnnn` anchor — "
-                                f"use `path:line` (or `path:line-line` for a range)")
+        bad_anchor(f"{c.id} anchor", c.anchor)
+        bad_file(f"{c.id} entry_point", c.entry_point)
     for d in m.deps:
-        for key, val in d.extra.items():
-            if isinstance(val, str) and _LEGACY_HASH_LINE.search(val):
-                problems.append(f"{d.id} extra.{key}: '{val}' contains a retired `#Lnnn` anchor — "
-                                f"use `path:line` (or `path:line-line` for a range)")
+        bad_file(f"{d.id} where_configured", d.where_configured)
+    for e in m.edges:
+        bad_file(f"{e.src} → {e.dst} where", e.where)
+    for ep in m.entry_points:
+        bad_file(f"entry_points[{ep.component} {ep.kind}].entity", ep.entity)
+    for e in m.entities:
+        bad_anchor(f"{e.id} source", e.source)
+    for group in (*m.subsystems, *m.subdomains):
+        bad_group_anchor(f"{group.id} anchor", group.anchor)
     return problems
+
+
+# `extra` (components/deps) is freeform by design, but the same concept kept drifting into
+# incompatible shapes across different authoring passes (a file listing shown as a list here and a
+# bare count there; a package name spelled `sdk` on one dep, `client_library` on another) — these
+# are the shapes/names the method now standardizes on.
+_RETIRED_EXTRA_KEYS = {
+    "files_count": "files", "members": "files",
+    "sdk": "package", "client_library": "package",
+    "standalone_alternative": "alternative",
+}
+_FORBIDDEN_EXTRA_KEYS = {"loc"}  # mechanical (line count) — compute it, don't hand-author it
+_DEPLOYMENT_FLAVORED_EXTRA_KEYS = {
+    "flags", "modes", "scaling", "sticky_sessions", "mode", "api_key", "noop_without", "wired_by",
+}
+
+
+def _check_evidence_item(el_id: str, i: int, item: object) -> str | None:
+    """None if `extra.evidence[i]` is a valid `{file, why}` citation, else the problem text."""
+    if not isinstance(item, dict):
+        return f"{el_id} extra.evidence[{i}]: must be an object with 'file' and 'why'"
+    stray = set(item) - {"file", "why"}
+    if stray:
+        return (f"{el_id} extra.evidence[{i}]: unexpected keys {sorted(stray)} "
+                f"(only 'file' and 'why' allowed)")
+    file = item.get("file")
+    if not isinstance(file, str) or not _ANCHOR_LINE.match(file):
+        return f"{el_id} extra.evidence[{i}]: 'file' must be a bare `path:line` anchor"
+    why = item.get("why")
+    if not isinstance(why, str) or not why.strip():
+        return f"{el_id} extra.evidence[{i}]: 'why' must be a non-empty explanation string"
+    return None
+
+
+def _check_extra_conventions(m: ProjectModel) -> tuple[list[str], list[str]]:
+    """The standardized shape for components'/deps' freeform `extra` columns — see the module
+    constants above for the retired/forbidden/advisory key lists."""
+    problems: list[str] = []
+    warnings: list[str] = []
+    for el in (*m.components, *m.deps):
+        for key, val in el.extra.items():
+            if key in _RETIRED_EXTRA_KEYS:
+                problems.append(f"{el.id} extra.{key}: retired — use extra.{_RETIRED_EXTRA_KEYS[key]}")
+            elif key in _FORBIDDEN_EXTRA_KEYS:
+                problems.append(f"{el.id} extra.{key}: not hand-authored — compute it, don't author it")
+            elif key in _DEPLOYMENT_FLAVORED_EXTRA_KEYS:
+                warnings.append(f"{el.id} extra.{key}: looks like deployment/config info — check "
+                                f"whether it belongs in the Deployment or Config table instead")
+            elif key == "files":
+                if not (isinstance(val, list) and all(isinstance(x, str) for x in val)):
+                    problems.append(f"{el.id} extra.files: must be a list of file-path strings")
+            elif key == "evidence":
+                if not isinstance(val, list):
+                    problems.append(f"{el.id} extra.evidence: must be a list of {{file, why}} objects")
+                else:
+                    problems.extend(err for i, item in enumerate(val)
+                                    if (err := _check_evidence_item(el.id, i, item)))
+    return problems, warnings
 
 
 def _check_altitude(m: ProjectModel) -> list[str]:
@@ -304,9 +378,10 @@ def _check_altitude(m: ProjectModel) -> list[str]:
 
 
 def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
-    """(label, href) for every drill-to-code anchor, mirroring v1's `_anchor_hrefs`: each edge's
-    `Where`, each element definition's first link (plus the v2 canonical `anchor`), each card's
-    SOURCE. Off-repo URLs excluded."""
+    """(label, href) for every drill-to-code anchor: each edge's `Where`, each element definition's
+    first link (plus the canonical `anchor`), each card's SOURCE. Off-repo URLs excluded. Used by
+    the opt-in `--check-sources` existence check — shape validity is `_check_anchor_format`'s job,
+    not this collector's."""
     url = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)
     out: list[tuple[str, str]] = []
     for e in m.edges:
@@ -324,18 +399,21 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for c in m.components:
         if c.anchor and not url.match(c.anchor):
             out.append((f"{c.id} anchor", c.anchor))
-        href = _first_link_of(c, [c.entry_point, c.purpose, c.depends_on,
+        href = c.entry_point or _first_link_of(c, [c.purpose, c.depends_on,
                                   *(v for v in c.extra.values() if isinstance(v, str))])
         if href and not url.match(href):
             out.append((c.id, href))
     for d in m.deps:
-        href = _first_link_of(d, [d.name, d.type, d.used_for, d.where_configured,
+        href = d.where_configured or _first_link_of(d, [d.name, d.type, d.used_for,
                                   *(v for v in d.extra.values() if isinstance(v, str))])
         if href and not url.match(href):
             out.append((d.id, href))
     for e in m.entities:
         if e.source and not url.match(e.source):
             out.append((e.id, e.source))
+    for ep in m.entry_points:
+        if ep.entity and not url.match(ep.entity):
+            out.append((f"entry_points[{ep.component} {ep.kind}]", ep.entity))
     return out
 
 
@@ -495,7 +573,10 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     card_problems, card_warnings = _check_domain_cards(m)
     problems.extend(card_problems)
     warnings.extend(card_warnings)
-    problems.extend(_check_anchor_syntax(m))
+    problems.extend(_check_anchor_format(m))
+    extra_problems, extra_warnings = _check_extra_conventions(m)
+    problems.extend(extra_problems)
+    warnings.extend(extra_warnings)
 
     roots = _source_roots(model_path, repo_root) if model_path is not None else (
         [repo_root.resolve()] if repo_root is not None else [])
@@ -567,7 +648,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
              if e.src.startswith("C") and e.dst.startswith("E") and e.verb.lower() in _WRITE_VERBS}
     if owned and m.entities:
         embedded = {r.target for ent in m.entities for r in ent.relations
-                    if schema_v1.REL_KIND.get(r.verb.lower()) in ("composition", "aggregation")}
+                    if grammar.REL_KIND.get(r.verb.lower()) in ("composition", "aggregation")}
         unowned = sorted(e.id for e in m.entities if e.id not in owned and e.id not in embedded)
         if unowned:
             shown = ", ".join(unowned[:12]) + (f", +{len(unowned) - 12} more"
@@ -604,22 +685,9 @@ def main(argv: list[str] | None = None) -> int:
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex validate [--check-sources] [--check-coverage] [--repo <root>] "
               "[.coyodex/project-map.json]\n\n"
-              "Validate a schema-v2 model map: structural schema validation, then the semantic\n"
+              "Validate a model: structural schema validation, then the semantic\n"
               "checks (IDs resolve, hierarchy sound, cards complete, view fresh, …).")
         return 0
-    positionals: list[str] = []
-    skip_value = False
-    for a in argv:
-        if skip_value:
-            skip_value = False
-        elif a == "--repo":
-            skip_value = True
-        elif not a.startswith("-"):
-            positionals.append(a)
-    if any(p.endswith(".md") for p in positionals):
-        print("ERROR: schema-v1 markdown maps are not supported — coyodex validates "
-              "project-map.json only.", file=sys.stderr)
-        return 2
 
     repo_root: Path | None = None
     if "--repo" in argv:
@@ -662,7 +730,7 @@ def main(argv: list[str] | None = None) -> int:
         for p in problems:
             print(f"  - {p}")
         return 1
-    print("Schema v2: OK — structure valid, all IDs defined once, all references resolve, every GP "
+    print("Schema OK — structure valid, all IDs defined once, all references resolve, every GP "
           "step names a use case, every flow step well-formed.")
     return 0
 

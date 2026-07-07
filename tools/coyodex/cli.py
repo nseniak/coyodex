@@ -18,8 +18,6 @@ Commands:
   preindex   Build the structural pre-index (.coyodex/preindex.json). Needs the
              `preindex` extra (tree-sitter); install with: pip install -e '.[preindex]'
   validate   Validate a map (schema + semantic checks — is it WELL-FORMED?).
-             project-map.json (the schema-v2 source) only; markdown maps are
-             not supported.
   audit      Adversarial pass over a built map (is it SELF-CONTRADICTORY?): L1
              deterministic contradiction checks + an L2 grounding worklist.
   render     Render a map to a generated view: model → HTML viewer or → the
@@ -39,7 +37,7 @@ Run `coyodex <command> --help` for command-specific options."""
 
 
 def _default_map(argv: list[str]) -> list[str]:
-    """When no positional map is given, default to the v2 source (`.coyodex/project-map.json`)."""
+    """When no positional map is given, default to `.coyodex/project-map.json`."""
     flags_with_value = {"--repo"}
     expect_value = False
     for a in argv:
@@ -78,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
         from coyodex import assemble  # stdlib-only
         return assemble.main(rest)
     if cmd == "dump":
-        from coyodex import dump  # stdlib-only; v2-only, defaults to .coyodex/project-map.json
+        from coyodex import dump  # stdlib-only; defaults to .coyodex/project-map.json
         return dump.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)

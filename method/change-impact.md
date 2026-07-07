@@ -142,5 +142,5 @@ clean baseline.
 
 No precomputed index / call-graph artifact — re-walk the diff against the baseline each time.
 Revisit only if scale/frequency makes re-reading the bottleneck. When that day comes, the
-structured source already exists (schema v1), so a viewer/tool parses the markdown rather
+structured source already exists (`project-map.json`), so a viewer/tool reads it directly rather
 than introducing a second maintained model.

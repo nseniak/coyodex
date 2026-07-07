@@ -46,7 +46,7 @@ def make_small_model() -> ProjectModel:
     """A minimal model exercising one field of each kind, for the render-CLI smoke test."""
     m = ProjectModel(title="Tiny", goal="A tiny demo.")
     m.components = [Component(id="C1", name="Viewer", subsystem=None, purpose="shows orders",
-                              entry_point="[v.py](src/v.py:1)", depends_on="", anchor=None,
+                              entry_point="src/v.py:1", depends_on="", anchor=None,
                               confidence="")]
     m.entities = [Entity(id="E1", name="Order", store="orders", meaning="a customer order",
                          source="src/order.py:1",

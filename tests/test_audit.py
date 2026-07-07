@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for `coyodex audit` — the adversarial pass (L1 self-contradiction + L2 worklist).
 
-The scenario maps are authored directly as schema-v2 JSON model documents — the format the audit
+The scenario maps are authored directly as JSON model documents — the format the audit
 actually reads — so these tests exercise the LIVE pipeline (model audit), not the retired markdown
 audit.
 
@@ -31,7 +31,7 @@ def l2(json_text: str) -> list[audit_model.WorkItem]:
     return audit_model.l2_worklist_model(load_model(json_text))
 
 
-# --- builders (schema-v2 JSON model documents) -----------------------------------
+# --- builders (JSON model documents) -----------------------------------
 def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
     """Two use cases over one entity E1: UC1 READS the order, UC2 CREATES it (`create_verb`).
     `bad=True` orders the Golden Path read-then-create (the read-before-create shape); `bad=False`
@@ -68,7 +68,7 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
   ]"""
     )
     return f"""{{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -191,7 +191,7 @@ def make_actor_mismatch_map(flow_actor: str = "Zoe") -> str:
     """UC1's declared Actor is Andy, but its flow opens with `flow_actor` — a mismatch when it isn't
     Andy (the two layers disagree about who drives the use case)."""
     return f"""{{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -275,7 +275,7 @@ def make_actor_variant_map(declared: str, opening: str, roles: bool = False) -> 
     }
   ]""" if roles else "[]")
     return f"""{{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -349,7 +349,7 @@ def make_shared_read_map() -> str:
     """Three use cases whose flows all read E1 (via a component that reads it); E1 is never written on
     the path. Exercises per-entity dedup: exactly ONE read-never-created advisory, not three."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -530,7 +530,7 @@ def make_cc_routed_read_map() -> str:
     at GP2. Audit CANNOT see the read (only C→E edges of flow-named components count) — a documented
     false negative that pins the limitation."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -683,7 +683,7 @@ def make_cc_routed_read_map() -> str:
 def make_backward_whyref_map() -> str:
     """GP1's `why:` cites GP2, which comes after it (a backward reference)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -781,7 +781,7 @@ def make_backward_whyref_map() -> str:
 def make_read_never_created_map() -> str:
     """A single step reads E9, which no step ever creates (an external/config entity) — advisory."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -873,7 +873,7 @@ def make_read_never_created_map() -> str:
 def make_whyless_map() -> str:
     """GP1 has a `why:`, GP2 does not — a non-initial step missing its precondition (warning)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -971,7 +971,7 @@ def make_whyless_map() -> str:
 def make_l2_map() -> str:
     """A Security & auth entry plus an `enforces` edge — the two L2-worklist sources."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1053,7 +1053,7 @@ def make_l2_dep_map() -> str:
     and a plain `C→C` `calls` (remaining). The `emits`-into-a-log-dep row is the audit→Elastic
     false-edge class."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1177,7 +1177,7 @@ def make_duplicated_edge_map() -> str:
     """`make_l2_dep_map` with its C→D `emits` row DUPLICATED — the G4 dedupe shape (a repeated edge
     row must not become two skeptic tasks)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1308,7 +1308,7 @@ def make_described_map() -> str:
     """Named components with file anchors, a named dep, and an entity card with SOURCE — so worklist
     claims can carry self-describing From/To detail (G1)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -1325,7 +1325,7 @@ def make_described_map() -> str:
       "name": "AuthGate",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "[gate.py](src/auth/gate.py:10)",
+      "entry_point": "src/auth/gate.py:10",
       "depends_on": "",
       "anchor": null,
       "confidence": "",
@@ -1336,7 +1336,7 @@ def make_described_map() -> str:
       "name": "PolicyStore",
       "subsystem": null,
       "purpose": "x",
-      "entry_point": "[policy.py](src/policy.py:5)",
+      "entry_point": "src/policy.py:5",
       "depends_on": "",
       "anchor": null,
       "confidence": "",

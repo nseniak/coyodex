@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for `coyodex score` — the deterministic MapProfile (the eval's reusable heart).
 
-Fixtures are schema-v2 JSON model documents (generated once from the retired md test notation
+Fixtures are JSON model documents (generated once from the retired md test notation
 at the Phase-3 boundary — see git history for the original markdown shorthand).
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
@@ -21,12 +21,12 @@ from coyodex_eval.profile import MapProfile, build_profile
 SCORE = [sys.executable, "-m", "coyodex_eval.cli", "score"]
 
 
-# --- fixtures (schema-v2 JSON model documents) -----------------------------------
+# --- fixtures (JSON model documents) -----------------------------------
 def make_counts_map() -> str:
     """A map with KNOWN element counts, so the profile's structural numbers are exact:
     UC 2 · S 1 · SD 1 · C 3 · D 1 · E 2 · edges 3 · GP 3 · flows 2 · auth-surfaces 2."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -240,7 +240,7 @@ def make_roles_then_usecases_map() -> str:
     the Use-cases table. This is the layout that made `_use_case_names` return [] (review Finding 1):
     iter_tables emits the Roles table first, so a `startswith('use case')`-only predicate read it."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -332,7 +332,7 @@ def make_roles_then_usecases_map() -> str:
 def make_broken_map() -> str:
     """References an undefined component C9 — a blocking validation problem (validate_ok is False)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -405,7 +405,7 @@ def make_broken_map() -> str:
 def make_backward_whyref_map() -> str:
     """GP1's `why:` cites GP2, which comes after it — a backward reference (audit CONTRADICTION)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -504,7 +504,7 @@ def make_read_before_create_map() -> str:
     """UC1 reads the order before UC2 writes it on the Golden Path — an audit ADVISORY (the
     component-granularity attribution is lossy, so this ordering signal never blocks)."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -639,7 +639,7 @@ def make_read_before_create_map() -> str:
 def make_single_use_case_map() -> str:
     """A single use case, no components — used where the profile must show density as None."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -712,12 +712,13 @@ def test_broken_map_is_not_validate_ok() -> None:
 
 
 def test_markdown_map_is_refused() -> None:
-    """The retired input: a non-model document raises ModelError, never a silent zero-profile."""
+    """A non-model document raises ModelError (a normal JSON parse failure), never a silent
+    zero-profile."""
     try:
         build_profile("## Use cases\n| **UC1** | View | Andy | a -> b |\n")
         raise AssertionError("expected ModelError")
     except ModelError as e:
-        assert "not supported" in str(e)
+        assert "not valid JSON" in str(e)
 
 
 # --- self-consistency (reuses audit) --------------------------------------------

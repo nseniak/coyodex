@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the schema-v2 model layer (`coyodex.model`) — round-trip, deterministic
+"""Tests for the model layer (`coyodex.model`) — round-trip, deterministic
 serialization, and structural (schema) validation on load.
 
 Run either way (needs an editable install: `make deps`):
@@ -25,7 +25,6 @@ from coyodex.model import (
     ProjectModel,
     UseCase,
     all_elements,
-    is_model_document,
     load_model,
     to_canonical_json,
 )
@@ -44,11 +43,11 @@ def make_model(extra_order: tuple[str, ...] = ("Zeta", "Alpha")) -> ProjectModel
     extra: dict[str, object] = {k: k.lower() for k in extra_order}
     m.components = [
         Component(id="C1", name="Viewer", subsystem="S1", purpose="shows orders",
-                  entry_point="[viewer.py](src/viewer.py#L1)", extra=extra),
+                  entry_point="src/viewer.py:1", extra=extra),
         Component(id="C2", name="Store", subsystem="S1", purpose="persists orders"),
     ]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database",
-                  used_for="orders", where_configured="[cfg](cfg.py#L1)")]
+                  used_for="orders", where_configured="cfg.py:1")]
     m.entities = [Entity(id="E1", name="Order", store="orders", meaning="a customer order",
                          source="src/order.py#L1",
                          fields=[EntityField(name="id", type="str", markers=["PK"])],
@@ -57,10 +56,8 @@ def make_model(extra_order: tuple[str, ...] = ("Zeta", "Alpha")) -> ProjectModel
     m.flows = [Flow(uc="UC1", title="View order",
                     steps=[FlowStep(n=1, src="Andy", dst="C1", phrase="opens the list"),
                            FlowStep(n=2, src="C1", dst="E1")])]
-    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show it",
-                    where="[viewer.py](src/viewer.py#L5)"),
-               Edge(src="C2", verb="persists", dst="E1", why="store it",
-                    where="[store.py](src/store.py#L9)"),
+    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show it", where="src/viewer.py:5"),
+               Edge(src="C2", verb="persists", dst="E1", why="store it", where="src/store.py:9"),
                Edge(src="C1", verb="uses", dst="D1", why="query", where="src/viewer.py:7")]
     return m
 
@@ -152,7 +149,7 @@ def test_load_rejects_suffixed_id():
 
 
 def test_absent_optional_fields_take_defaults():
-    minimal = {"format": "coyodex-map/2", "title": "T",
+    minimal = {"format": "coyodex-map", "title": "T",
                "components": [{"id": "C1", "name": "Only"}]}
     m = load_model(json.dumps(minimal))
     assert m.components[0].purpose == ""
@@ -161,12 +158,6 @@ def test_absent_optional_fields_take_defaults():
 
 
 # --- helpers ---------------------------------------------------------------------
-
-def test_is_model_document():
-    assert is_model_document(to_canonical_json(make_model()))
-    assert not is_model_document("# A markdown map\n| **C1** | x |\n")
-    assert not is_model_document('{"format": "not-a-map"}' + " " * 3000)
-
 
 def test_all_elements_keyed_by_id():
     els = all_elements(make_model())

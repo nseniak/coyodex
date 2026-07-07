@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Generated views of the schema-v2 model: model → markdown, and model → graph (the viewer's input).
+"""Generated views of the model: model → markdown, and model → graph (the viewer's input).
 
 The markdown view is the READABLE, COMMITTED rendering of `project-map.json` (canonical section
 order, template-shaped tables, deterministic output) — never hand-edited; `coyodex validate` warns
-when the committed copy is stale. The graph view feeds the existing HTML viewer
-(`gen_viewer.write_html`) unchanged: it reproduces exactly the `GraphDict` the schema-v1 parser
-built from the equivalent markdown, so the interactive diagram is identical either way.
+when the committed copy is stale. The graph view feeds the HTML viewer (`gen_viewer.write_html`)
+its `GraphDict` input, built straight from the model.
 
 Stdlib-only. Both functions are pure (same model → same bytes).
 """
@@ -15,7 +14,7 @@ import json
 import re
 from dataclasses import asdict
 
-from coyodex import schema_v1
+from coyodex import grammar
 from coyodex.model import Component, Dep, Entity, Group, ProjectModel, UseCase
 from coyodex.validate_analysis import strip_anchor
 from coyodex.viewer.build_graph import (
@@ -37,7 +36,7 @@ _GENERATED_NOTICE = (
 
 
 def _esc(cell: str) -> str:
-    """A model text value as a table cell: literal pipes re-escaped (the schema-v1 rule), newlines
+    """A model text value as a table cell: literal pipes re-escaped (the schema rule), newlines
     flattened so one row stays one line."""
     return cell.replace("|", r"\|").replace("\n", " ").strip()
 
@@ -62,6 +61,17 @@ def _source_line(source: str) -> str:
     stripped — leaving it in would mislabel `path:line` as `basename:line` instead of `basename`)."""
     label = strip_anchor(source).rsplit("/", 1)[-1] or source
     return f"SOURCE: [{label}]({source})"
+
+
+def _anchor_link(href: str | None) -> str:
+    """A bare `path:line` anchor (components[].entry_point, deps[].where_configured, edges[].where,
+    entry_points[].entity) as a markdown-link table cell, labelled with its basename — so the
+    generated view stays clickable even though the model itself stores these bare, like
+    `Entity.source`."""
+    if not href:
+        return ""
+    label = strip_anchor(href).rsplit("/", 1)[-1] or href
+    return f"[{label}]({href})"
 
 
 def _relation_item(r) -> str:
@@ -98,15 +108,15 @@ def _dep_headers(m: ProjectModel) -> tuple[list[str], bool, list[str]]:
 
 def model_to_markdown(m: ProjectModel) -> str:
     """The canonical markdown view. Sections render in the template's order; an empty section is
-    omitted (a small map without subsystems reads exactly like a v1 small map)."""
+    omitted (a small map without subsystems reads exactly like any other small map)."""
     out: list[str] = [f"# {m.title} — Codebase Analysis" if m.title else "# Codebase Analysis", ""]
     out += [_GENERATED_NOTICE, ""]
     out += ["> Built with the **coyodex** method. Behavioral layer first (Goal → Glossary → Roles →",
             "> Use cases → Golden Path), then the structural machine (Components → Entry points /",
             "> Model / Deps → Flows + Edges), joined at **use case ↔ flow**.",
-            "> **Schema v2** (JSON source): the committed source of truth is `project-map.json`;",
-            "> this file is a generated view. IDs, cross-references, and confidence tags follow",
-            "> schema v1's contract; validated by `coyodex validate project-map.json`."]
+            "> The committed source of truth is `project-map.json` (JSON); this file is a generated",
+            "> view. IDs, cross-references, and confidence tags are validated by",
+            "> `coyodex validate project-map.json`."]
     pin = []
     if m.commit:
         pin.append(f"**Commit:** `{m.commit}`")
@@ -154,7 +164,7 @@ def model_to_markdown(m: ProjectModel) -> str:
         headers, with_conf, extra = _component_headers(m)
         rows = []
         for c in m.components:
-            row = [f"**{c.id}**", c.name, c.subsystem or "", c.purpose, c.entry_point or "",
+            row = [f"**{c.id}**", c.name, c.subsystem or "", c.purpose, _anchor_link(c.entry_point),
                    c.depends_on]
             if with_conf:
                 row.append(c.confidence)
@@ -165,8 +175,8 @@ def model_to_markdown(m: ProjectModel) -> str:
         headers, linked, extra = _dep_headers(m)
         rows = []
         for d in m.deps:
-            row = [f"**{d.id}**", d.name, d.kind or "", d.type, d.used_for, d.where_configured,
-                   d.confidence]
+            row = [f"**{d.id}**", d.name, d.kind or "", d.type, d.used_for,
+                   _anchor_link(d.where_configured), d.confidence]
             if linked:
                 row.append("yes" if d.deployment_linked else "")
             row += [_extra_str(d.extra.get(k, "")) for k in extra]
@@ -179,7 +189,8 @@ def model_to_markdown(m: ProjectModel) -> str:
     if m.entry_points:
         section("T4 — Entry points",
                 _table(["Kind", "Trigger", "Code entity", "Component"],
-                       [[e.kind, e.trigger, e.entity, e.component] for e in m.entry_points]))
+                       [[e.kind, e.trigger, _anchor_link(e.entity), e.component]
+                        for e in m.entry_points]))
     if m.subdomains:
         section("Subdomains (SD) — bounded contexts of the domain model",
                 _table(["ID", "Subdomain", "Purpose", "Parent", "Anchor", "Conf."],
@@ -242,7 +253,7 @@ def model_to_markdown(m: ProjectModel) -> str:
     if m.edges:
         section("Relationships — backbone edge list",
                 _table(["From", "Verb", "To", "Why", "Where"],
-                       [[e.src, e.verb, e.dst, e.why or "", e.where or ""] for e in m.edges]))
+                       [[e.src, e.verb, e.dst, e.why or "", _anchor_link(e.where)] for e in m.edges]))
     if m.tests or m.tests_note:
         body = []
         if m.tests_note:
@@ -278,10 +289,9 @@ def _node(el, kind: str, name: str, file: str | None, fields: dict[str, str],
 
 
 def model_to_graph(m: ProjectModel) -> GraphDict:
-    """The model as the viewer's GraphDict — the same shape `build_graph.build` produced from the
-    equivalent schema-v1 markdown, so `gen_viewer.write_html` renders it unchanged. A component's
-    drill file prefers its v2 canonical `anchor` and falls back to the entry-point link (the v1
-    first-row-link heuristic, so converted maps render identically)."""
+    """The model as the viewer's GraphDict, the shape `gen_viewer.write_html` renders. A
+    component's drill file prefers its canonical `anchor` and falls back to its `entry_point`,
+    then a link found in its free-text fields."""
     nodes: dict[str, Node] = {}
     subsystem_names = {s.id: s.name for s in m.subsystems}
     subdomain_names = {sd.id: sd.name for sd in m.subdomains}
@@ -300,16 +310,16 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                   "Entry point": c.entry_point or "", "Depends on": c.depends_on,
                   "Conf.": c.confidence,
                   **{k: _extra_str(v) for k, v in c.extra.items()}}
-        # `anchor` is a bare `path#Lnnn` (the v2 canonical home); the fallback is the v1 heuristic —
-        # the first md link across the row's cells (usually the entry point).
-        href = c.anchor or _first_href(c.entry_point, c.purpose, c.depends_on)
+        # `anchor` is the v2 canonical home; `entry_point` (also bare) is the next best single
+        # location; only then fall back to hunting a markdown link in the free-text cells.
+        href = c.anchor or c.entry_point or _first_href(c.purpose, c.depends_on)
         nodes[c.id] = _node(c, "component", c.name, href, fields, c.subsystem)
     for d in m.deps:
         fields = {"Name": d.name, "Kind": d.kind or "", "Type": d.type, "Used for": d.used_for,
                   "Where configured": d.where_configured, "Conf.": d.confidence,
                   **{k: _extra_str(v) for k, v in d.extra.items()}}
-        node = _node(d, "dep", d.name, _first_href(d.where_configured, d.used_for), fields, None)
-        node.dep_kind = schema_v1.classify_dep(d.kind or "", d.type)
+        node = _node(d, "dep", d.name, d.where_configured or _first_href(d.used_for), fields, None)
+        node.dep_kind = grammar.classify_dep(d.kind or "", d.type)
         nodes[d.id] = node
     for sd in m.subdomains:
         parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""
@@ -336,27 +346,26 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         if key in seen:
             continue
         seen.add(key)
-        where = _first_href(e.where) or (e.where or None)
-        edges.append(GraphEdge(e.src, e.verb, e.dst, e.why or None, where))
+        edges.append(GraphEdge(e.src, e.verb, e.dst, e.why or None, e.where or None))
     for ent in m.entities:
         for r in ent.relations:
             edges.append(GraphEdge(ent.id, r.verb, r.target, None, None,
-                                   kind=schema_v1.REL_KIND.get(r.verb.lower(), "association"),
+                                   kind=grammar.REL_KIND.get(r.verb.lower(), "association"),
                                    src_card=r.src_card, dst_card=r.dst_card, how=r.how))
     # Resolve which real field backs each domain relation (drives the arrow label + panel line) —
     # the same second pass the v1 parser ran once all entity nodes existed.
-    backing = {e.id: [(f.name, f.type, schema_v1.fk_targets(f.markers)) for f in e.fields]
+    backing = {e.id: [(f.name, f.type, grammar.fk_targets(f.markers)) for f in e.fields]
                for e in m.entities}
     for ge in edges:
         if ge.kind and ge.kind != "inheritance" and ge.src in backing and ge.dst in backing:
-            ge.fk_field, ge.fk_side = schema_v1.resolve_backing(
+            ge.fk_field, ge.fk_side = grammar.resolve_backing(
                 ge.src, ge.dst, backing[ge.src], backing[ge.dst])
 
-    flows = [schema_v1.Flow(
+    flows = [grammar.Flow(
         uc=f.uc, title=f.title, line_no=0,
-        steps=[schema_v1.FlowStep(n=st.n, src=st.src, dst=st.dst,
-                                  src_is_id=schema_v1.is_step_id(st.src),
-                                  dst_is_id=schema_v1.is_step_id(st.dst),
+        steps=[grammar.FlowStep(n=st.n, src=st.src, dst=st.dst,
+                                  src_is_id=grammar.is_step_id(st.src),
+                                  dst_is_id=grammar.is_step_id(st.dst),
                                   phrase=st.phrase, note=st.note, ok=True)
                for st in f.steps]) for f in m.flows]
 

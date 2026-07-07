@@ -25,10 +25,10 @@ CLAIMS = [sys.executable, "-m", "coyodex_eval.cli", "claims"]
 
 
 def make_map() -> str:
-    """A small well-formed-enough map (a schema-v2 JSON model document) with the two L2 sources
+    """A small well-formed-enough map (a JSON model document) with the two L2 sources
     (a Security & auth row + an `enforces` edge), so profile + judge both have content."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,

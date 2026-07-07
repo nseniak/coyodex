@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""`coyodex audit` for a schema-v2 model map — L1 self-contradiction + the L2 grounding worklist.
+"""`coyodex audit` for a model map — L1 self-contradiction + the L2 grounding worklist.
 
-The adversarial pass reads model FIELDS (never a markdown parse): the Golden Path's narrative
-order vs the mechanism (T6 flows + backbone edges), then the ranked worklist of "actually-does"
-claims for fresh-context skeptics.
+The adversarial pass reads model FIELDS directly: the Golden Path's narrative order vs. the
+mechanism (T6 flows + backbone edges), then the ranked worklist of "actually-does" claims for
+fresh-context skeptics.
 
-Two v2 upgrades to the worklist's self-describing `detail` (the F2 false-refutation fix from the
-Phase-1 boundary):
+The worklist's self-describing `detail` avoids the false-refutation class where a skeptic reduces
+an endpoint to one arbitrary file:
   - a COMPONENT endpoint is described by its canonical anchor AND its member entry points (every T4
     row naming it) — an umbrella component ("Event stream — in-process + Redis") is never reduced
     to one arbitrary file, which is what got true edges refuted;
@@ -14,9 +14,8 @@ Phase-1 boundary):
     2.0 endpoints)") — its Kind + Type, never a code anchor, so a component reaching the real
     external service can't be refuted because the dep was anchored at a local wrapper module.
 
-Severity model, ranking, and the verbs-prioritize-never-gate principle are unchanged. Stdlib-only.
-This is the ONLY audit: the retired v1 markdown audit is gone, so the audit vocabulary —
-severities, verb sets, Finding/WorkItem, the report formatter — lives here.
+Severity model, ranking, and the verbs-prioritize-never-gate principle are stable. Stdlib-only. The
+audit vocabulary — severities, verb sets, Finding/WorkItem, the report formatter — lives here.
 """
 from __future__ import annotations
 
@@ -25,7 +24,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from coyodex import schema_v1
+from coyodex import grammar
 from coyodex.model import ProjectModel, load_model
 
 # ── the audit vocabulary (shared with the eval, which imports it from here) ──────────────────────
@@ -126,14 +125,14 @@ def _flow_component_ids(f) -> set[str]:
     comps: set[str] = set()
     for st in f.steps:
         for end in (st.src, st.dst):
-            if schema_v1.is_step_id(end) and end.startswith("C"):
+            if grammar.is_step_id(end) and end.startswith("C"):
                 comps.add(end)
     return comps
 
 
 def _flow_opening_actor(f) -> str | None:
     for st in f.steps:
-        if st.src and not schema_v1.is_step_id(st.src):
+        if st.src and not grammar.is_step_id(st.src):
             return st.src
     return None
 
@@ -305,7 +304,7 @@ def _endpoint_detail(m: ProjectModel) -> dict[str, str]:
             desc += f"; entry points: {shown}{more}"
         out[c.id] = desc
     for d in m.deps:
-        kind = schema_v1.classify_dep(d.kind or "", d.type)
+        kind = grammar.classify_dep(d.kind or "", d.type)
         system = d.type or d.name
         out[d.id] = (f"{d.id} = {d.name} ({kind}: {system} — an external system, not a code "
                      f"module)")
@@ -340,7 +339,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     skip for framework/library deps, deduplicated by claim string."""
     described = _endpoint_detail(m)
     folded = {d.id for d in m.deps
-              if (d.kind or "").strip().lower() in schema_v1.DEP_KINDS_FOLDED}
+              if (d.kind or "").strip().lower() in grammar.DEP_KINDS_FOLDED}
     items: list[WorkItem] = []
     for s in m.security:
         items.append(WorkItem(
@@ -430,14 +429,10 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex audit [.coyodex/project-map.json]\n\n"
-              "The adversarial pass over a schema-v2 model map: L1 deterministic self-contradiction\n"
+              "The adversarial pass over a model map: L1 deterministic self-contradiction\n"
               "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.")
         return 0
     args = [a for a in argv if not a.startswith("-")]
-    if any(a.endswith(".md") for a in args):
-        print("ERROR: schema-v1 markdown maps are not supported — coyodex audits "
-              "project-map.json only.", file=sys.stderr)
-        return 2
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)

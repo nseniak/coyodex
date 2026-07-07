@@ -42,13 +42,13 @@ class ScriptedJudge:
         return RubricVerdict(dimension, self.default_score, "j", "f.py:1")
 
 
-# --- builders (schema-v2 JSON model documents) -----------------------------------
+# --- builders (JSON model documents) -----------------------------------
 def make_l2_map(refute_surface: bool = False) -> str:
     """A map with the two L2-worklist sources: a Security & auth row and an `enforces` edge -> 2
     claims. `refute_surface` puts the marker in the surface name so the ScriptedJudge refutes that
     one claim."""
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -114,7 +114,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
   "tests": [],
   "extras": []
 }""" if refute_surface else """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -184,7 +184,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
 
 def make_no_claims_map() -> str:
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,
@@ -231,7 +231,7 @@ def make_many_claims_map(n_uses: int = 4) -> str:
     ranking) plus 4 low-risk C↔C `uses` edges appended to the same edges table."""
     assert n_uses == 4, "fixture is pre-generated for n_uses=4 only"
     return """{
-  "format": "coyodex-map/2",
+  "format": "coyodex-map",
   "title": "",
   "goal": "",
   "commit": null,

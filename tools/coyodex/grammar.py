@@ -1,12 +1,8 @@
 #!/usr/bin/env python3
-"""Shared token/grammar helpers behind the schema-v2 pipeline.
-
-Originally the schema-v1 markdown-map grammar (shared by the retired v1 parser and validator);
-what remains here is the subset the CURRENT tooling still needs: the id vocabulary, the dependency
+"""Shared token/grammar helpers used across the coyodex pipeline: the id vocabulary, the dependency
 Kind classifier, the markdown table-splitting grammar (used by the change-impact report parser in
 `viewer/build_graph.py`), and the domain-relation vocabulary (`views.py` derives graph edges and
-flow steps straight from the schema-v2 model, reusing this vocabulary rather than a second one).
-Stdlib-only.
+flow steps straight from the model, reusing this vocabulary rather than a second one). Stdlib-only.
 """
 from __future__ import annotations
 
@@ -62,7 +58,7 @@ def classify_dep(kind_cell: str, type_cell: str) -> str:
     """The dep's Kind (one of DEP_KINDS): an explicit, valid `Kind` cell wins; else infer from the
     free-text `Type`. Falls back to 'library' (folds into the Context 'Libraries' box) when nothing
     matches, so an un-tagged, unrecognised dep declutters rather than crowding Context. The authored
-    `Kind` column is the accurate path; this heuristic is the no-re-map fallback for older maps."""
+    `Kind` column is the accurate path; this heuristic is the fallback when it's absent."""
     explicit = (kind_cell or "").strip().lower()
     if explicit in DEP_KINDS:
         return explicit
@@ -131,7 +127,7 @@ def iter_pipe_runs(lines: list[str]) -> list[tuple[int, list[str]]]:
 
 
 # ── Domain-relation vocabulary ────────────────────────────────────────────────────────────────────
-# `views.py` derives every domain-relation edge and its arrow-backing straight from the schema-v2
+# `views.py` derives every domain-relation edge and its arrow-backing straight from the
 # model (`Entity.relations`, `EntityField.markers`) — this vocabulary (verb -> relationship kind,
 # the canonical-vs-alias verb map, and the FK-marker/backing-resolution helpers) is what it reuses,
 # so there is still ONE place that decides what a relation verb means.
@@ -183,7 +179,7 @@ def resolve_backing(
 
 
 # ── T6 use-case flows ─────────────────────────────────────────────────────────────────────────────
-# `views.py` builds a Flow/FlowStep per use case straight from the schema-v2 model's `Flow`/`FlowStep`
+# `views.py` builds a Flow/FlowStep per use case straight from the model's `Flow`/`FlowStep`
 # records (not from a markdown parse); `is_step_id` classifies each endpoint (an element ID vs a Role
 # display name) so the viewer knows whether a step is a backbone reference or an actor interaction.
 _STEP_ENDPOINT_ID = re.compile(r"^(?:UC\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)$")
