@@ -517,7 +517,7 @@ def main(argv: list[str] | None = None) -> int:
 # /api/recents; a project is added by pasting a path or browsing the filesystem via GET /api/browse
 # (breadcrumbs, quick locations, filter, inline add). Add/Remove POST to /api/open|forget with the
 # X-Coyodex CSRF header. Themed for light + dark via CSS variables + prefers-color-scheme.
-INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>coyodex maps</title>
+INDEX_HTML = r"""<!doctype html><html><head><meta charset="utf-8"><title>coyodex maps</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
 <style>
@@ -607,7 +607,7 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const $=id=>document.getElementById(id);
 async function jget(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error(r.status);return r.json();}
 async function jpost(u,body){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(body)});}
-let home=null,recents=[],cur=null,entries=[],curParent=null;
+let home=null,recents=[],cur=null,entries=[],curParent=null,typeSeq=0,typeBase=null;
 const shorten=p=>home&&(p===home||p.startsWith(home+'/'))?'~'+p.slice(home.length):p;
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1400);}
 
@@ -644,24 +644,46 @@ async function addPath(path){
 /* --- integrated path bar + folder browser (one control, not two) --- */
 function openBrowser(){const b=$('browser');if(b.hidden){b.hidden=false;if(!cur)browse(home||'');}}
 function closeBrowser(){$('browser').hidden=true;}
-// A typed path: absolute (/…), home (~/…), or RELATIVE to the current folder (e.g. "mee6/repos" at Home).
-function resolvePath(v){if(v[0]==='/')return v;if(v[0]==='~')return (home||'')+v.slice(1);return (cur||home||'')+'/'+v;}
-// While you type a bare name (no "/"), it live-filters the current folder; a path (with "/") shows all, ↵ navigates.
-function filterFrag(){const v=$('pathbar').value;return v.includes('/')?'':v.trim().toLowerCase();}
+// A typed path: absolute (/…), home (~/…), or RELATIVE to `typeBase` — the folder you were in when
+// you started typing (so live-navigating as you type never shifts the base). e.g. "mee6/repos" at Home.
+function resolvePath(v){if(v[0]==='/')return v;if(v[0]==='~')return (home||'')+v.slice(1);return (typeBase||cur||home||'')+'/'+v;}
+// The filter fragment = the text after the last "/" (or the whole value if none) — so a bare name
+// filters the current folder, and while typing a path only the trailing segment filters.
+function filterFrag(){const v=$('pathbar').value;const i=v.lastIndexOf('/');return (i===-1?v:v.slice(i+1)).trim().toLowerCase();}
 async function goPath(){
   const v=$('pathbar').value.trim();if(!v)return;
   let d;try{d=await fetchBrowse(resolvePath(v));}catch(_){$('adderr').textContent='No such folder.';return;}
   $('adderr').textContent='';
-  if(d.hasMap){if(await addPath(d.path)){$('pathbar').value='';renderList();}}  // typed a project folder -> add it
-  else{applyBrowse(d);$('pathbar').value='';}                                    // typed a parent folder -> browse in
+  if(d.hasMap){if(await addPath(d.path)){$('pathbar').value='';typeBase=cur;renderList();}}  // a project folder -> add it
+  else{applyBrowse(d);$('pathbar').value='';typeBase=cur;}                                     // a parent folder -> browse in
+}
+// Live navigation while typing ANY path (absolute /…, home ~/…, or relative like "mee6/repos"): the
+// text up to the last "/" is browsed, the part after it filters. So "/" jumps to the root dir, and
+// "mee6/repos" at Home walks into it as you type. Relative paths resolve against typeBase (see above),
+// so navigating never shifts the base under you. A bare name (no "/") just filters the current folder.
+async function onType(){
+  openBrowser();
+  const v=$('pathbar').value;
+  if(v===''){typeBase=cur;renderList();return;}
+  if(v.includes('/')){
+    const target=resolvePath(v.slice(0,v.lastIndexOf('/')+1));
+    const norm=target.replace(/\/+$/,'')||'/';
+    if(norm!==cur){
+      const seq=++typeSeq;
+      try{const d=await fetchBrowse(target);if(seq!==typeSeq)return;applyBrowse(d);return;}catch(_){/* not a folder (yet) */}
+    }
+  }
+  renderList();
 }
 $('pathbar').addEventListener('focus',openBrowser);
-$('pathbar').addEventListener('input',()=>{openBrowser();renderList();});
+$('pathbar').addEventListener('input',onType);
 $('pathbar').addEventListener('keydown',e=>{if(e.key==='Enter')goPath();});
 $('up').onclick=()=>{if(curParent)browse(curParent);};
 $('openfolder').onclick=()=>addPath(cur);
 $('closebrowser').onclick=closeBrowser;
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('browser').hidden)closeBrowser();});
+// Click anywhere outside the browser (and not on the path bar that opens it) closes it — like Esc.
+document.addEventListener('mousedown',e=>{const b=$('browser');if(b.hidden)return;if(!b.contains(e.target)&&e.target!==$('pathbar'))closeBrowser();});
 
 async function fetchBrowse(path){return jget('/api/browse'+(path?'?path='+encodeURIComponent(path):''));}
 function applyBrowse(d){
@@ -670,7 +692,7 @@ function applyBrowse(d){
   const of=$('openfolder');of.disabled=!d.hasMap;of.textContent=d.hasMap?'Add this folder':'No map here';
   renderCrumbs();renderList();
 }
-async function browse(path){let d;try{d=await fetchBrowse(path);}catch(_){return;}applyBrowse(d);}
+async function browse(path){let d;try{d=await fetchBrowse(path);}catch(_){return;}applyBrowse(d);typeBase=cur;}
 function renderCrumbs(){
   const box=$('crumbs');box.innerHTML='';
   const seg=(label,t)=>{const b=document.createElement('button');b.className='crumb';b.textContent=label;b.onclick=()=>browse(t);return b;};
