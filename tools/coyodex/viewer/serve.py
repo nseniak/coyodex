@@ -607,7 +607,10 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',
 const $=id=>document.getElementById(id);
 async function jget(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error(r.status);return r.json();}
 async function jpost(u,body){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(body)});}
-let home=null,recents=[],cur=null,entries=[],curParent=null,typeSeq=0,typeBase=null;
+// cur = the folder currently DISPLAYED (may be a live preview while typing); curBase = the COMMITTED
+// current folder — changed only by an explicit click or Enter, never by typing. Relative paths resolve
+// against curBase, and clearing the input snaps the view back to it.
+let home=null,recents=[],cur=null,entries=[],curParent=null,typeSeq=0,curBase=null;
 const shorten=p=>home&&(p===home||p.startsWith(home+'/'))?'~'+p.slice(home.length):p;
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1400);}
 
@@ -644,34 +647,36 @@ async function addPath(path){
 /* --- integrated path bar + folder browser (one control, not two) --- */
 function openBrowser(){const b=$('browser');if(b.hidden){b.hidden=false;if(!cur)browse(home||'');}}
 function closeBrowser(){$('browser').hidden=true;}
-// A typed path: absolute (/…), home (~/…), or RELATIVE to `typeBase` — the folder you were in when
-// you started typing (so live-navigating as you type never shifts the base). e.g. "mee6/repos" at Home.
-function resolvePath(v){if(v[0]==='/')return v;if(v[0]==='~')return (home||'')+v.slice(1);return (typeBase||cur||home||'')+'/'+v;}
+// A typed path: absolute (/…), home (~/…), or RELATIVE to the committed folder curBase (e.g.
+// "mee6/repos" at Home). curBase never moves while typing, so relative resolution stays stable.
+function resolvePath(v){if(v[0]==='/')return v;if(v[0]==='~')return (home||'')+v.slice(1);return (curBase||cur||home||'')+'/'+v;}
 // The filter fragment = the text after the last "/" (or the whole value if none) — so a bare name
 // filters the current folder, and while typing a path only the trailing segment filters.
 function filterFrag(){const v=$('pathbar').value;const i=v.lastIndexOf('/');return (i===-1?v:v.slice(i+1)).trim().toLowerCase();}
+// Enter COMMITS: resolve the typed path and either add it (a project folder) or move into it.
 async function goPath(){
   const v=$('pathbar').value.trim();if(!v)return;
   let d;try{d=await fetchBrowse(resolvePath(v));}catch(_){$('adderr').textContent='No such folder.';return;}
   $('adderr').textContent='';
-  if(d.hasMap){if(await addPath(d.path)){$('pathbar').value='';typeBase=cur;renderList();}}  // a project folder -> add it
-  else{applyBrowse(d);$('pathbar').value='';typeBase=cur;}                                     // a parent folder -> browse in
+  if(d.hasMap){if(await addPath(d.path))browse(curBase);}  // a project folder -> add it, snap back to the committed folder
+  else{$('pathbar').value='';applyBrowse(d);curBase=cur;}  // a parent folder -> move into it (commit)
 }
-// Live navigation while typing ANY path (absolute /…, home ~/…, or relative like "mee6/repos"): the
-// text up to the last "/" is browsed, the part after it filters. So "/" jumps to the root dir, and
-// "mee6/repos" at Home walks into it as you type. Relative paths resolve against typeBase (see above),
-// so navigating never shifts the base under you. A bare name (no "/") just filters the current folder.
+// Typing only PREVIEWS — it never changes the committed folder (curBase). The text up to the last "/"
+// is shown ("/" previews the root dir, "mee6/repos" at Home previews that folder), the part after it
+// filters. A bare name (no "/") filters the committed folder. Clearing the input snaps back to curBase.
+// Only a click (a folder row / breadcrumb / chip / Up) or Enter commits.
 async function onType(){
   openBrowser();
   const v=$('pathbar').value;
-  if(v===''){typeBase=cur;renderList();return;}
-  if(v.includes('/')){
-    const target=resolvePath(v.slice(0,v.lastIndexOf('/')+1));
-    const norm=target.replace(/\/+$/,'')||'/';
-    if(norm!==cur){
-      const seq=++typeSeq;
-      try{const d=await fetchBrowse(target);if(seq!==typeSeq)return;applyBrowse(d);return;}catch(_){/* not a folder (yet) */}
-    }
+  if(!v.includes('/')){                       // empty or a bare name -> show the committed folder, filtered
+    if(cur!==curBase){const seq=++typeSeq;try{const d=await fetchBrowse(curBase);if(seq!==typeSeq)return;applyBrowse(d);}catch(_){}}
+    renderList();return;
+  }
+  const target=resolvePath(v.slice(0,v.lastIndexOf('/')+1));   // preview the typed folder (no commit)
+  const norm=target.replace(/\/+$/,'')||'/';
+  if(norm!==cur){
+    const seq=++typeSeq;
+    try{const d=await fetchBrowse(target);if(seq!==typeSeq)return;applyBrowse(d);return;}catch(_){/* not a folder yet */}
   }
   renderList();
 }
@@ -692,7 +697,9 @@ function applyBrowse(d){
   const of=$('openfolder');of.disabled=!d.hasMap;of.textContent=d.hasMap?'Add this folder':'No map here';
   renderCrumbs();renderList();
 }
-async function browse(path){let d;try{d=await fetchBrowse(path);}catch(_){return;}applyBrowse(d);typeBase=cur;}
+// A COMMITTED navigation (click / Up / crumb / chip): clear the typed text, show the folder, and make
+// it the new committed base.
+async function browse(path){$('pathbar').value='';let d;try{d=await fetchBrowse(path);}catch(_){return;}applyBrowse(d);curBase=cur;}
 function renderCrumbs(){
   const box=$('crumbs');box.innerHTML='';
   const seg=(label,t)=>{const b=document.createElement('button');b.className='crumb';b.textContent=label;b.onclick=()=>browse(t);return b;};
@@ -718,7 +725,7 @@ function renderList(){
     const row=document.createElement('div');row.className='dir'+(e.hasMap?' hasmap':'');
     row.innerHTML='<span class="ic">'+(e.hasMap?'🗺️':'📁')+'</span><span class="dn">'+esc(e.name)+'</span>'
       +(e.hasMap?'<span class="mapbadge">map</span><button class="mini primary add">+ Add</button>':'');
-    row.onclick=()=>{$('pathbar').value='';browse(e.path);};  // navigating clears the filter for the new folder
+    row.onclick=()=>browse(e.path);  // a click commits into the folder (browse clears the filter)
     const a=row.querySelector('.add');if(a)a.onclick=ev=>{ev.stopPropagation();addPath(e.path);};
     box.appendChild(row);
   }
