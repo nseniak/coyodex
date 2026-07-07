@@ -20,6 +20,7 @@ from coyodex.model import (
     EntityField,
     EntityRelation,
     EntryPoint,
+    EvidenceItem,
     Flow,
     FlowStep,
     GoldenStep,
@@ -254,12 +255,6 @@ def test_colon_range_anchor_is_not_flagged():
     assert problems_of(m) == []
 
 
-def test_legacy_hash_anchor_in_extra_evidence_item_is_flagged():
-    m = make_valid_model()
-    m.components[0].extra = {"evidence": [{"file": "src/b.py#L7-L12", "why": "because"}]}
-    assert any("extra.evidence[0]" in p and "path:line" in p for p in problems_of(m))
-
-
 # --- anchor format gate: entry_point / where_configured / edges.where / entry_points.entity ---
 # must be bare `path:line`, never a markdown link (the label was always just the file's basename).
 
@@ -288,54 +283,66 @@ def test_entry_point_entity_md_link_is_a_blocking_problem():
     assert any("entity" in p and "not a valid" in p for p in problems_of(m))
 
 
-# --- `extra` conventions: components[]/deps[]' freeform columns, standardized shapes/names ---
+# --- files / evidence / package / alternative: real fields, not `extra` columns ---
 
-def test_extra_files_must_be_a_list_of_strings():
+def test_component_files_and_evidence_round_trip_clean():
     m = make_valid_model()
-    m.components[0].extra = {"files": 3}
-    assert any("extra.files" in p and "list of file-path strings" in p for p in problems_of(m))
-
-
-def test_extra_files_count_and_members_are_retired():
-    m = make_valid_model()
-    m.components[0].extra = {"files_count": 3}
-    assert any("extra.files_count" in p and "extra.files" in p for p in problems_of(m))
-    m.components[0].extra = {"members": ["a.py"]}
-    assert any("extra.members" in p and "extra.files" in p for p in problems_of(m))
-
-
-def test_extra_evidence_must_be_a_list_of_file_why_objects():
-    m = make_valid_model()
-    m.components[0].extra = {"evidence": "policy.py:1 the reason"}
-    assert any("extra.evidence" in p and "list of {file, why}" in p for p in problems_of(m))
-
-
-def test_extra_evidence_item_needs_file_and_why():
-    m = make_valid_model()
-    m.components[0].extra = {"evidence": [{"file": "policy.py:1"}]}
-    assert any("evidence[0]" in p and "'why'" in p for p in problems_of(m))
-    m.components[0].extra = {"evidence": [{"why": "the reason"}]}
-    assert any("evidence[0]" in p and "'file'" in p for p in problems_of(m))
-
-
-def test_extra_evidence_valid_shape_has_no_problems():
-    m = make_valid_model()
-    m.components[0].extra = {"evidence": [{"file": "policy.py:1", "why": "the reason"}]}
+    m.components[0].files = ["src/v.py", "src/helpers.py"]
+    m.components[0].evidence = [EvidenceItem(file="src/v.py:12", why="the entry point")]
     assert problems_of(m) == []
 
 
-def test_extra_sdk_and_client_library_are_retired_in_favor_of_package():
+def test_evidence_file_must_be_a_bare_path_line_anchor():
+    m = make_valid_model()
+    m.components[0].evidence = [EvidenceItem(file="[v.py](src/v.py:12)", why="a link, not bare")]
+    assert any("evidence[0].file" in p and "not a valid" in p for p in problems_of(m))
+    m.components[0].evidence = [EvidenceItem(file="src/v.py#L12", why="the retired form")]
+    assert any("evidence[0].file" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_evidence_why_must_be_non_empty():
+    m = make_valid_model()
+    m.components[0].evidence = [EvidenceItem(file="src/v.py:12", why="  ")]
+    assert any("evidence[0].why" in p and "non-empty" in p for p in problems_of(m))
+
+
+def test_dep_package_and_alternative_round_trip_clean():
+    m = make_valid_model()
+    m.deps[0].package = "motor ^3.7.0 (pyproject.toml)"
+    m.deps[0].alternative = "file-backed storage in standalone mode"
+    assert problems_of(m) == []
+
+
+# --- `extra`: a promoted name (files/evidence/package/alternative, or an old spelling) is retired ---
+
+def test_extra_files_count_and_members_are_retired_in_favor_of_the_files_field():
+    m = make_valid_model()
+    m.components[0].extra = {"files_count": 3}
+    assert any("extra.files_count" in p and "top-level `files`" in p for p in problems_of(m))
+    m.components[0].extra = {"members": ["a.py"]}
+    assert any("extra.members" in p and "top-level `files`" in p for p in problems_of(m))
+    m.components[0].extra = {"files": ["a.py"]}
+    assert any("extra.files" in p and "top-level `files`" in p for p in problems_of(m))
+
+
+def test_extra_evidence_is_retired_in_favor_of_the_evidence_field():
+    m = make_valid_model()
+    m.components[0].extra = {"evidence": [{"file": "policy.py:1", "why": "the reason"}]}
+    assert any("extra.evidence" in p and "top-level `evidence`" in p for p in problems_of(m))
+
+
+def test_extra_sdk_and_client_library_are_retired_in_favor_of_the_package_field():
     m = make_valid_model()
     m.deps[0].extra = {"sdk": "e2b ^2.20.0"}
-    assert any("extra.sdk" in p and "extra.package" in p for p in problems_of(m))
+    assert any("extra.sdk" in p and "top-level `package`" in p for p in problems_of(m))
     m.deps[0].extra = {"client_library": "motor ^3.7.0"}
-    assert any("extra.client_library" in p and "extra.package" in p for p in problems_of(m))
+    assert any("extra.client_library" in p and "top-level `package`" in p for p in problems_of(m))
 
 
-def test_extra_standalone_alternative_is_retired_in_favor_of_alternative():
+def test_extra_standalone_alternative_is_retired_in_favor_of_the_alternative_field():
     m = make_valid_model()
     m.deps[0].extra = {"standalone_alternative": "dev_stub"}
-    assert any("extra.standalone_alternative" in p and "extra.alternative" in p
+    assert any("extra.standalone_alternative" in p and "top-level `alternative`" in p
               for p in problems_of(m))
 
 

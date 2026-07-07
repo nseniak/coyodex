@@ -1,0 +1,843 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://coyodex.dev/schemas/project-map.schema.json",
+  "title": "coyodex project map",
+  "description": "Auto-generated from tools/coyodex/model.py \u2014 documentation and IDE-autocomplete use only; NOT used by `coyodex validate` (see this module's docstring, and method/model.md, for why). Regenerate with `python -m coyodex.json_schema > method/project-map.schema.json`.",
+  "type": "object",
+  "properties": {
+    "format": {
+      "type": "string",
+      "const": "coyodex-map"
+    },
+    "title": {
+      "type": "string"
+    },
+    "goal": {
+      "type": "string"
+    },
+    "commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "short commit sha the map was built at."
+    },
+    "committed": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "YYYY-MM-DD."
+    },
+    "built": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "YYYY-MM-DD HH:MM."
+    },
+    "roles": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Role"
+      }
+    },
+    "glossary": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/GlossaryRow"
+      }
+    },
+    "use_cases": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/UseCase"
+      }
+    },
+    "golden_path": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/GoldenStep"
+      }
+    },
+    "subsystems": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Group"
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Component"
+      }
+    },
+    "deps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Dep"
+      }
+    },
+    "run_commands": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/RunRow"
+      }
+    },
+    "entry_points": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/EntryPoint"
+      }
+    },
+    "subdomains": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Group"
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Entity"
+      }
+    },
+    "non_entity_types": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/NonEntityType"
+      }
+    },
+    "flows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Flow"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Edge"
+      }
+    },
+    "deployment": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/DeploymentRow"
+      }
+    },
+    "observability": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ObservabilityRow"
+      }
+    },
+    "security": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SecurityRow"
+      }
+    },
+    "config": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ConfigRow"
+      }
+    },
+    "tests_note": {
+      "type": "string"
+    },
+    "tests": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TestRow"
+      }
+    },
+    "extras": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ExtraSection"
+      }
+    }
+  },
+  "required": [],
+  "additionalProperties": false,
+  "$defs": {
+    "Role": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "description": "human | service, free text (not a closed vocabulary)."
+        },
+        "wants": {
+          "type": "string"
+        },
+        "drives": {
+          "type": "string",
+          "description": "the use cases this role drives \u2014 free text, ids inside."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "GlossaryRow": {
+      "type": "object",
+      "properties": {
+        "term": {
+          "type": "string"
+        },
+        "meaning": {
+          "type": "string"
+        },
+        "where": {
+          "type": "string",
+          "description": "markdown link to where the term is defined/used."
+        }
+      },
+      "required": [
+        "term"
+      ],
+      "additionalProperties": false
+    },
+    "UseCase": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^UC\\d+$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "string"
+        },
+        "trigger_outcome": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "GoldenStep": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^GP\\d+$",
+          "description": "this step's position in the ordered walk."
+        },
+        "title": {
+          "type": "string"
+        },
+        "uc": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^UC\\d+$",
+          "description": "the use case this step realizes."
+        },
+        "why": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "the prerequisite that fixes this step's position \u2014 why it can't come earlier in the walk."
+        }
+      },
+      "required": [
+        "id",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "Group": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(UC|GP|SD|C|D|E|S)\\d+$",
+          "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[] \u2014 same dataclass, two id forests."
+        },
+        "name": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(UC|GP|SD|C|D|E|S)\\d+$",
+          "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD parents an SD), or null for top-level."
+        },
+        "anchor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "\\[[^\\]]*\\]\\(([^)]+)\\)",
+          "description": "a markdown link to the group's home directory, `[label](path/dir/)` \u2014 the one anchor field that keeps an authored label, since a directory needs one."
+        },
+        "confidence": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "Component": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^C\\d+$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "subsystem": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^S\\d+$",
+          "description": "the owning subsystem's id, or null if ungrouped."
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "entry_point": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). Where the component is TRIGGERED \u2014 distinct from `anchor` (where it LIVES)."
+        },
+        "depends_on": {
+          "type": "string"
+        },
+        "anchor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. Where the component LIVES."
+        },
+        "confidence": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "repo-relative file paths this component owns, as a plain list \u2014 not a count, not a comma-joined string."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceItem"
+          }
+        },
+        "extra": {
+          "type": "object",
+          "description": "freeform authored columns \u2014 any JSON value, agent-chosen keys. The ONE place with no fixed meaning: a key `coyodex validate` gives an enforced shape to, or that the method documents as a convention, graduates to a real field instead and is then rejected here under its old spelling (this is how `files`/`evidence`/`package`/`alternative` were promoted)."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "EvidenceItem": {
+      "type": "object",
+      "properties": {
+        "file": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
+        },
+        "why": {
+          "type": "string",
+          "description": "why this citation supports the claim \u2014 what a skeptic re-reading `file` should find true."
+        }
+      },
+      "required": [
+        "file",
+        "why"
+      ],
+      "additionalProperties": false
+    },
+    "Dep": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^D\\d+$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "datastore",
+            "messaging",
+            "service",
+            "platform",
+            "framework",
+            "library",
+            null
+          ],
+          "description": "closed Context vocabulary; null \u2192 inferred from `type`."
+        },
+        "type": {
+          "type": "string"
+        },
+        "used_for": {
+          "type": "string"
+        },
+        "where_configured": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
+        },
+        "confidence": {
+          "type": "string"
+        },
+        "deployment_linked": {
+          "type": "boolean"
+        },
+        "package": {
+          "type": "string",
+          "description": "one string: \"<name> <version> (<where declared>)\"."
+        },
+        "alternative": {
+          "type": "string",
+          "description": "the fallback used instead of this dep, and under what circumstance."
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceItem"
+          }
+        },
+        "extra": {
+          "type": "object",
+          "description": "freeform authored columns \u2014 any JSON value, agent-chosen keys. The ONE place with no fixed meaning: a key `coyodex validate` gives an enforced shape to, or that the method documents as a convention, graduates to a real field instead and is then rejected here under its old spelling (this is how `files`/`evidence`/`package`/`alternative` were promoted)."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "RunRow": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "EntryPoint": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "trigger": {
+          "type": "string"
+        },
+        "entity": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
+        },
+        "component": {
+          "type": "string",
+          "pattern": "^C\\d+$",
+          "description": "the owning component's id."
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false
+    },
+    "Entity": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^E\\d+$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "store": {
+          "type": "string"
+        },
+        "meaning": {
+          "type": "string"
+        },
+        "subdomain": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^SD\\d+$",
+          "description": "the owning subdomain's id, or null if ungrouped."
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. Must anchor the entity's actual type DEFINITION (the `class X`/`@dataclass` line), never a use site."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityField"
+          }
+        },
+        "relations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EntityRelation"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "EntityField": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "markers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "annotation tokens, not free text: PK / FK\u2192En / unique / ? / []."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "EntityRelation": {
+      "type": "object",
+      "properties": {
+        "verb": {
+          "type": "string",
+          "description": "contains / has / isA (structural, canonical) or a free association verb."
+        },
+        "target": {
+          "type": "string",
+          "pattern": "^E\\d+$"
+        },
+        "src_card": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "dst_card": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "display": {
+          "type": "string"
+        },
+        "how": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "verb",
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "NonEntityType": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "why": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "Flow": {
+      "type": "object",
+      "properties": {
+        "uc": {
+          "type": "string",
+          "pattern": "^UC\\d+$"
+        },
+        "title": {
+          "type": "string"
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FlowStep"
+          }
+        }
+      },
+      "required": [
+        "uc",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "FlowStep": {
+      "type": "object",
+      "properties": {
+        "n": {
+          "type": "integer"
+        },
+        "src": {
+          "type": "string",
+          "description": "an element id, or a Role display name (an actor step)."
+        },
+        "dst": {
+          "type": "string",
+          "description": "same shape as `src`."
+        },
+        "phrase": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "n",
+        "src",
+        "dst"
+      ],
+      "additionalProperties": false
+    },
+    "Edge": {
+      "type": "object",
+      "properties": {
+        "src": {
+          "type": "string"
+        },
+        "verb": {
+          "type": "string"
+        },
+        "dst": {
+          "type": "string"
+        },
+        "why": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "the relationship's rationale \u2014 distinct from either endpoint's own `purpose`."
+        },
+        "where": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). The call site: the line in `src`'s code where it invokes `dst`."
+        }
+      },
+      "required": [
+        "src",
+        "verb",
+        "dst"
+      ],
+      "additionalProperties": false
+    },
+    "DeploymentRow": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": "string"
+        },
+        "runs_on": {
+          "type": "string"
+        },
+        "exposed_as": {
+          "type": "string"
+        },
+        "config_source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "unit"
+      ],
+      "additionalProperties": false
+    },
+    "ObservabilityRow": {
+      "type": "object",
+      "properties": {
+        "signal": {
+          "type": "string"
+        },
+        "where_emitted": {
+          "type": "string"
+        },
+        "where_viewed": {
+          "type": "string"
+        },
+        "alerts": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "signal"
+      ],
+      "additionalProperties": false
+    },
+    "SecurityRow": {
+      "type": "object",
+      "properties": {
+        "surface": {
+          "type": "string"
+        },
+        "who": {
+          "type": "string"
+        },
+        "check": {
+          "type": "string",
+          "description": "markdown link to the auth check in code."
+        },
+        "risk": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "surface"
+      ],
+      "additionalProperties": false
+    },
+    "ConfigRow": {
+      "type": "object",
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "per_env": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "additionalProperties": false
+    },
+    "TestRow": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string"
+        },
+        "tested": {
+          "type": "string"
+        },
+        "tests": {
+          "type": "string"
+        },
+        "gap": {
+          "type": "string"
+        },
+        "confidence": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "target"
+      ],
+      "additionalProperties": false
+    },
+    "ExtraSection": {
+      "type": "object",
+      "properties": {
+        "heading": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "heading"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

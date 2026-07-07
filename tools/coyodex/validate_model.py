@@ -308,14 +308,15 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
     return problems
 
 
-# `extra` (components/deps) is freeform by design, but the same concept kept drifting into
-# incompatible shapes across different authoring passes (a file listing shown as a list here and a
-# bare count there; a package name spelled `sdk` on one dep, `client_library` on another) — these
-# are the shapes/names the method now standardizes on.
-_RETIRED_EXTRA_KEYS = {
-    "files_count": "files", "members": "files",
-    "sdk": "package", "client_library": "package",
-    "standalone_alternative": "alternative",
+# `extra` is freeform by design — but the moment a key's shape is enforced (below) or the method
+# names it as a convention, it has already become a de facto field, so it graduates to a real one
+# instead of staying a "standardized" extra column. These are the promoted names' old spellings —
+# authoring any of them under `extra` is a mistake, not a valid alternative spelling.
+_PROMOTED_EXTRA_KEYS = {
+    "files": "files", "files_count": "files", "members": "files",
+    "evidence": "evidence",
+    "package": "package", "sdk": "package", "client_library": "package",
+    "alternative": "alternative", "standalone_alternative": "alternative",
 }
 _FORBIDDEN_EXTRA_KEYS = {"loc"}  # mechanical (line count) — compute it, don't hand-author it
 _DEPLOYMENT_FLAVORED_EXTRA_KEYS = {
@@ -323,47 +324,36 @@ _DEPLOYMENT_FLAVORED_EXTRA_KEYS = {
 }
 
 
-def _check_evidence_item(el_id: str, i: int, item: object) -> str | None:
-    """None if `extra.evidence[i]` is a valid `{file, why}` citation, else the problem text."""
-    if not isinstance(item, dict):
-        return f"{el_id} extra.evidence[{i}]: must be an object with 'file' and 'why'"
-    stray = set(item) - {"file", "why"}
-    if stray:
-        return (f"{el_id} extra.evidence[{i}]: unexpected keys {sorted(stray)} "
-                f"(only 'file' and 'why' allowed)")
-    file = item.get("file")
-    if not isinstance(file, str) or not _ANCHOR_LINE.match(file):
-        return f"{el_id} extra.evidence[{i}]: 'file' must be a bare `path:line` anchor"
-    why = item.get("why")
-    if not isinstance(why, str) or not why.strip():
-        return f"{el_id} extra.evidence[{i}]: 'why' must be a non-empty explanation string"
-    return None
-
-
 def _check_extra_conventions(m: ProjectModel) -> tuple[list[str], list[str]]:
-    """The standardized shape for components'/deps' freeform `extra` columns — see the module
-    constants above for the retired/forbidden/advisory key lists."""
+    """`extra` may only hold what the method has no opinion about — see the module constants above
+    for the promoted/forbidden/advisory key lists."""
     problems: list[str] = []
     warnings: list[str] = []
     for el in (*m.components, *m.deps):
-        for key, val in el.extra.items():
-            if key in _RETIRED_EXTRA_KEYS:
-                problems.append(f"{el.id} extra.{key}: retired — use extra.{_RETIRED_EXTRA_KEYS[key]}")
+        for key in el.extra:
+            if key in _PROMOTED_EXTRA_KEYS:
+                problems.append(f"{el.id} extra.{key}: retired — use the top-level "
+                                f"`{_PROMOTED_EXTRA_KEYS[key]}` field instead")
             elif key in _FORBIDDEN_EXTRA_KEYS:
                 problems.append(f"{el.id} extra.{key}: not hand-authored — compute it, don't author it")
             elif key in _DEPLOYMENT_FLAVORED_EXTRA_KEYS:
                 warnings.append(f"{el.id} extra.{key}: looks like deployment/config info — check "
                                 f"whether it belongs in the Deployment or Config table instead")
-            elif key == "files":
-                if not (isinstance(val, list) and all(isinstance(x, str) for x in val)):
-                    problems.append(f"{el.id} extra.files: must be a list of file-path strings")
-            elif key == "evidence":
-                if not isinstance(val, list):
-                    problems.append(f"{el.id} extra.evidence: must be a list of {{file, why}} objects")
-                else:
-                    problems.extend(err for i, item in enumerate(val)
-                                    if (err := _check_evidence_item(el.id, i, item)))
     return problems, warnings
+
+
+def _check_evidence(m: ProjectModel) -> list[str]:
+    """`evidence[].file` is a bare `path:line` anchor (method/model.md's 'Anchor formats');
+    `evidence[].why` must be a real explanation, not left blank."""
+    problems: list[str] = []
+    for el in (*m.components, *m.deps):
+        for i, ev in enumerate(el.evidence):
+            if not _ANCHOR_LINE.match(ev.file):
+                problems.append(f"{el.id} evidence[{i}].file: '{ev.file}' is not a valid "
+                                f"`path:line` anchor")
+            if not ev.why.strip():
+                problems.append(f"{el.id} evidence[{i}].why: must be a non-empty explanation")
+    return problems
 
 
 def _check_altitude(m: ProjectModel) -> list[str]:
@@ -574,6 +564,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(card_problems)
     warnings.extend(card_warnings)
     problems.extend(_check_anchor_format(m))
+    problems.extend(_check_evidence(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)
     problems.extend(extra_problems)
     warnings.extend(extra_warnings)

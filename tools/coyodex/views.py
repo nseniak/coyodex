@@ -15,7 +15,7 @@ import re
 from dataclasses import asdict
 
 from coyodex import grammar
-from coyodex.model import Component, Dep, Entity, Group, ProjectModel, UseCase
+from coyodex.model import Component, Dep, Entity, EvidenceItem, Group, ProjectModel, UseCase
 from coyodex.validate_analysis import strip_anchor
 from coyodex.viewer.build_graph import (
     LINK,
@@ -74,6 +74,15 @@ def _anchor_link(href: str | None) -> str:
     return f"[{label}]({href})"
 
 
+def _files_str(paths: list[str]) -> str:
+    return " · ".join(paths)
+
+
+def _evidence_str(items: list[EvidenceItem]) -> str:
+    """`evidence` as a table cell: one clickable anchor + its why per citation, `·`-separated."""
+    return " · ".join(f"{_anchor_link(ev.file)} — {ev.why}" for ev in items)
+
+
 def _relation_item(r) -> str:
     parts = [r.verb]
     if r.src_card and r.dst_card:
@@ -87,13 +96,17 @@ def _relation_item(r) -> str:
 
 
 def _component_headers(m: ProjectModel) -> tuple[list[str], bool, list[str]]:
-    """T1's column set: the canonical six, plus Conf. when any component states one, plus the union
-    of authored extra columns (sorted — deterministic)."""
+    """T1's column set: the canonical six, plus Conf./Files/Evidence when any component states one,
+    plus the union of authored extra columns (sorted — deterministic)."""
     with_conf = any(c.confidence for c in m.components)
     extra = sorted({k for c in m.components for k in c.extra})
     headers = ["ID", "Component", "Subsystem", "Purpose", "Entry point", "Depends on"]
     if with_conf:
         headers.append("Conf.")
+    if any(c.files for c in m.components):
+        headers.append("Files")
+    if any(c.evidence for c in m.components):
+        headers.append("Evidence")
     return headers + extra, with_conf, extra
 
 
@@ -103,6 +116,12 @@ def _dep_headers(m: ProjectModel) -> tuple[list[str], bool, list[str]]:
     headers = ["ID", "Name", "Kind", "Type", "Used for", "Where configured", "Conf."]
     if linked:
         headers.append("Deployment-linked")
+    if any(d.package for d in m.deps):
+        headers.append("Package")
+    if any(d.alternative for d in m.deps):
+        headers.append("Alternative")
+    if any(d.evidence for d in m.deps):
+        headers.append("Evidence")
     return headers + extra, linked, extra
 
 
@@ -168,6 +187,10 @@ def model_to_markdown(m: ProjectModel) -> str:
                    c.depends_on]
             if with_conf:
                 row.append(c.confidence)
+            if "Files" in headers:
+                row.append(_files_str(c.files))
+            if "Evidence" in headers:
+                row.append(_evidence_str(c.evidence))
             row += [_extra_str(c.extra.get(k, "")) for k in extra]
             rows.append(row)
         section("T1 — Components", _table(headers, rows))
@@ -179,6 +202,12 @@ def model_to_markdown(m: ProjectModel) -> str:
                    _anchor_link(d.where_configured), d.confidence]
             if linked:
                 row.append("yes" if d.deployment_linked else "")
+            if "Package" in headers:
+                row.append(d.package)
+            if "Alternative" in headers:
+                row.append(d.alternative)
+            if "Evidence" in headers:
+                row.append(_evidence_str(d.evidence))
             row += [_extra_str(d.extra.get(k, "")) for k in extra]
             rows.append(row)
         section("T2 — External dependencies", _table(headers, rows))
@@ -308,7 +337,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""
         fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
                   "Entry point": c.entry_point or "", "Depends on": c.depends_on,
-                  "Conf.": c.confidence,
+                  "Conf.": c.confidence, "Files": _files_str(c.files),
+                  "Evidence": _evidence_str(c.evidence),
                   **{k: _extra_str(v) for k, v in c.extra.items()}}
         # `anchor` is the v2 canonical home; `entry_point` (also bare) is the next best single
         # location; only then fall back to hunting a markdown link in the free-text cells.
@@ -317,6 +347,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     for d in m.deps:
         fields = {"Name": d.name, "Kind": d.kind or "", "Type": d.type, "Used for": d.used_for,
                   "Where configured": d.where_configured, "Conf.": d.confidence,
+                  "Package": d.package, "Alternative": d.alternative,
+                  "Evidence": _evidence_str(d.evidence),
                   **{k: _extra_str(v) for k, v in d.extra.items()}}
         node = _node(d, "dep", d.name, d.where_configured or _first_href(d.used_for), fields, None)
         node.dep_kind = grammar.classify_dep(d.kind or "", d.type)

@@ -75,6 +75,14 @@ class Group:
 
 
 @dataclass
+class EvidenceItem:
+    """One citation grounding a claim the map makes about the element carrying it — a
+    fresh-context skeptic re-reads `file` and checks whether `why` still holds."""
+    file: str                        # bare path:line anchor
+    why: str
+
+
+@dataclass
 class Component:
     id: str
     name: str
@@ -84,9 +92,12 @@ class Component:
     depends_on: str = ""             # the coarse derived summary text (edge list is the source)
     anchor: str | None = None        # v2: the canonical source anchor — where the component LIVES
     confidence: str = ""
+    files: list[str] = field(default_factory=list)       # repo-relative paths this component owns
+    evidence: list[EvidenceItem] = field(default_factory=list)
     extra: dict[str, object] = field(default_factory=dict)  # non-standard authored columns, by
     # header; values are any JSON value (agents return lists/numbers/bools naturally — the views
-    # render non-string values as compact JSON)
+    # render non-string values as compact JSON). A key `coyodex validate` gives a fixed shape to
+    # (or the method otherwise defines) does not belong here — it graduates to a real field instead.
 
 
 @dataclass
@@ -99,6 +110,9 @@ class Dep:
     where_configured: str = ""
     confidence: str = ""
     deployment_linked: bool = False  # v2: wired at deployment level only — no code call site
+    package: str = ""                # "<name> <version> (<where declared>)"
+    alternative: str = ""            # the fallback used instead, and when
+    evidence: list[EvidenceItem] = field(default_factory=list)
     extra: dict[str, object] = field(default_factory=dict)  # any JSON values, like Component.extra
 
 

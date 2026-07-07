@@ -99,6 +99,43 @@ def test_extra_non_string_values_render_as_compact_json_in_the_md_view():
     assert "[8080, 8443]" in md, md
 
 
+# --- files / evidence / package / alternative: real fields, rendered as their own T1/T2 columns ---
+
+def test_component_files_and_evidence_render_as_their_own_t1_columns():
+    from coyodex.views import model_to_markdown
+    frag = json.dumps({"title": "T", "components": [
+        {"id": "C1", "name": "X", "files": ["src/v.py", "src/helpers.py"],
+         "evidence": [{"file": "src/v.py:12", "why": "the entry point"}]}]})
+    model, problems = merge_fragments([("h.json", load_fragment(frag, "h.json"))])
+    assert problems == []
+    md = model_to_markdown(model)
+    assert "| Files |" in md and "Evidence |" in md, md
+    assert "src/v.py · src/helpers.py" in md
+    assert "[v.py](src/v.py:12) — the entry point" in md
+
+
+def test_dep_package_and_alternative_render_as_their_own_t2_columns():
+    from coyodex.views import model_to_markdown
+    frag = json.dumps({"title": "T", "deps": [
+        {"id": "D1", "name": "MongoDB", "package": "motor ^3.7.0 (pyproject.toml)",
+         "alternative": "file-backed storage in standalone mode"}]})
+    model, problems = merge_fragments([("h.json", load_fragment(frag, "h.json"))])
+    assert problems == []
+    md = model_to_markdown(model)
+    assert "| Package |" in md and "Alternative |" in md, md
+    assert "motor ^3.7.0 (pyproject.toml)" in md
+    assert "file-backed storage in standalone mode" in md
+
+
+def test_files_and_evidence_columns_absent_when_unused():
+    from coyodex.views import model_to_markdown
+    frag = json.dumps({"title": "T", "components": [{"id": "C1", "name": "X"}]})
+    model, problems = merge_fragments([("h.json", load_fragment(frag, "h.json"))])
+    assert problems == []
+    md = model_to_markdown(model)
+    assert "| Files |" not in md and "| Evidence |" not in md, md
+
+
 # --- anchors are not fixed up ------------------------------------------------------
 # `assemble` no longer normalizes anchor drift (a markdown-linked anchor, a missing directory
 # slash, a retired `#Lnnn` suffix) — a fragment's fields pass through unchanged, and

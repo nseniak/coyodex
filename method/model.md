@@ -53,10 +53,14 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "anchor", "confidence" } ],
   "components":  [ { "id": "Cn",  "name", "subsystem": "Sn|null", "purpose",
                      "entry_point": "<path:line|null>", "depends_on": "<derived summary text>",
-                     "anchor": "<canonical source anchor|null>", "confidence", "extra": {…} } ],
+                     "anchor": "<canonical source anchor|null>", "confidence",
+                     "files": [ "<repo-relative path>", … ],
+                     "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "deps":        [ { "id": "Dn",  "name", "kind": "<closed vocab|null>", "type", "used_for",
                      "where_configured": "<path:line|null>", "confidence",
-                     "deployment_linked": false, "extra": {…} } ],
+                     "deployment_linked": false, "package": "<name version (where declared)>",
+                     "alternative": "<fallback used instead, and when>",
+                     "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "run_commands":  [ { "action", "command", "source" } ],                       // T3
   "entry_points":  [ { "kind", "trigger", "entity": "<path:line>", "component": "Cn" } ],  // T4
 
@@ -82,11 +86,17 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "extras":      [ { "heading", "body": "<verbatim markdown>" } ] }
 ```
 
+A generated JSON Schema for this document — `method/project-map.schema.json`, auto-derived from
+`tools/coyodex/model.py` so it cannot drift — is available for documentation and IDE autocomplete
+(regenerate with `python -m coyodex.json_schema > method/project-map.schema.json`). It is not used
+by `coyodex validate`: that command's checks are semantic (ID references resolve, no hierarchy
+cycles, anchor formats) and stay hand-rolled for path-specific errors a generic schema validator
+can't match.
+
 Semantics, stated on the fields:
 
-- **IDs** are `prefix + digits` only; each element's `id` must match its array's prefix. Every
-  reference (a `subsystem`/`parent` pointer, an edge endpoint, a flow-step endpoint, a GP step's
-  `uc`, a relation `target`, an ID mentioned in any text) must resolve to a defined element —
+- **ID references** (a `subsystem`/`parent` pointer, an edge endpoint, a flow-step endpoint, a GP
+  step's `uc`, a relation `target`, an ID mentioned in any text) must resolve to a defined element —
   `coyodex validate` checks it.
 - **Membership is single-source on the child**: `components[].subsystem`, `subsystems[].parent`,
   `entities[].subdomain`, `subdomains[].parent`. Member lists, inter-group edges, and the
@@ -101,46 +111,38 @@ Semantics, stated on the fields:
   element↔element steps are pure references to the backbone edge (its verb + why render the step).
   The "used in" backward view (element → the use cases whose flow steps touch it) is derived from
   these, never authored.
-- **`entities[].relations`** are authored on the source card only; `verb` uses the canonical
-  structural verbs (`contains`/`has`/`isA`) or a free association verb; cardinality is a pair
-  (`src_card`/`dst_card`, both or neither); `how` is the plain-text note for field-less relations.
-- **`deps[].kind`** is the closed Context vocabulary (`datastore`/`messaging`/`service`/`platform`/
-  `framework`/`library`); when `null` it is inferred from `type`. The first four are external
-  systems the project talks to across a boundary, drawn at Context by name; `framework`/`library`
-  are in-process code deps that fold into one collapsed "Libraries" box.
-- **`extra`** (on components and deps) holds non-standard authored columns by header; its values
-  are **any JSON value** (string, number, boolean, null, list, object) — agents return natural
-  JSON, the generated views render a non-string value as compact JSON text. A handful of concepts
-  recur often enough across passes that their shape and name are standardized rather than left free
-  (`coyodex validate` rejects a drift from these):
-  - `files`: a **list of repo-relative file-path strings** — never a bare count, never a
-    comma-joined string, never under the name `files_count` or `members`.
-  - `evidence`: a **list of `{"file": "<path:line>", "why": "<explanation>"}` objects**, one per
-    citation — never a single free-text paragraph, and never a bare string in place of an object.
-  - `package` (deps): one string, `"<name> <version> (<where declared>)"` — not `sdk` or
-    `client_library`.
-  - `alternative` (deps): one string describing the fallback and when it applies — not
-    `standalone_alternative`.
-  - `loc` is **not authored** — a line count is mechanical; compute it with tooling if it's wanted,
-    don't hand-type it into `extra`.
+- **`entities[].relations`** are authored on the source card only (see the schema for `verb`'s
+  vocabulary); cardinality is a pair (`src_card`/`dst_card`, both or neither); `how` is the
+  plain-text note for field-less relations.
+- **`deps[].kind`** is a closed vocabulary — see the schema for the exact values; `null` means it's
+  inferred from `type`. Values split into two groups: external systems the project talks to across
+  a boundary (drawn at Context by name), and in-process code deps (`framework`/`library`) that fold
+  into one collapsed "Libraries" box.
+- **`evidence`** (components and deps) — citations grounding the map's claims about that element,
+  one per citation (see the schema for the exact shape). This is what a fresh-context skeptic
+  re-reads to verify (or refute) a claim during grounding.
+- **`extra`** (on components and deps) holds non-standard authored columns by header, any JSON
+  value (see the schema for the exact mechanics). The rule: the moment a concept recurs enough that
+  `coyodex validate` gives it an enforced shape, or the method documents it as a convention, it
+  graduates to a real field and `extra` rejects the old spelling — `files_count`, `members`, `sdk`,
+  `client_library`, and `standalone_alternative` are all retired this way, in favor of the real
+  `files`, `evidence`, `package`, and `alternative` fields. Two things stay in `extra` on purpose,
+  since neither is a recognized concept with its own shape:
+  - `loc` is **not authored at all** — a line count is mechanical; compute it with tooling if it's
+    wanted, don't hand-type it into `extra`.
   - A deployment/config-flavored key (`flags`, `modes`, `scaling`, `sticky_sessions`, `mode`,
     `api_key`, `noop_without`, `wired_by`) triggers an advisory `coyodex validate` warning to check
     whether the fact belongs in the Deployment or Config table instead of a per-element note.
-- **Anchor formats.** Every source-location string in the map uses ONE canonical line-number
-  syntax: `path:line` for a single line, `path:line-line` for a range (`domain/order.py:12`,
-  `domain/order.py:12-18`). `components[].anchor`, `entities[].source`, `components[].entry_point`,
-  `deps[].where_configured`, `edges[].where`, and `entry_points[].entity` are all **bare**
-  repo-root-relative refs (a directory anchor ends with `/`, no line suffix) — a markdown link's
-  label is always just the file's basename, fully derivable from the href, so it is never authored;
-  the generated markdown view builds `[basename](path:line)` back on render. The one exception is
-  group anchors (`subsystems[].anchor` / `subdomains[].anchor`), which stay **markdown links**
-  `[dir](path/dir/)` since a directory needs an authored label. `coyodex validate` rejects any
-  anchor written some other way (a markdown link where a bare ref is required, a stray `#`-style
-  suffix, or anything else that isn't `path:line`/`path:line-line`).
-- **`components[].anchor`** is the element's canonical source anchor (where the component *lives*:
-  its home file or directory) — distinct from `entry_point`, which is where it's *triggered*. An
-  umbrella component with several entry points is described by its anchor **plus** every
-  `entry_points` row naming it, so no single arbitrary file stands in for the whole thing.
+- **Anchor formats.** Every source-location string in the map uses ONE canonical, bare `path:line`
+  syntax (see the schema for the exact shape). `components[].anchor`, `entities[].source`,
+  `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `entry_points[].entity`,
+  and `evidence[].file` all use it. The one exception is group anchors (`subsystems[].anchor` /
+  `subdomains[].anchor`), which stay **markdown links** `[dir](path/dir/)` since a directory needs
+  an authored label. `coyodex validate` rejects any anchor written some other way.
+- **`components[].anchor`** is where the component *lives*, distinct from `entry_point` (where it's
+  *triggered* — see the schema for that distinction spelled out). An umbrella component with
+  several entry points is described by its anchor **plus** every `entry_points` row naming it, so
+  no single arbitrary file stands in for the whole thing.
 - **Deps are described as external systems, never as code files.** A dep endpoint reads
   `"D4 = Google OAuth (service: Google OAuth 2.0 endpoints)"` — its `kind` + `type` — not a source
   anchor; a component calling the real external system is never described through some local
