@@ -59,9 +59,21 @@ Writes `.coyodex/project-map.json` (the map model), `.coyodex/project-map.md` (a
 readable view), and `.coyodex/project-map.html` (an interactive, drillable
 [C4 viewer](tools/coyodex/viewer/)), pinned to the current commit. Commit both with your code.
 
-**3. Edit your code.** Work as usual.
+**3. View the map.** The viewer's file browser and code viewer are served by a small local server
+(source is read from git at the map's commit). Start it once, from the coyodex clone:
 
-**4. Analyze the change.**
+```
+make start
+```
+
+This opens a landing page at `http://127.0.0.1:8765/`. Building a map registers your project there, so
+it appears as a card — click it to open the map. Leave the server running; every project you map shows
+up on that page. (You can also double-click `.coyodex/project-map.html` to see the diagram on its own,
+without the file browser or code viewer.)
+
+**4. Edit your code.** Work as usual.
+
+**5. Analyze the change.**
 
 ```
 /coyodex analyze
@@ -71,7 +83,7 @@ Writes a report to `.coyodex/analysis-changes/<date>.md` — what your change ad
 to, in the project's own terms. It's left **uncommitted** so you can review it first; the baseline
 isn't touched yet.
 
-**5. Accept the change.**
+**6. Accept the change.**
 
 ```
 /coyodex accept
@@ -80,7 +92,7 @@ isn't touched yet.
 Patches the map, re-renders the viewer, bumps the commit pin, and commits the map together with the
 report.
 
-Then keep coding and repeat steps 3–5.
+Then keep coding and repeat steps 4–6.
 
 The skill only points at this repo and follows the method docs, which decide Build / Analyze / Accept
 — the method stays the single source of truth. `make install` covers Claude Code, Codex, and Cursor;

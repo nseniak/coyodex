@@ -133,10 +133,12 @@ clean baseline.
 4. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).
 5. git-commit all (map + diagram + report) — so baseline-commit stays aligned with code-commit.
    The commit IS the acceptance.
-6. **Finish by reporting the re-rendered diagram as a link** — `.coyodex/project-map.html` as a
-   relative path, and **in addition the full clickable `file://` URL with the absolute path**, so
-   the reader can open it straight in a browser — e.g.
-   `Open in browser: file:///abs/path/to/repo/.coyodex/project-map.html`.
+6. **Finish by reporting the re-rendered diagram** — `.coyodex/project-map.html` as a relative path,
+   and **in addition the URL to open it in a browser through the coyodex map server** (where the file
+   browser + code viewer work): if the server isn't already running, start it from the coyodex clone
+   with `make start` (or `.venv/bin/coyodex serve`), then open
+   `http://127.0.0.1:8765/p/<repo-folder-name>/` — or the landing page `http://127.0.0.1:8765/` and
+   click this project.
 
 ## Deliberately out of scope (for now)
 

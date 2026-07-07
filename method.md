@@ -535,10 +535,14 @@ Both are *renderings* of the model (no second source; never hand-edit them — `
 stale view) — commit them alongside the model so the three stay in step and a reviewer can open
 either. **Finish by reporting the artifacts as links** — the model (`.coyodex/project-map.json`),
 the markdown view (`.coyodex/project-map.md`), and the diagram HTML (`.coyodex/project-map.html`),
-as relative paths so the reader can open any. **In addition, for the HTML give the full clickable `file://`
-URL with the absolute path**, so the reader can open the diagram straight in a browser — e.g.
-`Open in browser: file:///abs/path/to/repo/.coyodex/project-map.html`. (Paths like `.venv/bin/coyodex`
-are relative to the coyodex clone, like the validator above.)
+as relative paths. **Then give the reader the URL to open the interactive map in a browser through the
+coyodex map server** — that is where the file browser and code viewer light up (source served from git
+at the map's commit). Rendering just registered this project with the server, so it shows up there as a
+card. Tell the reader: if the server isn't already running, start it once from the coyodex clone —
+`make start` (or `.venv/bin/coyodex serve`) — then open `http://127.0.0.1:8765/p/<repo-folder-name>/`
+(the `<repo-folder-name>` is the mapped repo's folder name), or the landing page
+`http://127.0.0.1:8765/` and click this project. (Paths like `.venv/bin/coyodex` are relative to the
+coyodex clone, like the validator above.)
 
 **Maintaining the map.** When code changes after a baseline exists, follow
 [change-impact](method/change-impact.md): report the impact against the map (modified /
