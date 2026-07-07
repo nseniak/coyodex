@@ -39,7 +39,7 @@ from typing import Any, cast
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
 from coyodex.viewer.filetree import FileTreeNode, build_file_tree  # repo file tree + map-coverage overlay (browser pane)
-from coyodex.schema_v1 import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
+from coyodex.grammar import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
 
 _ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined into the HTML at build time
 
