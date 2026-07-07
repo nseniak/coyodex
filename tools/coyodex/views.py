@@ -78,6 +78,29 @@ def _files_str(paths: list[str]) -> str:
     return " · ".join(paths)
 
 
+_URL_REF = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)
+
+
+def _bare_local_file(href: str | None) -> str | None:
+    """A bare repo-relative FILE path from a source/anchor href, or None for empty / off-repo /
+    directory refs (a directory or URL is not a single openable file). Line anchors are stripped, so
+    the result matches the file-browser tree keys."""
+    if not href or _URL_REF.match(href):
+        return None
+    p = strip_anchor(href).strip().strip("/")
+    return p if p and not href.rstrip().endswith("/") else None
+
+
+def _component_files(c: Component) -> list[str]:
+    """A component's owned files as bare repo-relative paths — the canonical `source` file first,
+    then the rest of `files`, deduped. This is the list the code-viewer switcher pages through."""
+    out: list[str] = []
+    for f in ([_bare_local_file(c.source)] + [_bare_local_file(f) for f in c.files]):
+        if f and f not in out:
+            out.append(f)
+    return out
+
+
 def _evidence_str(items: list[EvidenceItem]) -> str:
     """`evidence` as a table cell: one clickable anchor + its why per citation, `·`-separated."""
     return " · ".join(f"{_anchor_link(ev.file)} — {ev.why}" for ev in items)
@@ -343,7 +366,9 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         # `source` is the v2 canonical home; `entry_point` (also bare) is the next best single
         # location; only then fall back to hunting a markdown link in the free-text cells.
         href = c.source or c.entry_point or _first_href(c.purpose, c.depends_on)
-        nodes[c.id] = _node(c, "component", c.name, href, fields, c.subsystem)
+        node = _node(c, "component", c.name, href, fields, c.subsystem)
+        node.files = _component_files(c)
+        nodes[c.id] = node
     for d in m.deps:
         fields = {"Name": d.name, "Kind": d.kind or "", "Type": d.type, "Used for": d.used_for,
                   "Where configured": d.where_configured, "Conf.": d.confidence,
@@ -369,6 +394,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                     fields=meta, parent=e.subdomain,
                     attrs=[{"name": f.name, "type": f.type, "markers": " ".join(f.markers)}
                            for f in e.fields])
+        ent_file = _bare_local_file(e.source)
+        node.files = [ent_file] if ent_file else []
         nodes[e.id] = node
 
     edges: list[GraphEdge] = []
@@ -402,6 +429,33 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                for st in f.steps]) for f in m.flows]
 
     _ensure_default_subsystem(nodes, m.title or None)
+
+    # A group's files = the union of its members' files (subsystems roll up their components, subdomains
+    # their entities), recursively through nested groups — so drilling a subsystem's code viewer or
+    # highlighting its footprint spans everything it contains. Run after the default-subsystem inject so
+    # a synthesized group also rolls up its (now reparented) members. Membership is single-source on the
+    # child.
+    children_by_parent: dict[str, list[str]] = {}
+    for nid, n in nodes.items():
+        if n.parent:
+            children_by_parent.setdefault(n.parent, []).append(nid)
+
+    def _group_files(gid: str, seen: set[str]) -> list[str]:
+        out: list[str] = []
+        for cid in children_by_parent.get(gid, []):
+            if cid in seen:
+                continue
+            seen.add(cid)
+            child = nodes[cid]
+            contrib = _group_files(cid, seen) if child.kind in ("subsystem", "subdomain") else child.files
+            for f in contrib:
+                if f not in out:
+                    out.append(f)
+        return out
+
+    for nid, n in nodes.items():
+        if n.kind in ("subsystem", "subdomain"):
+            n.files = _group_files(nid, set())
     return {
         "commit": m.commit,
         "committed": m.committed,

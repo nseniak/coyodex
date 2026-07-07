@@ -18,9 +18,9 @@ import tempfile
 from pathlib import Path
 
 from coyodex.viewer.filetree import FileTreeNode
+from coyodex.viewer.recents import RecentsStore, register_project
 from coyodex.viewer.serve import (
     Project,
-    RecentsStore,
     _has_coyodex,
     _loopback_host,
     _safe_rel,
@@ -151,6 +151,37 @@ def test_recents_store_add_remove_dedupe_persist() -> None:
 def test_recents_store_missing_file_is_empty() -> None:
     with tempfile.TemporaryDirectory() as td:
         assert RecentsStore(Path(td) / "does-not-exist.json").list() == []
+
+
+def test_recents_store_add_merges_external_change() -> None:
+    # A mutation reloads first, so an external writer (a build registering a project while the server
+    # runs) is merged, not clobbered.
+    with tempfile.TemporaryDirectory() as td:
+        store_path = Path(td) / "recents.json"
+        s = RecentsStore(store_path)
+        s.add(str(Path(td) / "a"))
+        RecentsStore(store_path).add(str(Path(td) / "b"))  # a DIFFERENT store instance writes "b"
+        s.add(str(Path(td) / "c"))                          # s hasn't seen "b" in memory...
+        assert {Path(p).name for p in s.list()} == {"a", "b", "c"}  # ...but reload-before-add kept it
+
+
+def test_register_project() -> None:
+    import os
+    with tempfile.TemporaryDirectory() as td:
+        repo = Path(td) / "myproj"
+        (repo / ".coyodex").mkdir(parents=True)
+        store = RecentsStore(Path(td) / "recents.json")
+        register_project(repo / ".coyodex", store=store)
+        assert [Path(p).name for p in store.list()] == ["myproj"]   # registered the project root
+        register_project(repo, store=store)                          # not a .coyodex dir -> ignored
+        assert len(store.list()) == 1
+        os.environ["COYODEX_NO_SERVE_REGISTER"] = "1"                 # opt-out (e.g. the eval)
+        try:
+            store2 = RecentsStore(Path(td) / "recents2.json")
+            register_project(repo / ".coyodex", store=store2)
+            assert store2.list() == []
+        finally:
+            del os.environ["COYODEX_NO_SERVE_REGISTER"]
 
 
 def test_recents_store_set_order() -> None:

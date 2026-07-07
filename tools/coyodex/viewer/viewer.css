@@ -125,6 +125,14 @@ body:not(.served) #treetoggle { display: none; }
    path) reads strongest; 'under'/'has' sit in between at full strength. */
 .trow.cov-none { color: #b6bcc6; }
 .trow.cov-self > .tname { font-weight: 600; color: #1e1b4b; }
+/* 'ref' = a component/entity references this file at all (its source OR an owned file) -> bold "on the
+   map", broader than cov-self. An owned file can be cov-none (not under any anchored folder) yet still
+   referenced, so undim it. */
+.trow.ref > .tname { font-weight: 600; }
+.trow.cov-none.ref { color: inherit; }
+/* 'foot' = a file in the currently-selected element's footprint. A faint green wash + left marker, kept
+   distinct from the indigo 'sel' row and yielding to it when a row is both. */
+.trow.foot:not(.sel) { background: #f0fdf4; box-shadow: inset 2px 0 0 #86efac; }
 .tchildren { display: none; }
 .tchildren.open { display: block; }
 .tempty { padding: 10px 12px; color: #9ca3af; font-size: 12px; }
@@ -346,6 +354,12 @@ g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; po
 #cvtitle { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; font-weight: 600; }
 #cvpath { font: 12px ui-monospace, monospace; color: #4338ca; overflow: hidden; text-overflow: ellipsis;
           white-space: nowrap; }
+/* the element's file switcher: a compact dropdown of its files (source first), with the full current
+   path muted alongside. Only shown when the selected element owns more than one file. */
+#cvpath select.cvfiles { font: inherit; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe;
+          border-radius: 4px; padding: 0 4px; margin-right: 6px; cursor: pointer; vertical-align: baseline;
+          max-width: 240px; }
+#cvpath .cvpathfull { color: #6b7280; }
 #cvbody { flex: 1; min-height: 0; overflow: auto; background: #fbfbfd; }
 #cvbody .cvempty, #cvbody .cverr { color: #9ca3af; padding: 16px; font-size: 13px; }
 #cvbody .cverr { color: #cf222e; }

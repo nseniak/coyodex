@@ -46,6 +46,9 @@ def main(argv: list[str] | None = None) -> int:
         out.write_text(model_to_markdown(model), encoding="utf-8")
     else:
         write_html(model_to_graph(model), out, report)
+    # Rendering into a project's .coyodex/ registers it with `coyodex serve` (best-effort; see recents).
+    from coyodex.viewer.recents import register_project
+    register_project(out.parent)
     print(f"Rendered {src} -> {out.resolve()}")
     return 0
 

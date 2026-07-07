@@ -170,6 +170,8 @@ def main(argv: list[str] | None = None) -> int:
     (out_dir / "project-map.json").write_text(to_canonical_json(model), encoding="utf-8")
     (out_dir / "project-map.md").write_text(model_to_markdown(model), encoding="utf-8")
     write_html(model_to_graph(model), out_dir / "project-map.html", None)
+    from coyodex.viewer.recents import register_project  # registers the project with `coyodex serve` (best-effort)
+    register_project(out_dir)
     if ensure_fragments_ignored(out_dir):
         print(f"note: added 'build-fragments/' to {out_dir / '.gitignore'}")
     print(f"Assembled {len(parts)} fragment(s) -> {out_dir / 'project-map.json'} "

@@ -42,9 +42,13 @@ class FileTreeNode(TypedDict):
     node: str | None     # exact node id mapping to this path (set iff cov == 'self')
     others: list[str]    # other node ids that ALSO exactly anchor this path (a path collision node_path_index
                           # no longer silently drops) — empty unless `node` is set and collided
-    sel: str | None      # node to select on a click (exact, else nearest ancestor folder-node)
-    cov: str             # 'self' | 'under' | 'has' | 'none'
+    sel: str | None      # node to select on a click (definition first, else owning component, else
+                          # nearest ancestor folder-node)
+    cov: str             # 'self' | 'under' | 'has' | 'none' — anchor-based coverage (unchanged)
     mapped: int          # count of exact-mapped nodes strictly INSIDE (descendants) — the folder's badge
+    ref: int             # 1 if a component/entity references this file at all (its source OR an owned
+                          # file), else 0 — drives the "on the map" bold. Broader than cov=='self',
+                          # which is anchor-only.
     children: list["FileTreeNode"]
 
 
@@ -92,6 +96,38 @@ def node_path_index(graph: GraphDict) -> dict[str, list[str]]:
     return out
 
 
+def resolved_path_index(graph: GraphDict) -> dict[str, list[str]]:
+    """``node_path_index`` extended with components' OWNED files. The anchor index only maps a node's
+    single canonical file; but a component owns several files, and clicking any of them should select
+    that component. So: start from the anchor index (definition matches, primary first), then append
+    every non-anchor file a component/entity lists as an OWNER match. A path's resolved list is thus
+    'definition first, else owner' — exactly the file→element selection rule — and its presence marks
+    the file as referenced (the 'on the map' bold). Groups are skipped: their files are their members'
+    and are already indexed via those members."""
+    resolved: dict[str, list[str]] = {p: list(ids) for p, ids in node_path_index(graph).items()}
+    for nid, node in graph["nodes"].items():
+        if str(node.get("kind")) in _GROUP_KINDS:
+            continue
+        file = node.get("file")
+        anchor = None
+        if isinstance(file, str) and _is_local_ref(file):
+            line = node.get("line")
+            anchor = _clean_node_path(file, line if isinstance(line, int) else None) or None
+        files = node.get("files")
+        if not isinstance(files, list):
+            continue
+        for f in files:
+            if not isinstance(f, str):
+                continue
+            path = _clean_node_path(f, None)
+            if not path or path == anchor:  # the anchor is already an (earlier) definition match
+                continue
+            owners = resolved.setdefault(path, [])
+            if nid not in owners:
+                owners.append(nid)
+    return resolved
+
+
 class _Dir:
     """Mutable folder during the build: child dirs by name, child files (name -> repo-relative path)."""
 
@@ -107,26 +143,31 @@ def _to_node(d: _Dir) -> FileTreeNode:
     children: list[FileTreeNode] = [_to_node(d.dirs[name]) for name in sorted(d.dirs, key=str.lower)]
     for name in sorted(d.files, key=str.lower):
         children.append({"name": name, "path": d.files[name], "dir": False, "node": None, "others": [],
-                         "sel": None, "cov": "none", "mapped": 0, "children": []})
+                         "sel": None, "cov": "none", "mapped": 0, "ref": 0, "children": []})
     return {"name": d.name, "path": d.path, "dir": True, "node": None, "others": [],
-            "sel": None, "cov": "none", "mapped": 0, "children": children}
+            "sel": None, "cov": "none", "mapped": 0, "ref": 0, "children": children}
 
 
-def _annotate(entry: FileTreeNode, node_paths: dict[str, list[str]], ancestor_node: str | None) -> tuple[str, int]:
-    """Tag `entry` (and its subtree) with `node`/`others`/`sel`/`cov`/`mapped`. `ancestor_node` is the
-    id of the nearest ANCESTOR folder a node anchors (None if none) — it both flows the 'under'
-    coverage down and is the click target for a row no node points at directly. Returns (cov,
-    mapped-nodes-in-subtree INCLUDING self) so a parent dir can roll its children up to 'has' and sum
-    the badge count."""
-    ids = node_paths.get(entry["path"]) if entry["path"] else None
-    exact = ids[0] if ids else None
-    entry["node"] = exact
-    entry["others"] = ids[1:] if ids else []  # the rest of a path collision — kept, not dropped
-    entry["sel"] = exact if exact is not None else ancestor_node
-    nxt = exact if exact is not None else ancestor_node
+def _annotate(entry: FileTreeNode, node_paths: dict[str, list[str]],
+              resolved_paths: dict[str, list[str]], ancestor_node: str | None) -> tuple[str, int]:
+    """Tag `entry` (and its subtree) with `node`/`others`/`sel`/`cov`/`mapped`/`ref`. `ancestor_node`
+    is the id of the nearest ANCESTOR folder a node anchors (None if none) — it both flows the 'under'
+    coverage down and is the click target for a row no node points at directly. `node_paths` (anchors
+    only) drives coverage; `resolved_paths` (anchors + owned files, definition-first) drives which
+    element a click selects and the `ref` bold. Returns (cov, mapped-nodes-in-subtree INCLUDING self)
+    so a parent dir can roll its children up to 'has' and sum the badge count."""
+    path = entry["path"]
+    anchor_ids = node_paths.get(path) if path else None
+    exact = anchor_ids[0] if anchor_ids else None          # anchor match — drives cov / ancestry / badge
+    res_ids = resolved_paths.get(path) if path else None   # anchors + owners, definition-first
+    entry["node"] = res_ids[0] if res_ids else None
+    entry["others"] = res_ids[1:] if res_ids else []
+    entry["ref"] = 1 if res_ids else 0
+    entry["sel"] = entry["node"] if entry["node"] is not None else ancestor_node
+    nxt = exact if exact is not None else ancestor_node    # only real folder anchors flow 'under' down
     self_mapped = 1 if exact is not None else 0
     if entry["dir"]:
-        results = [_annotate(c, node_paths, nxt) for c in entry["children"]]
+        results = [_annotate(c, node_paths, resolved_paths, nxt) for c in entry["children"]]
         entry["mapped"] = sum(m for _, m in results)  # descendants only (the badge count)
         if exact is not None:
             entry["cov"] = "self"
@@ -142,9 +183,13 @@ def _annotate(entry: FileTreeNode, node_paths: dict[str, list[str]], ancestor_no
     return entry["cov"], self_mapped
 
 
-def build_tree(rel_paths: list[str], node_paths: dict[str, list[str]], root_name: str = "") -> FileTreeNode:
+def build_tree(rel_paths: list[str], node_paths: dict[str, list[str]],
+               resolved_paths: dict[str, list[str]] | None = None, root_name: str = "") -> FileTreeNode:
     """Pure tree builder (no IO): nest `rel_paths` (repo-relative posix files) into folders, then
-    overlay map coverage from `node_paths`. Split out from the git walk so it unit-tests directly."""
+    overlay map coverage from `node_paths` (anchors). `resolved_paths` (anchors + owned files,
+    definition-first — from `resolved_path_index`) drives the click target and the `ref` bold; when
+    omitted it falls back to `node_paths` (anchors only, no owned-file resolution). Split out from the
+    git walk so it unit-tests directly."""
     root = _Dir(root_name, "")
     for rp in rel_paths:
         parts = [p for p in rp.split("/") if p]
@@ -155,7 +200,7 @@ def build_tree(rel_paths: list[str], node_paths: dict[str, list[str]], root_name
             cur = cur.dirs.setdefault(part, _Dir(part, "/".join(parts[: i + 1])))
         cur.files[parts[-1]] = rp
     tree = _to_node(root)
-    _annotate(tree, node_paths, None)
+    _annotate(tree, node_paths, resolved_paths if resolved_paths is not None else node_paths, None)
     return tree
 
 
@@ -174,4 +219,5 @@ def build_file_tree(graph: GraphDict, repo_root: str) -> FileTreeNode | None:
     rels = sorted(p.relative_to(walk.root).as_posix() for p in walk.files)
     if not rels:
         return None
-    return build_tree(rels, node_path_index(graph), root_name=walk.root.name or repo_root)
+    return build_tree(rels, node_path_index(graph), resolved_path_index(graph),
+                      root_name=walk.root.name or repo_root)

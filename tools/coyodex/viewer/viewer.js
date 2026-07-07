@@ -610,8 +610,9 @@ function showEdge(e) {
   if (sl) sl.addEventListener('click', () => openSource(wn));
   // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
   // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
+  highlightFootprint(null);  // an edge has no element footprint — clear any previous one
   highlightTreePath(refTreePath(wn && wn.file, wn && wn.line));
-  if (wn) syncCodeView(wn.file, wn.line);  // and into the code viewer (FULL mode)
+  if (wn) syncCodeView(wn.file, wn.line, []);  // and into the code viewer (FULL mode); no switcher for an edge
 }
 
 // Context-edge panel: actor→system shows the role's wants; system→dep shows what it's used for
@@ -2392,7 +2393,10 @@ function updateFolderPeek(id) {
 // One row: a twisty (folders only), the name, and an id chip when a node points exactly here.
 function makeRow(entry, depth) {
   const row = document.createElement('div');
-  row.className = 'trow cov-' + entry.cov + (entry.dir ? ' tdir' : ' tfile');
+  // `ref` = referenced by a component/entity at all (source OR owned) -> bold "on the map"; broader than
+  // cov-self (anchor-only). `foot` = part of the currently-selected element's footprint.
+  row.className = 'trow cov-' + entry.cov + (entry.dir ? ' tdir' : ' tfile')
+    + (entry.ref ? ' ref' : '') + (!entry.dir && footSet.has(treeKey(entry.path)) ? ' foot' : '');
   row.style.paddingLeft = (8 + depth * 14) + 'px';
   row.title = entry.path || entry.name;
   const caret = document.createElement('span');
@@ -2403,7 +2407,9 @@ function makeRow(entry, depth) {
   name.textContent = entry.name;
   row.appendChild(caret);
   row.appendChild(name);
-  if (entry.node) {
+  if (entry.node && entry.cov === 'self') {
+    // The chip marks a true ANCHOR (a node's own source points exactly here). Owned files also carry
+    // entry.node (their owner, for the click) but get no chip — the bold `ref` already marks them.
     const chip = document.createElement('span');
     chip.className = 'tchip';
     chip.textContent = entry.node;
@@ -2451,11 +2457,22 @@ function onRowClick(key) {
   // A file row: the reader wants its source in the code viewer, so end any folder peek and show it.
   const wasPeeking = treePeek;
   if (wasPeeking) setTreePeek(false);
-  if (e.node) {
-    // A mapped file: selecting its node also loads it into the code viewer AT the node's line
-    // (syncTreeToNode -> syncCodeView), so no separate loadCode is needed here.
+  if (e.node && e.cov === 'self') {
+    // An ANCHOR file (a node's own source): selecting its node also loads it into the code viewer AT the
+    // node's line (syncTreeToNode -> syncCodeView), so no separate loadCode is needed here.
     suppressTreeScroll = true;
     selectFromTreeAnchors([e.node, ...e.others], key);  // this exact file collided — e.others carries the rest
+  } else if (e.node) {
+    // An OWNED file (belongs to a component but isn't its anchor): show THIS file, and select its owner
+    // (definition-first, already resolved into e.node). The syncCodeView/syncTreeToNode "belongs" guards
+    // keep this file shown + highlighted since it's in the owner's `files`, instead of jumping to source.
+    if (wasPeeking) suppressPeek = true;
+    const owner = GRAPH.nodes[e.node];
+    cvFiles = (owner && owner.files) || [];
+    loadCode(e.path, null);
+    suppressTreeScroll = true;
+    highlightTreePath(key);
+    selectFromTree(e.node);
   } else {
     // A file that is not itself a node: show its source directly (no line). If it sits under a mapped
     // folder, also select that owning subsystem/entity — but the file the reader clicked is what the
@@ -2563,9 +2580,28 @@ function refTreePath(file, line) { return file && localRef(file) ? treeKey(clean
 // ancestor folders so the row exists and is visible. No path / no row -> just clear the highlight.
 function syncTreeToNode(id) {
   const n = GRAPH.nodes[id];
-  const path = pathByNode[id] || (n ? refTreePath(n.file, n.line) : null);
-  highlightTreePath(path);
-  if (n) syncCodeView(n.file, n.line);  // mirror the node's source into the code viewer (FULL mode)
+  highlightFootprint(n ? n.files : null);  // light up the element's WHOLE file set in the browser
+  // Keep the 'sel' highlight on a file the reader just clicked if it belongs to this element (an owned
+  // file); otherwise move it to the element's own anchor row.
+  if (!(treeSelPath && n && (n.files || []).indexOf(treeSelPath) !== -1)) {
+    const path = pathByNode[id] || (n ? refTreePath(n.file, n.line) : null);
+    highlightTreePath(path);
+  }
+  if (n) syncCodeView(n.file, n.line, n.files);  // mirror the node's source into the code viewer (FULL mode)
+}
+// A second, dimmer highlight over EVERY file the selected element covers (its `files`) — the "footprint"
+// — distinct from the single 'sel' row. Folders holding a footprint file are expanded so the lit rows are
+// visible; `footSet` also lets a row built later (manual expand) pick up the class in makeRow.
+let footSet = new Set();
+function highlightFootprint(files) {
+  footSet = new Set((files || []).map(treeKey));
+  for (const k in rowByPath) {
+    if (!rowByPath[k].entry.dir) rowByPath[k].row.classList.toggle('foot', footSet.has(k));
+  }
+  for (const k of footSet) {
+    const parts = k.split('/');
+    for (let i = 0, acc = ''; i < parts.length - 1; i++) { acc = acc ? acc + '/' + parts[i] : parts[i]; expandDir(acc); }
+  }
 }
 function highlightTreePath(path) {
   const skipScroll = suppressTreeScroll;
@@ -2608,7 +2644,10 @@ function highlightTreePath(path) {
 // /api/tree in FULL mode). Indexes node<->path both ways, then renders the top level.
 function renderFileTree(root) {
   (function index(e) {
-    if (e.node) {
+    // Only ANCHOR rows (cov 'self') feed the node->path map: an owned-file row also carries e.node (its
+    // owner, for the click) but must NOT claim to be that owner's canonical path, or graph->tree would
+    // jump to a random owned file instead of the element's source.
+    if (e.node && e.cov === 'self') {
       pathByNode[e.node] = treeKey(e.path);
       const all = [e.node, ...(e.others || [])];
       if (all.length > 1) for (const id of all) siblingsByNode[id] = all;
@@ -2672,6 +2711,29 @@ let cvPath = null, cvTable = null;  // the file currently shown + its rendered t
 let cvLine = null;                  // the line to highlight — a module var so a line that arrives while the
                                     // file is still loading (tree click: file-load then node-select) still lands
 let cvReq = 0;                      // request token — a newer load supersedes an in-flight older one
+let cvFiles = [];                   // the selected element's files (source first) — the header's switcher list
+
+// The code-viewer header: a plain path, or — when the selected element owns several files — a switcher
+// (its `files`, source first) so the reader can page through them without leaving the element. The
+// current file stays selected; picking one loads it + highlights its tree row (no graph re-selection).
+function renderCvHeader() {
+  const suffix = cvLine ? ':' + cvLine : '';
+  if (SERVED && cvFiles.length > 1) {
+    const opts = cvFiles.map((f) =>
+      '<option value="' + esc(f) + '"' + (f === cvPath ? ' selected' : '') + ' title="' + esc(f) + '">'
+      + esc(f.split('/').pop()) + '</option>').join('');
+    cvpath.innerHTML = '<select class="cvfiles" title="Files in this element">' + opts + '</select>'
+      + '<span class="cvpathfull">' + esc((cvPath || '') + suffix) + '</span>';
+    const sel = cvpath.querySelector('select.cvfiles');
+    if (sel) sel.addEventListener('change', () => {
+      suppressTreeScroll = false;
+      highlightTreePath(treeKey(sel.value));
+      loadCode(sel.value, null);
+    });
+  } else {
+    cvpath.textContent = (cvPath || '') + suffix;
+  }
+}
 const HLJS_VER = '11.9.0';
 const HLJS_JS = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/' + HLJS_VER + '/highlight.min.js';
 const HLJS_JS_SRI = 'sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp';
@@ -2759,10 +2821,10 @@ function renderCode(path, text, token) {
 async function loadCode(path, line) {
   if (!SERVED || !path) return;
   cvLine = line || null;
-  cvpath.textContent = path + (cvLine ? ':' + cvLine : '');
-  if (path === cvPath) { markLine(cvLine); return; }  // same file already (or) loading — just move the line
+  if (path === cvPath) { renderCvHeader(); markLine(cvLine); return; }  // same file — move the line, refresh header
   const token = ++cvReq;
   cvPath = path; cvTable = null;
+  renderCvHeader();  // set the header (dropdown marks the new file) AFTER cvPath is updated
   cvbody.innerHTML = '<p class="cvempty">Loading…</p>';
   let text = null;
   try {
@@ -2781,10 +2843,20 @@ async function loadCode(path, line) {
   renderCode(path, text, token);
 }
 // Mirror a selection's source ref into the code viewer — from a node/edge with a local file anchor.
-// Skips directory anchors (a subsystem's folder) and off-repo URLs, which have no single file to show.
-function syncCodeView(file, line) {
-  if (!SERVED || !file || !localRef(file) || isDirRef(file, line)) return;
-  loadCode(cleanPath(file, line), line || null);
+// `files` (the element's whole file list, source first) drives the header switcher. Skips directory
+// anchors (a subsystem's folder) and off-repo URLs — but if the element still has member/owned files,
+// the first is opened so the switcher has something to show.
+function syncCodeView(file, line, files) {
+  if (Array.isArray(files)) cvFiles = files;
+  const anchor = (file && localRef(file) && !isDirRef(file, line)) ? cleanPath(file, line) : null;
+  // Keep the file already shown if it belongs to this element BUT is NOT the element's own anchor — i.e.
+  // an OWNED file the reader clicked (show that file, not the element's source). When the element's own
+  // anchor IS the shown file, fall through to loadCode so it moves the line highlight to the new
+  // element's def line (two elements sharing one file must still jump between their lines).
+  if (cvPath && cvFiles.indexOf(cvPath) !== -1 && anchor !== cvPath) { renderCvHeader(); return; }
+  if (anchor) { loadCode(anchor, line || null); return; }
+  if (SERVED && cvFiles.length) { loadCode(cvFiles[0], null); return; }  // a group's dir anchor -> its first file
+  renderCvHeader();  // nothing to load (off-repo / no files) — still refresh the header (clears a stale switcher)
 }
 
 // --- startup --------------------------------------------------------------------

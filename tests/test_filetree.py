@@ -21,14 +21,16 @@ from coyodex.viewer.filetree import (
     build_file_tree,
     build_tree,
     node_path_index,
+    resolved_path_index,
 )
 
 
 # --- builders (no fixtures; explicit make_* helpers) ----------------------------
 def make_node(nid: str, kind: str, file: str | None = None,
-              line: int | None = None, parent: str | None = None) -> dict[str, Any]:
+              line: int | None = None, parent: str | None = None,
+              files: list[str] | None = None) -> dict[str, Any]:
     return {"id": nid, "kind": kind, "name": nid, "file": file, "line": line,
-            "fields": {}, "parent": parent}
+            "fields": {}, "parent": parent, "files": files or []}
 
 
 def make_graph(*nodes: dict[str, Any]) -> GraphDict:
@@ -80,6 +82,39 @@ def test_node_path_index_keeps_both_leaves_on_collision() -> None:
     # collision was ever kept, just no longer silently discarding the second one.
     graph = make_graph(make_node("C1", "component", "src/x.py"), make_node("E1", "entity", "src/x.py"))
     assert node_path_index(graph)["src/x.py"] == ["C1", "E1"]
+
+
+# --- resolved_path_index: owned files resolve to their owner ---------------------
+def test_resolved_index_maps_owned_files_to_owner_after_definitions() -> None:
+    # C1 is defined at src/a.py (its anchor) and owns two more files. Each owned file resolves to C1
+    # even though C1 does not anchor it. The anchor file keeps a single (definition) match.
+    graph = make_graph(make_node("C1", "component", "src/a.py",
+                                 files=["src/a.py", "src/b.py", "src/c.py"]))
+    idx = resolved_path_index(graph)
+    assert idx["src/a.py"] == ["C1"]      # anchor / definition (owned dup not double-counted)
+    assert idx["src/b.py"] == ["C1"]      # owned -> owner
+    assert idx["src/c.py"] == ["C1"]
+
+
+def test_resolved_index_orders_definition_before_owner() -> None:
+    # src/shared.py is E1's definition (its source) AND a file C1 owns. Definition wins first; the
+    # owner follows — the exact 'definition first, else owner' rule the file->element click uses.
+    graph = make_graph(
+        make_node("C1", "component", "src/c.py", files=["src/c.py", "src/shared.py"]),
+        make_node("E1", "entity", "src/shared.py", files=["src/shared.py"]),
+    )
+    assert resolved_path_index(graph)["src/shared.py"] == ["E1", "C1"]  # E1 defines it, C1 only owns it
+
+
+def test_ref_bold_marks_owned_files_that_cov_does_not() -> None:
+    # An owned file that is NOT an anchor: coverage stays 'none'/'under' (anchor-based), but ref=1
+    # (it IS on the map) and clicking it selects the owning component.
+    graph = make_graph(make_node("C1", "component", "src/a.py", files=["src/a.py", "extra/b.py"]))
+    tree = build_tree(["src/a.py", "extra/b.py"], node_path_index(graph), resolved_path_index(graph))
+    a = find_entry(tree, "src/a.py")
+    b = find_entry(tree, "extra/b.py")
+    assert a is not None and (a["cov"], a["node"], a["ref"]) == ("self", "C1", 1)
+    assert b is not None and (b["cov"], b["node"], b["sel"], b["ref"]) == ("none", "C1", "C1", 1)
 
 
 # --- build_tree: structure ------------------------------------------------------

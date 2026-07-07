@@ -32,82 +32,14 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from coyodex.model import ModelError, load_model
-from coyodex.viewer.filetree import FileTreeNode, build_tree, node_path_index
+from coyodex.viewer.filetree import FileTreeNode, build_tree, node_path_index, resolved_path_index
+from coyodex.viewer.recents import RecentsStore
 from coyodex.views import model_to_graph
 
 MAP_JSON = "project-map.json"
 MAP_HTML = "project-map.html"
 _DEFAULT_PORT = 8765
-_RECENTS_PATH = Path.home() / ".coyodex" / "serve-recents.json"
 _STATE_LOCK = threading.Lock()  # guards recents mutation + the derived projects map
-
-
-# --- recents store (persisted list of chosen project folders) -----------------------------------
-
-class RecentsStore:
-    """The ordered (most-recent first) list of project folders the user has opened, persisted to a
-    small JSON file. No scanning — the list only grows when the user opens a folder in the UI."""
-
-    def __init__(self, path: Path = _RECENTS_PATH) -> None:
-        self.path = path
-        self.folders: list[str] = []
-        self.load()
-
-    def load(self) -> None:
-        try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            self.folders = []
-            return
-        folders = data.get("folders") if isinstance(data, dict) else None
-        self.folders = [f for f in folders if isinstance(f, str)] if isinstance(folders, list) else []
-
-    def save(self) -> None:
-        try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.path.write_text(json.dumps({"folders": self.folders}, indent=2), encoding="utf-8")
-        except OSError as e:
-            print(f"coyodex serve: could not save recents to {self.path} ({e})", file=sys.stderr)
-
-    def add(self, folder: str) -> None:
-        """Add (or bump to front) a folder — stored as its resolved absolute path, deduplicated. Dedup
-        is by SAME DIRECTORY, not just an equal string: on a case-insensitive filesystem (macOS/Windows)
-        ``resolve()`` doesn't normalize case, so the same folder typed two ways would otherwise be added
-        twice — ``samefile`` collapses those (and symlinks to the same target)."""
-        resolved = str(Path(folder).resolve())
-        target = Path(resolved)
-        kept: list[str] = []
-        for f in self.folders:
-            if f == resolved:
-                continue
-            try:
-                if target.samefile(f):  # same dir via a different spelling / a symlink -> drop the old entry
-                    continue
-            except OSError:
-                pass  # a stale entry whose folder is gone: keep it (the user can still remove it)
-            kept.append(f)
-        self.folders = [resolved] + kept
-        self.save()
-
-    def remove(self, folder: str) -> None:
-        resolved = str(Path(folder).resolve())
-        kept = [f for f in self.folders if f != resolved]
-        if len(kept) != len(self.folders):
-            self.folders = kept
-            self.save()
-
-    def set_order(self, order: list[str]) -> None:
-        """Reorder the recents to match `order` (existing paths, in the new sequence). Unknown paths are
-        ignored; any current entry missing from `order` is appended (safety against a concurrent add)."""
-        known = set(self.folders)
-        new = [p for p in order if p in known]
-        seen = set(new)
-        new += [f for f in self.folders if f not in seen]
-        self.folders = new
-        self.save()
-
-    def list(self) -> list[str]:
-        return list(self.folders)
 
 
 @dataclass
@@ -260,7 +192,8 @@ def project_tree(proj: Project) -> FileTreeNode:
         return proj.tree
     graph = model_to_graph(load_model(proj.map_json.read_text(encoding="utf-8")))
     rels = sorted(git_ls_files(proj.repo_root, proj.commit))
-    proj.tree = build_tree(rels, node_path_index(graph), root_name=proj.repo_root.name)
+    proj.tree = build_tree(rels, node_path_index(graph), resolved_path_index(graph),
+                           root_name=proj.repo_root.name)
     return proj.tree
 
 
@@ -372,6 +305,11 @@ class Handler(BaseHTTPRequestHandler):
     # --- landing-page API ---
     def _root_api(self, rest: list[str], query: dict[str, list[str]]) -> None:
         if rest == ["recents"]:
+            # Re-read the file (a build may have registered a project since startup) and rebuild the
+            # served set, so a just-built project shows up as a card AND is openable, no restart needed.
+            with _STATE_LOCK:
+                self.store.reload()
+                Handler.projects = build_projects(self.store.list())
             return self._json(_recents_payload(self.store, self.projects))
         if rest == ["browse"]:
             raw = (query.get("path") or [""])[0]

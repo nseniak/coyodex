@@ -88,7 +88,8 @@ whenever a fresh map must be built without the builder seeing prior maps or eval
      structured rows, `coyodex assemble` writes the model to its normal path
      `.coyodex/project-map.json` (+ generated views) **inside the isolated checkout**;
    - run the usual invariant there (`validate --check-sources`, `audit`, `render` via
-     `COYODEX_HOME/.venv/bin/coyodex`);
+     `COYODEX_HOME/.venv/bin/coyodex`); export `COYODEX_NO_SERVE_REGISTER=1` first so this throwaway
+     build in a temporary checkout is NOT registered with `coyodex serve`;
    - **never read**: any path under the original project checkout; any coyodex eval bundle under ANY
      root — in particular any file named `thresholds.json` or `rubric.md` belonging to one (the
      `COYODEX_HOME/eval/` originals AND any committed copy inside the worktree); any `.coyodex/` or
