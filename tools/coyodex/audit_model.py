@@ -287,14 +287,14 @@ def _endpoint_detail(m: ProjectModel) -> dict[str, str]:
 
     members: dict[str, list[str]] = {}
     for ep in m.entry_points:
-        h = href(ep.entity)
+        h = href(ep.source)
         members.setdefault(ep.component, []).append(
             f"{ep.trigger} ({h})" if h else ep.trigger)
 
     out: dict[str, str] = {}
     for c in m.components:
         desc = f"{c.id} = {c.name}" if c.name and c.name != c.id else c.id
-        home = c.anchor or href(c.entry_point)
+        home = c.source or href(c.entry_point)
         if home:
             desc += f" ({home})"
         eps = members.get(c.id, [])
@@ -317,7 +317,7 @@ def _endpoint_detail(m: ProjectModel) -> dict[str, str]:
         out[u.id] = f"{u.id} = {u.name}" if u.name else u.id
     for g in (*m.subsystems, *m.subdomains):
         desc = f"{g.id} = {g.name}" if g.name else g.id
-        h = href(g.anchor)
+        h = href(g.source)
         if h:
             desc += f" ({h})"
         out[g.id] = desc
@@ -343,8 +343,8 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     items: list[WorkItem] = []
     for s in m.security:
         items.append(WorkItem(
-            claim=f"Auth surface '{s.surface}' is protected by: {_claim_text(s.check)}",
-            anchor=_anchor(s.check),
+            claim=f"Auth surface '{s.surface}' is protected by: {_claim_text(s.source)}",
+            anchor=_anchor(s.source),
             why_risky="security boundary — a false claim here is an access-control hole."))
     dep_items: list[WorkItem] = []
     entity_items: list[WorkItem] = []

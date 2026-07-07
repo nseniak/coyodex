@@ -97,7 +97,7 @@ prose level, the model has no field for it, and builders rightly skipped it — 
 
 ### Level 0 (one screen, whole project)
 - **Subsystems (S)** *(optional; recommended above ~15 components)*: `ID | Subsystem | Purpose |
-  Parent | Anchor | Conf.` — the Container altitude: components grouped into subsystems, optionally
+  Parent | Source | Conf.` — the Container altitude: components grouped into subsystems, optionally
   nested (a subsystem's `Parent` is another `S`). Membership is carried on the child (a `Subsystem`
   column on T1); the member list and the inter-subsystem edges are *derived*, never authored. Present
   this first on large maps; drill into T1. **Nesting renders as recursive drill**: each subsystem's card
@@ -122,7 +122,7 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   unnamed concepts). Entity↔entity relations are authored on the source card only, never in the
   backbone edge list. Full spec: [domain cards](method/domain-cards.md).
 - **Subdomains (SD)** *(optional; recommended above ~15 entities)*: `ID | Subdomain | Purpose | Parent |
-  Anchor | Conf.` — the domain analog of Subsystems: T5 entities grouped into bounded contexts,
+  Source | Conf.` — the domain analog of Subsystems: T5 entities grouped into bounded contexts,
   optionally nested. Membership is carried on each card (a `SUBDOMAIN:` line holding one `SD`); the
   member list, the inter-subdomain arrows, and the subsystem→subdomain bridge are *derived*. The Domain
   diagram then leads with a Subdomains overview and drills into one subdomain's classDiagram.
@@ -384,11 +384,11 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > fragment (a T5 return routinely exceeds 50 KB) is silently truncated by sub-agent result caps,
 > and a truncated fragment fails `assemble`. An empty slice is an empty array plus a one-line note.
 > **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
-> rejects them): `components[].anchor`, `entities[].source`, `components[].entry_point`,
-> `deps[].where_configured`, `edges[].where`, and `entry_points[].entity` are all **bare**
+> rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
+> `deps[].where_configured`, `edges[].where`, and `entry_points[].source` are all **bare**
 > repo-root-relative refs (`path/to/file.py:120`; a directory anchor keeps its trailing slash,
-> `path/dir/`). The one exception is group anchors (`subsystems[].anchor` /
-> `subdomains[].anchor`), which are **markdown links** `[dir](path/dir/)`.
+> `path/dir/`). The one exception is group `source` fields (`subsystems[].source` /
+> `subdomains[].source`), which are **markdown links** `[dir](path/dir/)`.
 > **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
 > also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
 > `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is

@@ -33,18 +33,18 @@ CLI = [sys.executable, "-m", "coyodex.cli", "dump"]
 def make_model() -> ProjectModel:
     m = ProjectModel(title="Demo", goal="A demo.")
     m.use_cases = [UseCase(id="UC1", name="View", actor="Andy")]
-    m.subsystems = [Group(id="S1", name="Core", anchor="[core](backend/core/)"),
+    m.subsystems = [Group(id="S1", name="Core", source="[core](backend/core/)"),
                     Group(id="S2", name="Edge", parent="S1")]
     m.components = [
-        Component(id="C1", name="Viewer", subsystem="S1", anchor="backend/viewer.py#L1"),
+        Component(id="C1", name="Viewer", subsystem="S1", source="backend/viewer.py#L1"),
         Component(id="C2", name="Store", subsystem="S1",
                   entry_point="backend/store.py#L5"),
         Component(id="C3", name="Umbrella", subsystem="S2"),
     ]
     m.entry_points = [
-        EntryPoint(kind="http", trigger="GET /orders", entity="backend/api.py#L10",
+        EntryPoint(kind="http", trigger="GET /orders", source="backend/api.py#L10",
                    component="C3"),
-        EntryPoint(kind="queue", trigger="orders.created", entity="backend/sub.py#L3",
+        EntryPoint(kind="queue", trigger="orders.created", source="backend/sub.py#L3",
                    component="C3"),
     ]
     m.subdomains = [Group(id="SD1", name="Orders")]
@@ -60,31 +60,31 @@ def make_model() -> ProjectModel:
 def test_resolve_component_uses_its_canonical_anchor():
     r = resolve_id(make_model(), "C1")
     assert r == {"id": "C1", "kind": "component", "name": "Viewer",
-                 "anchor": "backend/viewer.py#L1", "members": []}
+                 "source": "backend/viewer.py#L1", "members": []}
 
 
 def test_resolve_component_falls_back_to_the_entry_point_href():
     r = resolve_id(make_model(), "C2")
-    assert r is not None and r["anchor"] == "backend/store.py#L5"
+    assert r is not None and r["source"] == "backend/store.py#L5"
 
 
 def test_resolve_component_lists_its_member_entry_points():
     r = resolve_id(make_model(), "C3")
     assert r is not None
-    assert r["members"] == [{"trigger": "GET /orders", "entity": "backend/api.py#L10"},
-                            {"trigger": "orders.created", "entity": "backend/sub.py#L3"}]
+    assert r["members"] == [{"trigger": "GET /orders", "source": "backend/api.py#L10"},
+                            {"trigger": "orders.created", "source": "backend/sub.py#L3"}]
 
 
 def test_resolve_group_lists_member_ids_and_link_href():
     r = resolve_id(make_model(), "S1")
     assert r is not None
-    assert r["anchor"] == "backend/core/"
+    assert r["source"] == "backend/core/"
     assert r["members"] == ["C1", "C2", "S2"]  # components first, then child subsystems
 
 
 def test_resolve_entity_anchors_at_its_source():
     r = resolve_id(make_model(), "E1")
-    assert r is not None and r["anchor"] == "backend/order.py#L7" and r["kind"] == "entity"
+    assert r is not None and r["source"] == "backend/order.py#L7" and r["kind"] == "entity"
 
 
 def test_resolve_unknown_id_is_none():

@@ -45,7 +45,7 @@ def make_grouped_map(layout: str = "proper") -> str:
       "name": "Edge",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -53,7 +53,7 @@ def make_grouped_map(layout: str = "proper") -> str:
       "name": "Core",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -65,7 +65,7 @@ def make_grouped_map(layout: str = "proper") -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -76,7 +76,7 @@ def make_grouped_map(layout: str = "proper") -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -122,7 +122,7 @@ def make_grouped_map(layout: str = "proper") -> str:
       "name": "Edge",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -130,7 +130,7 @@ def make_grouped_map(layout: str = "proper") -> str:
       "name": "Core",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -142,7 +142,7 @@ def make_grouped_map(layout: str = "proper") -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -153,7 +153,7 @@ def make_grouped_map(layout: str = "proper") -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -205,7 +205,7 @@ def make_card_map() -> str:
       "name": "Edge",
       "purpose": "front",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -213,7 +213,7 @@ def make_card_map() -> str:
       "name": "Core",
       "purpose": "brains",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -225,7 +225,7 @@ def make_card_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -236,7 +236,7 @@ def make_card_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -247,7 +247,7 @@ def make_card_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "D1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -342,7 +342,7 @@ def make_nested_subsystem_map() -> str:
       "name": "Platform",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -350,7 +350,7 @@ def make_nested_subsystem_map() -> str:
       "name": "Inner",
       "purpose": "x",
       "parent": "S1",
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -358,7 +358,7 @@ def make_nested_subsystem_map() -> str:
       "name": "Other",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -370,7 +370,7 @@ def make_nested_subsystem_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -381,7 +381,7 @@ def make_nested_subsystem_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C3",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -392,7 +392,7 @@ def make_nested_subsystem_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -452,7 +452,7 @@ def make_ungrouped_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -494,7 +494,7 @@ def make_fenced_node_map() -> str:
       "name": "A",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -506,7 +506,7 @@ def make_fenced_node_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -1337,7 +1337,7 @@ def make_gp_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -1348,7 +1348,7 @@ def make_gp_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "D1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -1485,7 +1485,7 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -1694,7 +1694,7 @@ def make_nested_bridge_map() -> str:
       "name": "Outer",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -1702,7 +1702,7 @@ def make_nested_bridge_map() -> str:
       "name": "Inner",
       "purpose": "x",
       "parent": "S1",
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -1714,7 +1714,7 @@ def make_nested_bridge_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -1728,7 +1728,7 @@ def make_nested_bridge_map() -> str:
       "name": "DomOuter",
       "purpose": "x",
       "parent": null,
-      "anchor": "[f](f#L1)",
+      "source": "[f](f#L1)",
       "confidence": "inferred"
     },
     {
@@ -1736,7 +1736,7 @@ def make_nested_bridge_map() -> str:
       "name": "DomInner",
       "purpose": "x",
       "parent": "SD1",
-      "anchor": "[f](f#L1)",
+      "source": "[f](f#L1)",
       "confidence": "inferred"
     }
   ],
@@ -2198,7 +2198,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
       "name": "Ordering",
       "purpose": "x",
       "parent": null,
-      "anchor": "[order.py](order.py#L1)",
+      "source": "[order.py](order.py#L1)",
       "confidence": "inferred"
     },
     {
@@ -2206,7 +2206,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
       "name": "Inner",
       "purpose": "x",
       "parent": "SD1",
-      "anchor": "[order.py](order.py#L1)",
+      "source": "[order.py](order.py#L1)",
       "confidence": "inferred"
     },
     {
@@ -2214,7 +2214,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
       "name": "Catalog",
       "purpose": "x",
       "parent": null,
-      "anchor": "[product.py](product.py#L1)",
+      "source": "[product.py](product.py#L1)",
       "confidence": "inferred"
     }
   ],
@@ -2340,7 +2340,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
       "name": "Ordering",
       "purpose": "purchase lifecycle",
       "parent": null,
-      "anchor": "[order.py](order.py#L1)",
+      "source": "[order.py](order.py#L1)",
       "confidence": "inferred"
     },
     {
@@ -2348,7 +2348,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
       "name": "Catalog",
       "purpose": "products",
       "parent": null,
-      "anchor": "[product.py](product.py#L1)",
+      "source": "[product.py](product.py#L1)",
       "confidence": "inferred"
     }
   ],
@@ -2479,7 +2479,7 @@ def make_nested_subdomain_map() -> str:
       "name": "Ordering",
       "purpose": "x",
       "parent": null,
-      "anchor": "[order.py](order.py#L1)",
+      "source": "[order.py](order.py#L1)",
       "confidence": "inferred"
     },
     {
@@ -2487,7 +2487,7 @@ def make_nested_subdomain_map() -> str:
       "name": "Inner",
       "purpose": "x",
       "parent": "SD1",
-      "anchor": "[order.py](order.py#L1)",
+      "source": "[order.py](order.py#L1)",
       "confidence": "inferred"
     },
     {
@@ -2495,7 +2495,7 @@ def make_nested_subdomain_map() -> str:
       "name": "Catalog",
       "purpose": "x",
       "parent": null,
-      "anchor": "[product.py](product.py#L1)",
+      "source": "[product.py](product.py#L1)",
       "confidence": "inferred"
     }
   ],
@@ -2660,7 +2660,7 @@ def make_bridge_map() -> str:
       "name": "Edge",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -2668,7 +2668,7 @@ def make_bridge_map() -> str:
       "name": "Core",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -2680,7 +2680,7 @@ def make_bridge_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -2691,7 +2691,7 @@ def make_bridge_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -2705,7 +2705,7 @@ def make_bridge_map() -> str:
       "name": "Ordering",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -2926,7 +2926,7 @@ def _two_context_map(cards_extra: str = "") -> str:
       "name": "Ordering",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -2934,7 +2934,7 @@ def _two_context_map(cards_extra: str = "") -> str:
       "name": "Catalog",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -3001,7 +3001,7 @@ def make_both_groupings_map() -> str:
       "name": "Edge",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -3009,7 +3009,7 @@ def make_both_groupings_map() -> str:
       "name": "Core",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -3021,7 +3021,7 @@ def make_both_groupings_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -3032,7 +3032,7 @@ def make_both_groupings_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -3046,7 +3046,7 @@ def make_both_groupings_map() -> str:
       "name": "Ordering",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     },
     {
@@ -3054,7 +3054,7 @@ def make_both_groupings_map() -> str:
       "name": "Catalog",
       "purpose": "x",
       "parent": null,
-      "anchor": "[a](a)",
+      "source": "[a](a)",
       "confidence": "V"
     }
   ],
@@ -3270,7 +3270,7 @@ def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -3373,7 +3373,7 @@ def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -3496,7 +3496,7 @@ def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> st
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "D1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }

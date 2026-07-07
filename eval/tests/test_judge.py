@@ -67,7 +67,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -78,7 +78,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -105,7 +105,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
     {
       "surface": "REFUTE /admin",
       "who": "admins",
-      "check": "[require_admin](auth.py#L10)",
+      "source": "[require_admin](auth.py#L10)",
       "risk": "escalation"
     }
   ],
@@ -133,7 +133,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -144,7 +144,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -171,7 +171,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
     {
       "surface": "/admin",
       "who": "admins",
-      "check": "[require_admin](auth.py#L10)",
+      "source": "[require_admin](auth.py#L10)",
       "risk": "escalation"
     }
   ],
@@ -203,7 +203,7 @@ def make_no_claims_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -250,7 +250,7 @@ def make_many_claims_map(n_uses: int = 4) -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -261,7 +261,7 @@ def make_many_claims_map(n_uses: int = 4) -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -316,7 +316,7 @@ def make_many_claims_map(n_uses: int = 4) -> str:
     {
       "surface": "/admin",
       "who": "admins",
-      "check": "[require_admin](auth.py#L10)",
+      "source": "[require_admin](auth.py#L10)",
       "risk": "escalation"
     }
   ],

@@ -195,7 +195,7 @@
         "meaning": {
           "type": "string"
         },
-        "where": {
+        "source": {
           "type": [
             "string",
             "null"
@@ -286,7 +286,7 @@
           "pattern": "^(UC|GP|SD|C|D|E|S)\\d+$",
           "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD parents an SD), or null for top-level."
         },
-        "anchor": {
+        "source": {
           "type": [
             "string",
             "null"
@@ -331,12 +331,12 @@
             "null"
           ],
           "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
-          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). Where the component is TRIGGERED \u2014 distinct from `anchor` (where it LIVES)."
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). Where the component is TRIGGERED \u2014 distinct from `source` (where it LIVES)."
         },
         "depends_on": {
           "type": "string"
         },
-        "anchor": {
+        "source": {
           "type": [
             "string",
             "null"
@@ -484,7 +484,7 @@
         "trigger": {
           "type": "string"
         },
-        "entity": {
+        "source": {
           "type": "string",
           "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
           "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
@@ -769,7 +769,7 @@
         "who": {
           "type": "string"
         },
-        "check": {
+        "source": {
           "type": "string",
           "description": "markdown link to the auth check in code."
         },

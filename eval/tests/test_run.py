@@ -54,7 +54,7 @@ def make_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -65,7 +65,7 @@ def make_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -92,7 +92,7 @@ def make_map() -> str:
     {
       "surface": "/admin",
       "who": "admins",
-      "check": "[require_admin](auth.py#L10)",
+      "source": "[require_admin](auth.py#L10)",
       "risk": "escalation"
     }
   ],

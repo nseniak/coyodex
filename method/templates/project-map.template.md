@@ -80,7 +80,7 @@ why: needs the result of GP1
      nothing — its definition and every membership pointing at it are SILENTLY dropped, leaving an
      empty box. Numeric-id + `Parent` also lets you re-parent with a one-cell edit, no rename. -->
 
-| ID | Subsystem | Purpose | Parent | Anchor | Conf. |
+| ID | Subsystem | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
 | **S1** | <subsystem> | <one-line purpose> |  | [dir/](path/) | inferred |
 | **S2** | <large subsystem, subdivided below> | <one-line purpose> |  | [dir2/](path2/) | inferred |
@@ -149,7 +149,7 @@ why: needs the result of GP1
      this whole section on small models — ungrouped entities are valid. Cluster entities the same way
      components cluster into Subsystems: directory (the card's SOURCE) first, then relation cohesion. -->
 
-| ID | Subdomain | Purpose | Parent | Anchor | Conf. |
+| ID | Subdomain | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
 | **SD1** | <subdomain> | <one-line purpose> |  | [dir/](path/) | inferred |
 | **SD2** | <nested subdomain> | <one-line purpose> | SD1 | [dir/sub/](path/sub/) | inferred |

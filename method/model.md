@@ -46,14 +46,14 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "commit": "<short sha>", "committed": "<YYYY-MM-DD>", "built": "<YYYY-MM-DD HH:MM>",
 
   "roles":       [ { "name", "kind": "human|service", "wants", "drives" } ],
-  "glossary":    [ { "term", "meaning", "where": "<path:line|path/|null>" } ],
+  "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>" } ],
   "use_cases":   [ { "id": "UCn", "name", "actor", "trigger_outcome" } ],
   "golden_path": [ { "id": "GPn", "title", "uc": "UCn", "why": "<prerequisite or null>" } ],
 
-  "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "anchor", "confidence" } ],
+  "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "source", "confidence" } ],
   "components":  [ { "id": "Cn",  "name", "subsystem": "Sn|null", "purpose",
                      "entry_point": "<path:line|null>", "depends_on": "<derived summary text>",
-                     "anchor": "<canonical source anchor|null>", "confidence",
+                     "source": "<canonical source anchor|null>", "confidence",
                      "files": [ "<repo-relative path>", … ],
                      "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "deps":        [ { "id": "Dn",  "name", "kind": "<closed vocab|null>", "type", "used_for",
@@ -62,9 +62,9 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "alternative": "<fallback used instead, and when>",
                      "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "run_commands":  [ { "action", "command", "source" } ],                       // T3
-  "entry_points":  [ { "kind", "trigger", "entity": "<path:line>", "component": "Cn" } ],  // T4
+  "entry_points":  [ { "kind", "trigger", "source": "<path:line>", "component": "Cn" } ],  // T4
 
-  "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "anchor", "confidence" } ],
+  "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "source", "confidence" } ],
   "entities":    [ { "id": "En",  "name", "store", "meaning", "subdomain": "SDn|null",
                      "source": "<path:line|null>",
                      "fields":    [ { "name", "type", "markers": ["PK", "FK→En", "[]", …] } ],
@@ -78,7 +78,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
 
   "deployment":     [ { "unit", "runs_on", "exposed_as", "config_source" } ],
   "observability":  [ { "signal", "where_emitted", "where_viewed", "alerts" } ],
-  "security":       [ { "surface", "who", "check": "<md link to the auth check>", "risk" } ],
+  "security":       [ { "surface", "who", "source": "<md link to the auth check>", "risk" } ],
   "config":         [ { "key", "purpose", "default", "per_env" } ],
 
   "tests_note":  "<the 'Tests run for this table?' honesty line>",
@@ -134,17 +134,20 @@ Semantics, stated on the fields:
     `api_key`, `noop_without`, `wired_by`) triggers an advisory `coyodex validate` warning to check
     whether the fact belongs in the Deployment or Config table instead of a per-element note.
 - **Anchor formats.** Every source-location string in the map uses ONE canonical, bare `path:line`
-  syntax (see the schema for the exact shape). `components[].anchor`, `entities[].source`,
-  `glossary[].where`, `components[].entry_point`, `deps[].where_configured`, `edges[].where`,
-  `entry_points[].entity`, and `evidence[].file` all use it — `glossary[].where` and the two file
-  OR directory fields (`components[].anchor`, `entities[].source`) may also be a bare directory ref
-  `path/`, and `glossary[].where` is additionally nullable (a pure product-level term with no single
-  code home). The one exception is group anchors (`subsystems[].anchor` /
-  `subdomains[].anchor`), which stay **markdown links** `[dir](path/dir/)` since a directory needs
+  syntax (see the schema for the exact shape). `components[].source`, `entities[].source`,
+  `glossary[].source`, `components[].entry_point`, `deps[].where_configured`, `edges[].where`,
+  `entry_points[].source`, and `evidence[].file` all use it — `glossary[].source` and the two file
+  OR directory fields (`components[].source`, `entities[].source`) may also be a bare directory ref
+  `path/`, and `glossary[].source` is additionally nullable (a pure product-level term with no single
+  code home). The one exception is group `source` fields (`subsystems[].source` /
+  `subdomains[].source`), which stay **markdown links** `[dir](path/dir/)` since a directory needs
   an authored label. `coyodex validate` rejects any anchor written some other way.
-- **`components[].anchor`** is where the component *lives*, distinct from `entry_point` (where it's
+- **`source` is the single canonical name for "where an element is defined"** — used uniformly across
+  `components[].source`, `subsystems[].source` / `subdomains[].source`, `entities[].source`,
+  `non_entity_types[].source`, `glossary[].source`, `entry_points[].source`, and `security[].source`.
+  On a component it is where the component *lives*, distinct from `entry_point` (where it's
   *triggered* — see the schema for that distinction spelled out). An umbrella component with
-  several entry points is described by its anchor **plus** every `entry_points` row naming it, so
+  several entry points is described by its `source` **plus** every `entry_points` row naming it, so
   no single arbitrary file stands in for the whole thing.
 - **Deps are described as external systems, never as code files.** A dep endpoint reads
   `"D4 = Google OAuth (service: Google OAuth 2.0 endpoints)"` — its `kind` + `type` — not a source

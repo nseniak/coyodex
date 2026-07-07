@@ -140,7 +140,7 @@ why: terminal — purges everything created above
 
 ## Subsystems (S) — the container altitude
 
-| ID | Subsystem | Purpose | Parent | Anchor | Conf. |
+| ID | Subsystem | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
 | **S1** | App bootstrap & runtime wiring | Build the app, pick storage, assemble per-org runtimes, drain on shutdown |  | [entrypoints/](backend/src/mcpolis/entrypoints/) | inferred |
 | **S2** | Gateway (MCP protocol surface) | Serve MCP clients at `/mcp`: list/call tools, route to upstreams, push changes |  | [gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py) | inferred |
@@ -366,7 +366,7 @@ why: terminal — purges everything created above
 
 ## Subdomains (SD) — bounded contexts of the domain model
 
-| ID | Subdomain | Purpose | Parent | Anchor | Conf. |
+| ID | Subdomain | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
 | **SD1** | Tenancy & access policy | Orgs, memberships, plans, roles, and the per-tool access rules |  | [settings.py](backend/src/mcpolis/domain/model/settings.py) | verified |
 | **SD2** | Upstream & transport | Upstream definitions, transports, and their auth configuration |  | [upstream.py](backend/src/mcpolis/domain/model/upstream.py) | verified |

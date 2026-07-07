@@ -65,7 +65,7 @@ def _source_line(source: str) -> str:
 
 def _anchor_link(href: str | None) -> str:
     """A bare `path:line` anchor (components[].entry_point, deps[].where_configured, edges[].where,
-    entry_points[].entity) as a markdown-link table cell, labelled with its basename — so the
+    entry_points[].source) as a markdown-link table cell, labelled with its basename — so the
     generated view stays clickable even though the model itself stores these bare, like
     `Entity.source`."""
     if not href:
@@ -155,7 +155,7 @@ def model_to_markdown(m: ProjectModel) -> str:
     if m.glossary:
         section("Glossary — the ubiquitous language",
                 _table(["Term", "Meaning", "Defined / used in"],
-                       [[f"**{g.term}**", g.meaning, _anchor_link(g.where)] for g in m.glossary]))
+                       [[f"**{g.term}**", g.meaning, _anchor_link(g.source)] for g in m.glossary]))
     if m.roles:
         section("Roles (actors)",
                 _table(["Role", "Kind", "What they want", "Use cases they drive"],
@@ -176,8 +176,8 @@ def model_to_markdown(m: ProjectModel) -> str:
         section("Golden Path — the spine (an ordered walk through the use cases)", body)
     if m.subsystems:
         section("Subsystems (S) — the container altitude",
-                _table(["ID", "Subsystem", "Purpose", "Parent", "Anchor", "Conf."],
-                       [[f"**{s.id}**", s.name, s.purpose, s.parent or "", s.anchor or "",
+                _table(["ID", "Subsystem", "Purpose", "Parent", "Source", "Conf."],
+                       [[f"**{s.id}**", s.name, s.purpose, s.parent or "", s.source or "",
                          s.confidence] for s in m.subsystems]))
     if m.components:
         headers, with_conf, extra = _component_headers(m)
@@ -218,12 +218,12 @@ def model_to_markdown(m: ProjectModel) -> str:
     if m.entry_points:
         section("T4 — Entry points",
                 _table(["Kind", "Trigger", "Code entity", "Component"],
-                       [[e.kind, e.trigger, _anchor_link(e.entity), e.component]
+                       [[e.kind, e.trigger, _anchor_link(e.source), e.component]
                         for e in m.entry_points]))
     if m.subdomains:
         section("Subdomains (SD) — bounded contexts of the domain model",
-                _table(["ID", "Subdomain", "Purpose", "Parent", "Anchor", "Conf."],
-                       [[f"**{s.id}**", s.name, s.purpose, s.parent or "", s.anchor or "",
+                _table(["ID", "Subdomain", "Purpose", "Parent", "Source", "Conf."],
+                       [[f"**{s.id}**", s.name, s.purpose, s.parent or "", s.source or "",
                          s.confidence] for s in m.subdomains]))
     if m.entities:
         body: list[str] = []
@@ -273,7 +273,7 @@ def model_to_markdown(m: ProjectModel) -> str:
         if m.security:
             body += ["### Security & auth", ""] + _table(
                 ["Surface", "Who can reach", "Auth check", "Risk note"],
-                [[r.surface, r.who, r.check, r.risk] for r in m.security]) + [""]
+                [[r.surface, r.who, r.source, r.risk] for r in m.security]) + [""]
         if m.config:
             body += ["### Config & environments", ""] + _table(
                 ["Key", "Purpose", "Default", "Per-env / secret?"],
@@ -319,7 +319,7 @@ def _node(el, kind: str, name: str, file: str | None, fields: dict[str, str],
 
 def model_to_graph(m: ProjectModel) -> GraphDict:
     """The model as the viewer's GraphDict, the shape `gen_viewer.write_html` renders. A
-    component's drill file prefers its canonical `anchor` and falls back to its `entry_point`,
+    component's drill file prefers its canonical `source` and falls back to its `entry_point`,
     then a link found in its free-text fields."""
     nodes: dict[str, Node] = {}
     subsystem_names = {s.id: s.name for s in m.subsystems}
@@ -330,9 +330,9 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                              "Trigger → Outcome": u.trigger_outcome}, None)
     for s in m.subsystems:
         parent_name = subsystem_names.get(s.parent, s.parent) if s.parent else ""
-        nodes[s.id] = _node(s, "subsystem", s.name, _first_href(s.anchor),
+        nodes[s.id] = _node(s, "subsystem", s.name, _first_href(s.source),
                             {"Subsystem": s.name, "Purpose": s.purpose, "Parent": parent_name,
-                             "Anchor": s.anchor or "", "Conf.": s.confidence}, s.parent)
+                             "Source": s.source or "", "Conf.": s.confidence}, s.parent)
     for c in m.components:
         subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""
         fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
@@ -340,9 +340,9 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                   "Conf.": c.confidence, "Files": _files_str(c.files),
                   "Evidence": _evidence_str(c.evidence),
                   **{k: _extra_str(v) for k, v in c.extra.items()}}
-        # `anchor` is the v2 canonical home; `entry_point` (also bare) is the next best single
+        # `source` is the v2 canonical home; `entry_point` (also bare) is the next best single
         # location; only then fall back to hunting a markdown link in the free-text cells.
-        href = c.anchor or c.entry_point or _first_href(c.purpose, c.depends_on)
+        href = c.source or c.entry_point or _first_href(c.purpose, c.depends_on)
         nodes[c.id] = _node(c, "component", c.name, href, fields, c.subsystem)
     for d in m.deps:
         fields = {"Name": d.name, "Kind": d.kind or "", "Type": d.type, "Used for": d.used_for,
@@ -355,9 +355,9 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         nodes[d.id] = node
     for sd in m.subdomains:
         parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""
-        nodes[sd.id] = _node(sd, "subdomain", sd.name, _first_href(sd.anchor),
+        nodes[sd.id] = _node(sd, "subdomain", sd.name, _first_href(sd.source),
                              {"Subdomain": sd.name, "Purpose": sd.purpose,
-                              "Parent": parent_name, "Anchor": sd.anchor or "",
+                              "Parent": parent_name, "Source": sd.source or "",
                               "Conf.": sd.confidence}, sd.parent)
     for e in m.entities:
         meta: dict[str, str] = {}
@@ -414,6 +414,6 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         "flows": [asdict(f) for f in flows],
         "roles": [{"name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind)}
                   for r in m.roles],
-        "glossary": [{"term": g.term, "meaning": g.meaning, "where": g.where or ""}
+        "glossary": [{"term": g.term, "meaning": g.meaning, "source": g.source or ""}
                      for g in m.glossary],
     }

@@ -47,7 +47,7 @@ def make_small_model() -> ProjectModel:
     """A minimal model exercising one field of each kind, for the render-CLI smoke test."""
     m = ProjectModel(title="Tiny", goal="A tiny demo.")
     m.components = [Component(id="C1", name="Viewer", subsystem=None, purpose="shows orders",
-                              entry_point="src/v.py:1", depends_on="", anchor=None,
+                              entry_point="src/v.py:1", depends_on="", source=None,
                               confidence="")]
     m.entities = [Entity(id="E1", name="Order", store="orders", meaning="a customer order",
                          source="src/order.py:1",
@@ -93,17 +93,17 @@ def test_golden_graph_carries_every_defined_element():
 
 
 def test_glossary_where_renders_as_link_and_reaches_graph():
-    """The bare `where` anchor becomes a clickable basename link in the md view, and the glossary
-    (with `where` preserved, "" for a null home) rides into the graph the Glossary tab reads."""
+    """The bare `source` anchor becomes a clickable basename link in the md view, and the glossary
+    (with `source` preserved, "" for a null home) rides into the graph the Glossary tab reads."""
     m = ProjectModel(title="Tiny", goal="A tiny demo.")
-    m.glossary = [GlossaryRow(term="Order", meaning="a customer order", where="src/order.py:12"),
-                  GlossaryRow(term="Brand", meaning="the product itself", where=None)]
+    m.glossary = [GlossaryRow(term="Order", meaning="a customer order", source="src/order.py:12"),
+                  GlossaryRow(term="Brand", meaning="the product itself", source=None)]
     md = model_to_markdown(m)
     assert "| **Order** | a customer order | [order.py](src/order.py:12) |" in md
     assert "| **Brand** | the product itself |  |" in md  # null home -> empty cell, no broken link
     g = model_to_graph(m)
-    assert g["glossary"] == [{"term": "Order", "meaning": "a customer order", "where": "src/order.py:12"},
-                             {"term": "Brand", "meaning": "the product itself", "where": ""}]
+    assert g["glossary"] == [{"term": "Order", "meaning": "a customer order", "source": "src/order.py:12"},
+                             {"term": "Brand", "meaning": "the product itself", "source": ""}]
 
 
 def test_graph_line_parses_colon_range_and_legacy_hash_anchors():

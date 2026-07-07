@@ -41,122 +41,122 @@
     {
       "term": "MCP Hero",
       "meaning": "User-facing brand for the gateway product",
-      "where": "README.md:10"
+      "source": "README.md:10"
     },
     {
       "term": "mcpolis",
       "meaning": "Internal codename for every technical artifact (modules, DBs, env vars)",
-      "where": "CLAUDE.md"
+      "source": "CLAUDE.md"
     },
     {
       "term": "Organization (org)",
       "meaning": "A tenant — the top-level isolation boundary everything is scoped to",
-      "where": "backend/src/mcpolis/domain/ports/organization_repository.py:41"
+      "source": "backend/src/mcpolis/domain/ports/organization_repository.py:41"
     },
     {
       "term": "Upstream MCP",
       "meaning": "A backend MCP server added to the gateway whose tools are proxied",
-      "where": "backend/src/mcpolis/domain/model/upstream.py:84"
+      "source": "backend/src/mcpolis/domain/model/upstream.py:84"
     },
     {
       "term": "Remote HTTP MCP",
       "meaning": "Upstream reached at a URL (streamable-http transport)",
-      "where": "backend/src/mcpolis/domain/model/upstream.py:79"
+      "source": "backend/src/mcpolis/domain/model/upstream.py:79"
     },
     {
       "term": "Hosted stdio MCP",
       "meaning": "`command:`-style upstream the gateway runs in a sandbox",
-      "where": "backend/src/mcpolis/domain/model/upstream.py:45"
+      "source": "backend/src/mcpolis/domain/model/upstream.py:45"
     },
     {
       "term": "Gateway",
       "meaning": "The single MCP endpoint exposed to clients at `/mcp` or `/mcp/<slug>`",
-      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:281"
+      "source": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:281"
     },
     {
       "term": "Tool",
       "meaning": "An action an upstream exposes; surfaced through the gateway with a prefixed name",
-      "where": "backend/src/mcpolis/domain/model/upstream.py:161"
+      "source": "backend/src/mcpolis/domain/model/upstream.py:161"
     },
     {
       "term": "Tool category",
       "meaning": "readOnly / destructive / other annotation buckets used for role toggles",
-      "where": "backend/src/mcpolis/domain/services/policy_engine.py:61"
+      "source": "backend/src/mcpolis/domain/services/policy_engine.py:61"
     },
     {
       "term": "Role",
       "meaning": "Named permission set deciding which MCPs and tools a member may use",
-      "where": "backend/src/mcpolis/domain/model/settings.py:47"
+      "source": "backend/src/mcpolis/domain/model/settings.py:47"
     },
     {
       "term": "Policy / argument check",
       "meaning": "Per-tool regex allow/forbid rule on argument values, enforced before forwarding",
-      "where": "backend/src/mcpolis/domain/model/settings.py:8"
+      "source": "backend/src/mcpolis/domain/model/settings.py:8"
     },
     {
       "term": "Auth mode",
       "meaning": "How an upstream authenticates: service-account, admin OAuth, or per-user OAuth",
-      "where": "backend/src/mcpolis/domain/model/policy.py:8"
+      "source": "backend/src/mcpolis/domain/model/policy.py:8"
     },
     {
       "term": "Per-user OAuth",
       "meaning": "Each member signs in to the upstream as themselves; tokens stored encrypted",
-      "where": "backend/src/mcpolis/adapters/repositories/connection_store.py:9"
+      "source": "backend/src/mcpolis/adapters/repositories/connection_store.py:9"
     },
     {
       "term": "Service token",
       "meaning": "Revocable `svct_` bearer bound to one org and one role, for headless agents",
-      "where": "backend/src/mcpolis/domain/model/service_token.py:35"
+      "source": "backend/src/mcpolis/domain/model/service_token.py:35"
     },
     {
       "term": "Sandbox",
       "meaning": "Isolated environment that runs a stdio MCP command",
-      "where": "backend/src/mcpolis/domain/services/sandbox_service.py:277"
+      "source": "backend/src/mcpolis/domain/services/sandbox_service.py:277"
     },
     {
       "term": "E2B",
       "meaning": "Hosted sandbox provider (production default) for stdio MCPs",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123"
+      "source": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123"
     },
     {
       "term": "Template variable / password",
       "meaning": "Per-MCP `${NAME}` value (plain or secret) substituted at launch",
-      "where": "backend/src/mcpolis/domain/model/template_var.py:66"
+      "source": "backend/src/mcpolis/domain/model/template_var.py:66"
     },
     {
       "term": "Sandbox file",
       "meaning": "Per-MCP uploaded credential file written into the sandbox at session start",
-      "where": "backend/src/mcpolis/domain/model/sandbox_file.py:73"
+      "source": "backend/src/mcpolis/domain/model/sandbox_file.py:73"
     },
     {
       "term": "Admin MCP",
       "meaning": "A second MCP at `/admin-mcp` for managing MCP Hero itself conversationally",
-      "where": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99"
+      "source": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99"
     },
     {
       "term": "Superadmin / operator",
       "meaning": "Email-allowlisted operator with cross-org support access",
-      "where": "backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:19"
+      "source": "backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:19"
     },
     {
       "term": "Standalone vs cloud",
       "meaning": "Single-org file-backed mode vs multi-org Mongo/Redis SaaS",
-      "where": "backend/src/mcpolis/entrypoints/config.py:15"
+      "source": "backend/src/mcpolis/entrypoints/config.py:15"
     },
     {
       "term": "Plan / subscription",
       "meaning": "Per-org seat + feature limits (FREE vs TEAM)",
-      "where": "backend/src/mcpolis/domain/services/plan_policy.py:34"
+      "source": "backend/src/mcpolis/domain/services/plan_policy.py:34"
     },
     {
       "term": "Audit entry",
       "meaning": "A logged gateway action: who, what tool, policy decision, outcome, latency",
-      "where": "backend/src/mcpolis/domain/model/audit.py:8"
+      "source": "backend/src/mcpolis/domain/model/audit.py:8"
     },
     {
       "term": "Slug",
       "meaning": "URL-safe org name forming the gateway path `/mcp/<slug>`",
-      "where": "backend/src/mcpolis/entrypoints/middleware/org_context.py:84"
+      "source": "backend/src/mcpolis/entrypoints/middleware/org_context.py:84"
     }
   ],
   "use_cases": [
@@ -403,7 +403,7 @@
       "name": "App bootstrap & runtime wiring",
       "purpose": "Build the app, pick storage, assemble per-org runtimes, drain on shutdown",
       "parent": null,
-      "anchor": "[entrypoints/](backend/src/mcpolis/entrypoints/)",
+      "source": "[entrypoints/](backend/src/mcpolis/entrypoints/)",
       "confidence": "inferred"
     },
     {
@@ -411,7 +411,7 @@
       "name": "Gateway (MCP protocol surface)",
       "purpose": "Serve MCP clients at `/mcp`: list/call tools, route to upstreams, push changes",
       "parent": null,
-      "anchor": "[gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py)",
+      "source": "[gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py)",
       "confidence": "inferred"
     },
     {
@@ -419,7 +419,7 @@
       "name": "Management MCP (admin & superadmin)",
       "purpose": "Conversational management of the gateway and of the whole instance",
       "parent": null,
-      "anchor": "[controllers/](backend/src/mcpolis/entrypoints/controllers/)",
+      "source": "[controllers/](backend/src/mcpolis/entrypoints/controllers/)",
       "confidence": "verified"
     },
     {
@@ -427,7 +427,7 @@
       "name": "Dashboard REST API",
       "purpose": "The `/api/*` surface the React dashboard calls",
       "parent": null,
-      "anchor": "[routes/](backend/src/mcpolis/entrypoints/routes/)",
+      "source": "[routes/](backend/src/mcpolis/entrypoints/routes/)",
       "confidence": "verified"
     },
     {
@@ -435,7 +435,7 @@
       "name": "Identity & access",
       "purpose": "Authenticate clients/admins, mint/verify tokens, enforce roles & plans",
       "parent": null,
-      "anchor": "[adapters/auth/](backend/src/mcpolis/adapters/auth/)",
+      "source": "[adapters/auth/](backend/src/mcpolis/adapters/auth/)",
       "confidence": "inferred"
     },
     {
@@ -443,7 +443,7 @@
       "name": "Gateway auth & service tokens",
       "purpose": "Bearer auth for `/mcp`: Google-backed OAuth + `svct_` service tokens",
       "parent": "S5",
-      "anchor": "[service_token_verifier.py](backend/src/mcpolis/adapters/auth/service_token_verifier.py)",
+      "source": "[service_token_verifier.py](backend/src/mcpolis/adapters/auth/service_token_verifier.py)",
       "confidence": "inferred"
     },
     {
@@ -451,7 +451,7 @@
       "name": "Policy, roles & plans",
       "purpose": "Role→tool authorization, settings resolution, plan-limit gates, secret scan",
       "parent": "S5",
-      "anchor": "[policy_engine.py](backend/src/mcpolis/domain/services/policy_engine.py)",
+      "source": "[policy_engine.py](backend/src/mcpolis/domain/services/policy_engine.py)",
       "confidence": "inferred"
     },
     {
@@ -459,7 +459,7 @@
       "name": "Dashboard sign-in & sessions",
       "purpose": "Browser Google login, session cookies, org-context resolution, revocation",
       "parent": "S5",
-      "anchor": "[dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py)",
+      "source": "[dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py)",
       "confidence": "inferred"
     },
     {
@@ -467,7 +467,7 @@
       "name": "Org & tenancy",
       "purpose": "Org/membership CRUD, creation seeding, deletion cascade",
       "parent": null,
-      "anchor": "[org_service.py](backend/src/mcpolis/domain/services/org_service.py)",
+      "source": "[org_service.py](backend/src/mcpolis/domain/services/org_service.py)",
       "confidence": "inferred"
     },
     {
@@ -475,7 +475,7 @@
       "name": "Upstream management",
       "purpose": "Define, persist, connect, and keep healthy the proxied upstream MCPs",
       "parent": null,
-      "anchor": "[upstream_clients/](backend/src/mcpolis/adapters/upstream_clients/)",
+      "source": "[upstream_clients/](backend/src/mcpolis/adapters/upstream_clients/)",
       "confidence": "inferred"
     },
     {
@@ -483,7 +483,7 @@
       "name": "Upstream config & catalog",
       "purpose": "Persist upstream defs + options, load/merge mcp.json, cache discovered tools",
       "parent": "S7",
-      "anchor": "[upstream_config_service.py](backend/src/mcpolis/domain/services/upstream_config_service.py)",
+      "source": "[upstream_config_service.py](backend/src/mcpolis/domain/services/upstream_config_service.py)",
       "confidence": "inferred"
     },
     {
@@ -491,7 +491,7 @@
       "name": "Upstream connections & clients",
       "purpose": "Long-lived MCP sessions: HTTP + stdio clients, the connection manager",
       "parent": "S7",
-      "anchor": "[client_manager.py](backend/src/mcpolis/adapters/upstream_clients/client_manager.py)",
+      "source": "[client_manager.py](backend/src/mcpolis/adapters/upstream_clients/client_manager.py)",
       "confidence": "verified"
     },
     {
@@ -499,7 +499,7 @@
       "name": "Upstream OAuth lifecycle",
       "purpose": "Token refresh, liveness probing, re-auth health email",
       "parent": "S7",
-      "anchor": "[oauth_refresh.py](backend/src/mcpolis/domain/services/oauth_refresh.py)",
+      "source": "[oauth_refresh.py](backend/src/mcpolis/domain/services/oauth_refresh.py)",
       "confidence": "inferred"
     },
     {
@@ -507,7 +507,7 @@
       "name": "Sandbox execution (stdio MCPs)",
       "purpose": "Run stdio MCPs in E2B / local sandboxes; files, variables, reconcile",
       "parent": null,
-      "anchor": "[sandbox_e2b/](backend/src/mcpolis/adapters/sandbox_e2b/)",
+      "source": "[sandbox_e2b/](backend/src/mcpolis/adapters/sandbox_e2b/)",
       "confidence": "verified"
     },
     {
@@ -515,7 +515,7 @@
       "name": "Persistence & storage",
       "purpose": "The cross-cutting storage machinery: Mongo client, field encryption, audit, migrations",
       "parent": null,
-      "anchor": "[repositories/](backend/src/mcpolis/adapters/repositories/)",
+      "source": "[repositories/](backend/src/mcpolis/adapters/repositories/)",
       "confidence": "inferred"
     },
     {
@@ -523,7 +523,7 @@
       "name": "Realtime & infra adapters",
       "purpose": "Pub/sub event stream, rate limiter, distributed lock",
       "parent": null,
-      "anchor": "[adapters/](backend/src/mcpolis/adapters/)",
+      "source": "[adapters/](backend/src/mcpolis/adapters/)",
       "confidence": "inferred"
     },
     {
@@ -531,7 +531,7 @@
       "name": "Observability & email",
       "purpose": "Structured logs, Sentry, Mixpanel, transactional email",
       "parent": null,
-      "anchor": "[observability/](backend/src/mcpolis/adapters/observability/)",
+      "source": "[observability/](backend/src/mcpolis/adapters/observability/)",
       "confidence": "verified"
     },
     {
@@ -539,7 +539,7 @@
       "name": "Dashboard SPA (frontend)",
       "purpose": "The React admin + marketing + docs single-page app",
       "parent": null,
-      "anchor": "[frontend/src/](frontend/src/)",
+      "source": "[frontend/src/](frontend/src/)",
       "confidence": "verified"
     },
     {
@@ -547,7 +547,7 @@
       "name": "Admin dashboard",
       "purpose": "Upstreams, roles/access, team, tokens, audit, gateway, variables, files",
       "parent": "S12",
-      "anchor": "[pages/admin/](frontend/src/pages/admin/)",
+      "source": "[pages/admin/](frontend/src/pages/admin/)",
       "confidence": "verified"
     },
     {
@@ -555,7 +555,7 @@
       "name": "User & onboarding surfaces",
       "purpose": "End-user connect / my-tools, join & signup, per-MCP OAuth popup",
       "parent": "S12",
-      "anchor": "[pages/user/](frontend/src/pages/user/)",
+      "source": "[pages/user/](frontend/src/pages/user/)",
       "confidence": "verified"
     },
     {
@@ -563,7 +563,7 @@
       "name": "Marketing & docs",
       "purpose": "Public landing/pricing/legal pages + the docs renderer",
       "parent": "S12",
-      "anchor": "[pages/marketing/](frontend/src/pages/marketing/)",
+      "source": "[pages/marketing/](frontend/src/pages/marketing/)",
       "confidence": "verified"
     },
     {
@@ -571,7 +571,7 @@
       "name": "Superadmin console",
       "purpose": "Cross-org operator dashboard",
       "parent": "S12",
-      "anchor": "[pages/superadmin/](frontend/src/pages/superadmin/)",
+      "source": "[pages/superadmin/](frontend/src/pages/superadmin/)",
       "confidence": "verified"
     },
     {
@@ -579,7 +579,7 @@
       "name": "Shared SPA infrastructure",
       "purpose": "Router, API client, query hooks, auth context, UI kit, SSE",
       "parent": "S12",
-      "anchor": "[api/](frontend/src/api/)",
+      "source": "[api/](frontend/src/api/)",
       "confidence": "verified"
     }
   ],
@@ -591,7 +591,7 @@
       "purpose": "Builds the FastAPI app, mounts every sub-app, runs lifespan background loops",
       "entry_point": "backend/src/mcpolis/entrypoints/app.py:893",
       "depends_on": "C8 C21 C2 C3",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -604,7 +604,7 @@
       "purpose": "Wraps `/mcp` with bearer auth + org-pin + slug-aware metadata middleware",
       "entry_point": "backend/src/mcpolis/entrypoints/app.py:296",
       "depends_on": "C72 C5 C12 C111",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -617,7 +617,7 @@
       "purpose": "Wraps `/admin-mcp/{slug}` with per-org admin-role gate",
       "entry_point": "backend/src/mcpolis/entrypoints/app.py:452",
       "depends_on": "C72 C6 C23",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -630,7 +630,7 @@
       "purpose": "Wraps `/admin-mcp/system` with email-allowlist gate (cloud only)",
       "entry_point": "backend/src/mcpolis/entrypoints/app.py:602",
       "depends_on": "C72 C7",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -643,7 +643,7 @@
       "purpose": "Low-level MCP server: list/call tools, list/read resources, prompts",
       "entry_point": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:281",
       "depends_on": "C21 C24 C25 C45",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -656,7 +656,7 @@
       "purpose": "~40 admin tools: upstream CRUD/connect, users, roles, audit",
       "entry_point": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99",
       "depends_on": "C21 C26 C22 C33",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -669,7 +669,7 @@
       "purpose": "4 cross-org tools: list/get org, system status, delete org",
       "entry_point": "backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:19",
       "depends_on": "C22 C55",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -682,7 +682,7 @@
       "purpose": "Picks file (standalone) vs Mongo/Redis (cloud) repos; builds StorageBundle",
       "entry_point": "backend/src/mcpolis/entrypoints/storage_factory.py:180",
       "depends_on": "C49 C108 C109 C107",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -695,7 +695,7 @@
       "purpose": "Graceful SIGTERM drain; drives `/healthz` 503 while draining",
       "entry_point": "backend/src/mcpolis/entrypoints/lifecycle.py:24",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -708,7 +708,7 @@
       "purpose": "Per-request protected-resource metadata + `WWW-Authenticate` from org slug",
       "entry_point": "backend/src/mcpolis/entrypoints/slug_aware_oauth.py:44",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -721,7 +721,7 @@
       "purpose": "Resolves `/mcp/{slug}` → org_id, rewrites path, anti-enumeration 401",
       "entry_point": "backend/src/mcpolis/entrypoints/middleware/org_context.py:111",
       "depends_on": "C55 C21",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -734,7 +734,7 @@
       "purpose": "Pins `svct_` bearers to their org; slug mismatch 401s, fails closed",
       "entry_point": "backend/src/mcpolis/entrypoints/middleware/service_token_pin.py:39",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -747,7 +747,7 @@
       "purpose": "Per-category limiter returning 429; present but not installed today",
       "entry_point": "backend/src/mcpolis/entrypoints/middleware/rate_limit_middleware.py:123",
       "depends_on": "C109",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -760,7 +760,7 @@
       "purpose": "Composes 14 per-concern `/api/*` routers (upstreams, roles, users, audit…)",
       "entry_point": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
       "depends_on": "C21 C26 C22 C41",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -773,7 +773,7 @@
       "purpose": "Browser login/logout/callback; HMAC session cookie; require_admin",
       "entry_point": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217",
       "depends_on": "C101 C110",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -786,7 +786,7 @@
       "purpose": "Public callback completing the gateway bearer Google flow",
       "entry_point": "backend/src/mcpolis/entrypoints/routes/google_callback.py:56",
       "depends_on": "C72",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -799,7 +799,7 @@
       "purpose": "`/api/orgs` create/list/switch/info/delete + one public invite read",
       "entry_point": "backend/src/mcpolis/entrypoints/routes/org_routes.py:82",
       "depends_on": "C22",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -812,7 +812,7 @@
       "purpose": "Public callback completing per-MCP upstream OAuth via signed state",
       "entry_point": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:182",
       "depends_on": "C100 C27",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -825,7 +825,7 @@
       "purpose": "Sandbox caps, observability smoke (404-masked), client-errors, superadmin API",
       "entry_point": "backend/src/mcpolis/entrypoints/routes/sandbox_routes.py:80",
       "depends_on": "C37 C62",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -838,7 +838,7 @@
       "purpose": "Bundled \"kitchen sink\" FastMCP at `/dev/mcp-demo` with 5 widget kinds",
       "entry_point": "backend/src/mcpolis/dev/demo_mcp_server.py:512",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -851,7 +851,7 @@
       "purpose": "Per-org runtime lifecycle: build/cache policy_engine, registry, clients, router",
       "entry_point": "backend/src/mcpolis/domain/services/org_runtime.py:100",
       "depends_on": "C23 C24 C25 C64",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -864,7 +864,7 @@
       "purpose": "Org/membership CRUD, creation seeding, org-deletion cascade",
       "entry_point": "backend/src/mcpolis/domain/services/org_service.py:113",
       "depends_on": "C55 C54 C57 C62",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -877,7 +877,7 @@
       "purpose": "Role→tool authorization, argument checks, is_admin",
       "entry_point": "backend/src/mcpolis/domain/services/policy_engine.py:61",
       "depends_on": "C42 C54",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -890,7 +890,7 @@
       "purpose": "Per-upstream tool/resource/prompt discovery + cache; prefixed wire tools",
       "entry_point": "backend/src/mcpolis/domain/services/tool_registry.py:103",
       "depends_on": "C64 C61",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -903,7 +903,7 @@
       "purpose": "Route a gateway call to the right upstream session with heal+retry+audit",
       "entry_point": "backend/src/mcpolis/domain/services/tool_router.py:256",
       "depends_on": "C23 C64 C62 C104",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -916,7 +916,7 @@
       "purpose": "Upstream CRUD with side effects; secret-scan on save; cascade purge",
       "entry_point": "backend/src/mcpolis/domain/services/upstream_config_service.py:28",
       "depends_on": "C53 C40 C64 C24",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -929,7 +929,7 @@
       "purpose": "OAuth connect/reconnect/heal of live upstream sessions",
       "entry_point": "backend/src/mcpolis/domain/services/upstream_connection_service.py:735",
       "depends_on": "C64 C47 C28 C100",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -942,7 +942,7 @@
       "purpose": "Background near-expiry token refresh; delete + notify on invalid_grant",
       "entry_point": "backend/src/mcpolis/domain/services/oauth_refresh.py:105",
       "depends_on": "C47 C107 C103",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -955,7 +955,7 @@
       "purpose": "Periodic `list_tools` probe of live sessions; feed dead ones to reconnect",
       "entry_point": "backend/src/mcpolis/domain/services/oauth_liveness.py:76",
       "depends_on": "C64 C27",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -968,7 +968,7 @@
       "purpose": "Send signed re-auth email for tokens flagged invalid_grant",
       "entry_point": "backend/src/mcpolis/domain/services/upstream_health_check.py:173",
       "depends_on": "C47 C103",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -981,7 +981,7 @@
       "purpose": "SHA-256 fingerprint of runtime inputs → dashboard \"dirty / restart\" banner",
       "entry_point": "backend/src/mcpolis/domain/services/upstream_runtime_hash.py:108",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -994,7 +994,7 @@
       "purpose": "Match an upstream URL host to configured instance OAuth app credentials",
       "entry_point": "backend/src/mcpolis/domain/services/oauth_app_resolver.py:9",
       "depends_on": "C52",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1007,7 +1007,7 @@
       "purpose": "Assert plan limits (seats, upstreams, roles); raise 402 + analytics event",
       "entry_point": "backend/src/mcpolis/domain/services/plan_gates.py:93",
       "depends_on": "C34 C104",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1020,7 +1020,7 @@
       "purpose": "Source of truth for per-plan limits + PlanLimitExceeded",
       "entry_point": "backend/src/mcpolis/domain/services/plan_policy.py:34",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1033,7 +1033,7 @@
       "purpose": "Debounced push of `tools/list_changed` to affected gateway sessions",
       "entry_point": "backend/src/mcpolis/domain/services/policy_notifier.py:43",
       "depends_on": "C111 C24",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1046,7 +1046,7 @@
       "purpose": "The Protocol every stdio sandbox backend implements + shared value types",
       "entry_point": "backend/src/mcpolis/domain/services/sandbox_service.py:277",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1059,7 +1059,7 @@
       "purpose": "Decide which sandbox provider an org's stdio session uses",
       "entry_point": "backend/src/mcpolis/domain/services/sandbox_resolver.py:18",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1072,7 +1072,7 @@
       "purpose": "Reconcile live vs persisted sandboxes; orphan-kill + snapshot GC policy",
       "entry_point": "backend/src/mcpolis/domain/services/sandbox_reconciler.py:58",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1085,7 +1085,7 @@
       "purpose": "Confine a materialize-file path to the sandbox home (reject traversal)",
       "entry_point": "backend/src/mcpolis/domain/services/sandbox_path.py:27",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1098,7 +1098,7 @@
       "purpose": "Heuristic raw-credential detection in upstream env/headers at save time",
       "entry_point": "backend/src/mcpolis/domain/services/secret_scanner.py:119",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1111,7 +1111,7 @@
       "purpose": "Service-token lifecycle: mint / list / revoke / verify",
       "entry_point": "backend/src/mcpolis/domain/services/service_token_service.py:42",
       "depends_on": "C57",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1124,7 +1124,7 @@
       "purpose": "Resolve effective MCP/tool access for a user or role, failing closed",
       "entry_point": "backend/src/mcpolis/domain/services/settings_resolver.py:33",
       "depends_on": "C54",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1137,7 +1137,7 @@
       "purpose": "Bounded newline-framing of a sandboxed MCP's stdout into JSON-RPC lines",
       "entry_point": "backend/src/mcpolis/domain/services/stdout_framing.py:26",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1150,7 +1150,7 @@
       "purpose": "`${NAME}` substitution into command/args/env/url/headers at launch",
       "entry_point": "backend/src/mcpolis/domain/services/template_var_substitution.py:64",
       "depends_on": "C58",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1163,7 +1163,7 @@
       "purpose": "Wrap/unwrap upstream resource & widget URIs; SSRF deny-list on URLs",
       "entry_point": "backend/src/mcpolis/domain/services/uri_wrapping.py:129",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1176,7 +1176,7 @@
       "purpose": "Abstract port for stored upstream tokens + connection state; OAuthToken type",
       "entry_point": "backend/src/mcpolis/adapters/repositories/connection_store.py:27",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1189,7 +1189,7 @@
       "purpose": "Stored-token store; mongo encrypts access/refresh tokens",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_connection_store.py:73",
       "depends_on": "C46 C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1202,7 +1202,7 @@
       "purpose": "HKDF-derive key; encrypt/decrypt field values with `enc:v1:` prefix",
       "entry_point": "backend/src/mcpolis/adapters/repositories/encryption.py:54",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1215,7 +1215,7 @@
       "purpose": "The sole class touching a raw collection; injects org_id, transparent crypto",
       "entry_point": "backend/src/mcpolis/adapters/repositories/mongo_client.py:110",
       "depends_on": "C48",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1228,7 +1228,7 @@
       "purpose": "Read/write upstreams in standard mcpServers JSON (file, single-org)",
       "entry_point": "backend/src/mcpolis/adapters/repositories/mcp_json_store.py:23",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1241,7 +1241,7 @@
       "purpose": "Merge mcp.json + options into UpstreamDefinitions; flatten import blobs",
       "entry_point": "backend/src/mcpolis/adapters/repositories/upstream_config_loader.py:169",
       "depends_on": "C52",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1254,7 +1254,7 @@
       "purpose": "Load instance OAuth app credentials from env JSON or file",
       "entry_point": "backend/src/mcpolis/adapters/repositories/oauth_apps_loader.py:29",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1267,7 +1267,7 @@
       "purpose": "Persist UpstreamDefinitions; mongo encrypts config/options blobs",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_upstream_config_store.py:24",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1280,7 +1280,7 @@
       "purpose": "Persist roles, users, options (one settings doc per org)",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_config_store.py:20",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1293,7 +1293,7 @@
       "purpose": "Persist orgs + memberships; mongo enforces unique slug",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_organization_repository.py:32",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1306,7 +1306,7 @@
       "purpose": "Persist gateway OAuth provider state (clients, tokens) per org",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_oauth_state_repository.py:32",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1319,7 +1319,7 @@
       "purpose": "Persist `svct_` registry (sha256 hash + org/label/role)",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_service_token_repository.py:71",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1332,7 +1332,7 @@
       "purpose": "Persist per-MCP variables/secrets; mongo encrypts the value",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_template_var_repository.py:45",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1345,7 +1345,7 @@
       "purpose": "Persist per-MCP uploaded files; mongo encrypts contents",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_sandbox_file_repository.py:53",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1358,7 +1358,7 @@
       "purpose": "Track current sandbox / paused-snapshot ref per (org,upstream)",
       "entry_point": "backend/src/mcpolis/adapters/repositories/mongo_sandbox_persistence_repository.py:46",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1371,7 +1371,7 @@
       "purpose": "Persist discovered tool catalog so the UI survives restarts",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_tool_catalog_store.py:18",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1384,7 +1384,7 @@
       "purpose": "Append-only audit log + search; mongo TTL by retention days",
       "entry_point": "backend/src/mcpolis/adapters/repositories/file_audit_repository.py:22",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1397,7 +1397,7 @@
       "purpose": "Irreversible at-rest migrations (encrypt upstreams; normalize sandbox refs)",
       "entry_point": "backend/src/mcpolis/adapters/repositories/migrations/upstreams_encrypt_phase_a.py:211",
       "depends_on": "C49",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1410,7 +1410,7 @@
       "purpose": "Owns all long-lived MCP sessions; state machine, stall-heal, idle sweep",
       "entry_point": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103",
       "depends_on": "C65 C66 C67 C44",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1423,7 +1423,7 @@
       "purpose": "One streamable-http MCP connection over an SSRF-safe transport",
       "entry_point": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:36",
       "depends_on": "C67 C45",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1436,7 +1436,7 @@
       "purpose": "One stdio MCP session over the SandboxService boundary",
       "entry_point": "backend/src/mcpolis/adapters/upstream_clients/stdio_adapter.py:178",
       "depends_on": "C36 C43",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1449,7 +1449,7 @@
       "purpose": "Shared task lifecycle; re-validating httpx transport; redacting stderr buffers",
       "entry_point": "backend/src/mcpolis/adapters/upstream_clients/connection_task_base.py:57",
       "depends_on": "C45",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1462,7 +1462,7 @@
       "purpose": "Prod SandboxService over E2B: session/pause/resume, volumes, docker daemon",
       "entry_point": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123",
       "depends_on": "C36 C70 C60",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1475,7 +1475,7 @@
       "purpose": "Startup sweep killing orphan sandboxes / GC unknown snapshots",
       "entry_point": "backend/src/mcpolis/adapters/sandbox_e2b/reconciler.py:34",
       "depends_on": "C60 C38",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1488,7 +1488,7 @@
       "purpose": "The 24-template grid (node/python/docker × 8 CPU/RAM) + capabilities",
       "entry_point": "backend/src/mcpolis/adapters/sandbox_e2b/template_grid.py:35",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1501,7 +1501,7 @@
       "purpose": "Dev-only no-isolation SandboxService spawning a host subprocess",
       "entry_point": "backend/src/mcpolis/adapters/sandbox_services/local_subprocess.py:64",
       "depends_on": "C36",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1514,7 +1514,7 @@
       "purpose": "Issue gateway bearers via Google; route `svct_` to the token verifier",
       "entry_point": "backend/src/mcpolis/adapters/auth/mcp_gateway_oauth_provider.py:76",
       "depends_on": "C41 C56",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1527,7 +1527,7 @@
       "purpose": "Route table, QueryClient, AuthContext; DefaultRedirect resolves `/app` per role",
       "entry_point": "frontend/src/App.tsx:127",
       "depends_on": "C74 C76",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1540,7 +1540,7 @@
       "purpose": "`apiFetch` with cookie auth + X-Org-Slug; ApiError/PlanLimitError typing",
       "entry_point": "frontend/src/api/client.ts:70",
       "depends_on": "C14 C15 C17",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1553,7 +1553,7 @@
       "purpose": "`useUpstreams` / `useFeatures` / `useOrgSlug` org-scoped caches",
       "entry_point": "frontend/src/hooks/useUpstreams.ts:6",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1566,7 +1566,7 @@
       "purpose": "Loads `/api/auth/me`, holds user, wires Sentry + analytics, 401 handler",
       "entry_point": "frontend/src/hooks/useAuth.ts:33",
       "depends_on": "C74 C99",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1579,7 +1579,7 @@
       "purpose": "Add HTTP/stdio MCP, sandbox sizing, import, live status via SSE",
       "entry_point": "frontend/src/pages/admin/UpstreamsPage.tsx:1",
       "depends_on": "C75 C98 C97",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1592,7 +1592,7 @@
       "purpose": "Single-MCP edit; inline log stream over SSE; variables & files managers",
       "entry_point": "frontend/src/pages/admin/UpstreamDetailPage.tsx:1",
       "depends_on": "C74 C84 C85",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1605,7 +1605,7 @@
       "purpose": "Per-role MCP access, 3-state tool toggles, category defaults, argument checks",
       "entry_point": "frontend/src/pages/admin/AccessPage.tsx:1",
       "depends_on": "C80 C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1618,7 +1618,7 @@
       "purpose": "Shared access table reused by Access + User pages",
       "entry_point": "frontend/src/components/admin/McpAccessTable.tsx:14",
       "depends_on": "C92",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1631,7 +1631,7 @@
       "purpose": "List/add members, assign role, invite link, remove; per-user detail",
       "entry_point": "frontend/src/pages/admin/UsersPage.tsx:1",
       "depends_on": "C74 C80 C93",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1644,7 +1644,7 @@
       "purpose": "Mint/revoke `svct_` tokens scoped to one org+role; value shown once",
       "entry_point": "frontend/src/pages/admin/ServiceTokensPage.tsx:1",
       "depends_on": "C74 C93",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1657,7 +1657,7 @@
       "purpose": "Filterable audit table with live SSE tail",
       "entry_point": "frontend/src/pages/admin/AuditPage.tsx:1",
       "depends_on": "C74 C97",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1670,7 +1670,7 @@
       "purpose": "Per-MCP variable/password editor with write-time redaction",
       "entry_point": "frontend/src/components/TemplateVarsManager.tsx:1",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1683,7 +1683,7 @@
       "purpose": "Per-MCP file editor; system-variable hints",
       "entry_point": "frontend/src/components/SandboxFilesManager.tsx:1",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1696,7 +1696,7 @@
       "purpose": "Header dropdown switching active org; slug drives scoped queries",
       "entry_point": "frontend/src/components/layout/OrgSwitcher.tsx:1",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1709,7 +1709,7 @@
       "purpose": "Shows `/mcp` URL + config snippet, connected users, admin disconnect",
       "entry_point": "frontend/src/pages/admin/GatewayPage.tsx:1",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1722,7 +1722,7 @@
       "purpose": "Public landing/pricing/legal pages under a buyer-shaped shell",
       "entry_point": "frontend/src/components/layout/MarketingLayout.tsx:1",
       "depends_on": "C73",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1735,7 +1735,7 @@
       "purpose": "`/docs/:slug` renders user docs with a curated sidebar + hash anchors",
       "entry_point": "frontend/src/pages/marketing/DocsPage.tsx:1",
       "depends_on": "C73",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1748,7 +1748,7 @@
       "purpose": "Invite landing, org-creation signup, per-MCP OAuth popup",
       "entry_point": "frontend/src/pages/JoinPage.tsx:1",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1761,7 +1761,7 @@
       "purpose": "End-user gateway setup + per-MCP connect/disconnect",
       "entry_point": "frontend/src/pages/user/ConnectPage.tsx:1",
       "depends_on": "C74 C97",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1774,7 +1774,7 @@
       "purpose": "base-ui/tailwind primitives: button, table, toggles, id-input",
       "entry_point": "frontend/src/components/ui/button.tsx:1",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1787,7 +1787,7 @@
       "purpose": "Confirm/Import/Promo/Secret/Upgrade dialogs; status/role badges; dirty banner",
       "entry_point": "frontend/src/components/ConfirmDialog.tsx:1",
       "depends_on": "C92",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1800,7 +1800,7 @@
       "purpose": "Auth-gated layout + role-aware sidebar nav",
       "entry_point": "frontend/src/components/layout/DashboardLayout.tsx:15",
       "depends_on": "C76 C86",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1813,7 +1813,7 @@
       "purpose": "Read-only listing of the `/admin-mcp` tool catalog",
       "entry_point": "frontend/src/pages/admin/AdminMcpPage.tsx:1",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1826,7 +1826,7 @@
       "purpose": "Cross-org browse + soft actions, gated by SuperadminGuard",
       "entry_point": "frontend/src/pages/superadmin/OverviewPage.tsx:1",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1839,7 +1839,7 @@
       "purpose": "`useEventSource` to `/api/events` backing live status / audit / connect",
       "entry_point": "frontend/src/hooks/useEventSource.ts:11",
       "depends_on": "C14",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1852,7 +1852,7 @@
       "purpose": "Action buttons, capacity pills, sandbox select, JSON editor, tool table",
       "entry_point": "frontend/src/components/UpstreamActionButtons.tsx:1",
       "depends_on": "C74",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1865,7 +1865,7 @@
       "purpose": "Mixpanel, Sentry, client-error reporter, plan-limit upgrade opener, i18n",
       "entry_point": "frontend/src/lib/analytics.ts:1",
       "depends_on": "D8 D7",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1878,7 +1878,7 @@
       "purpose": "Coordinate the upstream OAuth callback dance via signed HMAC state",
       "entry_point": "backend/src/mcpolis/adapters/auth/pending_auth.py:169",
       "depends_on": "C27",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1891,7 +1891,7 @@
       "purpose": "Sign admins into the dashboard via Google (httpx); dev email-picker stub",
       "entry_point": "backend/src/mcpolis/adapters/auth/google_oauth_provider.py:25",
       "depends_on": "D4",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1904,7 +1904,7 @@
       "purpose": "Implement the mcp SDK TokenStorage port over ConnectionStore",
       "entry_point": "backend/src/mcpolis/adapters/auth/mcp_token_storage.py:23",
       "depends_on": "C46",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1917,7 +1917,7 @@
       "purpose": "Outbound mail via aiosmtplib; stub records without sending",
       "entry_point": "backend/src/mcpolis/adapters/email/smtp_email_sender.py:39",
       "depends_on": "D6",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1930,7 +1930,7 @@
       "purpose": "Fire-and-forget product analytics with hashed emails",
       "entry_point": "backend/src/mcpolis/adapters/observability/analytics_client.py:25",
       "depends_on": "D8",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1943,7 +1943,7 @@
       "purpose": "Init Sentry with user/org enrichment + header scrubbing",
       "entry_point": "backend/src/mcpolis/adapters/observability/sentry_setup.py:158",
       "depends_on": "D7",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1956,7 +1956,7 @@
       "purpose": "Configure one JSON log stream; mask secret-shaped keys",
       "entry_point": "backend/src/mcpolis/adapters/observability/structlog_setup.py:46",
       "depends_on": "D20",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1969,7 +1969,7 @@
       "purpose": "Cross-process lock for cloud token refresh; noop for standalone",
       "entry_point": "backend/src/mcpolis/adapters/distributed_lock_mongo.py:25",
       "depends_on": "D1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1982,7 +1982,7 @@
       "purpose": "SSE pub/sub: asyncio queues (standalone) vs Redis channels (cloud)",
       "entry_point": "backend/src/mcpolis/adapters/event_stream_redis.py:73",
       "depends_on": "D2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -1995,7 +1995,7 @@
       "purpose": "Sliding-window limiter: deque vs Redis ZSET+Lua; fails open",
       "entry_point": "backend/src/mcpolis/adapters/rate_limiter_redis.py:88",
       "depends_on": "D2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -2008,7 +2008,7 @@
       "purpose": "Logged-out-cookie deny-list keyed by jti; fails open",
       "entry_point": "backend/src/mcpolis/adapters/session_revocation_redis.py:37",
       "depends_on": "D2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -2021,7 +2021,7 @@
       "purpose": "In-process map of gateway session_id → (org,user)",
       "entry_point": "backend/src/mcpolis/adapters/gateway_session_registry.py:14",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "files": [],
       "evidence": [],
@@ -2414,127 +2414,127 @@
     {
       "kind": "Process boot",
       "trigger": "`uvicorn.run(create_app(settings))`",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:2246",
+      "source": "backend/src/mcpolis/entrypoints/app.py:2246",
       "component": "C1"
     },
     {
       "kind": "Mounted ASGI",
       "trigger": "`/mcp` — gateway MCP (bearer)",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:2068",
+      "source": "backend/src/mcpolis/entrypoints/app.py:2068",
       "component": "C2"
     },
     {
       "kind": "Mounted ASGI",
       "trigger": "`/admin-mcp/{slug}` — admin MCP (per-org admin)",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:2100",
+      "source": "backend/src/mcpolis/entrypoints/app.py:2100",
       "component": "C3"
     },
     {
       "kind": "Mounted ASGI",
       "trigger": "`/admin-mcp/system` — superadmin MCP (allowlist)",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:2093",
+      "source": "backend/src/mcpolis/entrypoints/app.py:2093",
       "component": "C4"
     },
     {
       "kind": "Mounted ASGI",
       "trigger": "`/dev/mcp-demo` — demo MCP",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:2114",
+      "source": "backend/src/mcpolis/entrypoints/app.py:2114",
       "component": "C20"
     },
     {
       "kind": "MCP method",
       "trigger": "list/call tools, list/read resources, prompts",
-      "entity": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:399",
+      "source": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:399",
       "component": "C5"
     },
     {
       "kind": "MCP tool surface",
       "trigger": "~40 admin tools",
-      "entity": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:231",
+      "source": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:231",
       "component": "C6"
     },
     {
       "kind": "HTTP route group",
       "trigger": "Dashboard REST `/api/admin/*`, `/api/user/*`, `/api/config/*`, `/api/events`",
-      "entity": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
+      "source": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
       "component": "C14"
     },
     {
       "kind": "HTTP route group",
       "trigger": "Dashboard auth `/api/auth/*` (session cookie)",
-      "entity": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217",
+      "source": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217",
       "component": "C15"
     },
     {
       "kind": "HTTP route group",
       "trigger": "Org routes `/api/orgs/*` (+ `/{slug}/public`)",
-      "entity": "backend/src/mcpolis/entrypoints/routes/org_routes.py:82",
+      "source": "backend/src/mcpolis/entrypoints/routes/org_routes.py:82",
       "component": "C17"
     },
     {
       "kind": "HTTP route",
       "trigger": "Gateway Google OAuth callback",
-      "entity": "backend/src/mcpolis/entrypoints/routes/google_callback.py:56",
+      "source": "backend/src/mcpolis/entrypoints/routes/google_callback.py:56",
       "component": "C16"
     },
     {
       "kind": "HTTP route",
       "trigger": "Upstream OAuth callback",
-      "entity": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:182",
+      "source": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:182",
       "component": "C18"
     },
     {
       "kind": "HTTP route",
       "trigger": "Liveness `/health` / `/healthz` (503 draining)",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:1727",
+      "source": "backend/src/mcpolis/entrypoints/app.py:1727",
       "component": "C9"
     },
     {
       "kind": "Background loop",
       "trigger": "Connect all org runtimes + seed demo at boot",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:1129",
+      "source": "backend/src/mcpolis/entrypoints/app.py:1129",
       "component": "C1"
     },
     {
       "kind": "Background loop",
       "trigger": "Periodic upstream OAuth token refresh",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:1284",
+      "source": "backend/src/mcpolis/entrypoints/app.py:1284",
       "component": "C28"
     },
     {
       "kind": "Background loop",
       "trigger": "Hourly OAuth liveness probe",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:1379",
+      "source": "backend/src/mcpolis/entrypoints/app.py:1379",
       "component": "C29"
     },
     {
       "kind": "Background loop",
       "trigger": "Hourly re-auth health-email sweep",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:1342",
+      "source": "backend/src/mcpolis/entrypoints/app.py:1342",
       "component": "C30"
     },
     {
       "kind": "Background loop",
       "trigger": "Per-org policy-event listener",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:1209",
+      "source": "backend/src/mcpolis/entrypoints/app.py:1209",
       "component": "C35"
     },
     {
       "kind": "Boot task",
       "trigger": "E2B orphan-sandbox reconcile before traffic",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:807",
+      "source": "backend/src/mcpolis/entrypoints/app.py:807",
       "component": "C69"
     },
     {
       "kind": "Signal",
       "trigger": "SIGTERM → graceful drain",
-      "entity": "backend/src/mcpolis/entrypoints/app.py:1517",
+      "source": "backend/src/mcpolis/entrypoints/app.py:1517",
       "component": "C9"
     },
     {
       "kind": "SPA route",
       "trigger": "`/`, `/docs/:slug`, `/orgs/:slug/admin/*`, `/superadmin/*`",
-      "entity": "frontend/src/App.tsx:136",
+      "source": "frontend/src/App.tsx:136",
       "component": "C73"
     }
   ],
@@ -2544,7 +2544,7 @@
       "name": "Tenancy & access policy",
       "purpose": "Orgs, memberships, plans, roles, and the per-tool access rules",
       "parent": null,
-      "anchor": "[settings.py](backend/src/mcpolis/domain/model/settings.py)",
+      "source": "[settings.py](backend/src/mcpolis/domain/model/settings.py)",
       "confidence": "verified"
     },
     {
@@ -2552,7 +2552,7 @@
       "name": "Upstream & transport",
       "purpose": "Upstream definitions, transports, and their auth configuration",
       "parent": null,
-      "anchor": "[upstream.py](backend/src/mcpolis/domain/model/upstream.py)",
+      "source": "[upstream.py](backend/src/mcpolis/domain/model/upstream.py)",
       "confidence": "verified"
     },
     {
@@ -2560,7 +2560,7 @@
       "name": "Credentials & secrets",
       "purpose": "Service tokens, stored OAuth tokens, variables, sandbox files",
       "parent": null,
-      "anchor": "[service_token.py](backend/src/mcpolis/domain/model/service_token.py)",
+      "source": "[service_token.py](backend/src/mcpolis/domain/model/service_token.py)",
       "confidence": "verified"
     },
     {
@@ -2568,7 +2568,7 @@
       "name": "Tool catalog",
       "purpose": "The discovered tools/resources/prompts cached per upstream",
       "parent": null,
-      "anchor": "[tool_catalog_repository.py](backend/src/mcpolis/domain/ports/tool_catalog_repository.py)",
+      "source": "[tool_catalog_repository.py](backend/src/mcpolis/domain/ports/tool_catalog_repository.py)",
       "confidence": "verified"
     },
     {
@@ -2576,7 +2576,7 @@
       "name": "Audit & events",
       "purpose": "The append-only audit log and the realtime event bus",
       "parent": null,
-      "anchor": "[audit.py](backend/src/mcpolis/domain/model/audit.py)",
+      "source": "[audit.py](backend/src/mcpolis/domain/model/audit.py)",
       "confidence": "verified"
     }
   ],
@@ -6592,61 +6592,61 @@
     {
       "surface": "`/mcp` gateway",
       "who": "Google bearer OR `svct_` service token",
-      "check": "[app.py](backend/src/mcpolis/entrypoints/app.py#L353)",
+      "source": "[app.py](backend/src/mcpolis/entrypoints/app.py#L353)",
       "risk": "Composite verifier routes svct_→registry, else→OAuth"
     },
     {
       "surface": "`/mcp` org scoping",
       "who": "user/token scoped to one org",
-      "check": "[org_context.py](backend/src/mcpolis/entrypoints/middleware/org_context.py#L267)",
+      "source": "[org_context.py](backend/src/mcpolis/entrypoints/middleware/org_context.py#L267)",
       "risk": "cross-org isolation via the slug→org contextvar"
     },
     {
       "surface": "service-token org pin",
       "who": "`svct_` holder, one pinned org",
-      "check": "[service_token_pin.py](backend/src/mcpolis/entrypoints/middleware/service_token_pin.py#L39)",
+      "source": "[service_token_pin.py](backend/src/mcpolis/entrypoints/middleware/service_token_pin.py#L39)",
       "risk": "slug mismatch 401s; fails closed if scope missing"
     },
     {
       "surface": "`/admin-mcp/{slug}`",
       "who": "OAuth user who is admin in that org",
-      "check": "[app.py](backend/src/mcpolis/entrypoints/app.py#L521)",
+      "source": "[app.py](backend/src/mcpolis/entrypoints/app.py#L521)",
       "risk": "per-org gate; service tokens structurally rejected"
     },
     {
       "surface": "`/admin-mcp/system`",
       "who": "email in superadmin allowlist",
-      "check": "[app.py](backend/src/mcpolis/entrypoints/app.py#L668)",
+      "source": "[app.py](backend/src/mcpolis/entrypoints/app.py#L668)",
       "risk": "cloud-only; allowlist is the sole gate"
     },
     {
       "surface": "dashboard `/api/*`",
       "who": "signed-in user (cookie); admin via require_admin",
-      "check": "[dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py#L284)",
+      "source": "[dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py#L284)",
       "risk": "HMAC cookie, 7-day TTL, optional jti revocation"
     },
     {
       "surface": "org anti-enumeration",
       "who": "unknown slug → 401 (not 404)",
-      "check": "[org_routes.py](backend/src/mcpolis/entrypoints/routes/org_routes.py#L100)",
+      "source": "[org_routes.py](backend/src/mcpolis/entrypoints/routes/org_routes.py#L100)",
       "risk": "one exception: `/{slug}/public` invite read"
     },
     {
       "surface": "upstream OAuth callback",
       "who": "public, HMAC-signed state",
-      "check": "[upstream_oauth_callback.py](backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py#L107)",
+      "source": "[upstream_oauth_callback.py](backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py#L107)",
       "risk": "integrity rests on the signed state"
     },
     {
       "surface": "upstream URL fetch",
       "who": "gateway → upstream",
-      "check": "[url_safety.py](backend/src/mcpolis/domain/services/url_safety.py#L152)",
+      "source": "[url_safety.py](backend/src/mcpolis/domain/services/url_safety.py#L152)",
       "risk": "SSRF deny-list (loopback/RFC1918/IMDS)"
     },
     {
       "surface": "rate limiting (unwired)",
       "who": "n/a",
-      "check": "[app.py](backend/src/mcpolis/entrypoints/app.py#L1630)",
+      "source": "[app.py](backend/src/mcpolis/entrypoints/app.py#L1630)",
       "risk": "middleware built but not installed today"
     }
   ],

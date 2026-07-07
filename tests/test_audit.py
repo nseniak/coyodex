@@ -100,7 +100,7 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {{}}
     }},
@@ -111,7 +111,7 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {{}}
     }}
@@ -224,7 +224,7 @@ def make_actor_mismatch_map(flow_actor: str = "Zoe") -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {{}}
     }}
@@ -308,7 +308,7 @@ def make_actor_variant_map(declared: str, opening: str, roles: bool = False) -> 
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {{}}
     }}
@@ -406,7 +406,7 @@ def make_shared_read_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -417,7 +417,7 @@ def make_shared_read_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -428,7 +428,7 @@ def make_shared_read_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -575,7 +575,7 @@ def make_cc_routed_read_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C3",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -586,7 +586,7 @@ def make_cc_routed_read_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -597,7 +597,7 @@ def make_cc_routed_read_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -728,7 +728,7 @@ def make_backward_whyref_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -814,7 +814,7 @@ def make_read_never_created_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E9",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -918,7 +918,7 @@ def make_whyless_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -997,7 +997,7 @@ def make_l2_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C2",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -1008,7 +1008,7 @@ def make_l2_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -1035,7 +1035,7 @@ def make_l2_map() -> str:
     {
       "surface": "/api",
       "who": "admins",
-      "check": "[require_admin](auth.py#L10)",
+      "source": "[require_admin](auth.py#L10)",
       "risk": "escalation"
     }
   ],
@@ -1327,7 +1327,7 @@ def make_described_map() -> str:
       "purpose": "x",
       "entry_point": "src/auth/gate.py:10",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -1338,7 +1338,7 @@ def make_described_map() -> str:
       "purpose": "x",
       "entry_point": "src/policy.py:5",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }

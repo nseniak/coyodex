@@ -2218,7 +2218,7 @@ function resizeStagePreserve() {
 // node's ⌘-click), an off-repo/absent one stays plain text.
 function renderGlossary() {
   const rows = (GRAPH.glossary || []).map((g) => {
-    const where = g.where || '';
+    const where = g.source || '';
     const { file, line } = where ? whereNode(where) : { file: '', line: null };
     let cell = '<span class="gloss-none">—</span>';
     if (where && localRef(where)) {

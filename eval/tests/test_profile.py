@@ -74,7 +74,7 @@ def make_counts_map() -> str:
       "name": "Ordering",
       "purpose": "",
       "parent": null,
-      "anchor": null,
+      "source": null,
       "confidence": ""
     }
   ],
@@ -86,7 +86,7 @@ def make_counts_map() -> str:
       "purpose": "show",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -97,7 +97,7 @@ def make_counts_map() -> str:
       "purpose": "make",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -108,7 +108,7 @@ def make_counts_map() -> str:
       "purpose": "log",
       "entry_point": "f",
       "depends_on": "D1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -134,7 +134,7 @@ def make_counts_map() -> str:
       "name": "Orders",
       "purpose": "",
       "parent": null,
-      "anchor": null,
+      "source": null,
       "confidence": ""
     }
   ],
@@ -218,13 +218,13 @@ def make_counts_map() -> str:
     {
       "surface": "/api/orders",
       "who": "admins",
-      "check": "[require_admin](auth.py#L10)",
+      "source": "[require_admin](auth.py#L10)",
       "risk": "escalation"
     },
     {
       "surface": "/api/lines",
       "who": "members",
-      "check": "[require_login](auth.py#L20)",
+      "source": "[require_login](auth.py#L20)",
       "risk": "leak"
     }
   ],
@@ -292,7 +292,7 @@ def make_roles_then_usecases_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -365,7 +365,7 @@ def make_broken_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "C9",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -450,7 +450,7 @@ def make_backward_whyref_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }
@@ -549,7 +549,7 @@ def make_read_before_create_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     },
@@ -560,7 +560,7 @@ def make_read_before_create_map() -> str:
       "purpose": "x",
       "entry_point": "f",
       "depends_on": "E1",
-      "anchor": null,
+      "source": null,
       "confidence": "",
       "extra": {}
     }

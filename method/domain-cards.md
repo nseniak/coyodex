@@ -46,7 +46,7 @@ SOURCE: [<file>](<path>:<line>)
 > **`SUBDOMAIN:` groups the entity** into a bounded context (`SD`) — the domain-model analog of a
 > component's `subsystem` field, single-sourced on the child. It is **optional and additive**: omit
 > it and the entity is ungrouped (top-level). Subdomains are their own array (`id`, `name`,
-> `purpose`, `parent`, `anchor`, `confidence`); the derived `SD→SD` / `S→SD` edges and the Domain
+> `purpose`, `parent`, `source`, `confidence`); the derived `SD→SD` / `S→SD` edges and the Domain
 > bounded-contexts overview are never authored (see [the map model](model.md)).
 
 - The heading em-dash `—` and the `*(…)*` metadata parens mirror the Golden Path heading

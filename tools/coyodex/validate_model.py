@@ -293,20 +293,20 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
                             f"(a markdown link, `[label](path)`)")
 
     for c in m.components:
-        bad_anchor(f"{c.id} anchor", c.anchor)
+        bad_anchor(f"{c.id} source", c.source)
         bad_file(f"{c.id} entry_point", c.entry_point)
     for d in m.deps:
         bad_file(f"{d.id} where_configured", d.where_configured)
     for e in m.edges:
         bad_file(f"{e.src} → {e.dst} where", e.where)
     for ep in m.entry_points:
-        bad_file(f"entry_points[{ep.component} {ep.kind}].entity", ep.entity)
+        bad_file(f"entry_points[{ep.component} {ep.kind}].source", ep.source)
     for e in m.entities:
         bad_anchor(f"{e.id} source", e.source)
     for g in m.glossary:
-        bad_anchor(f"glossary '{g.term}' where", g.where)
+        bad_anchor(f"glossary '{g.term}' source", g.source)
     for group in (*m.subsystems, *m.subdomains):
-        bad_group_anchor(f"{group.id} anchor", group.anchor)
+        bad_group_anchor(f"{group.id} source", group.source)
     return problems
 
 
@@ -385,12 +385,12 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         if href and not url.match(href):
             out.append((u.id, href))
     for group in (*m.subsystems, *m.subdomains):
-        href = _first_link_of(group, [group.anchor])
+        href = _first_link_of(group, [group.source])
         if href and not url.match(href):
             out.append((group.id, href))
     for c in m.components:
-        if c.anchor and not url.match(c.anchor):
-            out.append((f"{c.id} anchor", c.anchor))
+        if c.source and not url.match(c.source):
+            out.append((f"{c.id} source", c.source))
         href = c.entry_point or _first_link_of(c, [c.purpose, c.depends_on,
                                   *(v for v in c.extra.values() if isinstance(v, str))])
         if href and not url.match(href):
@@ -404,11 +404,11 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         if e.source and not url.match(e.source):
             out.append((e.id, e.source))
     for g in m.glossary:
-        if g.where and not url.match(g.where):
-            out.append((f"glossary '{g.term}'", g.where))
+        if g.source and not url.match(g.source):
+            out.append((f"glossary '{g.term}'", g.source))
     for ep in m.entry_points:
-        if ep.entity and not url.match(ep.entity):
-            out.append((f"entry_points[{ep.component} {ep.kind}]", ep.entity))
+        if ep.source and not url.match(ep.source):
+            out.append((f"entry_points[{ep.component} {ep.kind}]", ep.source))
     return out
 
 

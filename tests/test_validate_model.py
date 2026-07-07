@@ -254,23 +254,23 @@ def test_legacy_hash_anchor_is_a_blocking_problem():
 
 def test_glossary_where_accepts_bare_file_dir_and_null():
     m = make_valid_model()
-    m.glossary = [GlossaryRow(term="Order", meaning="a thing", where="src/order.py:12"),
-                  GlossaryRow(term="Domain", meaning="the dir", where="src/domain/"),
-                  GlossaryRow(term="Product", meaning="no code home", where=None)]
+    m.glossary = [GlossaryRow(term="Order", meaning="a thing", source="src/order.py:12"),
+                  GlossaryRow(term="Domain", meaning="the dir", source="src/domain/"),
+                  GlossaryRow(term="Product", meaning="no code home", source=None)]
     assert problems_of(m) == []
 
 
 def test_glossary_where_rejects_markdown_link():
     m = make_valid_model()
     m.glossary = [GlossaryRow(term="Order", meaning="a thing",
-                              where="[order.py](src/order.py:12)")]
-    assert any("glossary 'Order' where" in p and "not a valid" in p for p in problems_of(m))
+                              source="[order.py](src/order.py:12)")]
+    assert any("glossary 'Order' source" in p and "not a valid" in p for p in problems_of(m))
 
 
 def test_glossary_where_dead_anchor_warns_with_check_sources():
     with tempfile.TemporaryDirectory() as td:
         m = make_valid_model()
-        m.glossary = [GlossaryRow(term="Ghost", meaning="gone", where="src/nowhere.py:1")]
+        m.glossary = [GlossaryRow(term="Ghost", meaning="gone", source="src/nowhere.py:1")]
         _, warnings = validate_model(m, repo_root=Path(td), check_sources=True)
         assert any("glossary 'Ghost'" in w and "does not resolve" in w for w in warnings)
 
@@ -281,7 +281,7 @@ def test_colon_range_anchor_is_not_flagged():
     assert problems_of(m) == []
 
 
-# --- anchor format gate: entry_point / where_configured / edges.where / entry_points.entity ---
+# --- anchor format gate: entry_point / where_configured / edges.where / entry_points.source ---
 # must be bare `path:line`, never a markdown link (the label was always just the file's basename).
 
 def test_component_entry_point_md_link_is_a_blocking_problem():
@@ -304,9 +304,9 @@ def test_edge_where_md_link_is_a_blocking_problem():
 
 def test_entry_point_entity_md_link_is_a_blocking_problem():
     m = make_valid_model()
-    m.entry_points = [EntryPoint(kind="http", trigger="GET /x", entity="[api.py](src/api.py:1)",
+    m.entry_points = [EntryPoint(kind="http", trigger="GET /x", source="[api.py](src/api.py:1)",
                                  component="C1")]
-    assert any("entity" in p and "not a valid" in p for p in problems_of(m))
+    assert any("source" in p and "not a valid" in p for p in problems_of(m))
 
 
 # --- files / evidence / package / alternative: real fields, not `extra` columns ---

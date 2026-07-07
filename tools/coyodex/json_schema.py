@@ -48,7 +48,7 @@ _EXTRA_DESC = ("freeform authored columns — any JSON value, agent-chosen keys.
 FIELD_META: dict[tuple[str, str], dict] = {
     ("Role", "kind"): {"description": "human | service, free text (not a closed vocabulary)."},
     ("Role", "drives"): {"description": "the use cases this role drives — free text, ids inside."},
-    ("GlossaryRow", "where"): {"description": _DIR_OR_FILE_DESC + " The term's canonical code home "
+    ("GlossaryRow", "source"): {"description": _DIR_OR_FILE_DESC + " The term's canonical code home "
                                "(where it is defined); null when the concept has no single code home "
                                "(a pure product-level term)."},
     ("GoldenStep", "id"): {"pattern": r"^GP\d+$", "description": "this step's position in the "
@@ -61,7 +61,7 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Group", "parent"): {"pattern": ID_SHAPE.pattern, "description": "the enclosing group's id, "
                            "in the SAME forest (an S parents an S, an SD parents an SD), or null "
                            "for top-level."},
-    ("Group", "anchor"): {"pattern": _MD_LINK.pattern, "description": _GROUP_ANCHOR_DESC},
+    ("Group", "source"): {"pattern": _MD_LINK.pattern, "description": _GROUP_ANCHOR_DESC},
     ("UseCase", "id"): {"pattern": r"^UC\d+$"},
     ("EvidenceItem", "file"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EvidenceItem", "why"): {"description": "why this citation supports the claim — what a "
@@ -71,8 +71,8 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                   "id, or null if ungrouped."},
     ("Component", "entry_point"): {"pattern": _ANCHOR_LINE.pattern,
                                     "description": _ANCHOR_DESC + " Where the component is "
-                                    "TRIGGERED — distinct from `anchor` (where it LIVES)."},
-    ("Component", "anchor"): {"description": _DIR_OR_FILE_DESC + " Where the component LIVES."},
+                                    "TRIGGERED — distinct from `source` (where it LIVES)."},
+    ("Component", "source"): {"description": _DIR_OR_FILE_DESC + " Where the component LIVES."},
     ("Component", "files"): {"description": "repo-relative file paths this component owns, as a "
                               "plain list — not a count, not a comma-joined string."},
     ("Component", "extra"): {"description": _EXTRA_DESC},
@@ -84,7 +84,7 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Dep", "alternative"): {"description": "the fallback used instead of this dep, and under "
                               "what circumstance."},
     ("Dep", "extra"): {"description": _EXTRA_DESC},
-    ("EntryPoint", "entity"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
+    ("EntryPoint", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EntryPoint", "component"): {"pattern": r"^C\d+$", "description": "the owning component's id."},
     ("EntityField", "markers"): {"description": "annotation tokens, not free text: PK / FK→En / "
                                   "unique / ? / []."},
@@ -103,7 +103,7 @@ FIELD_META: dict[tuple[str, str], dict] = {
                          "site: the line in `src`'s code where it invokes `dst`."},
     ("Edge", "why"): {"description": "the relationship's rationale — distinct from either "
                        "endpoint's own `purpose`."},
-    ("SecurityRow", "check"): {"description": "markdown link to the auth check in code."},
+    ("SecurityRow", "source"): {"description": "markdown link to the auth check in code."},
     ("ProjectModel", "format"): {"const": FORMAT},
     ("ProjectModel", "commit"): {"description": "short commit sha the map was built at."},
     ("ProjectModel", "committed"): {"description": "YYYY-MM-DD."},

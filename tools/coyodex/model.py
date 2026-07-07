@@ -44,9 +44,9 @@ class Role:
 class GlossaryRow:
     term: str
     meaning: str = ""
-    where: str | None = None  # the term's canonical code home: a bare `path:line` or `path/`
-                              # anchor (like Component.anchor / Entity.source), or None when the
-                              # concept has no single code home (a pure product-level term)
+    source: str | None = None  # the term's canonical code home: a bare `path:line` or `path/`
+                               # anchor (like Component.source / Entity.source), or None when the
+                               # concept has no single code home (a pure product-level term)
 
 
 @dataclass
@@ -72,7 +72,7 @@ class Group:
     name: str
     purpose: str = ""
     parent: str | None = None
-    anchor: str | None = None  # md link to the group's home dir
+    source: str | None = None  # md link to the group's home dir
     confidence: str = ""
 
 
@@ -92,7 +92,7 @@ class Component:
     purpose: str = ""
     entry_point: str | None = None   # md link cell
     depends_on: str = ""             # the coarse derived summary text (edge list is the source)
-    anchor: str | None = None        # v2: the canonical source anchor — where the component LIVES
+    source: str | None = None        # v2: the canonical source anchor — where the component LIVES
     confidence: str = ""
     files: list[str] = field(default_factory=list)       # repo-relative paths this component owns
     evidence: list[EvidenceItem] = field(default_factory=list)
@@ -129,7 +129,7 @@ class RunRow:                        # T3
 class EntryPoint:                    # T4
     kind: str
     trigger: str = ""
-    entity: str = ""                 # md link to the code entity
+    source: str = ""                 # md link to the code entity — where the entry point LIVES
     component: str = ""              # the owning C id
 
 
@@ -216,7 +216,7 @@ class ObservabilityRow:
 class SecurityRow:
     surface: str
     who: str = ""
-    check: str = ""                  # md link to the auth check — an L2 grounding claim
+    source: str = ""                 # md link to the auth check — an L2 grounding claim
     risk: str = ""
 
 

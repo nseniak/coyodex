@@ -143,10 +143,10 @@ def test_files_and_evidence_columns_absent_when_unused():
 # wrong shape. These guard that no silent fix-up regrows here.
 
 def test_component_anchor_passes_through_unchanged():
-    frag = {"components": [{"id": "C1", "name": "X", "anchor": "[app.py](backend/app.py#L10)"}]}
+    frag = {"components": [{"id": "C1", "name": "X", "source": "[app.py](backend/app.py#L10)"}]}
     model, problems = merge_fragments([("f.json", load_fragment(json.dumps(frag), "f.json"))])
     assert problems == []
-    assert model.components[0].anchor == "[app.py](backend/app.py#L10)"
+    assert model.components[0].source == "[app.py](backend/app.py#L10)"
 
 
 def test_edge_where_passes_through_unchanged():

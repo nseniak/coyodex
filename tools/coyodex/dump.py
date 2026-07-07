@@ -5,7 +5,7 @@ The model IS the data, so this is a reader, not a query language: the slice surf
 deliberately tiny and fixed (Phase-3 brief) —
 
   (whole)          the canonical model JSON (what `load_model` parsed, re-serialized)
-  --id <ID>        resolve an id → its kind, display name, canonical anchor, and members
+  --id <ID>        resolve an id → its kind, display name, canonical source, and members
   --record <ID>    the element's full stored record, verbatim
   --edges <ID>     the backbone edges into / out of a node
   --members <ID>   a subsystem's / subdomain's member records (components + child subsystems,
@@ -63,7 +63,7 @@ def _group_member_ids(m: ProjectModel, gid: str) -> list[str]:
 
 
 def resolve_id(m: ProjectModel, eid: str) -> dict[str, object] | None:
-    """The `--id` slice: kind + display name + canonical anchor + members. Members are the
+    """The `--id` slice: kind + display name + canonical source + members. Members are the
     group's derived children; for a component, its member entry points (every T4 row naming it —
     the same set the self-describing L2 claims carry)."""
     el = all_elements(m).get(eid)
@@ -71,18 +71,18 @@ def resolve_id(m: ProjectModel, eid: str) -> dict[str, object] | None:
         return None
     kind = _kind_of(eid)
     name: str | None = getattr(el, "name", None) or getattr(el, "title", None)
-    anchor: str | None = None
+    source: str | None = None
     members: list[object] = []
     if isinstance(el, Component):
-        anchor = el.anchor or _href(el.entry_point)
-        members = [{"trigger": ep.trigger, "entity": ep.entity}
+        source = el.source or _href(el.entry_point)
+        members = [{"trigger": ep.trigger, "source": ep.source}
                    for ep in m.entry_points if ep.component == eid]
     elif isinstance(el, Group):
-        anchor = _href(el.anchor)
+        source = _href(el.source)
         members = list(_group_member_ids(m, eid))
     elif isinstance(el, Entity):
-        anchor = el.source
-    return {"id": eid, "kind": kind, "name": name, "anchor": anchor, "members": members}
+        source = el.source
+    return {"id": eid, "kind": kind, "name": name, "source": source, "members": members}
 
 
 def record_of(m: ProjectModel, eid: str) -> dict[str, object] | None:
@@ -109,7 +109,7 @@ def members_of(m: ProjectModel, gid: str) -> list[dict[str, object]]:
 _USAGE = """usage: coyodex dump [<project-map.json>] [--id <ID> | --record <ID> | --edges <ID> | --members <Sn|SDn>]
 
 Emit the parsed model as JSON — whole (no flag), or one FIXED slice:
-  --id <ID>       resolve an id: kind, display name, canonical anchor, members
+  --id <ID>       resolve an id: kind, display name, canonical source, members
                   (a group's children; a component's member entry points)
   --record <ID>   the element's full stored record
   --edges <ID>    the backbone edges into/out of a node: {"in": [...], "out": [...]}
