@@ -157,7 +157,10 @@ def test_recents_store_missing_file_is_empty() -> None:
 def test_load_project_valid_and_invalid() -> None:
     with tempfile.TemporaryDirectory() as td:
         good = make_project_dir(Path(td), "alpha")
-        assert load_project(str(good)) is not None
+        proj = load_project(str(good))
+        assert proj is not None
+        assert proj.title == "MCP Hero (mcpolis)"  # from the fixture map, for the landing card
+        assert proj.goal                            # a non-empty goal is carried too
         assert load_project(str(Path(td) / "nope")) is None          # no such folder
         (Path(td) / "bare").mkdir()
         assert load_project(str(Path(td) / "bare")) is None          # folder, but no .coyodex map

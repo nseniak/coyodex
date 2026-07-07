@@ -98,6 +98,8 @@ class Project:
     map_json: Path
     map_html: Path
     commit: str
+    title: str = ""   # the map's human title (shown on the landing card) — folder name if the map has none
+    goal: str = ""    # the map's one-paragraph goal (shown, clamped, under the title)
     tree: FileTreeNode | None = None  # cached tree (built once, on the first /api/tree)
 
 
@@ -140,7 +142,9 @@ def load_project(folder: str) -> Project | None:
     if commit and not _valid_commit(commit):
         return None
     return Project(slug=root.name or "project", repo_root=root, map_json=map_json,
-                   map_html=map_json.parent / MAP_HTML, commit=commit)
+                   map_html=map_json.parent / MAP_HTML, commit=commit,
+                   title=str(graph.get("title") or "").strip() or (root.name or "project"),
+                   goal=str(graph.get("goal") or "").strip())
 
 
 def build_projects(folders: list[str]) -> dict[str, Project]:
@@ -252,7 +256,8 @@ def list_dirs(path: Path) -> dict[str, object]:
     except (OSError, PermissionError):
         pass
     parent = str(path.parent) if path.parent != path else None
-    return {"path": str(path), "parent": parent, "hasMap": _has_map(path), "entries": entries}
+    return {"path": str(path), "parent": parent, "home": str(Path.home()),
+            "hasMap": _has_map(path), "entries": entries}
 
 
 # --- HTTP -----------------------------------------------------------------------------------------
@@ -287,6 +292,8 @@ def _recents_payload(store: RecentsStore, projects: dict[str, Project]) -> list[
         items.append({
             "path": folder,
             "name": Path(folder).name,
+            "title": proj.title if proj else Path(folder).name,
+            "goal": proj.goal if proj else "",
             "slug": slug,
             "ok": proj is not None,
             "commit": proj.commit if proj else "",
@@ -340,7 +347,7 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(_recents_payload(self.store, self.projects))
         if rest == ["browse"]:
             raw = (query.get("path") or [""])[0]
-            base = Path(raw) if raw else Path.home()
+            base = Path(raw).expanduser() if raw else Path.home()  # accept ~/… paths
             try:
                 base = base.resolve()
             except OSError:
@@ -351,12 +358,14 @@ class Handler(BaseHTTPRequestHandler):
         return self._send(404, "text/plain; charset=utf-8", b"unknown api")
 
     def _open(self, path: str) -> None:
-        p = Path(path)
-        if not path or not p.is_absolute() or not p.is_dir():
-            return self._send(400, "text/plain; charset=utf-8", b"not an absolute directory path")
+        p = Path(path).expanduser() if path else Path("")  # accept ~/… paths typed in the UI
+        if not path or not p.is_absolute():
+            return self._send(400, "text/plain; charset=utf-8", b"enter an absolute folder path")
+        if not p.is_dir():
+            return self._send(400, "text/plain; charset=utf-8", b"no such folder on this machine")
         if load_project(str(p)) is None:
             return self._send(400, "text/plain; charset=utf-8",
-                              b"no valid .coyodex/project-map.json in that folder")
+                              b"that folder has no valid .coyodex/project-map.json")
         with _STATE_LOCK:
             self.store.add(str(p))
             Handler.projects = build_projects(self.store.list())
@@ -502,109 +511,185 @@ def main(argv: list[str] | None = None) -> int:
     return serve(folders, port=port, open_browser=open_browser)
 
 
-# --- landing page (recents list + folder-picker to add a project) -------------------------------
-# Self-contained: recents render from GET /api/recents; the picker walks the filesystem via
-# GET /api/browse; Open/Remove POST to /api/open|forget with the X-Coyodex CSRF header.
+# --- landing page (recents cards + a folder browser to add a project) ---------------------------
+# Self-contained (no external assets). Recents render as cards (map title + goal) from GET
+# /api/recents; a project is added by pasting a path or browsing the filesystem via GET /api/browse
+# (breadcrumbs, quick locations, filter, inline add). Add/Remove POST to /api/open|forget with the
+# X-Coyodex CSRF header. Themed for light + dark via CSS variables + prefers-color-scheme.
 INDEX_HTML = """<!doctype html><html><head><meta charset="utf-8"><title>coyodex maps</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
 <style>
-:root{color-scheme:light dark}
-body{font:15px/1.5 -apple-system,system-ui,sans-serif;margin:40px auto;max-width:760px;padding:0 16px;color:#111}
-h1{font-size:20px;margin:0 0 4px}h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;margin:28px 0 8px}
-.sub{color:#6b7280;font-size:13px;margin:0 0 8px}
-ul{list-style:none;padding:0;margin:0}
-li{padding:10px 12px;border:1px solid #e5e7eb;border-radius:8px;margin:8px 0;display:flex;gap:12px;align-items:center}
-a.open{font-weight:600;color:#4338ca;text-decoration:none}a.open:hover{text-decoration:underline}
-.name{font-weight:600}.meta{font:12px ui-monospace,monospace;color:#6b7280}
-.path{font:12px ui-monospace,monospace;color:#9ca3af;margin-left:auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:320px}
-.warn{color:#b45309;font-size:12px}
-button{font:inherit;font-size:13px;padding:5px 10px;border:1px solid #d1d5db;border-radius:6px;background:#fff;color:#374151;cursor:pointer}
-button:hover{background:#f3f4f6}button.primary{background:#6366f1;border-color:#6366f1;color:#fff}button.primary:hover{background:#818cf8}
-.x{border:0;background:none;color:#9ca3af;font-size:16px;cursor:pointer;padding:0 4px;line-height:1}.x:hover{color:#cf222e}
-.empty{color:#9ca3af}
-#picker{border:1px solid #e5e7eb;border-radius:8px;padding:12px;margin-top:10px;display:none}
-#picker.on{display:block}
-.crumbs{display:flex;gap:6px;align-items:center;margin-bottom:8px}
-#curpath{font:12px ui-monospace,monospace;color:#374151;flex:1;padding:5px 8px;border:1px solid #d1d5db;border-radius:6px}
-.dirs{max-height:260px;overflow:auto;border:1px solid #f3f4f6;border-radius:6px}
-.dir{display:flex;align-items:center;gap:8px;padding:6px 10px;cursor:pointer;border-bottom:1px solid #f6f7f9}
-.dir:last-child{border-bottom:0}.dir:hover{background:#f5f7ff}
-.dir .ic{color:#9ca3af}.dir .badge{margin-left:auto;font:10px ui-monospace,monospace;color:#059669;border:1px solid #a7f3d0;border-radius:4px;padding:0 5px}
-#err{color:#cf222e;font-size:13px;margin-top:8px;min-height:1em}
+:root{color-scheme:light dark;
+  --bg:#fff;--fg:#111827;--muted:#6b7280;--faint:#9ca3af;--line:#e5e7eb;--line2:#f1f2f4;
+  --card:#fff;--cardh:#f9fafb;--accent:#4f46e5;--accent2:#6366f1;--hover:#f5f6ff;
+  --badge:#059669;--badgebg:#ecfdf5;--badgeln:#a7f3d0;--warn:#b45309;--danger:#dc2626;--ring:#c7d2fe}
+@media (prefers-color-scheme:dark){:root{
+  --bg:#0f1117;--fg:#e5e7eb;--muted:#9ca3af;--faint:#6b7280;--line:#242836;--line2:#1b1e28;
+  --card:#161a23;--cardh:#1b2030;--accent:#a5b4fc;--accent2:#6366f1;--hover:#1a1f2e;
+  --badge:#34d399;--badgebg:#0c2a20;--badgeln:#134e3a;--warn:#fbbf24;--danger:#f87171;--ring:#3730a3}}
+*{box-sizing:border-box}
+body{font:15px/1.55 -apple-system,system-ui,sans-serif;margin:0;background:var(--bg);color:var(--fg)}
+.wrap{max-width:820px;margin:0 auto;padding:36px 20px 60px}
+h1{font-size:22px;margin:0 0 2px;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:13px;margin:0 0 20px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--faint);margin:26px 0 10px;font-weight:600}
+button{font:inherit;font-size:13px;padding:7px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--fg);cursor:pointer}
+button:hover{background:var(--hover)}button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent2);border-color:var(--accent2);color:#fff}button.primary:hover{background:#818cf8}
+input{font:inherit;font-size:14px;padding:8px 11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--fg);width:100%}
+input:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:transparent}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.addbar{display:flex;gap:8px;align-items:center}.addbar input{flex:1}
+.err{color:var(--danger);font-size:13px;min-height:1.2em;margin:6px 2px 0}
+.browser{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:6px;background:var(--card)}
+.bhead{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.crumbs{display:flex;flex-wrap:wrap;gap:1px;align-items:center;flex:1;min-width:0}
+.crumb{padding:3px 7px;border:0;background:none;color:var(--accent);border-radius:6px;font-size:13px}
+.crumb:hover{background:var(--hover);text-decoration:underline}.crsep{color:var(--faint);font-size:12px}
+.quick{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.chip{font-size:12px;padding:3px 9px;border:1px solid var(--line);border-radius:999px;background:var(--bg);color:var(--muted)}
+.chip:hover{background:var(--hover);color:var(--fg)}
+.filter{margin-bottom:8px}
+.dirs{max-height:300px;overflow:auto;border:1px solid var(--line2);border-radius:8px}
+.dir{display:flex;align-items:center;gap:9px;padding:7px 11px;cursor:pointer;border-bottom:1px solid var(--line2)}
+.dir:last-child{border-bottom:0}.dir:hover{background:var(--hover)}
+.dir.hasmap{background:var(--cardh)}.dir.hasmap:hover{background:var(--hover)}
+.dir .ic{font-size:14px}.dir .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mapbadge{font-size:10px;color:var(--badge);background:var(--badgebg);border:1px solid var(--badgeln);border-radius:5px;padding:1px 6px;font-family:ui-monospace,monospace}
+.mini{padding:3px 9px;font-size:12px}
+.dir.empty{color:var(--faint);cursor:default}.dir.empty:hover{background:none}
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{position:relative;border:1px solid var(--line);border-radius:12px;padding:14px 40px 14px 16px;background:var(--card);transition:border-color .12s,box-shadow .12s}
+.card:hover{border-color:var(--ring);box-shadow:0 2px 12px rgba(80,70,229,.08)}
+.card .title{font-size:15px;font-weight:650;color:var(--accent);text-decoration:none}
+.card .title:hover{text-decoration:underline}.card .title.dead{color:var(--fg)}
+.card .goal{color:var(--muted);font-size:13px;margin:3px 0 8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .cmeta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px}
+.card .cpath{color:var(--faint);font-family:ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
+.card .csha{color:var(--muted);font-family:ui-monospace,monospace}
+.card .warn{color:var(--warn)}.card .copy{padding:2px 8px;font-size:11px}
+.card .x{position:absolute;top:10px;right:8px;border:0;background:none;color:var(--faint);font-size:15px;padding:2px 6px;opacity:0;transition:opacity .1s}
+.card:hover .x{opacity:1}.card .x:hover{color:var(--danger)}
+.empty{color:var(--faint);font-size:14px;padding:6px 2px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;padding:8px 14px;border-radius:8px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.on{opacity:.95}
 </style></head><body>
+<div class="wrap">
 <h1>coyodex maps</h1>
-<p class="sub">Open a project's map, or add a new one by browsing to its folder.</p>
+<p class="sub">Open a project's map, or add one — paste its folder path, or browse to it.</p>
 
-<h2>Recent</h2>
-<ul id="recents"><li class="empty">Loading…</li></ul>
+<div class="addbar">
+  <input id="addpath" class="mono" placeholder="Paste a project folder, e.g. ~/code/myrepo" autocomplete="off" spellcheck="false">
+  <button id="addbtn" class="primary">Add</button>
+  <button id="browsebtn">Browse…</button>
+</div>
+<div id="adderr" class="err"></div>
 
-<button id="addbtn" class="primary">+ Add a project…</button>
-
-<div id="picker">
-  <div class="crumbs">
+<div id="browser" class="browser" hidden>
+  <div class="bhead">
     <button id="up" title="Parent folder">↑</button>
-    <input id="curpath" readonly>
-    <button id="pick" class="primary" disabled>Open this folder</button>
+    <div id="crumbs" class="crumbs"></div>
+    <button id="openfolder" class="primary" disabled>Add this folder</button>
   </div>
-  <div class="dirs" id="dirs"></div>
-  <div id="err"></div>
+  <div id="quick" class="quick"></div>
+  <input id="filter" placeholder="Filter folders…" autocomplete="off">
+  <div id="dirs" class="dirs"></div>
 </div>
 
+<h2>Recent</h2>
+<div id="recents" class="cards"><div class="empty">Loading…</div></div>
+</div>
+<div id="toast" class="toast"></div>
+
 <script>
-const H = { 'Content-Type': 'application/json', 'X-Coyodex': 'serve' };
-const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-async function jget(u){ const r = await fetch(u, {cache:'no-store'}); if(!r.ok) throw new Error(r.status); return r.json(); }
-async function jpost(u, body){ return fetch(u, {method:'POST', headers:H, body:JSON.stringify(body)}); }
+const H={'Content-Type':'application/json','X-Coyodex':'serve'};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const $=id=>document.getElementById(id);
+async function jget(u){const r=await fetch(u,{cache:'no-store'});if(!r.ok)throw new Error(r.status);return r.json();}
+async function jpost(u,body){return fetch(u,{method:'POST',headers:H,body:JSON.stringify(body)});}
+let home=null,recents=[],cur=null,entries=[],curParent=null;
+const shorten=p=>home&&(p===home||p.startsWith(home+'/'))?'~'+p.slice(home.length):p;
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1400);}
 
 async function loadRecents(){
-  const ul = document.getElementById('recents');
-  let items; try { items = await jget('/api/recents'); } catch(_) { ul.innerHTML = '<li class="empty">Could not load recents.</li>'; return; }
-  if(!items.length){ ul.innerHTML = '<li class="empty">No projects yet — add one below.</li>'; return; }
-  ul.innerHTML = '';
-  for(const it of items){
-    const li = document.createElement('li');
-    let left;
-    if(it.ok && it.rendered){ left = '<a class="open" href="/p/'+encodeURIComponent(it.slug)+'/">'+esc(it.name)+'</a>'; }
-    else if(it.ok){ left = '<span class="name">'+esc(it.name)+'</span> <span class="warn">— run: coyodex render</span>'; }
-    else { left = '<span class="name">'+esc(it.name)+'</span> <span class="warn">— map missing or invalid</span>'; }
-    const meta = it.commit ? '<span class="meta">'+esc(it.commit.slice(0,12))+'</span>' : '';
-    li.innerHTML = left + ' ' + meta + '<span class="path" title="'+esc(it.path)+'">'+esc(it.path)+'</span>'
-      + '<button class="x" title="Remove from list">✕</button>';
-    li.querySelector('.x').onclick = async () => { await jpost('/api/forget', {path: it.path}); loadRecents(); };
-    ul.appendChild(li);
+  try{recents=await jget('/api/recents');}catch(_){$('recents').innerHTML='<div class="empty">Could not load recents.</div>';return;}
+  const box=$('recents');
+  if(!recents.length){box.innerHTML='<div class="empty">No projects yet — add one above.</div>';renderQuick();return;}
+  box.innerHTML='';
+  for(const it of recents){
+    const c=document.createElement('div');c.className='card';
+    const title=(it.ok&&it.rendered)
+      ? '<a class="title" href="/p/'+encodeURIComponent(it.slug)+'/">'+esc(it.title)+'</a>'
+      : '<span class="title dead">'+esc(it.title)+'</span>';
+    const goal=it.goal?'<p class="goal">'+esc(it.goal)+'</p>':'';
+    let meta='<span class="cpath" title="'+esc(it.path)+'">'+esc(shorten(it.path))+'</span>';
+    if(it.commit)meta+='<span class="csha">'+esc(it.commit.slice(0,10))+'</span>';
+    if(!it.ok)meta+='<span class="warn">map missing or invalid</span>';
+    else if(!it.rendered)meta+='<span class="warn">not rendered</span><button class="copy" data-path="'+esc(it.path)+'">Copy render cmd</button>';
+    c.innerHTML=title+goal+'<div class="cmeta">'+meta+'</div><button class="x" title="Remove from list">✕</button>';
+    c.querySelector('.x').onclick=async()=>{await jpost('/api/forget',{path:it.path});loadRecents();};
+    const cp=c.querySelector('.copy');
+    if(cp)cp.onclick=()=>{const cmd='cd "'+cp.dataset.path+'" && coyodex render .coyodex/project-map.json .coyodex/project-map.html';if(navigator.clipboard)navigator.clipboard.writeText(cmd);toast('Render command copied');};
+    box.appendChild(c);
   }
+  renderQuick();
 }
 
-let curPath = null, curHasMap = false;
+async function addPath(path){
+  if(!path)return false;
+  const r=await jpost('/api/open',{path});
+  if(r.ok){$('adderr').textContent='';await loadRecents();toast('Added');return true;}
+  $('adderr').textContent=await r.text();return false;
+}
+$('addbtn').onclick=async()=>{if(await addPath($('addpath').value.trim()))$('addpath').value='';};
+$('addpath').addEventListener('keydown',async e=>{if(e.key==='Enter'&&await addPath($('addpath').value.trim()))$('addpath').value='';});
+
+$('browsebtn').onclick=()=>{const b=$('browser');b.hidden=!b.hidden;if(!b.hidden&&!cur)browse('');};
+$('up').onclick=()=>{if(curParent)browse(curParent);};
+$('openfolder').onclick=()=>addPath(cur);
+$('filter').addEventListener('input',renderList);
+$('filter').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('dirs').querySelector('.dir:not(.empty)');if(f)f.click();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('browser').hidden)$('browser').hidden=true;});
+
 async function browse(path){
-  const err = document.getElementById('err'); err.textContent = '';
-  let data; try { data = await jget('/api/browse' + (path ? '?path='+encodeURIComponent(path) : '')); }
-  catch(_) { err.textContent = 'Could not read that folder.'; return; }
-  curPath = data.path; curHasMap = data.hasMap;
-  document.getElementById('curpath').value = data.path;
-  document.getElementById('up').disabled = !data.parent;
-  const pick = document.getElementById('pick');
-  pick.disabled = !data.hasMap; pick.textContent = data.hasMap ? 'Open this folder' : 'No .coyodex here';
-  const box = document.getElementById('dirs'); box.innerHTML = '';
-  if(!data.entries.length){ box.innerHTML = '<div class="dir empty">(no subfolders)</div>'; }
-  for(const e of data.entries){
-    const row = document.createElement('div'); row.className = 'dir';
-    row.innerHTML = '<span class="ic">📁</span><span>'+esc(e.name)+'</span>' + (e.hasMap ? '<span class="badge">map</span>' : '');
-    row.onclick = () => browse(e.path);
+  let d;try{d=await jget('/api/browse'+(path?'?path='+encodeURIComponent(path):''));}catch(_){return;}
+  home=d.home;cur=d.path;curParent=d.parent;entries=d.entries;
+  $('up').disabled=!d.parent;
+  const of=$('openfolder');of.disabled=!d.hasMap;of.textContent=d.hasMap?'Add this folder':'No map here';
+  renderCrumbs();$('filter').value='';renderList();
+}
+function renderCrumbs(){
+  const box=$('crumbs');box.innerHTML='';
+  const seg=(label,t)=>{const b=document.createElement('button');b.className='crumb';b.textContent=label;b.onclick=()=>browse(t);return b;};
+  const sep=()=>{const s=document.createElement('span');s.className='crsep';s.textContent='/';return s;};
+  let base,rest;
+  if(home&&(cur===home||cur.startsWith(home+'/'))){base=home;rest=cur.slice(home.length);box.appendChild(seg('Home',home));}
+  else{base='';rest=cur;box.appendChild(seg('/','/'));}
+  let acc=base;
+  for(const p of rest.split('/').filter(Boolean)){acc+='/'+p;box.appendChild(sep());box.appendChild(seg(p,acc));}
+}
+function renderQuick(){
+  const box=$('quick');box.innerHTML='';const seen=new Set();const chips=[];
+  if(home){chips.push(['Home',home]);seen.add(home);}
+  for(const it of recents){const par=it.path.slice(0,it.path.lastIndexOf('/'))||'/';if(!seen.has(par)){seen.add(par);chips.push([shorten(par),par]);}}
+  if(chips.length<=1){box.style.display='none';return;}box.style.display='';
+  for(const[label,path]of chips){const b=document.createElement('button');b.className='chip';b.textContent=label;b.title=path;b.onclick=()=>browse(path);box.appendChild(b);}
+}
+function renderList(){
+  const q=($('filter').value||'').toLowerCase();const box=$('dirs');box.innerHTML='';
+  const ordered=[...entries.filter(e=>e.hasMap),...entries.filter(e=>!e.hasMap)].filter(e=>e.name.toLowerCase().includes(q));
+  if(!ordered.length){box.innerHTML='<div class="dir empty">'+(entries.length?'No matching folders.':'(no subfolders)')+'</div>';return;}
+  for(const e of ordered){
+    const row=document.createElement('div');row.className='dir'+(e.hasMap?' hasmap':'');
+    row.innerHTML='<span class="ic">'+(e.hasMap?'🗺️':'📁')+'</span><span class="dn">'+esc(e.name)+'</span>'
+      +(e.hasMap?'<span class="mapbadge">map</span><button class="mini primary add">+ Add</button>':'');
+    row.onclick=()=>browse(e.path);
+    const a=row.querySelector('.add');if(a)a.onclick=ev=>{ev.stopPropagation();addPath(e.path);};
     box.appendChild(row);
   }
-  window._up = data.parent;
 }
-document.getElementById('addbtn').onclick = () => { const p = document.getElementById('picker'); p.classList.toggle('on'); if(p.classList.contains('on') && !curPath) browse(''); };
-document.getElementById('up').onclick = () => { if(window._up) browse(window._up); };
-document.getElementById('pick').onclick = async () => {
-  const err = document.getElementById('err');
-  const r = await jpost('/api/open', {path: curPath});
-  if(r.ok){ document.getElementById('picker').classList.remove('on'); loadRecents(); }
-  else { err.textContent = await r.text(); }
-};
-loadRecents();
+(async()=>{try{const d=await jget('/api/browse');home=d.home;}catch(_){}loadRecents();})();
 </script>
 </body></html>"""
 
