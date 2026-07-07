@@ -132,10 +132,12 @@ def _valid_commit(commit: str) -> bool:
     return bool(_SHA_RE.fullmatch(commit))
 
 
-def _has_map(folder: Path) -> bool:
-    """True if `folder` holds a `.coyodex/project-map.json` (the marker of a mappable project)."""
+def _has_coyodex(folder: Path) -> bool:
+    """True if `folder` holds a `.coyodex/` directory — the marker of a coyodex project. The map inside
+    may be missing or not yet valid; such a folder is still addable (its recents card then shows
+    'No valid map yet' and stays disabled until the map is built)."""
     try:
-        return (folder / ".coyodex" / MAP_JSON).is_file()
+        return (folder / ".coyodex").is_dir()
     except OSError:
         return False
 
@@ -264,14 +266,14 @@ def list_dirs(path: Path) -> dict[str, object]:
         for child in sorted(path.iterdir(), key=lambda x: x.name.lower()):
             try:
                 if child.is_dir() and not child.is_symlink():
-                    entries.append({"name": child.name, "path": str(child), "hasMap": _has_map(child)})
+                    entries.append({"name": child.name, "path": str(child), "hasMap": _has_coyodex(child)})
             except OSError:
                 continue
     except (OSError, PermissionError):
         pass
     parent = str(path.parent) if path.parent != path else None
     return {"path": str(path), "parent": parent, "home": str(Path.home()),
-            "hasMap": _has_map(path), "entries": entries}
+            "hasMap": _has_coyodex(path), "entries": entries}
 
 
 # --- HTTP -----------------------------------------------------------------------------------------
@@ -378,9 +380,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(400, "text/plain; charset=utf-8", b"enter an absolute folder path")
         if not p.is_dir():
             return self._send(400, "text/plain; charset=utf-8", b"no such folder on this machine")
-        if load_project(str(p)) is None:
-            return self._send(400, "text/plain; charset=utf-8",
-                              b"that folder has no valid .coyodex/project-map.json")
+        if not _has_coyodex(p):  # a .coyodex/ dir is enough — the map inside may not be valid/built yet
+            return self._send(400, "text/plain; charset=utf-8", b"that folder has no .coyodex/ folder")
         with _STATE_LOCK:
             self.store.add(str(p))
             Handler.projects = build_projects(self.store.list())
@@ -465,10 +466,10 @@ def serve(add_folders: list[Path], port: int = _DEFAULT_PORT, open_browser: bool
     interrupted. No disk scan — the served set is exactly the recents list."""
     store = store or RecentsStore()
     for folder in add_folders:
-        if load_project(str(folder)) is not None:
+        if _has_coyodex(folder):  # a .coyodex/ dir is enough; an unbuilt map just shows as "No valid map yet"
             store.add(str(folder))
         else:
-            print(f"coyodex serve: skipping {folder} — no valid .coyodex/project-map.json", file=sys.stderr)
+            print(f"coyodex serve: skipping {folder} — no .coyodex/ folder", file=sys.stderr)
     Handler.store = store
     Handler.projects = build_projects(store.list())
     httpd = ThreadingHTTPServer(("127.0.0.1", port), Handler)
@@ -579,6 +580,7 @@ input:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:tr
 .card{position:relative;border:1px solid var(--line);border-radius:12px;padding:14px 40px 14px 16px;background:var(--card);transition:border-color .12s,box-shadow .12s}
 .card:hover{border-color:var(--ring);box-shadow:0 2px 12px rgba(80,70,229,.08)}
 .card.clickable{cursor:pointer}
+.card.disabled{opacity:.6}.card.disabled:hover{border-color:var(--line);box-shadow:none}.card.disabled .x{opacity:1}
 .card .title{font-size:15px;font-weight:650;color:var(--accent)}
 .card.clickable:hover .title{text-decoration:underline}.card .title.dead{color:var(--fg)}
 .iconbtn{border:0;background:none;color:var(--faint);font-size:14px;padding:2px 7px;line-height:1}.iconbtn:hover{color:var(--fg)}
@@ -638,10 +640,11 @@ async function loadRecents(){
     const goal=it.goal?'<p class="goal">'+esc(it.goal)+'</p>':'';
     let meta='<span class="cpath" title="'+esc(it.path)+'">'+esc(shorten(it.path))+'</span>';
     if(it.commit)meta+='<span class="csha">'+esc(it.commit.slice(0,10))+'</span>';
-    if(!it.ok)meta+='<span class="warn">map missing or invalid</span>';
+    if(!it.ok)meta+='<span class="warn">No valid map yet</span>';
     else if(!it.rendered)meta+='<span class="warn">not rendered</span><button class="copy" data-path="'+esc(it.path)+'">Copy render cmd</button>';
     c.innerHTML='<span class="title'+(it.ok&&it.rendered?'':' dead')+'">'+esc(it.title)+'</span>'+goal
       +'<div class="cmeta">'+meta+'</div><button class="x" title="Remove from list">✕</button>';
+    if(!it.ok)c.classList.add('disabled');                                                                 // .coyodex present but no valid map -> dimmed, not clickable
     if(it.ok&&it.rendered){c.classList.add('clickable');c.onclick=()=>{location.href='/p/'+encodeURIComponent(it.slug)+'/';};}  // whole card opens the map
     c.querySelector('.x').onclick=async e=>{e.stopPropagation();await jpost('/api/forget',{path:it.path});loadRecents();};
     const cp=c.querySelector('.copy');

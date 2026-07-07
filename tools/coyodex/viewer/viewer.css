@@ -27,18 +27,20 @@ main { display: flex; flex: 1; min-height: 0; }
    map is opened statically (no server), the browser + code panes are hidden and this column fills. */
 #leftcol { flex: 0 0 auto; width: 62%; min-width: 0; display: flex; flex-direction: column; }
 body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
-#stage { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow: hidden; background: #fafafa; }
+#stage { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow: hidden; background: #fafafa;
+         display: flex; flex-direction: column; }
 /* Horizontal drag bar between the diagram and the info pane (sets the info pane's height). */
 #vsplit { flex: 0 0 5px; cursor: row-resize; background: #e5e7eb; }
 #vsplit:hover, body.vresizing #vsplit { background: #818cf8; }
 body.vresizing { cursor: row-resize; user-select: none; }
 body.vresizing #stage { pointer-events: none; }
-#diagram { width: 100%; height: 100%; }
-/* Fixed header on the graph pane: the view selector + breadcrumb, overlaid on the canvas (like
-   #legend/#drillhint below) rather than pushed into normal page flow — so #diagram still exactly fills
-   #stage (applyZoomAndCenter in viewer.js relies on that). Stays put while the diagram pans/zooms
-   underneath it. */
-#stagehead { position: absolute; left: 0; right: 0; top: 0; z-index: 6; }
+/* The map fills the space LEFT UNDER the header (a flex child of #stage), so the header never overlaps
+   the fitted/centered diagram — the view-selector row is not part of the viewable area. #stagehead takes
+   its natural height at the top; #diagram takes the rest, and svg-pan-zoom fits/centers into that box
+   (applyZoomAndCenter in viewer.js measures #diagram, not #stage, for the same reason). */
+#diagram { flex: 1 1 auto; min-width: 0; min-height: 0; }
+/* View selector + breadcrumb, a normal-flow bar at the top of the graph pane. */
+#stagehead { flex: 0 0 auto; z-index: 6; }
 #stageheadrow { background: #fff; padding: 8px 14px; border-bottom: 1px solid #e5e7eb; }
 #viewsw { display: inline-flex; border: 1px solid #c7d2fe; border-radius: 6px; overflow: hidden; }
 #viewsw button { font: inherit; font-size: 12px; padding: 4px 10px; border: 0; background: transparent;
@@ -48,7 +50,8 @@ body.vresizing #stage { pointer-events: none; }
 #stagehead .hint { border-bottom: 1px solid #e5e7eb; }
 #diagram svg { width: 100%; height: 100%; }
 /* Glossary tab: the ubiquitous-language terms as a table rendered straight into #diagram (not a
-   mermaid diagram). Scrolls inside the fixed-size stage; top padding (set inline) clears the header. */
+   mermaid diagram). Scrolls inside the fixed-size stage (already below the header, so just a small
+   top padding set inline). */
 .glossary-wrap { height: 100%; overflow: auto; box-sizing: border-box; padding: 0 20px 24px; }
 .glossary { border-collapse: collapse; width: 100%; max-width: 1100px; margin: 0 auto; font-size: 13px; }
 .glossary thead th { position: sticky; top: 0; background: #fff; text-align: left; padding: 8px 12px;

@@ -1183,15 +1183,15 @@ function selectNodeFromCanvas(el, id, e) {
 }
 
 // The zoom-by-`scale`-then-recenter step behind matchTextSize (scale === 1 skips straight to just
-// centering). Measures el/stage BEFORE any mutation: svg-pan-zoom's zoom() only updates its internal
+// centering). Measures el/diagram BEFORE any mutation: svg-pan-zoom's zoom() only updates its internal
 // state synchronously — the CTM it actually paints is applied on the NEXT animation frame (see
 // `updateCTMOnNextFrame` in the vendored lib) — so a getBoundingClientRect() taken right after would
-// still read the OLD, pre-zoom geometry. zoomAtPoint anchors on the SVG's own center, which
-// #diagram/#stage's CSS (width/height:100%, no padding) makes exactly `stageRect`'s center — so the
-// post-zoom position is derived analytically (every point scales toward/away from that shared center
-// by `scale`) instead of re-measured.
+// still read the OLD, pre-zoom geometry. zoomAtPoint anchors on the SVG's own center, which is exactly
+// `diagramRect`'s center (the svg fills #diagram, which sits below the header — not the whole #stage) —
+// so the post-zoom position is derived analytically (every point scales toward/away from that shared
+// center by `scale`) instead of re-measured.
 function applyZoomAndCenter(el, scale) {
-  const stageRect = stage.getBoundingClientRect();
+  const stageRect = diagram.getBoundingClientRect();
   const stageCx = stageRect.left + stageRect.width / 2, stageCy = stageRect.top + stageRect.height / 2;
   const elRect = el.getBoundingClientRect();
   let elCx = elRect.left + elRect.width / 2, elCy = elRect.top + elRect.height / 2;
@@ -2229,9 +2229,7 @@ function renderGlossary() {
     }
     return `<tr><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${cell}</td></tr>`;
   }).join('');
-  const head = document.getElementById('stagehead');
-  const pad = head ? head.offsetHeight + 12 : 60;  // clear the absolutely-positioned tab/breadcrumb bar
-  diagram.innerHTML = `<div class="glossary-wrap" style="padding-top:${pad}px">`
+  diagram.innerHTML = '<div class="glossary-wrap" style="padding-top:20px">'
     + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
     + `<tbody>${rows}</tbody></table></div>`;
   diagram.querySelectorAll('.gloss-src').forEach((btn) => {

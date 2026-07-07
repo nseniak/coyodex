@@ -21,7 +21,7 @@ from coyodex.viewer.filetree import FileTreeNode
 from coyodex.viewer.serve import (
     Project,
     RecentsStore,
-    _has_map,
+    _has_coyodex,
     _loopback_host,
     _safe_rel,
     _strip_dirty,
@@ -197,18 +197,20 @@ def test_build_projects_slug_collision_and_skips_invalid() -> None:
 
 
 # --- filesystem browser ---------------------------------------------------------
-def test_list_dirs_flags_maps_and_parent() -> None:
+def test_list_dirs_flags_coyodex_and_parent() -> None:
     with tempfile.TemporaryDirectory() as td:
         parent = Path(td)
-        make_project_dir(parent, "withmap")               # has .coyodex/project-map.json
-        (parent / "plain").mkdir()                        # no map
+        make_project_dir(parent, "withmap")               # .coyodex/project-map.json (valid)
+        (parent / "empty-coyodex" / ".coyodex").mkdir(parents=True)  # .coyodex dir, NO map file yet
+        (parent / "plain").mkdir()                        # no .coyodex at all
         data = list_dirs(parent)
         assert data["path"] == str(parent)
         assert data["parent"] == str(parent.parent)
         by_name = {e["name"]: e for e in data["entries"]}  # type: ignore[union-attr]
         assert by_name["withmap"]["hasMap"] is True
+        assert by_name["empty-coyodex"]["hasMap"] is True  # a bare .coyodex/ is addable (card: "No valid map yet")
         assert by_name["plain"]["hasMap"] is False
-        assert _has_map(parent / "withmap") and not _has_map(parent / "plain")
+        assert _has_coyodex(parent / "empty-coyodex") and not _has_coyodex(parent / "plain")
 
 
 # --- git-backed file-browser tree -----------------------------------------------
