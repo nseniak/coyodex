@@ -556,6 +556,7 @@ input:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:tr
 .dir{display:flex;align-items:center;gap:9px;padding:7px 11px;cursor:pointer;border-bottom:1px solid var(--line2)}
 .dir:last-child{border-bottom:0}.dir:hover{background:var(--hover)}
 .dir.hasmap{background:var(--cardh)}.dir.hasmap:hover{background:var(--hover)}
+.dir.ksel{background:var(--hover);box-shadow:inset 2px 0 0 var(--accent2)}
 .dir .ic{font-size:14px}.dir .dn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mapbadge{font-size:10px;color:var(--badge);background:var(--badgebg);border:1px solid var(--badgeln);border-radius:5px;padding:1px 6px;font-family:ui-monospace,monospace}
 .mini{padding:3px 9px;font-size:12px}
@@ -610,7 +611,7 @@ async function jpost(u,body){return fetch(u,{method:'POST',headers:H,body:JSON.s
 // cur = the folder currently DISPLAYED (may be a live preview while typing); curBase = the COMMITTED
 // current folder — changed only by an explicit click or Enter, never by typing. Relative paths resolve
 // against curBase, and clearing the input snaps the view back to it.
-let home=null,recents=[],cur=null,entries=[],curParent=null,typeSeq=0,curBase=null;
+let home=null,recents=[],cur=null,entries=[],curParent=null,typeSeq=0,curBase=null,dirRows=[],selIdx=-1;
 const shorten=p=>home&&(p===home||p.startsWith(home+'/'))?'~'+p.slice(home.length):p;
 function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1400);}
 
@@ -680,9 +681,21 @@ async function onType(){
   }
   renderList();
 }
+// Keyboard: ↑/↓ move a highlight through the folder list, Enter opens the highlighted folder (or, with
+// nothing highlighted, commits the typed path via goPath).
+function moveSel(d){
+  if(!dirRows.length)return;
+  selIdx = selIdx<0 ? (d>0?0:dirRows.length-1) : Math.max(0,Math.min(dirRows.length-1,selIdx+d));
+  dirRows.forEach((r,i)=>r.classList.toggle('ksel',i===selIdx));
+  dirRows[selIdx].scrollIntoView({block:'nearest'});
+}
 $('pathbar').addEventListener('focus',openBrowser);
 $('pathbar').addEventListener('input',onType);
-$('pathbar').addEventListener('keydown',e=>{if(e.key==='Enter')goPath();});
+$('pathbar').addEventListener('keydown',e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();moveSel(1);}
+  else if(e.key==='ArrowUp'){e.preventDefault();moveSel(-1);}
+  else if(e.key==='Enter'){if(selIdx>=0&&dirRows[selIdx])dirRows[selIdx].click();else goPath();}
+});
 $('up').onclick=()=>{if(curParent)browse(curParent);};
 $('openfolder').onclick=()=>addPath(cur);
 $('closebrowser').onclick=closeBrowser;
@@ -708,7 +721,9 @@ function renderCrumbs(){
   if(home&&(cur===home||cur.startsWith(home+'/'))){base=home;rest=cur.slice(home.length);box.appendChild(seg('Home',home));}
   else{base='';rest=cur;box.appendChild(seg('/','/'));}
   let acc=base;
-  for(const p of rest.split('/').filter(Boolean)){acc+='/'+p;box.appendChild(sep());box.appendChild(seg(p,acc));}
+  // The root "/" crumb already shows the leading slash, so skip the separator before the first segment
+  // under it (otherwise "/ / Users"). Under Home, every segment gets its separator.
+  rest.split('/').filter(Boolean).forEach((p,i)=>{acc+='/'+p;if(!(base===''&&i===0))box.appendChild(sep());box.appendChild(seg(p,acc));});
 }
 function renderQuick(){
   const box=$('quick');box.innerHTML='';const seen=new Set();const chips=[];
@@ -718,7 +733,7 @@ function renderQuick(){
   for(const[label,path]of chips){const b=document.createElement('button');b.className='chip';b.textContent=label;b.title=path;b.onclick=()=>browse(path);box.appendChild(b);}
 }
 function renderList(){
-  const q=filterFrag();const box=$('dirs');box.innerHTML='';
+  const q=filterFrag();const box=$('dirs');box.innerHTML='';selIdx=-1;dirRows=[];
   const ordered=[...entries.filter(e=>e.hasMap),...entries.filter(e=>!e.hasMap)].filter(e=>e.name.toLowerCase().includes(q));
   if(!ordered.length){box.innerHTML='<div class="dir empty">'+(entries.length?'No matching folders.':'(no subfolders)')+'</div>';return;}
   for(const e of ordered){
@@ -729,6 +744,7 @@ function renderList(){
     const a=row.querySelector('.add');if(a)a.onclick=ev=>{ev.stopPropagation();addPath(e.path);};
     box.appendChild(row);
   }
+  dirRows=[...box.querySelectorAll('.dir:not(.empty)')];  // for ↑/↓ keyboard selection
 }
 (async()=>{try{const d=await jget('/api/browse');home=d.home;}catch(_){}loadRecents();})();
 </script>
