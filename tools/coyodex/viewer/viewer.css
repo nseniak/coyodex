@@ -7,6 +7,9 @@ body { margin: 0; font: 14px/1.5 -apple-system, system-ui, sans-serif; color: #1
        height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 header { padding: 8px 14px; background: #1e1b4b; color: #fff; display: flex; gap: 12px; align-items: center; }
 header h1 { font-size: 15px; margin: 0; font-weight: 600; flex: 0 0 auto; }
+/* In FULL mode the title links back to the server's landing page (all maps). */
+header h1.home-link { cursor: pointer; }
+header h1.home-link:hover { text-decoration: underline; }
 header .meta { font-size: 12px; opacity: .8; flex: 1; }
 header .meta .repo { color: #c7d2fe; font-weight: 600; }  /* the mapped repo name — file links resolve here */
 header button { font: inherit; font-size: 12px; padding: 4px 12px; border: 0; border-radius: 6px;

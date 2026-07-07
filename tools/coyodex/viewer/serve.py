@@ -347,13 +347,14 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(_recents_payload(self.store, self.projects))
         if rest == ["browse"]:
             raw = (query.get("path") or [""])[0]
-            base = Path(raw).expanduser() if raw else Path.home()  # accept ~/… paths
+            if not raw:
+                return self._json(list_dirs(Path.home()))  # no path -> land at Home
             try:
-                base = base.resolve()
+                base = Path(raw).expanduser().resolve()  # accept ~/… and absolute paths
             except OSError:
-                base = Path.home()
-            if not base.is_dir():
-                base = Path.home()
+                base = None
+            if base is None or not base.is_dir():
+                return self._send(404, "text/plain; charset=utf-8", b"no such folder")  # let the UI flag a typo
             return self._json(list_dirs(base))
         return self._send(404, "text/plain; charset=utf-8", b"unknown api")
 
@@ -562,8 +563,10 @@ input:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:tr
 .cards{display:flex;flex-direction:column;gap:10px}
 .card{position:relative;border:1px solid var(--line);border-radius:12px;padding:14px 40px 14px 16px;background:var(--card);transition:border-color .12s,box-shadow .12s}
 .card:hover{border-color:var(--ring);box-shadow:0 2px 12px rgba(80,70,229,.08)}
-.card .title{font-size:15px;font-weight:650;color:var(--accent);text-decoration:none}
-.card .title:hover{text-decoration:underline}.card .title.dead{color:var(--fg)}
+.card.clickable{cursor:pointer}
+.card .title{font-size:15px;font-weight:650;color:var(--accent)}
+.card.clickable:hover .title{text-decoration:underline}.card .title.dead{color:var(--fg)}
+.iconbtn{border:0;background:none;color:var(--faint);font-size:14px;padding:2px 7px;line-height:1}.iconbtn:hover{color:var(--fg)}
 .card .goal{color:var(--muted);font-size:13px;margin:3px 0 8px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 .card .cmeta{display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px}
 .card .cpath{color:var(--faint);font-family:ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
@@ -577,13 +580,9 @@ input:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:tr
 </style></head><body>
 <div class="wrap">
 <h1>coyodex maps</h1>
-<p class="sub">Open a project's map, or add one — paste its folder path, or browse to it.</p>
+<p class="sub">Open a project's map, or add one — start typing a folder to browse, or paste a path and press ↵.</p>
 
-<div class="addbar">
-  <input id="addpath" class="mono" placeholder="Paste a project folder, e.g. ~/code/myrepo" autocomplete="off" spellcheck="false">
-  <button id="addbtn" class="primary">Add</button>
-  <button id="browsebtn">Browse…</button>
-</div>
+<input id="pathbar" class="mono" placeholder="Type or paste a folder — ↵ opens it; type to browse &amp; filter" autocomplete="off" spellcheck="false">
 <div id="adderr" class="err"></div>
 
 <div id="browser" class="browser" hidden>
@@ -591,9 +590,9 @@ input:focus{outline:2px solid var(--accent2);outline-offset:-1px;border-color:tr
     <button id="up" title="Parent folder">↑</button>
     <div id="crumbs" class="crumbs"></div>
     <button id="openfolder" class="primary" disabled>Add this folder</button>
+    <button id="closebrowser" class="iconbtn" title="Close browser">✕</button>
   </div>
   <div id="quick" class="quick"></div>
-  <input id="filter" placeholder="Filter folders…" autocomplete="off">
   <div id="dirs" class="dirs"></div>
 </div>
 
@@ -619,18 +618,17 @@ async function loadRecents(){
   box.innerHTML='';
   for(const it of recents){
     const c=document.createElement('div');c.className='card';
-    const title=(it.ok&&it.rendered)
-      ? '<a class="title" href="/p/'+encodeURIComponent(it.slug)+'/">'+esc(it.title)+'</a>'
-      : '<span class="title dead">'+esc(it.title)+'</span>';
     const goal=it.goal?'<p class="goal">'+esc(it.goal)+'</p>':'';
     let meta='<span class="cpath" title="'+esc(it.path)+'">'+esc(shorten(it.path))+'</span>';
     if(it.commit)meta+='<span class="csha">'+esc(it.commit.slice(0,10))+'</span>';
     if(!it.ok)meta+='<span class="warn">map missing or invalid</span>';
     else if(!it.rendered)meta+='<span class="warn">not rendered</span><button class="copy" data-path="'+esc(it.path)+'">Copy render cmd</button>';
-    c.innerHTML=title+goal+'<div class="cmeta">'+meta+'</div><button class="x" title="Remove from list">✕</button>';
-    c.querySelector('.x').onclick=async()=>{await jpost('/api/forget',{path:it.path});loadRecents();};
+    c.innerHTML='<span class="title'+(it.ok&&it.rendered?'':' dead')+'">'+esc(it.title)+'</span>'+goal
+      +'<div class="cmeta">'+meta+'</div><button class="x" title="Remove from list">✕</button>';
+    if(it.ok&&it.rendered){c.classList.add('clickable');c.onclick=()=>{location.href='/p/'+encodeURIComponent(it.slug)+'/';};}  // whole card opens the map
+    c.querySelector('.x').onclick=async e=>{e.stopPropagation();await jpost('/api/forget',{path:it.path});loadRecents();};
     const cp=c.querySelector('.copy');
-    if(cp)cp.onclick=()=>{const cmd='cd "'+cp.dataset.path+'" && coyodex render .coyodex/project-map.json .coyodex/project-map.html';if(navigator.clipboard)navigator.clipboard.writeText(cmd);toast('Render command copied');};
+    if(cp)cp.onclick=e=>{e.stopPropagation();const cmd='cd "'+cp.dataset.path+'" && coyodex render .coyodex/project-map.json .coyodex/project-map.html';if(navigator.clipboard)navigator.clipboard.writeText(cmd);toast('Render command copied');};
     box.appendChild(c);
   }
   renderQuick();
@@ -642,23 +640,37 @@ async function addPath(path){
   if(r.ok){$('adderr').textContent='';await loadRecents();toast('Added');return true;}
   $('adderr').textContent=await r.text();return false;
 }
-$('addbtn').onclick=async()=>{if(await addPath($('addpath').value.trim()))$('addpath').value='';};
-$('addpath').addEventListener('keydown',async e=>{if(e.key==='Enter'&&await addPath($('addpath').value.trim()))$('addpath').value='';});
 
-$('browsebtn').onclick=()=>{const b=$('browser');b.hidden=!b.hidden;if(!b.hidden&&!cur)browse('');};
+/* --- integrated path bar + folder browser (one control, not two) --- */
+function openBrowser(){const b=$('browser');if(b.hidden){b.hidden=false;if(!cur)browse(home||'');}}
+function closeBrowser(){$('browser').hidden=true;}
+// A typed path: absolute (/…), home (~/…), or RELATIVE to the current folder (e.g. "mee6/repos" at Home).
+function resolvePath(v){if(v[0]==='/')return v;if(v[0]==='~')return (home||'')+v.slice(1);return (cur||home||'')+'/'+v;}
+// While you type a bare name (no "/"), it live-filters the current folder; a path (with "/") shows all, ↵ navigates.
+function filterFrag(){const v=$('pathbar').value;return v.includes('/')?'':v.trim().toLowerCase();}
+async function goPath(){
+  const v=$('pathbar').value.trim();if(!v)return;
+  let d;try{d=await fetchBrowse(resolvePath(v));}catch(_){$('adderr').textContent='No such folder.';return;}
+  $('adderr').textContent='';
+  if(d.hasMap){if(await addPath(d.path)){$('pathbar').value='';renderList();}}  // typed a project folder -> add it
+  else{applyBrowse(d);$('pathbar').value='';}                                    // typed a parent folder -> browse in
+}
+$('pathbar').addEventListener('focus',openBrowser);
+$('pathbar').addEventListener('input',()=>{openBrowser();renderList();});
+$('pathbar').addEventListener('keydown',e=>{if(e.key==='Enter')goPath();});
 $('up').onclick=()=>{if(curParent)browse(curParent);};
 $('openfolder').onclick=()=>addPath(cur);
-$('filter').addEventListener('input',renderList);
-$('filter').addEventListener('keydown',e=>{if(e.key==='Enter'){const f=$('dirs').querySelector('.dir:not(.empty)');if(f)f.click();}});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('browser').hidden)$('browser').hidden=true;});
+$('closebrowser').onclick=closeBrowser;
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('browser').hidden)closeBrowser();});
 
-async function browse(path){
-  let d;try{d=await jget('/api/browse'+(path?'?path='+encodeURIComponent(path):''));}catch(_){return;}
+async function fetchBrowse(path){return jget('/api/browse'+(path?'?path='+encodeURIComponent(path):''));}
+function applyBrowse(d){
   home=d.home;cur=d.path;curParent=d.parent;entries=d.entries;
   $('up').disabled=!d.parent;
   const of=$('openfolder');of.disabled=!d.hasMap;of.textContent=d.hasMap?'Add this folder':'No map here';
-  renderCrumbs();$('filter').value='';renderList();
+  renderCrumbs();renderList();
 }
+async function browse(path){let d;try{d=await fetchBrowse(path);}catch(_){return;}applyBrowse(d);}
 function renderCrumbs(){
   const box=$('crumbs');box.innerHTML='';
   const seg=(label,t)=>{const b=document.createElement('button');b.className='crumb';b.textContent=label;b.onclick=()=>browse(t);return b;};
@@ -677,14 +689,14 @@ function renderQuick(){
   for(const[label,path]of chips){const b=document.createElement('button');b.className='chip';b.textContent=label;b.title=path;b.onclick=()=>browse(path);box.appendChild(b);}
 }
 function renderList(){
-  const q=($('filter').value||'').toLowerCase();const box=$('dirs');box.innerHTML='';
+  const q=filterFrag();const box=$('dirs');box.innerHTML='';
   const ordered=[...entries.filter(e=>e.hasMap),...entries.filter(e=>!e.hasMap)].filter(e=>e.name.toLowerCase().includes(q));
   if(!ordered.length){box.innerHTML='<div class="dir empty">'+(entries.length?'No matching folders.':'(no subfolders)')+'</div>';return;}
   for(const e of ordered){
     const row=document.createElement('div');row.className='dir'+(e.hasMap?' hasmap':'');
     row.innerHTML='<span class="ic">'+(e.hasMap?'🗺️':'📁')+'</span><span class="dn">'+esc(e.name)+'</span>'
       +(e.hasMap?'<span class="mapbadge">map</span><button class="mini primary add">+ Add</button>':'');
-    row.onclick=()=>browse(e.path);
+    row.onclick=()=>{$('pathbar').value='';browse(e.path);};  // navigating clears the filter for the new folder
     const a=row.querySelector('.add');if(a)a.onclick=ev=>{ev.stopPropagation();addPath(e.path);};
     box.appendChild(row);
   }

@@ -2606,6 +2606,10 @@ async function initServerMode() {
   } catch (_) { return; }  // no server — stay degraded
   SERVED = true;
   document.body.classList.add('served');
+  // The header title becomes a link back to the server's landing page (all maps) — only in FULL mode,
+  // since a static file:// map has no server root to return to.
+  const h1 = document.querySelector('header h1');
+  if (h1) { h1.classList.add('home-link'); h1.title = 'Back to all maps'; h1.addEventListener('click', () => { location.href = new URL('/', location.href).href; }); }
   refitStage();  // the diagram column just narrowed to make room for the browser + code panes
   loadServerTree();
 }
