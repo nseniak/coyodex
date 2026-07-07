@@ -1302,6 +1302,47 @@ def flow_narratives(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
     return {str(f["uc"]): flow_narrative(graph, f) for f in graph["flows"]}
 
 
+def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
+    """Per-actor (Role) participants in one use-case flow, in the SAME `FAn` alias order gen_flow_mermaid
+    assigns them, so the viewer's actor lifeline lines up with its rendered `data-id`. Mirrors gp_actors
+    for the Golden Path, scoped to this one flow: each actor links back to its Roles-table entry (kind +
+    wants) and lists which of THIS flow's own steps it drives — `stepIdx` indexes the SAME filtered,
+    ordered step list flow_narrative returns (== the viewer's FLOWS_NARR[uc]), so the two stay in
+    lockstep. A role can drive more than one step (e.g. it also receives the final reply).
+    `is_role` mirrors flow_narrative's srcId/dstId predicate exactly (an id absent from the current
+    graph reads as a role, not a dangling element) so the two functions never disagree on a step."""
+    steps = [st for st in cast("list[dict[str, Any]]", flow.get("steps") or []) if st.get("ok")]
+
+    def is_role(tok: str, is_id: bool) -> bool:
+        return not (is_id and tok in graph["nodes"])
+
+    roles_by_name = {_safe_msg(r["name"]).strip().lower(): r for r in graph["roles"]}
+    order: dict[str, str] = {}  # role display name -> alias (FAn), first-appearance order
+    for st in steps:
+        for tok, is_id in ((str(st["src"]), bool(st.get("src_is_id"))), (str(st["dst"]), bool(st.get("dst_is_id")))):
+            if is_role(tok, is_id):
+                order.setdefault(tok, "FA" + str(len(order)))
+    out: list[dict[str, Any]] = []
+    for name, aid in order.items():
+        idxs = [i for i, st in enumerate(steps)
+                if (is_role(str(st["src"]), bool(st.get("src_is_id"))) and str(st["src"]) == name)
+                or (is_role(str(st["dst"]), bool(st.get("dst_is_id"))) and str(st["dst"]) == name)]
+        role = roles_by_name.get(name.strip().lower())
+        out.append({
+            "aid": aid,
+            "name": name,
+            "kind": str(role["kind"]) if role else "",
+            "wants": str(role["wants"]) if role else "",
+            "stepIdx": idxs,
+        })
+    return out
+
+
+def flow_actors_map(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
+    """{uc_id: [actor, …]} for every T6 flow — the flow-level companion to gp_actors, one list per flow."""
+    return {str(f["uc"]): flow_actors(graph, f) for f in graph["flows"]}
+
+
 def merged_graph(graph: GraphDict, diff: DiffDict | None) -> dict[str, Any]:
     """Graph + diff annotations (added nodes inserted, change status on nodes) for the panel."""
     g = cast("dict[str, Any]", copy.deepcopy(graph))
@@ -1472,7 +1513,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
              domain_edge_cards: dict[str, str], bridge_cards: dict[str, str],
              domain_container_edges: dict[str, list[dict[str, str]]], subdomains: bool,
              gp_mm: str, flows_mm: dict[str, str], flows_narr: dict[str, list[dict[str, Any]]],
-             gp_actors_list: list[dict[str, Any]], gp: bool,
+             gp_actors_list: list[dict[str, Any]], flow_actors_list: dict[str, list[dict[str, Any]]], gp: bool,
              libs_mm: str, folded: list[dict[str, str]],
              repo_root: str, gh_repo: str | None, gh_commit: str | None,
              file_tree: FileTreeNode | None) -> str:
@@ -1503,6 +1544,7 @@ def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
         .replace("__FLOWS_NARR__", json.dumps(flows_narr))
         .replace("__ELEMENT_TINT__", json.dumps(ELEMENT_TINT))
         .replace("__GP_ACTORS__", json.dumps(gp_actors_list))
+        .replace("__FLOW_ACTORS__", json.dumps(flow_actors_list))
         .replace("__MERMAID_LIBS__", json.dumps(libs_mm))
         .replace("__FOLDED_LIBS__", json.dumps(folded))
         .replace("__CONTEXT_EDGES__", json.dumps(context_edges))
@@ -1564,6 +1606,7 @@ def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
     # are computed from graph["flows"] directly (empty when the map has no T6 section).
     flows_mm = flow_mermaids(graph)
     flows_narr = flow_narratives(graph)
+    flow_actors_list = flow_actors_map(graph)
     libs_mm = gen_libs_mermaid(graph)
     folded = folded_libs(graph)
     # File-browser pane: the mapped repo's real tree (rooted at the same repo_root the source links
@@ -1574,7 +1617,7 @@ def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
                     container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
                     domain_container_mm, domain_sub, domain_edge_cards, bridge_cards, domain_container_edges, subdomains,
-                    gp_mm, flows_mm, flows_narr, gp_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit, file_tree)
+                    gp_mm, flows_mm, flows_narr, gp_actors_list, flow_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit, file_tree)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(html, encoding="utf-8")
 

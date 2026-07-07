@@ -18,6 +18,7 @@ const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): use 
 const FLOWS_MM = __FLOWS_MM__;                    // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
 const FLOWS_NARR = __FLOWS_NARR__;                // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
 const GP_ACTORS = __GP_ACTORS__;                  // Golden-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
+const FLOW_ACTORS = __FLOW_ACTORS__;              // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level actor lifelines (mirrors GP_ACTORS, scoped to one flow's own steps)
 const ELEMENT_TINT = __ELEMENT_TINT__;            // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
 const MERMAID_LIBS = __MERMAID_LIBS__;            // Context "Libraries" drill: System + the folded in-process deps
 const FOLDED_LIBS = __FOLDED_LIBS__;              // [{id,name,type}] folded out of Context into the Libraries box
@@ -745,6 +746,20 @@ function showUseCase(uc) {
 // entity leaves) / tooltip like nodes; message arrows select (the backbone edge, or the actor step) / focus / tooltip
 // like edges; the role actor gets a meaning tooltip. message[i] <-> FLOWS_NARR[uc][i] (gen_flow_mermaid
 // emits one message per ok step, in the order flow_narrative lists them).
+// Mermaid centers a sequence-diagram message label over its arrow (text-anchor: middle, x = midpoint) —
+// left-align it instead: pin the label's left edge just past the arrow's leftmost point, with a small
+// padding, so a top-to-bottom read of the steps starts every label at the same x instead of one that
+// drifts with each arrow's length. getBBox() (not x1/x2) works whether the arrow is a <line> or a <path>.
+function leftAlignMessageLabels(texts, lineByIdx) {
+  texts.forEach((text, i) => {
+    const line = lineByIdx[i];
+    if (!text || !line) return;
+    let bb; try { bb = line.getBBox(); } catch (_) { return; }
+    const em = parseFloat(getComputedStyle(text).fontSize) || 16;  // 1em gap, in the label's own units
+    text.setAttribute('x', String(bb.x + em));
+    text.setAttribute('text-anchor', 'start');
+  });
+}
 function bindFlow(uc) {
   const scene = mainScene, root = scene.root;
   const steps = FLOWS_NARR[uc] || [];
@@ -777,6 +792,7 @@ function bindFlow(uc) {
     const m = (ln.getAttribute('data-id') || '').match(/^i(\d+)$/);
     if (m) lineByIdx[+m[1]] = ln;
   });
+  leftAlignMessageLabels(texts, lineByIdx);
   const msgEls = steps.map((_, i) => [texts[i], lineByIdx[i]].filter(Boolean));
   for (const els of msgEls) for (const el of els) scene.dimEls.push(el);
 
@@ -787,12 +803,12 @@ function bindFlow(uc) {
     const select = () => {
       scene.selectedKey = selKey;
       showNode(id);
-      const keep = new Set(parts);
+      const stepEls = myMsg.flatMap((i) => msgEls[i] || []);
+      const keep = new Set([...parts, ...stepEls]);
       for (const i of myMsg) {
-        for (const el of msgEls[i]) keep.add(el);
         for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
       }
-      sceneSelect(scene, () => gpHighlight(scene, parts));
+      sceneSelect(scene, () => gpHighlight(scene, [...parts, ...stepEls]));
       gpFocus(scene, keep);
     };
     scene.selectors[selKey] = select;  // so back/forward can restore this participant selection
@@ -811,6 +827,42 @@ function bindFlow(uc) {
         select();
       });
     }
+  }
+
+  // role (actor) participants: same "select -> highlight my messages, dim the rest" as an element
+  // participant above, just addressed differently — a Role has no graph node of its own, so
+  // FLOW_ACTORS (gen_viewer.flow_actors) hands us its Mermaid alias (data-id) instead of a node id.
+  // Mirrors bindGP's actor loop below, the same DOM shape (stick figure + lifeline).
+  const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
+  for (const a of (FLOW_ACTORS[uc] || [])) {
+    const selKey = 'flowactor:' + uc + ':' + a.aid;
+    const figT = root.querySelector('.actor-top[data-id="' + a.aid + '"]');
+    const life = root.querySelector('line.actor-line[data-id="' + a.aid + '"]');
+    const figB = bottoms.find((g) => (g.textContent || '').trim() === a.name) || null;
+    const parts = [figT, figB, life].filter(Boolean);
+    if (!parts.length) continue;
+    for (const el of parts) scene.dimEls.push(el);
+    const select = () => {
+      scene.selectedKey = selKey;
+      showFlowActor(uc, a);
+      const stepEls = a.stepIdx.flatMap((i) => msgEls[i] || []);
+      const keep = new Set([...parts, ...stepEls]);
+      for (const i of a.stepIdx) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
+      sceneSelect(scene, () => gpHighlight(scene, [...parts, ...stepEls]));
+      gpFocus(scene, keep);
+    };
+    scene.selectors[selKey] = select;
+    const on = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = HOVER; };
+    const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = gpRestFilter(scene, el); };
+    const click = (e) => { if (isDrag(e)) return; e.stopPropagation(); select(); };
+    for (const el of parts) {
+      if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', click);
+      el.addEventListener('mouseenter', on);
+      el.addEventListener('mouseleave', off);
+    }
+    if (life) attachEdgeHandlers(life, null, click, on, off, null);
   }
 
   // messages: select (the backbone edge for an element↔element step, else the step's own panel) / focus /
@@ -858,6 +910,18 @@ function showGPActor(a) {
   const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
   const drives = (a.steps || []).map((st) =>
     '<dd>' + esc(st.title || st.id) + '</dd>').join('');
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>' + kindBadge + '</div>'
+    + (a.wants ? '<p class="explain">' + mdInline(a.wants) + '</p>' : '')
+    + (drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '');
+}
+// A flow-level actor's card — the same idea as showGPActor, scoped to one flow: its kind, what its
+// role wants, and which of THIS flow's own steps it drives. Reads those steps straight out of
+// FLOWS_NARR by index rather than duplicating their text in FLOW_ACTORS.
+function showFlowActor(uc, a) {
+  const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
+  const flowSteps = FLOWS_NARR[uc] || [];
+  const drives = a.stepIdx.map((i) => flowSteps[i]).filter(Boolean)
+    .map((st) => '<dd>' + esc(st.src) + ' <em>' + esc(st.verb) + '</em> ' + esc(st.dst) + '</dd>').join('');
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>' + kindBadge + '</div>'
     + (a.wants ? '<p class="explain">' + mdInline(a.wants) + '</p>' : '')
     + (drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '');
@@ -1843,6 +1907,7 @@ function bindGP() {
     const m = (ln.getAttribute('data-id') || '').match(/^i(\d+)$/);
     if (m) lineByIdx[+m[1]] = ln;
   });
+  leftAlignMessageLabels(texts, lineByIdx);
   scene.gpMsg = {};  // step index -> { text, line }
   for (let i = 0; i < (GRAPH.gp || []).length; i++) {
     const text = texts[i] || null;
@@ -1876,8 +1941,11 @@ function bindGP() {
     // A dimmed step (gpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
     // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
     const on = () => { if (scene.selectedKey !== selKey) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
-    // restore to the resting glow (an actor-selected step keeps its HILITE), not blank
-    const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = gpRestFilter(scene, text); if (line) line.style.filter = gpRestFilter(scene, line); hideIcon(icon); } };
+    // restore to the resting glow (an actor-selected step keeps its HILITE), not blank — and for the
+    // same reason, the pill sticks too: `scene.gpLit` is exactly what gpRestFilter already checks to
+    // decide that, so hiding the icon only when this step ISN'T in that lit set keeps it up for as
+    // long as its driving actor is selected, not just for as long as the step itself is.
+    const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = gpRestFilter(scene, text); if (line) line.style.filter = gpRestFilter(scene, line); if (!scene.gpLit.has(text)) hideIcon(icon); } };
     const click = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
