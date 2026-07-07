@@ -32,11 +32,32 @@ machine that has never seen coyodex (the only external load is the pinned + SRI 
 .venv/bin/coyodex render .coyodex/project-map.json .coyodex/project-map.html [analysis-changes/<date>.md]
 ```
 
-To view, serve over http (file:// can't fetch the CDN libs cleanly):
+Then just open `project-map.html` — double-click it, no server needed. (The CDN libs are plain
+pinned + SRI `<script>` tags, which load fine over `file://`.)
+
+## Two modes: the file browser + code viewer (`coyodex serve`)
+
+The same HTML adapts to how it's opened:
+
+- **Opened as a file** (double-click, `file://`, or committed and shared) — **DEGRADED**: the
+  diagram + info panel. Self-contained and portable: it opens on any machine with nothing installed,
+  because a `file://` page can't read your local source files.
+- **Opened through the map server** (`http://…/<project>/`) — **FULL**: the diagram + info panel
+  **plus** a live file browser and a syntax-highlighted code viewer. Both read their files from git
+  **at the map's commit** (via `git ls-tree` / `git show`), so what you see always matches the map
+  and edits on disk never leak in.
+
+Start the server (one server serves every project it finds — any folder with a `.coyodex/`):
 
 ```bash
-python3 -m http.server 8753 -d .coyodex   # → http://localhost:8753/project-map.html
+make start                       # scans the parent dir; opens the project list in a browser
+# or directly, choosing what to scan and the port:
+.venv/bin/coyodex serve ~/code --port 8765 --open
 ```
+
+Then open `http://127.0.0.1:8765/` and pick a project (or go straight to `…/<project>/`). Nothing is
+embedded for these panes — the browser tree and code both come from the server on demand, so the
+committed HTML stays lean. highlight.js is lazy-loaded from a pinned + SRI CDN on first use.
 
 ## What it shows — the C4 altitudes
 

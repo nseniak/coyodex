@@ -609,6 +609,7 @@ function showEdge(e) {
   // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
   // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
   highlightTreePath(refTreePath(wn && wn.file, wn && wn.line));
+  if (wn) syncCodeView(wn.file, wn.line);  // and into the code viewer (FULL mode)
 }
 
 // Context-edge panel: actor→system shows the role's wants; system→dep shows what it's used for
@@ -2181,18 +2182,31 @@ function updateZoomLevel() {  // reflect the current pan-zoom scale in the heade
 }
 
 // Keep the diagram fitted to the stage as the side bars (or the window) resize it. svg-pan-zoom caches
-// the container size at init, so without this the content would clip/misalign when #stage's width
-// changes. We re-fit (not just resize) so the SAME content stays framed in the new width — the diagram
-// rescales with the stage instead of getting cut off. Coalesced to one re-fit per animation frame so a
+// the container size at init, so without this the content would clip/misalign when #stage's size
+// changes. Both variants are coalesced to one call per animation frame (via the shared refitRaf) so a
 // drag's mousemove stream stays smooth.
 let refitRaf = 0;
-function refitStage() {
+function scheduleStage(fn) {
   if (refitRaf) return;
-  refitRaf = requestAnimationFrame(() => {
-    refitRaf = 0;
-    if (!mainPz) return;
-    mainPz.resize(); mainPz.fit(); mainPz.center();
-    updateZoomLevel();
+  refitRaf = requestAnimationFrame(() => { refitRaf = 0; if (mainPz) { fn(); updateZoomLevel(); } });
+}
+// Re-FIT: the SAME content is re-framed in the new size (zoom resets to fit, recentered). Used when the
+// stage's WIDTH changes (side bars / window) — the diagram should reflow to the new width.
+function refitStage() { scheduleStage(() => { mainPz.resize(); mainPz.fit(); mainPz.center(); }); }
+// PRESERVE: keep the user's current zoom level and keep the point that was at the viewport centre at the
+// centre — the diagram doesn't jump. Used for the vertical split (info-pane height), where re-fitting
+// would throw away a zoom-in every time the reader nudges the divider.
+function resizeStagePreserve() {
+  scheduleStage(() => {
+    const b = mainPz.getSizes();                          // container size + realZoom BEFORE the resize
+    const pan = mainPz.getPan();
+    const cx = (b.width / 2 - pan.x) / b.realZoom;        // SVG-space point currently under the viewport centre
+    const cy = (b.height / 2 - pan.y) / b.realZoom;
+    const z = mainPz.getZoom();
+    mainPz.resize();
+    mainPz.zoom(z);                                       // resize() can snap zoom back to fit — restore it
+    const a = mainPz.getSizes();                          // realZoom AFTER (base fit may have shifted)
+    mainPz.pan({ x: a.width / 2 - a.realZoom * cx, y: a.height / 2 - a.realZoom * cy });  // re-centre on the same point
   });
 }
 
@@ -2400,13 +2414,16 @@ function onRowClick(key) {
     // rest, kept instead of dropped — selectFromTreeAnchors decides whether that's one thing or several.
     if (e.node) { suppressTreeScroll = true; selectFromTreeAnchors([e.node, ...e.others], key); }
   } else if (e.node) {
+    // A mapped file: selecting its node also loads it into the code viewer AT the node's line
+    // (syncTreeToNode -> syncCodeView), so no separate loadCode is needed here.
     suppressTreeScroll = true;
     selectFromTreeAnchors([e.node, ...e.others], key);  // this exact file collided — e.others carries the rest
-  } else if (e.sel) {
-    suppressTreeScroll = true;
-    selectFromTree(e.sel);     // no exact match here — its owning subsystem/entity (finer grain), single target
   } else {
-    flashNoMap(rec.row);       // unmapped file: a click does nothing -> brief hint
+    // A file that is not itself a node: show its source directly (no line). If it sits under a mapped
+    // folder, also select that owning subsystem/entity — but the file the reader clicked is what the
+    // code viewer shows, not the owner's own anchor.
+    loadCode(e.path, null);
+    if (e.sel) { suppressTreeScroll = true; selectFromTree(e.sel); }
   }
 }
 function toggleDir(key) {
@@ -2423,7 +2440,6 @@ function expandDir(key) {  // ensure a folder is open + its children built (used
   rec.row.classList.add('open');
   if (!rec.built) { renderChildrenInto(rec.kids, rec.entry.children, rec.depth + 1); rec.built = true; }
 }
-function flashNoMap(row) { row.classList.add('flash'); setTimeout(() => row.classList.remove('flash'), 450); }
 
 // tree -> graph: which view draws `id` (so the box exists to select), and the id to select there.
 function selectTargetFor(id) {
@@ -2510,6 +2526,7 @@ function syncTreeToNode(id) {
   const n = GRAPH.nodes[id];
   const path = pathByNode[id] || (n ? refTreePath(n.file, n.line) : null);
   highlightTreePath(path);
+  if (n) syncCodeView(n.file, n.line);  // mirror the node's source into the code viewer (FULL mode)
 }
 function highlightTreePath(path) {
   const skipScroll = suppressTreeScroll;
@@ -2548,8 +2565,9 @@ function highlightTreePath(path) {
   }
   rec.row.scrollIntoView({ block: 'center' });
 }
-function buildFileTree() {
-  if (!FILE_TREE) { document.body.classList.add('no-tree'); return; }
+// Build the file browser from a tree root (embedded FILE_TREE in the legacy path, or the server's
+// /api/tree in FULL mode). Indexes node<->path both ways, then renders the top level.
+function renderFileTree(root) {
   (function index(e) {
     if (e.node) {
       pathByNode[e.node] = treeKey(e.path);
@@ -2557,10 +2575,173 @@ function buildFileTree() {
       if (all.length > 1) for (const id of all) siblingsByNode[id] = all;
     }
     for (const c of e.children) index(c);
-  })(FILE_TREE);
-  const kids = FILE_TREE.children || [];
+  })(root);
+  const kids = root.children || [];
+  treeBody.innerHTML = '';
   if (!kids.length) { treeBody.innerHTML = '<div class="tempty">No files found.</div>'; return; }
   renderChildrenInto(treeBody, kids, 0);
+}
+function buildFileTree() {
+  // The tree is no longer embedded; it arrives from the server (see initServerMode). Kept as the
+  // single build entry point so a future embedded fallback can route through the same renderer.
+  if (FILE_TREE) renderFileTree(FILE_TREE);
+}
+
+// --- FULL mode: the coyodex server (file browser + code viewer) ------------------
+// The map HTML adapts to how it was opened. Served by `coyodex serve` (http://…/<project>/) it is in
+// FULL mode: the file browser and code viewer read from the server, which serves files from git at the
+// map's commit. Opened as a static file (file://) it stays in DEGRADED mode — diagram + info only —
+// because a file:// page can't read local files. Detection: an http(s) origin whose /api/health probe
+// answers. The API base is the map's own directory + "api/" (works whether the URL ends in the project
+// folder or in project-map.html).
+let SERVED = false;
+const API_BASE = /^https?:$/.test(location.protocol) ? new URL('./api/', location.href).href : null;
+async function initServerMode() {
+  if (!API_BASE) return;  // file:// — degraded mode, nothing to probe
+  try {
+    const r = await fetch(API_BASE + 'health', { cache: 'no-store' });
+    if (!r.ok) return;
+    const j = await r.json();
+    if (!j || !j.ok) return;
+  } catch (_) { return; }  // no server — stay degraded
+  SERVED = true;
+  document.body.classList.add('served');
+  refitStage();  // the diagram column just narrowed to make room for the browser + code panes
+  loadServerTree();
+}
+async function loadServerTree() {
+  try {
+    const r = await fetch(API_BASE + 'tree', { cache: 'no-store' });
+    if (!r.ok) throw new Error('tree ' + r.status);
+    renderFileTree(await r.json());
+  } catch (_) {
+    treeBody.innerHTML = '<div class="tempty">Could not load the file tree.</div>';
+  }
+}
+
+// --- code viewer -----------------------------------------------------------------
+// A first-pass read-only source view: fetch the file from the server (git @ commit), highlight it with
+// highlight.js (lazy-loaded from a CDN, SRI-pinned like the other libs), show a line-number gutter, and
+// scroll to / highlight the current line. Deliberately simple — richer navigation is a planned follow-up.
+const cvbody = document.getElementById('cvbody');
+const cvpath = document.getElementById('cvpath');
+let cvPath = null, cvTable = null;  // the file currently shown + its rendered table (for same-file line moves)
+let cvLine = null;                  // the line to highlight — a module var so a line that arrives while the
+                                    // file is still loading (tree click: file-load then node-select) still lands
+let cvReq = 0;                      // request token — a newer load supersedes an in-flight older one
+const HLJS_VER = '11.9.0';
+const HLJS_JS = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/' + HLJS_VER + '/highlight.min.js';
+const HLJS_JS_SRI = 'sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp';
+const HLJS_CSS = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/' + HLJS_VER + '/styles/github.min.css';
+const HLJS_CSS_SRI = 'sha384-eFTL69TLRZTkNfYZOLM+G04821K1qZao/4QLJbet1pP4tcF+fdXq/9CdqAbWRl/L';
+const EXT_LANG = { js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript', ts: 'typescript', tsx: 'typescript', py: 'python', rb: 'ruby', go: 'go', rs: 'rust', java: 'java', kt: 'kotlin', c: 'c', h: 'c', cpp: 'cpp', cc: 'cpp', hpp: 'cpp', cs: 'csharp', php: 'php', swift: 'swift', scala: 'scala', sh: 'bash', bash: 'bash', zsh: 'bash', sql: 'sql', json: 'json', yaml: 'yaml', yml: 'yaml', toml: 'ini', ini: 'ini', md: 'markdown', html: 'xml', xml: 'xml', css: 'css', scss: 'scss' };
+const langOf = (p) => EXT_LANG[(p.split('.').pop() || '').toLowerCase()] || null;
+let hljsP = null;
+function ensureHljs() {
+  if (window.hljs) return Promise.resolve(window.hljs);
+  if (!hljsP) hljsP = new Promise((res) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = HLJS_CSS; css.integrity = HLJS_CSS_SRI; css.crossOrigin = 'anonymous';
+    document.head.appendChild(css);
+    const s = document.createElement('script');
+    s.src = HLJS_JS; s.integrity = HLJS_JS_SRI; s.crossOrigin = 'anonymous';
+    s.onload = () => res(window.hljs || null);
+    s.onerror = () => res(null);  // CDN blocked/offline — fall back to un-highlighted text
+    document.head.appendChild(s);
+  });
+  return hljsP;
+}
+// Split highlight.js's flat markup into per-line HTML, re-opening any spans that straddle a newline so
+// each line's markup is self-balanced (needed for the one-row-per-line table + gutter).
+function highlightedToLines(rootEl) {
+  const lines = [''];
+  const openTag = (el) => {
+    const cls = el.getAttribute('class');
+    return '<' + el.tagName.toLowerCase() + (cls ? ' class="' + esc(cls) + '"' : '') + '>';
+  };
+  (function walk(node, stack) {
+    for (const ch of node.childNodes) {
+      if (ch.nodeType === 3) {
+        const parts = ch.nodeValue.split('\n');
+        for (let i = 0; i < parts.length; i++) {
+          if (i > 0) {
+            for (let j = stack.length - 1; j >= 0; j--) lines[lines.length - 1] += '</' + stack[j].tagName.toLowerCase() + '>';
+            lines.push(stack.map(openTag).join(''));
+          }
+          lines[lines.length - 1] += esc(parts[i]);
+        }
+      } else if (ch.nodeType === 1) {
+        lines[lines.length - 1] += openTag(ch);
+        stack.push(ch); walk(ch, stack); stack.pop();
+        lines[lines.length - 1] += '</' + ch.tagName.toLowerCase() + '>';
+      }
+    }
+  })(rootEl, []);
+  return lines;
+}
+function markLine(line) {
+  if (!cvTable) return;
+  const prev = cvTable.querySelector('tr.cvcur');
+  if (prev) prev.classList.remove('cvcur');
+  if (!line) return;
+  const row = cvTable.querySelector('tr[data-ln="' + line + '"]');
+  if (row) { row.classList.add('cvcur'); row.scrollIntoView({ block: 'center' }); }
+}
+function renderCode(path, text, token) {
+  text = text.replace(/\r\n/g, '\n');  // normalize CRLF so neither path leaves a stray \r under white-space:pre
+  ensureHljs().then((hl) => {
+    if (token !== cvReq) return;  // superseded by a newer load
+    let lineHtml;
+    if (hl) {
+      const lang = langOf(path);
+      let out = null;
+      try { out = lang && hl.getLanguage(lang) ? hl.highlight(text, { language: lang, ignoreIllegals: true }) : hl.highlightAuto(text); }
+      catch (_) { out = null; }
+      const tmp = document.createElement('div');
+      tmp.innerHTML = out ? out.value : esc(text);  // hljs output is trusted markup; the fallback is esc()
+      lineHtml = highlightedToLines(tmp);
+    } else {
+      lineHtml = text.split('\n').map(esc);
+    }
+    if (lineHtml.length && lineHtml[lineHtml.length - 1] === '') lineHtml.pop();  // drop trailing blank line
+    const rows = lineHtml.map((h, i) =>
+      '<tr data-ln="' + (i + 1) + '"><td class="ln">' + (i + 1) + '</td><td class="code hljs">' + (h || '&nbsp;') + '</td></tr>').join('');
+    cvbody.innerHTML = '<table class="cvcode"><tbody>' + rows + '</tbody></table>';
+    cvTable = cvbody.querySelector('table.cvcode');
+    markLine(cvLine);  // the latest requested line (may have arrived after the fetch started)
+  });
+}
+// Load `path` (repo-relative) into the code viewer, scrolled to `line`. Same file + new line just moves
+// the highlight (no refetch). Only meaningful in FULL mode; a no-op otherwise.
+async function loadCode(path, line) {
+  if (!SERVED || !path) return;
+  cvLine = line || null;
+  cvpath.textContent = path + (cvLine ? ':' + cvLine : '');
+  if (path === cvPath) { markLine(cvLine); return; }  // same file already (or) loading — just move the line
+  const token = ++cvReq;
+  cvPath = path; cvTable = null;
+  cvbody.innerHTML = '<p class="cvempty">Loading…</p>';
+  let text = null;
+  try {
+    const r = await fetch(API_BASE + 'src?path=' + encodeURIComponent(path), { cache: 'no-store' });
+    if (token !== cvReq) return;
+    if (!r.ok) {
+      cvbody.innerHTML = '<p class="cverr">' + (r.status === 404 ? 'Not tracked in this commit.' : 'Could not load this file.') + '</p>';
+      cvPath = null; return;
+    }
+    text = await r.text();
+  } catch (_) {
+    if (token === cvReq) { cvbody.innerHTML = '<p class="cverr">Could not load this file.</p>'; cvPath = null; }
+    return;
+  }
+  if (token !== cvReq) return;
+  renderCode(path, text, token);
+}
+// Mirror a selection's source ref into the code viewer — from a node/edge with a local file anchor.
+// Skips directory anchors (a subsystem's folder) and off-repo URLs, which have no single file to show.
+function syncCodeView(file, line) {
+  if (!SERVED || !file || !localRef(file) || isDirRef(file, line)) return;
+  loadCode(cleanPath(file, line), line || null);
 }
 
 // --- startup --------------------------------------------------------------------
@@ -2610,7 +2791,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', panelW: 'coyodex.panelW', treeW: 'coyodex.treeW', treeHidden: 'coyodex.treeHidden' };
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', leftW: 'coyodex.leftW', panelH: 'coyodex.panelH', treeW: 'coyodex.treeW', treeHidden: 'coyodex.treeHidden' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
 // A single global key let a root saved while viewing one repo's map open files from the WRONG repo in
@@ -2816,27 +2997,42 @@ coach.addEventListener('click', (e) => { if (e.target === coach) dismissCoach();
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.hidden) dismissCoach(); });
 if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once
 
-// --- resizable side panel -------------------------------------------------------
-// Drag the handle to set the panel width; persisted so it survives reloads, clamped so both the canvas
-// and the panel stay usable. The drag starts on the handle (not the svg), so svg-pan-zoom never pans.
+// --- resizable left column (diagram + info) -------------------------------------
+// The left column holds the diagram (top) and the info pane (bottom). #resizer sets the whole
+// column's WIDTH (the file browser + code viewer share the rest); #vsplit sets the info pane's
+// HEIGHT within the column (the diagram takes what's left). Both persist and clamp; the drag starts
+// on a handle (not the svg) so svg-pan-zoom never pans.
+const leftcol = document.getElementById('leftcol');
+const clampLeftW = (w) => Math.min(Math.max(w, 360), Math.round(window.innerWidth * 0.85));
+const savedLeftW = parseInt(lsGet(LS.leftW) || '', 10);
+if (savedLeftW) leftcol.style.width = clampLeftW(savedLeftW) + 'px';
 const resizer = document.getElementById('resizer');
-const clampPanelW = (w) => Math.min(Math.max(w, 240), Math.round(window.innerWidth * 0.7));
-const savedPanelW = parseInt(lsGet(LS.panelW) || '', 10);
-if (savedPanelW) panel.style.width = clampPanelW(savedPanelW) + 'px';
 let resizing = false;
 resizer.addEventListener('mousedown', (e) => { e.preventDefault(); resizing = true; document.body.classList.add('resizing'); });
-// The panel now sits between the file browser and the diagram (not flush against the window's right
-// edge), so its width is the distance from ITS OWN left edge to the cursor — not from the window edge.
-document.addEventListener('mousemove', (e) => { if (resizing) { panel.style.width = clampPanelW(e.clientX - panel.getBoundingClientRect().left) + 'px'; refitStage(); } });
+document.addEventListener('mousemove', (e) => { if (resizing) { leftcol.style.width = clampLeftW(e.clientX - leftcol.getBoundingClientRect().left) + 'px'; refitStage(); } });
 document.addEventListener('mouseup', () => {
   if (!resizing) return;
   resizing = false; document.body.classList.remove('resizing');
-  lsSet(LS.panelW, String(parseInt(panel.style.width, 10) || ''));
+  lsSet(LS.leftW, String(parseInt(leftcol.style.width, 10) || ''));
+});
+
+// Vertical split: the info pane's height is the distance from the cursor up to the column's bottom.
+const vsplit = document.getElementById('vsplit');
+const clampPanelH = (h) => Math.min(Math.max(h, 120), Math.round(window.innerHeight * 0.7));
+const savedPanelH = parseInt(lsGet(LS.panelH) || '', 10);
+if (savedPanelH) panel.style.height = clampPanelH(savedPanelH) + 'px';
+let vresizing = false;
+vsplit.addEventListener('mousedown', (e) => { e.preventDefault(); vresizing = true; document.body.classList.add('vresizing'); });
+document.addEventListener('mousemove', (e) => { if (vresizing) { panel.style.height = clampPanelH(leftcol.getBoundingClientRect().bottom - e.clientY) + 'px'; resizeStagePreserve(); } });
+document.addEventListener('mouseup', () => {
+  if (!vresizing) return;
+  vresizing = false; document.body.classList.remove('vresizing');
+  lsSet(LS.panelH, String(parseInt(panel.style.height, 10) || ''));
 });
 
 // --- file browser: build + toggle + resize --------------------------------------
-// Same persist-and-clamp model as the side panel, mirrored to the left edge. The pane folds away via
-// the header toggle; both its width and folded state survive reloads.
+// The pane folds away via the header toggle; both its width and folded state survive reloads. #treeresizer
+// sits on the tree's RIGHT edge, so its width is the distance from the tree's own left edge to the cursor.
 const tree = document.getElementById('tree');
 const clampTreeW = (w) => Math.min(Math.max(w, 180), Math.round(window.innerWidth * 0.5));
 const savedTreeW = parseInt(lsGet(LS.treeW) || '', 10);
@@ -2850,13 +3046,14 @@ treeToggleBtn.addEventListener('click', () => {
 });
 let treeResizing = false;
 treeResizer.addEventListener('mousedown', (e) => { e.preventDefault(); treeResizing = true; document.body.classList.add('resizing'); });
-document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX) + 'px'; refitStage(); } });
+document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX - tree.getBoundingClientRect().left) + 'px'; refitStage(); } });
 document.addEventListener('mouseup', () => {
   if (!treeResizing) return;
   treeResizing = false; document.body.classList.remove('resizing');
   lsSet(LS.treeW, String(parseInt(tree.style.width, 10) || ''));
 });
 buildFileTree();
+initServerMode();  // probe for `coyodex serve`; on success reveal + wire the file browser and code viewer
 
 buildLegend();
 viewsw.querySelectorAll('button').forEach((b) => {

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Build the viewer's file-browser tree + map-coverage overlay.
 
-A second data global baked into the standalone HTML (`__FILE_TREE__`): the mapped repo's real
-folder/file structure (the SAME git-tracked file set the pre-index and validator measure, via
-``iter_source_files`` — shared CODE, never DATA, so the render dependency firewall holds), with
-each entry tagged by how the project map covers it:
+The mapped repo's real folder/file structure, each entry tagged by how the project map covers it.
+This is NO LONGER embedded in the HTML — the viewer's file browser is a FULL-mode feature served by
+`coyodex serve` (see serve.py), which builds the same tree from git at the map's commit and reuses
+the pure pieces here (``build_tree`` + ``node_path_index``). ``build_file_tree`` keeps the disk-walk
+variant (via ``iter_source_files`` — shared CODE, never DATA, so the render dependency firewall
+holds). Coverage tags:
 
   cov = 'self'  : a node's source ref points exactly at this path  -> strong "mapped" marker
         'under' : this path sits under a folder a node anchors      -> covered

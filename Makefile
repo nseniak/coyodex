@@ -16,7 +16,13 @@ MIN_PY := 3.10
 # Codex and Cursor and extra copies would just show up as duplicate skills.
 SKILLS_DIRS := $(HOME)/.claude/skills $(HOME)/.agents/skills
 
-.PHONY: install install-eval uninstall uninstall-eval deps dev venv clean
+.PHONY: install install-eval uninstall uninstall-eval deps dev venv clean start
+
+# Root the map server scans for projects (folders with .coyodex/project-map.json). Defaults to the
+# PARENT of this repo, so sibling repos (the common "all my code in one folder" layout) are served
+# together. Override for a different layout, e.g.  make start ROOT=~/code  or  make start ROOT=.
+ROOT ?= ..
+PORT ?= 8765
 
 # Create the repo-local venv. Requires Python $(MIN_PY)+ (the pre-index's tree-sitter deps
 # declare requires-python >=3.10); fail fast with a clear message instead of a cryptic error.
@@ -77,6 +83,12 @@ uninstall-eval:
 		rm -rf "$$dir/coyodex-eval"; \
 		echo "Uninstalled coyodex-eval skill from $$dir/coyodex-eval"; \
 	done
+
+# Start the local map server so the viewer's file browser + code viewer work (files read from git
+# at each map's commit). Serves every project found under ROOT; opens the project list in a browser.
+# Depends on `deps` so the venv/CLI exist. Ctrl-C to stop.
+start: deps
+	$(VENV)/bin/coyodex serve "$(ROOT)" --port $(PORT) --open
 
 # Remove the repo-local venv (run `make install` again to rebuild it).
 clean:

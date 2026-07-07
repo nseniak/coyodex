@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
-from coyodex.viewer.filetree import FileTreeNode, build_file_tree  # repo file tree + map-coverage overlay (browser pane)
+from coyodex.viewer.filetree import FileTreeNode  # file-browser tree type (now fetched live via `coyodex serve`)
 from coyodex.grammar import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
 
 _ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined into the HTML at build time
@@ -1407,8 +1407,47 @@ __STYLE__
   <button id="toggle" style="display:none"></button>
 </header>
 <main>
-  <!-- File browser: the mapped repo's real tree, shaded by map coverage. Selecting a graph element
-       highlights its file here; clicking a file/folder selects the matching component/subsystem. -->
+  <!-- Left column (dominant): the diagram on top, the details/info pane below it, split by a
+       horizontal drag bar (#vsplit). The diagram is the centrepiece, so this column takes the lion's
+       share of the width; the file browser + code viewer are the narrower right-hand panes. -->
+  <div id="leftcol">
+    <div id="stage">
+      <!-- Fixed header overlaid on the graph pane: the view selector, with the breadcrumb directly below
+           it. Absolutely positioned (like #legend/#drillhint) so it stays put while the diagram itself
+           pans/zooms underneath — #diagram still fills the whole #stage box regardless. -->
+      <div id="stagehead">
+        <div id="stageheadrow">
+          <span id="viewsw">
+            <button data-view="context">Context</button>
+            <button data-view="gp">Golden Path</button>
+            <button data-view="container">Subsystems</button>
+            <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
+            <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
+
+            <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
+                 landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's
+                 `component` machinery are kept dormant so the tab can be restored by re-adding this button.
+                 Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
+          </span>
+        </div>
+        <div class="hint"><span id="crumb"></span></div>
+      </div>
+      <div id="diagram"></div>
+      <div id="legend"></div>
+      <!-- Always-on, informational navigation caption overlaid on the canvas bottom-left (filled in JS).
+           Lives over the diagram, not in the header chrome users skip. Not interactive (pointer-events:none). -->
+      <div id="drillhint" hidden></div>
+    </div>
+    <!-- Horizontal drag handle: sets the info pane's HEIGHT (the diagram takes the rest). -->
+    <div id="vsplit" title="Drag to resize"></div>
+    <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
+  </div>
+  <!-- Vertical drag handle: sets the whole left column's WIDTH (the browser + code viewer share the rest). -->
+  <div id="resizer" title="Drag to resize"></div>
+  <!-- File browser: the mapped repo's real tree, shaded by map coverage. FULL mode only — the tree is
+       fetched live from the coyodex server (git @ the map's commit), so it is hidden when the map is
+       opened as a static file. Selecting a graph element highlights its file here; clicking a file
+       selects the matching component/subsystem AND shows the file in the code viewer. -->
   <aside id="tree">
     <div id="treehead">
       <span id="treetitle">Files</span>
@@ -1422,39 +1461,15 @@ __STYLE__
   </aside>
   <!-- Drag handle to resize the file browser (width persisted in localStorage). -->
   <div id="treeresizer" title="Drag to resize"></div>
-  <!-- The details pane sits right after the file browser (not after the diagram) — drilling from a
-       file/folder into what it anchors reads as "browser -> details", with the diagram as the third,
-       wider pane rather than sitting between the two. -->
-  <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
-  <!-- Drag handle to resize the side panel (width persisted in localStorage). -->
-  <div id="resizer" title="Drag to resize"></div>
-  <div id="stage">
-    <!-- Fixed header overlaid on the graph pane: the view selector, with the breadcrumb directly below
-         it. Absolutely positioned (like #legend/#drillhint) so it stays put while the diagram itself
-         pans/zooms underneath — #diagram still fills the whole #stage box regardless. -->
-    <div id="stagehead">
-      <div id="stageheadrow">
-        <span id="viewsw">
-          <button data-view="context">Context</button>
-          <button data-view="gp">Golden Path</button>
-          <button data-view="container">Subsystems</button>
-          <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
-          <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
-
-          <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
-               landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's
-               `component` machinery are kept dormant so the tab can be restored by re-adding this button.
-               Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
-        </span>
-      </div>
-      <div class="hint"><span id="crumb"></span></div>
+  <!-- Code viewer: the selected file's source, highlighted, scrolled to the current line. FULL mode
+       only — its text comes from the server (git @ commit); hidden in static mode. -->
+  <section id="codeview">
+    <div id="cvhead">
+      <span id="cvtitle">Code</span>
+      <span id="cvpath"></span>
     </div>
-    <div id="diagram"></div>
-    <div id="legend"></div>
-    <!-- Always-on, informational navigation caption overlaid on the canvas bottom-left (filled in JS).
-         Lives over the diagram, not in the header chrome users skip. Not interactive (pointer-events:none). -->
-    <div id="drillhint" hidden></div>
-  </div>
+    <div id="cvbody"><p class="cvempty">Select a node or file to view its source.</p></div>
+  </section>
 </main>
 <div id="tip"></div>
 <div id="modal" class="modal" hidden>
@@ -1611,9 +1626,10 @@ def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
     flow_actors_list = flow_actors_map(graph)
     libs_mm = gen_libs_mermaid(graph)
     folded = folded_libs(graph)
-    # File-browser pane: the mapped repo's real tree (rooted at the same repo_root the source links
-    # resolve against) overlaid with map coverage. None when repo_root isn't a walkable repo.
-    file_tree = build_file_tree(graph, repo_root)
+    # File-browser tree is NO LONGER embedded: it (and the code viewer) are FULL-mode features fed live
+    # by `coyodex serve` from git at the map's commit, so a static/committed HTML stays lean and always
+    # matches the mapped commit. `__FILE_TREE__` is baked as null; the viewer fetches /api/tree when served.
+    file_tree = None
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,

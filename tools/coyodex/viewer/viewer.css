@@ -19,7 +19,17 @@ header button:hover { background: #818cf8; }
 #zoomctl button { font-size: 13px; line-height: 1; padding: 4px 9px; }
 #zoomctl #zoomlevel { min-width: 52px; font-size: 12px; font-variant-numeric: tabular-nums; }
 main { display: flex; flex: 1; min-height: 0; }
-#stage { flex: 1; min-width: 0; position: relative; overflow: hidden; background: #fafafa; }
+/* Left column (dominant): diagram on top, info pane below, stacked vertically and split by #vsplit.
+   Fixed default width (persisted); the file browser + code viewer share the remaining width. When the
+   map is opened statically (no server), the browser + code panes are hidden and this column fills. */
+#leftcol { flex: 0 0 auto; width: 62%; min-width: 0; display: flex; flex-direction: column; }
+body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
+#stage { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow: hidden; background: #fafafa; }
+/* Horizontal drag bar between the diagram and the info pane (sets the info pane's height). */
+#vsplit { flex: 0 0 5px; cursor: row-resize; background: #e5e7eb; }
+#vsplit:hover, body.vresizing #vsplit { background: #818cf8; }
+body.vresizing { cursor: row-resize; user-select: none; }
+body.vresizing #stage { pointer-events: none; }
 #diagram { width: 100%; height: 100%; }
 /* Fixed header on the graph pane: the view selector + breadcrumb, overlaid on the canvas (like
    #legend/#drillhint below) rather than pushed into normal page flow — so #diagram still exactly fills
@@ -63,6 +73,13 @@ main { display: flex; flex: 1; min-height: 0; }
 #resizer:hover, body.resizing #resizer { background: #818cf8; }
 body.resizing { cursor: col-resize; user-select: none; }
 body.resizing #stage { pointer-events: none; }  /* no canvas hovers/pans mid-drag */
+/* Server-only panes: hidden until the map is opened via `coyodex serve` (JS sets body.served after a
+   health probe). Static/committed HTML then shows just the diagram + info pane. */
+body:not(.served) #tree,
+body:not(.served) #treeresizer,
+body:not(.served) #codeview,
+body:not(.served) #resizer,
+body:not(.served) #treetoggle { display: none; }
 
 /* --- file browser (left pane) ------------------------------------------------------------------
    A foldable repo tree shaded by map coverage. Same flex-item + inline-width + drag-handle model as
@@ -112,7 +129,10 @@ body.resizing #stage { pointer-events: none; }  /* no canvas hovers/pans mid-dra
 body.tree-hidden #tree, body.tree-hidden #treeresizer { display: none; }
 body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #treetoggle { display: none; }
 
-#panel { flex: 0 0 auto; width: 340px; padding: 16px; overflow-y: auto; background: #fff; }
+/* Info pane: now the BOTTOM of the left column (was a fixed-width side pane). Full column width; its
+   HEIGHT is the resizable dimension (dragged via #vsplit, persisted). */
+#panel { flex: 0 0 auto; height: 300px; min-height: 0; padding: 16px; overflow-y: auto; background: #fff;
+         border-top: 1px solid #e5e7eb; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }
 /* a block's title in the "several elements anchored here" list (showElementsList) — clicking it
@@ -303,3 +323,27 @@ g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; po
 .modal-btns button:hover { background: #f3f4f6; }
 .modal-btns button.primary { background: #6366f1; border-color: #6366f1; color: #fff; }
 .modal-btns button.primary:hover { background: #818cf8; }
+
+/* --- code viewer (right pane) -------------------------------------------------------------------
+   The selected file's source, read from the server (git @ the map's commit), highlighted with
+   highlight.js (lazy-loaded from a CDN) and scrolled to the current line. A first pass — deliberately
+   simple; richer navigation (go-to-def, search) is planned. */
+#codeview { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; background: #fff;
+            border-left: 1px solid #e5e7eb; }
+#cvhead { flex: 0 0 auto; display: flex; align-items: baseline; gap: 8px; padding: 8px 12px;
+          border-bottom: 1px solid #f3f4f6; }
+#cvtitle { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; font-weight: 600; }
+#cvpath { font: 12px ui-monospace, monospace; color: #4338ca; overflow: hidden; text-overflow: ellipsis;
+          white-space: nowrap; }
+#cvbody { flex: 1; min-height: 0; overflow: auto; background: #fbfbfd; }
+#cvbody .cvempty, #cvbody .cverr { color: #9ca3af; padding: 16px; font-size: 13px; }
+#cvbody .cverr { color: #cf222e; }
+/* The code table: a line-number gutter column + a code column, monospace, no wrap (scrolls). */
+table.cvcode { border-collapse: collapse; width: 100%; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+table.cvcode td { padding: 0; vertical-align: top; }
+table.cvcode td.ln { width: 1%; white-space: nowrap; text-align: right; padding: 0 10px 0 12px; color: #b6bcc7;
+          background: #f6f7f9; border-right: 1px solid #eceef1; user-select: none;
+          font-variant-numeric: tabular-nums; }
+table.cvcode td.code { padding: 0 14px 0 12px; white-space: pre; }
+table.cvcode tr.cvcur td.code { background: #fff7cf; }
+table.cvcode tr.cvcur td.ln { background: #fbeeb3; color: #8a6d00; }

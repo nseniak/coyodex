@@ -22,6 +22,9 @@ Commands:
              deterministic contradiction checks + an L2 grounding worklist.
   render     Render a map to a generated view: model → HTML viewer or → the
              committed markdown view (picked by the output extension).
+  serve      Serve rendered maps over a local HTTP server so the viewer's file
+             browser + code viewer light up (files read from git at the map's
+             commit). One server covers every project found under the roots.
   assemble   Merge build agents' structured-row fragments into the canonical
              project-map.json (+ generated views).
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
@@ -72,6 +75,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "render":
         from coyodex.viewer import render  # stdlib-only
         return render.main(rest)
+    if cmd == "serve":
+        from coyodex.viewer import serve  # stdlib-only (http.server + git subprocess)
+        return serve.main(rest)
     if cmd == "assemble":
         from coyodex import assemble  # stdlib-only
         return assemble.main(rest)
