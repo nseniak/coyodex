@@ -65,7 +65,6 @@ const tip = document.getElementById('tip');
 const zoomin = document.getElementById('zoomin');
 const zoomout = document.getElementById('zoomout');
 const zoomlevel = document.getElementById('zoomlevel');
-const drillhint = document.getElementById('drillhint');
 document.getElementById('meta').innerHTML = META;
 const esc = (s) => (s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 // Inline markdown -> safe HTML for prose fields (Purpose / Why / Wants / …): a link collapses to its
@@ -2110,14 +2109,6 @@ function renderChrome(s) {
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
-  // One shared hint pill across every view: a plain click focuses (dims to the clicked element's own
-  // links + connected boxes); a double-click, its corner icon, or a ⌘-click all drill down — into the
-  // next altitude where one exists, or to the source at a leaf (Components / Domain entities / a GP
-  // step). All three are "drilling in", so the pill reads the same everywhere instead of splitting
-  // "drill down" vs "open source" (⌘-click stays as a shortcut for anyone who already learned it).
-  // The Glossary table has no focus/drill affordance — hide the pill there; every diagram view shows it.
-  drillhint.hidden = s.kind === 'glossary';
-  drillhint.innerHTML = 'Click to focus · double-click (or its icon) to drill in';
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it.

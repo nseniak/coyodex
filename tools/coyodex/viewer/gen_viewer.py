@@ -1434,9 +1434,6 @@ __STYLE__
       </div>
       <div id="diagram"></div>
       <div id="legend"></div>
-      <!-- Always-on, informational navigation caption overlaid on the canvas bottom-left (filled in JS).
-           Lives over the diagram, not in the header chrome users skip. Not interactive (pointer-events:none). -->
-      <div id="drillhint" hidden></div>
     </div>
     <!-- Horizontal drag handle: sets the info pane's HEIGHT (the diagram takes the rest). -->
     <div id="vsplit" title="Drag to resize"></div>

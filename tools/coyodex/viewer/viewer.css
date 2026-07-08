@@ -308,15 +308,6 @@ g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; po
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
 
-/* Always-on, informational navigation caption overlaid on the canvas (bottom-left) — sits where the
-   user is actually looking instead of in the header chrome. Not interactive: pointer-events:none so it
-   never intercepts a drag-pan or a click on the diagram beneath it. */
-#drillhint { position: absolute; left: 12px; bottom: 12px; z-index: 5; pointer-events: none;
-             font: inherit; font-size: 12px; white-space: nowrap; color: #312e81;
-             background: rgba(255,255,255,.92); border: 1px solid #c7d2fe; border-radius: 999px;
-             padding: 4px 13px; box-shadow: 0 1px 5px rgba(0,0,0,.12); }
-#drillhint[hidden] { display: none; }
-
 /* Source-link settings modal + first-run navigation guide (#coach). The [hidden] attr toggles from JS. */
 #modal, #coach { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
          background: rgba(17,24,39,.45); }
