@@ -17,8 +17,11 @@ Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall th
 
 ## Step 1 — is there already a baseline?
 
-Look for `.coyodex/project-map.json` in the analyzed repo. If it's absent, there is no baseline —
-fall through to Build below.
+Look **only at the working tree** of the analyzed repo for `.coyodex/project-map.json`. If the file
+is not on disk, **there is no baseline — even if git history still has a committed copy.** A deleted
+working-tree file is a deliberate signal to start from scratch. **Never restore, `git checkout`,
+`git show`, or otherwise recover a deleted `.coyodex/` file from git; never treat a git-committed
+copy as the baseline when the working-tree file is gone.** Fall through to Build below.
 
 ### No baseline → Build
 
