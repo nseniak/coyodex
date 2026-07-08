@@ -218,6 +218,16 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
 
 ## Cross-cutting rules
 
+**Read the project's own docs.** Before drafting the behavioral layer, read what the project says
+about itself — `README`, `docs/`, `CONTRIBUTING`, a `CHANGELOG`, package/manifest descriptions, and
+any architecture or design notes. These are the primary source for the parts the code does not spell
+out: the **Goal**, the **Roles**, and which **Use cases** matter most — the headline features and
+intended workflows a maintainer documents are usually the primary use cases, so rank by them. Treat
+docs as **intent, not ground truth**: they go stale and oversell, so anything you take from them
+stays **inferred** until the code confirms it, and when docs and code disagree, the code wins (note
+the drift). Where the docs are silent, infer from naming/structure and mark inferred — don't assert a
+confidently-wrong purpose.
+
 **Confidence by layer.** Structure (components, entry points, data) reads reliably from
 source — mostly **verified**. Goal/Roles/intent often are NOT in the code (they live in
 README/docs/the maintainer's head) — infer from naming/structure, mark **inferred**, and
