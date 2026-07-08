@@ -1467,6 +1467,7 @@ __STYLE__
     <div id="cvhead">
       <span id="cvtitle">Code</span>
       <span id="cvpath"></span>
+      <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
     </div>
     <div id="cvbody"><p class="cvempty">Select a node or file to view its source.</p></div>
   </section>
@@ -1505,8 +1506,9 @@ __STYLE__
     <ul class="coach-list">
       <li><b>Select a view</b> at the top of the graph pane</li>
       <li><b>Scroll</b> to zoom, <b>drag</b> to move</li>
-      <li><b>Click</b> a box or arrow &mdash; shows its details</li>
-      <li><b>Double-click</b> a box (or click its corner icon) &mdash; drills in / opens the source file</li>
+      <li><b>Click</b> a box or arrow &mdash; shows its details (and its source in the code viewer)</li>
+      <li><b>Double-click</b> a subsystem box (or its corner icon) &mdash; drills into it</li>
+      <li>Open the shown file in your editor with the <b>&#8599;</b> in the code header</li>
     </ul>
     <div class="modal-btns">
       <button id="coachok" type="button" class="primary">Got it</button>

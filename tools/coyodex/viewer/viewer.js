@@ -487,13 +487,10 @@ function nodeDetailHtml(id) {
   const rows = Object.entries(fields)
     .filter(([k, v]) => k !== explainKey && v !== n.name && !dropped.has(k.toLowerCase()))
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${mdInline(v)}</dd>`).join('');
-  // Any node with a local source ref — a component/entity FILE or a subsystem/subdomain entry DIRECTORY —
-  // gets a clickable link that opens it exactly the way the diagram's ⌘-click does (editor or GitHub). An
-  // off-repo URL (e.g. a dep pointing at a website) stays plain text, since openSource can't resolve it.
+  // The node's source ref, shown as plain reference text. Selecting the node already mirrors it into the
+  // code viewer (FULL mode); the code viewer's header carries the sole "open externally" control now.
   const ref = n.file ? esc(cleanPath(n.file, n.line)) + (n.line ? ':' + n.line : '') : '';
-  const src = !n.file ? ''
-    : localRef(n.file) ? `<button type="button" class="src srclink" title="Open in editor or on GitHub">${ref}</button>`
-    : `<div class="src">${ref}</div>`;
+  const src = ref ? `<div class="src">${ref}</div>` : '';
   return `<div class="pane-title"><h2>${esc(n.name)}</h2><span class="badge kind">${esc(kindTagFor(n))}</span>${chg}</div>`
     + explain
     + `<dl>${rows}${usedInHtml(id)}</dl>${src}`;
@@ -501,9 +498,6 @@ function nodeDetailHtml(id) {
 // Wire the interactive bits inside a just-written detail block: the source-open button + any
 // use-case-flow refs. `root` is the panel itself (single-node case) or one `.pblock` div (list case).
 function bindNodeDetailHandlers(root, id) {
-  const n = GRAPH.nodes[id];
-  const sl = root.querySelector('.srclink');
-  if (sl) sl.addEventListener('click', () => openSource(n));
   root.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
   }));
@@ -593,21 +587,16 @@ function showEdge(e) {
       + (e.fk_side === 'dst' ? ' <span class="muted">(back-reference)</span>' : '')
     : (e.how ? mdInline(e.how) : '');
   const implRow = impl ? '<dt>Implemented by</dt><dd>' + impl + '</dd>' : '';
-  // The edge's `where` source ref — clickable (opens in editor / on GitHub) when it's an in-repo path,
-  // exactly like a node's source link; plain text for an off-repo URL. (Was a non-clickable div.)
+  // The edge's `where` source ref, shown as plain reference text. Selecting the edge already mirrors it
+  // into the code viewer below; the code viewer's header carries the sole "open externally" control.
   const wn = e.where ? whereNode(e.where) : null;
   const srcHtml = !wn ? ''
-    : (localRef(wn.file)
-        ? '<button type="button" class="src srclink" title="Open in editor or on GitHub">'
-          + esc(cleanPath(wn.file, wn.line) + (wn.line ? ':' + wn.line : '')) + '</button>'
-        : '<div class="src">' + esc(e.where) + '</div>');
+    : '<div class="src">' + esc(localRef(wn.file) ? cleanPath(wn.file, wn.line) + (wn.line ? ':' + wn.line : '') : e.where) + '</div>';
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
     + '<span class="badge edge">' + esc(e.verb) + '</span>' + kindBadge + '</div>'
     + (e.why ? '<p class="explain">' + mdInline(e.why) + '</p>' : '')
     + '<dl>' + card + implRow + '</dl>'
     + srcHtml;
-  const sl = panel.querySelector('.srclink');
-  if (sl) sl.addEventListener('click', () => openSource(wn));
   // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
   // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
   highlightFootprint(null);  // an edge has no element footprint — clear any previous one
@@ -2226,7 +2215,7 @@ function renderGlossary() {
       const rel = cleanPath(file, line);
       const base = rel.replace(/\/+$/, '').split('/').pop() + (line ? ':' + line : '');
       cell = `<button type="button" class="src srclink gloss-src" data-where="${esc(where)}"`
-        + ` title="Open in editor or on GitHub">${esc(base)}</button>`;
+        + ` title="Open in the code viewer">${esc(base)}</button>`;
     } else if (where) {
       cell = `<span class="gloss-plain">${esc(cleanPath(file, line))}</span>`;
     }
@@ -2236,8 +2225,8 @@ function renderGlossary() {
     + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
     + `<tbody>${rows}</tbody></table></div>`;
   diagram.querySelectorAll('.gloss-src').forEach((btn) => {
-    const where = btn.getAttribute('data-where');
-    btn.addEventListener('click', () => openSource(whereNode(where)));
+    const wn = whereNode(btn.getAttribute('data-where'));
+    btn.addEventListener('click', () => openInCodeViewer(wn.file, wn.line));
   });
 }
 
@@ -2712,6 +2701,8 @@ async function loadServerTree() {
 // scroll to / highlight the current line. Deliberately simple — richer navigation is a planned follow-up.
 const cvbody = document.getElementById('cvbody');
 const cvpath = document.getElementById('cvpath');
+const cvopen = document.getElementById('cvopen');  // ↗ opens the shown file in the external editor / on GitHub
+if (cvopen) cvopen.addEventListener('click', () => { if (cvPath) openSource({ file: cvPath, line: cvLine }); });
 let cvPath = null, cvTable = null;  // the file currently shown + its rendered table (for same-file line moves)
 let cvLine = null;                  // the line to highlight — a module var so a line that arrives while the
                                     // file is still loading (tree click: file-load then node-select) still lands
@@ -2738,6 +2729,7 @@ function renderCvHeader() {
   } else {
     cvpath.textContent = (cvPath || '') + suffix;
   }
+  if (cvopen) cvopen.hidden = !(cvPath && localRef(cvPath));  // the ↗ only shows once a local file is open
 }
 const HLJS_VER = '11.9.0';
 const HLJS_JS = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/' + HLJS_VER + '/highlight.min.js';
@@ -2862,6 +2854,19 @@ function syncCodeView(file, line, files) {
   if (anchor) { loadCode(anchor, line || null); return; }
   if (SERVED && cvFiles.length) { loadCode(cvFiles[0], null); return; }  // a group's dir anchor -> its first file
   renderCvHeader();  // nothing to load (off-repo / no files) — still refresh the header (clears a stale switcher)
+}
+// Open a source ref (a glossary term's home, or any standalone file link) into the code viewer — the
+// in-app viewer when served, else fall back to the external editor / GitHub (degraded mode has no code
+// pane). Not tied to a graph selection, so it clears the element footprint + switcher.
+function openInCodeViewer(file, line) {
+  if (!file) return;
+  if (SERVED && localRef(file)) {
+    highlightFootprint(null);
+    highlightTreePath(refTreePath(file, line));  // highlights the file's row (or its folder, for a dir home)
+    syncCodeView(file, line, []);                // shows the file; a no-op for a directory ref
+    return;
+  }
+  openSource({ file: file, line: line });        // degraded / off-repo: the external editor is the only option
 }
 
 // --- startup --------------------------------------------------------------------
@@ -3025,7 +3030,12 @@ function doOpenSource(n) {
 // `file` is an external manifest, not local source). A subsystem box reached via bindNodes (the
 // neighbourhood view) carries a `file` too, so this guard keeps its ⌘-click as a drill.
 const SRC_KINDS = new Set(['component', 'entity']);
-const srcNode = (id) => { const n = GRAPH.nodes[id]; return (n && n.file && SRC_KINDS.has(String(n.kind))) ? n : null; };
+// The box "open source" affordance (corner ↗ icon, ⌘-click, `</>` cursor, its hover tooltip, and the
+// double-click open) is intentionally RETIRED: opening a file externally now lives solely on the code
+// viewer's header ↗. Selecting a box already mirrors its source into the in-app code viewer. `srcNode`
+// is the single gate every one of those affordances checks, so returning null disables them all at once.
+// (markOpenSrc / openSrcClick / actionOpenSrcHtml and the `is-open` icon are now inert — safe to prune.)
+const srcNode = (_id) => null;
 function markOpenSrc(el, id) { if (srcNode(id)) el.classList.add('opensrc'); }
 function openSrcClick(id, ev) { const n = srcNode(id); if (n && isDrillClick(ev)) { openSource(n); return true; } return false; }
 

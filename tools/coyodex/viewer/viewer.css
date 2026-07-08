@@ -180,9 +180,10 @@ body.tree-hidden.tree-peek #codeview { display: none; }
 #panel h3 { font-size: 14px; margin: 0 0 2px; }
 #panel hr { border: 0; border-top: 1px solid #e5e7eb; margin: 14px 0; }
 /* source ref in the panel: a button styled as a link — click opens it in the editor / on GitHub */
+/* the panel's source ref is now plain reference text (not a clickable "open" pill) — the code viewer
+   shows the file on selection, and its header ↗ opens it externally. */
 #panel .src { display: inline-block; margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px;
-              color: #2563eb; background: none; border: 0; padding: 0; cursor: pointer; text-align: left; }
-#panel .src:hover { text-decoration: underline; }
+              color: #6b7280; background: none; border: 0; padding: 0; text-align: left; }
 /* "Locate in full map" link on a Golden Path step panel */
 #panel .locate { display: inline-block; margin-top: 16px; font-size: 13px; color: #2563eb; text-decoration: none; }
 #panel .locate:hover { text-decoration: underline; }
@@ -352,8 +353,14 @@ g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; po
 #cvhead { flex: 0 0 auto; display: flex; align-items: baseline; gap: 8px; padding: 8px 12px;
           border-bottom: 1px solid #f3f4f6; }
 #cvtitle { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; font-weight: 600; }
-#cvpath { font: 12px ui-monospace, monospace; color: #4338ca; overflow: hidden; text-overflow: ellipsis;
-          white-space: nowrap; }
+#cvpath { flex: 1 1 auto; min-width: 0; font: 12px ui-monospace, monospace; color: #4338ca;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the ↗ that opens the shown file in the external editor / on GitHub — the SOLE external-open control
+   (the old inline source pills are gone). Hidden until a local file is showing. */
+#cvopen { flex: 0 0 auto; cursor: pointer; border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca;
+          border-radius: 4px; padding: 1px 6px; font-size: 13px; line-height: 1.2; }
+#cvopen:hover { background: #e0e7ff; }
+#cvopen[hidden] { display: none; }
 /* the element's file switcher: a compact dropdown of its files (source first), with the full current
    path muted alongside. Only shown when the selected element owns more than one file. */
 #cvpath select.cvfiles { font: inherit; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe;
