@@ -2322,7 +2322,12 @@ async function render() {
     // Restore the pan/zoom this diagram was last left at (zoom first, then absolute pan). `s.vp` is the
     // exact history slot (back/forward); `vpByView` catches the same diagram reached any other way — a
     // tab, a breadcrumb crumb, or a re-drill — so it reopens where it was instead of a fresh fit.
-    const vp = s.vp || vpByView[stateKey(s)];
+    // SKIP the restore when a matchTextSize move follows (a file-tree selection): it overrides the camera
+    // anyway, and — crucially — svg-pan-zoom paints zoom()/pan() only on the NEXT frame (see matchTextSize),
+    // so a synchronous matchTextSize would measure the still-showing fit transform while the internal state
+    // already held the restored vp. Those two disagreeing is what threw the selected box off-screen; leaving
+    // the fresh fit in place (its transform IS applied synchronously) keeps measurement and state in step.
+    const vp = pendingMatchTextId ? null : (s.vp || vpByView[stateKey(s)]);
     if (vp) { mainPz.zoom(vp.zoom); mainPz.pan(vp.pan); }
     updateZoomLevel();
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
