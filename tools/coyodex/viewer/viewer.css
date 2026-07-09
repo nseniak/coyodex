@@ -315,8 +315,11 @@ g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; po
 #flowplayer[hidden] { display: none; }
 #flowplayer button { font-size: 12px; line-height: 1; padding: 5px 11px; border: 0; border-radius: 999px;
                      background: #6366f1; color: #fff; cursor: pointer; }
-#flowplayer button:hover:not(:disabled) { background: #4f46e5; }
-#flowplayer button:disabled { background: #e5e7eb; color: #9ca3af; cursor: default; }
+#flowplayer button:hover:not(:disabled):not(.flowend) { background: #4f46e5; }
+/* .flowend: at an end (Prev on step 1 / Next on the last) — greyed like disabled, but still clickable
+   because it wraps around. Only a truly inert control (unstarted Prev) uses the real :disabled attr. */
+#flowplayer button:disabled, #flowplayer button.flowend { background: #e5e7eb; color: #9ca3af; }
+#flowplayer button:disabled { cursor: default; }
 #flowcount { font-size: 12px; color: #374151; font-variant-numeric: tabular-nums; min-width: 78px;
              text-align: center; padding: 0 2px; }
 

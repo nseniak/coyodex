@@ -966,13 +966,17 @@ function flowReveal(els, i) {
   flowAnimatePanBy(dx, dy);
 }
 // cur === -1 is the "unstarted" state: no step selected yet, but the counter reads "Step 1 / N" so the
-// first Next lands on step 1 (not step 2). Prev is disabled until a step is actually selected.
+// first Next lands on step 1 (not step 2). Stepping wraps around the ends, so once started neither button
+// disables; Prev stays disabled only while unstarted (where it does nothing).
 function flowCounter() {
   if (!flowPlay) return;
   const n = flowPlay.steps.length, i = flowPlay.cur;
   flowcount.textContent = 'Step ' + (i < 0 ? 1 : i + 1) + ' / ' + n;
-  flowprev.disabled = i <= 0;         // covers unstarted (-1) and step 1 (0)
-  flownext.disabled = i >= n - 1;
+  flowprev.disabled = i < 0;   // truly inert only while unstarted; once started, Prev wraps past step 1
+  flownext.disabled = false;   // Next is always live: unstarted -> step 1, last -> wraps to step 1
+  // Grey (but still clickable) at the ends: Prev on step 1, Next on the last step — the old end-of-list look.
+  flowprev.classList.toggle('flowend', i <= 0);       // step 1 (and unstarted, which is also :disabled)
+  flownext.classList.toggle('flowend', i >= n - 1);   // last step
 }
 // Move the counter to step i without re-highlighting — used when a click on the arrow already selected it.
 function flowSyncCur(i) { if (flowPlay) { flowPlay.cur = i; flowCounter(); } }
@@ -988,11 +992,13 @@ function flowGoto(i) {
   flowReveal(flowPlay.msgEls[i] || [], i);
   flowCounter();
 }
-// From the unstarted state, Next selects step 1 (and Prev does nothing); once started, step by ±1.
+// From the unstarted state, Next selects step 1 (and Prev does nothing); once started, step by ±1 and wrap
+// around the ends (Next past the last -> step 1, Prev before step 1 -> the last).
 function flowStepBy(d) {
   if (!flowPlay) return;
+  const n = flowPlay.steps.length;
   if (flowPlay.cur < 0) { if (d > 0) flowGoto(0); return; }
-  flowGoto(flowPlay.cur + d);
+  flowGoto((flowPlay.cur + d + n) % n);
 }
 // Called from render() once svg-pan-zoom exists. Shows the strip. A back/forward revisit that restored a
 // selected step starts there; a fresh open is UNSTARTED — nothing selected, the overview panel stays, and
