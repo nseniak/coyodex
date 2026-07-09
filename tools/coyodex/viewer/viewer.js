@@ -825,33 +825,31 @@ function showFlowPanel(uc, title, why) {
   // spotlight the whole flow on, so the "Locate in full map" link is gone with the Components tab.
   bindFlowRefs();
 }
-// Drilling a Happy Path step opens its use case's flow (the step IS that use case) — the full T6
-// narrative. Title = the step title. This is the DRILLED view's panel; a plain arrow-select is lighter
-// (showHPArrow below).
-function showHPStep(hpId) {
-  const s = HP_BY_ID[hpId];
-  if (!s) { panel.innerHTML = EMPTY_PANEL; return; }
-  showFlowPanel(s.uc, s.title || s.id, s.why);
+// The use case's OUTSIDE view — the SAME facts the Use Cases list shows for it: its name, its actor,
+// and its trigger → outcome. Shown when a Happy Path step/use case is SELECTED (not drilled); the full
+// T6 flow (the inside view) stays behind the drill and on the Use Cases tab.
+function showUseCaseSummary(uc) {
+  const n = uc ? GRAPH.nodes[uc] : null;
+  if (!n) { panel.innerHTML = EMPTY_PANEL; return; }
+  const f = n.fields || {};
+  const actor = f.Actor || '';
+  const to = f['Trigger → Outcome'] || '';
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(n.name) + '</h2>'
+    + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
+    + (to ? '<p class="explain">' + mdInline(to) + '</p>' : '');
 }
-// Selecting a Happy Path ARROW (a step message, plain click on the overview) shows JUST the interaction
-// it draws — the black-box `actor → System` handoff for that step — not the use case's full flow (that
-// lives behind the drill / on the Use Cases tab). The step title says which step; the drilled view has
-// the mechanism.
+// Selecting a Happy Path step (plain click on the overview) shows that use case's summary — the same
+// facts as its row in the Use Cases list. The mechanism (T6 flow) is behind the drill.
 function showHPArrow(hpId) {
   const s = HP_BY_ID[hpId];
-  if (!s) { panel.innerHTML = EMPTY_PANEL; return; }
-  const actor = (HP_ACTOR_OF_STEP[hpId] && HP_ACTOR_OF_STEP[hpId].name)
-    || ((GRAPH.nodes[s.uc] || {}).fields || {}).Actor || 'Actor';
-  const sys = (GRAPH.nodes['SYS'] || {}).name || GRAPH.title || 'System';
-  panel.innerHTML = '<div class="pane-title"><h2 class="hp-arrow">' + esc(actor)
-    + ' <span class="hp-arrow-to">→</span> ' + esc(sys) + '</h2></div>'
-    + (s.title ? '<p class="explain">' + esc(s.title) + '</p>' : '');
+  showUseCaseSummary(s ? s.uc : null);
 }
-// The use-case view default panel (reached directly, not via a Happy Path position).
+// The use-case flow view's default panel — the full T6 flow. Reached by drilling a use case, whether
+// from the Use Cases list or a Happy Path step (both land on the one `usecase` view).
 function showUseCase(uc) {
   showFlowPanel(uc, GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc, '');
 }
-// The flow views (hpstep / usecase) are sequence diagrams — wire them like every other diagram, using
+// The use-case flow view is a sequence diagram — wire it like every other diagram, using
 // the same sequence-diagram focus machinery the Happy Path uses (hpHighlight/hpFocus over element
 // sets, since a participant is split across top box / label / lifeline / bottom mirror). Element
 // participants select (focus to their messages + the other ends) / ⌘-open their source (component &
@@ -2143,7 +2141,7 @@ function selectHPStep(scene, i, hpId, aid) {
 function selectHPUseCase(scene, uc) {
   const selKey = 'hpuc:' + uc;
   scene.selectedKey = selKey;
-  showUseCase(uc);
+  showUseCaseSummary(uc);  // same facts as the Use Cases list row; the flow is behind the drill
   const glow = [], keep = [];
   (GRAPH.happy_path || []).forEach((step, i) => {
     if (step.uc !== uc) return;
@@ -2201,7 +2199,9 @@ function bindHP() {
     if (!text) return;
     const hpId = step.id, selKey = 'hpstep:' + hpId;
     scene.selectors[selKey] = () => selectHPStep(scene, i, hpId, aidOfStep[i]);  // back/forward restore
-    addLabelActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'hpstep', hp: hpId }) });
+    // Drilling a step opens its use case's flow — the SAME view (and breadcrumb: "Use Cases › …") a
+    // click from the Use Cases tab lands on, so a use case's flow has ONE home regardless of entry.
+    addLabelActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'usecase', uc: step.uc }) });
     const icon = ACTION_ICONS[selKey];
     // A dimmed step (hpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
     // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
@@ -2215,7 +2215,7 @@ function bindHP() {
       if (isDrag(ev)) return;
       ev.stopPropagation();
       off();
-      if (isDrillClick(ev)) { go({ kind: 'hpstep', hp: hpId }); return; }  // ⌘-click drills in
+      if (isDrillClick(ev)) { go({ kind: 'usecase', uc: step.uc }); return; }  // ⌘-click drills into the use case's flow
       selectHPStep(scene, i, hpId, aidOfStep[i]);
     };
     for (const el of [text, line]) {
@@ -2268,7 +2268,6 @@ function mermaidFor(s) {
   if (s.kind === 'domedge') return MERMAID_DOMAIN_EDGE_CARD[s.a + '>' + s.b];
   if (s.kind === 'bridge') return MERMAID_BRIDGE_CARD[s.sid + '>' + s.sd];
   if (s.kind === 'hp') return MERMAID_HP;
-  if (s.kind === 'hpstep') return FLOWS_MM[(HP_BY_ID[s.hp] || {}).uc] || EMPTY_FLOW_MM;  // the step's use case's flow
   if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
   if (s.kind === 'libs') return MERMAID_LIBS;
   return mode === 'diff' ? MERMAID_DIFF : MERMAID_BASE;  // component
@@ -2279,7 +2278,6 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
   else if (s.kind === 'domedge') showTwoSubdomains(s.a, s.b);
   else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
-  else if (s.kind === 'hpstep') showHPStep(s.hp);
   else if (s.kind === 'usecase') showUseCase(s.uc);
   else if (s.kind === 'libs') showLibsFold();
   // The Happy Path overview (nothing selected) opens on the project goal — the SYS node carries the
@@ -2303,7 +2301,6 @@ function bindFor(s) {
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
   else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
   else if (s.kind === 'hp') bindHP();
-  else if (s.kind === 'hpstep') bindFlow((HP_BY_ID[s.hp] || {}).uc);  // the step opens its use case's flow
   else if (s.kind === 'usecase') bindFlow(s.uc);
   else if (s.kind === 'libs') bindLibs();
   else bindComponent();
@@ -2312,12 +2309,11 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary') return kind;
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
-  if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog
-  if (kind === 'hp' || kind === 'hpstep') return 'hp';
+  if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog (incl. a Happy Path drill)
+  if (kind === 'hp') return 'hp';
   if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
   return 'container';
 }
-function hpTitle(hp) { const s = HP_BY_ID[hp]; return s ? (s.title || s.id) : hp; }  // breadcrumb crumb: title, not the HPn id
 function stateTitle(s) {
   if (s.kind === 'context') return 'Dependencies';
   if (s.kind === 'container') return 'Subsystems';
@@ -2329,7 +2325,6 @@ function stateTitle(s) {
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
   if (s.kind === 'bridge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.sid) + ' → ' + nm(s.sd); }
   if (s.kind === 'hp') return 'Happy Path';
-  if (s.kind === 'hpstep') return hpTitle(s.hp);
   if (s.kind === 'usecase') return (GRAPH.nodes[s.uc] ? GRAPH.nodes[s.uc].name : s.uc);
   if (s.kind === 'libs') return 'Libraries';
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
@@ -2354,7 +2349,6 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'domedge') return [{ kind: 'domain' }, { kind: 'domedge', a: s.a, b: s.b }];  // subdomain pair beside them
   if (s.kind === 'bridge') return [{ kind: 'container' }, { kind: 'bridge', sid: s.sid, sd: s.sd }];  // S×SD bridge under Subsystems
   if (s.kind === 'hp') return [{ kind: 'hp' }];
-  if (s.kind === 'hpstep') return [{ kind: 'hp' }, { kind: 'hpstep', hp: s.hp }];  // step under the Happy Path
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   if (s.kind === 'usecase') return [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];  // a use case's flow, under the Use Cases catalog
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
@@ -2513,11 +2507,12 @@ function renderUseCases() {
     return `<span class="uc-kind uc-kind-${k}">${esc(k)}</span>`;
   };
   const pill = (uc) => {
-    const ids = HP_STEPS_BY_UC[uc] || [];
-    if (!ids.length) return '';
-    const label = ids.join(' · ');
+    // On the Happy Path? -> a "Happy Path" pill that jumps there (and lights this use case's step(s)).
+    // The label is the plain words, not the `HPn` position: the click already lands on the right step,
+    // so the number added nothing. No pill at all = off-spine.
+    if (!(HP_STEPS_BY_UC[uc] || []).length) return '';
     return `<button type="button" class="uc-hp-pill" data-uc="${esc(uc)}"`
-      + ` title="On the Happy Path — jump to ${esc(label)}">${esc(label)}</button>`;
+      + ' title="On the Happy Path — click to jump there">Happy Path</button>';
   };
   const sections = groups.map((g) => {
     const wants = g.role && g.role.wants ? `<span class="uc-actor-wants">${mdInline(g.role.wants)}</span>` : '';
