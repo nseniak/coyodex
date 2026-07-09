@@ -39,7 +39,6 @@ from coyodex.viewer.recents import RecentsStore
 from coyodex.views import model_to_graph
 
 MAP_JSON = "project-map.json"
-MAP_HTML = "project-map.html"
 CHANGE_REPORT = "change-report.md"  # optional change-impact overlay, alongside the model in .coyodex/
 _DEFAULT_PORT = 8765
 
@@ -386,9 +385,9 @@ class Handler(BaseHTTPRequestHandler):
     def _project(self, proj: Project, rest: list[str], query: dict[str, list[str]]) -> None:
         if rest and rest[0] == "api":
             return self._project_api(proj, rest[1:], query)
-        if not rest or rest == [MAP_HTML]:
+        if not rest:
             # The generic shell — identical for every project; it fetches this map's data from
-            # api/view at boot. (project-map.html kept as an alias so old links still resolve.)
+            # api/view at boot.
             return self._send_file(_FRONTEND_DIR / "viewer.html", "text/html; charset=utf-8")
         return self._send(404, "text/plain; charset=utf-8", b"not found")
 
