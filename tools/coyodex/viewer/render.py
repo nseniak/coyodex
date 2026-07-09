@@ -3,16 +3,15 @@
 
     coyodex render .coyodex/project-map.json .coyodex/project-map.md   # committed markdown view
 
-The interactive C4 viewer is no longer a file: it is served live by `coyodex serve`, which reads the
-model and builds every diagram on demand (the generic frontend fetches its data from the server). So a
-`.html` output is accepted for backward compatibility but writes nothing — it only registers the
-project with the server and prints how to open it. Markdown INPUT is not supported: only a model
-(project-map.json) can be rendered.
+Markdown is the ONLY generated file. The interactive C4 viewer is no longer a file: it is served
+live by `coyodex serve`, which reads the model and builds every diagram on demand (the generic
+frontend fetches its data from the server). Markdown INPUT is not supported either: only a model
+(project-map.json) can be rendered, and only to a `.md` output.
 
 The persisted artifacts are the model (the single source) and its committed markdown view. The stages
 stay importable on their own (`coyodex.views`, `coyodex.viewer.gen_viewer`) for debugging.
 
-Driven by `coyodex render <map> <out.md> [change-report.md]`.
+Driven by `coyodex render <project-map.json> <out.md>`.
 """
 from __future__ import annotations
 
@@ -30,10 +29,14 @@ def main(argv: list[str] | None = None) -> int:
     if not src.exists():
         print(f"ERROR: {src} not found", file=sys.stderr)
         return 1
-    out.parent.mkdir(parents=True, exist_ok=True)
     if src.suffix != ".json":
         print("ERROR: views are generated from a model (project-map.json) only — "
               "markdown maps are not supported.", file=sys.stderr)
+        return 2
+    if out.suffix != ".md":
+        print("ERROR: the only rendered file is the markdown view — give a `.md` output. The "
+              "interactive viewer is served by `coyodex serve` (built on demand), not rendered to a "
+              "file.", file=sys.stderr)
         return 2
     from coyodex.model import ModelError, load_model
     from coyodex.views import model_to_markdown
@@ -42,18 +45,12 @@ def main(argv: list[str] | None = None) -> int:
     except ModelError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(model_to_markdown(model), encoding="utf-8")
     # Rendering into a project's .coyodex/ registers it with `coyodex serve` (best-effort; see recents).
     from coyodex.viewer.recents import register_project
-    if out.suffix == ".md":
-        out.write_text(model_to_markdown(model), encoding="utf-8")
-        register_project(out.parent)
-        print(f"Rendered {src} -> {out.resolve()}")
-    else:
-        # The viewer is now served, not baked. Accept the old `.html` target so existing callers keep
-        # working, but write nothing — just register the project so `coyodex serve` picks it up.
-        register_project(out.parent)
-        print(f"The interactive viewer is served by `coyodex serve` — no HTML file is written.\n"
-              f"Registered {out.parent} · open it from the coyodex serve landing page.")
+    register_project(out.parent)
+    print(f"Rendered {src} -> {out.resolve()}")
     return 0
 
 

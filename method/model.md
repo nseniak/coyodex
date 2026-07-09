@@ -171,8 +171,8 @@ non-goal; a free verb still renders and still drives the diagram.
   JSON for readable diffs; `coyodex validate` warns when the committed view is stale (differs from
   the regenerated one).
 - The interactive C4 viewer is served, not written: run `coyodex serve` and open the project — the
-  server builds every diagram on demand from the model and the frontend fetches it. (There is no
-  `project-map.html` file to render; a `render … .html` call still succeeds but writes nothing.)
+  server builds every diagram on demand from the model and the frontend fetches it. `coyodex render`
+  only writes the `.md` view; a non-`.md` output is a clean error (there is no HTML file to render).
 - The serializer is **deterministic**: the same model always produces byte-identical JSON (fixed
   key order, `indent=2`), so the committed JSON diffs cleanly.
 
