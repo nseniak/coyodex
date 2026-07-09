@@ -883,6 +883,11 @@ function bindFlow(uc) {
   // FLOW_ACTORS (gen_viewer.flow_actors) hands us its Mermaid alias (data-id) instead of a node id.
   // Mirrors bindGP's actor loop below, the same DOM shape (stick figure + lifeline).
   const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
+  // A step's endpoint that is a Role has no node id (srcId/dstId are null), so it can't be found via
+  // partsById. Index each actor's DOM parts by the steps it drives (a.stepIdx) so selecting a step can
+  // keep its actor endpoints lit, the same way partsById keeps its element endpoints. Without this, the
+  // first step (typically actor -> component) dims its actor.
+  const actorPartsByStep = {};
   for (const a of (FLOW_ACTORS[uc] || [])) {
     const selKey = 'flowactor:' + uc + ':' + a.aid;
     const figT = root.querySelector('.actor-top[data-id="' + a.aid + '"]');
@@ -891,6 +896,7 @@ function bindFlow(uc) {
     const parts = [figT, figB, life].filter(Boolean);
     if (!parts.length) continue;
     for (const el of parts) scene.dimEls.push(el);
+    for (const i of a.stepIdx) (actorPartsByStep[i] || (actorPartsByStep[i] = [])).push(...parts);
     const select = () => {
       scene.selectedKey = selKey;
       showFlowActor(uc, a);
@@ -928,6 +934,7 @@ function bindFlow(uc) {
       if (edge) showEdge(edge); else showFlowStep(uc, i);
       const keep = new Set(els);
       for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
+      for (const el of (actorPartsByStep[i] || [])) keep.add(el);  // Role endpoints have no node id
       sceneSelect(scene, () => gpHighlight(scene, els));
       gpFocus(scene, keep);
     };
