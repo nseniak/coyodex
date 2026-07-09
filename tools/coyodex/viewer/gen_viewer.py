@@ -1259,8 +1259,11 @@ def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
         ensure(str(st["src"]), bool(st.get("src_is_id")))
         ensure(str(st["dst"]), bool(st.get("dst_is_id")))
     lines = ["sequenceDiagram"] + decls
-    for st in steps:
-        lines.append(f"  {pid[str(st['src'])]}->>{pid[str(st['dst'])]}: {_safe_msg(_flow_step_label(idx, st))}")
+    # Prefix each arrow with its 1-based position so the diagram is self-numbered — the same number the
+    # side-panel narrative shows (a plain <ol>) and the step player's "Step n / N" counter uses. The index
+    # is over this same ok-filtered list, so message n <-> FLOWS_NARR[uc][n-1] <-> panel item n line up.
+    for i, st in enumerate(steps):
+        lines.append(f"  {pid[str(st['src'])]}->>{pid[str(st['dst'])]}: {i + 1}. {_safe_msg(_flow_step_label(idx, st))}")
     return "\n".join(lines)
 
 
@@ -1434,6 +1437,14 @@ __STYLE__
       </div>
       <div id="diagram"></div>
       <div id="legend"></div>
+      <!-- Step player: shown only on a use-case flow view (a Golden Path step drill-down). Walks the flow's
+           actions one at a time — glowing and centering the current arrow — without touching the info pane.
+           Absolutely positioned like #legend, so it floats over the diagram as it pans/zooms underneath. -->
+      <div id="flowplayer" hidden>
+        <button id="flowprev" title="Previous step (Left arrow)">&#9664;</button>
+        <span id="flowcount">Step 1 / 1</span>
+        <button id="flownext" title="Next step (Right arrow)">&#9654;</button>
+      </div>
     </div>
     <!-- Horizontal drag handle: sets the info pane's HEIGHT (the diagram takes the rest). -->
     <div id="vsplit" title="Drag to resize"></div>

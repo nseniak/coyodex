@@ -308,6 +308,18 @@ g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; po
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
 
+/* Step player for use-case flow views — floats bottom-centre over the diagram. `hidden` toggles from JS. */
+#flowplayer { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 6;
+              display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #e5e7eb;
+              border-radius: 999px; padding: 4px 6px; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+#flowplayer[hidden] { display: none; }
+#flowplayer button { font-size: 12px; line-height: 1; padding: 5px 11px; border: 0; border-radius: 999px;
+                     background: #6366f1; color: #fff; cursor: pointer; }
+#flowplayer button:hover:not(:disabled) { background: #4f46e5; }
+#flowplayer button:disabled { background: #e5e7eb; color: #9ca3af; cursor: default; }
+#flowcount { font-size: 12px; color: #374151; font-variant-numeric: tabular-nums; min-width: 78px;
+             text-align: center; padding: 0 2px; }
+
 /* Source-link settings modal + first-run navigation guide (#coach). The [hidden] attr toggles from JS. */
 #modal, #coach { position: fixed; inset: 0; z-index: 100; display: flex; align-items: center; justify-content: center;
          background: rgba(17,24,39,.45); }

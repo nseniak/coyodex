@@ -65,6 +65,10 @@ const tip = document.getElementById('tip');
 const zoomin = document.getElementById('zoomin');
 const zoomout = document.getElementById('zoomout');
 const zoomlevel = document.getElementById('zoomlevel');
+const flowplayer = document.getElementById('flowplayer');
+const flowprev = document.getElementById('flowprev');
+const flownext = document.getElementById('flownext');
+const flowcount = document.getElementById('flowcount');
 document.getElementById('meta').innerHTML = META;
 const esc = (s) => (s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
 // Inline markdown -> safe HTML for prose fields (Purpose / Why / Wants / …): a link collapses to its
@@ -118,6 +122,10 @@ let pendingElementsList = null;
 // language regardless of which of the three ways you triggered it.
 const ACTION_ICONS = {};
 let EDGE_ICON_SEQ = 0;  // fallback ACTION_ICONS key for a drillable edge path with no (or a stripped) DOM id
+// The step player's live context on a use-case flow view: the flow's uc, its ordered narrative steps, the
+// per-step DOM (arrow line + label) and participant columns bindFlow already resolved, and the current
+// 0-based step. null on every non-flow view (so the strip stays hidden and the arrow keys stay inert).
+let flowPlay = null;
 
 // --- scene ----------------------------------------------------------------------
 // A "scene" wraps the diagram currently shown: its root, the bound node/edge elements, the active
@@ -870,6 +878,7 @@ function bindFlow(uc) {
     const selKey = 'flowstep:' + uc + ':' + i;
     const doSelect = () => {
       scene.selectedKey = selKey;
+      flowSyncCur(i);  // clicking a step's arrow directly moves the player's counter to it
       if (edge) showEdge(edge); else showFlowStep(uc, i);
       const keep = new Set(els);
       for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
@@ -887,6 +896,113 @@ function bindFlow(uc) {
     if (line) attachEdgeHandlers(line, text, onClick, on, off, null);
     else { text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important'); text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off); }
   });
+
+  // Hand the step player everything it needs to walk this flow: the ordered steps, each step's arrow+label
+  // DOM (msgEls) and its endpoint columns (partsById). render() shows the strip and lands on step 1 once
+  // svg-pan-zoom exists (centering needs it). No flow -> null, so the strip stays hidden.
+  flowPlay = steps.length ? { uc, steps, msgEls, partsById, cur: -1 } : null;  // -1 = unstarted (see flowInit)
+}
+// --- use-case flow step player --------------------------------------------------
+// Walk a flow's actions one at a time. Each step is selected exactly as a click on its arrow would —
+// the same info pane, code viewer, glow and focus — then scrolled into view (only if it isn't already
+// fully shown). The step player is just a driver over the arrows' own click selection, so stepping and
+// clicking never diverge.
+// Pan (not zoom) the diagram by (dx,dy) screen px with an ease-out — a short "scroll" so the eye can
+// follow the jump between steps instead of teleporting. panBy is relative, so each frame applies only
+// the delta since the last one; a new call cancels the in-flight one (rapid stepping recomputes from the
+// current position in flowReveal, so it self-corrects).
+let flowPanRAF = 0;
+function flowAnimatePanBy(dx, dy) {
+  if (flowPanRAF) { cancelAnimationFrame(flowPanRAF); flowPanRAF = 0; }
+  if (!mainPz || (!dx && !dy)) return;
+  const DUR = 260, start = performance.now();
+  let done = 0;  // fraction of the full (dx,dy) already applied
+  const ease = (t) => 1 - Math.pow(1 - t, 3);  // easeOutCubic
+  const step = (now) => {
+    const e = ease(Math.min(1, (now - start) / DUR));
+    mainPz.panBy({ x: (e - done) * dx, y: (e - done) * dy });
+    done = e;
+    flowPanRAF = e < 1 ? requestAnimationFrame(step) : 0;
+  };
+  flowPanRAF = requestAnimationFrame(step);
+}
+// Bring step i into view with the LEAST scroll. Preferred target: the arrow + label + its two endpoint
+// lifelines (the "from"/"to" columns), padded so those verticals show. If that whole span can't fit the
+// viewport (a wide arrow, zoomed in), fall back to just the label — so you at least always see WHICH step
+// you're on. Screen-space (getBoundingClientRect + panBy), immune to Mermaid's internal group transforms.
+// Only the overflowing side is nudged in, so an already-visible axis never moves; a fully-visible target
+// doesn't move at all. PAD keeps the target off the very edge.
+const FLOW_PAD = 36;
+function flowRect(items) {  // items: [{el, xOnly}] -> padded union rect in screen px, or null
+  let l = Infinity, t = Infinity, r = -Infinity, b = -Infinity;
+  for (const { el, xOnly } of items) {
+    const q = el.getBoundingClientRect();
+    if (!q || (!q.width && !q.height)) continue;
+    l = Math.min(l, q.left); r = Math.max(r, q.right);
+    if (!xOnly) { t = Math.min(t, q.top); b = Math.max(b, q.bottom); }
+  }
+  return isFinite(l) ? { l: l - FLOW_PAD, t: t - FLOW_PAD, r: r + FLOW_PAD, b: b + FLOW_PAD } : null;
+}
+function flowReveal(els, i) {
+  if (!mainPz || !els || !els.length) return;
+  const d = diagram.getBoundingClientRect();
+  const st = flowPlay.steps[i];
+  // preferred target: arrow + label (full extent) + both endpoint lifelines (x only, not the wide box).
+  const items = els.map((el) => ({ el, xOnly: false }));
+  for (const end of [st.srcId, st.dstId])
+    for (const el of (flowPlay.partsById[end] || []))
+      if (el.tagName === 'line') items.push({ el, xOnly: true });
+  let box = flowRect(items);
+  if (!box) return;
+  if (box.r - box.l > d.width || box.b - box.t > d.height) {   // too big to show in full -> just the label
+    const label = els.find((e) => e.classList && e.classList.contains('messageText'));
+    box = label ? flowRect([{ el: label, xOnly: false }]) : null;
+    if (!box || box.r - box.l > d.width || box.b - box.t > d.height) return;  // even the label can't fit
+  }
+  let dx = 0, dy = 0;
+  if (box.l < d.left) dx = d.left - box.l; else if (box.r > d.right) dx = d.right - box.r;
+  if (box.t < d.top) dy = d.top - box.t; else if (box.b > d.bottom) dy = d.bottom - box.b;
+  if (!dx && !dy) return;   // already fully visible -> stay put
+  flowAnimatePanBy(dx, dy);
+}
+// cur === -1 is the "unstarted" state: no step selected yet, but the counter reads "Step 1 / N" so the
+// first Next lands on step 1 (not step 2). Prev is disabled until a step is actually selected.
+function flowCounter() {
+  if (!flowPlay) return;
+  const n = flowPlay.steps.length, i = flowPlay.cur;
+  flowcount.textContent = 'Step ' + (i < 0 ? 1 : i + 1) + ' / ' + n;
+  flowprev.disabled = i <= 0;         // covers unstarted (-1) and step 1 (0)
+  flownext.disabled = i >= n - 1;
+}
+// Move the counter to step i without re-highlighting — used when a click on the arrow already selected it.
+function flowSyncCur(i) { if (flowPlay) { flowPlay.cur = i; flowCounter(); } }
+// Go to step i: select its arrow exactly as a manual click would (same info pane, code viewer, glow and
+// focus — via the step's registered selector), then scroll it into view if needed. Delegating to the click
+// selector keeps stepping and clicking in sync by design.
+function flowGoto(i) {
+  if (!flowPlay || !flowPlay.steps.length) return;
+  const n = flowPlay.steps.length;
+  i = Math.max(0, Math.min(n - 1, i));
+  const sel = mainScene.selectors['flowstep:' + flowPlay.uc + ':' + i];
+  if (sel) sel(); else flowPlay.cur = i;  // sel() runs doSelect, which calls flowSyncCur(i) -> cur + counter
+  flowReveal(flowPlay.msgEls[i] || [], i);
+  flowCounter();
+}
+// From the unstarted state, Next selects step 1 (and Prev does nothing); once started, step by ±1.
+function flowStepBy(d) {
+  if (!flowPlay) return;
+  if (flowPlay.cur < 0) { if (d > 0) flowGoto(0); return; }
+  flowGoto(flowPlay.cur + d);
+}
+// Called from render() once svg-pan-zoom exists. Shows the strip. A back/forward revisit that restored a
+// selected step starts there; a fresh open is UNSTARTED — nothing selected, the overview panel stays, and
+// the counter sits ready at step 1 (the first Next selects it).
+function flowInit() {
+  if (!flowPlay || !flowPlay.steps.length) { flowplayer.hidden = true; return; }
+  flowplayer.hidden = false;
+  const m = (mainScene.selectedKey || '').match(/^flowstep:.*:(\d+)$/);
+  flowPlay.cur = m ? +m[1] : -1;
+  flowCounter();
 }
 // A flow message's side panel for an ACTOR step (an element↔element step shows its backbone edge instead).
 // `Why` is this step's one explanation field — plain prose, no label, like every other panel now.
@@ -2225,6 +2341,7 @@ async function render() {
   const seq = ++renderSeq;
   hideTip();  // a re-render replaces the diagram — drop any tooltip from the old one
   if (mainPz) { mainPz.destroy(); mainPz = null; }
+  flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   const s = history[hi];
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
@@ -2311,6 +2428,7 @@ async function render() {
     if (vp) { mainPz.zoom(vp.zoom); mainPz.pan(vp.pan); }
     updateZoomLevel();
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
+    flowInit();  // a flow view: show the step player (unstarted on a fresh open; nothing auto-selected)
   }
   if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e)) resetScene(mainScene); });  // empty space deselects
   renderChrome(s);
@@ -2866,6 +2984,12 @@ document.addEventListener('keydown', (e) => {
   // ⌘/⌥ + ←/→ navigate history (preventDefault so ⌘+arrows don't trigger the browser's back/forward)
   if ((e.metaKey || e.altKey) && e.key === 'ArrowLeft') { e.preventDefault(); back(); return; }
   if ((e.metaKey || e.altKey) && e.key === 'ArrowRight') { e.preventDefault(); fwd(); return; }
+  // Bare ←/→ walk the use-case flow step by step (only on a flow view, and not while typing in a field).
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') || (e.target && e.target.isContentEditable);
+  if (flowPlay && !typing && !e.metaKey && !e.altKey && !e.ctrlKey) {
+    if (e.key === 'ArrowLeft') { e.preventDefault(); flowStepBy(-1); return; }
+    if (e.key === 'ArrowRight') { e.preventDefault(); flowStepBy(1); return; }
+  }
   if (e.key === 'Escape' && mainScene) resetScene(mainScene);
 });
 // While ⌘ (or ⌃ off Mac) is held, flag the body so drillable subsystems/arrows show the drill-in
@@ -3190,6 +3314,8 @@ navfwd.addEventListener('click', fwd);
 zoomin.addEventListener('click', () => { if (mainPz) { mainPz.zoomIn(); updateZoomLevel(); } });
 zoomout.addEventListener('click', () => { if (mainPz) { mainPz.zoomOut(); updateZoomLevel(); } });
 zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); updateZoomLevel(); } });  // fit to screen
+flowprev.addEventListener('click', () => flowStepBy(-1));  // step player: previous / next flow action
+flownext.addEventListener('click', () => flowStepBy(1));
 if (HAS_DIFF) {
   // Same view, different overlay — capture the live pan/zoom + selection first so the toggle keeps
   // them (render() restores from the state) instead of resetting to a fresh, unselected fit.
