@@ -2359,11 +2359,13 @@ function scheduleStage(fn) {
   refitRaf = requestAnimationFrame(() => { refitRaf = 0; if (mainPz) { fn(); updateZoomLevel(); } });
 }
 // Re-FIT: the SAME content is re-framed in the new size (zoom resets to fit, recentered). Used when the
-// stage's WIDTH changes (side bars / window) — the diagram should reflow to the new width.
+// whole window resizes, or the file browser is toggled on/off — a large, discrete size change where a
+// fresh fit is the least surprising result.
 function refitStage() { scheduleStage(() => { mainPz.resize(); mainPz.fit(); mainPz.center(); }); }
 // PRESERVE: keep the user's current zoom level and keep the point that was at the viewport centre at the
-// centre — the diagram doesn't jump. Used for the vertical split (info-pane height), where re-fitting
-// would throw away a zoom-in every time the reader nudges the divider.
+// centre — the diagram doesn't jump. Used for EVERY drag-handle resize — the vertical info-pane split
+// AND the two horizontal splits (left-column width, file-browser width) — where re-fitting would throw
+// away the reader's zoom-in every time they nudge a divider.
 function resizeStagePreserve() {
   scheduleStage(() => {
     const b = mainPz.getSizes();                          // container size + realZoom BEFORE the resize
@@ -3541,7 +3543,7 @@ if (savedLeftW) leftcol.style.width = clampLeftW(savedLeftW) + 'px';
 const resizer = document.getElementById('resizer');
 let resizing = false;
 resizer.addEventListener('mousedown', (e) => { e.preventDefault(); resizing = true; document.body.classList.add('resizing'); });
-document.addEventListener('mousemove', (e) => { if (resizing) { leftcol.style.width = clampLeftW(e.clientX - leftcol.getBoundingClientRect().left) + 'px'; refitStage(); } });
+document.addEventListener('mousemove', (e) => { if (resizing) { leftcol.style.width = clampLeftW(e.clientX - leftcol.getBoundingClientRect().left) + 'px'; resizeStagePreserve(); } });
 document.addEventListener('mouseup', () => {
   if (!resizing) return;
   resizing = false; document.body.classList.remove('resizing');
@@ -3579,7 +3581,7 @@ treeToggleBtn.addEventListener('click', () => {
 });
 let treeResizing = false;
 treeResizer.addEventListener('mousedown', (e) => { e.preventDefault(); treeResizing = true; document.body.classList.add('resizing'); });
-document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX - tree.getBoundingClientRect().left) + 'px'; refitStage(); } });
+document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX - tree.getBoundingClientRect().left) + 'px'; resizeStagePreserve(); } });
 document.addEventListener('mouseup', () => {
   if (!treeResizing) return;
   treeResizing = false; document.body.classList.remove('resizing');
