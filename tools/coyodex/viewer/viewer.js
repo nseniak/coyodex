@@ -170,10 +170,6 @@ for (const f of GRAPH.flows || []) {
 // When a click navigates to another view to reveal a node (the file browser, a flow element link, the
 // change-impact summary), the node id to select is stashed here and applied once that view has rendered.
 let pendingSelect = null;
-// A file-tree click on a path with MULTIPLE anchored elements (node_path_index collision) navigates to
-// their shared view (if one exists) without selecting anything — the ids to list in the panel once that
-// view has rendered are stashed here (see selectFromTreeAnchors / showElementsList).
-let pendingElementsList = null;
 
 // node id -> its injected corner-action icon element (see decorateActionIcons), so a ⌘-click / double
 // click drill (isDrillClick) can flash the SAME icon a direct icon-click would have used — one visual
@@ -576,8 +572,7 @@ function kindPills(n) {
     + (sub ? `<span class="badge kind">${esc(sub)}</span>` : '');
 }
 // A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
-// writes, no handler wiring. Shared by showNode (one node fills the whole panel) and showElementsList
-// (several nodes stack in one panel, each block needing this same markup).
+// writes, no handler wiring. Used by showNode to fill the panel with a single element's detail.
 function nodeDetailHtml(id) {
   const n = GRAPH.nodes[id];
   if (!n) return '';
@@ -596,8 +591,7 @@ function nodeDetailHtml(id) {
     + explain
     + `<dl>${rows}${usedInHtml(id)}</dl>`;
 }
-// Wire the interactive bits inside a just-written detail block: the use-case-flow refs. `root` is the
-// panel itself (single-node case) or one `.pblock` div (list case).
+// Wire the interactive bits inside the just-written detail panel: the use-case-flow refs.
 function bindNodeDetailHandlers(root) {
   root.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
@@ -612,64 +606,12 @@ function showNode(id) {
   // collapsed box (bindBridgeEdge), neither of which went through selectNode before.
   syncTreeToNode(id);
 }
-// `id`'s file/folder collision set (node_path_index — filetree.py), primary + others, for ANY id in
-// that set (not just the primary) — [id] alone when it didn't collide with anything.
-function anchorSetFor(id) { return siblingsByNode[id] || [id]; }
-// A file/folder anchoring MULTIPLE elements (node_path_index collision): rather than guessing which one
-// the reader meant, show all of them — full detail, stacked, separated by a rule — so nothing is hidden
-// behind an arbitrary pick. Each block's title is clickable and re-selects that one (selectFromTree),
-// which — since it shares this same anchor set — lands right back here with `selectedId` set. Passing
-// `selectedId` dims every OTHER block (the same DIM opacity the diagram itself uses for "not focused")
-// and scrolls that one block into view, so a long sibling list doesn't leave it hidden off-screen.
-// Called with no `selectedId` for the "just landed here, nothing picked yet" state (selectFromTreeAnchors).
-function showElementsList(ids, selectedId) {
-  const known = ids.filter((id) => GRAPH.nodes[id]);
-  panel.innerHTML = known.map((id) =>
-    `<div class="pblock" data-id="${esc(id)}">${nodeDetailHtml(id)}</div>`).join('<hr>');
-  let activeBlock = null;
-  panel.querySelectorAll('.pblock').forEach((block) => {
-    const id = block.getAttribute('data-id');
-    bindNodeDetailHandlers(block);
-    const h2 = block.querySelector('h2');
-    if (h2) { h2.classList.add('pblock-title'); h2.addEventListener('click', () => selectFromTree(id)); }
-    if (selectedId) {
-      const active = id === selectedId;
-      block.style.opacity = active ? '' : DIM;
-      if (active) activeBlock = block;
-    }
-  });
-  if (activeBlock) {
-    // Center it, not just scroll it into view — but a block near the END of the list has no content
-    // below it for the viewport to scroll into, so plain block:'center' would leave it stuck low. Pad
-    // the bottom with exactly the shortfall so even the last block can still be centered.
-    const panelRect = panel.getBoundingClientRect(), blockRect = activeBlock.getBoundingClientRect();
-    const blockCenter = panel.scrollTop + (blockRect.top - panelRect.top) + blockRect.height / 2;
-    const shortfall = blockCenter + panel.clientHeight / 2 - panel.scrollHeight;
-    if (shortfall > 0) {
-      const spacer = document.createElement('div');
-      spacer.style.height = Math.ceil(shortfall) + 'px';
-      panel.appendChild(spacer);
-    }
-    activeBlock.scrollIntoView({ block: 'center' });
-  }
-}
-// The single choke point behind every node selection's panel content: `id`'s OWN plain detail, unless
-// it shares an exact file/folder anchor with other elements (anchorSetFor), in which case the full
-// sibling list is shown instead — with `id` itself the undimmed, scrolled-to one. So "selecting a box"
-// always reads as "here's the file it came from", regardless of whether it was reached via the file
-// tree, a sibling's list-title link, or a plain click on the box itself.
-function showNodeDetail(id) {
-  const ids = anchorSetFor(id);
-  if (ids.length > 1) showElementsList(ids, id); else showNode(id);
-}
-// showNodeDetail already mirrors into the tree for the single-anchor case (showNode does it); only the
-// multi-anchor case (showElementsList, which doesn't sync itself) still needs an explicit call. A caller
-// that always called both unconditionally was a real bug, not just noise: highlightTreePath's near/far
-// centering compares against the PREVIOUS row, so a redundant second call for the same id compared the
-// row against itself (trivially "near") and undid the first call's correct centering.
+// Every node selection shows exactly that one element's detail — never a stacked list. When the element's
+// file also anchors OTHER elements (a node_path_index collision — filetree.py), they aren't crammed into
+// the panel: the code viewer tags each one on its own source line instead (anchorsByPath / paintCodeTags),
+// so "selecting a box" reads as "here's this one element", and its file-mates are discoverable in the code.
 function showNodeDetailSynced(id) {
-  showNodeDetail(id);
-  if (anchorSetFor(id).length > 1) syncTreeToNode(id);
+  showNode(id);          // fills the panel with `id` alone and mirrors into the tree + code viewer (syncTreeToNode)
   updateFolderPeek(id);  // a folder element peeks the file browser open when it's folded (see setTreePeek)
 }
 
@@ -2572,7 +2514,7 @@ async function render() {
   // Landing on a view with nothing selected (a tab / drill, not a folder element click): show its
   // default panel and close any folder peek carried over from the previous view. An explicit selection
   // (pendingSelect below) instead runs through updateFolderPeek, which re-peeks if it's a folder.
-  if (!pendingSelect && !pendingElementsList && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setTreePeek(false); }
+  if (!pendingSelect && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setTreePeek(false); }
   if (mode === 'diff' && HAS_DIFF) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
@@ -2586,11 +2528,6 @@ async function render() {
     const el = mainScene.nodeEls[id];
     if (el) selectNode(mainScene, el, id); else showNodeDetailSynced(id);
     if (el) pendingMatchTextId = id;
-  } else if (pendingElementsList) {
-    // A file/folder anchoring several elements shares this view — land here with nothing selected
-    // (see selectFromTreeAnchors) and list them all instead of guessing which one was meant.
-    const ids = pendingElementsList; pendingElementsList = null;
-    showElementsList(ids);
   } else if (s.sel && mainScene.selectors[s.sel]) {
     mainScene.selectors[s.sel]();  // history revisit: restore the element that was selected in this view
   }
@@ -2634,11 +2571,11 @@ const treeToggleBtn = document.getElementById('treetoggle');
 const treeResizer = document.getElementById('treeresizer');
 const rowByPath = {};   // path (no trailing slash) -> { row, kids, entry, depth, built }
 const pathByNode = {};  // node id -> its exact tree path (graph -> tree highlight for a mapped node)
-// node id -> the FULL node_path_index collision set at its exact path (primary + others), for any id
-// that collided with at least one other — built eagerly from FILE_TREE (unlike rowByPath, which only
-// exists for a path once its row has been lazily expanded/built), so a selection can look this up
-// regardless of what the tree happens to have rendered so far. See anchorSetFor.
-const siblingsByNode = {};
+// file path (no trailing slash) -> every element anchored there (node_path_index — filetree.py), primary
+// first. The code viewer reads this to tag each element on its own source line (paintCodeTags). Built
+// eagerly from FILE_TREE (unlike rowByPath, which exists for a path only once its row has been lazily
+// built), so a file can be tagged the moment it's shown, whatever the tree happens to have rendered.
+const anchorsByPath = {};
 let treeSelPath = null; // path of the currently highlighted row
 let treeSpacer = null;  // bottom filler div added when centering a row near the end of the tree (see highlightTreePath)
 // Set by onRowClick right before a click leads to a selection: a row the reader just clicked is already
@@ -2741,8 +2678,8 @@ function onRowClick(key) {
     // hijack the selection to the containing subsystem. A folder click stays in a folder peek.
     toggleDir(key);
     // e.node set -> this exact path collided in node_path_index (filetree.py): e.others carries the
-    // rest, kept instead of dropped — selectFromTreeAnchors decides whether that's one thing or several.
-    if (e.node) { suppressTreeScroll = true; selectFromTreeAnchors([e.node, ...e.others], key); }
+    // rest — selectFromTreeAnchors selects the primary, the others are tagged in the code viewer.
+    if (e.node) { suppressTreeScroll = true; selectFromTreeAnchors([e.node, ...e.others]); }
     return;
   }
   // A file row: the reader wants its source in the code viewer, so end any folder peek and show it.
@@ -2752,7 +2689,7 @@ function onRowClick(key) {
     // An ANCHOR file (a node's own source): selecting its node also loads it into the code viewer AT the
     // node's line (syncTreeToNode -> syncCodeView), so no separate loadCode is needed here.
     suppressTreeScroll = true;
-    selectFromTreeAnchors([e.node, ...e.others], key);  // this exact file collided — e.others carries the rest
+    selectFromTreeAnchors([e.node, ...e.others]);  // this exact file collided — e.others carries the rest
   } else if (e.node) {
     // An OWNED file (belongs to a component but isn't its anchor): show THIS file, and select its owner
     // (definition-first, already resolved into e.node). The syncCodeView/syncTreeToNode "belongs" guards
@@ -2842,25 +2779,12 @@ function selectFromTree(nodeId) {
   }
 }
 // A file/folder row whose exact path anchors one or more elements (node_path_index — filetree.py).
-// One element: select it directly, same as ever (which highlights the row via syncTreeToNode, same as
-// any other selection). Several: never guess which one was meant — list every one's full detail in the
-// panel instead (showElementsList; each title re-selects that one for real), and switch the diagram to
-// their shared view ONLY when they all genuinely live on the exact same one; otherwise leave whatever
-// diagram is currently showing untouched. Nothing gets selected in that case, so nothing would
-// otherwise mark this row as the source — highlight `path` (this row itself) directly instead.
-function selectFromTreeAnchors(allIds, path) {
-  if (allIds.length <= 1) { if (allIds.length) selectFromTree(allIds[0]); return; }
-  highlightTreePath(path);
-  const states = allIds.map((id) => selectTargetFor(id)).filter(Boolean).map((t) => t.state);
-  const shared = states.length === allIds.length && states.every((s) => stateKey(s) === stateKey(states[0]))
-    ? states[0] : null;
-  const cur = history[hi];
-  if (shared && (!cur || stateKey(cur) !== stateKey(shared))) {
-    pendingElementsList = allIds;  // render() shows the list once the shared view has finished rendering
-    go(shared);
-  } else {
-    showElementsList(allIds);  // already on the shared view (or there isn't one) — just update the panel
-  }
+// Select the PRIMARY element — the collision set's first (leaves before groups, ordered in filetree.py).
+// Its file-mates aren't stacked in the panel anymore; the code viewer tags each on its own source line
+// (paintCodeTags), so they stay discoverable there. Selecting highlights this row via syncTreeToNode,
+// same as any other selection (the primary's own anchor IS this path).
+function selectFromTreeAnchors(allIds) {
+  if (allIds.length) selectFromTree(allIds[0]);
 }
 
 // A source ref (a node's `file`/`line`, an edge's `where`) -> the tree path it resolves to, or null when
@@ -2918,9 +2842,9 @@ function highlightTreePath(path) {
   const near = prevRow && prevRow.offsetParent !== null
     && Math.abs(prevRow.getBoundingClientRect().top - rec.row.getBoundingClientRect().top) < NEAR_PX;
   if (near) { rec.row.scrollIntoView({ block: 'nearest' }); return; }
-  // Same shortfall trick as showElementsList: a row near the END of the tree has no content below it
-  // for the viewport to scroll into, so plain block:'center' would leave it stuck low. Pad the bottom
-  // with exactly the shortfall so even the last row can still be centered.
+  // A row near the END of the tree has no content below it for the viewport to scroll into, so plain
+  // block:'center' would leave it stuck low. Pad the bottom with exactly the shortfall so even the last
+  // row can still be centered.
   const bodyRect = treeBody.getBoundingClientRect(), rowRect = rec.row.getBoundingClientRect();
   const rowCenter = treeBody.scrollTop + (rowRect.top - bodyRect.top) + rowRect.height / 2;
   const shortfall = rowCenter + treeBody.clientHeight / 2 - treeBody.scrollHeight;
@@ -2940,8 +2864,7 @@ function renderFileTree(root) {
     // jump to a random owned file instead of the element's source.
     if (e.node && e.cov === 'self') {
       pathByNode[e.node] = treeKey(e.path);
-      const all = [e.node, ...(e.others || [])];
-      if (all.length > 1) for (const id of all) siblingsByNode[id] = all;
+      anchorsByPath[treeKey(e.path)] = [e.node, ...(e.others || [])];  // every element anchored at this file
     }
     for (const c of e.children) index(c);
   })(root);
@@ -2995,15 +2918,39 @@ async function loadServerTree() {
 // A first-pass read-only source view: fetch the file from the server (git @ commit), highlight it with
 // highlight.js (lazy-loaded from a CDN, SRI-pinned like the other libs), show a line-number gutter, and
 // scroll to / highlight the current line. Deliberately simple — richer navigation is a planned follow-up.
-const cvbody = document.getElementById('cvbody');
+const cvscroll = document.getElementById('cvscroll');  // the scrolling source area (the table lives here)
+const cvminimap = document.getElementById('cvminimap');  // the overview ruler beside it
 const cvpath = document.getElementById('cvpath');
 const cvopen = document.getElementById('cvopen');  // ↗ opens the shown file in the external editor / on GitHub
 if (cvopen) cvopen.addEventListener('click', () => { if (cvPath) openSource({ file: cvPath, line: cvLine }); });
+// The ruler's viewport band tracks the scroll live, and the ruler doubles as a scrollbar: press or drag
+// anywhere on it (except a dot, which jumps to its line) scrubs the source, centring the view on the
+// pointer. Listeners wired once — updateViewport / scrollCodeToLine are hoisted.
+if (cvscroll) cvscroll.addEventListener('scroll', updateViewport);
+window.addEventListener('resize', updateViewport);
+if (cvminimap) cvminimap.addEventListener('mousedown', (e) => {
+  if (e.target.classList.contains('cvmark')) return;  // a dot handles its own click
+  const rect = cvminimap.getBoundingClientRect();
+  const scrub = (y) => {
+    const frac = Math.max(0, Math.min(1, (y - rect.top) / rect.height));
+    cvscroll.scrollTop = frac * cvscroll.scrollHeight - cvscroll.clientHeight / 2;  // centre the view on the point
+  };
+  scrub(e.clientY);
+  const move = (ev) => scrub(ev.clientY);
+  const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); document.body.classList.remove('cv-scrubbing'); };
+  window.addEventListener('mousemove', move);
+  window.addEventListener('mouseup', up);
+  document.body.classList.add('cv-scrubbing');
+  e.preventDefault();  // don't start a text selection while scrubbing
+});
 let cvPath = null, cvTable = null;  // the file currently shown + its rendered table (for same-file line moves)
 let cvLine = null;                  // the line to highlight — a module var so a line that arrives while the
                                     // file is still loading (tree click: file-load then node-select) still lands
+let cvLineCount = 0;                // total lines in the shown file (positions the overview-ruler marks)
 let cvReq = 0;                      // request token — a newer load supersedes an in-flight older one
 let cvFiles = [];                   // the selected element's files (source first) — the header's switcher list
+let suppressCodeScroll = false;     // one-shot: skip the next markLine re-centering (a tag click on a line
+                                    // already in view must not yank the scroll — see paintCodeTags)
 
 // The code-viewer header: a plain path, or — when the selected element owns several files — a switcher
 // (its `files`, source first) so the reader can page through them without leaving the element. The
@@ -3078,12 +3025,160 @@ function highlightedToLines(rootEl) {
   return lines;
 }
 function markLine(line) {
-  if (!cvTable) return;
+  if (!cvTable) { suppressCodeScroll = false; return; }
   const prev = cvTable.querySelector('tr.cvcur');
   if (prev) prev.classList.remove('cvcur');
-  if (!line) return;
+  if (line) {
+    const row = cvTable.querySelector('tr[data-ln="' + line + '"]');
+    // Skip the re-centering when a tag click asked us to (suppressCodeScroll): the line is already on
+    // screen — the reader just clicked its pill — so yanking the scroll would be jarring.
+    if (row) { row.classList.add('cvcur'); if (!suppressCodeScroll) row.scrollIntoView({ block: 'center' }); }
+  }
+  suppressCodeScroll = false;  // one-shot: always consumed by the next mark, scrolled or not
+}
+// The element's type, as one short word for its on-the-line tag — the thing the code itself can't tell
+// you (the name is already right there on the line). A dependency shows its Context sub-type (service /
+// datastore / …) when it has one, since the generic "dependency" is less informative — same choice
+// kindPills makes for the info-pane pill.
+function nodeTypeLabel(n) {
+  if (n.kind === 'dep') return (n.fields && n.fields.Kind) || 'dependency';
+  return n.kind;
+}
+// file path -> the use-case flow steps whose backing edge is anchored there. A step carries no source ref
+// of its own; its location is the edge between its two element endpoints (COMP_LOOKUP, same derivation
+// bindFlow uses). A step touching a Role (no srcId/dstId) has no edge and no line, so it's skipped. Built
+// once, lazily — FLOWS_NARR / COMP_LOOKUP are set at boot, well before any file is shown.
+let stepsByPathCache = null;
+function stepsByPath() {
+  if (stepsByPathCache) return stepsByPathCache;
+  stepsByPathCache = {};
+  for (const uc in (FLOWS_NARR || {})) {
+    (FLOWS_NARR[uc] || []).forEach((st, i) => {
+      if (!st.srcId || !st.dstId) return;
+      const edge = (COMP_LOOKUP[st.srcId + '>' + st.dstId] || [])[0];
+      if (!edge || !edge.where) return;
+      const wn = whereNode(edge.where);
+      if (!wn.line || !localRef(wn.file)) return;
+      const key = treeKey(cleanPath(wn.file, wn.line));
+      (stepsByPathCache[key] ||= []).push({ uc, i, line: wn.line, verb: st.verb, src: st.src, dst: st.dst });
+    });
+  }
+  return stepsByPathCache;
+}
+// Navigate to use case `uc` and select step `i`. stateKey ignores `sel`, so a plain go() to the same
+// use case we're already viewing would no-op — select in place then (mirrors selectFromTree's fallback).
+function selectFlowStep(uc, i) {
+  const state = { kind: 'usecase', uc: uc, sel: 'flowstep:' + uc + ':' + i };
+  const cur = history[hi];
+  if (cur && stateKey(cur) === stateKey(state) && mainScene && mainScene.selectors[state.sel]) {
+    mainScene.selectors[state.sel]();
+  } else {
+    go(state);
+  }
+}
+// Every taggable item in the shown file — structural elements anchored here AND use-case steps that pass
+// through here — as a uniform list the code tags and the overview ruler both render. `select` runs the
+// item's own selection (suppressing the re-center, since the reader clicked a line already on screen).
+function codeItemsForPath(path) {
+  const key = treeKey(path), items = [];
+  for (const id of (anchorsByPath[key] || [])) {
+    const n = GRAPH.nodes[id];
+    if (!n || !n.line) continue;
+    items.push({ line: n.line, kind: 'element', name: n.name, label: nodeTypeLabel(n),
+      select: () => { suppressCodeScroll = true; selectFromTree(id); } });
+  }
+  // One use-case tag per LINE, not per step: a single line (one edge) is often walked by several use
+  // cases — four identical "use case" pills would just eat the width. Collapse them; the tooltip names
+  // them all, and clicking selects the first (a specific one is still pickable from the use-case view).
+  const byLine = {};
+  for (const s of (stepsByPath()[key] || [])) (byLine[s.line] ||= []).push(s);
+  for (const ln in byLine) {
+    const arr = byLine[ln], first = arr[0];
+    const names = [...new Set(arr.map((s) => (GRAPH.nodes[s.uc] && GRAPH.nodes[s.uc].name) || s.uc))];
+    const name = names.length === 1 ? names[0] : names.length + ' use cases: ' + names.join(', ');
+    items.push({ line: +ln, kind: 'usecase', name: name, label: 'use case',
+      select: () => { suppressCodeScroll = true; selectFlowStep(first.uc, first.i); } });
+  }
+  return items;
+}
+// Tag each item on its own source line: a small pill pinned to the code view's right edge (so it never
+// depends on line length), clicking it selects that item. The element pill on the current line (cvLine —
+// the selected element's line) is emphasized. Re-run on every table build and line move. Two items sharing
+// one line get two pills; an item with no line can't be tagged (it isn't shown in the code at all).
+function paintCodeTags() {
+  if (!cvTable || !cvPath) return;
+  cvTable.querySelectorAll('td.cvtag').forEach((td) => { td.textContent = ''; });  // clear a previous paint
+  for (const it of codeItemsForPath(cvPath)) {
+    const row = cvTable.querySelector('tr[data-ln="' + it.line + '"]');
+    const cell = row && row.querySelector('td.cvtag');
+    if (!cell) continue;
+    const pill = document.createElement('span');
+    pill.className = 'cvtag-pill ' + it.kind + (it.kind === 'element' && it.line === cvLine ? ' cur' : '');
+    pill.textContent = it.label;                    // textContent, not innerHTML — labels are plain text
+    pill.addEventListener('click', it.select);
+    cell.appendChild(pill);
+  }
+}
+// A hover popup on a ruler mark (a dot): the item's NAME next to its type pill — since a dot alone can't
+// say what it is. Its own light card (#cvpop, created once) — appears instantly, pinned to the LEFT of the
+// dot and vertically centred on it (flips to the right only if there's no room on the left).
+const cvpop = document.createElement('div');
+cvpop.id = 'cvpop'; cvpop.hidden = true; document.body.appendChild(cvpop);
+function showMarkPop(el, name, label, kind) {
+  cvpop.innerHTML = '<span class="cvpop-name">' + esc(name) + '</span>'
+    + '<span class="cvpop-pill ' + kind + '">' + esc(label) + '</span>';
+  cvpop.hidden = false;
+  const r = el.getBoundingClientRect(), pw = cvpop.offsetWidth, ph = cvpop.offsetHeight, gap = 8;
+  let left = r.left - gap - pw;
+  if (left < 6) left = Math.min(r.right + gap, window.innerWidth - pw - 6);  // no room left -> flip right
+  const top = Math.max(6, Math.min(r.top + r.height / 2 - ph / 2, window.innerHeight - ph - 6));
+  cvpop.style.left = left + 'px';
+  cvpop.style.top = top + 'px';
+}
+function attachMarkPop(el, name, label, kind) {
+  el.addEventListener('mouseenter', () => showMarkPop(el, name, label, kind));
+  el.addEventListener('mouseleave', () => { cvpop.hidden = true; });
+}
+// The overview ruler: one clickable mark per item, placed at its line's relative depth in the whole file
+// (like a diff view's marker gutter). Clicking a mark jumps the source to that line — it does NOT select
+// (that's what the pill is for), so scanning the file's shape stays cheap. A viewport band (updated on
+// scroll) shows the slice of the file currently on screen, so the ruler doubles as a scrollbar.
+function paintMinimap() {
+  if (!cvminimap) return;
+  cvminimap.textContent = '';
+  if (!cvTable || !cvPath || cvLineCount < 1) return;
+  const vp = document.createElement('div');  // the viewport band — the part of the file currently on screen
+  vp.className = 'cvviewport';
+  cvminimap.appendChild(vp);
+  for (const it of codeItemsForPath(cvPath)) {
+    const mark = document.createElement('button');
+    mark.type = 'button';
+    mark.className = 'cvmark ' + it.kind;
+    mark.style.top = ((it.line - 1) / Math.max(1, cvLineCount - 1) * 100) + '%';
+    attachMarkPop(mark, it.name, it.label, it.kind);  // hover card: the item's name + its type pill
+    mark.addEventListener('click', () => scrollCodeToLine(it.line));
+    cvminimap.appendChild(mark);
+  }
+  updateViewport();
+}
+// Size + place the viewport band to match what's visible in the scroller. Hidden when the whole file fits
+// (nothing to scroll). Runs on every scroll / resize, so the band tracks the view live.
+function updateViewport() {
+  const vp = cvminimap && cvminimap.querySelector('.cvviewport');
+  if (!vp || !cvscroll) return;
+  const sh = cvscroll.scrollHeight, ch = cvscroll.clientHeight;
+  if (sh <= ch + 1) { vp.style.display = 'none'; return; }
+  vp.style.display = '';
+  vp.style.top = (cvscroll.scrollTop / sh * 100) + '%';
+  vp.style.height = (ch / sh * 100) + '%';
+}
+function scrollCodeToLine(line) {
+  if (!cvTable) return;
   const row = cvTable.querySelector('tr[data-ln="' + line + '"]');
-  if (row) { row.classList.add('cvcur'); row.scrollIntoView({ block: 'center' }); }
+  if (!row) return;
+  row.scrollIntoView({ block: 'center' });
+  row.classList.add('cvflash');
+  setTimeout(() => row.classList.remove('cvflash'), 700);  // brief flash so the eye catches the landing
 }
 function renderCode(path, text, token) {
   text = text.replace(/\r\n/g, '\n');  // normalize CRLF so neither path leaves a stray \r under white-space:pre
@@ -3102,11 +3197,18 @@ function renderCode(path, text, token) {
       lineHtml = text.split('\n').map(esc);
     }
     if (lineHtml.length && lineHtml[lineHtml.length - 1] === '') lineHtml.pop();  // drop trailing blank line
+    cvLineCount = lineHtml.length;  // total lines — positions the overview-ruler marks
     const rows = lineHtml.map((h, i) =>
-      '<tr data-ln="' + (i + 1) + '"><td class="ln">' + (i + 1) + '</td><td class="code hljs">' + (h || '&nbsp;') + '</td></tr>').join('');
-    cvbody.innerHTML = '<table class="cvcode"><tbody>' + rows + '</tbody></table>';
-    cvTable = cvbody.querySelector('table.cvcode');
+      '<tr data-ln="' + (i + 1) + '"><td class="ln">' + (i + 1) + '</td><td class="code hljs">' + (h || '&nbsp;')
+      + '</td><td class="cvtag"></td></tr>').join('');
+    // A few empty trailing rows past the last line: they carry no data-ln (so nothing targets them), just
+    // continuing the gutter + pill columns blank so the end reads as "nothing more here", not a hard cut.
+    const pad = '<tr class="cvpad"><td class="ln"></td><td class="code hljs">&nbsp;</td><td class="cvtag"></td></tr>'.repeat(3);
+    cvscroll.innerHTML = '<table class="cvcode"><tbody>' + rows + pad + '</tbody></table>';
+    cvTable = cvscroll.querySelector('table.cvcode');
     markLine(cvLine);  // the latest requested line (may have arrived after the fetch started)
+    paintCodeTags();   // tag every element / use-case step anchored in this file on its own line
+    paintMinimap();    // and place its marks on the overview ruler
   });
 }
 // Load `path` (repo-relative) into the code viewer, scrolled to `line`. Same file + new line just moves
@@ -3114,22 +3216,22 @@ function renderCode(path, text, token) {
 async function loadCode(path, line) {
   if (!SERVED || !path) return;
   cvLine = line || null;
-  if (path === cvPath) { renderCvHeader(); markLine(cvLine); return; }  // same file — move the line, refresh header
+  if (path === cvPath) { renderCvHeader(); markLine(cvLine); paintCodeTags(); return; }  // same file — move the line + its tag emphasis, refresh header
   const token = ++cvReq;
-  cvPath = path; cvTable = null;
+  cvPath = path; cvTable = null; cvminimap.textContent = '';  // clear the old file's ruler while the new one loads
   renderCvHeader();  // set the header (dropdown marks the new file) AFTER cvPath is updated
-  cvbody.innerHTML = '<p class="cvempty">Loading…</p>';
+  cvscroll.innerHTML = '<p class="cvempty">Loading…</p>';
   let text = null;
   try {
     const r = await fetch(API_BASE + 'src?path=' + encodeURIComponent(path), { cache: 'no-store' });
     if (token !== cvReq) return;
     if (!r.ok) {
-      cvbody.innerHTML = '<p class="cverr">' + (r.status === 404 ? 'Not tracked in this commit.' : 'Could not load this file.') + '</p>';
+      cvscroll.innerHTML = '<p class="cverr">' + (r.status === 404 ? 'Not tracked in this commit.' : 'Could not load this file.') + '</p>';
       cvPath = null; return;
     }
     text = await r.text();
   } catch (_) {
-    if (token === cvReq) { cvbody.innerHTML = '<p class="cverr">Could not load this file.</p>'; cvPath = null; }
+    if (token === cvReq) { cvscroll.innerHTML = '<p class="cverr">Could not load this file.</p>'; cvPath = null; }
     return;
   }
   if (token !== cvReq) return;

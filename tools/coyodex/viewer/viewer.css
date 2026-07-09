@@ -182,10 +182,6 @@ body.tree-hidden.tree-peek #codeview { display: none; }
          border-top: 1px solid #e5e7eb; }
 #panel .empty { color: #9ca3af; }
 #panel h2 { font-size: 16px; margin: 0 0 6px; }
-/* a block's title in the "several elements anchored here" list (showElementsList) — clicking it
-   selects that one element for real, so it reads as a link despite still being an <h2>. */
-#panel h2.pblock-title { color: #2563eb; cursor: pointer; }
-#panel h2.pblock-title:hover { text-decoration: underline; }
 /* name + kind tag (and any change badge) on one line — the identity a box/edge keeps even once its
    other fields are pruned down to what isn't already visible on the diagram. */
 #panel .pane-title { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -389,15 +385,66 @@ g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; po
           border-radius: 4px; padding: 0 4px; margin-right: 6px; cursor: pointer; vertical-align: baseline;
           max-width: 240px; }
 #cvpath .cvpathfull { color: #6b7280; }
-#cvbody { flex: 1; min-height: 0; overflow: auto; background: #fbfbfd; }
-#cvbody .cvempty, #cvbody .cverr { color: #9ca3af; padding: 16px; font-size: 13px; }
-#cvbody .cverr { color: #cf222e; }
+/* the code body is a flex row: the scrolling source on the left, a thin overview ruler pinned on the right */
+#cvbody { flex: 1; min-height: 0; overflow: hidden; background: #fbfbfd; display: flex; }
+#cvscroll { flex: 1 1 auto; min-width: 0; overflow: auto; }
+#cvscroll .cvempty, #cvscroll .cverr { color: #9ca3af; padding: 16px; font-size: 13px; }
+#cvscroll .cverr { color: #cf222e; }
+/* overview ruler: full-height strip (no fill — blends with the code), each mark at its line's depth. It
+   doubles as a scrollbar, so it takes a vertical-scrub cursor. */
+#cvminimap { flex: 0 0 14px; position: relative; cursor: ns-resize; }
+body.cv-scrubbing { cursor: ns-resize; user-select: none; }
+.cvmark { position: absolute; right: 3px; width: 8px; height: 8px; margin-top: -4px; padding: 0; border: 0;
+          border-radius: 50%; cursor: pointer; }
+.cvmark.element { background: #9ca3af; }
+.cvmark.element:hover { background: #4338ca; }
+.cvmark.usecase { background: #f59e0b; }
+.cvmark.usecase:hover { background: #b45309; }
+.cvmark:hover { width: 10px; height: 10px; margin-top: -5px; right: 2px; }
+/* the viewport band: the slice of the file currently on screen — moves + resizes as you scroll, so the
+   ruler reads as a scrollbar. pointer-events:none so a press on it still reaches the ruler's scrub. */
+.cvviewport { position: absolute; left: 0; right: 0; min-height: 8px; background: rgba(67, 56, 202, .13);
+          border: 1px solid rgba(67, 56, 202, .3); border-radius: 3px; pointer-events: none; }
+/* brief flash on the line jumped to from the ruler (so the eye catches where it landed) */
+table.cvcode tr.cvflash td.code { animation: cvflash .7s ease-out; }
+@keyframes cvflash { from { background: #dbeafe; } to { background: transparent; } }
 /* The code table: a line-number gutter column + a code column, monospace, no wrap (scrolls). */
 table.cvcode { border-collapse: collapse; width: 100%; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
 table.cvcode td { padding: 0; vertical-align: top; }
-table.cvcode td.ln { width: 1%; white-space: nowrap; text-align: right; padding: 0 10px 0 12px; color: #b6bcc7;
-          background: #f6f7f9; border-right: 1px solid #eceef1; user-select: none;
-          font-variant-numeric: tabular-nums; }
+/* the gutter is sticky-left so the line numbers stay pinned when the code scrolls sideways (its opaque
+   background + border keep the code from showing through underneath). */
+table.cvcode td.ln { position: sticky; left: 0; z-index: 2; width: 1%; white-space: nowrap; text-align: right;
+          padding: 0 10px 0 12px; color: #b6bcc7; background: #f6f7f9; border-right: 1px solid #eceef1;
+          user-select: none; font-variant-numeric: tabular-nums; }
 table.cvcode td.code { padding: 0 14px 0 12px; white-space: pre; }
 table.cvcode tr.cvcur td.code { background: #fff7cf; }
 table.cvcode tr.cvcur td.ln { background: #fbeeb3; color: #8a6d00; }
+/* Element type tags: a pill on an element's own source line, pinned to the code view's right edge
+   (position: sticky) so it never depends on line length and stays put through horizontal scroll. td.code
+   (no width set, in a width:100% table) absorbs the slack and pushes this narrow column hard right. */
+table.cvcode td.cvtag { position: sticky; right: 0; width: 1%; white-space: nowrap; text-align: right;
+          padding: 0 10px 0 8px; }
+/* opaque on purpose (no transparency): in a narrow code pane the pill is pinned over the right end of a
+   long line, so a see-through pill would let the code bleed through and muddy both. Quiet by colour, not
+   by opacity — a light solid chip at rest, filled indigo for the current element. */
+.cvtag-pill { display: inline-block; margin-left: 6px; font: 600 10px/1.6 ui-sans-serif, system-ui, sans-serif;
+          text-transform: uppercase; letter-spacing: .04em; padding: 0 6px; border-radius: 999px;
+          border: 1px solid #e5e7eb; background: #f3f4f6; color: #6b7280; cursor: pointer; user-select: none; }
+.cvtag-pill:hover { background: #eef2ff; border-color: #c7d2fe; color: #4338ca; }
+/* the tag for the element whose line is the current one — filled, so the selected element stands out */
+.cvtag-pill.cur { background: #4338ca; border-color: #4338ca; color: #fff; }
+/* a use-case step's tag — amber, so it reads as a different kind of thing from a structural element */
+.cvtag-pill.usecase { background: #fff7ed; border-color: #fed7aa; color: #9a3412; }
+.cvtag-pill.usecase:hover { background: #ffedd5; border-color: #fdba74; color: #9a3412; }
+/* the hover popup for a code tag: a light card (in the app's palette, not a dark tooltip) pinned to the
+   left of the pill — the item's name next to its type pill. Instant (no fade), never steals the pointer. */
+#cvpop { position: fixed; z-index: 60; display: flex; align-items: center; gap: 8px; max-width: 340px;
+         background: #fff; color: #1f2937; border: 1px solid #e5e7eb; border-radius: 8px; padding: 6px 10px;
+         box-shadow: 0 6px 20px rgba(30, 27, 75, .16); font-size: 12.5px; white-space: nowrap;
+         pointer-events: none; }
+#cvpop[hidden] { display: none; }
+#cvpop .cvpop-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+#cvpop .cvpop-pill { flex: 0 0 auto; font: 600 10px/1.6 ui-sans-serif, system-ui, sans-serif;
+         text-transform: uppercase; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; }
+#cvpop .cvpop-pill.element { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
+#cvpop .cvpop-pill.usecase { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }

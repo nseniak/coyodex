@@ -105,7 +105,12 @@
       <span id="cvpath"></span>
       <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
     </div>
-    <div id="cvbody"><p class="cvempty">Select a node or file to view its source.</p></div>
+    <div id="cvbody">
+      <div id="cvscroll"><p class="cvempty">Select a node or file to view its source.</p></div>
+      <!-- Overview ruler: one tick per element / use-case anchored in the file, at its relative depth —
+           click a tick to jump to that line. Filled by paintMinimap. -->
+      <div id="cvminimap" aria-hidden="true"></div>
+    </div>
   </section>
 </main>
 <div id="tip"></div>
