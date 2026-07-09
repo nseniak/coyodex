@@ -26,7 +26,7 @@ def make_profile(**over: object) -> MapProfile:
     """A representative baseline profile; override any field to build a candidate that drifts."""
     base: dict[str, object] = dict(
         use_cases=10, subsystems=4, subdomains=3, components=20, deps=5, entities=15,
-        edges=40, gp_steps=8, flows=10, security_surfaces=5,
+        edges=40, hp_steps=8, flows=10, security_surfaces=5,
         validate_ok=True, validate_problems=2, validate_warnings=1,
         contradictions=0, advisories=1, audit_warnings=0, l2_claims=6,
         coverage_flags=0, edges_per_component=2.0,
@@ -241,7 +241,7 @@ def test_every_structural_count_has_a_band() -> None:
     collapse can't pass silently. `l2_claims` is the deliberate exception (P1): the worklist derives
     from edges + auth rows, so banding it double-jeopardizes movement those signals already catch."""
     for metric in ("use_cases", "subsystems", "subdomains", "components", "deps", "entities",
-                   "edges", "gp_steps", "flows"):
+                   "edges", "hp_steps", "flows"):
         assert f"{metric}_shrink_pct" in DEFAULT_BANDS, metric
     assert "l2_claims_pct" not in DEFAULT_BANDS and "l2_claims_shrink_pct" not in DEFAULT_BANDS
     assert "edges_per_component_pct" in DEFAULT_BANDS

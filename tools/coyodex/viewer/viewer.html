@@ -49,10 +49,11 @@
       <div id="stagehead">
         <div id="stageheadrow">
           <span id="viewsw">
-            <button data-view="context">Context</button>
-            <button data-view="gp">Golden Path</button>
+            <button data-view="hp">Happy Path</button>  <!-- the landing view; internal kind stays `hp` -->
+            <button data-view="usecases">Use Cases</button>  <!-- actor-grouped catalog (hidden when no use cases) -->
             <button data-view="container">Subsystems</button>
             <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
+            <button data-view="context">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
             <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
 
             <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
@@ -65,7 +66,7 @@
       </div>
       <div id="diagram"></div>
       <div id="legend"></div>
-      <!-- Step player: shown only on a use-case flow view (a Golden Path step drill-down). Walks the flow's
+      <!-- Step player: shown only on a use-case flow view (a Happy Path step drill-down). Walks the flow's
            actions one at a time — glowing and centering the current arrow — without touching the info pane.
            Absolutely positioned like #legend, so it floats over the diagram as it pans/zooms underneath. -->
       <div id="flowplayer" hidden>

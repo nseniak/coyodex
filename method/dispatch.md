@@ -67,7 +67,7 @@ The map is the single source at the analyzed repo's `.coyodex/project-map.json`;
 diagram is served live by `coyodex serve` (not a committed file). After every write:
 **validate → audit → render**. Validate (`coyodex validate --check-sources`) checks schema +
 semantics (and that the committed markdown view is fresh); audit (`coyodex audit`) is the adversarial
-pass — it makes the narrative Golden Path and
+pass — it makes the narrative Happy Path and
 the mechanism flows/edges refute each other. It blocks only on a hard contradiction (a forward/dangling
 `why:` reference); read-before-create and actor-attribution are ADVISORY (lossy attribution — reconcile,
 don't treat as fact), and it prints an L2 grounding worklist to disprove against the code with

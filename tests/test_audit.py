@@ -34,19 +34,19 @@ def l2(json_text: str) -> list[audit_model.WorkItem]:
 # --- builders (JSON model documents) -----------------------------------
 def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
     """Two use cases over one entity E1: UC1 READS the order, UC2 CREATES it (`create_verb`).
-    `bad=True` orders the Golden Path read-then-create (the read-before-create shape); `bad=False`
+    `bad=True` orders the Happy Path read-then-create (the read-before-create shape); `bad=False`
     orders it create-then-read (clean). `create_verb` lets a test use a MUTATION verb (`writes`) to
     prove an update is NOT mistaken for a create. No `why:` lines, so the why-less check is a no-op."""
     gp = (
         """[
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Andy views the order",
       "uc": "UC1",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Adam creates the order",
       "uc": "UC2",
       "why": null
@@ -54,13 +54,13 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
   ]""" if bad else
         """[
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Adam creates the order",
       "uc": "UC2",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Andy views the order",
       "uc": "UC1",
       "why": null
@@ -90,7 +90,7 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
       "trigger_outcome": "submits -> stored"
     }}
   ],
-  "golden_path": {gp},
+  "happy_path": {gp},
   "subsystems": [],
   "components": [
     {{
@@ -207,9 +207,9 @@ def make_actor_mismatch_map(flow_actor: str = "Zoe") -> str:
       "trigger_outcome": "opens -> sees"
     }}
   ],
-  "golden_path": [
+  "happy_path": [
     {{
-      "id": "GP1",
+      "id": "HP1",
       "title": "View the order",
       "uc": "UC1",
       "why": null
@@ -291,9 +291,9 @@ def make_actor_variant_map(declared: str, opening: str, roles: bool = False) -> 
       "trigger_outcome": "opens -> sees"
     }}
   ],
-  "golden_path": [
+  "happy_path": [
     {{
-      "id": "GP1",
+      "id": "HP1",
       "title": "View the order",
       "uc": "UC1",
       "why": null
@@ -377,21 +377,21 @@ def make_shared_read_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "A",
       "uc": "UC1",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "B",
       "uc": "UC2",
       "why": null
     },
     {
-      "id": "GP3",
+      "id": "HP3",
       "title": "C",
       "uc": "UC3",
       "why": null
@@ -527,7 +527,7 @@ def make_shared_read_map() -> str:
 def make_cc_routed_read_map() -> str:
     """The mcpolis bug shape, but the precondition read is routed through a `C→C` dependency: UC1's
     flow names only C1; C1 reads C3 (C→C); C3 reads E1 (C→E, but C3 is NOT in the flow). E1 is created
-    at GP2. Audit CANNOT see the read (only C→E edges of flow-named components count) — a documented
+    at HP2. Audit CANNOT see the read (only C→E edges of flow-named components count) — a documented
     false negative that pins the limitation."""
     return """{
   "format": "coyodex-map",
@@ -552,15 +552,15 @@ def make_cc_routed_read_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Sign in",
       "uc": "UC1",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Create org",
       "uc": "UC2",
       "why": null
@@ -681,7 +681,7 @@ def make_cc_routed_read_map() -> str:
 
 
 def make_backward_whyref_map() -> str:
-    """GP1's `why:` cites GP2, which comes after it (a backward reference)."""
+    """HP1's `why:` cites HP2, which comes after it (a backward reference)."""
     return """{
   "format": "coyodex-map",
   "title": "",
@@ -705,18 +705,18 @@ def make_backward_whyref_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "First",
       "uc": "UC1",
-      "why": "needs the thing from GP2"
+      "why": "needs the thing from HP2"
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Second",
       "uc": "UC2",
-      "why": "follows GP1"
+      "why": "follows HP1"
     }
   ],
   "subsystems": [],
@@ -797,9 +797,9 @@ def make_read_never_created_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Load the config",
       "uc": "UC1",
       "why": null
@@ -871,7 +871,7 @@ def make_read_never_created_map() -> str:
 
 
 def make_whyless_map() -> str:
-    """GP1 has a `why:`, GP2 does not — a non-initial step missing its precondition (warning)."""
+    """HP1 has a `why:`, HP2 does not — a non-initial step missing its precondition (warning)."""
     return """{
   "format": "coyodex-map",
   "title": "",
@@ -895,15 +895,15 @@ def make_whyless_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "First",
       "uc": "UC1",
       "why": "the start"
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Second",
       "uc": "UC2",
       "why": null
@@ -987,7 +987,7 @@ def make_l2_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {
@@ -1069,7 +1069,7 @@ def make_l2_dep_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [],
   "deps": [
@@ -1193,7 +1193,7 @@ def make_duplicated_edge_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [],
   "deps": [
@@ -1317,7 +1317,7 @@ def make_described_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {
@@ -1443,7 +1443,7 @@ def test_read_before_create_does_not_block_the_cli() -> None:
 
 
 def test_correct_order_has_no_finding() -> None:
-    """Regression guard: a create-then-read Golden Path is clean — no false positive."""
+    """Regression guard: a create-then-read Happy Path is clean — no false positive."""
     assert audit_md(make_precedence_map(bad=False)) == []
 
 

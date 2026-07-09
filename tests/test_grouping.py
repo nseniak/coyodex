@@ -43,7 +43,7 @@ def make_grouped_map(layout: str = "proper") -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [
     {
       "id": "S1",
@@ -120,7 +120,7 @@ def make_grouped_map(layout: str = "proper") -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [
     {
       "id": "S1",
@@ -203,7 +203,7 @@ def make_card_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [
     {
       "id": "S1",
@@ -340,7 +340,7 @@ def make_nested_subsystem_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [
     {
       "id": "S1",
@@ -447,7 +447,7 @@ def make_ungrouped_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {
@@ -492,7 +492,7 @@ def make_fenced_node_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [
     {
       "id": "S1",
@@ -609,9 +609,9 @@ def make_domain_map(cards: str | None = None) -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -707,9 +707,9 @@ def make_domain_map(cards: str | None = None) -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -789,9 +789,9 @@ def make_domain_map(cards: str | None = None) -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -891,9 +891,9 @@ def make_domain_map(cards: str | None = None) -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -1015,9 +1015,9 @@ def make_domain_map(cards: str | None = None) -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -1101,9 +1101,9 @@ def make_domain_map(cards: str | None = None) -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -1194,9 +1194,9 @@ def make_domain_map(cards: str | None = None) -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -1294,7 +1294,7 @@ def make_domain_map(cards: str | None = None) -> str:
 
 
 def make_gp_map() -> str:
-    """A two-step Golden Path (GP1=UC1 actor Andy, GP2=UC2 actor Adam) + the two use-case T6 flows.
+    """A two-step Happy Path (HP1=UC1 actor Andy, HP2=UC2 actor Adam) + the two use-case T6 flows.
     Exercises the GP overview sequence (actors from the UCs) and each use case's flow sequence."""
     return """{
   "format": "coyodex-map",
@@ -1319,18 +1319,18 @@ def make_gp_map() -> str:
       "trigger_outcome": "approves -> done"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Submit order",
       "uc": "UC1",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Approve order",
       "uc": "UC2",
-      "why": "needs the order from GP1"
+      "why": "needs the order from HP1"
     }
   ],
   "subsystems": [],
@@ -1445,7 +1445,7 @@ def make_gp_map() -> str:
 
 
 def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
-    """A Golden Path step whose use case's actor matches a defined Role, so gp_actors can join the
+    """A Happy Path step whose use case's actor matches a defined Role, so hp_actors can join the
     lifeline to the Roles table (wants + kind). The T6 flow opens with an actor step; every kept test
     uses the default Role-matching actor (the undefined-actor variant only served the retired
     validator test)."""
@@ -1473,9 +1473,9 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Admin creates the org",
       "uc": "UC22",
       "why": null
@@ -1685,7 +1685,7 @@ def make_nested_bridge_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [
     {
       "id": "S1",
@@ -1857,7 +1857,8 @@ def test_diff_overlay_bundle_and_landing() -> None:
     assert b["hasDiff"] is True
     assert b["diffState"].get("C2") == "modified" and b["diffState"].get("C9") == "added"
     js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
-    assert "(HAS_DIFF && HAS_GROUPING) ? 'container' : 'context'" in js  # lands on Subsystems for a diff
+    assert "(HAS_DIFF && HAS_GROUPING) ? 'container'" in js  # still lands on Subsystems for a diff
+    assert "HAS_HP ? 'hp'" in js                             # otherwise the Happy Path is the landing view
     shell = (VIEWER_DIR / "viewer.html").read_text(encoding="utf-8")
     assert 'data-view="component"' not in shell        # never resurrects the flat map
 
@@ -1875,7 +1876,7 @@ def test_glued_collection_relation_is_labelled() -> None:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [],
   "deps": [],
@@ -2062,7 +2063,7 @@ def test_class_diagram_inheritance_arrow_labelled_inferred() -> None:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [],
   "deps": [],
@@ -2149,9 +2150,9 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -2291,9 +2292,9 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -2430,9 +2431,9 @@ def make_nested_subdomain_map() -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -2623,7 +2624,7 @@ def make_bridge_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [
     {
       "id": "S1",
@@ -2756,7 +2757,7 @@ def test_gen_domain_subdomain_card_frames_members_collapses_neighbour_subdomains
     assert set(cards) == {"SD1", "SD2"}
     cx1 = cards["SD1"]
     assert cx1.startswith("classDiagram")
-    assert 'namespace SD1["Ordering (2)"] {' in cx1                     # focal subdomain is a labelled frame
+    assert 'namespace SD1["Ordering"] {' in cx1                     # focal subdomain is a labelled frame
     assert 'class E1["Order"] {' in cx1 and "ObjectId id" in cx1        # member entity, FULL box
     assert 'class E2["LineItem"] {' in cx1                              # the other member, full
     assert 'class SD2["Catalog (1)"]' in cx1                            # neighbour drawn as ONE collapsed subdomain box
@@ -2766,7 +2767,7 @@ def test_gen_domain_subdomain_card_frames_members_collapses_neighbour_subdomains
     assert ": product" not in cx1                                       # the crossing is aggregated, not a labelled relation here
     # in SD2's card the roles flip: E4 is the framed member, SD1 the collapsed neighbour, arrow inbound
     cx2 = cards["SD2"]
-    assert 'namespace SD2["Catalog (1)"] {' in cx2
+    assert 'namespace SD2["Catalog"] {' in cx2
     assert 'class E4["Product"] {' in cx2 and 'class E1["Order"] {' not in cx2
     assert 'class SD1["Ordering (2)"]' in cx2 and "SD1 --> E4" in cx2   # inbound cross arrow from the neighbour
 
@@ -2780,7 +2781,7 @@ def test_gen_domain_edge_card_two_namespaces_with_inner_and_crossing() -> None:
     assert set(cards) == {"SD1>SD2"}                                   # only the crossing direction (E1 → E4)
     card = cards["SD1>SD2"]
     assert card.startswith("classDiagram")
-    assert 'namespace SD1["Ordering (2)"] {' in card and 'namespace SD2["Catalog (1)"] {' in card
+    assert 'namespace SD1["Ordering"] {' in card and 'namespace SD2["Catalog"] {' in card
     assert 'class E1["Order"] {' in card and 'class E2["LineItem"] {' in card and 'class E4["Product"] {' in card
     assert 'E1 "1" *-- "*" E2' in card                                 # SD1's inner wiring
     assert 'E1 "*" --> "1" E4 : product' in card                       # the crossing relation, drawn in full
@@ -2858,9 +2859,9 @@ def _two_context_map(cards_extra: str = "") -> str:
       "trigger_outcome": "types -> list"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Search",
       "uc": "UC1",
       "why": null
@@ -2945,7 +2946,7 @@ def make_both_groupings_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [
     {
       "id": "S1",
@@ -3162,12 +3163,12 @@ def test_bridge_card_pairs_subsystem_and_subdomain() -> None:
     assert "style C1 fill:" in card                                            # component box styled (indigo)
 
 
-def test_parser_gp_captures_uc_and_why() -> None:
+def test_parser_hp_captures_uc_and_why() -> None:
     g = parse_map(make_gp_map())
-    steps = {s["id"]: s for s in g["gp"]}
-    assert steps["GP1"]["uc"] == "UC1" and steps["GP2"]["uc"] == "UC2"
-    assert steps["GP1"]["why"] == "" and steps["GP2"]["why"] == "needs the order from GP1"
-    assert "touches" not in steps["GP1"]  # the step no longer carries its own touches/story
+    steps = {s["id"]: s for s in g["happy_path"]}
+    assert steps["HP1"]["uc"] == "UC1" and steps["HP2"]["uc"] == "UC2"
+    assert steps["HP1"]["why"] == "" and steps["HP2"]["why"] == "needs the order from HP1"
+    assert "touches" not in steps["HP1"]  # the step no longer carries its own touches/story
 
 
 def test_parser_captures_use_case_flows() -> None:
@@ -3180,19 +3181,19 @@ def test_parser_captures_use_case_flows() -> None:
     assert all(st["ok"] for st in s1)
 
 
-def test_gen_gp_mermaid_black_box_sequence() -> None:
+def test_gen_hp_mermaid_black_box_sequence() -> None:
     # Level 1: a sequenceDiagram whose lifelines are the actors derived from each step's UC, with one
-    # message per step. The label is the step TITLE only — no `GPn` id (the viewer pairs by order).
-    mm = gen_viewer.gen_gp_mermaid(parse_map(make_gp_map()))
+    # message per step. The label is the step TITLE only — no `HPn` id (the viewer pairs by order).
+    mm = gen_viewer.gen_hp_mermaid(parse_map(make_gp_map()))
     assert mm.startswith("sequenceDiagram")
-    assert "actor GPA0 as Andy" in mm and "actor GPA1 as Adam" in mm  # one lifeline per distinct actor
-    assert "participant GPSYS" in mm
-    assert "GPA0->>GPSYS: Submit order" in mm
-    assert "GPA1->>GPSYS: Approve order" in mm
-    assert "GP1" not in mm and "GP2" not in mm  # step ids no longer leak into the message labels
+    assert "actor HPA0 as Andy" in mm and "actor HPA1 as Adam" in mm  # one lifeline per distinct actor
+    assert "participant HPSYS" in mm
+    assert "HPA0->>HPSYS: 1. Submit order" in mm
+    assert "HPA1->>HPSYS: 2. Approve order" in mm
+    assert "HP1" not in mm and "HP2" not in mm  # step ids no longer leak into the message labels
 
 
-def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
+def test_gen_hp_mermaid_actor_fallback_without_uc() -> None:
     # A GP step with no `*(UCn)*` tag falls back to a generic 'Actor' lifeline (no crash).
     md = """{
   "format": "coyodex-map",
@@ -3204,9 +3205,9 @@ def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Do a thing",
       "uc": null,
       "why": null
@@ -3242,34 +3243,34 @@ def test_gen_gp_mermaid_actor_fallback_without_uc() -> None:
   "tests": [],
   "extras": []
 }"""
-    mm = gen_viewer.gen_gp_mermaid(parse_map(md))
-    assert "actor GPA0 as Actor" in mm and "GPA0->>GPSYS: Do a thing" in mm
+    mm = gen_viewer.gen_hp_mermaid(parse_map(md))
+    assert "actor HPA0 as Actor" in mm and "HPA0->>HPSYS: 1. Do a thing" in mm
 
 
-def test_gp_actors_links_roles_and_steps() -> None:
-    # gp_actors mirrors the diagram's participant order/ids and joins each actor to its Roles-table
+def test_hp_actors_links_roles_and_steps() -> None:
+    # hp_actors mirrors the diagram's participant order/ids and joins each actor to its Roles-table
     # entry (wants + kind) and the steps it drives (stepIdx = the message positions to highlight).
     g = parse_map(make_gp_role_actor_map())
-    actors = gen_viewer.gp_actors(g)
+    actors = gen_viewer.hp_actors(g)
     assert len(actors) == 1
     a = actors[0]
-    assert a["aid"] == "GPA0" and a["name"] == "Org admin"
+    assert a["aid"] == "HPA0" and a["name"] == "Org admin"
     assert a["kind"] == "human" and a["wants"] == "manage"   # joined from the Roles table by name
     assert a["stepIdx"] == [0]
-    assert a["steps"] == [{"id": "GP1", "title": "Admin creates the org"}]
+    assert a["steps"] == [{"id": "HP1", "title": "Admin creates the org"}]
 
 
-def test_gp_actors_without_matching_role_has_blank_wants() -> None:
+def test_hp_actors_without_matching_role_has_blank_wants() -> None:
     # An actor derived from a UC with no matching Roles row still appears, just without wants/kind;
     # ids follow first-appearance order and stepIdx points at each actor's messages.
-    actors = gen_viewer.gp_actors(parse_map(make_gp_map()))
+    actors = gen_viewer.hp_actors(parse_map(make_gp_map()))
     by_name = {a["name"]: a for a in actors}
-    assert by_name["Andy"]["aid"] == "GPA0" and by_name["Adam"]["aid"] == "GPA1"
+    assert by_name["Andy"]["aid"] == "HPA0" and by_name["Adam"]["aid"] == "HPA1"
     assert by_name["Andy"]["wants"] == "" and by_name["Andy"]["kind"] == ""
     assert by_name["Andy"]["stepIdx"] == [0] and by_name["Adam"]["stepIdx"] == [1]
 
 
-def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
+def test_parser_hp_captures_first_uc_of_multi_tag() -> None:
     # A step tagged with several UCs (`*(UC1, UC2)*`) or trailing text (`*(UC3 follow-on)*`) must
     # resolve to its FIRST UC — not fall back to a generic 'Actor' lifeline (the multi-UC regression).
     md = """{
@@ -3301,15 +3302,15 @@ def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Sign in and create",
       "uc": "UC1",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Renewal flow",
       "uc": "UC3",
       "why": null
@@ -3346,18 +3347,18 @@ def test_parser_gp_captures_first_uc_of_multi_tag() -> None:
   "extras": []
 }"""
     g = parse_map(md)
-    steps = {s["id"]: s for s in g["gp"]}
-    assert steps["GP1"]["uc"] == "UC1"           # first id of the multi-UC tag
-    assert steps["GP2"]["uc"] == "UC3"           # trailing text after the id is ignored
-    mm = gen_viewer.gen_gp_mermaid(g)
-    assert "actor GPA0 as Org admin" in mm and "actor GPA1 as End user" in mm  # real actors...
+    steps = {s["id"]: s for s in g["happy_path"]}
+    assert steps["HP1"]["uc"] == "UC1"           # first id of the multi-UC tag
+    assert steps["HP2"]["uc"] == "UC3"           # trailing text after the id is ignored
+    mm = gen_viewer.gen_hp_mermaid(g)
+    assert "actor HPA0 as Org admin" in mm and "actor HPA1 as End user" in mm  # real actors...
     assert "as Actor" not in mm                  # ...not the generic fallback
 
 
-def test_gp_actor_is_use_case_actor() -> None:
+def test_hp_actor_is_use_case_actor() -> None:
     # A step IS one use case, so its driving actor is that use case's Actor cell (no separate signal).
     g = parse_map(make_gp_role_actor_map())
-    assert gen_viewer._gp_actor(g, g["gp"][0]) == "Org admin"
+    assert gen_viewer._hp_actor(g, g["happy_path"][0]) == "Org admin"
 
 
 def test_flow_mermaid_sequence_from_use_case() -> None:
@@ -3397,7 +3398,7 @@ def test_flow_uses_arrow_shows_why() -> None:
 def test_bundle_carries_gp_data() -> None:
     # The bundle carries the GP sequence + step diagrams so the client opens them.
     b = bundle_of(make_gp_map())
-    hay = b["mermaidGp"] + " ".join(b["flowsMm"].values())
+    hay = b["mermaidHp"] + " ".join(b["flowsMm"].values())
     assert "sequenceDiagram" in hay and "Submit order" in hay
 
 
@@ -3431,7 +3432,7 @@ def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> st
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {

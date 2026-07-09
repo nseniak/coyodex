@@ -48,21 +48,21 @@ def make_counts_map() -> str:
       "trigger_outcome": "submits -> stored"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Adam creates the order",
       "uc": "UC2",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Andy views the order",
       "uc": "UC1",
       "why": null
     },
     {
-      "id": "GP3",
+      "id": "HP3",
       "title": "Logger records it",
       "uc": "UC1",
       "why": null
@@ -275,9 +275,9 @@ def make_roles_then_usecases_map() -> str:
       "trigger_outcome": "submits -> stored"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "View",
       "uc": "UC1",
       "why": null
@@ -348,9 +348,9 @@ def make_broken_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "View",
       "uc": "UC1",
       "why": null
@@ -403,7 +403,7 @@ def make_broken_map() -> str:
 
 
 def make_backward_whyref_map() -> str:
-    """GP1's `why:` cites GP2, which comes after it — a backward reference (audit CONTRADICTION)."""
+    """HP1's `why:` cites HP2, which comes after it — a backward reference (audit CONTRADICTION)."""
     return """{
   "format": "coyodex-map",
   "title": "",
@@ -427,18 +427,18 @@ def make_backward_whyref_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "First",
       "uc": "UC1",
-      "why": "needs the thing from GP2"
+      "why": "needs the thing from HP2"
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Second",
       "uc": "UC2",
-      "why": "follows GP1"
+      "why": "follows HP1"
     }
   ],
   "subsystems": [],
@@ -501,7 +501,7 @@ def make_backward_whyref_map() -> str:
 
 
 def make_read_before_create_map() -> str:
-    """UC1 reads the order before UC2 writes it on the Golden Path — an audit ADVISORY (the
+    """UC1 reads the order before UC2 writes it on the Happy Path — an audit ADVISORY (the
     component-granularity attribution is lossy, so this ordering signal never blocks)."""
     return """{
   "format": "coyodex-map",
@@ -526,15 +526,15 @@ def make_read_before_create_map() -> str:
       "trigger_outcome": "submits -> stored"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Andy views the order",
       "uc": "UC1",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Adam creates the order",
       "uc": "UC2",
       "why": null
@@ -655,7 +655,7 @@ def make_single_use_case_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [],
   "deps": [],
@@ -688,7 +688,7 @@ def run_score(map_text: str, *extra: str) -> tuple[int, str]:
 def test_structure_counts_are_exact() -> None:
     p = build_profile(make_counts_map())
     assert (p.use_cases, p.subsystems, p.subdomains, p.components, p.deps, p.entities) == (2, 1, 1, 3, 1, 2), p
-    assert (p.edges, p.gp_steps, p.flows, p.security_surfaces) == (3, 3, 2, 2), p
+    assert (p.edges, p.hp_steps, p.flows, p.security_surfaces) == (3, 3, 2, 2), p
 
 
 def test_concept_name_sets_are_captured() -> None:

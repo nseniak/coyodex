@@ -23,7 +23,7 @@ be scored **down**, not guessed.
 4. **Altitude discipline** — is each element at the right zoom (a component is a component, not a whole
    subsystem folded into one box; the domain model is not under-harvested)?
 
-5. **Golden-Path coherence** — does the ordered spine read as a real end-to-end walk, with each step's
+5. **Happy-Path coherence** — does the ordered spine read as a real end-to-end walk, with each step's
    `why:` precondition satisfied by an earlier step?
 
 ## Output (per judge)

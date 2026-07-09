@@ -61,14 +61,14 @@ baseline pinned @ C0  ───────────────────�
   added/deleted/renamed. (Analysis runs fine on a dirty tree; *accepting* still needs committed code
   — the pin gate in `method.md`.)
 - **Per change.** Classify modified / added / deleted; **ripple** by following the changed
-  element's relationships (edge list) to downstream elements and Golden Path steps. Verify by
+  element's relationships (edge list) to downstream elements and Happy Path steps. Verify by
   reading the changed code; a pure refactor/move with no behavior change = "no analysis
   impact" (keep noise down).
 - **Resolution honesty.** Always place a change at least at **component** level (which file →
-  which component — always available). Sharpen to entity / GP step where reading allows.
-  **State the resolution reached per change**; don't fake GP-step precision. For a
+  which component — always available). Sharpen to entity / HP step where reading allows.
+  **State the resolution reached per change**; don't fake HP-step precision. For a
   widely-used helper, the honest answer is often "load-bearing, high blast radius — reaches
-  GP-a/b/c", which is itself useful.
+  HP-a/b/c", which is itself useful.
 - **Seam caveat.** Tracing callers statically breaks at interface / dependency-injection
   boundaries (callers hit a port, not the impl). Resolve the binding by reading the wiring
   (a `Dependencies` / storage-factory), and note where reachability is incomplete rather than
@@ -88,7 +88,7 @@ carries the exact **was → now** text, not just a description of impact.
 | Modified | the new row/step text | replace the old text |
 | Added | the new row + which table/section + where | insert |
 | Deleted | which row to remove + every reference to scrub | delete + clean refs |
-| Ripple | the **new text** of each rippled element (e.g. UC4's new flow steps, a GP step's new `why`), not just "UC4 affected" | apply it |
+| Ripple | the **new text** of each rippled element (e.g. UC4's new flow steps, a HP step's new `why`), not just "UC4 affected" | apply it |
 | Promotion (drill deeper) | the retired component id, the new subsystem + its child components, and every old `C — verb → X` edge **re-pointed** to a specific new component | retire the component, insert the subsystem + children, re-point the edges, scrub refs to the old id (a subsystem can't be an edge endpoint, so any leftover edge to it fails validation) |
 
 **If accept finds itself inferring or re-reading code, the report was incomplete** —
@@ -100,9 +100,9 @@ understanding.)
 ## Structure of the report / annotated baseline-diff
 
 1. **Header** — baseline-commit → new-commit, files changed.
-2. **Narrative summary** — functional (delta to the Golden Path / use cases) + technical
+2. **Narrative summary** — functional (delta to the Happy Path / use cases) + technical
    (architectural shape). Lives here, at the top, never in the baseline.
-3. **Golden Path / flow impact** — which use cases entered/left the walk, and whose T6 flow changed.
+3. **Happy Path / flow impact** — which use cases entered/left the walk, and whose T6 flow changed.
 4. **Per-element annotated diff** — `was → now`, classification (modified/added/deleted), why,
    code link, confidence. *This section is also the patch applied at accept* (see above).
 5. **New / removed elements.**

@@ -1,10 +1,10 @@
 # <Project> — Codebase Analysis
 
 > Built with the **coyodex** method. Behavioral layer first (Goal → Glossary → Roles →
-> Use cases → Golden Path), then the structural machine (Components → Entry points /
+> Use cases → Happy Path), then the structural machine (Components → Entry points /
 > Model / Deps → Flows + Edges), joined at **use case ↔ flow**.
 > Every row is drillable: name a row and it expands to a lower table or a `file:line`.
-> **Schema v1** (ID-based): every element has a stable ID (`UC`/`C`/`D`/`E`/`GP`);
+> **Schema v1** (ID-based): every element has a stable ID (`UC`/`C`/`D`/`E`/`HP`);
 > cross-references use IDs; validated by `coyodex validate`.
 > Confidence: **verified** (read/traced) vs **inferred** (naming/convention).
 > **Commit:** `<sha>` · **Committed:** `<commit-date>` · **Built:** `<YYYY-MM-DD HH:MM>`
@@ -46,19 +46,19 @@
 
 ---
 
-## Golden Path — the spine (an ordered walk through the use cases)
+## Happy Path — the spine (an ordered walk through the use cases)
 
 The happy-path ORDERING of use cases across all main functionality and every actor. Each step IS a
-use case — its `*(UCn)*` tag is required; `GPn` is just its position in the walk. The step carries no
+use case — its `*(UCn)*` tag is required; `HPn` is just its position in the walk. The step carries no
 STORY / mechanics / Touches: those live once in the use case's T6 flow below, and drilling a step
 opens it. An optional `why:` line records the prerequisite that fixes this step's position. The
 driving actor is the use case's own Actor (no separate `Actor:` line). Refer to actors by their
 Roles-table names, never invented nicknames.
 
-**GP1 — <title>** *(UC1)*
-**GP2 — <title>** *(UC2)*
-why: needs the result of GP1
-**GP3 — <title>** *(UC3)*
+**HP1 — <title>** *(UC1)*
+**HP2 — <title>** *(UC2)*
+why: needs the result of HP1
+**HP3 — <title>** *(UC3)*
 
 <!-- The use-case↔element traceability and the backward "Used in UC" view are DERIVED from the T6
      flows below (the flow steps name the elements) — not authored here. -->
@@ -158,7 +158,7 @@ why: needs the result of GP1
 
 ## T5 — Domain model (domain cards)
 
-<!-- Each entity is a CARD (a block), not a table row — same micro-format as the Golden Path. The
+<!-- Each entity is a CARD (a block), not a table row — same micro-format as the Happy Path. The
      heading defines the E id; FIELDS = attributes, RELATIONS = typed E→E edges (authored on the
      source side only, never in the backbone edge list). Renders as a Mermaid classDiagram.
      An optional `SUBDOMAIN:` line assigns the entity to one subdomain (SD) — the domain-model analog of
@@ -195,7 +195,7 @@ SOURCE: [file](path/sub:1)
      backbone edge — its Verb + Why render the step (sequence message AND readable line), so DON'T
      restate the why. An ACTOR step (`<Role> → C…`) carries a short authored phrase after `: ` (the
      backbone has no actor edges). Add flow-specific context after `· `. Renders as a Mermaid
-     sequenceDiagram + a numbered narrative, and is the drill-down of the matching Golden Path step.
+     sequenceDiagram + a numbered narrative, and is the drill-down of the matching Happy Path step.
      Separators inside a line are `·`, never raw `|`.
      A step may go BACKWARD too: a `to` that is an earlier participant renders right-to-left. Record
      the meaningful returns — the response the actor sees, an error/fallback, a callback/event — as

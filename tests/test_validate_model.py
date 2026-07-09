@@ -24,7 +24,7 @@ from coyodex.model import (
     Flow,
     FlowStep,
     GlossaryRow,
-    GoldenStep,
+    HappyStep,
     Group,
     NonEntityType,
     ProjectModel,
@@ -49,7 +49,7 @@ def make_valid_model() -> ProjectModel:
     m = ProjectModel(title="Demo", goal="A demo.")
     m.roles = [Role(name="Andy", kind="human", wants="orders", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="View order", actor="Andy")]
-    m.golden_path = [GoldenStep(id="GP1", title="View", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", title="View", uc="UC1")]
     m.components = [Component(id="C1", name="Viewer", purpose="shows",
                               entry_point="src/v.py:1")]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
@@ -130,8 +130,8 @@ def test_hierarchy_cycle_and_wrong_kind_parent():
 
 def test_gp_step_without_uc_is_flagged():
     m = make_valid_model()
-    m.golden_path[0].uc = None
-    assert any("Golden Path steps missing" in p for p in problems_of(m))
+    m.happy_path[0].uc = None
+    assert any("Happy Path steps missing" in p for p in problems_of(m))
 
 
 def test_unknown_flow_actor_is_flagged():

@@ -36,7 +36,7 @@ def make_node(nid: str, kind: str, file: str | None = None,
 def make_graph(*nodes: dict[str, Any]) -> GraphDict:
     return cast(GraphDict, {
         "commit": None, "committed": None, "title": None, "goal": None,
-        "nodes": {n["id"]: n for n in nodes}, "edges": [], "gp": [], "roles": [],
+        "nodes": {n["id"]: n for n in nodes}, "edges": [], "happy_path": [], "roles": [],
     })
 
 

@@ -86,9 +86,9 @@ def test_golden_graph_carries_every_defined_element():
     assert g["title"] and g["commit"] == m.commit and g["goal"]
     node_ids = set(g["nodes"])
     for eid in all_elements(m):
-        if not eid.startswith("GP"):  # GP steps ride the `gp` list, not the node dict
+        if not eid.startswith("HP"):  # HP steps ride the `happy_path` list, not the node dict
             assert eid in node_ids, f"{eid} missing from the graph"
-    assert len(g["gp"]) == len(m.golden_path)
+    assert len(g["happy_path"]) == len(m.happy_path)
     assert len(g["roles"]) == len(m.roles)
     assert len(g["glossary"]) == len(m.glossary)
     assert g["edges"], "the fixture's backbone must survive into the graph"

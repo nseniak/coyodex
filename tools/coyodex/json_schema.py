@@ -49,10 +49,10 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("GlossaryRow", "source"): {"description": _DIR_OR_FILE_DESC + " The term's canonical code home "
                                "(where it is defined); null when the concept has no single code home "
                                "(a pure product-level term)."},
-    ("GoldenStep", "id"): {"pattern": r"^GP\d+$", "description": "this step's position in the "
+    ("HappyStep", "id"): {"pattern": r"^HP\d+$", "description": "this step's position in the "
                            "ordered walk."},
-    ("GoldenStep", "uc"): {"pattern": r"^UC\d+$", "description": "the use case this step realizes."},
-    ("GoldenStep", "why"): {"description": "the prerequisite that fixes this step's position — "
+    ("HappyStep", "uc"): {"pattern": r"^UC\d+$", "description": "the use case this step realizes."},
+    ("HappyStep", "why"): {"description": "the prerequisite that fixes this step's position — "
                              "why it can't come earlier in the walk."},
     ("Group", "id"): {"pattern": ID_SHAPE.pattern, "description": "`S<n>` in subsystems[], "
                        "`SD<n>` in subdomains[] — same dataclass, two id forests."},

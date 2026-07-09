@@ -496,15 +496,18 @@ def gen_domain_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str
 
 def _subdomain_namespace(graph: GraphDict, sdid: str,
                          members: list[tuple[str, str]]) -> list[str]:
-    """`classDiagram` lines framing a subdomain's entities as `namespace <sdid>["Name (N)"] { … }` —
+    """`classDiagram` lines framing a subdomain's entities as `namespace <sdid>["Name"] { … }` —
     each member entity drawn full (attributes). The classDiagram analog of `_component_subgraph`:
     a subdomain always reads as a labelled frame (Mermaid 11 namespaces render as a titled cluster,
     DOM-id `cluster-<sdid>`, with the inner class group ids unchanged so the id bridge still resolves).
+    The title is the bare name — NO member count: when zoomed into the frame the entities are drawn
+    inside, so the count is redundant (it stays on the COLLAPSED subdomain boxes, where it can't be
+    seen). This matches the subsystem frame (`_component_subgraph`), which never carried one.
     Shared by the subdomain card and the domain edge card."""
     nodes = graph["nodes"]
     ent_names = {nid: str(n["name"]) for nid, n in nodes.items() if str(n["kind"]) == "entity"}
     nm = _safe_label(str(nodes[sdid]["name"])) if sdid in nodes else sdid
-    out = [f'namespace {sdid}["{nm} ({len(members)})"] {{']
+    out = [f'namespace {sdid}["{nm}"] {{']
     for eid, _ in members:
         out += _class_box_lines(eid, cast("dict[str, Any]", nodes[eid]), ent_names, with_members=True)
     for cid, cname in _child_subdomains(graph, sdid):  # nested child subdomains: collapsed, drillable
@@ -1119,8 +1122,8 @@ def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
     return ce
 
 
-def has_gp(graph: GraphDict) -> bool:
-    return bool(graph["gp"])
+def has_hp(graph: GraphDict) -> bool:
+    return bool(graph["happy_path"])
 
 
 def _safe_msg(s: str) -> str:
@@ -1133,7 +1136,7 @@ def _safe_msg(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def _gp_actor(graph: GraphDict, step: dict[str, Any]) -> str:
+def _hp_actor(graph: GraphDict, step: dict[str, Any]) -> str:
     """The actor that drives a GP step = the `Actor` of the use case it realizes (a step IS exactly one
     use case, so no separate actor signal is needed), falling back to a generic 'Actor'."""
     uc = step.get("uc")
@@ -1145,41 +1148,43 @@ def _gp_actor(graph: GraphDict, step: dict[str, Any]) -> str:
     return "Actor"
 
 
-def gen_gp_mermaid(graph: GraphDict) -> str:
-    """C4 behavioural overlay, Level 1: the Golden Path as a black-box sequenceDiagram — each step a
-    message from its actor to the System, in order. Labels carry the step TITLE only (no `GPn` id —
-    that clutters the spine); the viewer pairs message[i] with step[i] by order instead. Distinct
-    actors (derived per step from its UC) become the lifelines."""
-    steps = cast("list[dict[str, Any]]", graph["gp"])
+def gen_hp_mermaid(graph: GraphDict) -> str:
+    """C4 behavioural overlay, Level 1: the Happy Path as a black-box sequenceDiagram — each step a
+    message from its actor to the System, in order. Each label is PREFIXED with its 1-based position
+    (`1. …`, `2. …`) — the same numbering the T6 flows use — so a step's `HPn` id (surfaced on a
+    Use-cases pill and in the side panel) points at a visible number; the bare `HPn` id itself is kept
+    out of the label. The viewer pairs message[i] with step[i] by order. Distinct actors (derived per
+    step from its UC) become the lifelines."""
+    steps = cast("list[dict[str, Any]]", graph["happy_path"])
     title = _safe_msg(graph["title"] or "System")
     actor_ids: dict[str, str] = {}  # actor name -> stable participant id, in first-appearance order
     for st in steps:
-        actor_ids.setdefault(_gp_actor(graph, st), "GPA" + str(len(actor_ids)))
+        actor_ids.setdefault(_hp_actor(graph, st), "HPA" + str(len(actor_ids)))
     lines = ["sequenceDiagram"]
     for name, aid in actor_ids.items():
         lines.append(f"  actor {aid} as {name}")
-    lines.append(f"  participant GPSYS as {title}")
-    for st in steps:
-        aid = actor_ids[_gp_actor(graph, st)]
+    lines.append(f"  participant HPSYS as {title}")
+    for i, st in enumerate(steps):
+        aid = actor_ids[_hp_actor(graph, st)]
         title_txt = _safe_msg(str(st["title"])) if st["title"] else ""
         label = title_txt or str(st["id"])  # title only; id lives in the side panel, not the label
-        lines.append(f"  {aid}->>GPSYS: {label}")
+        lines.append(f"  {aid}->>HPSYS: {i + 1}. {label}")
     return "\n".join(lines)
 
 
-def gp_actors(graph: GraphDict) -> list[dict[str, Any]]:
-    """Per-actor data for the Golden Path lifelines, in the SAME participant order/ids as
-    gen_gp_mermaid (so `GPAn` lines up with the rendered lifeline). Each actor links back to its
+def hp_actors(graph: GraphDict) -> list[dict[str, Any]]:
+    """Per-actor data for the Happy Path lifelines, in the SAME participant order/ids as
+    gen_hp_mermaid (so `HPAn` lines up with the rendered lifeline). Each actor links back to its
     Roles-table entry by name to surface what it wants + its kind, plus the GP steps it drives —
     `stepIdx` are the message positions the viewer highlights when the actor is selected."""
-    steps = cast("list[dict[str, Any]]", graph["gp"])
+    steps = cast("list[dict[str, Any]]", graph["happy_path"])
     roles_by_name = {_safe_msg(r["name"]).strip().lower(): r for r in graph["roles"]}
-    order: dict[str, str] = {}  # actor name -> participant id, first-appearance order (matches gen_gp_mermaid)
+    order: dict[str, str] = {}  # actor name -> participant id, first-appearance order (matches gen_hp_mermaid)
     for st in steps:
-        order.setdefault(_gp_actor(graph, st), "GPA" + str(len(order)))
+        order.setdefault(_hp_actor(graph, st), "HPA" + str(len(order)))
     out: list[dict[str, Any]] = []
     for name, aid in order.items():
-        idxs = [i for i, st in enumerate(steps) if _gp_actor(graph, st) == name]
+        idxs = [i for i, st in enumerate(steps) if _hp_actor(graph, st) == name]
         role = roles_by_name.get(name.strip().lower())
         out.append({
             "aid": aid,
@@ -1193,7 +1198,7 @@ def gp_actors(graph: GraphDict) -> list[dict[str, Any]]:
 
 
 # ── T6 use-case flows: the shared sequence renderer ───────────────────────────────────────────────
-# One renderer drives BOTH the use-case view and the Golden-Path step drill-down (a GP step IS a use
+# One renderer drives BOTH the use-case view and the Happy-Path step drill-down (an HP step IS a use
 # case, so it opens that use case's flow). A flow renders two derived views from ONE source — a Mermaid
 # sequenceDiagram (the visual) and a numbered narrative (the readable text) — so the "why" of each step
 # is never authored twice. Element↔element steps pull their verb + why from the backbone edge.
@@ -1305,8 +1310,8 @@ def flow_narratives(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
 
 def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
     """Per-actor (Role) participants in one use-case flow, in the SAME `FAn` alias order gen_flow_mermaid
-    assigns them, so the viewer's actor lifeline lines up with its rendered `data-id`. Mirrors gp_actors
-    for the Golden Path, scoped to this one flow: each actor links back to its Roles-table entry (kind +
+    assigns them, so the viewer's actor lifeline lines up with its rendered `data-id`. Mirrors hp_actors
+    for the Happy Path, scoped to this one flow: each actor links back to its Roles-table entry (kind +
     wants) and lists which of THIS flow's own steps it drives — `stepIdx` indexes the SAME filtered,
     ordered step list flow_narrative returns (== the viewer's FLOWS_NARR[uc]), so the two stay in
     lockstep. A role can drive more than one step (e.g. it also receives the final reply).
@@ -1340,7 +1345,7 @@ def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def flow_actors_map(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
-    """{uc_id: [actor, …]} for every T6 flow — the flow-level companion to gp_actors, one list per flow."""
+    """{uc_id: [actor, …]} for every T6 flow — the flow-level companion to hp_actors, one list per flow."""
     return {str(f["uc"]): flow_actors(graph, f) for f in graph["flows"]}
 
 
@@ -1393,10 +1398,10 @@ class ViewBundle(TypedDict):
     mermaidDomainEdgeCard: dict[str, str]
     mermaidBridgeCard: dict[str, str]
     domainContainerEdges: dict[str, list[dict[str, str]]]
-    mermaidGp: str
+    mermaidHp: str
     flowsMm: dict[str, str]
     flowsNarr: dict[str, list[dict[str, Any]]]
-    gpActors: list[dict[str, Any]]
+    hpActors: list[dict[str, Any]]
     flowActors: dict[str, list[dict[str, Any]]]
     elementTint: dict[str, dict[str, str]]
     mermaidLibs: str
@@ -1406,7 +1411,7 @@ class ViewBundle(TypedDict):
     hasGrouping: bool
     hasDomain: bool
     hasSubdomains: bool
-    hasGp: bool
+    hasHp: bool
     meta: str                      # the header meta line (HTML)
     diffState: dict[str, str]
 
@@ -1444,7 +1449,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
     grouping = has_grouping(graph)
     domain = has_domain(graph)
     subdomains = has_subdomains(graph)
-    gp = has_gp(graph)
+    hp = has_hp(graph)
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
     return ViewBundle(
@@ -1461,19 +1466,19 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         mermaidDomainEdgeCard=domain_edge_card_mermaids(graph) if subdomains else {},
         mermaidBridgeCard=bridge_card_mermaids(graph) if (grouping and subdomains) else {},
         domainContainerEdges=gen_domain_container_edges(graph) if subdomains else {},
-        mermaidGp=gen_gp_mermaid(graph) if gp else "",
-        # Flows are independent of the Golden Path — the use-case view needs them even with no GP — so
+        mermaidHp=gen_hp_mermaid(graph) if hp else "",
+        # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so
         # they come from graph["flows"] directly (empty when the map has no T6 section).
         flowsMm=flow_mermaids(graph),
         flowsNarr=flow_narratives(graph),
-        gpActors=gp_actors(graph) if gp else [],
+        hpActors=hp_actors(graph) if hp else [],
         flowActors=flow_actors_map(graph),
         elementTint=ELEMENT_TINT,
         mermaidLibs=gen_libs_mermaid(graph),
         foldedLibs=folded_libs(graph),
         contextEdges=context_edges,
         hasDiff=diff is not None,
-        hasGrouping=grouping, hasDomain=domain, hasSubdomains=subdomains, hasGp=gp,
+        hasGrouping=grouping, hasDomain=domain, hasSubdomains=subdomains, hasHp=hp,
         meta=meta, diffState=state,
     )
 

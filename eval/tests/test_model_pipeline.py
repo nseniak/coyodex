@@ -43,7 +43,7 @@ def make_tiny_model_json() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {

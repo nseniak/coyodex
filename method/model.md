@@ -20,7 +20,7 @@ Every element has a stable, unique ID by prefix:
 | Prefix | Element |
 |---|---|
 | `UC` | Use case |
-| `GP` | Golden Path step (a use-case occurrence — a position in the ordered walk) |
+| `HP` | Happy Path step (a use-case occurrence — a position in the ordered walk) |
 | `C` | Component |
 | `S` | Subsystem — a group of components and/or nested subsystems (optional) |
 | `D` | External dependency |
@@ -49,7 +49,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "roles":       [ { "name", "kind": "human|service", "wants", "drives" } ],
   "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>" } ],
   "use_cases":   [ { "id": "UCn", "name", "actor", "trigger_outcome" } ],
-  "golden_path": [ { "id": "GPn", "title", "uc": "UCn", "why": "<prerequisite or null>" } ],
+  "happy_path": [ { "id": "HPn", "title", "uc": "UCn", "why": "<prerequisite or null>" } ],
 
   "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "source", "confidence" } ],
   "components":  [ { "id": "Cn",  "name", "subsystem": "Sn|null", "purpose",
@@ -96,7 +96,7 @@ can't match.
 
 Semantics, stated on the fields:
 
-- **ID references** (a `subsystem`/`parent` pointer, an edge endpoint, a flow-step endpoint, a GP
+- **ID references** (a `subsystem`/`parent` pointer, an edge endpoint, a flow-step endpoint, an HP
   step's `uc`, a relation `target`, an ID mentioned in any text) must resolve to a defined element —
   `coyodex validate` checks it.
 - **Membership is single-source on the child**: `components[].subsystem`, `subsystems[].parent`,

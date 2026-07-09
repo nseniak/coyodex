@@ -3,7 +3,7 @@
 T5 (the domain model) is authored as **per-entity cards**, not a flat table, and renders as a
 Mermaid **`classDiagram`** — boxes with attributes inside and typed, cardinal relationships
 between them. A card is a block with a defining heading and labeled lines, exactly the same
-micro-format shape as a [Golden Path](method.md) step. One block holds everything about an
+micro-format shape as a [Happy Path](method.md) step. One block holds everything about an
 entity: its fields, its relations, its meaning, its source anchor — so you read an entity whole
 instead of joining three tables.
 
@@ -22,7 +22,7 @@ it beats.
 
 ## The card grammar
 
-One card per entity. The heading **defines** the `E` id (like `**GP1 — …**` defines a GP step);
+One card per entity. The heading **defines** the `E` id (like `**HP1 — …**` defines a HP step);
 labeled lines carry the rest:
 
 ```
@@ -49,8 +49,8 @@ SOURCE: [<file>](<path>:<line>)
 > `purpose`, `parent`, `source`, `confidence`); the derived `SD→SD` / `S→SD` edges and the Domain
 > bounded-contexts overview are never authored (see [the map model](model.md)).
 
-- The heading em-dash `—` and the `*(…)*` metadata parens mirror the Golden Path heading
-  (`**GP1 — title** *(UC1)*`). The parens carry "stored where" (the old T5 column). Optional.
+- The heading em-dash `—` and the `*(…)*` metadata parens mirror the Happy Path heading
+  (`**HP1 — title** *(UC1)*`). The parens carry "stored where" (the old T5 column). Optional.
 - Separators inside `FIELDS` / `RELATIONS` are `·` — the same separator a T6 flow step's `· note` uses.
 
 **An entity is a REAL named type.** A card maps to an actual `class` / dataclass / enum / struct /
@@ -297,12 +297,12 @@ build passes, not a default check.
 |---|---|---|
 | **Where attributes live** | per-entity **card** (block) | **Three tables** (entity / attributes / relations) — splits one entity across three places, unreadable for the join. **One wide table** with a packed `Attributes` cell — breaks "one fact per cell", unreadable past a few fields. |
 | **Where relations live** | card `RELATIONS`, single-sourced per pair | **Backbone `From\|Verb\|To` edge list** — would co-mingle two edge semantics and dangle an ER-only cardinality column on every component row. |
-| **Entity identity** | keep the global `E` id, defined in the heading | **Mermaid-as-source** (author a literal `classDiagram`) — code fences are stripped by the parser, so it is invisible as source; and class names are not `E` ids, so T6 / GP / traceability cross-refs break. |
+| **Entity identity** | keep the global `E` id, defined in the heading | **Mermaid-as-source** (author a literal `classDiagram`) — code fences are stripped by the parser, so it is invisible as source; and class names are not `E` ids, so T6 / HP / traceability cross-refs break. |
 | **Render target** | `classDiagram` | `erDiagram` — lossy cardinality mapping, no methods. |
 | **Attribute ids** | none (fields are leaf reference data) | id-ing every field — explodes the id space, the same anti-pattern as mapping every class. |
 
-The cost is one **second non-table micro-format** (the method had exactly one before: the Golden
-Path). It is justified the same way the Golden Path is: an element with rich internal structure
+The cost is one **second non-table micro-format** (the method had exactly one before: the Happy
+Path). It is justified the same way the Happy Path is: an element with rich internal structure
 that a table represents poorly.
 
 ---

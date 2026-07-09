@@ -4,7 +4,7 @@
      file with `coyodex render project-map.json project-map.md`. -->
 
 > Built with the **coyodex** method. Behavioral layer first (Goal → Glossary → Roles →
-> Use cases → Golden Path), then the structural machine (Components → Entry points /
+> Use cases → Happy Path), then the structural machine (Components → Entry points /
 > Model / Deps → Flows + Edges), joined at **use case ↔ flow**.
 > The committed source of truth is `project-map.json` (JSON); this file is a generated
 > view. IDs, cross-references, and confidence tags are validated by
@@ -102,38 +102,38 @@ who want a curated, governed set of MCP tools shared across their AI assistants.
 
 ---
 
-## Golden Path — the spine (an ordered walk through the use cases)
+## Happy Path — the spine (an ordered walk through the use cases)
 
 The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag
 names it); the step's detail lives in that use case's T6 flow. An optional `why:`
 line records the prerequisite that fixes the step's position.
 
-**GP1 — Sign up & create the organization** *(UC1)*
-**GP2 — Add a remote HTTP upstream MCP** *(UC2)*
-why: needs the org from GP1
-**GP3 — Add a hosted stdio upstream MCP** *(UC3)*
-why: same org as GP2
-**GP4 — Connect / start the upstreams** *(UC4)*
-why: an upstream must exist (GP2/GP3) before it can connect
-**GP5 — Configure roles & per-MCP access** *(UC5)*
-why: needs discovered upstreams (GP4) to scope access to
-**GP6 — Configure per-tool access & argument checks** *(UC6)*
-why: refines the role from GP5
-**GP7 — Invite a team member** *(UC13)*
-why: needs a role (GP5) to assign
-**GP8 — Member connects their AI client via Google OAuth** *(UC7)*
-why: the member must be invited (GP7) to authenticate into the org
-**GP9 — Member authenticates per-user OAuth to an upstream** *(UC8)*
-why: needs a gateway session (GP8) and a per-user-OAuth upstream (GP2)
-**GP10 — Member lists & calls tools through the gateway** *(UC12)*
-why: needs the connected session (GP8) and allowed tools (GP6)
-**GP11 — Admin mints a service token** *(UC10)*
-why: needs a least-privilege role (GP5)
-**GP12 — Headless agent calls tools via the service token** *(UC11)*
-why: needs the minted token (GP11)
-**GP13 — Admin reviews the audit log** *(UC17)*
-why: tool calls (GP10/GP12) must have happened to audit
-**GP14 — Admin deletes the organization** *(UC25)*
+**HP1 — Sign up & create the organization** *(UC1)*
+**HP2 — Add a remote HTTP upstream MCP** *(UC2)*
+why: needs the org from HP1
+**HP3 — Add a hosted stdio upstream MCP** *(UC3)*
+why: same org as HP2
+**HP4 — Connect / start the upstreams** *(UC4)*
+why: an upstream must exist (HP2/HP3) before it can connect
+**HP5 — Configure roles & per-MCP access** *(UC5)*
+why: needs discovered upstreams (HP4) to scope access to
+**HP6 — Configure per-tool access & argument checks** *(UC6)*
+why: refines the role from HP5
+**HP7 — Invite a team member** *(UC13)*
+why: needs a role (HP5) to assign
+**HP8 — Member connects their AI client via Google OAuth** *(UC7)*
+why: the member must be invited (HP7) to authenticate into the org
+**HP9 — Member authenticates per-user OAuth to an upstream** *(UC8)*
+why: needs a gateway session (HP8) and a per-user-OAuth upstream (HP2)
+**HP10 — Member lists & calls tools through the gateway** *(UC12)*
+why: needs the connected session (HP8) and allowed tools (HP6)
+**HP11 — Admin mints a service token** *(UC10)*
+why: needs a least-privilege role (HP5)
+**HP12 — Headless agent calls tools via the service token** *(UC11)*
+why: needs the minted token (HP11)
+**HP13 — Admin reviews the audit log** *(UC17)*
+why: tool calls (HP10/HP12) must have happened to audit
+**HP14 — Admin deletes the organization** *(UC25)*
 why: terminal — purges everything created above
 
 ---

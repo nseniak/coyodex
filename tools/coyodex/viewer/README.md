@@ -84,14 +84,14 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     by drilling a subsystem; a map that defines no subsystem of its own gets one **default subsystem**
     (named after the project) so there is always a structural altitude. The flat-map generators are kept
     dormant and restorable.)*
-- **Golden Path** *(when the map has a Golden Path)* — the behavioural overlay, in two levels:
+- **Happy Path** *(when the map has a Happy Path)* — the behavioural overlay, in two levels:
   - **Level 1** is the path as a black-box **sequence diagram** — an ordered walk through the use
     cases, each step a message from its use case's actor to the System. Click a step to drill in.
   - **Level 2** (a step) opens its **use case's T6 flow**: a **sequence diagram** of the actor plus the
     components/deps/entities it touches, each step an ordered message (the verb comes from the backbone
     edge), with the same steps as a readable numbered narrative in the side panel — each element link
     locates that element in its home view (its subsystem card, entity card, …).
-    Navigate back with the breadcrumb (Golden Path › *this step*) or the **◀ ▶** arrows.
+    Navigate back with the breadcrumb (Happy Path › *this step*) or the **◀ ▶** arrows.
 - **Entities** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal
   relations (composition/aggregation/inheritance/association). Click a class for its fields +

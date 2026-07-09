@@ -60,7 +60,7 @@ DEFAULT_BANDS: dict[str, float] = {
     "deps_shrink_pct": 0.30,
     "entities_shrink_pct": 0.30,
     "edges_shrink_pct": 0.30,
-    "gp_steps_shrink_pct": 0.30,
+    "hp_steps_shrink_pct": 0.30,
     "flows_shrink_pct": 0.30,
     "edges_per_component_pct": 0.25,
 }

@@ -54,10 +54,10 @@
         "$ref": "#/$defs/UseCase"
       }
     },
-    "golden_path": {
+    "happy_path": {
       "type": "array",
       "items": {
-        "$ref": "#/$defs/GoldenStep"
+        "$ref": "#/$defs/HappyStep"
       }
     },
     "subsystems": {
@@ -231,12 +231,12 @@
       ],
       "additionalProperties": false
     },
-    "GoldenStep": {
+    "HappyStep": {
       "type": "object",
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^GP\\d+$",
+          "pattern": "^HP\\d+$",
           "description": "this step's position in the ordered walk."
         },
         "title": {
@@ -269,7 +269,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(UC|GP|SD|C|D|E|S)\\d+$",
+          "pattern": "^(UC|HP|SD|C|D|E|S)\\d+$",
           "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[] \u2014 same dataclass, two id forests."
         },
         "name": {
@@ -283,7 +283,7 @@
             "string",
             "null"
           ],
-          "pattern": "^(UC|GP|SD|C|D|E|S)\\d+$",
+          "pattern": "^(UC|HP|SD|C|D|E|S)\\d+$",
           "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD parents an SD), or null for top-level."
         },
         "source": {

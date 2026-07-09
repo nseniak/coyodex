@@ -16,19 +16,20 @@ let MERMAID_DOMAIN_SUB;         // per-subdomain card: SD-id -> classDiagram
 let MERMAID_DOMAIN_EDGE_CARD;   // subdomain edge pair: 'A>B' -> two-subdomain classDiagram
 let MERMAID_BRIDGE_CARD;        // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
-let MERMAID_GP;            // Golden Path (Level 1): use cases as a black-box sequence
+let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box sequence
 let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
-let GP_ACTORS;          // Golden-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
-let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level actor lifelines (mirrors GP_ACTORS, scoped to one flow's own steps)
+let HP_ACTORS;          // Happy-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
+let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level actor lifelines (mirrors HP_ACTORS, scoped to one flow's own steps)
 let ELEMENT_TINT;       // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
 let MERMAID_LIBS;       // Context "Libraries" drill: System + the folded in-process deps
 let FOLDED_LIBS;        // [{id,name,type}] folded out of Context into the Libraries box
 const LIBS_ID = 'LIBS';                           // synthetic id of that collapsed box (matches gen_viewer.LIBS_ID)
 let HAS_GROUPING, HAS_DOMAIN;
 let HAS_SUBDOMAINS;  // domain model grouped into subdomains -> Domain view leads with the overview
-let HAS_GP;
+let HAS_HP;
 let HAS_GLOSSARY;    // gates the Glossary tab (derived from the graph in applyBundle)
+let HAS_USECASES;    // gates the Use Cases tab (any use-case node present)
 let CONTEXT_EDGES;
 let HAS_DIFF;
 let META;
@@ -50,13 +51,14 @@ function applyBundle(b) {
   MERMAID_DOMAIN = b.mermaidDomain; MERMAID_DOMAIN_CONTAINER = b.mermaidDomainContainer;
   MERMAID_DOMAIN_SUB = b.mermaidDomainSub; MERMAID_DOMAIN_EDGE_CARD = b.mermaidDomainEdgeCard;
   MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
-  MERMAID_GP = b.mermaidGp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
-  GP_ACTORS = b.gpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
+  MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
+  HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
   HAS_GROUPING = b.hasGrouping; HAS_DOMAIN = b.hasDomain; HAS_SUBDOMAINS = b.hasSubdomains;
-  HAS_GP = b.hasGp; HAS_DIFF = b.hasDiff; META = b.meta; DIFF_STATE = b.diffState;
+  HAS_HP = b.hasHp; HAS_DIFF = b.hasDiff; META = b.meta; DIFF_STATE = b.diffState;
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
+  HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
 }
 
 function bootError(msg) {
@@ -85,7 +87,7 @@ const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'mo
                 deleted: ['#cf222e', '×', 'deleted'], rippled: ['#d97706', '≈', 'ripples to'] };
 const HILITE = 'drop-shadow(0 0 4px #2563eb) drop-shadow(0 0 2px #2563eb)';  // selection glow (nodes + edge labels)
 const HOVER = 'drop-shadow(0 0 3px #60a5fa)';  // softer hover glow: signals "clickable" without competing with HILITE
-const GP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Golden-Path selection: just a touch stronger than HOVER (not the heavy HILITE)
+const HP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Happy-Path selection: just a touch stronger than HOVER (not the heavy HILITE)
 const DIM = '0.15';  // opacity for non-focused elements
 const EMPTY_PANEL = '<p class="empty">Click a node or edge to see details.</p>';
 // Shown when a use case has no T6 flow yet, so the flow view still renders (the panel explains it)
@@ -135,15 +137,25 @@ let downX = 0, downY = 0;  // last mousedown, to tell a real click from a drag-p
 const COMP_LOOKUP = {};
 for (const e of GRAPH.edges || []) (COMP_LOOKUP[e.src + '>' + e.dst] ||= []).push(e);
 
-// Golden Path step lookup 'GP1' -> step record (id, title, uc, why). The step IS a use case; its
+// Happy Path step lookup 'HP1' -> step record (id, title, uc, why). The step IS a use case; its
 // detailed actions live in that use case's T6 flow (FLOWS_MM / FLOWS_NARR), opened when the step drills.
-const GP_BY_ID = {};
-for (const s of GRAPH.gp || []) GP_BY_ID[s.id] = s;
-// Golden Path actor lookups: by participant id (GPA0) and by the step it drives (GP1 -> actor record).
-const GP_ACTOR_BY_AID = {};
-for (const a of GP_ACTORS) GP_ACTOR_BY_AID[a.aid] = a;
-const GP_ACTOR_OF_STEP = {};
-for (const a of GP_ACTORS) for (const st of a.steps) GP_ACTOR_OF_STEP[st.id] = a;
+const HP_BY_ID = {};
+for (const s of GRAPH.happy_path || []) HP_BY_ID[s.id] = s;
+// Happy Path actor lookups: by participant id (HPA0) and by the step it drives (HP1 -> actor record).
+const HP_ACTOR_BY_AID = {};
+for (const a of HP_ACTORS) HP_ACTOR_BY_AID[a.aid] = a;
+const HP_ACTOR_OF_STEP = {};
+for (const a of HP_ACTORS) for (const st of a.steps) HP_ACTOR_OF_STEP[st.id] = a;
+// The Use Cases catalog: every use-case node in model order (importance), plus the reverse index
+// uc -> [Happy Path step ids] that realize it. A use case may occupy several Happy Path positions, so
+// this maps to a LIST — the `HPn` pill lists them all and lights every one when clicked. A use case
+// with no entry here is off-spine (no pill).
+const UC_NODES = Object.values(GRAPH.nodes || {}).filter((n) => n.kind === 'usecase');
+const HP_STEPS_BY_UC = {};
+for (const s of GRAPH.happy_path || []) if (s.uc) (HP_STEPS_BY_UC[s.uc] ||= []).push(s.id);
+// Role lookup by name (lower-cased) -> {name, kind, wants} for the Use Cases actor-section headers.
+const ROLE_BY_NAME = {};
+for (const r of GRAPH.roles || []) ROLE_BY_NAME[(r.name || '').trim().toLowerCase()] = r;
 // Reverse traceability ("Used in UC"): element id -> Set of use-case ids whose T6 flow steps through
 // it. The backward view of the flows (derived here, never authored), shown as links on a node's panel.
 const USES_BY_NODE = {};
@@ -180,11 +192,11 @@ let flowPlay = null;
 let mainScene = null;
 
 function makeScene(root, defaultPanel) {
-  // dimEls: a flat list of extra focusable elements (the Golden Path's actor figures, lifelines and
+  // dimEls: a flat list of extra focusable elements (the Happy Path's actor figures, lifelines and
   // message text/lines) that the standard node/edge focus model doesn't cover — dimmed/restored together.
   // selectors: selectedKey -> a zero-arg closure that re-applies that selection (panel + glow + focus),
   //   registered at bind time so back/forward can restore the element that was selected in this view.
-  return { root, nodeEls: {}, edgeEls: [], dimEls: [], gpLit: new Set(), selectedKey: null, selectors: {}, clearHighlight: null, defaultPanel };
+  return { root, nodeEls: {}, edgeEls: [], dimEls: [], hpLit: new Set(), selectedKey: null, selectors: {}, clearHighlight: null, defaultPanel };
 }
 function sceneSelect(scene, applyFn) {  // one highlight at a time within a scene
   if (scene.clearHighlight) scene.clearHighlight();
@@ -241,6 +253,41 @@ function tintClusters(root) {
     const node = m && GRAPH.nodes[m[1]];
     applyTint(g.querySelector('rect'), node && node.kind);
   });
+}
+// Emphasise the frame of the group you have zoomed INTO (a drilled subsystem or subdomain): a thicker
+// border + a larger, bolder title, so the currently-open container reads as distinct from the child
+// boxes drawn inside it. Runs AFTER tintClusters so its stroke-width wins over the tint's `!important`
+// one. Scoped to the single-group views (subsystem / domsub); the frame is matched by its DOM-id
+// suffix, exactly like tintClusters. Off-diagram views (hp/usecases/glossary) skip it (no clusters).
+function emphasizeZoomedFrame(root, s) {
+  const gid = s.kind === 'subsystem' ? s.sid : (s.kind === 'domsub' ? s.sd : null);
+  if (!gid) return;
+  for (const g of root.querySelectorAll('g.cluster')) {
+    const m = (g.id || '').match(/-([A-Za-z]+\d+)$/);
+    if (!m || m[1] !== gid) continue;
+    const rect = g.querySelector('rect');
+    const label = g.querySelector('.cluster-label') || g.querySelector('text');
+    // Mermaid sizes the label band for the ORIGINAL font, so an enlarged title grows down into the first
+    // child. Fix: grow the frame UPWARD by PAD (empty space at the top) and lift the title into it — the
+    // content stays put, so a real gap opens BELOW the bigger title instead of overlap.
+    const PAD = 20;
+    if (rect) {
+      rect.style.setProperty('stroke-width', '4px', 'important');  // beats the tint's dashed width
+      const y = parseFloat(rect.getAttribute('y')), h = parseFloat(rect.getAttribute('height'));
+      if (!Number.isNaN(y) && !Number.isNaN(h)) { rect.setAttribute('y', y - PAD); rect.setAttribute('height', h + PAD); }
+    }
+    if (label) {
+      label.style.fontSize = '1.35em';
+      label.style.fontWeight = '700';
+      const t = label.getAttribute('transform') || '';
+      const m = t.match(/translate\(\s*([-\d.]+)[ ,]+([-\d.]+)\s*\)/);
+      if (m) label.setAttribute('transform', 'translate(' + m[1] + ', ' + (parseFloat(m[2]) - PAD) + ')');
+      // let a slightly wider title overflow its layout-fixed box rather than clip
+      const fo = label.querySelector ? label.querySelector('foreignObject') : null;
+      if (fo) fo.style.overflow = 'visible';
+    }
+    break;  // exactly one frame is the zoomed-in group
+  }
 }
 
 // --- corner action icon -----------------------------------------------------------
@@ -380,7 +427,7 @@ function addActionIcon(el, id, action, opts) {
   ACTION_ICONS[id] = icon;
 }
 // A message label has no box to anchor a corner badge to — sit the pill just before the label's left
-// edge instead (so it reads first, like a bullet), vertically centered on it. Used for a Golden Path
+// edge instead (so it reads first, like a bullet), vertically centered on it. Used for a Happy Path
 // message's text AND (see bindEdgeActionIcon) any drillable edge with a real label — same convention
 // either way: one fixed spot, not one that chases the cursor. Appended to the label's own parent (not
 // the label itself: an SVG <text> can't usefully host a child <g>), which shares its coordinate space
@@ -388,7 +435,7 @@ function addActionIcon(el, id, action, opts) {
 //
 // The gap to the label must be a CONSTANT SCREEN distance, not a constant diagram-unit one: the pill's
 // own SIZE is already held constant on screen regardless of zoom (rescaleActionIcons counter-scales
-// it), so a fixed diagram-unit gap would drift — shrinking toward (and past, on a wide Golden Path
+// it), so a fixed diagram-unit gap would drift — shrinking toward (and past, on a wide Happy Path
 // that needs a lot of shrink just to fit) zero as the diagram zooms out, overlapping the very label
 // it's meant to sit clear of. `_labelRef` (the zoom-invariant point this pill hangs off) + `_labelGap`
 // (the desired screen-px clearance) let rescaleActionIcons redo this placement — and the bridge below
@@ -422,7 +469,7 @@ function addLabelActionIcon(label, id, action) {
   host.insertBefore(bridge, label);
   addActionIcon(label, id, action, { host, anchor });
   const icon = ACTION_ICONS[id];
-  // Lets gpGlow / glowEdge find this pill from the label/path element alone, so selecting the step or
+  // Lets hpGlow / glowEdge find this pill from the label/path element alone, so selecting the step or
   // edge shows it without the caller threading the icon through separately.
   label._actionIcon = icon;
   icon._bridge = bridge;
@@ -502,7 +549,7 @@ function usedInHtml(id) {
 }
 // The one free-text "what/why" field a node kind carries — Purpose (subsystem/subdomain/component),
 // Used for (dep), Meaning (entity). Shown as plain prose with no label, since the field IS the
-// description (mirrors how showContextEdge/showGPActor treat Wants, and showEdge/showFlowPanel treat Why).
+// description (mirrors how showContextEdge/showHPActor treat Wants, and showEdge/showFlowPanel treat Why).
 const EXPLANATION_KEYS = ['purpose', 'used for', 'meaning'];
 function explanationKey(fields) {
   for (const want of EXPLANATION_KEYS)
@@ -737,7 +784,7 @@ function showDomainContainerEdge(a, b) {
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no relations recorded</p>');
 }
 
-// --- Golden Path + use-case flow panels -----------------------------------------
+// --- Happy Path + use-case flow panels -----------------------------------------
 // A use case's flow as a readable numbered list — the SAME source as its sequence diagram (FLOWS_MM),
 // so the "why" of each step is shown once and never drifts. Each element endpoint links to its node;
 // the why (from the backbone edge) and any flow note are inline. '' when the use case has no T6 flow.
@@ -760,7 +807,7 @@ function bindFlowRefs() {
     selectFromTree(a.getAttribute('data-id'));
   }));
 }
-// The use-case flow panel — shared by the Golden-Path step drill-down and the use-case view: the use
+// The use-case flow panel — shared by the Happy-Path step drill-down and the use-case view: the use
 // case (name + driving actor) + the numbered narrative (the readable twin of the sequence diagram drawn
 // at this altitude); each step's element links locate that element in its home view.
 function showFlowPanel(uc, title, why) {
@@ -778,18 +825,34 @@ function showFlowPanel(uc, title, why) {
   // spotlight the whole flow on, so the "Locate in full map" link is gone with the Components tab.
   bindFlowRefs();
 }
-// A Golden Path step opens its use case's flow (the step IS that use case). Title = the step title.
-function showGPStep(gpId) {
-  const s = GP_BY_ID[gpId];
+// Drilling a Happy Path step opens its use case's flow (the step IS that use case) — the full T6
+// narrative. Title = the step title. This is the DRILLED view's panel; a plain arrow-select is lighter
+// (showHPArrow below).
+function showHPStep(hpId) {
+  const s = HP_BY_ID[hpId];
   if (!s) { panel.innerHTML = EMPTY_PANEL; return; }
   showFlowPanel(s.uc, s.title || s.id, s.why);
 }
-// The use-case view default panel (reached directly, not via a Golden Path position).
+// Selecting a Happy Path ARROW (a step message, plain click on the overview) shows JUST the interaction
+// it draws — the black-box `actor → System` handoff for that step — not the use case's full flow (that
+// lives behind the drill / on the Use Cases tab). The step title says which step; the drilled view has
+// the mechanism.
+function showHPArrow(hpId) {
+  const s = HP_BY_ID[hpId];
+  if (!s) { panel.innerHTML = EMPTY_PANEL; return; }
+  const actor = (HP_ACTOR_OF_STEP[hpId] && HP_ACTOR_OF_STEP[hpId].name)
+    || ((GRAPH.nodes[s.uc] || {}).fields || {}).Actor || 'Actor';
+  const sys = (GRAPH.nodes['SYS'] || {}).name || GRAPH.title || 'System';
+  panel.innerHTML = '<div class="pane-title"><h2 class="hp-arrow">' + esc(actor)
+    + ' <span class="hp-arrow-to">→</span> ' + esc(sys) + '</h2></div>'
+    + (s.title ? '<p class="explain">' + esc(s.title) + '</p>' : '');
+}
+// The use-case view default panel (reached directly, not via a Happy Path position).
 function showUseCase(uc) {
   showFlowPanel(uc, GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc, '');
 }
-// The flow views (gpstep / usecase) are sequence diagrams — wire them like every other diagram, using
-// the same sequence-diagram focus machinery the Golden Path uses (gpHighlight/gpFocus over element
+// The flow views (hpstep / usecase) are sequence diagrams — wire them like every other diagram, using
+// the same sequence-diagram focus machinery the Happy Path uses (hpHighlight/hpFocus over element
 // sets, since a participant is split across top box / label / lifeline / bottom mirror). Element
 // participants select (focus to their messages + the other ends) / ⌘-open their source (component &
 // entity leaves) / tooltip like nodes; message arrows select (the backbone edge, or the actor step) / focus / tooltip
@@ -834,7 +897,7 @@ function bindFlow(uc) {
     for (const el of parts) if (el.tagName === 'rect') applyTint(el, GRAPH.nodes[id].kind);
   }
 
-  // messages: text[i] + arrow line[i] (data-id "i<idx>") pair with steps[i] — same pairing as bindGP.
+  // messages: text[i] + arrow line[i] (data-id "i<idx>") pair with steps[i] — same pairing as bindHP.
   const texts = [...root.querySelectorAll('text.messageText')];
   const lineByIdx = {};
   root.querySelectorAll('.messageLine0, .messageLine1').forEach((ln) => {
@@ -857,12 +920,12 @@ function bindFlow(uc) {
       for (const i of myMsg) {
         for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
       }
-      sceneSelect(scene, () => gpHighlight(scene, [...parts, ...stepEls]));
-      gpFocus(scene, keep);
+      sceneSelect(scene, () => hpHighlight(scene, [...parts, ...stepEls]));
+      hpFocus(scene, keep);
     };
     scene.selectors[selKey] = select;  // so back/forward can restore this participant selection
     const on = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = HOVER; };
-    const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = gpRestFilter(scene, el); };
+    const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
     for (const el of parts) {
       el.style.cursor = 'pointer';
       markOpenSrc(el, id);  // </> cursor on a component/entity leaf with a source ref, like the other diagrams
@@ -881,7 +944,7 @@ function bindFlow(uc) {
   // role (actor) participants: same "select -> highlight my messages, dim the rest" as an element
   // participant above, just addressed differently — a Role has no graph node of its own, so
   // FLOW_ACTORS (gen_viewer.flow_actors) hands us its Mermaid alias (data-id) instead of a node id.
-  // Mirrors bindGP's actor loop below, the same DOM shape (stick figure + lifeline).
+  // Mirrors bindHP's actor loop below, the same DOM shape (stick figure + lifeline).
   const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
   // A step's endpoint that is a Role has no node id (srcId/dstId are null), so it can't be found via
   // partsById. Index each actor's DOM parts by the steps it drives (a.stepIdx) so selecting a step can
@@ -903,12 +966,12 @@ function bindFlow(uc) {
       const stepEls = a.stepIdx.flatMap((i) => msgEls[i] || []);
       const keep = new Set([...parts, ...stepEls]);
       for (const i of a.stepIdx) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
-      sceneSelect(scene, () => gpHighlight(scene, [...parts, ...stepEls]));
-      gpFocus(scene, keep);
+      sceneSelect(scene, () => hpHighlight(scene, [...parts, ...stepEls]));
+      hpFocus(scene, keep);
     };
     scene.selectors[selKey] = select;
     const on = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = HOVER; };
-    const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = gpRestFilter(scene, el); };
+    const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
     const click = (e) => { if (isDrag(e)) return; e.stopPropagation(); select(); };
     for (const el of parts) {
       if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
@@ -935,8 +998,8 @@ function bindFlow(uc) {
       const keep = new Set(els);
       for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
       for (const el of (actorPartsByStep[i] || [])) keep.add(el);  // Role endpoints have no node id
-      sceneSelect(scene, () => gpHighlight(scene, els));
-      gpFocus(scene, keep);
+      sceneSelect(scene, () => hpHighlight(scene, els));
+      hpFocus(scene, keep);
     };
     scene.selectors[selKey] = doSelect;  // so back/forward can restore this flow-step selection
     const onClick = (ev) => {
@@ -945,7 +1008,7 @@ function bindFlow(uc) {
       doSelect();
     };
     const on = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = HOVER; };
-    const off = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = gpRestFilter(scene, el); };
+    const off = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = hpRestFilter(scene, el); };
     if (line) attachEdgeHandlers(line, text, onClick, on, off, null);
     else { text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important'); text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off); }
   });
@@ -1075,8 +1138,8 @@ function showFlowStep(uc, i) {
     + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '');
   bindFlowRefs();
 }
-// One actor's card: its kind, what its role wants (the explanation), and the Golden Path steps it drives.
-function showGPActor(a) {
+// One actor's card: its kind, what its role wants (the explanation), and the Happy Path steps it drives.
+function showHPActor(a) {
   const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
   const drives = (a.steps || []).map((st) =>
     '<dd>' + esc(st.title || st.id) + '</dd>').join('');
@@ -1084,7 +1147,7 @@ function showGPActor(a) {
     + (a.wants ? '<p class="explain">' + mdInline(a.wants) + '</p>' : '')
     + (drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '');
 }
-// A flow-level actor's card — the same idea as showGPActor, scoped to one flow: its kind, what its
+// A flow-level actor's card — the same idea as showHPActor, scoped to one flow: its kind, what its
 // role wants, and which of THIS flow's own steps it drives. Reads those steps straight out of
 // FLOWS_NARR by index rather than duplicating their text in FLOW_ACTORS.
 function showFlowActor(uc, a) {
@@ -1172,8 +1235,8 @@ function actionTipEdge(a, b) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   return '<div class="tt">Open</div><div class="tm">' + esc(nm(a)) + ' &rarr; ' + esc(nm(b)) + '</div>';
 }
-function actionTipGP(gpId) {
-  const s = GP_BY_ID[gpId];
+function actionTipHP(hpId) {
+  const s = HP_BY_ID[hpId];
   return '<div class="tt">Open step</div>' + (s && s.title ? '<div class="tm">' + esc(s.title) + '</div>' : '');
 }
 
@@ -1284,7 +1347,7 @@ function idOf(el) {
   if (cls) return cls.slice(3);
   const dataId = el.getAttribute('data-id');
   if (dataId && GRAPH.nodes[dataId]) return dataId;
-  const m = (el.id || '').match(/(?:^|-)((?:UC|GP|SD|C|D|E|S)\d+)(?:-|$)/);  // SD before S: a subdomain id is not a subsystem
+  const m = (el.id || '').match(/(?:^|-)((?:UC|HP|SD|C|D|E|S)\d+)(?:-|$)/);  // SD before S: a subdomain id is not a subsystem
   return m ? m[1] : null;
 }
 // Walk an id's parent chain up to its top-level subdomain (or null) — the domain mirror of a top
@@ -1469,7 +1532,7 @@ function clientToLocal(referenceEl, clientX, clientY) {
   return { x: local.x, y: local.y };
 }
 // Convert a point given in `fromEl`'s own local space (e.g. straight out of `fromEl.getBBox()`) into
-// `toEl`'s local space instead — needed whenever the two don't share a coordinate system. A Golden
+// `toEl`'s local space instead — needed whenever the two don't share a coordinate system. A Happy
 // Path message's <text> carries no transform of its own, so its bbox already happens to line up with
 // its parent's space (addLabelActionIcon relied on exactly that, harmlessly). A Mermaid edge label
 // (`g.edgeLabel`) is NOT so simple — Mermaid positions it via a transform on the group itself, so its
@@ -1511,7 +1574,7 @@ function edgeLabelHasContent(label) {
   return !!(label && (label.textContent || '').trim());
 }
 // A drillable edge's pill has no box corner to anchor to. Two cases:
-//  - A real label: same fixed convention as a Golden Path message (addLabelActionIcon) — sits just
+//  - A real label: same fixed convention as a Happy Path message (addLabelActionIcon) — sits just
 //    left of the label, one constant spot, not one that chases the cursor around as it moves along
 //    the arrow (a moving target is harder to click, not easier, once the label already tells you
 //    where to look).
@@ -1524,7 +1587,7 @@ function edgeLabelHasContent(label) {
 // matter for the pill's identity and visibility. `hit` is the wide invisible clone that actually
 // catches the pointer (see attachEdgeHandlers) — hovering/leaving THAT, not the thin original stroke,
 // is what should show/hide the pill, so listeners go on it, not on `p`. `isSelected` (from
-// bindSelectEdge, matching gpGlow's `scene.selectedKey !== selKey` guard) is what lets the pill stay
+// bindSelectEdge, matching hpGlow's `scene.selectedKey !== selKey` guard) is what lets the pill stay
 // up after a selection even once the cursor leaves — without it, hide() would blank a pill glowEdge
 // just pinned the moment the mouse moved off the arrow.
 function bindEdgeActionIcon(p, hit, label, onDrill, isSelected) {
@@ -1554,7 +1617,7 @@ function bindEdgeActionIcon(p, hit, label, onDrill, isSelected) {
   hit.addEventListener('mouseenter', showAt);
   hit.addEventListener('mouseleave', hide);
   if (label) { label.addEventListener('mouseenter', showAt); label.addEventListener('mouseleave', hide); }
-  // Lets glowEdge (selection) show/hide this pill the same way gpGlow does for a Golden Path step.
+  // Lets glowEdge (selection) show/hide this pill the same way hpGlow does for a Happy Path step.
   p._actionIcon = icon;
 }
 // Give an edge's visible path a wide transparent hit-path + make its label clickable.
@@ -1604,8 +1667,8 @@ function glowEdge(p, label) {
   p.style.setProperty('stroke', '#2563eb', 'important');
   p.style.setProperty('stroke-width', '3px', 'important');
   if (label) label.style.filter = HILITE;
-  // A drillable edge's pill (see bindEdgeActionIcon) sticks while selected, same as gpGlow does for a
-  // Golden Path step — otherwise selecting the edge (without ever hovering it) would leave no way to
+  // A drillable edge's pill (see bindEdgeActionIcon) sticks while selected, same as hpGlow does for a
+  // Happy Path step — otherwise selecting the edge (without ever hovering it) would leave no way to
   // see its drill option short of hovering again.
   if (p._actionIcon) showIcon(p._actionIcon);
   return () => {
@@ -1703,7 +1766,7 @@ const vpByView = {};
 
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
-    + (s.gp ? ':' + s.gp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '');
+    + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '');
 }
 function captureViewState() {  // stash the current pan/zoom + selection on the entry we're about to leave
   if (hi < 0 || !history[hi]) return;
@@ -2024,62 +2087,82 @@ function bindDomain() {
   });
 }
 
-// --- Golden Path (Level 1) selection ---------------------------------------------
+// --- Happy Path (Level 1) selection ---------------------------------------------
 // A sequenceDiagram, a different SVG shape again: a step is a message (text + line), an actor is a
 // stick figure over a lifeline. Both SELECT (panel + glow + focus-dim); a step also ⌘-clicks to drill.
-// Glow one GP element (figure, text, lifeline or arrow) with the soft GP_SEL drop-shadow — a touch
+// Glow one HP element (figure, text, lifeline or arrow) with the soft HP_SEL drop-shadow — a touch
 // above the hover glow, never the heavy stroke-recolour the click used to apply. Returns a cleanup.
-function gpGlow(el) {
-  el.style.filter = GP_SEL;
+function hpGlow(el) {
+  el.style.filter = HP_SEL;
   if (el._actionIcon) showIcon(el._actionIcon);  // a selected step's pill stays put, not just its glow
   return () => { el.style.filter = ''; if (el._actionIcon) hideIcon(el._actionIcon); };
 }
-// Glow a set of elements and remember them in scene.gpLit (a step driven by a selected actor is
+// Glow a set of elements and remember them in scene.hpLit (a step driven by a selected actor is
 // glowed but isn't itself the selection, so its own hover handlers must restore THIS glow on leave —
 // not blank it). Returns a cleanup that both undoes the glow and forgets the set.
-function gpHighlight(scene, els) {
-  scene.gpLit = new Set(els);
-  const undo = els.map(gpGlow);
-  return () => { undo.forEach((f) => f()); scene.gpLit = new Set(); };
+function hpHighlight(scene, els) {
+  scene.hpLit = new Set(els);
+  const undo = els.map(hpGlow);
+  return () => { undo.forEach((f) => f()); scene.hpLit = new Set(); };
 }
-// The filter an element should rest at given the current selection: the GP_SEL glow if the selection
+// The filter an element should rest at given the current selection: the HP_SEL glow if the selection
 // lit it, else none. Hover-off restores to this instead of blanking, so a selection glow survives a
 // passing hover.
-function gpRestFilter(scene, el) {
-  return scene.gpLit.has(el) ? GP_SEL : '';
+function hpRestFilter(scene, el) {
+  return scene.hpLit.has(el) ? HP_SEL : '';
 }
-function gpFocus(scene, keep) {  // dim every focusable GP element not in the keep set (system stays lit)
+function hpFocus(scene, keep) {  // dim every focusable HP element not in the keep set (system stays lit)
   for (const el of scene.dimEls) el.style.opacity = keep.has(el) ? '' : DIM;
 }
 // Select an actor: its figure + lifeline + every step it drives glow; the rest dims.
-function selectGPActor(scene, a) {
-  const selKey = 'gpactor:' + a.aid;
+function selectHPActor(scene, a) {
+  const selKey = 'hpactor:' + a.aid;
   scene.selectedKey = selKey;
-  showGPActor(a);
+  showHPActor(a);
   const stepEls = [];
-  for (const i of a.stepIdx) { const m = scene.gpMsg[i]; if (m) { if (m.text) stepEls.push(m.text); if (m.line) stepEls.push(m.line); } }
-  const lit = [...scene.gpActor[a.aid].els, ...stepEls];
-  sceneSelect(scene, () => gpHighlight(scene, lit));
-  gpFocus(scene, new Set(lit));
+  for (const i of a.stepIdx) { const m = scene.hpMsg[i]; if (m) { if (m.text) stepEls.push(m.text); if (m.line) stepEls.push(m.line); } }
+  const lit = [...scene.hpActor[a.aid].els, ...stepEls];
+  sceneSelect(scene, () => hpHighlight(scene, lit));
+  hpFocus(scene, new Set(lit));
 }
 // Select a step: the step (text + line) glows and its driving actor stays lit; the rest dims.
-function selectGPStep(scene, i, gpId, aid) {
-  const selKey = 'gpstep:' + gpId;
+function selectHPStep(scene, i, hpId, aid) {
+  const selKey = 'hpstep:' + hpId;
   scene.selectedKey = selKey;
-  showGPStep(gpId);
-  const m = scene.gpMsg[i] || {};
+  showHPArrow(hpId);  // plain select = just the X → Y interaction; the full flow is behind the drill
+  const m = scene.hpMsg[i] || {};
   const glow = [m.text, m.line].filter(Boolean);
-  const rec = aid ? scene.gpActor[aid] : null;
-  sceneSelect(scene, () => gpHighlight(scene, glow));
-  gpFocus(scene, new Set([...glow, ...(rec ? rec.els : [])]));
+  const rec = aid ? scene.hpActor[aid] : null;
+  sceneSelect(scene, () => hpHighlight(scene, glow));
+  hpFocus(scene, new Set([...glow, ...(rec ? rec.els : [])]));
+}
+// Select a whole use case on the Happy Path (reached from a Use-cases `HPn` pill): EVERY step that
+// realizes it glows and its driving actor stays lit; the rest dims. A use case can occupy several
+// positions, so more than one step may light — that is exactly the "appears twice" signal. The panel
+// shows the use case (not a single step), and the selection is keyed by uc so back/forward restores it.
+function selectHPUseCase(scene, uc) {
+  const selKey = 'hpuc:' + uc;
+  scene.selectedKey = selKey;
+  showUseCase(uc);
+  const glow = [], keep = [];
+  (GRAPH.happy_path || []).forEach((step, i) => {
+    if (step.uc !== uc) return;
+    const m = scene.hpMsg[i]; if (!m) return;
+    if (m.text) glow.push(m.text);
+    if (m.line) glow.push(m.line);
+    const rec = HP_ACTOR_OF_STEP[step.id] ? scene.hpActor[HP_ACTOR_OF_STEP[step.id].aid] : null;
+    if (rec) keep.push(...rec.els);
+  });
+  sceneSelect(scene, () => hpHighlight(scene, glow));
+  hpFocus(scene, new Set([...glow, ...keep]));
 }
 
-// Bind the Golden Path: steps + actors both select; a step ⌘-clicks to its Level-2 components view.
-// The step id is no longer in the label, so message[i] pairs with GRAPH.gp[i] by order; an actor's
-// figure/lifeline are found by participant id (data-id="GPAn") and its driven steps come from GP_ACTORS.
-function bindGP() {
+// Bind the Happy Path: steps + actors both select; a step ⌘-clicks to its Level-2 components view.
+// The step id is no longer in the label, so message[i] pairs with GRAPH.happy_path[i] by order; an actor's
+// figure/lifeline are found by participant id (data-id="GPAn") and its driven steps come from HP_ACTORS.
+function bindHP() {
   const scene = mainScene, root = scene.root;
-  // message text[i] <-> GRAPH.gp[i]; its arrow is the .messageLine with data-id "i<idx>".
+  // message text[i] <-> GRAPH.happy_path[i]; its arrow is the .messageLine with data-id "i<idx>".
   const texts = [...root.querySelectorAll('text.messageText')];
   const lineByIdx = {};
   root.querySelectorAll('.messageLine0, .messageLine1').forEach((ln) => {
@@ -2087,50 +2170,53 @@ function bindGP() {
     if (m) lineByIdx[+m[1]] = ln;
   });
   leftAlignMessageLabels(texts, lineByIdx);
-  scene.gpMsg = {};  // step index -> { text, line }
-  for (let i = 0; i < (GRAPH.gp || []).length; i++) {
+  scene.hpMsg = {};  // step index -> { text, line }
+  for (let i = 0; i < (GRAPH.happy_path || []).length; i++) {
     const text = texts[i] || null;
     const line = lineByIdx[i] || null;
     if (text) scene.dimEls.push(text);
     if (line) scene.dimEls.push(line);
-    scene.gpMsg[i] = { text, line };
+    scene.hpMsg[i] = { text, line };
   }
   // resolve each actor's DOM (figure top + bottom mirror + lifeline) by participant id, register for dimming.
-  scene.gpActor = {};  // aid -> { els:[…] }
+  scene.hpActor = {};  // aid -> { els:[…] }
   const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
-  for (const a of GP_ACTORS) {
+  for (const a of HP_ACTORS) {
     const figT = root.querySelector('.actor-top[data-id="' + a.aid + '"]');
     const life = root.querySelector('line.actor-line[data-id="' + a.aid + '"]');
     const figB = bottoms.find((g) => (g.textContent || '').trim() === a.name) || null;  // no data-id on the mirror
     const els = [figT, figB, life].filter(Boolean);
-    scene.gpActor[a.aid] = { els };
+    scene.hpActor[a.aid] = { els };
     for (const el of els) scene.dimEls.push(el);
   }
   const aidOfStep = {};  // step index -> driving actor id (keeps the actor lit when a step is selected)
-  for (const a of GP_ACTORS) for (const i of a.stepIdx) aidOfStep[i] = a.aid;
+  for (const a of HP_ACTORS) for (const i of a.stepIdx) aidOfStep[i] = a.aid;
+  // Per-use-case selector: arriving from a Use-cases `HPn` pill (state `sel: 'hpuc:<uc>'`) lights every
+  // step of that use case. Registered for each use case that occupies ≥1 position; back/forward too.
+  for (const uc of Object.keys(HP_STEPS_BY_UC)) scene.selectors['hpuc:' + uc] = () => selectHPUseCase(scene, uc);
 
   // steps: plain click selects (panel), ⌘-click drills to Level 2.
-  (GRAPH.gp || []).forEach((step, i) => {
-    const { text, line } = scene.gpMsg[i];
+  (GRAPH.happy_path || []).forEach((step, i) => {
+    const { text, line } = scene.hpMsg[i];
     if (!text) return;
-    const gpId = step.id, selKey = 'gpstep:' + gpId;
-    scene.selectors[selKey] = () => selectGPStep(scene, i, gpId, aidOfStep[i]);  // back/forward restore
-    addLabelActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'gpstep', gp: gpId }) });
+    const hpId = step.id, selKey = 'hpstep:' + hpId;
+    scene.selectors[selKey] = () => selectHPStep(scene, i, hpId, aidOfStep[i]);  // back/forward restore
+    addLabelActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'hpstep', hp: hpId }) });
     const icon = ACTION_ICONS[selKey];
-    // A dimmed step (gpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
+    // A dimmed step (hpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
     // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
     const on = () => { if (scene.selectedKey !== selKey) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
     // restore to the resting glow (an actor-selected step keeps its HILITE), not blank — and for the
-    // same reason, the pill sticks too: `scene.gpLit` is exactly what gpRestFilter already checks to
+    // same reason, the pill sticks too: `scene.hpLit` is exactly what hpRestFilter already checks to
     // decide that, so hiding the icon only when this step ISN'T in that lit set keeps it up for as
     // long as its driving actor is selected, not just for as long as the step itself is.
-    const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = gpRestFilter(scene, text); if (line) line.style.filter = gpRestFilter(scene, line); if (!scene.gpLit.has(text)) hideIcon(icon); } };
+    const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = hpRestFilter(scene, text); if (line) line.style.filter = hpRestFilter(scene, line); if (!scene.hpLit.has(text)) hideIcon(icon); } };
     const click = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
       off();
-      if (isDrillClick(ev)) { go({ kind: 'gpstep', gp: gpId }); return; }  // ⌘-click drills in
-      selectGPStep(scene, i, gpId, aidOfStep[i]);
+      if (isDrillClick(ev)) { go({ kind: 'hpstep', hp: hpId }); return; }  // ⌘-click drills in
+      selectHPStep(scene, i, hpId, aidOfStep[i]);
     };
     for (const el of [text, line]) {
       if (!el) continue;
@@ -2140,7 +2226,7 @@ function bindGP() {
       el.addEventListener('click', click);
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
-      attachTip(el, () => actionTipGP(gpId));
+      attachTip(el, () => actionTipHP(hpId));
     }
     // The pill and its bridge (see addLabelActionIcon) get the same on/off as the text/line, so the
     // whole step — label, arrow, gap, pill — behaves as one continuous hover zone with an instant,
@@ -2151,12 +2237,12 @@ function bindGP() {
   });
 
   // actors: click the figure or anywhere on the lifeline to select the actor (no drill).
-  for (const a of GP_ACTORS) {
-    const rec = scene.gpActor[a.aid], selKey = 'gpactor:' + a.aid;
-    scene.selectors[selKey] = () => selectGPActor(scene, a);  // back/forward restore
+  for (const a of HP_ACTORS) {
+    const rec = scene.hpActor[a.aid], selKey = 'hpactor:' + a.aid;
+    scene.selectors[selKey] = () => selectHPActor(scene, a);  // back/forward restore
     const on = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = HOVER; };
-    const off = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = gpRestFilter(scene, el); };
-    const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off(); selectGPActor(scene, a); };
+    const off = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = hpRestFilter(scene, el); };
+    const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off(); selectHPActor(scene, a); };
     for (const el of rec.els) {
       if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
       el.style.cursor = 'pointer';
@@ -2181,8 +2267,8 @@ function mermaidFor(s) {
   if (s.kind === 'domsub') return MERMAID_DOMAIN_SUB[s.sd];
   if (s.kind === 'domedge') return MERMAID_DOMAIN_EDGE_CARD[s.a + '>' + s.b];
   if (s.kind === 'bridge') return MERMAID_BRIDGE_CARD[s.sid + '>' + s.sd];
-  if (s.kind === 'gp') return MERMAID_GP;
-  if (s.kind === 'gpstep') return FLOWS_MM[(GP_BY_ID[s.gp] || {}).uc] || EMPTY_FLOW_MM;  // the step's use case's flow
+  if (s.kind === 'hp') return MERMAID_HP;
+  if (s.kind === 'hpstep') return FLOWS_MM[(HP_BY_ID[s.hp] || {}).uc] || EMPTY_FLOW_MM;  // the step's use case's flow
   if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
   if (s.kind === 'libs') return MERMAID_LIBS;
   return mode === 'diff' ? MERMAID_DIFF : MERMAID_BASE;  // component
@@ -2193,9 +2279,12 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
   else if (s.kind === 'domedge') showTwoSubdomains(s.a, s.b);
   else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
-  else if (s.kind === 'gpstep') showGPStep(s.gp);
+  else if (s.kind === 'hpstep') showHPStep(s.hp);
   else if (s.kind === 'usecase') showUseCase(s.uc);
   else if (s.kind === 'libs') showLibsFold();
+  // The Happy Path overview (nothing selected) opens on the project goal — the SYS node carries the
+  // title + T0 goal (fields.Overview). Selecting a step/actor then replaces it with that detail.
+  else if (s.kind === 'hp' && GRAPH.nodes['SYS']) showNode('SYS');
   // The Subsystems overview in diff mode leads with the change-impact summary (which subsystems/elements
   // changed), since that is the whole point of opening a diff render.
   else if (s.kind === 'container' && mode === 'diff' && HAS_DIFF) showDiffSummary();
@@ -2213,8 +2302,8 @@ function bindFor(s) {
   else if (s.kind === 'domsub') bindDomainSub(s.sd);  // neighbourhood: framed entities + collapsed neighbour boxes + cross arrows
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
   else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
-  else if (s.kind === 'gp') bindGP();
-  else if (s.kind === 'gpstep') bindFlow((GP_BY_ID[s.gp] || {}).uc);  // the step opens its use case's flow
+  else if (s.kind === 'hp') bindHP();
+  else if (s.kind === 'hpstep') bindFlow((HP_BY_ID[s.hp] || {}).uc);  // the step opens its use case's flow
   else if (s.kind === 'usecase') bindFlow(s.uc);
   else if (s.kind === 'libs') bindLibs();
   else bindComponent();
@@ -2223,22 +2312,24 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary') return kind;
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
-  if (kind === 'gp' || kind === 'gpstep' || kind === 'usecase') return 'gp';
+  if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog
+  if (kind === 'hp' || kind === 'hpstep') return 'hp';
   if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
   return 'container';
 }
-function gpTitle(gp) { const s = GP_BY_ID[gp]; return s ? (s.title || s.id) : gp; }  // breadcrumb crumb: title, not the GPn id
+function hpTitle(hp) { const s = HP_BY_ID[hp]; return s ? (s.title || s.id) : hp; }  // breadcrumb crumb: title, not the HPn id
 function stateTitle(s) {
-  if (s.kind === 'context') return 'Context';
+  if (s.kind === 'context') return 'Dependencies';
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
   if (s.kind === 'glossary') return 'Glossary';
+  if (s.kind === 'usecases') return 'Use Cases';
   if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
   if (s.kind === 'bridge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.sid) + ' → ' + nm(s.sd); }
-  if (s.kind === 'gp') return 'Golden Path';
-  if (s.kind === 'gpstep') return gpTitle(s.gp);
+  if (s.kind === 'hp') return 'Happy Path';
+  if (s.kind === 'hpstep') return hpTitle(s.hp);
   if (s.kind === 'usecase') return (GRAPH.nodes[s.uc] ? GRAPH.nodes[s.uc].name : s.uc);
   if (s.kind === 'libs') return 'Libraries';
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
@@ -2255,16 +2346,17 @@ function groupChain(kind, key, id) {
 }
 function ancestors(s) {  // structural nesting path (top → s), independent of the click history
   // Each tab's OVERVIEW shows a single crumb (its own name); only a drill-down appends deeper crumbs.
-  // So sibling tabs read uniformly — Subsystems, Components, Domain, Golden Path, Context are each one
+  // So sibling tabs read uniformly — Subsystems, Components, Domain, Happy Path, Context are each one
   // crumb at the top, and ancestry (Subsystems › Auth › … , Context › Libraries) appears only once you
   // zoom in; a nested subsystem/subdomain appends one crumb PER level via groupChain.
   if (s.kind === 'domain') return [{ kind: 'domain' }];
   if (s.kind === 'domsub') return [{ kind: 'domain' }, ...groupChain('domsub', 'sd', s.sd)];  // subdomain card (full nesting path) under Domain
   if (s.kind === 'domedge') return [{ kind: 'domain' }, { kind: 'domedge', a: s.a, b: s.b }];  // subdomain pair beside them
   if (s.kind === 'bridge') return [{ kind: 'container' }, { kind: 'bridge', sid: s.sid, sd: s.sd }];  // S×SD bridge under Subsystems
-  if (s.kind === 'gp') return [{ kind: 'gp' }];
-  if (s.kind === 'gpstep') return [{ kind: 'gp' }, { kind: 'gpstep', gp: s.gp }];  // step under the Golden Path
-  if (s.kind === 'usecase') return [{ kind: 'gp' }, { kind: 'usecase', uc: s.uc }];  // a use case's flow, under the Golden Path
+  if (s.kind === 'hp') return [{ kind: 'hp' }];
+  if (s.kind === 'hpstep') return [{ kind: 'hp' }, { kind: 'hpstep', hp: s.hp }];  // step under the Happy Path
+  if (s.kind === 'usecases') return [{ kind: 'usecases' }];
+  if (s.kind === 'usecase') return [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];  // a use case's flow, under the Use Cases catalog
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
@@ -2396,6 +2488,63 @@ function renderGlossary() {
   });
 }
 
+// The Use Cases tab: the full catalog, GROUPED BY ACTOR — each actor section header IS the Role (the
+// only place roles get a home now that the Context/Dependencies view is deps-focused). Each use case
+// shows its trigger → outcome and, when it sits on the Happy Path, an `HPn` pill (all positions when it
+// recurs) that jumps to that step. Off-spine use cases have NO pill — that absence is the on/off-spine
+// signal in the catalog. A non-diagram HTML view rendered straight into #diagram, like the Glossary.
+function renderUseCases() {
+  // Group by the single primary actor, keeping model (importance) order within a group and
+  // first-appearance order of the actors. A use case whose Actor names no known role (or is blank)
+  // falls into an "Other" bucket rather than an invented header — the single-actor invariant made safe.
+  const groups = [];               // [{actor, role, ucs:[node]}]
+  const byActor = {};
+  const OTHER = ' other';
+  for (const n of UC_NODES) {
+    const actor = ((n.fields && n.fields.Actor) || '').trim();
+    const role = ROLE_BY_NAME[actor.toLowerCase()];
+    const key = (role && actor) ? actor.toLowerCase() : OTHER;
+    if (!byActor[key]) { byActor[key] = { actor: role ? actor : 'Other', role: role || null, ucs: [] }; groups.push(byActor[key]); }
+    byActor[key].ucs.push(n);
+  }
+  const kindBadge = (kind) => {
+    const k = (kind || '').trim().toLowerCase();
+    if (k !== 'human' && k !== 'service') return '';
+    return `<span class="uc-kind uc-kind-${k}">${esc(k)}</span>`;
+  };
+  const pill = (uc) => {
+    const ids = HP_STEPS_BY_UC[uc] || [];
+    if (!ids.length) return '';
+    const label = ids.join(' · ');
+    return `<button type="button" class="uc-hp-pill" data-uc="${esc(uc)}"`
+      + ` title="On the Happy Path — jump to ${esc(label)}">${esc(label)}</button>`;
+  };
+  const sections = groups.map((g) => {
+    const wants = g.role && g.role.wants ? `<span class="uc-actor-wants">${mdInline(g.role.wants)}</span>` : '';
+    const rows = g.ucs.map((n) => {
+      const to = (n.fields && n.fields['Trigger → Outcome']) || '';
+      return `<li class="uc-row" data-uc="${esc(n.id)}" tabindex="0">`
+        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${pill(n.id)}</span>`
+        + (to ? `<span class="uc-to">${mdInline(to)}</span>` : '')
+        + '</li>';
+    }).join('');
+    return '<section class="uc-group">'
+      + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(g.role && g.role.kind)}${wants}</h3>`
+      + `<ul class="uc-list">${rows}</ul></section>`;
+  }).join('');
+  diagram.innerHTML = `<div class="usecases-wrap">${sections || '<p class="empty">No use cases recorded.</p>'}</div>`;
+  // A row opens the use case's flow — the SAME detail a Happy Path step drills into (one home).
+  const openUc = (li) => go({ kind: 'usecase', uc: li.getAttribute('data-uc') });
+  diagram.querySelectorAll('.uc-row').forEach((li) => {
+    li.addEventListener('click', (ev) => { if (!ev.target.closest('.uc-hp-pill')) openUc(li); });
+    li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' && !ev.target.closest('.uc-hp-pill')) openUc(li); });
+  });
+  // A pill jumps to the Happy Path tab with every step of this use case lit (see selectHPUseCase).
+  diagram.querySelectorAll('.uc-hp-pill').forEach((btn) => {
+    btn.addEventListener('click', (ev) => { ev.stopPropagation(); go({ kind: 'hp', sel: 'hpuc:' + btn.getAttribute('data-uc') }); });
+  });
+}
+
 async function render() {
   const seq = ++renderSeq;
   hideTip();  // a re-render replaces the diagram — drop any tooltip from the old one
@@ -2406,6 +2555,8 @@ async function render() {
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
   if (s.kind === 'glossary') { renderGlossary(); mainScene = null; renderChrome(s); return; }
+  // The Use Cases tab is an actor-grouped HTML catalog, not a mermaid diagram — same shape as Glossary.
+  if (s.kind === 'usecases') { renderUseCases(); mainScene = null; renderChrome(s); return; }
   // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,
   // not throw an unhandled rejection that freezes the view mid-navigation. Show a message + keep the
   // chrome (back/forward still work) so the user can step out.
@@ -2423,12 +2574,13 @@ async function render() {
   if (seq !== renderSeq) return;  // a newer render started during the async layout — drop this stale one
   diagram.innerHTML = svg;
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
+  emphasizeZoomedFrame(diagram, s);  // thicker border + bigger title on the group you drilled into
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
   for (const id in ACTION_ICONS) delete ACTION_ICONS[id];  // reset before bindFor's bindFrameDrill re-populates it
   bindFor(s);
   decorateActionIcons(mainScene);  // corner icon = each drawn box's one useful secondary action
   // Every drawn box gets a default re-select closure (plain-click select), so back/forward can restore
-  // a node selection. Edges, flow steps and GP actors/steps register their own during bindFor; a box
+  // a node selection. Edges, flow steps and HP actors/steps register their own during bindFor; a box
   // with special select behaviour (the Libraries fold) pre-registers too, so it's skipped here.
   for (const id in mainScene.nodeEls) {
     if (!mainScene.selectors['node:' + id]) {
@@ -2831,8 +2983,8 @@ function buildFileTree() {
 // The map is always served by `coyodex serve` (the view data is fetched from it at boot), so the file
 // browser and code viewer are always available: they read files from the server, which serves them
 // from git at the map's commit. A /api/health probe confirms the API is reachable before we reveal the
-// panes. API_BASE is the map's own directory + "api/" (works whether the URL ends in the project folder
-// or in project-map.html); it is declared at the top of the module.
+// panes. API_BASE is the map's own directory + "api/" (the page is served at /p/<slug>/); it is declared
+// at the top of the module.
 let SERVED = false;
 // API_BASE is declared at the top of the module (the view bundle is fetched from it at boot).
 async function initServerMode() {
@@ -3361,7 +3513,8 @@ buildLegend();
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
-  if (b.dataset.view === 'gp' && !HAS_GP) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'hp' && !HAS_HP) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'usecases' && !HAS_USECASES) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'glossary' && !HAS_GLOSSARY) { b.style.display = 'none'; return; }
   b.addEventListener('click', () => go({ kind: b.dataset.view }));
 });
@@ -3378,5 +3531,6 @@ if (HAS_DIFF) {
   toggle.addEventListener('click', () => { captureViewState(); mode = mode === 'diff' ? 'base' : 'diff'; render(); });
 }
 // Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise the
-// Context view — the highest, C4 system-in-the-world altitude.
-go({ kind: (HAS_DIFF && HAS_GROUPING) ? 'container' : 'context' });
+// Happy Path — the behavioural spine, lead-with-behaviour — falling back to Subsystems, then the
+// Dependencies (context) view, when a map has no Happy Path.
+go({ kind: (HAS_DIFF && HAS_GROUPING) ? 'container' : (HAS_HP ? 'hp' : (HAS_GROUPING ? 'container' : 'context')) });

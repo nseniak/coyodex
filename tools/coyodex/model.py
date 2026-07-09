@@ -23,7 +23,7 @@ FORMAT = "coyodex-map"
 
 # Each element array's required id prefix — structural (a `Cn` in `deps` is a shape error, caught at
 # load), while uniqueness/resolution stay semantic (validate_model).
-ID_SHAPE = re.compile(r"^(UC|GP|SD|C|D|E|S)\d+$")
+ID_SHAPE = re.compile(r"^(UC|HP|SD|C|D|E|S)\d+$")
 
 
 class ModelError(ValueError):
@@ -58,8 +58,8 @@ class UseCase:
 
 
 @dataclass
-class GoldenStep:
-    id: str                   # GPn — the position in the walk
+class HappyStep:
+    id: str                   # HPn — the position in the walk
     title: str
     uc: str | None = None     # the use case this step realizes (required by validate)
     why: str | None = None    # the prerequisite that fixes this step's position
@@ -257,7 +257,7 @@ class ProjectModel:
     roles: list[Role] = field(default_factory=list)
     glossary: list[GlossaryRow] = field(default_factory=list)
     use_cases: list[UseCase] = field(default_factory=list)
-    golden_path: list[GoldenStep] = field(default_factory=list)
+    happy_path: list[HappyStep] = field(default_factory=list)
     subsystems: list[Group] = field(default_factory=list)
     components: list[Component] = field(default_factory=list)
     deps: list[Dep] = field(default_factory=list)
@@ -280,7 +280,7 @@ class ProjectModel:
 # The element arrays that DEFINE ids, with each one's required prefix. `S` must not match `SD` (both
 # start with "S"), so validation matches the WHOLE id against ID_SHAPE and then the exact prefix.
 ID_ARRAYS: dict[str, str] = {
-    "use_cases": "UC", "golden_path": "GP", "subsystems": "S", "components": "C",
+    "use_cases": "UC", "happy_path": "HP", "subsystems": "S", "components": "C",
     "deps": "D", "subdomains": "SD", "entities": "E",
 }
 

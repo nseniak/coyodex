@@ -44,7 +44,7 @@ def make_map() -> str:
       "trigger_outcome": "a -> b"
     }
   ],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {

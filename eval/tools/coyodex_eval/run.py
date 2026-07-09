@@ -100,7 +100,7 @@ def delta_md(result: RunResult) -> str:
     lines += [
         "## Profile", "```",
         f"structure : UC {p.use_cases} · S {p.subsystems} · SD {p.subdomains} · C {p.components} "
-        f"· D {p.deps} · E {p.entities} · edges {p.edges} · GP {p.gp_steps} · flows {p.flows} "
+        f"· D {p.deps} · E {p.entities} · edges {p.edges} · HP {p.hp_steps} · flows {p.flows} "
         f"· auth {p.security_surfaces}",
         f"validate  : {'OK' if p.validate_ok else f'{p.validate_problems} problem(s)'}, "
         f"{p.validate_warnings} warning(s)",

@@ -57,7 +57,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {
@@ -123,7 +123,7 @@ def make_l2_map(refute_surface: bool = False) -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {
@@ -193,7 +193,7 @@ def make_no_claims_map() -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {
@@ -240,7 +240,7 @@ def make_many_claims_map(n_uses: int = 4) -> str:
   "roles": [],
   "glossary": [],
   "use_cases": [],
-  "golden_path": [],
+  "happy_path": [],
   "subsystems": [],
   "components": [
     {
@@ -523,9 +523,9 @@ def test_precomputed_judge_replays_grounding_and_median_scores() -> None:
         {"claim": "C1 enforces C2", "grounded": False, "evidence": "gate.py:5"},
     ]
     judges = [
-        {"faithfulness": 2, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "golden_path": 3},
-        {"faithfulness": 4, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "golden_path": 3},
-        {"faithfulness": 4, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "golden_path": 3},
+        {"faithfulness": 2, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "happy_path": 3},
+        {"faithfulness": 4, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "happy_path": 3},
+        {"faithfulness": 4, "completeness": 3, "drill_accuracy": 3, "altitude": 3, "happy_path": 3},
     ]
     rep = report_from_verdicts(make_l2_map(), HERE, "R", grounding, judges)
     assert (rep.n_claims, rep.n_grounded, rep.grounding_passrate) == (2, 1, 0.5), rep

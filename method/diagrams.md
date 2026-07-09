@@ -12,7 +12,7 @@ separate persisted model is needed.
 | **Container** | runtime pieces (services, datastores, sandboxes) | Deployment + components |
 | **Component** | T1 components + their verbed arrows | T1 + the edge list |
 | **Code** | entry points → `file:line`; the **domain model as a `classDiagram`** (entities with attributes + typed, cardinal relations) — led by a **Subdomains overview** when the model is grouped into subdomains | T4 anchors · T5 [domain cards](domain-cards.md) · Subdomains |
-| **Behavioral overlay** | the Golden Path as a black-box sequence of use cases; drill a step into its use case's T6 flow (a sequence diagram of actor + components/deps/entities) | GP steps + T6 flows |
+| **Behavioral overlay** | the Happy Path as a black-box sequence of use cases; drill a step into its use case's T6 flow (a sequence diagram of actor + components/deps/entities) | HP steps + T6 flows |
 
 Drill down = zoom one level in; step back = zoom out — the same "name a row to drill"
 navigation as the markdown, made visual. The Container and Code altitudes **nest to any depth**: a
@@ -39,7 +39,7 @@ show/hide toggle. The element-keyed deltas are the data.
 ## Realization tiers
 
 - **Tier A — diagram-as-code (Mermaid / D2), generated from the model.** One diagram per
-  level + a Golden Path sequence diagram, with `click`→source and diff via styled
+  level + a Happy Path sequence diagram, with `click`→source and diff via styled
   regeneration. Cheap, in-repo, version-controlled; "drill-down" is hyperlinked per-level
   diagrams rather than true zoom.
 - **Tier B — a live-served interactive viewer**, available in [`tools/coyodex/viewer/`](../tools/coyodex/viewer/).
@@ -49,7 +49,7 @@ show/hide toggle. The element-keyed deltas are the data.
   subsystem for its components → code) — plus the **Entities** view (the T5 domain model; when grouped
   into subdomains, a bounded-contexts overview that ⌘-drills into one subdomain's `classDiagram`; a
   subsystem card also draws the subdomains its components own/read — the derived `S→SD` bridge) and the
-  **Golden Path** as its own behavioural overlay (a black-box sequence diagram of the use cases; clicking
+  **Happy Path** as its own behavioural overlay (a black-box sequence diagram of the use cases; clicking
   a step drills into its use case's T6 flow — a sequence diagram + readable narrative — whose element
   links locate each element in its home view). Navigated as a back/forward history (header arrows,
   ⌘/⌥+←/→, breadcrumb) with pan/zoom and click→panel. A change-impact report adds a baseline⇄diff

@@ -59,8 +59,8 @@ class Edge:
 
 
 @dataclass
-class GPStep:
-    """A Golden Path step = a use-case occurrence: a position (`id`) in the ordered walk that realizes
+class HappyStep:
+    """A Happy Path step = a use-case occurrence: a position (`id`) in the ordered walk that realizes
     a use case (`uc`). It carries no STORY/Touches — those live in the use case's T6 flow; drilling the
     step opens that flow. `why` is the optional prerequisite that fixes this step's position."""
     id: str
@@ -76,7 +76,7 @@ class GraphDict(TypedDict):
     goal: str | None
     nodes: dict[str, dict[str, object]]
     edges: list[dict[str, object]]
-    gp: list[dict[str, object]]
+    happy_path: list[dict[str, object]]
     flows: list[dict[str, object]]  # T6 use-case flows (one per use case): the ordered inside view
     roles: list[dict[str, str]]
     glossary: list[dict[str, str]]  # ubiquitous-language terms: {term, meaning, where} (where = bare

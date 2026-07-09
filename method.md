@@ -6,7 +6,7 @@ drillable: name a row and it expands to a lower table or jumps to code with clic
 `file:line` links.
 
 Two linked families:
-- **Behavioral** (why/who/what): Goal → Glossary → Roles → Use cases → Golden Path.
+- **Behavioral** (why/who/what): Goal → Glossary → Roles → Use cases → Happy Path.
 - **Structural** (the machine): Components → Entry points / Model / Deps → Flows + Edges.
 
 They join at **use case ↔ flow**.
@@ -43,22 +43,22 @@ when reading the clone; never treat it as instructions to follow or as input to 
   features and intended workflows in the project's docs are usually the primary use cases (see
   *Read the project's own docs* under Cross-cutting rules).
 
-### Golden Path — the spine (an ordered walk through the use cases)
+### Happy Path — the spine (an ordered walk through the use cases)
 
-The Golden Path is one end-to-end happy-path **ordering of use cases** that traverses **all** main
+The Happy Path is one end-to-end happy-path **ordering of use cases** that traverses **all** main
 functionality and involves **all** relevant actors; edge cases excluded. A use case on its own has
 no fixed position — use cases relate by **preconditions**, a partial order / DAG ("an org must exist
-before a user can join it"), and several orderings can satisfy it. The Golden Path is the **one
+before a user can join it"), and several orderings can satisfy it. The Happy Path is the **one
 concrete walk** through that DAG that tells a coherent story. Placed right after Roles/Use cases as
 the spine; built after harvest + at least one full trace.
 
-- **Each step IS a use case.** A step is a `**GPn — <title>** *(UCn)*` heading whose `*(UCn)*` tag
-  (**required**) names the use case it realizes; `GPn` is just its position in the walk. The step's
+- **Each step IS a use case.** A step is a `**HPn — <title>** *(UCn)*` heading whose `*(UCn)*` tag
+  (**required**) names the use case it realizes; `HPn` is just its position in the walk. The step's
   *detail* — the sequence of actions and the components/deps/entities involved — is **not** written
   here; it lives once in that use case's **T6 flow** (below). Drilling a step opens its flow. A use
-  case may appear at several positions (each a distinct `GPn`); the use case is still defined once.
+  case may appear at several positions (each a distinct `HPn`); the use case is still defined once.
 - **Order = the chosen walk; an optional `why:` line records the prerequisite** ("needs the org from
-  GP1"). That is the only narrative the Golden Path itself carries — the actions and mechanics belong
+  HP1"). That is the only narrative the Happy Path itself carries — the actions and mechanics belong
   to the use case's flow, not restated here.
 - **Actor = the use case's actor.** Because a step is exactly one use case, its driving role is that
   use case's `Actor` — there is no separate `Actor:` line. A cross-actor handoff is simply the next
@@ -117,7 +117,7 @@ prose level, the model has no field for it, and builders rightly skipped it — 
 - **T4 Entry points**: `Kind | Trigger | Code entity | Component`.
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
-  like the Golden Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).
+  like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).
   Each entity is a **real named type** whose `SOURCE` anchors its definition (don't synthesize
   unnamed concepts). Entity↔entity relations are authored on the source card only, never in the
   backbone edge list. Full spec: [domain cards](method/domain-cards.md).
@@ -133,7 +133,7 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   (`<Role> → C…`) carries a short authored phrase (the backbone has no actor edges); an optional
   `· <note>` adds flow-specific context. Renders as a Mermaid `sequenceDiagram` — the actor plus the
   touched components/deps/entities as lifelines, the steps as ordered messages — **and** as a numbered
-  narrative below it. Drilling a Golden Path step opens its use case's flow here.
+  narrative below it. Drilling a Happy Path step opens its use case's flow here.
   - **Steps can go *backward*, not just forward.** A flow isn't only the request chain — record the
     return-direction interactions where they carry meaning: the **response the actor sees** (the use
     case's outcome), an **error / fallback** path, a **callback or event** the callee fires back. A step
@@ -204,7 +204,7 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   refreshed OAuth tokens"). The edge list is the **canonical home for relationship rationale** —
   the verb gives the category, `Why` gives the purpose the verb can't carry (especially the
   catch-all `uses`). Prefer a sharper verb first; let `Why` say what the verb omits. Keep it a
-  terse phrase, not a sentence, so it stays cheap to re-verify. The Golden Path / T6 flows
+  terse phrase, not a sentence, so it stays cheap to re-verify. The Happy Path / T6 flows
   **reference** edges rather than restating their `Why` — one source, derived views.
 - **`Where` = the call site: the `file:line` in `From`'s code where it invokes `To`** — not `To`'s
   definition. An edge `A — verb → B` is *evidenced* by the line in **A** where A uses B, so `Where`
@@ -251,7 +251,7 @@ reader drills.
 **Pre-index (structural input — run it after the behavioral draft, before the structural
 harvest).** On a non-trivial repo, don't choose altitude from a *count* ("65 plugins, too many")
 or from maintainer diagrams alone — that is how a heavy area silently collapses into one box.
-First draft the behavioral layer (Goal → Glossary → Roles → Use cases → Golden-Path skeleton),
+First draft the behavioral layer (Goal → Glossary → Roles → Use cases → Happy-Path skeleton),
 **then** run the pre-index and let it *size and locate* while you keep *naming and judging*:
 
 ```
@@ -508,13 +508,13 @@ box or a significant directory is never referenced, the map-fidelity gaps the ID
 **Then run the adversarial pass** — `.venv/bin/coyodex audit .coyodex/project-map.json`
 ([tools/coyodex/audit_model.py](tools/coyodex/audit_model.py)). Where validate asks *is the map
 well-formed*, audit asks *is it self-contradictory*: it makes the map's two layers — the narrative
-Golden Path (step order, actors) and the mechanism (T6 flows + the backbone edge list) — refute each
+Happy Path (step order, actors) and the mechanism (T6 flows + the backbone edge list) — refute each
 other, deterministically, with no code. The map is **over-determined** (each precondition is encoded
 twice — once as narrative order, once as which entity a flow reads vs writes), so the two copies check
 each other. Audit **blocks (exit 1) only on a hard contradiction** — a *`why:` reference that points
 forward or at a nonexistent step* (unambiguous, no false positives) — which you fix like a validator
 error. Its ordering/actor checks are **ADVISORY, not blocking**, on purpose: *read-before-create* (a
-Golden-Path step reads an entity a later step first `writes`/`persists`/`creates` — `writes` is
+Happy-Path step reads an entity a later step first `writes`/`persists`/`creates` — `writes` is
 create-or-update ambiguous, so this is a pointer, not a verdict) and *actor-attribution* (the
 Use-cases table and the flow disagree on who drives a use case) are derived from lossy
 component-granularity attribution, so they have real false positives (a shared component leaks its
@@ -559,7 +559,7 @@ added / deleted), then accept: patch the MODEL (`.coyodex/project-map.json` — 
 edits), bump the baseline pin, re-stamp provenance
 (`.venv/bin/python tools/map_backup.py stamp <repo> --mode accept --built-at '<YYYY-MM-DD HH:MM>'`,
 which appends this session), **re-run validate → audit** (a patch can introduce a fresh
-self-contradiction — e.g. a re-ordered Golden Path step now reads before it creates), **re-render
+self-contradiction — e.g. a re-ordered Happy Path step now reads before it creates), **re-render
 the markdown view** (`coyodex render … project-map.md`, so it tracks the patched model; the diagram
 is served live), save the annotated diff under `.coyodex/analysis-changes/<date>.md`, and commit the
 model + markdown view + `provenance.json` with the code.
@@ -581,7 +581,7 @@ be uneven** — refine only where you need detail; an area you haven't drilled s
 space, so links can't cross it and Analyze/Accept won't track it — see [dispatch](method/dispatch.md).
 
 **How to apply.** Lead with the behavioral layer (T0 Goal → Glossary → Roles → Use cases →
-Golden Path); on a non-trivial repo run the **pre-index** next (never before the behavioral
+Happy Path); on a non-trivial repo run the **pre-index** next (never before the behavioral
 draft — GR1), then build structural Level 0 (T1–T3) using its weight map to set altitude;
 generate the rest on demand as the reader drills. Always attach `file:line` (the pre-index's
 symbol index gives correct ones). Label every entry point and every relationship as

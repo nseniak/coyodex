@@ -3,7 +3,7 @@
 The **info pane** is the side panel that fills in when you select something in the diagram.
 Its content depends on what you selected. There are three families: **box elements** (the
 nested boxes in the Context / Subsystems / Entities views), **use cases** (the steps of the
-Golden Path), and **arrows** (the edges between boxes).
+Happy Path), and **arrows** (the edges between boxes).
 
 Every value below is text in the map source. The **display** column says how the pane renders
 it: *heading*, *badge* (a small coloured tag), *prose* (the one free description line),
@@ -83,8 +83,8 @@ box nests in) are dropped.
 
 ## Use case
 
-A use case is not a box. In the UI it appears as a **step in the Golden Path**. Its info pane
-shows up when you **select a Golden Path step**, **drill into a step**, or **follow a "Used in"
+A use case is not a box. In the UI it appears as a **step in the Happy Path**. Its info pane
+shows up when you **select a Happy Path step**, **drill into a step**, or **follow a "Used in"
 link** on some other element.
 
 The use-case pane is a **flow panel**, not the box layout above:
@@ -94,7 +94,7 @@ The use-case pane is a **flow panel**, not the box layout above:
 | Step title, or the use case name | heading | |
 | Use case name | badge | |
 | Driving actor | badge | |
-| Why this step comes here | prose (only when reached as a Golden Path step that has a "why") | |
+| Why this step comes here | prose (only when reached as a Happy Path step that has a "why") | |
 | The flow — the numbered inside steps | list; each step is "A → *verb* → B", with its why and any note inline, each endpoint a link to that element | |
 
 > A use case also carries an **Actor** and a **Trigger → Outcome** in the map source. In normal

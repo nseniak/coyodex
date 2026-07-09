@@ -6,7 +6,7 @@ Two layers:
   1. STRUCTURE — `model.load_model` already validated shape/types/id-prefixes. This module starts
      where structure ends.
   2. SEMANTICS — every referenced ID resolves, hierarchy sound (right-kind parents, no cycles,
-     deep-nest advisory), GP steps name their use case, flow actors resolve to Roles, dep Kinds in
+     deep-nest advisory), HP steps name their use case, flow actors resolve to Roles, dep Kinds in
      the closed vocabulary, domain-card completeness, plus every advisory nudge (altitude, empty
      groups, unowned entities, orphan deps honoring the `deployment_linked` marker) and the opt-in
      repo-reading checks (`--check-sources` anchors + entity grounding, `--check-coverage`
@@ -113,8 +113,8 @@ def _check_ids(m: ProjectModel) -> list[str]:
     problems: list[str] = []
     counts: dict[str, int] = {}
     for attr in ID_ARRAYS:
-        if attr == "golden_path":
-            continue  # a use case may occupy several GP positions; GP ids ride their own check
+        if attr == "happy_path":
+            continue  # a use case may occupy several HP positions; HP ids ride their own check
         for el in getattr(m, attr):
             counts[el.id] = counts.get(el.id, 0) + 1
     duplicates = sorted(i for i, n in counts.items() if n > 1)
@@ -128,7 +128,7 @@ def _check_ids(m: ProjectModel) -> list[str]:
         + [(s.id, "parent", s.parent) for s in m.subsystems]
         + [(sd.id, "parent", sd.parent) for sd in m.subdomains]
         + [(e.id, "subdomain", e.subdomain) for e in m.entities]
-        + [(g.id, "uc", g.uc) for g in m.golden_path]
+        + [(g.id, "uc", g.uc) for g in m.happy_path]
         + [(e.id, "relation target", r.target) for e in m.entities for r in e.relations]
     )
     for owner, field_name, val in pointers:
@@ -145,7 +145,7 @@ def _check_ids(m: ProjectModel) -> list[str]:
 def _check_references(m: ProjectModel) -> list[str]:
     """Every ID token stored anywhere in the model must resolve to a defined element — with schema
     v1's additivity rule: stray S/SD tokens are ignored while the map has no grouping/subdomains."""
-    defined = set(all_elements(m)) | {g.id for g in m.golden_path}
+    defined = set(all_elements(m)) | {g.id for g in m.happy_path}
     referenced = {tok for s in _strings(m) for tok in grammar.ID_TOKEN.findall(s)}
     parents = _parents(m)
     grouping_present = (any(_is_subsystem_id(i) for i in defined)
@@ -164,9 +164,9 @@ def _check_references(m: ProjectModel) -> list[str]:
     return [f"References to undefined IDs: {', '.join(unresolved)}"] if unresolved else []
 
 
-def _check_gp(m: ProjectModel) -> list[str]:
-    missing = [g.id for g in m.golden_path if not g.uc]
-    return ([f"Golden Path steps missing a use-case reference (`uc`): {', '.join(missing)}"]
+def _check_hp(m: ProjectModel) -> list[str]:
+    missing = [g.id for g in m.happy_path if not g.uc]
+    return ([f"Happy Path steps missing a use-case reference (`uc`): {', '.join(missing)}"]
             if missing else [])
 
 
@@ -542,11 +542,11 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         raise ValueError("model_path or repo_root is required when check_sources/check_coverage is set")
     problems: list[str] = []
     warnings: list[str] = []
-    defined = set(all_elements(m)) | {g.id for g in m.golden_path}
+    defined = set(all_elements(m)) | {g.id for g in m.happy_path}
 
     problems.extend(_check_ids(m))
     problems.extend(_check_references(m))
-    problems.extend(_check_gp(m))
+    problems.extend(_check_hp(m))
     problems.extend(_check_flows(m))
     problems.extend(_check_roles(m))
     problems.extend(_check_dep_kinds(m))
@@ -658,7 +658,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 
 def _inventory(m: ProjectModel) -> str:
-    counts = {"UC": len(m.use_cases), "GP": len(m.golden_path), "S": len(m.subsystems),
+    counts = {"UC": len(m.use_cases), "HP": len(m.happy_path), "S": len(m.subsystems),
               "C": len(m.components), "D": len(m.deps), "SD": len(m.subdomains),
               "E": len(m.entities)}
     return ", ".join(f"{k}:{v}" for k, v in sorted(counts.items()) if v)
@@ -714,7 +714,7 @@ def main(argv: list[str] | None = None) -> int:
         for p in problems:
             print(f"  - {p}")
         return 1
-    print("Schema OK — structure valid, all IDs defined once, all references resolve, every GP "
+    print("Schema OK — structure valid, all IDs defined once, all references resolve, every HP "
           "step names a use case, every flow step well-formed.")
     return 0
 

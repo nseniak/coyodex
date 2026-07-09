@@ -311,87 +311,87 @@
       "trigger_outcome": "Delete org → org and all its scoped data purged"
     }
   ],
-  "golden_path": [
+  "happy_path": [
     {
-      "id": "GP1",
+      "id": "HP1",
       "title": "Sign up & create the organization",
       "uc": "UC1",
       "why": null
     },
     {
-      "id": "GP2",
+      "id": "HP2",
       "title": "Add a remote HTTP upstream MCP",
       "uc": "UC2",
-      "why": "needs the org from GP1"
+      "why": "needs the org from HP1"
     },
     {
-      "id": "GP3",
+      "id": "HP3",
       "title": "Add a hosted stdio upstream MCP",
       "uc": "UC3",
-      "why": "same org as GP2"
+      "why": "same org as HP2"
     },
     {
-      "id": "GP4",
+      "id": "HP4",
       "title": "Connect / start the upstreams",
       "uc": "UC4",
-      "why": "an upstream must exist (GP2/GP3) before it can connect"
+      "why": "an upstream must exist (HP2/HP3) before it can connect"
     },
     {
-      "id": "GP5",
+      "id": "HP5",
       "title": "Configure roles & per-MCP access",
       "uc": "UC5",
-      "why": "needs discovered upstreams (GP4) to scope access to"
+      "why": "needs discovered upstreams (HP4) to scope access to"
     },
     {
-      "id": "GP6",
+      "id": "HP6",
       "title": "Configure per-tool access & argument checks",
       "uc": "UC6",
-      "why": "refines the role from GP5"
+      "why": "refines the role from HP5"
     },
     {
-      "id": "GP7",
+      "id": "HP7",
       "title": "Invite a team member",
       "uc": "UC13",
-      "why": "needs a role (GP5) to assign"
+      "why": "needs a role (HP5) to assign"
     },
     {
-      "id": "GP8",
+      "id": "HP8",
       "title": "Member connects their AI client via Google OAuth",
       "uc": "UC7",
-      "why": "the member must be invited (GP7) to authenticate into the org"
+      "why": "the member must be invited (HP7) to authenticate into the org"
     },
     {
-      "id": "GP9",
+      "id": "HP9",
       "title": "Member authenticates per-user OAuth to an upstream",
       "uc": "UC8",
-      "why": "needs a gateway session (GP8) and a per-user-OAuth upstream (GP2)"
+      "why": "needs a gateway session (HP8) and a per-user-OAuth upstream (HP2)"
     },
     {
-      "id": "GP10",
+      "id": "HP10",
       "title": "Member lists & calls tools through the gateway",
       "uc": "UC12",
-      "why": "needs the connected session (GP8) and allowed tools (GP6)"
+      "why": "needs the connected session (HP8) and allowed tools (HP6)"
     },
     {
-      "id": "GP11",
+      "id": "HP11",
       "title": "Admin mints a service token",
       "uc": "UC10",
-      "why": "needs a least-privilege role (GP5)"
+      "why": "needs a least-privilege role (HP5)"
     },
     {
-      "id": "GP12",
+      "id": "HP12",
       "title": "Headless agent calls tools via the service token",
       "uc": "UC11",
-      "why": "needs the minted token (GP11)"
+      "why": "needs the minted token (HP11)"
     },
     {
-      "id": "GP13",
+      "id": "HP13",
       "title": "Admin reviews the audit log",
       "uc": "UC17",
-      "why": "tool calls (GP10/GP12) must have happened to audit"
+      "why": "tool calls (HP10/HP12) must have happened to audit"
     },
     {
-      "id": "GP14",
+      "id": "HP14",
       "title": "Admin deletes the organization",
       "uc": "UC25",
       "why": "terminal — purges everything created above"

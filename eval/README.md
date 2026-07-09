@@ -20,7 +20,7 @@ drift). So the harness never diffs map *text* — it compares measurable **quali
 
 ## The signals it compares
 
-- **structure** — counts of use cases, subsystems, components, entities, edges, Golden-Path steps…
+- **structure** — counts of use cases, subsystems, components, entities, edges, Happy-Path steps…
 - **well-formedness** — `coyodex validate` problems / warnings
 - **self-consistency** — `coyodex audit` contradictions / advisories
 - **coverage** — how much of the source the map actually maps

@@ -10,9 +10,9 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-# IDs by prefix. Multi-letter prefixes (UC, GP, SD) must precede the single-letter ones (so `SD1`
+# IDs by prefix. Multi-letter prefixes (UC, HP, SD) must precede the single-letter ones (so `SD1`
 # never reads as `S` + stray text).
-ID_TOKEN = re.compile(r"\b(?:UC\d+|GP\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)\b")
+ID_TOKEN = re.compile(r"\b(?:UC\d+|HP\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)\b")
 
 # Grouping: membership is ONE parent pointer carried on the child.
 # Nesting depth is ADVISORY, not capped: the viewer renders arbitrary depth, and the cycle check (not a

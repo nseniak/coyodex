@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """`coyodex audit` for a model map — L1 self-contradiction + the L2 grounding worklist.
 
-The adversarial pass reads model FIELDS directly: the Golden Path's narrative order vs. the
+The adversarial pass reads model FIELDS directly: the Happy Path's narrative order vs. the
 mechanism (T6 flows + backbone edges), then the ranked worklist of "actually-does" claims for
 fresh-context skeptics.
 
@@ -31,7 +31,7 @@ from coyodex.model import ProjectModel, load_model
 
 # WRITE = the C→E verbs that ESTABLISH or MUTATE an entity's stored state: `persists` / `writes` /
 # `creates`. Crucially `writes` is used for BOTH creates AND updates (there is no distinct create
-# verb), so the FIRST write of an entity in Golden-Path order is treated as its (possible) create,
+# verb), so the FIRST write of an entity in Happy-Path order is treated as its (possible) create,
 # and the precedence check stays ADVISORY — its message says both readings. `encrypts` is excluded:
 # encrypting a stored value is a transform, not an establishment.
 WRITE_VERBS = frozenset({"persists", "writes", "creates"})
@@ -104,20 +104,20 @@ _ENTRY_POINTS_SHOWN = 6  # cap the member entry points listed in a component's c
 
 
 @dataclass
-class GPStep:
+class HPStep:
     pos: int
-    gp_id: str
+    hp_id: str
     uc: str | None
     title: str
     why: str | None
     why_refs: list[int] = field(default_factory=list)
 
 
-def golden_path_steps(m: ProjectModel) -> list[GPStep]:
-    steps: list[GPStep] = []
-    for pos, g in enumerate(m.golden_path):
-        refs = [int(x) for x in re.findall(r"GP(\d+)", g.why or "")]
-        steps.append(GPStep(pos=pos, gp_id=g.id, uc=g.uc, title=g.title, why=g.why, why_refs=refs))
+def happy_path_steps(m: ProjectModel) -> list[HPStep]:
+    steps: list[HPStep] = []
+    for pos, g in enumerate(m.happy_path):
+        refs = [int(x) for x in re.findall(r"HP(\d+)", g.why or "")]
+        steps.append(HPStep(pos=pos, hp_id=g.id, uc=g.uc, title=g.title, why=g.why, why_refs=refs))
     return steps
 
 
@@ -166,7 +166,7 @@ def _touch_sets(m: ProjectModel) -> tuple[dict[str, set[str]], dict[str, set[str
 # ── L1 checks ────────────────────────────────────────────────────────────────────────────────────
 
 def check_precedence(m: ProjectModel) -> list[Finding]:
-    steps = golden_path_steps(m)
+    steps = happy_path_steps(m)
     writes, reads = _touch_sets(m)
     ename = {e.id: e.name for e in m.entities}
 
@@ -180,14 +180,14 @@ def check_precedence(m: ProjectModel) -> list[Finding]:
 
     def at(pos: int) -> str:
         s = next((s for s in steps if s.pos == pos), None)
-        return f"GP{pos + 1}" + (f" ({s.uc})" if s and s.uc else "")
+        return f"HP{pos + 1}" + (f" ({s.uc})" if s and s.uc else "")
 
     findings: list[Finding] = []
     written_so_far: set[str] = set()
     reported: set[str] = set()
     for st in steps:
         uc = st.uc or ""
-        loc = f"GP{st.pos + 1} ({uc}) — {st.title}" if uc else f"GP{st.pos + 1} — {st.title}"
+        loc = f"HP{st.pos + 1} ({uc}) — {st.title}" if uc else f"HP{st.pos + 1} — {st.title}"
         for e in sorted(reads.get(uc, set())):
             if e in written_so_far or e in writes.get(uc, set()) or e in reported:
                 continue
@@ -196,31 +196,31 @@ def check_precedence(m: ProjectModel) -> list[Finding]:
                 reported.add(e)
                 findings.append(Finding(
                     "read-before-create", ADVISORY, loc,
-                    f"reads {label(e)} but the Golden Path first WRITES it later, at {at(fw)}; if "
+                    f"reads {label(e)} but the Happy Path first WRITES it later, at {at(fw)}; if "
                     f"that write creates {e}, {at(fw)} should precede this step (if it only updates "
                     f"an entity created off-path, ignore)."))
             elif fw is None:
                 reported.add(e)
                 findings.append(Finding(
                     "read-never-created", ADVISORY, loc,
-                    f"reads {label(e)} but no Golden-Path step writes or creates it — external / "
+                    f"reads {label(e)} but no Happy-Path step writes or creates it — external / "
                     f"config data, or a coverage gap."))
         written_so_far |= writes.get(uc, set())
     return findings
 
 
 def check_why_refs(m: ProjectModel) -> list[Finding]:
-    steps = golden_path_steps(m)
-    pos_of = {st.gp_id: st.pos for st in steps}
+    steps = happy_path_steps(m)
+    pos_of = {st.hp_id: st.pos for st in steps}
     findings: list[Finding] = []
     for st in steps:
-        loc = f"GP{st.pos + 1} ({st.uc}) — {st.title}" if st.uc else f"GP{st.pos + 1} — {st.title}"
+        loc = f"HP{st.pos + 1} ({st.uc}) — {st.title}" if st.uc else f"HP{st.pos + 1} — {st.title}"
         for ref in st.why_refs:
-            ref_id = f"GP{ref}"
+            ref_id = f"HP{ref}"
             if ref_id not in pos_of:
                 findings.append(Finding(
                     "dangling-why-ref", CONTRADICTION, loc,
-                    f"`why:` cites {ref_id}, which is not a Golden-Path step."))
+                    f"`why:` cites {ref_id}, which is not a Happy-Path step."))
             elif pos_of[ref_id] > st.pos:
                 findings.append(Finding(
                     "backward-why-ref", CONTRADICTION, loc,
@@ -250,13 +250,13 @@ def check_actor_attribution(m: ProjectModel) -> list[Finding]:
 
 
 def check_whyless_steps(m: ProjectModel) -> list[Finding]:
-    steps = golden_path_steps(m)
+    steps = happy_path_steps(m)
     if not any(st.why for st in steps):
         return []
     findings: list[Finding] = []
     for st in steps:
         if st.pos > 0 and st.why is None:
-            loc = f"GP{st.pos + 1} ({st.uc}) — {st.title}" if st.uc else f"GP{st.pos + 1} — {st.title}"
+            loc = f"HP{st.pos + 1} ({st.uc}) — {st.title}" if st.uc else f"HP{st.pos + 1} — {st.title}"
             findings.append(Finding(
                 "why-less-step", WARNING, loc,
                 "declares no `why:` precondition while other steps do; state its prerequisite, or "

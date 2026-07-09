@@ -34,7 +34,7 @@ from coyodex.model import (
 )
 
 _PREFIX = re.compile(r"^[A-Z]+")
-_KIND = {"UC": "use_case", "GP": "golden_path_step", "S": "subsystem", "C": "component",
+_KIND = {"UC": "use_case", "HP": "happy_path_step", "S": "subsystem", "C": "component",
          "D": "dep", "SD": "subdomain", "E": "entity"}
 _MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 

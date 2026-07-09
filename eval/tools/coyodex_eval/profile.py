@@ -9,7 +9,7 @@ quality signals that ARE comparable run-to-run:
   self-consistency — `audit` findings, by severity, + the L2 grounding worklist size
   coverage         — compression / absent-module flags (needs the repo; else omitted)
   structure        — counts of use cases, subsystems, subdomains, components, deps, entities, edges,
-                     Golden-Path steps, T6 flows, security surfaces
+                     Happy-Path steps, T6 flows, security surfaces
   concept sets     — auth-surface / use-case / entity NAMES, for the comparator's set diffs and the
                      "an auth surface must not silently disappear" gate
 
@@ -45,7 +45,7 @@ class MapProfile:
     deps: int
     entities: int
     edges: int
-    gp_steps: int
+    hp_steps: int
     flows: int
     security_surfaces: int
     # ── well-formedness (coyodex validate) ──
@@ -126,7 +126,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         deps=len({d.id for d in m.deps}),
         entities=len({e.id for e in m.entities}),
         edges=n_edges,
-        gp_steps=len(m.golden_path),
+        hp_steps=len(m.happy_path),
         flows=len(m.flows),
         security_surfaces=len(surfaces),
         validate_ok=not problems,
@@ -156,7 +156,7 @@ def _format(p: MapProfile) -> str:
         "Map profile — deterministic quality signals",
         "",
         f"  structure   : UC {p.use_cases} · S {p.subsystems} · SD {p.subdomains} · C {p.components} "
-        f"· D {p.deps} · E {p.entities} · edges {p.edges} · GP {p.gp_steps} · flows {p.flows} "
+        f"· D {p.deps} · E {p.entities} · edges {p.edges} · HP {p.hp_steps} · flows {p.flows} "
         f"· auth-surfaces {p.security_surfaces}",
         f"  validate    : {verdict}, {p.validate_warnings} warning(s)",
         f"  audit       : {p.contradictions} contradiction(s) · {p.advisories} advisory · "

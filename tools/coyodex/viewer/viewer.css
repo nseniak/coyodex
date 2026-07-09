@@ -66,6 +66,34 @@ body.vresizing #stage { pointer-events: none; }
 .glossary .src:hover { text-decoration: underline; }
 .glossary .gloss-plain { font-family: ui-monospace, monospace; font-size: 12px; color: #6b7280; }
 .glossary .gloss-none { color: #9ca3af; }
+/* Use Cases tab: the actor-grouped catalog (a non-diagram HTML view, like the glossary). Each actor
+   section header IS the Role; each row is a use case with its trigger→outcome and an optional HPn pill. */
+.usecases-wrap { height: 100%; overflow: auto; box-sizing: border-box; padding: 8px 20px 24px;
+                 max-width: 1100px; margin: 0 auto; }
+.usecases-wrap .empty { color: #9ca3af; }
+.uc-group { margin: 18px 0 4px; }
+.uc-actor { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 13px;
+            font-weight: 700; color: #111827; margin: 0 0 8px; padding-bottom: 6px;
+            border-bottom: 1px solid #eef2f7; }
+.uc-kind { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+           padding: 1px 7px; border-radius: 9px; }
+.uc-kind-human { background: #fff7ed; color: #9a3412; }
+.uc-kind-service { background: #eef2ff; color: #3730a3; }
+.uc-actor-wants { font-size: 12px; font-weight: 400; color: #6b7280; }
+.uc-list { list-style: none; margin: 0 0 8px; padding: 0; }
+.uc-row { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+.uc-row:hover { background: #f5f7ff; }
+.uc-row:focus { outline: none; border-color: #c7d2fe; background: #f5f7ff; }
+.uc-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.uc-name { font-size: 13px; font-weight: 600; color: #1f2937; }
+.uc-to { display: block; font-size: 12px; color: #6b7280; line-height: 1.45; margin-top: 2px; }
+.uc-hp-pill { font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; color: #3730a3;
+              background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 9px; padding: 1px 7px;
+              cursor: pointer; }
+.uc-hp-pill:hover { background: #e0e7ff; }
+/* Happy Path arrow-select panel: the black-box "actor → System" interaction for one step. */
+#panel h2.hp-arrow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+#panel h2.hp-arrow .hp-arrow-to { color: #9ca3af; font-weight: 400; }
 /* svg-pan-zoom sets pan/zoom via inline `style.transform` on its own `.svg-pan-zoom_viewport` group —
    this transition is toggled on JUST for centerOnSelection's programmatic move (viewer.js), never left
    on during a drag-pan (every mousemove frame would otherwise visibly lag behind the cursor). */
@@ -184,7 +212,7 @@ body.tree-hidden.tree-peek #codeview { display: none; }
    shows the file on selection, and its header ↗ opens it externally. */
 #panel .src { display: inline-block; margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px;
               color: #6b7280; background: none; border: 0; padding: 0; text-align: left; }
-/* "Locate in full map" link on a Golden Path step panel */
+/* "Locate in full map" link on a Happy Path step panel */
 #panel .locate { display: inline-block; margin-top: 16px; font-size: 13px; color: #2563eb; text-decoration: none; }
 #panel .locate:hover { text-decoration: underline; }
 /* T6 use-case flow narrative: the readable twin of the sequence diagram. One numbered step per line —

@@ -19,7 +19,7 @@ from coyodex.model import (
     EntityRelation,
     Flow,
     FlowStep,
-    GoldenStep,
+    HappyStep,
     Group,
     ModelError,
     ProjectModel,
@@ -38,7 +38,7 @@ def make_model(extra_order: tuple[str, ...] = ("Zeta", "Alpha")) -> ProjectModel
     m = ProjectModel(title="Demo", goal="A demo project.", commit="abc1234",
                      committed="2026-07-01", built="2026-07-02 10:00")
     m.use_cases = [UseCase(id="UC1", name="View order", actor="Andy", trigger_outcome="opens → sees")]
-    m.golden_path = [GoldenStep(id="GP1", title="Andy views the order", uc="UC1")]
+    m.happy_path = [HappyStep(id="HP1", title="Andy views the order", uc="UC1")]
     m.subsystems = [Group(id="S1", name="Core", purpose="everything")]
     extra: dict[str, object] = {k: k.lower() for k in extra_order}
     m.components = [
@@ -161,7 +161,7 @@ def test_absent_optional_fields_take_defaults():
 
 def test_all_elements_keyed_by_id():
     els = all_elements(make_model())
-    assert set(els) == {"UC1", "GP1", "S1", "C1", "C2", "D1", "E1"}
+    assert set(els) == {"UC1", "HP1", "S1", "C1", "C2", "D1", "E1"}
 
 
 if __name__ == "__main__":

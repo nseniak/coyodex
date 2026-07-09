@@ -21,7 +21,7 @@ from coyodex.validate_analysis import strip_anchor
 from coyodex.viewer.build_graph import (
     LINK,
     Edge as GraphEdge,
-    GPStep as GraphGPStep,
+    HappyStep as GraphHappyStep,
     GraphDict,
     Node,
     _ensure_default_subsystem,
@@ -155,7 +155,7 @@ def model_to_markdown(m: ProjectModel) -> str:
     out: list[str] = [f"# {m.title} — Codebase Analysis" if m.title else "# Codebase Analysis", ""]
     out += [_GENERATED_NOTICE, ""]
     out += ["> Built with the **coyodex** method. Behavioral layer first (Goal → Glossary → Roles →",
-            "> Use cases → Golden Path), then the structural machine (Components → Entry points /",
+            "> Use cases → Happy Path), then the structural machine (Components → Entry points /",
             "> Model / Deps → Flows + Edges), joined at **use case ↔ flow**.",
             "> The committed source of truth is `project-map.json` (JSON); this file is a generated",
             "> view. IDs, cross-references, and confidence tags are validated by",
@@ -188,16 +188,16 @@ def model_to_markdown(m: ProjectModel) -> str:
         section("Use cases",
                 _table(["ID", "Use case", "Actor", "Trigger → Outcome"],
                        [[f"**{u.id}**", u.name, u.actor, u.trigger_outcome] for u in m.use_cases]))
-    if m.golden_path:
+    if m.happy_path:
         body = ["The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag",
                 "names it); the step's detail lives in that use case's T6 flow. An optional `why:`",
                 "line records the prerequisite that fixes the step's position.", ""]
-        for gp in m.golden_path:
-            tag = f" *({gp.uc})*" if gp.uc else ""
-            body.append(f"**{gp.id} — {gp.title}**{tag}")
-            if gp.why:
-                body.append(f"why: {gp.why}")
-        section("Golden Path — the spine (an ordered walk through the use cases)", body)
+        for hp in m.happy_path:
+            tag = f" *({hp.uc})*" if hp.uc else ""
+            body.append(f"**{hp.id} — {hp.title}**{tag}")
+            if hp.why:
+                body.append(f"why: {hp.why}")
+        section("Happy Path — the spine (an ordered walk through the use cases)", body)
     if m.subsystems:
         section("Subsystems (S) — the container altitude",
                 _table(["ID", "Subsystem", "Purpose", "Parent", "Source", "Conf."],
@@ -463,8 +463,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         "goal": m.goal or None,
         "nodes": {nid: asdict(n) for nid, n in nodes.items()},
         "edges": [asdict(e) for e in edges],
-        "gp": [asdict(GraphGPStep(id=g.id, title=g.title, uc=g.uc, why=g.why or ""))
-               for g in m.golden_path],
+        "happy_path": [asdict(GraphHappyStep(id=g.id, title=g.title, uc=g.uc, why=g.why or ""))
+               for g in m.happy_path],
         "flows": [asdict(f) for f in flows],
         "roles": [{"name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind)}
                   for r in m.roles],

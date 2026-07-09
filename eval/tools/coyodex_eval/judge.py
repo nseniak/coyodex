@@ -11,7 +11,7 @@ alongside the `MapProfile`):
     ranked, most-dangerous first); a skeptic that returns no verdict is a FAILURE, excluded from the
     denominator — never scored as refuted. Reuses `audit_model.l2_worklist_model` — no new claim extractor.
   Rubric scores — N judges independently score each rubric dimension (faithfulness, completeness,
-    drill-accuracy, altitude, golden-path) 0–4 against the code; the median per dimension tames the
+    drill-accuracy, altitude, happy-path) 0–4 against the code; the median per dimension tames the
     noise.
 
 THIS MODULE IS PURE + STDLIB-ONLY. It never calls a model itself: the actual LLM work is behind the
@@ -33,7 +33,7 @@ from coyodex.model import load_model
 
 # The rubric dimensions scored 0–4, in report order. Keys match config/rubric.md (external workspace);
 # the rubric TEXT is passed in, so the wording can evolve without touching this constant.
-DIMENSIONS = ("faithfulness", "completeness", "drill_accuracy", "altitude", "golden_path")
+DIMENSIONS = ("faithfulness", "completeness", "drill_accuracy", "altitude", "happy_path")
 
 # Grounding defaults — mirrored by eval/method.md Step 4 (change them together).
 DEFAULT_N_SKEPTICS = 3     # majority-of-N vote per claim: one dissenting skeptic can't flip a verdict
