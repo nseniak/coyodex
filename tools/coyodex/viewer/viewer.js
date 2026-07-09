@@ -549,7 +549,7 @@ function usedInHtml(id) {
 }
 // The one free-text "what/why" field a node kind carries — Purpose (subsystem/subdomain/component),
 // Used for (dep), Meaning (entity). Shown as plain prose with no label, since the field IS the
-// description (mirrors how showContextEdge/showHPActor treat Wants, and showEdge/showFlowPanel treat Why).
+// description (mirrors how showContextEdge/showHPActor treat Wants, and showEdge treats Why).
 const EXPLANATION_KEYS = ['purpose', 'used for', 'meaning'];
 function explanationKey(fields) {
   for (const want of EXPLANATION_KEYS)
@@ -559,18 +559,21 @@ function explanationKey(fields) {
 }
 // Fields that would just restate what the diagram already shows for this box: its own name (a
 // subsystem's/subdomain's "Subsystem"/"Subdomain" field mirrors the <h2>), which box it nests inside
-// (the diagram shows that by literally nesting the box there — see kindTagFor for why "Kind" drops too).
+// (the diagram shows that by literally nesting the box there — see kindPills for why "Kind" drops too).
 // A field whose value equals the node's own name (Subsystem/Subdomain/Component/"Name") is dropped
 // unconditionally below — no need to list it here too.
 const REDUNDANT_FIELD_BY_KIND = {
   subsystem: ['parent'], subdomain: ['parent'],
   component: ['subsystem'], dep: ['kind'],
 };
-// The name-tag's label: a dependency's authored sub-type (datastore/service/…) — already what the
-// diagram's shape/colour encodes — is more useful than the generic "dep"; fall back to the raw kind
-// when none was recorded. Every other kind just shows its own kind.
-function kindTagFor(n) {
-  return (n.kind === 'dep' && n.fields && n.fields.Kind) || n.kind;
+// The type pill(s) after a box's title. Every box leads with its element type; a dependency adds a
+// SECOND pill for its authored Context sub-type (datastore/service/…) — the same thing the diagram
+// encodes by shape/colour — since the generic "dependency" alone is less informative.
+function kindPills(n) {
+  const type = n.kind === 'dep' ? 'dependency' : n.kind;
+  const sub = n.kind === 'dep' && n.fields ? n.fields.Kind : '';
+  return `<span class="badge kind">${esc(type)}</span>`
+    + (sub ? `<span class="badge kind">${esc(sub)}</span>` : '');
 }
 // A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
 // writes, no handler wiring. Shared by showNode (one node fills the whole panel) and showElementsList
@@ -587,17 +590,15 @@ function nodeDetailHtml(id) {
   const rows = Object.entries(fields)
     .filter(([k, v]) => k !== explainKey && v !== n.name && !dropped.has(k.toLowerCase()))
     .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${mdInline(v)}</dd>`).join('');
-  // The node's source ref, shown as plain reference text. Selecting the node already mirrors it into the
-  // code viewer (FULL mode); the code viewer's header carries the sole "open externally" control now.
-  const ref = n.file ? esc(cleanPath(n.file, n.line)) + (n.line ? ':' + n.line : '') : '';
-  const src = ref ? `<div class="src">${ref}</div>` : '';
-  return `<div class="pane-title"><h2>${esc(n.name)}</h2><span class="badge kind">${esc(kindTagFor(n))}</span>${chg}</div>`
+  // No source ref in the panel: selecting the node already mirrors its location into the file browser +
+  // code viewer, which carry the path and the sole "open externally" control.
+  return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`
     + explain
-    + `<dl>${rows}${usedInHtml(id)}</dl>${src}`;
+    + `<dl>${rows}${usedInHtml(id)}</dl>`;
 }
-// Wire the interactive bits inside a just-written detail block: the source-open button + any
-// use-case-flow refs. `root` is the panel itself (single-node case) or one `.pblock` div (list case).
-function bindNodeDetailHandlers(root, id) {
+// Wire the interactive bits inside a just-written detail block: the use-case-flow refs. `root` is the
+// panel itself (single-node case) or one `.pblock` div (list case).
+function bindNodeDetailHandlers(root) {
   root.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
   }));
@@ -605,7 +606,7 @@ function bindNodeDetailHandlers(root, id) {
 function showNode(id) {
   if (!GRAPH.nodes[id]) return;
   panel.innerHTML = nodeDetailHtml(id);
-  bindNodeDetailHandlers(panel, id);
+  bindNodeDetailHandlers(panel);
   // Mirror into the file browser here (not just in selectNode) — showNode is also how a subsystem's/
   // subdomain's OWN card lands on its default panel (applyDefaultPanel) and how a bridge arrow shows its
   // collapsed box (bindBridgeEdge), neither of which went through selectNode before.
@@ -628,7 +629,7 @@ function showElementsList(ids, selectedId) {
   let activeBlock = null;
   panel.querySelectorAll('.pblock').forEach((block) => {
     const id = block.getAttribute('data-id');
-    bindNodeDetailHandlers(block, id);
+    bindNodeDetailHandlers(block);
     const h2 = block.querySelector('h2');
     if (h2) { h2.classList.add('pblock-title'); h2.addEventListener('click', () => selectFromTree(id)); }
     if (selectedId) {
@@ -675,7 +676,8 @@ function showNodeDetailSynced(id) {
 function showEdge(e) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   // domain relations carry a kind (composition/…) + cardinality; component edges carry why/where.
-  const kindBadge = e.kind ? '<span class="badge kind">' + esc(e.kind) + '</span>' : '';
+  // The single title pill is always the verb; a relation's kind rides in the body, next to cardinality.
+  const kindRow = e.kind ? '<dt>Kind</dt><dd>' + esc(e.kind) + '</dd>' : '';
   const card = (e.src_card || e.dst_card)
     ? '<dt>Cardinality</dt><dd>' + esc((e.src_card || '') + ' → ' + (e.dst_card || '')) + '</dd>' : '';
   // How the relation is implemented: the backing field (resolved in build_graph; `↩`-named when it
@@ -687,16 +689,13 @@ function showEdge(e) {
       + (e.fk_side === 'dst' ? ' <span class="muted">(back-reference)</span>' : '')
     : (e.how ? mdInline(e.how) : '');
   const implRow = impl ? '<dt>Implemented by</dt><dd>' + impl + '</dd>' : '';
-  // The edge's `where` source ref, shown as plain reference text. Selecting the edge already mirrors it
-  // into the code viewer below; the code viewer's header carries the sole "open externally" control.
+  // No source ref in the panel: selecting the edge already mirrors its `where` location into the file
+  // browser + code viewer below, which carry the path and the sole "open externally" control.
   const wn = e.where ? whereNode(e.where) : null;
-  const srcHtml = !wn ? ''
-    : '<div class="src">' + esc(localRef(wn.file) ? cleanPath(wn.file, wn.line) + (wn.line ? ':' + wn.line : '') : e.where) + '</div>';
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
-    + '<span class="badge edge">' + esc(e.verb) + '</span>' + kindBadge + '</div>'
+    + '<span class="badge edge">' + esc(e.verb) + '</span></div>'
     + (e.why ? '<p class="explain">' + mdInline(e.why) + '</p>' : '')
-    + '<dl>' + card + implRow + '</dl>'
-    + srcHtml;
+    + '<dl>' + kindRow + card + implRow + '</dl>';
   // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
   // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
   highlightFootprint(null);  // an edge has no element footprint — clear any previous one
@@ -729,9 +728,9 @@ function showContextEdge(ce) {
 function showLibsFold() {
   const items = FOLDED_LIBS.map((d) =>
     '<dd>• ' + esc(d.name) + (d.type ? ' <span class="muted">— ' + esc(d.type) + '</span>' : '') + '</dd>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>Libraries</h2><span class="badge kind">' + FOLDED_LIBS.length + ' in-process</span></div>'
+  panel.innerHTML = '<div class="pane-title"><h2>Libraries</h2><span class="badge kind">libraries</span></div>'
     + '<p class="empty">Frameworks &amp; libraries linked into the process — folded out of the Context view. ⌘-click to drill in.</p>'
-    + (items ? '<dl><dt>Bundled</dt>' + items + '</dl>' : '');
+    + (items ? '<dl><dt>Bundled (' + FOLDED_LIBS.length + ' in-process)</dt>' + items + '</dl>' : '');
 }
 
 // Subsystems edge: the panel shows both subsystems (name + Purpose); the concrete A→B wiring is the
@@ -744,18 +743,24 @@ function subsystemBlock(id) {
     + (purpose ? '<p class="explain">' + mdInline(purpose) + '</p>' : '');
 }
 function showTwoSubsystems(a, b) {
-  panel.innerHTML = '<div class="badges"><span class="badge edge">connection</span></div>'
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+    + '<span class="badge edge">connection</span></div>'
     + subsystemBlock(a) + '<hr>' + subsystemBlock(b);
 }
 // The domedge default panel — the two subdomains being framed. subsystemBlock reads only id/name/Purpose,
 // which an SD node carries too, so it doubles as the subdomain block.
 function showTwoSubdomains(a, b) {
-  panel.innerHTML = '<div class="badges"><span class="badge edge">relations</span></div>'
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+    + '<span class="badge edge">relations</span></div>'
     + subsystemBlock(a) + '<hr>' + subsystemBlock(b);
 }
 // The bridge-card default panel — the subsystem and subdomain being framed (the structure↔domain pair).
 function showBridge(sid, sd) {
-  panel.innerHTML = '<div class="badges"><span class="badge edge">bridge</span></div>'
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(sid)) + ' → ' + esc(nm(sd)) + '</h2>'
+    + '<span class="badge edge">bridge</span></div>'
     + subsystemBlock(sid) + '<hr>' + subsystemBlock(sd);
 }
 // Selecting (not drilling) a Subsystems arrow: list every component→component crossing it bundles as
@@ -767,7 +772,8 @@ function showContainerEdge(a, b) {
   const items = list.map((r) =>
     '<li><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
     + (r.why ? '<div class="xwhy">' + mdInline(r.why) + '</div>' : '') + '</li>').join('');
-  panel.innerHTML = '<h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+    + '<span class="badge edge">connections</span></div>'
     + '<div class="xcount">' + list.length + ' connection' + (list.length === 1 ? '' : 's') + '</div>'
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no connections recorded</p>');
 }
@@ -779,51 +785,20 @@ function showDomainContainerEdge(a, b) {
   const items = list.map((r) =>
     '<li><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
     + '<div class="xwhy">' + esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : '') + '</div></li>').join('');
-  panel.innerHTML = '<h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+    + '<span class="badge edge">relations</span></div>'
     + '<div class="xcount">' + list.length + ' relation' + (list.length === 1 ? '' : 's') + '</div>'
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no relations recorded</p>');
 }
 
-// --- Happy Path + use-case flow panels -----------------------------------------
-// A use case's flow as a readable numbered list — the SAME source as its sequence diagram (FLOWS_MM),
-// so the "why" of each step is shown once and never drifts. Each element endpoint links to its node;
-// the why (from the backbone edge) and any flow note are inline. '' when the use case has no T6 flow.
-function flowNarrativeHtml(uc) {
-  const steps = FLOWS_NARR[uc] || [];
-  if (!steps.length) return '';
-  const end = (label, id) => id
-    ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
-  const items = steps.map((st) =>
-    '<li><span class="flowact">' + end(st.src, st.srcId) + ' <em>' + esc(st.verb) + '</em> ' + end(st.dst, st.dstId) + '</span>'
-    + (st.why ? '<span class="floww"> — ' + mdInline(st.why) + '</span>' : '')
-    + (st.note ? '<span class="flown"> (' + mdInline(st.note) + ')</span>' : '') + '</li>').join('');
-  return '<ol class="flow">' + items + '</ol>';
-}
-// Wire the narrative's element links: a click locates that node in its home view (its subsystem card,
-// domain card, etc.) and selects it — the same routing the file browser uses.
+// --- Happy Path + use-case panels -----------------------------------------------
+// Wire an element link inside a flow-step panel: a click locates that node in its home view (its
+// subsystem card, domain card, etc.) and selects it — the same routing the file browser uses.
 function bindFlowRefs() {
   panel.querySelectorAll('a.flowref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault();
     selectFromTree(a.getAttribute('data-id'));
   }));
-}
-// The use-case flow panel — shared by the Happy-Path step drill-down and the use-case view: the use
-// case (name + driving actor) + the numbered narrative (the readable twin of the sequence diagram drawn
-// at this altitude); each step's element links locate that element in its home view.
-function showFlowPanel(uc, title, why) {
-  const ucNode = uc ? GRAPH.nodes[uc] : null;
-  const ucName = ucNode ? ucNode.name : (uc || '');
-  const f = (ucNode && ucNode.fields) || {};
-  const actor = f.Actor || f.actor || '';
-  const narr = flowNarrativeHtml(uc);
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(title || ucName) + '</h2>'
-    + (ucName ? '<span class="badge kind">' + esc(ucName) + '</span>' : '')
-    + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
-    + (why ? '<p class="explain">' + mdInline(why) + '</p>' : '')
-    + (narr || '<p class="empty">No T6 flow recorded for this use case.</p>');
-  // Each step's element links locate that element in its home view; there is no flat full-map view to
-  // spotlight the whole flow on, so the "Locate in full map" link is gone with the Components tab.
-  bindFlowRefs();
 }
 // The use case's OUTSIDE view — the SAME facts the Use Cases list shows for it: its name, its actor,
 // and its trigger → outcome. Shown when a Happy Path step/use case is SELECTED (not drilled); the full
@@ -835,6 +810,7 @@ function showUseCaseSummary(uc) {
   const actor = f.Actor || '';
   const to = f['Trigger → Outcome'] || '';
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(n.name) + '</h2>'
+    + '<span class="badge kind">use case</span>'
     + (actor ? '<span class="badge edge">' + esc(actor) + '</span>' : '') + '</div>'
     + (to ? '<p class="explain">' + mdInline(to) + '</p>' : '');
 }
@@ -844,10 +820,12 @@ function showHPArrow(hpId) {
   const s = HP_BY_ID[hpId];
   showUseCaseSummary(s ? s.uc : null);
 }
-// The use-case flow view's default panel — the full T6 flow. Reached by drilling a use case, whether
-// from the Use Cases list or a Happy Path step (both land on the one `usecase` view).
+// The use-case flow view's default panel. Reached by drilling a use case (from the Use Cases list or a
+// Happy Path step). The sequence diagram IS the flow; the panel shows the same outside summary as a
+// plain selection, so it doesn't repeat every arrow the diagram already draws. A step's own detail
+// opens when that step is clicked in the diagram.
 function showUseCase(uc) {
-  showFlowPanel(uc, GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc, '');
+  showUseCaseSummary(uc);
 }
 // The use-case flow view is a sequence diagram — wire it like every other diagram, using
 // the same sequence-diagram focus machinery the Happy Path uses (hpHighlight/hpFocus over element
@@ -1130,8 +1108,10 @@ function showFlowStep(uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
   const end = (label, id) => id ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
-  panel.innerHTML = '<div class="pane-title"><h2>' + end(st.src, st.srcId) + ' &rarr; ' + end(st.dst, st.dstId) + '</h2>'
-    + '<span class="badge edge">' + esc(st.verb) + '</span></div>'
+  // The step's action is the title (a full sentence for actor steps — too long for a pill). The src → dst
+  // endpoints move to the body, keeping their links to each element; the why (backbone edge) follows.
+  panel.innerHTML = '<div class="pane-title"><h2>' + (st.verb ? mdInline(st.verb) : 'Step') + '</h2></div>'
+    + '<p class="endpoints">' + end(st.src, st.srcId) + ' &rarr; ' + end(st.dst, st.dstId) + '</p>'
     + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
     + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '');
   bindFlowRefs();
@@ -1141,7 +1121,8 @@ function showHPActor(a) {
   const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
   const drives = (a.steps || []).map((st) =>
     '<dd>' + esc(st.title || st.id) + '</dd>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>' + kindBadge + '</div>'
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
+    + '<span class="badge kind">actor</span>' + kindBadge + '</div>'
     + (a.wants ? '<p class="explain">' + mdInline(a.wants) + '</p>' : '')
     + (drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '');
 }
@@ -1153,7 +1134,8 @@ function showFlowActor(uc, a) {
   const flowSteps = FLOWS_NARR[uc] || [];
   const drives = a.stepIdx.map((i) => flowSteps[i]).filter(Boolean)
     .map((st) => '<dd>' + esc(st.src) + ' <em>' + esc(st.verb) + '</em> ' + esc(st.dst) + '</dd>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>' + kindBadge + '</div>'
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
+    + '<span class="badge kind">actor</span>' + kindBadge + '</div>'
     + (a.wants ? '<p class="explain">' + mdInline(a.wants) + '</p>' : '')
     + (drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '');
 }

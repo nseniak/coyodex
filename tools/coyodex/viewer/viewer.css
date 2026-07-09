@@ -207,26 +207,14 @@ body.tree-hidden.tree-peek #codeview { display: none; }
 #panel dd .muted { color: #9ca3af; font-style: italic; }
 #panel h3 { font-size: 14px; margin: 0 0 2px; }
 #panel hr { border: 0; border-top: 1px solid #e5e7eb; margin: 14px 0; }
-/* source ref in the panel: a button styled as a link — click opens it in the editor / on GitHub */
-/* the panel's source ref is now plain reference text (not a clickable "open" pill) — the code viewer
-   shows the file on selection, and its header ↗ opens it externally. */
-#panel .src { display: inline-block; margin-top: 14px; font-family: ui-monospace, monospace; font-size: 12px;
-              color: #6b7280; background: none; border: 0; padding: 0; text-align: left; }
 /* "Locate in full map" link on a Happy Path step panel */
 #panel .locate { display: inline-block; margin-top: 16px; font-size: 13px; color: #2563eb; text-decoration: none; }
 #panel .locate:hover { text-decoration: underline; }
-/* T6 use-case flow narrative: the readable twin of the sequence diagram. One numbered step per line —
-   `from verb to`, then the edge's Why and any flow note, so the "why" reads inline. */
-#panel ol.flow { margin: 4px 0 0; padding-left: 20px; }
-#panel ol.flow li { margin: 6px 0; line-height: 1.4; }
-#panel ol.flow .flowact em { font-style: normal; color: #6b7280; }   /* the verb/phrase, de-emphasised */
-#panel ol.flow .floww { color: #4b5563; }                            /* the backbone edge's Why */
-#panel ol.flow .flown { color: #9ca3af; font-style: italic; }        /* the flow-specific note */
-#panel ol.flow a.flowref { color: #2563eb; text-decoration: none; }
-#panel ol.flow a.flowref:hover { text-decoration: underline; }
 /* "Used in UC" backward-view links on a node panel (element -> the use cases whose flow touches it) */
-#panel a.ucref, #panel a.alsoref { color: #2563eb; text-decoration: none; }
-#panel a.ucref:hover, #panel a.alsoref:hover { text-decoration: underline; }
+#panel a.ucref, #panel a.alsoref, #panel a.flowref { color: #2563eb; text-decoration: none; }
+#panel a.ucref:hover, #panel a.alsoref:hover, #panel a.flowref:hover { text-decoration: underline; }
+/* a flow step's src → dst endpoints, shown under the action title */
+#panel p.endpoints { margin: 2px 0 10px; color: #4b5563; }
 /* inline `code` in prose fields (mdInline), light panel background */
 #panel code { font-family: ui-monospace, monospace; font-size: 12px; background: #f3f4f6;
               padding: 0 3px; border-radius: 3px; color: #1f2937; }

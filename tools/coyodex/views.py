@@ -355,14 +355,12 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     for s in m.subsystems:
         parent_name = subsystem_names.get(s.parent, s.parent) if s.parent else ""
         nodes[s.id] = _node(s, "subsystem", s.name, s.source,
-                            {"Subsystem": s.name, "Purpose": s.purpose, "Parent": parent_name,
-                             "Conf.": s.confidence}, s.parent)
+                            {"Subsystem": s.name, "Purpose": s.purpose, "Parent": parent_name},
+                            s.parent)
     for c in m.components:
         subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""
         fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
-                  "Entry point": c.entry_point or "", "Depends on": c.depends_on,
-                  "Conf.": c.confidence, "Files": _files_str(c.files),
-                  "Evidence": _evidence_str(c.evidence),
+                  "Entry point": c.entry_point or "",
                   **{k: _extra_str(v) for k, v in c.extra.items()}}
         # `source` is the v2 canonical home; `entry_point` (also bare) is the next best single
         # location; only then fall back to hunting a markdown link in the free-text cells.
@@ -372,9 +370,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         nodes[c.id] = node
     for d in m.deps:
         fields = {"Name": d.name, "Kind": d.kind or "", "Type": d.type, "Used for": d.used_for,
-                  "Where configured": d.where_configured, "Conf.": d.confidence,
-                  "Package": d.package, "Alternative": d.alternative,
-                  "Evidence": _evidence_str(d.evidence),
+                  "Package": d.package,
                   **{k: _extra_str(v) for k, v in d.extra.items()}}
         node = _node(d, "dep", d.name, d.where_configured or _first_href(d.used_for), fields, None)
         node.dep_kind = grammar.classify_dep(d.kind or "", d.type)
@@ -383,7 +379,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""
         nodes[sd.id] = _node(sd, "subdomain", sd.name, sd.source,
                              {"Subdomain": sd.name, "Purpose": sd.purpose,
-                              "Parent": parent_name, "Conf.": sd.confidence}, sd.parent)
+                              "Parent": parent_name}, sd.parent)
     for e in m.entities:
         meta: dict[str, str] = {}
         if e.meaning:

@@ -86,11 +86,14 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
     dormant and restorable.)*
 - **Happy Path** *(when the map has a Happy Path)* — the behavioural overlay, in two levels:
   - **Level 1** is the path as a black-box **sequence diagram** — an ordered walk through the use
-    cases, each step a message from its use case's actor to the System. Click a step to drill in.
+    cases, each step a message from its use case's actor to the System. Plain-click a step to see that
+    use case's **outside summary** in the side panel (its actor + trigger → outcome, the same facts as
+    the Use Cases list); ⌘-click to drill in.
   - **Level 2** (a step) opens its **use case's T6 flow**: a **sequence diagram** of the actor plus the
     components/deps/entities it touches, each step an ordered message (the verb comes from the backbone
-    edge), with the same steps as a readable numbered narrative in the side panel — each element link
-    locates that element in its home view (its subsystem card, entity card, …).
+    edge). The side panel keeps the use case's outside summary — it does **not** repeat the steps, since
+    the diagram already draws them; clicking one message opens that step's own pane (its action, why, and
+    note), each element link locating that element in its home view (its subsystem card, entity card, …).
     Navigate back with the breadcrumb (Happy Path › *this step*) or the **◀ ▶** arrows.
 - **Entities** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal

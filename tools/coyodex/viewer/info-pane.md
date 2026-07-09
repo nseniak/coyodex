@@ -6,8 +6,15 @@ nested boxes in the Context / Subsystems / Entities views), **use cases** (the s
 Happy Path), and **arrows** (the edges between boxes).
 
 Every value below is text in the map source. The **display** column says how the pane renders
-it: *heading*, *badge* (a small coloured tag), *prose* (the one free description line),
-*text* (a label → value row), *path* (a code location), or *list* (several links/items).
+it: *heading*, *pill* (a small coloured tag), *prose* (the one free description line),
+*text* (a label → value row), or *list* (several links/items). The element's source location
+is **not** shown here — selecting it syncs the file browser + code viewer, which carry the path
+and the "open externally" control.
+
+**Pill convention**: every pane's title carries a **type pill first** (the element type, or — for
+an arrow — the relationship). A few elements add **one** secondary pill (a dependency's sub-type,
+an actor's human/service, a use case's actor). On a change-impact map a **change pill** is
+appended. Everything else lives in the body.
 
 The **Action** column is empty on purpose — it's where we note what to do with each property
 (keep, remove, move, rename, …).
@@ -16,19 +23,17 @@ The **Action** column is empty on purpose — it's where we note what to do with
 
 ## Box elements
 
-Every box element renders the same way: a **title** (its name), a **kind badge**, one
-**description line** as prose, then **label → value rows**, a derived **"Used in"** row, and a
-**source path** at the bottom. What changes per type is which fields fill those slots. Empty
-fields, fields that just repeat the name, and fields the diagram already shows (like which box a
-box nests in) are dropped.
+Every box element renders the same way: a **title** (its name), a **type pill** (two pills for a
+dependency), one **description line** as prose, then **label → value rows**, and a derived
+**"Used in"** row.
+What changes per type is which fields fill those slots. Empty fields, fields that just repeat
+the name, and fields the diagram already shows (like which box a box nests in) are dropped.
 
 ### Subsystem
 | Property | Display | Action |
 |---|---|---|
 | Purpose | prose | |
-| Confidence | text | |
 | Used in | list of use-case links | |
-| source | path | |
 | *(kind)* | badge: "subsystem" | |
 
 ### Component
@@ -36,13 +41,8 @@ box nests in) are dropped.
 |---|---|---|
 | Purpose | prose | |
 | Entry point | text | |
-| Depends on | text | |
-| Confidence | text | |
-| Files | list of paths | |
-| Evidence | list (path + why) | |
 | *(extra authored fields)* | text | |
 | Used in | list | |
-| source | path | |
 | *(kind)* | badge: "component" | |
 
 ### Dependency
@@ -50,23 +50,16 @@ box nests in) are dropped.
 |---|---|---|
 | Used for | prose | |
 | Type | text | |
-| Where configured | text | |
-| Confidence | text | |
 | Package | text | |
-| Alternative | text | |
-| Evidence | list | |
 | *(extra authored fields)* | text | |
 | Used in | list | |
-| source | path | |
-| *(kind)* | badge: the dependency's sub-type (datastore / service / messaging / …) | |
+| *(type)* | two pills: `dependency` + its sub-type (datastore / service / messaging / …) | |
 
 ### Subdomain
 | Property | Display | Action |
 |---|---|---|
 | Purpose | prose | |
-| Confidence | text | |
 | Used in | list | |
-| source | path | |
 | *(kind)* | badge: "subdomain" | |
 
 ### Entity
@@ -75,7 +68,6 @@ box nests in) are dropped.
 | Meaning | prose | |
 | Stored | text | |
 | Used in | list | |
-| source | path | |
 | *(kind)* | badge: "entity" | |
 | *(the entity's own fields)* | **not** in the info pane — shown as columns inside the diagram box instead | |
 
@@ -83,50 +75,67 @@ box nests in) are dropped.
 
 ## Use case
 
-A use case is not a box. In the UI it appears as a **step in the Happy Path**. Its info pane
-shows up when you **select a Happy Path step**, **drill into a step**, or **follow a "Used in"
-link** on some other element.
-
-The use-case pane is a **flow panel**, not the box layout above:
+A use case is not a box. In the UI it appears as a **step in the Happy Path**. Both selecting it
+and drilling into it show the **same outside summary** — the facts from its Use Cases row:
 
 | Property | Display | Action |
 |---|---|---|
-| Step title, or the use case name | heading | |
-| Use case name | badge | |
-| Driving actor | badge | |
-| Why this step comes here | prose (only when reached as a Happy Path step that has a "why") | |
-| The flow — the numbered inside steps | list; each step is "A → *verb* → B", with its why and any note inline, each endpoint a link to that element | |
+| Use case name | heading | |
+| *(type)* | pill: `use case` | |
+| Driving actor | pill | |
+| Trigger → Outcome | prose | |
 
-> A use case also carries an **Actor** and a **Trigger → Outcome** in the map source. In normal
-> navigation the use case is only ever reached through the flow panel above (where the actor is a
-> badge and Trigger → Outcome is not shown), so the generic box layout is never used for a use
-> case.
+The **steps themselves are not listed** in the panel — the sequence diagram already draws every
+arrow. Clicking one arrow in the diagram opens that single step's pane:
+
+### Flow step (one arrow of a use case's flow)
+| Property | Display | Action |
+|---|---|---|
+| The step's action | heading (free text — a sentence for an actor step) | |
+| source → destination | text (each endpoint is a link to that element) | |
+| Why (from the backbone edge) | prose | |
+| Note | text | |
+
+---
+
+## Actor
+
+An actor (a Role) is selectable on the Happy Path and inside a flow.
+
+| Property | Display | Action |
+|---|---|---|
+| Actor name | heading | |
+| *(type)* | pill: `actor` | |
+| Human / service | pill | |
+| Wants | prose | |
+| Drives | list (the steps this actor drives) | |
 
 ---
 
 ## Arrows (edges)
 
+The title is `A → B`; the single type pill is the relationship (its verb, or `uses` / `connection`
+/ `bridge`).
+
 ### Backbone edge (A → B)
 | Property | Display | Action |
 |---|---|---|
+| verb | pill (the type pill) | |
 | Why | prose | |
 | Cardinality | text | |
 | Implemented by (the backing field, or a note) | text | |
-| verb | badge | |
-| source | path | |
 
 ### Domain relation (entity → entity)
-Same as a backbone edge, plus the relation **kind** (composition / aggregation / inheritance /
-association) as a badge.
+Same as a backbone edge; the relation **kind** (composition / aggregation / inheritance /
+association) is a body row, not a pill.
 
 | Property | Display | Action |
 |---|---|---|
+| verb | pill (the type pill) | |
 | Why | prose | |
+| Kind | text (body row) | |
 | Cardinality | text | |
 | Implemented by | text | |
-| verb | badge | |
-| kind | badge | |
-| source | path | |
 
 ### Actor → System
 | Property | Display | Action |
@@ -148,18 +157,24 @@ A roster of the bundled frameworks / libraries, as a list.
 | Bundled | list (name + type) | |
 
 ### Group-to-group edges
-Each shows the two boxes being framed — their name + Purpose — as two prose blocks.
+Title is `A → B` with one relation pill; the body shows the two boxes being framed — each one's
+name + Purpose.
 
 | Property | Display | Action |
 |---|---|---|
-| Both boxes' name + Purpose (Subsystem ↔ Subsystem, Subdomain ↔ Subdomain, or the structure ↔ domain bridge) | two prose blocks | |
+| A → B | heading | |
+| *(relation)* | pill: `connection` (subsystems) / `relations` (subdomains) / `bridge` (structure ↔ domain) | |
+| Both boxes' name + Purpose | two prose blocks | |
+
+The **group-pair overview** arrow (the bundled crossings between two groups) uses the same title +
+`connections` / `relations` pill, then lists each crossing with a count in the body.
 
 ---
 
 ## The change badge
 
-On a change-impact map, any box or edge can carry one extra **change badge**
-(added / modified / deleted / rippled) next to its kind badge.
+On a change-impact map, any box or edge can carry one extra **change pill**
+(added / modified / deleted / rippled) after its type pill.
 
 | Property | Display | Action |
 |---|---|---|
