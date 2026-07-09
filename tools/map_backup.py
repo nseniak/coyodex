@@ -223,7 +223,7 @@ def _find_transcript_paths(session_id: str) -> list[Path]:
 
 
 _WRITE_TOOLS = {"Write", "Edit", "MultiEdit"}
-_MAP_BASENAMES = {MAP_MD_NAME, "project-map.html"}
+_MAP_BASENAMES = {MAP_MD_NAME}  # the only generated view that is a file (the diagram is served, not baked)
 
 
 def _cwd_of_transcript(jsonl: Path) -> str | None:
@@ -326,7 +326,7 @@ def _search_transcripts_that_wrote_map(repo: Path) -> list[str]:
 
 def _maybe_map_line(line: str) -> bool:
     """Cheap pre-filter: only JSON-parse lines that could name a map file."""
-    return MAP_MD_NAME in line or "project-map.html" in line
+    return MAP_MD_NAME in line
 
 
 def _safe_json(line: str) -> object:

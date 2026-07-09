@@ -38,12 +38,15 @@ release notes unless you'd rather stay anonymous.
 ## Scope and threat model
 
 coyodex runs **locally**, driven from your AI coding agent. It reads your repo,
-writes a map under `.coyodex/`, and renders a **standalone HTML viewer**. A few
-things worth keeping in mind when assessing risk:
+writes a map under `.coyodex/`, and serves an **interactive viewer** over a local
+HTTP server (`coyodex serve`, bound to 127.0.0.1). A few things worth keeping in
+mind when assessing risk:
 
-- The generated `project-map.html` inlines its assets and is meant to be opened
-  in a browser. Reports about the viewer mishandling repo content (for example,
-  unescaped file paths or code rendered into the page) are in scope.
+- The viewer is served by `coyodex serve`: a generic frontend fetches the map's
+  data (and, on demand, source files read from git at the map's commit) from the
+  local server. Reports about the viewer or server mishandling repo content (for
+  example, unescaped file paths or code rendered into the page, or the server
+  serving files outside the mapped commit) are in scope.
 - The Python tooling under `tools/coyodex/` parses the map and analysis files. Reports
   about parsing untrusted map/analysis input unsafely are in scope.
 - coyodex sends your code and map context to whatever AI agent / model you drive

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Generate a self-contained HTML viewer from a parsed graph.
+"""Build the view bundle a coyodex map's frontend renders — the graph plus every pre-rendered diagram.
 
-Reads a graph.json (from build_graph.py) and (optionally) a change-impact report; emits a single
-HTML file with the graph inlined and Mermaid + svg-pan-zoom loaded from a pinned CDN with SRI.
-The viewer's own CSS/JS are authored in viewer.css / viewer.js next to this module and inlined at
-build time, so the emitted HTML stays standalone — it carries no path back to this repo (see the
-"Generated artifacts are standalone w.r.t. the coyodex repo" design note).
+Reads a graph.json (from build_graph.py) and (optionally) a change-impact report and produces a
+`ViewBundle` (via `build_view_bundle`): the graph, every altitude's Mermaid source, the use-case
+flows, colours, and source-link config. `coyodex serve` calls this per request and serves the bundle
+as JSON at /p/<slug>/api/view; the generic frontend (viewer.html + viewer.js/css, served from the
+same folder) fetches it and renders. Mermaid + svg-pan-zoom load from a pinned CDN with SRI.
 The viewer offers these altitudes — Context (C4; external SYSTEMS drawn by name, while in-process
 framework/library deps fold into one ⌘-clickable "Libraries" box that drills to the full list) →
 Subsystems (click a box to select it + its linked
@@ -23,8 +23,8 @@ Node labels are the element name only (no ID prefix) to keep them uncluttered;
 the ID still appears in the panel header and drives the bridge via the cy-<ID>
 class.
 
-Normally driven in-process by `coyodex render`. For two-stage debugging:
-    python -m coyodex.viewer.gen_viewer [graph.json] [out.html] [report.md]
+Normally called in-process by `coyodex serve`. For two-stage debugging (dumps the bundle JSON):
+    python -m coyodex.viewer.gen_viewer [graph.json] [view-bundle.json] [report.md]
 """
 from __future__ import annotations
 
@@ -35,13 +35,10 @@ import subprocess
 import sys
 from html import escape as html_escape
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, TypedDict, cast
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
-from coyodex.viewer.filetree import FileTreeNode  # file-browser tree type (now fetched live via `coyodex serve`)
 from coyodex.grammar import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
-
-_ASSETS = Path(__file__).resolve().parent  # viewer.css/js live here; inlined into the HTML at build time
 
 # Synthetic node id for the collapsed "Libraries" box in the Context view (folds framework + library
 # deps out of the C4 Context altitude). Not a real element id (no prefix+digits), so it never
@@ -1370,226 +1367,58 @@ def merged_graph(graph: GraphDict, diff: DiffDict | None) -> dict[str, Any]:
     return g
 
 
-HTML = r"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>coyodex viewer</title>
-<!-- Inline data-URI favicon (two nodes + an edge, the viewer's palette): gives the page an icon AND
-     stops the browser's default /favicon.ico request 404ing. Inline so the HTML stays self-contained. -->
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
-<style>
-__STYLE__
-</style>
-<!-- CDN libs pinned to exact versions + Subresource-Integrity (browser rejects a tampered file).
-     Mermaid uses its self-contained UMD bundle (exposes window.mermaid) so SRI covers the whole
-     library — the ESM build splits into runtime chunks that SRI on the entry would not cover. -->
-<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"
-        integrity="sha384-yc/c2Lk1s2V2ir1rxvjo8YyVD9PlOlYTqpNr3Wm1WIuAA30GlDYNx6U5104OiavY"
-        crossorigin="anonymous"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js"
-        integrity="sha384-yQ4mmBBT+vhTAwjFH0toJXNYJ6O4usWnt6EPIdWwrRvx2V/n5lXuDZQwQFeSFydF"
-        crossorigin="anonymous"></script>
-</head>
-<body>
-<header>
-  <h1>coyodex viewer</h1>
-  <button id="treetoggle" title="Toggle file browser">&#9776; Files</button>
-  <span class="meta" id="meta"></span>
-  <span id="nav">
-    <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
-    <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
-  </span>
-  <span id="zoomctl">
-    <button id="zoomout" title="Zoom out">−</button>
-    <button id="zoomlevel" title="Fit to screen">100%</button>
-    <button id="zoomin" title="Zoom in">+</button>
-  </span>
-  <button id="setbtn" title="Source link settings (editor + repo root)">&#9881;</button>
-  <button id="toggle" style="display:none"></button>
-</header>
-<main>
-  <!-- Left column (dominant): the diagram on top, the details/info pane below it, split by a
-       horizontal drag bar (#vsplit). The diagram is the centrepiece, so this column takes the lion's
-       share of the width; the file browser + code viewer are the narrower right-hand panes. -->
-  <div id="leftcol">
-    <div id="stage">
-      <!-- Fixed header overlaid on the graph pane: the view selector, with the breadcrumb directly below
-           it. Absolutely positioned (like #legend/#drillhint) so it stays put while the diagram itself
-           pans/zooms underneath — #diagram still fills the whole #stage box regardless. -->
-      <div id="stagehead">
-        <div id="stageheadrow">
-          <span id="viewsw">
-            <button data-view="context">Context</button>
-            <button data-view="gp">Golden Path</button>
-            <button data-view="container">Subsystems</button>
-            <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
-            <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
+class ViewBundle(TypedDict):
+    """All the per-project view data the frontend needs — the graph plus every pre-rendered diagram
+    source, edge-crossing list, flow, colour table, and config flag. Built from the model by
+    `build_view_bundle` and served as JSON by `coyodex serve` at /p/<slug>/api/view; the frontend
+    fetches it and renders.
 
-            <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
-                 landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's
-                 `component` machinery are kept dormant so the tab can be restored by re-adding this button.
-                 Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
-          </span>
-        </div>
-        <div class="hint"><span id="crumb"></span></div>
-      </div>
-      <div id="diagram"></div>
-      <div id="legend"></div>
-      <!-- Step player: shown only on a use-case flow view (a Golden Path step drill-down). Walks the flow's
-           actions one at a time — glowing and centering the current arrow — without touching the info pane.
-           Absolutely positioned like #legend, so it floats over the diagram as it pans/zooms underneath. -->
-      <div id="flowplayer" hidden>
-        <button id="flowprev" title="Previous step (Left arrow)">&#9664;</button>
-        <span id="flowcount">Step 1 / 1</span>
-        <button id="flownext" title="Next step (Right arrow)">&#9654;</button>
-      </div>
-    </div>
-    <!-- Horizontal drag handle: sets the info pane's HEIGHT (the diagram takes the rest). -->
-    <div id="vsplit" title="Drag to resize"></div>
-    <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
-  </div>
-  <!-- Vertical drag handle: sets the whole left column's WIDTH (the browser + code viewer share the rest). -->
-  <div id="resizer" title="Drag to resize"></div>
-  <!-- File browser: the mapped repo's real tree, shaded by map coverage. FULL mode only — the tree is
-       fetched live from the coyodex server (git @ the map's commit), so it is hidden when the map is
-       opened as a static file. Selecting a graph element highlights its file here; clicking a file
-       selects the matching component/subsystem AND shows the file in the code viewer. -->
-  <aside id="tree">
-    <div id="treehead">
-      <span id="treetitle">Files</span>
-      <span id="treelegend">
-        <span class="tdot tdot-self"></span>mapped
-        <span class="tdot tdot-has"></span>partial
-        <span class="tdot tdot-none"></span>unmapped
-      </span>
-    </div>
-    <div id="treebody"></div>
-  </aside>
-  <!-- Drag handle to resize the file browser (width persisted in localStorage). -->
-  <div id="treeresizer" title="Drag to resize"></div>
-  <!-- Code viewer: the selected file's source, highlighted, scrolled to the current line. FULL mode
-       only — its text comes from the server (git @ commit); hidden in static mode. -->
-  <section id="codeview">
-    <div id="cvhead">
-      <span id="cvtitle">Code</span>
-      <span id="cvpath"></span>
-      <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
-    </div>
-    <div id="cvbody"><p class="cvempty">Select a node or file to view its source.</p></div>
-  </section>
-</main>
-<div id="tip"></div>
-<div id="modal" class="modal" hidden>
-  <div class="modal-card">
-    <h2 id="modalTitle">Open source links</h2>
-    <p id="modalIntro" class="modal-help"></p>
-    <label class="modal-row">Open in
-      <select id="setEditor"></select>
-    </label>
-    <label class="modal-row" id="setCustomRow" hidden>Custom URI
-      <input id="setCustom" type="text" placeholder="subl://open?url=file://{abspath}&amp;line={line}">
-    </label>
-    <label class="modal-row" id="setGhRow" hidden>GitHub repository URL
-      <input id="setGhRepo" type="text" placeholder="https://github.com/owner/repo">
-    </label>
-    <label class="modal-row" id="setRootRow">Repository root <span class="modal-sub">(absolute path on this machine)</span>
-      <input id="setRoot" type="text" placeholder="/Users/you/code/your-repo">
-    </label>
-    <p class="modal-help" id="setHelp">Placeholders: <code>{abspath}</code> <code>{path}</code> <code>{line}</code> <code>{col}</code>.
-       The browser cannot pick a folder for you — type or paste the absolute path. Stored only in this browser.</p>
-    <p class="modal-help" id="setGhHelp" hidden>Files open on GitHub at this repository, pinned to the map's commit. Stored only in this browser.</p>
-    <p id="modalErr" class="modal-err" hidden></p>
-    <div class="modal-btns">
-      <button id="setCancel" type="button">Cancel</button>
-      <button id="setSave" type="button" class="primary">Save</button>
-    </div>
-  </div>
-</div>
-<!-- First-run navigation guide: shown once (localStorage), reopened from the canvas hint. -->
-<div id="coach" class="modal" hidden>
-  <div class="modal-card">
-    <h2>Getting around the map</h2>
-    <ul class="coach-list">
-      <li><b>Select a view</b> at the top of the graph pane</li>
-      <li><b>Scroll</b> to zoom, <b>drag</b> to move</li>
-      <li><b>Click</b> a box or arrow &mdash; shows its details (and its source in the code viewer)</li>
-      <li><b>Double-click</b> a subsystem box (or its corner icon) &mdash; drills into it</li>
-      <li>Open the shown file in your editor with the <b>&#8599;</b> in the code header</li>
-    </ul>
-    <div class="modal-btns">
-      <button id="coachok" type="button" class="primary">Got it</button>
-    </div>
-  </div>
-</div>
-<script type="module">
-__SCRIPT__
-</script>
-</body>
-</html>
-"""
+    Keys are the viewer's own vocabulary (camelCase); the frontend maps them onto its runtime state
+    (see viewer.js `applyBundle` — keep the two in step).
+    """
+    repoRoot: str
+    ghRepo: str | None
+    ghCommit: str | None
+    graph: dict[str, Any]          # the MERGED graph (base+diff, with Context nodes added)
+    mermaidBase: str
+    mermaidDiff: str
+    mermaidContext: str
+    mermaidContainer: str
+    mermaidBySub: dict[str, str]
+    mermaidEdgeCard: dict[str, str]
+    containerEdges: dict[str, list[dict[str, str]]]
+    mermaidDomain: str
+    mermaidDomainContainer: str
+    mermaidDomainSub: dict[str, str]
+    mermaidDomainEdgeCard: dict[str, str]
+    mermaidBridgeCard: dict[str, str]
+    domainContainerEdges: dict[str, list[dict[str, str]]]
+    mermaidGp: str
+    flowsMm: dict[str, str]
+    flowsNarr: dict[str, list[dict[str, Any]]]
+    gpActors: list[dict[str, Any]]
+    flowActors: dict[str, list[dict[str, Any]]]
+    elementTint: dict[str, dict[str, str]]
+    mermaidLibs: str
+    foldedLibs: list[dict[str, str]]
+    contextEdges: dict[str, dict[str, Any]]
+    hasDiff: bool
+    hasGrouping: bool
+    hasDomain: bool
+    hasSubdomains: bool
+    hasGp: bool
+    meta: str                      # the header meta line (HTML)
+    diffState: dict[str, str]
 
 
-def gen_html(graph: dict[str, Any], base: str, diff_mm: str, context_mm: str,
-             context_edges: dict[str, dict[str, Any]], has_diff: bool, meta: str,
-             diff_state: dict[str, str], container_mm: str, by_sub: dict[str, str],
-             edge_cards: dict[str, str], container_edges: dict[str, list[dict[str, str]]],
-             grouping: bool, domain_mm: str, domain: bool,
-             domain_container_mm: str, domain_sub: dict[str, str],
-             domain_edge_cards: dict[str, str], bridge_cards: dict[str, str],
-             domain_container_edges: dict[str, list[dict[str, str]]], subdomains: bool,
-             gp_mm: str, flows_mm: dict[str, str], flows_narr: dict[str, list[dict[str, Any]]],
-             gp_actors_list: list[dict[str, Any]], flow_actors_list: dict[str, list[dict[str, Any]]], gp: bool,
-             libs_mm: str, folded: list[dict[str, str]],
-             repo_root: str, gh_repo: str | None, gh_commit: str | None,
-             file_tree: FileTreeNode | None) -> str:
-    css = (_ASSETS / "viewer.css").read_text(encoding="utf-8")
-    js = (_ASSETS / "viewer.js").read_text(encoding="utf-8")
-    return (
-        HTML.replace("__STYLE__", css)
-        .replace("__SCRIPT__", js)
-        .replace("__REPO_ROOT__", json.dumps(repo_root))
-        .replace("__GH_REPO__", json.dumps(gh_repo))
-        .replace("__GH_COMMIT__", json.dumps(gh_commit))
-        .replace("__GRAPH_JSON__", json.dumps(graph))
-        .replace("__MERMAID_BASE__", json.dumps(base))
-        .replace("__MERMAID_DIFF__", json.dumps(diff_mm))
-        .replace("__MERMAID_CONTEXT__", json.dumps(context_mm))
-        .replace("__MERMAID_CONTAINER__", json.dumps(container_mm))
-        .replace("__MERMAID_BY_SUB__", json.dumps(by_sub))
-        .replace("__MERMAID_EDGE_CARD__", json.dumps(edge_cards))
-        .replace("__CONTAINER_EDGES__", json.dumps(container_edges))
-        .replace("__MERMAID_DOMAIN__", json.dumps(domain_mm))
-        .replace("__MERMAID_DOMAIN_CONTAINER__", json.dumps(domain_container_mm))
-        .replace("__MERMAID_DOMAIN_SUB__", json.dumps(domain_sub))
-        .replace("__MERMAID_DOMAIN_EDGE_CARD__", json.dumps(domain_edge_cards))
-        .replace("__MERMAID_BRIDGE_CARD__", json.dumps(bridge_cards))
-        .replace("__DOMAIN_CONTAINER_EDGES__", json.dumps(domain_container_edges))
-        .replace("__MERMAID_GP__", json.dumps(gp_mm))
-        .replace("__FLOWS_MM__", json.dumps(flows_mm))
-        .replace("__FLOWS_NARR__", json.dumps(flows_narr))
-        .replace("__ELEMENT_TINT__", json.dumps(ELEMENT_TINT))
-        .replace("__GP_ACTORS__", json.dumps(gp_actors_list))
-        .replace("__FLOW_ACTORS__", json.dumps(flow_actors_list))
-        .replace("__MERMAID_LIBS__", json.dumps(libs_mm))
-        .replace("__FOLDED_LIBS__", json.dumps(folded))
-        .replace("__CONTEXT_EDGES__", json.dumps(context_edges))
-        .replace("__HAS_DIFF__", "true" if has_diff else "false")
-        .replace("__HAS_GROUPING__", "true" if grouping else "false")
-        .replace("__HAS_DOMAIN__", "true" if domain else "false")
-        .replace("__HAS_SUBDOMAINS__", "true" if subdomains else "false")
-        .replace("__HAS_GP__", "true" if gp else "false")
-        .replace("__META__", json.dumps(meta))
-        .replace("__DIFF_STATE__", json.dumps(diff_state))
-        .replace("__FILE_TREE__", json.dumps(file_tree))
-    )
+def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> ViewBundle:
+    """Compute every derived view artifact for one map — the pure-data core that `coyodex serve`
+    exposes at /p/<slug>/api/view for the frontend to fetch and render.
 
-
-def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
-    """Render a parsed graph (+ optional change-impact report) to a standalone HTML viewer file.
-
-    The in-process entry point used by `coyodex render`; `main()` is the thin file-based wrapper.
+    `anchor` is the directory that source links resolve against (the map's `.coyodex/` folder): the
+    repo root + GitHub URL are derived from the git work tree around it, overridable in the viewer's
+    Settings. Nothing here touches the output file or the frontend assets, so it is safe to call per
+    request. `report` is the optional change-impact overlay; None renders the plain baseline.
     """
     diff = build_diff(report) if report and report.exists() else None
     base_mm = gen_mermaid(graph, None)
@@ -1597,9 +1426,8 @@ def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
     context_mm = gen_context_mermaid(graph)
     context_edges = gen_context_edges(graph)
     state = compute_state(graph, diff)
-    # Source-link config, derived at build time from the mapped repo (the output dir anchors it).
+    # Source-link config, derived from the mapped repo (the anchor dir sits inside its work tree).
     # Seeded into the viewer; the user can override the root / GitHub URL in Settings (localStorage).
-    anchor = out.resolve().parent
     repo_root = repo_root_default(anchor)
     gh_repo = gh_repo_url(anchor)
     gh_commit = graph["commit"]
@@ -1614,53 +1442,59 @@ def write_html(graph: GraphDict, out: Path, report: Path | None = None) -> None:
         meta = f"baseline @ commit <code>{commit}</code>" + (f" from {committed}" if committed else "")
     meta = repo_tag + meta
     grouping = has_grouping(graph)
-    container_mm = gen_container_mermaid(graph) if grouping else ""
-    by_sub = subsystem_component_mermaids(graph) if grouping else {}
-    edge_cards = edge_card_mermaids(graph) if grouping else {}
-    container_edges = gen_container_edges(graph) if grouping else {}
     domain = has_domain(graph)
-    domain_mm = gen_domain_mermaid(graph) if domain else ""
     subdomains = has_subdomains(graph)
-    domain_container_mm = gen_domain_container_mermaid(graph) if subdomains else ""
-    domain_sub = domain_subdomain_mermaids(graph) if subdomains else {}
-    domain_edge_cards = domain_edge_card_mermaids(graph) if subdomains else {}
-    bridge_cards = bridge_card_mermaids(graph) if (grouping and subdomains) else {}
-    domain_container_edges = gen_domain_container_edges(graph) if subdomains else {}
     gp = has_gp(graph)
-    gp_mm = gen_gp_mermaid(graph) if gp else ""
-    gp_actors_list = gp_actors(graph) if gp else []
-    # Flows are independent of the Golden Path — the use-case view needs them even with no GP — so they
-    # are computed from graph["flows"] directly (empty when the map has no T6 section).
-    flows_mm = flow_mermaids(graph)
-    flows_narr = flow_narratives(graph)
-    flow_actors_list = flow_actors_map(graph)
-    libs_mm = gen_libs_mermaid(graph)
-    folded = folded_libs(graph)
-    # File-browser tree is NO LONGER embedded: it (and the code viewer) are FULL-mode features fed live
-    # by `coyodex serve` from git at the map's commit, so a static/committed HTML stays lean and always
-    # matches the mapped commit. `__FILE_TREE__` is baked as null; the viewer fetches /api/tree when served.
-    file_tree = None
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
-    html = gen_html(mg, base_mm, diff_mm, context_mm, context_edges, diff is not None, meta, state,
-                    container_mm, by_sub, edge_cards, container_edges, grouping, domain_mm, domain,
-                    domain_container_mm, domain_sub, domain_edge_cards, bridge_cards, domain_container_edges, subdomains,
-                    gp_mm, flows_mm, flows_narr, gp_actors_list, flow_actors_list, gp, libs_mm, folded, repo_root, gh_repo, gh_commit, file_tree)
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(html, encoding="utf-8")
+    return ViewBundle(
+        repoRoot=repo_root, ghRepo=gh_repo, ghCommit=gh_commit,
+        graph=mg,
+        mermaidBase=base_mm, mermaidDiff=diff_mm, mermaidContext=context_mm,
+        mermaidContainer=gen_container_mermaid(graph) if grouping else "",
+        mermaidBySub=subsystem_component_mermaids(graph) if grouping else {},
+        mermaidEdgeCard=edge_card_mermaids(graph) if grouping else {},
+        containerEdges=gen_container_edges(graph) if grouping else {},
+        mermaidDomain=gen_domain_mermaid(graph) if domain else "",
+        mermaidDomainContainer=gen_domain_container_mermaid(graph) if subdomains else "",
+        mermaidDomainSub=domain_subdomain_mermaids(graph) if subdomains else {},
+        mermaidDomainEdgeCard=domain_edge_card_mermaids(graph) if subdomains else {},
+        mermaidBridgeCard=bridge_card_mermaids(graph) if (grouping and subdomains) else {},
+        domainContainerEdges=gen_domain_container_edges(graph) if subdomains else {},
+        mermaidGp=gen_gp_mermaid(graph) if gp else "",
+        # Flows are independent of the Golden Path — the use-case view needs them even with no GP — so
+        # they come from graph["flows"] directly (empty when the map has no T6 section).
+        flowsMm=flow_mermaids(graph),
+        flowsNarr=flow_narratives(graph),
+        gpActors=gp_actors(graph) if gp else [],
+        flowActors=flow_actors_map(graph),
+        elementTint=ELEMENT_TINT,
+        mermaidLibs=gen_libs_mermaid(graph),
+        foldedLibs=folded_libs(graph),
+        contextEdges=context_edges,
+        hasDiff=diff is not None,
+        hasGrouping=grouping, hasDomain=domain, hasSubdomains=subdomains, hasGp=gp,
+        meta=meta, diffState=state,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Two-stage debug entry: dump the view bundle (the JSON the frontend fetches) for a graph.json.
+
+        python -m coyodex.viewer.gen_viewer [graph.json] [view-bundle.json] [report.md]
+    """
     argv = list(sys.argv[1:] if argv is None else argv)
     src = Path(argv[0] if len(argv) > 0 else "build/graph.json")
-    out = Path(argv[1] if len(argv) > 1 else "build/project-map.html")
+    out = Path(argv[1] if len(argv) > 1 else "build/view-bundle.json")
     report = Path(argv[2]) if len(argv) > 2 else None
     if not src.exists():
         print(f"ERROR: {src} not found (build the graph first)", file=sys.stderr)
         return 1
     graph = cast(GraphDict, json.loads(src.read_text(encoding="utf-8")))
-    write_html(graph, out, report)
-    print(f"Wrote viewer -> {out}  (diff: {'yes' if report and report.exists() else 'no'})")
+    bundle = build_view_bundle(graph, report, out.resolve().parent)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(bundle, indent=2), encoding="utf-8")
+    print(f"Wrote view bundle -> {out}  (diff: {'yes' if report and report.exists() else 'no'})")
     return 0
 
 

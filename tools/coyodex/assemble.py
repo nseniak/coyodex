@@ -163,19 +163,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: {pr}", file=sys.stderr)
         print("ASSEMBLY FAILED: merge conflicts above; nothing was written.", file=sys.stderr)
         return 1
-    from coyodex.viewer.gen_viewer import write_html
-    from coyodex.views import model_to_graph, model_to_markdown
+    from coyodex.views import model_to_markdown
 
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "project-map.json").write_text(to_canonical_json(model), encoding="utf-8")
     (out_dir / "project-map.md").write_text(model_to_markdown(model), encoding="utf-8")
-    write_html(model_to_graph(model), out_dir / "project-map.html", None)
+    # The interactive viewer is served live by `coyodex serve` (built on demand from the model), so no
+    # HTML file is written here — registering the folder is enough for the server to pick it up.
     from coyodex.viewer.recents import register_project  # registers the project with `coyodex serve` (best-effort)
     register_project(out_dir)
     if ensure_fragments_ignored(out_dir):
         print(f"note: added 'build-fragments/' to {out_dir / '.gitignore'}")
     print(f"Assembled {len(parts)} fragment(s) -> {out_dir / 'project-map.json'} "
-          f"(+ generated md/html views)\n"
+          f"(+ generated markdown view)\n"
           f"Next: coyodex validate {out_dir / 'project-map.json'} --check-sources")
     return 0
 

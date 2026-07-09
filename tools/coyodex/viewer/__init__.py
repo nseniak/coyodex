@@ -1,1 +1,1 @@
-"""Viewer subpackage: parse a project-map.md and render the standalone HTML viewer."""
+"""Viewer subpackage: build a map's view data from its model and serve the interactive viewer."""

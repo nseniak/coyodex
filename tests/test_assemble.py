@@ -199,7 +199,9 @@ def test_assemble_cli_writes_canonical_map_and_views():
         assert proc.returncode == 0, proc.stderr
         model = load_model((out / "project-map.json").read_text(encoding="utf-8"))
         assert model.title == "Demo" and [c.id for c in model.components] == ["C1"]
-        assert (out / "project-map.md").exists() and (out / "project-map.html").exists()
+        # The interactive viewer is served by `coyodex serve`, not baked, so assembly writes json + md
+        # (the committed views) and no HTML file.
+        assert (out / "project-map.md").exists() and not (out / "project-map.html").exists()
 
 
 def test_assemble_cli_fails_on_duplicate_ids_and_writes_nothing():

@@ -55,12 +55,13 @@ Re-run `make install` only if you move the repo; `make uninstall` removes the sk
 /coyodex
 ```
 
-Writes `.coyodex/project-map.json` (the map model), `.coyodex/project-map.md` (a generated,
-readable view), and `.coyodex/project-map.html` (an interactive, drillable
-[C4 viewer](tools/coyodex/viewer/)), pinned to the current commit. Commit both with your code.
+Writes `.coyodex/project-map.json` (the map model) and `.coyodex/project-map.md` (a generated,
+readable view), pinned to the current commit. Commit both with your code. The interactive, drillable
+[C4 viewer](tools/coyodex/viewer/) is not a committed file — it is served live from the model (below).
 
-**3. View the map.** The viewer's file browser and code viewer are served by a small local server
-(source is read from git at the map's commit). Start it once, from the coyodex clone:
+**3. View the map.** The whole viewer — the diagram, the file browser, and the code viewer — is
+served by a small local server (the diagram is built on demand from the model; source is read from
+git at the map's commit). Start it once, from the coyodex clone:
 
 ```
 make start
@@ -68,8 +69,7 @@ make start
 
 This opens a landing page at `http://127.0.0.1:8765/`. Building a map registers your project there, so
 it appears as a card — click it to open the map. Leave the server running; every project you map shows
-up on that page. (You can also double-click `.coyodex/project-map.html` to see the diagram on its own,
-without the file browser or code viewer.)
+up on that page.
 
 **4. Edit your code.** Work as usual.
 
@@ -102,8 +102,8 @@ agent that can read this repo.
 ## The workflow
 
 ```
-/coyodex ────────▶ .coyodex/project-map.json (committed, commit-pinned; +generated md/html views)
-                   .coyodex/project-map.html (rendered interactive viewer)
+/coyodex ────────▶ .coyodex/project-map.json (committed, commit-pinned; + generated markdown view)
+                   interactive viewer served live by `coyodex serve` (not a file)
    │
    ▼
 edit code
@@ -112,7 +112,7 @@ edit code
 /coyodex analyze ──▶ .coyodex/analysis-changes/<date>.md (report: modified / added / deleted, uncommitted)
    │
    ▼
-/coyodex accept ──▶ patch the map, re-render the html, bump the commit pin, commit the map + the report
+/coyodex accept ──▶ patch the map, re-render the markdown view, bump the commit pin, commit the map + the report
 ```
 
 The map is committed *with* the code, so the baseline commit and the code commit

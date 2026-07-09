@@ -1,53 +1,38 @@
 # coyodex viewer
 
-An interactive, self-contained HTML rendering of `project-map.json` — the Tier-B viewer from
-[diagrams](../../method/diagrams.md). A diagram is a *rendering* of the map: this tool builds a
-graph straight from the model (no second source) and draws it; `project-map.json` stays the single
-source of truth.
+The interactive, drillable rendering of `project-map.json` — the Tier-B viewer from
+[diagrams](../../method/diagrams.md). A diagram is a *rendering* of the map: the model stays the
+single source of truth; this tool builds a graph from it and draws it. The viewer is **served**, not
+a committed file — `coyodex serve` reads the model and builds every diagram on demand, and a generic
+frontend fetches that data and renders it.
 
 ## Pipeline
 
 ```
 .coyodex/project-map.json        the model (single source)
-   │  views.model_to_graph       model → GraphDict (the viewer's input)
+   │  views.model_to_graph       model → GraphDict
    ▼
-GraphDict                        in-memory graph (no persisted intermediate file)
-   │  gen_viewer.py              inlines viewer.css + viewer.js → one self-contained HTML file
-   ▼                             (Mermaid + pan/zoom, pinned + SRI)
-project-map.html                 render · pan/zoom · click→panel · diff overlay
+GraphDict
+   │  gen_viewer.build_view_bundle   graph → the view bundle (every diagram source, flow, config)
+   ▼
+GET /p/<slug>/api/view           served as JSON by `coyodex serve`
+   │  viewer.js (fetched by the generic shell viewer.html, from /static/)
+   ▼
+the rendered map                 render · pan/zoom · click→panel · diff overlay
 ```
 
 `build_graph.py` additionally hosts the change-impact report parser (`build_diff`), reusing the
 same table-splitting grammar (`tools/coyodex/grammar.py`) — a genuinely separate, still-markdown
 input (the diff overlay's report), not the map itself.
 
-The viewer's front-end lives in **`viewer.css`** and **`viewer.js`** (edited as normal CSS/JS);
-`gen_viewer.py` reads and **inlines** them at build time. The emitted HTML stays standalone — it
-carries no path back to this repo, so it can be committed with the mapped project and opened on a
-machine that has never seen coyodex (the only external load is the pinned + SRI CDN libs).
+The frontend lives in **`viewer.html`** (the generic shell), **`viewer.css`**, and **`viewer.js`**
+(edited as normal HTML/CSS/JS). `coyodex serve` ships them from `/static/` unchanged for every
+project — identical for every map; only the per-project data differs, fetched at boot from `api/view`.
+Mermaid + svg-pan-zoom load from a pinned + SRI CDN.
 
 ## Run
 
-```bash
-.venv/bin/coyodex render .coyodex/project-map.json .coyodex/project-map.html [analysis-changes/<date>.md]
-```
-
-Then just open `project-map.html` — double-click it, no server needed. (The CDN libs are plain
-pinned + SRI `<script>` tags, which load fine over `file://`.)
-
-## Two modes: the file browser + code viewer (`coyodex serve`)
-
-The same HTML adapts to how it's opened:
-
-- **Opened as a file** (double-click, `file://`, or committed and shared) — **DEGRADED**: the
-  diagram + info panel. Self-contained and portable: it opens on any machine with nothing installed,
-  because a `file://` page can't read your local source files.
-- **Opened through the map server** (`http://…/p/<project>/`) — **FULL**: the diagram + info panel
-  **plus** a live file browser and a syntax-highlighted code viewer. Both read their files from git
-  **at the map's commit** (via `git ls-tree` / `git show`), so what you see always matches the map
-  and edits on disk never leak in.
-
-Start the server:
+The viewer is served — there is no HTML file to render. Start the server and open the project:
 
 ```bash
 make start                       # opens the landing page in a browser
@@ -56,12 +41,15 @@ make start                       # opens the landing page in a browser
 .venv/bin/coyodex serve ~/code/myrepo   # add + serve a folder right away
 ```
 
+For each map the server provides: the generic shell + `/static/` assets; the map's data at
+`/p/<slug>/api/view`; and a live file browser + syntax-highlighted code viewer, both reading files
+from git **at the map's commit** (`git ls-tree` / `git show`), so what you see always matches the map
+and edits on disk never leak in.
+
 The server does **not** scan the disk. Open `http://127.0.0.1:8765/` and use **+ Add a project…** to
 browse to a folder containing a `.coyodex/project-map.json`; your choices are remembered in
 `~/.coyodex/serve-recents.json` and shown as a recents list on the next start (each openable, or
-removable with the ✕). Nothing is embedded for these panes — the browser tree and code both come from
-the server on demand, so the committed HTML stays lean. highlight.js is lazy-loaded from a pinned +
-SRI CDN on first use.
+removable with the ✕). highlight.js is lazy-loaded from a pinned + SRI CDN on first use.
 
 ## What it shows — the C4 altitudes
 
@@ -138,10 +126,10 @@ python tests/test_grouping.py     # stdlib runner; or: .venv/bin/pytest tests/te
 ## Scope & current limits
 
 - **Client libs from a pinned CDN with SRI** (Mermaid 11.15.0 UMD + svg-pan-zoom 3.6.1). Viewing
-  needs network; the integrity hashes mean a tampered file is rejected. Fully offline use would
-  require vendoring the libs locally — not done.
-- **Source links** show as `file:line` text in the panel; turning them into clickable blob URLs
-  pinned to the map's commit SHA is a follow-up.
+  needs network; the integrity hashes mean a tampered file is rejected. Vendoring the libs locally is
+  not done.
+- **The viewer requires `coyodex serve`** — there is no offline `file://` fallback; the map data is
+  fetched from the server, which also supplies the file browser + code viewer.
 - **Subsystem drill-down replaces the diagram in place** (no popups) with a back/forward history,
   rather than expanding boxes in the map. Neighbours are shown collapsed (one box per subsystem,
   aggregated arrows), so a hub subsystem stays readable. The flat whole-repo Components map (which

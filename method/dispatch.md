@@ -48,8 +48,8 @@ the model's `commit` / `committed` fields, then:
 
    - **Both true — current source == the pin** → the baseline is current. Tell the user
      `baseline is up to date @ commit <id> from <date>` and stop; do **not** produce an empty diff.
-     (If only `.coyodex/project-map.html` is missing or stale, just re-render it with
-     `coyodex render` — that is a render, not a rebuild.)
+     (If only the committed `.coyodex/project-map.md` view is stale, just re-render it with
+     `coyodex render … project-map.md` — that is a render, not a rebuild.)
    - **Otherwise — the source differs** (a later commit, uncommitted edits, or new files) →
      **Analyze**: read `method/change-impact.md` and follow it. The diff it computes is
      `git diff <pin>` (pin → working tree) plus any untracked files.
@@ -63,15 +63,16 @@ the model's `commit` / `committed` fields, then:
 ## Invariant (every mode)
 
 The map is the single source at the analyzed repo's `.coyodex/project-map.json`; the committed
-`.coyodex/project-map.md` and `.html` are generated views of it (never hand-edited). After every
-write: **validate → audit → render**. Validate (`coyodex validate --check-sources`) checks schema +
-semantics (and that the committed views are fresh); audit (`coyodex audit`) is the adversarial
+`.coyodex/project-map.md` is a generated view of it (never hand-edited), and the interactive C4
+diagram is served live by `coyodex serve` (not a committed file). After every write:
+**validate → audit → render**. Validate (`coyodex validate --check-sources`) checks schema +
+semantics (and that the committed markdown view is fresh); audit (`coyodex audit`) is the adversarial
 pass — it makes the narrative Golden Path and
 the mechanism flows/edges refute each other. It blocks only on a hard contradiction (a forward/dangling
 `why:` reference); read-before-create and actor-attribution are ADVISORY (lossy attribution — reconcile,
 don't treat as fact), and it prints an L2 grounding worklist to disprove against the code with
-fresh-context skeptics (see `method.md`); render (`coyodex render` to `.md` and `.html`) — the views
-are renderings, never a second source.
+fresh-context skeptics (see `method.md`); render (`coyodex render … project-map.md`) — the markdown
+view is a rendering, never a second source, and the diagram is served on demand from the model.
 
 **Going deeper stays in the one map.** When a part of the system needs finer detail than its current
 altitude, refine it IN PLACE — nest subsystems/subdomains, or promote a leaf component into a subsystem

@@ -12,14 +12,19 @@ committed fixture map, and the git-backed file-browser tree.
 """
 from __future__ import annotations
 
+import http.client
+import json
 import shutil
 import subprocess
 import tempfile
+import threading
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from coyodex.viewer.filetree import FileTreeNode
 from coyodex.viewer.recents import RecentsStore, register_project
 from coyodex.viewer.serve import (
+    Handler,
     Project,
     _has_coyodex,
     _loopback_host,
@@ -33,6 +38,7 @@ from coyodex.viewer.serve import (
     list_dirs,
     load_project,
     project_tree,
+    project_view,
 )
 
 _FIXTURE_MAP = Path(__file__).parent / "fixtures" / "mcpolis-project-map.json"
@@ -268,8 +274,8 @@ def test_project_tree_from_git() -> None:
         sha = make_git_repo(root, {"src/app.py": "x = 1\n", "docs/readme.md": "hi\n"})
         (root / ".coyodex").mkdir()
         shutil.copy(_FIXTURE_MAP, root / ".coyodex" / "project-map.json")
-        proj = Project(slug=root.name, repo_root=root, map_json=root / ".coyodex" / "project-map.json",
-                       map_html=root / ".coyodex" / "project-map.html", commit=sha)
+        proj = Project(slug=root.name, repo_root=root,
+                       map_json=root / ".coyodex" / "project-map.json", commit=sha)
         tree = project_tree(proj)
         assert tree["name"] == root.name and tree["dir"]
         paths = _all_paths(tree)
@@ -282,6 +288,70 @@ def _all_paths(node: FileTreeNode) -> set[str]:
     for c in node["children"]:
         out |= _all_paths(c)
     return out
+
+
+# --- served view bundle (generic-frontend data) ---------------------------------
+def test_project_view_bundle_and_cache() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        folder = make_project_dir(Path(td), "alpha")
+        proj = load_project(str(folder))
+        assert proj is not None
+        bundle = project_view(proj)
+        assert bundle["graph"]["nodes"]                    # the merged graph is present
+        assert isinstance(bundle["mermaidContext"], str) and bundle["mermaidContext"]
+        assert bundle["hasDiff"] is False                  # no change-report.md alongside the model
+        assert proj.view is bundle                         # cached on the Project after the first build
+        assert project_view(proj) is bundle                # a second call returns the same cached object
+
+
+def test_project_view_tolerates_malformed_change_report() -> None:
+    # A short/garbage change-report.md must not crash the view build (build_diff skips bad rows).
+    with tempfile.TemporaryDirectory() as td:
+        folder = make_project_dir(Path(td), "alpha")
+        (folder / ".coyodex" / "change-report.md").write_text(
+            "# a -> b\n\n| from | verb | to |\n| --- | --- | --- |\n| A |\n", encoding="utf-8")
+        proj = load_project(str(folder))
+        assert proj is not None
+        bundle = project_view(proj)                         # must not raise (was an IndexError before)
+        assert bundle["graph"]["nodes"]
+
+
+def _http_get(port: int, path: str) -> tuple[int, str, bytes]:
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=10)
+    try:
+        conn.request("GET", path)
+        r = conn.getresponse()
+        return r.status, r.getheader("Content-Type") or "", r.read()
+    finally:
+        conn.close()
+
+
+def test_http_static_and_view_routes() -> None:
+    # Exercises the real HTTP dispatch: shared static frontend + per-project view bundle.
+    with tempfile.TemporaryDirectory() as td:
+        folder = make_project_dir(Path(td), "alpha")
+        projects = build_projects([str(folder)])
+        slug = next(iter(projects))
+        Handler.store = RecentsStore()
+        Handler.projects = projects
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            port = httpd.server_address[1]
+            code, ctype, body = _http_get(port, "/static/viewer.js")
+            assert code == 200 and "javascript" in ctype and b"mermaid" in body
+            code, ctype, _ = _http_get(port, "/static/viewer.css")
+            assert code == 200 and "text/css" in ctype
+            assert _http_get(port, "/static/nope.js")[0] == 404       # off-whitelist name rejected
+            assert _http_get(port, "/static/../serve.py")[0] == 404   # not a 2-segment /static/<name>
+            code, ctype, body = _http_get(port, f"/p/{slug}/api/view")
+            assert code == 200 and "application/json" in ctype
+            data = json.loads(body)
+            assert data["graph"]["nodes"] and data["mermaidContext"] and data["hasDiff"] is False
+            assert _http_get(port, "/p/ghost/api/view")[0] == 404     # unknown project
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
 
 # --- runner ---------------------------------------------------------------------

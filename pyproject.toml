@@ -47,5 +47,5 @@ packages = ["coyodex", "coyodex.viewer", "coyodex_eval"]
 version = { file = "VERSION" }
 
 [tool.setuptools.package-data]
-# The viewer inlines these into the standalone HTML at render time; ship them in the wheel.
-"coyodex.viewer" = ["viewer.css", "viewer.js"]
+# The generic frontend `coyodex serve` ships from /static/ (the viewer.html shell + css + js); wheel them in.
+"coyodex.viewer" = ["viewer.html", "viewer.css", "viewer.js"]

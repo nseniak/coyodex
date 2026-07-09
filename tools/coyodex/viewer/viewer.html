@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>coyodex viewer</title>
+<!-- Inline data-URI favicon (two nodes + an edge, the viewer's palette): gives the page an icon AND
+     stops the browser's default /favicon.ico request 404ing. -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+PHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzFlMWI0YiIvPjxsaW5lIHgxPSIxMS41IiB5MT0iMTEuNSIgeDI9IjIwLjUiIHkyPSIyMC41IiBzdHJva2U9IiNjN2QyZmUiIHN0cm9rZS13aWR0aD0iMi4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiLz48Y2lyY2xlIGN4PSIxMCIgY3k9IjEwIiByPSIzLjQiIGZpbGw9IiNhNWI0ZmMiLz48Y2lyY2xlIGN4PSIyMiIgY3k9IjIyIiByPSIzLjQiIGZpbGw9IiNmMGFiZmMiLz48L3N2Zz4=">
+<!-- The generic frontend: shipped once by `coyodex serve`, shared by every project. Its CSS + JS are
+     served from /static/; the per-project data arrives at runtime from /p/<slug>/api/view. -->
+<link rel="stylesheet" href="/static/viewer.css">
+<!-- CDN libs pinned to exact versions + Subresource-Integrity (browser rejects a tampered file).
+     Mermaid uses its self-contained UMD bundle (exposes window.mermaid) so SRI covers the whole
+     library — the ESM build splits into runtime chunks that SRI on the entry would not cover. -->
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"
+        integrity="sha384-yc/c2Lk1s2V2ir1rxvjo8YyVD9PlOlYTqpNr3Wm1WIuAA30GlDYNx6U5104OiavY"
+        crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js"
+        integrity="sha384-yQ4mmBBT+vhTAwjFH0toJXNYJ6O4usWnt6EPIdWwrRvx2V/n5lXuDZQwQFeSFydF"
+        crossorigin="anonymous"></script>
+</head>
+<body>
+<header>
+  <h1>coyodex viewer</h1>
+  <button id="treetoggle" title="Toggle file browser">&#9776; Files</button>
+  <span class="meta" id="meta"></span>
+  <span id="nav">
+    <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
+    <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
+  </span>
+  <span id="zoomctl">
+    <button id="zoomout" title="Zoom out">−</button>
+    <button id="zoomlevel" title="Fit to screen">100%</button>
+    <button id="zoomin" title="Zoom in">+</button>
+  </span>
+  <button id="setbtn" title="Source link settings (editor + repo root)">&#9881;</button>
+  <button id="toggle" style="display:none"></button>
+</header>
+<main>
+  <!-- Left column (dominant): the diagram on top, the details/info pane below it, split by a
+       horizontal drag bar (#vsplit). The diagram is the centrepiece, so this column takes the lion's
+       share of the width; the file browser + code viewer are the narrower right-hand panes. -->
+  <div id="leftcol">
+    <div id="stage">
+      <!-- Fixed header overlaid on the graph pane: the view selector, with the breadcrumb directly below
+           it. Absolutely positioned (like #legend/#drillhint) so it stays put while the diagram itself
+           pans/zooms underneath — #diagram still fills the whole #stage box regardless. -->
+      <div id="stagehead">
+        <div id="stageheadrow">
+          <span id="viewsw">
+            <button data-view="context">Context</button>
+            <button data-view="gp">Golden Path</button>
+            <button data-view="container">Subsystems</button>
+            <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
+            <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
+
+            <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
+                 landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's
+                 `component` machinery are kept dormant so the tab can be restored by re-adding this button.
+                 Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
+          </span>
+        </div>
+        <div class="hint"><span id="crumb"></span></div>
+      </div>
+      <div id="diagram"></div>
+      <div id="legend"></div>
+      <!-- Step player: shown only on a use-case flow view (a Golden Path step drill-down). Walks the flow's
+           actions one at a time — glowing and centering the current arrow — without touching the info pane.
+           Absolutely positioned like #legend, so it floats over the diagram as it pans/zooms underneath. -->
+      <div id="flowplayer" hidden>
+        <button id="flowprev" title="Previous step (Left arrow)">&#9664;</button>
+        <span id="flowcount">Step 1 / 1</span>
+        <button id="flownext" title="Next step (Right arrow)">&#9654;</button>
+      </div>
+    </div>
+    <!-- Horizontal drag handle: sets the info pane's HEIGHT (the diagram takes the rest). -->
+    <div id="vsplit" title="Drag to resize"></div>
+    <aside id="panel"><p class="empty">Click a node or edge to see details.</p></aside>
+  </div>
+  <!-- Vertical drag handle: sets the whole left column's WIDTH (the browser + code viewer share the rest). -->
+  <div id="resizer" title="Drag to resize"></div>
+  <!-- File browser: the mapped repo's real tree, shaded by map coverage. Fetched live from the coyodex
+       server (git @ the map's commit). Selecting a graph element highlights its file here; clicking a
+       file selects the matching component/subsystem AND shows the file in the code viewer. -->
+  <aside id="tree">
+    <div id="treehead">
+      <span id="treetitle">Files</span>
+      <span id="treelegend">
+        <span class="tdot tdot-self"></span>mapped
+        <span class="tdot tdot-has"></span>partial
+        <span class="tdot tdot-none"></span>unmapped
+      </span>
+    </div>
+    <div id="treebody"></div>
+  </aside>
+  <!-- Drag handle to resize the file browser (width persisted in localStorage). -->
+  <div id="treeresizer" title="Drag to resize"></div>
+  <!-- Code viewer: the selected file's source, highlighted, scrolled to the current line. Its text comes
+       from the server (git @ commit). -->
+  <section id="codeview">
+    <div id="cvhead">
+      <span id="cvtitle">Code</span>
+      <span id="cvpath"></span>
+      <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
+    </div>
+    <div id="cvbody"><p class="cvempty">Select a node or file to view its source.</p></div>
+  </section>
+</main>
+<div id="tip"></div>
+<div id="modal" class="modal" hidden>
+  <div class="modal-card">
+    <h2 id="modalTitle">Open source links</h2>
+    <p id="modalIntro" class="modal-help"></p>
+    <label class="modal-row">Open in
+      <select id="setEditor"></select>
+    </label>
+    <label class="modal-row" id="setCustomRow" hidden>Custom URI
+      <input id="setCustom" type="text" placeholder="subl://open?url=file://{abspath}&amp;line={line}">
+    </label>
+    <label class="modal-row" id="setGhRow" hidden>GitHub repository URL
+      <input id="setGhRepo" type="text" placeholder="https://github.com/owner/repo">
+    </label>
+    <label class="modal-row" id="setRootRow">Repository root <span class="modal-sub">(absolute path on this machine)</span>
+      <input id="setRoot" type="text" placeholder="/Users/you/code/your-repo">
+    </label>
+    <p class="modal-help" id="setHelp">Placeholders: <code>{abspath}</code> <code>{path}</code> <code>{line}</code> <code>{col}</code>.
+       The browser cannot pick a folder for you — type or paste the absolute path. Stored only in this browser.</p>
+    <p class="modal-help" id="setGhHelp" hidden>Files open on GitHub at this repository, pinned to the map's commit. Stored only in this browser.</p>
+    <p id="modalErr" class="modal-err" hidden></p>
+    <div class="modal-btns">
+      <button id="setCancel" type="button">Cancel</button>
+      <button id="setSave" type="button" class="primary">Save</button>
+    </div>
+  </div>
+</div>
+<!-- First-run navigation guide: shown once (localStorage), reopened from the canvas hint. -->
+<div id="coach" class="modal" hidden>
+  <div class="modal-card">
+    <h2>Getting around the map</h2>
+    <ul class="coach-list">
+      <li><b>Select a view</b> at the top of the graph pane</li>
+      <li><b>Scroll</b> to zoom, <b>drag</b> to move</li>
+      <li><b>Click</b> a box or arrow &mdash; shows its details (and its source in the code viewer)</li>
+      <li><b>Double-click</b> a subsystem box (or its corner icon) &mdash; drills into it</li>
+      <li>Open the shown file in your editor with the <b>&#8599;</b> in the code header</li>
+    </ul>
+    <div class="modal-btns">
+      <button id="coachok" type="button" class="primary">Got it</button>
+    </div>
+  </div>
+</div>
+<script type="module" src="/static/viewer.js"></script>
+</body>
+</html>

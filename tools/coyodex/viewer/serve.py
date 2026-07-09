@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Local multi-project server for coyodex maps — the file browser + code viewer's live backend.
+"""Local multi-project server for coyodex maps — the whole viewer's backend.
 
-A committed map HTML opens two ways, and the SAME file adapts to how it was opened:
+The interactive viewer is served, not baked into a file. For each project this server serves:
 
-  * double-clicked (``file://``) — DEGRADED mode: diagram + info panel only. Self-contained and
-    portable: commit it, share it, open it on any machine with nothing installed.
-  * served by THIS server (``http://localhost:PORT/p/<project>/``) — FULL mode: adds the file
-    browser and the code viewer, both read from git AT THE MAP'S COMMIT (never the dirty working
-    tree), so what you see always matches the map.
+  * a generic shell (``viewer.html``) + shared frontend assets (``viewer.js`` / ``viewer.css`` from
+    ``/static/``) — identical for every map;
+  * the map's own data at ``/p/<project>/api/view`` — the graph + every pre-rendered diagram, flow,
+    and config flag (``gen_viewer.build_view_bundle``), which the frontend fetches and renders;
+  * the file browser + code viewer, both read from git AT THE MAP'S COMMIT (``/api/tree`` /
+    ``/api/src``, never the dirty working tree), so what you see always matches the map.
 
 The server does NOT scan the disk. You pick a project folder (one holding ``.coyodex/project-map.json``)
 through the landing page's built-in folder browser; the choice is remembered in a small recents file
@@ -33,30 +34,41 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 from coyodex.model import ModelError, load_model
 from coyodex.viewer.filetree import FileTreeNode, build_tree, node_path_index, resolved_path_index
+from coyodex.viewer.gen_viewer import ViewBundle, build_view_bundle
 from coyodex.viewer.recents import RecentsStore
 from coyodex.views import model_to_graph
 
 MAP_JSON = "project-map.json"
 MAP_HTML = "project-map.html"
+CHANGE_REPORT = "change-report.md"  # optional change-impact overlay, alongside the model in .coyodex/
 _DEFAULT_PORT = 8765
+
+# The generic frontend assets (shell + viewer.js/css) live next to this module and are served as-is,
+# shared by every project — the per-project data arrives separately via /p/<slug>/api/view.
+_FRONTEND_DIR = Path(__file__).resolve().parent
+_STATIC_FILES = {  # exact-name whitelist (no path traversal possible) -> content type
+    "viewer.js": "text/javascript; charset=utf-8",
+    "viewer.css": "text/css; charset=utf-8",
+}
 _STATE_LOCK = threading.Lock()  # guards recents mutation + the derived projects map
 
 
 @dataclass
 class Project:
-    """One served map: its slug (URL segment), repo root, the committed HTML, and the map's commit.
+    """One served map: its slug (URL segment), repo root, the model file, and the map's commit.
 
     ``commit`` is the SHA every git read is pinned to — ``-dirty`` stripped, since a working-tree
-    marker isn't a real ref. ``tree`` caches the built file-browser tree (lazy, on first request)."""
+    marker isn't a real ref. ``tree`` caches the built file-browser tree (lazy, on first request);
+    ``view`` caches the view bundle (lazy, on first request)."""
 
     slug: str
     repo_root: Path
     map_json: Path
-    map_html: Path
     commit: str
     title: str = ""   # the map's human title (shown on the landing card) — folder name if the map has none
     goal: str = ""    # the map's one-paragraph goal (shown, clamped, under the title)
     tree: FileTreeNode | None = None  # cached tree (built once, on the first /api/tree)
+    view: ViewBundle | None = None    # cached view bundle (built once, on the first /api/view)
 
 
 def _strip_dirty(commit: str) -> str:
@@ -99,8 +111,7 @@ def load_project(folder: str) -> Project | None:
     commit = _strip_dirty(str(graph.get("commit") or "").strip())
     if commit and not _valid_commit(commit):
         return None
-    return Project(slug=root.name or "project", repo_root=root, map_json=map_json,
-                   map_html=map_json.parent / MAP_HTML, commit=commit,
+    return Project(slug=root.name or "project", repo_root=root, map_json=map_json, commit=commit,
                    title=str(graph.get("title") or "").strip() or (root.name or "project"),
                    goal=str(graph.get("goal") or "").strip())
 
@@ -197,6 +208,20 @@ def project_tree(proj: Project) -> FileTreeNode:
     return proj.tree
 
 
+def project_view(proj: Project) -> ViewBundle:
+    """The whole view bundle for a project — the graph plus every pre-rendered diagram, flow, colour,
+    and config flag the generic frontend needs (see gen_viewer.build_view_bundle). Computed from the
+    committed model, source-links anchored on the map's `.coyodex/` folder, with the optional
+    `change-report.md` overlay applied when present. Cached on the Project after the first request.
+    The frontend fetches this at boot from /p/<slug>/api/view and renders it."""
+    if proj.view is not None:
+        return proj.view
+    graph = model_to_graph(load_model(proj.map_json.read_text(encoding="utf-8")))
+    report = proj.map_json.parent / CHANGE_REPORT
+    proj.view = build_view_bundle(graph, report if report.is_file() else None, proj.map_json.parent)
+    return proj.view
+
+
 # --- filesystem browser (for the "add a project" picker) ----------------------------------------
 
 def list_dirs(path: Path) -> dict[str, object]:
@@ -240,9 +265,10 @@ def _loopback_host(host: str) -> bool:
 
 
 def _recents_payload(store: RecentsStore, projects: dict[str, Project]) -> list[dict[str, object]]:
-    """Every recents folder for the landing page — its served slug (None if the map is gone/broken),
-    commit, and whether the HTML has been rendered — so the UI can offer Open / a 'render first' hint /
-    Remove for each."""
+    """Every recents folder for the landing page — its served slug (None if the map is gone/broken) and
+    commit — so the UI can offer Open / Remove for each. A valid map is directly openable: the viewer is
+    served (built on demand), so there is no separate 'render the HTML first' step. `rendered` mirrors
+    `ok` for the older landing-page script that still reads it."""
     by_path = {str(p.repo_root): slug for slug, p in projects.items()}
     items: list[dict[str, object]] = []
     for folder in store.list():
@@ -256,7 +282,7 @@ def _recents_payload(store: RecentsStore, projects: dict[str, Project]) -> list[
             "slug": slug,
             "ok": proj is not None,
             "commit": proj.commit if proj else "",
-            "rendered": bool(proj and proj.map_html.is_file()),
+            "rendered": proj is not None,   # a valid map is openable; the viewer is served, not baked
         })
     return items
 
@@ -280,6 +306,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, "text/html; charset=utf-8", INDEX_HTML.encode("utf-8"))
         if parts[0] == "api":            # landing-page API (recents + folder browser)
             return self._root_api(parts[1:], query)
+        if parts[0] == "static" and len(parts) == 2:  # shared generic frontend (viewer.js/css)
+            return self._static(parts[1])
         if parts[0] == "p" and len(parts) >= 2:  # /p/<slug>/...  -> a project's map + its API
             proj = self.projects.get(parts[1])
             if proj is None:
@@ -359,12 +387,23 @@ class Handler(BaseHTTPRequestHandler):
         if rest and rest[0] == "api":
             return self._project_api(proj, rest[1:], query)
         if not rest or rest == [MAP_HTML]:
-            return self._send_file(proj.map_html, "text/html; charset=utf-8")
+            # The generic shell — identical for every project; it fetches this map's data from
+            # api/view at boot. (project-map.html kept as an alias so old links still resolve.)
+            return self._send_file(_FRONTEND_DIR / "viewer.html", "text/html; charset=utf-8")
         return self._send(404, "text/plain; charset=utf-8", b"not found")
 
     def _project_api(self, proj: Project, rest: list[str], query: dict[str, list[str]]) -> None:
         if rest == ["health"]:
             return self._json({"ok": True, "project": proj.slug, "commit": proj.commit})
+        if rest == ["view"]:
+            # Widest of the API catches: build_view_bundle walks the whole model + change-report and
+            # assembles every diagram, so an odd-but-loadable map can raise KeyError/IndexError/TypeError
+            # too. A bad map must yield a clean 500, never kill the worker thread or leak a traceback.
+            try:
+                return self._json(project_view(proj))
+            except (ModelError, OSError, ValueError, KeyError, IndexError, TypeError) as e:
+                return self._send(500, "text/plain; charset=utf-8",
+                                  f"could not build the view: {e}".encode("utf-8"))
         if rest == ["tree"]:
             try:
                 return self._json(project_tree(proj))
@@ -402,12 +441,18 @@ class Handler(BaseHTTPRequestHandler):
     def _json(self, obj: object) -> None:
         self._send(200, "application/json; charset=utf-8", json.dumps(obj).encode("utf-8"))
 
+    def _static(self, name: str) -> None:
+        """Serve one shared generic-frontend asset by exact name (whitelist -> no traversal)."""
+        ctype = _STATIC_FILES.get(name)
+        if ctype is None:
+            return self._send(404, "text/plain; charset=utf-8", b"not found")
+        return self._send_file(_FRONTEND_DIR / name, ctype)
+
     def _send_file(self, path: Path, ctype: str) -> None:
         try:
             data = path.read_bytes()
         except OSError:
-            return self._send(404, "text/plain; charset=utf-8",
-                              b"map HTML not rendered yet - run: coyodex render")
+            return self._send(404, "text/plain; charset=utf-8", b"file not found")
         self._send(200, ctype, data)
 
     def _send(self, code: int, ctype: str, body: bytes) -> None:
@@ -616,7 +661,7 @@ async function loadRecents(){
     c.addEventListener('dragover',e=>{e.preventDefault();if(!dragSrc||dragSrc===c)return;const b=c.getBoundingClientRect();const before=(e.clientY-b.top)<b.height/2;c.parentNode.insertBefore(dragSrc,before?c:c.nextSibling);});
     c.querySelector('.x').onclick=async e=>{e.stopPropagation();await jpost('/api/forget',{path:it.path});loadRecents();};
     const cp=c.querySelector('.copy');
-    if(cp)cp.onclick=e=>{e.stopPropagation();const cmd='cd "'+cp.dataset.path+'" && coyodex render .coyodex/project-map.json .coyodex/project-map.html';if(navigator.clipboard)navigator.clipboard.writeText(cmd);toast('Render command copied');};
+    if(cp)cp.onclick=e=>{e.stopPropagation();const cmd='cd "'+cp.dataset.path+'" && coyodex render .coyodex/project-map.json .coyodex/project-map.md';if(navigator.clipboard)navigator.clipboard.writeText(cmd);toast('Render command copied');};
     box.appendChild(c);
   }
   renderQuick();

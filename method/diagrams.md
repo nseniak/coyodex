@@ -42,8 +42,9 @@ show/hide toggle. The element-keyed deltas are the data.
   level + a Golden Path sequence diagram, with `click`→source and diff via styled
   regeneration. Cheap, in-repo, version-controlled; "drill-down" is hyperlinked per-level
   diagrams rather than true zoom.
-- **Tier B — a small self-contained HTML viewer**, available in [`tools/coyodex/viewer/`](../tools/coyodex/viewer/).
-  Builds its graph straight from `project-map.json` and renders the C4 altitudes —
+- **Tier B — a live-served interactive viewer**, available in [`tools/coyodex/viewer/`](../tools/coyodex/viewer/).
+  A generic frontend served by `coyodex serve`; it fetches its data (built straight from
+  `project-map.json`) from the server and renders the C4 altitudes —
   Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges; drill a
   subsystem for its components → code) — plus the **Entities** view (the T5 domain model; when grouped
   into subdomains, a bounded-contexts overview that ⌘-drills into one subdomain's `classDiagram`; a

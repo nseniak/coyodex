@@ -29,8 +29,8 @@ By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 - **`skill/coyodex/`** — the agent skill (`SKILL.md`) that drives the method; works on
   Claude Code, Codex, and Cursor.
 - **`tools/coyodex/`** — the Python package behind the `coyodex` CLI: the pre-index, schema
-  validation, the analysis validator, and the **`viewer/`** (builds the standalone
-  interactive HTML from the map). `cli.py` is the subcommand dispatcher.
+  validation, the analysis validator, and the **`viewer/`** (builds the map's view data and
+  serves the interactive viewer via `coyodex serve`). `cli.py` is the subcommand dispatcher.
 - **`tests/`** — the tool tests (stdlib runners; also run under `pytest`).
 - **`README.md`** — user-facing overview and the install / usage steps.
 

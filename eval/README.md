@@ -51,7 +51,7 @@ eval/                         # the bundle (in the coyodex repo)
   .coyodex/project-map.md         # the baseline (curated, committed, pinned to a commit)
   .coyodex-eval/                  # git-ignored, regenerable
     baseline/  map-hash · profile.json · judge.json   # memoized scoring of .coyodex/, per version
-    runs/<timestamp>/  project-map.md · map-hash · project-map.html · profile.json
+    runs/<timestamp>/  project-map.md · map-hash · project-map.view.json · profile.json
                        judge.json · judge-verdicts.json · delta.md
 ```
 
@@ -88,7 +88,7 @@ git checkout <pin>        # the commit in .coyodex/project-map.md's header — /
 /coyodex-eval             # builds a fresh map, judges it, compares to .coyodex/, writes .coyodex-eval/runs/<ts>/
 ```
 
-It prints the verdict and points you at the run's `delta.md` and `project-map.html`. **PASS** → nothing
+It prints the verdict and points you at the run's `delta.md` and `project-map.view.json`. **PASS** → nothing
 got worse. **DRIFT** → a count/score moved a lot, look at it. **REGRESSED** → a real regression. If a
 fresh map is genuinely better, accept it into `.coyodex/` the normal coyodex way (`/coyodex accept`);
 the next eval re-scores the new baseline.

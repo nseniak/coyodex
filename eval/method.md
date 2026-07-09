@@ -128,8 +128,9 @@ whenever a fresh map must be built without the builder seeing prior maps or eval
    COYODEX_HOME/.venv/bin/coyodex validate --check-sources --repo . .coyodex-eval/runs/<ts>/project-map.json
    COYODEX_HOME/.venv/bin/coyodex audit .coyodex-eval/runs/<ts>/project-map.json
    COYODEX_HOME/.venv/bin/coyodex render .coyodex-eval/runs/<ts>/project-map.json .coyodex-eval/runs/<ts>/project-map.md
-   COYODEX_HOME/.venv/bin/coyodex render .coyodex-eval/runs/<ts>/project-map.json .coyodex-eval/runs/<ts>/project-map.html
    ```
+   (The interactive diagram is served live from the model by `coyodex serve`; there is no `.html`
+   file to render. The run archives `project-map.view.json` — the served viewer's data snapshot.)
    A `validate` problem or `audit` contradiction here is a **reported finding** — "the method produced
    an invalid map" — that flows into the profile and the final report. Do NOT fix the map, do not
    re-run the builder to get a cleaner one, do not soften the finding. (The build sub-agent fixing its
@@ -231,7 +232,7 @@ For a map M:
    failure count, rubric scores), then the verdict (PASS / DRIFT / REGRESSED) with the gates/bands
    that moved — for the component count, lead with the **granularity line** (both maps' distance to
    the code-derived expectation E; only the candidate gates) — then the raw structural counts last,
-   and the path to the run's `delta.md` and `project-map.html`. On REGRESSED, name the gate that
+   and the path to the run's `delta.md` and `project-map.view.json`. On REGRESSED, name the gate that
    tripped. Any post-freeze validate/audit
    finding from Step 2 is part of this report — a finding about the method, not something to have
    fixed.

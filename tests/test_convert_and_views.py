@@ -71,9 +71,11 @@ def test_render_cli_json_to_md_and_html():
         assert subprocess.run(RENDER + [str(src), str(Path(td) / "out.md")],
                               capture_output=True).returncode == 0
         assert (Path(td) / "out.md").read_text(encoding="utf-8") == model_to_markdown(m)
+        # The interactive viewer is served by `coyodex serve` now, not baked: a `.html` target still
+        # succeeds (it registers the project) but writes no file.
         assert subprocess.run(RENDER + [str(src), str(Path(td) / "out.html")],
                               capture_output=True).returncode == 0
-        assert (Path(td) / "out.html").stat().st_size > 0
+        assert not (Path(td) / "out.html").exists()
 
 
 def test_golden_graph_carries_every_defined_element():

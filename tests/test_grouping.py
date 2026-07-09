@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the grouping/rendering pipeline: the graph builder (build_graph), the view
-derivation (views.model_to_graph), the Mermaid/HTML card generators (gen_viewer), and the
-self-contained HTML renderer (viewer.render).
+derivation (views.model_to_graph), the Mermaid card generators + view bundle (gen_viewer), and the
+served generic frontend (viewer.html / viewer.js).
 
 Stdlib-only — no pytest required. Run either way (needs an editable install: `make deps`):
     python3 tests/test_grouping.py        # built-in runner (prints pass/fail)
@@ -9,7 +9,6 @@ Stdlib-only — no pytest required. Run either way (needs an editable install: `
 """
 from __future__ import annotations
 
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -20,8 +19,14 @@ from coyodex.model import load_model
 from coyodex.viewer import build_graph, gen_viewer
 from coyodex.views import model_to_graph
 
-# Render as a module so the subprocess tests hit the same entry point as the CLI.
-RENDER = [sys.executable, "-m", "coyodex.viewer.render"]
+VIEWER_DIR = Path(gen_viewer.__file__).resolve().parent  # the served shell + viewer.js/css live here
+
+
+def bundle_of(json_text: str, report: Path | None = None) -> gen_viewer.ViewBundle:
+    """The view bundle a served map exposes at /api/view — the data the generic frontend fetches. The
+    render→HTML file is gone; the diagrams/flows/config now live here (build_view_bundle), so the tests
+    that used to grep the baked HTML assert on this bundle (and on the static shell for page chrome)."""
+    return gen_viewer.build_view_bundle(parse_map(json_text), report, VIEWER_DIR)
 
 
 def make_grouped_map(layout: str = "proper") -> str:
@@ -1528,13 +1533,6 @@ def parse_map(json_text: str) -> build_graph.GraphDict:
     return model_to_graph(load_model(json_text))
 
 
-def write_model(d: Path, json_text: str) -> Path:
-    """The scenario map (already a JSON model document) stored as-is, for CLI render tests."""
-    out = Path(d) / "project-map.json"
-    out.write_text(json_text, encoding="utf-8")
-    return out
-
-
 def test_parser_proper_layout_names_and_parents() -> None:
     g = parse_map(make_grouped_map("proper"))
     comps = {k: v for k, v in g["nodes"].items() if v["kind"] == "component"}
@@ -1798,19 +1796,11 @@ def test_container_edges_list_crossing_component_edges() -> None:
     assert all(r["verb"] == "calls" and r["why"] == "reach engine" for r in rows)
 
 
-def test_render_inlines_edge_card_data() -> None:
-    # The self-contained HTML must carry the edge-card diagrams AND the per-arrow component-edge
-    # lists for the client to open on click / preview on hover (placeholder fully substituted).
-    with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_card_map())
-        out = Path(d) / "project-map.html"
-        r = subprocess.run(
-            [*RENDER, str(md), str(out)],
-            capture_output=True, text=True,
-        )
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        assert "S1>S2" in html and "__CONTAINER_EDGES__" not in html
+def test_bundle_carries_edge_card_data() -> None:
+    # The served bundle must carry the edge-card diagrams AND the per-arrow component-edge lists so the
+    # client opens on click / previews on hover.
+    b = bundle_of(make_card_map())
+    assert "S1>S2" in b["containerEdges"] and "S1>S2" in b["mermaidEdgeCard"]
 
 
 def test_parser_ignores_fenced_nodes() -> None:
@@ -1819,35 +1809,21 @@ def test_parser_ignores_fenced_nodes() -> None:
     assert "C1" in g["nodes"] and "C9" not in g["nodes"], list(g["nodes"])
 
 
-def test_render_produces_self_contained_html() -> None:
-    # render.py: map -> HTML in one step, with the pinned+SRI libs inlined.
-    with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_grouped_map("proper"))
-        out = Path(d) / "project-map.html"
-        r = subprocess.run(
-            [*RENDER, str(md), str(out)],
-            capture_output=True, text=True,
-        )
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        assert 'integrity="sha384-' in html and "Front door" in html
-        assert 'rel="icon"' in html   # inline favicon -> no /favicon.ico 404, stays self-contained
+def test_shell_pins_libs_and_bundle_carries_node_names() -> None:
+    # Chrome lives in the served shell (pinned+SRI CDN libs, inline favicon); the map data lives in the
+    # bundle (node names the client renders).
+    shell = (VIEWER_DIR / "viewer.html").read_text(encoding="utf-8")
+    assert 'integrity="sha384-' in shell and 'rel="icon"' in shell
+    b = bundle_of(make_grouped_map("proper"))
+    names = {n.get("name") for n in b["graph"]["nodes"].values()}
+    assert "Front door" in names
 
 
-def test_render_bakes_nested_drill_data() -> None:
-    # End-to-end: a nested map's HTML carries an edge card for each DISJOINT cross-pair at every level
-    # (S2>S3 nested, S1>S3 overview) and omits the overlapping parent-child pair (S1>S2, which navigates).
-    with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_nested_subsystem_map())
-        out = Path(d) / "project-map.html"
-        r = subprocess.run(
-            [*RENDER, str(md), str(out)],
-            capture_output=True, text=True,
-        )
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        assert '"S2>S3"' in html and '"S1>S3"' in html
-        assert '"S1>S2"' not in html
+def test_bundle_has_nested_drill_data() -> None:
+    # A nested map's bundle carries an edge card for each DISJOINT cross-pair at every level (S2>S3
+    # nested, S1>S3 overview) and omits the overlapping parent-child pair (S1>S2, which navigates).
+    keys = set(bundle_of(make_nested_subsystem_map())["mermaidEdgeCard"])
+    assert "S2>S3" in keys and "S1>S3" in keys and "S1>S2" not in keys
 
 
 def make_report_map() -> str:
@@ -1862,34 +1838,28 @@ def make_report_map() -> str:
     )
 
 
-def test_render_has_no_components_tab_but_keeps_generators() -> None:
-    # The flat Components map is no longer a tab; its generators stay baked so it can be restored.
-    with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_grouped_map("proper"))
-        out = Path(d) / "project-map.html"
-        r = subprocess.run([*RENDER, str(md), str(out)], capture_output=True, text=True)
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        assert 'data-view="component"' not in html        # the Components tab button is gone
-        assert 'data-view="container"' in html            # Subsystems remains
-        assert "MERMAID_BASE" in html and "bindComponent" in html  # generators kept dormant (restorable)
+def test_shell_has_no_components_tab_but_js_keeps_generators() -> None:
+    # The flat Components map is no longer a tab; its generators stay in the frontend so it can be restored.
+    shell = (VIEWER_DIR / "viewer.html").read_text(encoding="utf-8")
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    assert 'data-view="component"' not in shell        # the Components tab button is gone
+    assert 'data-view="container"' in shell            # Subsystems remains
+    assert "MERMAID_BASE" in js and "bindComponent" in js  # generators kept dormant (restorable)
 
 
-def test_render_diff_overlay_wired_to_subsystems() -> None:
-    # With a change-impact report the diff overlay is armed on the Subsystems views (not the removed
-    # Components tab): HAS_DIFF + DIFF_STATE are baked, and the viewer lands on the Subsystems overview.
+def test_diff_overlay_bundle_and_landing() -> None:
+    # With a change-impact report the diff overlay is armed: the bundle carries hasDiff + diffState, the
+    # frontend lands on the Subsystems overview for a diff, and never resurrects the flat Components map.
     with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_grouped_map("proper"))
         report = Path(d) / "report.md"
         report.write_text(make_report_map(), encoding="utf-8")
-        out = Path(d) / "project-map.html"
-        r = subprocess.run([*RENDER, str(md), str(out), str(report)], capture_output=True, text=True)
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        assert "const HAS_DIFF = true;" in html
-        assert '"C2": "modified"' in html and '"C9": "added"' in html
-        assert "(HAS_DIFF && HAS_GROUPING) ? 'container' : 'context'" in html  # lands on Subsystems for a diff
-        assert 'data-view="component"' not in html        # never resurrects the flat map
+        b = bundle_of(make_grouped_map("proper"), report)
+    assert b["hasDiff"] is True
+    assert b["diffState"].get("C2") == "modified" and b["diffState"].get("C9") == "added"
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    assert "(HAS_DIFF && HAS_GROUPING) ? 'container' : 'context'" in js  # lands on Subsystems for a diff
+    shell = (VIEWER_DIR / "viewer.html").read_text(encoding="utf-8")
+    assert 'data-view="component"' not in shell        # never resurrects the flat map
 
 
 def test_glued_collection_relation_is_labelled() -> None:
@@ -2853,38 +2823,19 @@ def test_subsystem_card_has_no_context_box_without_bridges() -> None:
     assert "subdomain" not in s1
 
 
-def test_render_inlines_context_data() -> None:
-    # The self-contained HTML must carry the contexts overview + per-context cards, every new
-    # placeholder substituted, and HAS_CONTEXTS flipped on, so the Domain view leads with the overview.
-    with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_context_map())
-        out = Path(d) / "project-map.html"
-        r = subprocess.run(
-            [*RENDER, str(md), str(out)],
-            capture_output=True, text=True,
-        )
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        for ph in ("__MERMAID_DOMAIN_CONTAINER__", "__MERMAID_DOMAIN_SUB__",
-                   "__MERMAID_DOMAIN_EDGE_CARD__", "__DOMAIN_CONTAINER_EDGES__", "__HAS_SUBDOMAINS__"):
-            assert ph not in html, ph
-        assert "const HAS_SUBDOMAINS = true;" in html
-        assert "Ordering (2)" in html       # the bounded-contexts overview is inlined
-        assert "SD1>SD2" in html            # the subdomain edge-card diagram (keyed by crossing pair) is inlined
+def test_bundle_carries_context_data() -> None:
+    # The bundle carries the contexts overview + per-context cards, with hasSubdomains on so the Domain
+    # view leads with the overview.
+    b = bundle_of(make_context_map())
+    assert b["hasSubdomains"] is True
+    assert "Ordering (2)" in b["mermaidDomainContainer"]   # the bounded-contexts overview
+    assert "SD1>SD2" in b["mermaidDomainEdgeCard"]          # the subdomain edge-card (keyed by crossing pair)
 
 
-def test_render_no_context_data_when_ungrouped() -> None:
-    # A domain map with no Subdomains table: HAS_CONTEXTS is false and the flat classDiagram still ships.
-    with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_domain_map())
-        out = Path(d) / "project-map.html"
-        r = subprocess.run(
-            [*RENDER, str(md), str(out)],
-            capture_output=True, text=True,
-        )
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        assert "const HAS_SUBDOMAINS = false;" in html and "__HAS_SUBDOMAINS__" not in html
+def test_bundle_no_context_data_when_ungrouped() -> None:
+    # A domain map with no Subdomains table: hasSubdomains is false and the flat classDiagram still ships.
+    b = bundle_of(make_domain_map())
+    assert b["hasSubdomains"] is False and b["mermaidDomain"]
 
 
 def _two_context_map(cards_extra: str = "") -> str:
@@ -3417,10 +3368,11 @@ def test_flow_mermaid_sequence_from_use_case() -> None:
     assert s1.startswith("sequenceDiagram")
     assert "actor FA0 as Andy" in s1                      # the actor lifeline
     assert "participant C1 as Gateway" in s1 and "participant C2 as Engine" in s1
-    assert "FA0->>C1: submits the order" in s1           # actor step -> the authored phrase
-    assert "C1->>C2: calls" in s1                         # element step -> verb from the backbone edge
+    # Each arrow is prefixed with its 1-based step number (aligns with the panel narrative + step player).
+    assert "FA0->>C1: 1. submits the order" in s1        # actor step -> the authored phrase
+    assert "C1->>C2: 2. calls" in s1                      # element step -> verb from the backbone edge
     s2 = mm["UC2"]
-    assert "C2->>D1: reads" in s2
+    assert "C2->>D1: 2. reads" in s2
 
 
 def test_flow_narrative_derives_why_from_edge() -> None:
@@ -3436,24 +3388,17 @@ def test_flow_uses_arrow_shows_why() -> None:
     # Why instead. A sharper verb (calls / reads / …) stays as-is.
     md = make_gp_map().replace('"verb": "calls",', '"verb": "uses",')
     s1 = gen_viewer.flow_mermaids(parse_map(md))["UC1"]
-    assert "C1->>C2: reach engine" in s1      # generic 'uses' -> the Why
-    assert "C1->>C2: uses" not in s1
+    assert "C1->>C2: 2. reach engine" in s1   # generic 'uses' -> the Why (with its step number)
+    assert "C1->>C2: 2. uses" not in s1       # the catch-all verb never shows on the arrow
     s2 = gen_viewer.flow_mermaids(parse_map(md))["UC2"]
-    assert "C2->>D1: reads" in s2             # a sharp verb is untouched
+    assert "C2->>D1: 2. reads" in s2          # a sharp verb is untouched
 
 
-def test_render_inlines_gp_data() -> None:
-    # The self-contained HTML must carry the GP sequence + step diagrams so the client opens them.
-    with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_gp_map())
-        out = Path(d) / "project-map.html"
-        r = subprocess.run(
-            [*RENDER, str(md), str(out)],
-            capture_output=True, text=True,
-        )
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        assert "sequenceDiagram" in html and "Submit order" in html
+def test_bundle_carries_gp_data() -> None:
+    # The bundle carries the GP sequence + step diagrams so the client opens them.
+    b = bundle_of(make_gp_map())
+    hay = b["mermaidGp"] + " ".join(b["flowsMm"].values())
+    assert "sequenceDiagram" in hay and "Submit order" in hay
 
 
 def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> str:
@@ -3692,21 +3637,13 @@ def test_context_no_libraries_box_when_none_folded() -> None:
     assert gen_viewer.gen_libs_mermaid(g) == ""
 
 
-def test_render_inlines_libs_fold_data() -> None:
-    # The self-contained HTML must carry the Libraries drill diagram + the folded-dep list, fully
-    # substituted (no leftover placeholder), so the client can preview/drill the fold box.
-    with tempfile.TemporaryDirectory() as d:
-        md = write_model(Path(d), make_dep_kinds_map())
-        out = Path(d) / "project-map.html"
-        r = subprocess.run(
-            [*RENDER, str(md), str(out)],
-            capture_output=True, text=True,
-        )
-        assert r.returncode == 0, r.stdout + r.stderr
-        html = out.read_text(encoding="utf-8")
-        assert "__MERMAID_LIBS__" not in html and "__FOLDED_LIBS__" not in html
-        # the emoji is JSON-escaped (📚) when inlined, so assert on the text after it
-        assert "pydantic" in html and "Libraries (2)" in html
+def test_bundle_carries_libs_fold_data() -> None:
+    # The bundle carries the Libraries drill diagram + the folded-dep list, so the client can
+    # preview/drill the Context fold box.
+    b = bundle_of(make_dep_kinds_map())
+    folded_names = [x.get("name", "") for x in b["foldedLibs"]]
+    assert "pydantic" in b["mermaidLibs"] or "pydantic" in folded_names
+    assert "Libraries (2)" in b["mermaidContext"]   # the fold box label in the Context diagram
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

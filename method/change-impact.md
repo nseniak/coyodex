@@ -127,14 +127,13 @@ clean baseline.
    **pin gate** as Build applies (`method.md`): the *code* must be committed (the `.coyodex/` report
    and map you are accepting are expected to be dirty — that's what this step commits), else give the
    user the A/B choice and record the pin `-dirty` only if they pick B.
-3. Re-render BOTH generated views (`.venv/bin/coyodex render .coyodex/project-map.json
-   .coyodex/project-map.md` and `… .coyodex/project-map.html`) — a deterministic re-render of the
-   patched model, no new inference.
+3. Re-render the committed markdown view (`.venv/bin/coyodex render .coyodex/project-map.json
+   .coyodex/project-map.md`) — a deterministic re-render of the patched model, no new inference. (The
+   interactive diagram is served live from the model; there is no `.html` file to re-render.)
 4. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).
-5. git-commit all (map + diagram + report) — so baseline-commit stays aligned with code-commit.
+5. git-commit all (map + markdown view + report) — so baseline-commit stays aligned with code-commit.
    The commit IS the acceptance.
-6. **Finish by reporting the re-rendered diagram** — `.coyodex/project-map.html` as a relative path,
-   and **in addition the URL to open it in a browser through the coyodex map server** (where the file
+6. **Finish by reporting the URL to open the diagram** in the coyodex map server (where the file
    browser + code viewer work): if the server isn't already running, start it from the coyodex clone
    with `make start` (or `.venv/bin/coyodex serve`), then open
    `http://127.0.0.1:8765/p/<repo-folder-name>/` — or the landing page `http://127.0.0.1:8765/` and

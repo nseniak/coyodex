@@ -434,16 +434,16 @@ and never-referenced dirs.
 existing `.coyodex/` map, so you should only be here for a first map or a user-confirmed rebuild —
 [dispatch](method/dispatch.md) routes an existing baseline to Analyze, not Build. The committed
 source of truth is `.coyodex/project-map.json` ([the map model](method/model.md)),
-written by `coyodex assemble` together with its two generated views, `.coyodex/project-map.md`
-(readable diffs) and `.coyodex/project-map.html` (the diagram) — all three are committed. Record
-the commit the map was built at in the model's `commit`/`committed`/`built` fields (the baseline
-pin — see the pin gate below).
+written by `coyodex assemble` together with its generated markdown view, `.coyodex/project-map.md`
+(readable diffs) — both are committed. The interactive C4 diagram is not a committed file: it is
+served live by `coyodex serve` (built on demand from the model). Record the commit the map was built
+at in the model's `commit`/`committed`/`built` fields (the baseline pin — see the pin gate below).
 
 **Baseline pin — require committed code, or record it dirty.** The pin must mean "the map describes
 *exactly* this commit". The map you just read reflects the **working tree**, so if the code has
 uncommitted changes, HEAD alone is a misleading pin (and a later `git diff <pin>..<now>` would miss
 the edits already baked into the map). So before recording the pin, check the analyzed repo for
-uncommitted **code** — coyodex's own files under `.coyodex/` (map / html / report) don't count, they
+uncommitted **code** — coyodex's own files under `.coyodex/` (map / markdown view / report) don't count, they
 are always in flux and the workflow commits them:
 
 ```
@@ -532,22 +532,21 @@ by spawning a **fresh-context skeptic** (Phase 4 below) that sees only the finis
 never your build reasoning — and tries to *disprove* the claim; **reconcile every finding — advisory
 or blocking — (fix the map, or justify and note why)** before rendering. So the invariant after every
 write is **validate → audit → render**.
-**Then render the views** — once the
+**Then render the markdown view** — once the
 map validates and the adversarial pass has no blocking contradiction (advisories reconciled),
-regenerate both views next to the model (assemble already wrote them; re-run after any patch):
+regenerate the committed markdown view next to the model (assemble already wrote it; re-run after any patch):
 
 ```
 .venv/bin/coyodex render .coyodex/project-map.json .coyodex/project-map.md
-.venv/bin/coyodex render .coyodex/project-map.json .coyodex/project-map.html
 ```
 
-Both are *renderings* of the model (no second source; never hand-edit them — `validate` flags a
-stale view) — commit them alongside the model so the three stay in step and a reviewer can open
-either. **Finish by reporting the artifacts as links** — the model (`.coyodex/project-map.json`),
-the markdown view (`.coyodex/project-map.md`), and the diagram HTML (`.coyodex/project-map.html`),
-as relative paths. **Then give the reader the URL to open the interactive map in a browser through the
-coyodex map server** — that is where the file browser and code viewer light up (source served from git
-at the map's commit). Rendering just registered this project with the server, so it shows up there as a
+It is a *rendering* of the model (no second source; never hand-edit it — `validate` flags a stale
+view) — commit it alongside the model so the two stay in step. The interactive diagram is not a file:
+it is served live from the model by `coyodex serve`. **Finish by reporting the artifacts as links** —
+the model (`.coyodex/project-map.json`) and the markdown view (`.coyodex/project-map.md`), as relative
+paths. **Then give the reader the URL to open the interactive map in a browser through the
+coyodex map server** — that is where the diagram, file browser, and code viewer light up (data + source
+served from git at the map's commit). Rendering just registered this project with the server, so it shows up there as a
 card. Tell the reader: if the server isn't already running, start it once from the coyodex clone —
 `make start` (or `.venv/bin/coyodex serve`) — then open `http://127.0.0.1:8765/p/<repo-folder-name>/`
 (the `<repo-folder-name>` is the mapped repo's folder name), or the landing page
@@ -561,9 +560,9 @@ edits), bump the baseline pin, re-stamp provenance
 (`.venv/bin/python tools/map_backup.py stamp <repo> --mode accept --built-at '<YYYY-MM-DD HH:MM>'`,
 which appends this session), **re-run validate → audit** (a patch can introduce a fresh
 self-contradiction — e.g. a re-ordered Golden Path step now reads before it creates), **re-render
-both views** (`coyodex render` to `.md` and `.html`, so they track the patched model), save the
-annotated diff under `.coyodex/analysis-changes/<date>.md`, and commit the model + views +
-`provenance.json` with the code.
+the markdown view** (`coyodex render … project-map.md`, so it tracks the patched model; the diagram
+is served live), save the annotated diff under `.coyodex/analysis-changes/<date>.md`, and commit the
+model + markdown view + `provenance.json` with the code.
 
 **Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big
 to detail at its altitude (e.g. a `plugins` area holding dozens of feature units), go finer **inside the

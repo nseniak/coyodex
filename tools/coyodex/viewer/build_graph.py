@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The viewer's graph data model + the change-impact report parser.
 
-The graph (`GraphDict`) is what `gen_viewer.write_html` renders; it is produced by
-`coyodex.views.model_to_graph`, straight from the model. `build_diff` separately parses the
-change-impact REPORT, a markdown artifact distinct from the map itself.
+The graph (`GraphDict`) is what `gen_viewer.build_view_bundle` turns into the viewer's data; it is
+produced by `coyodex.views.model_to_graph`, straight from the model. `build_diff` separately parses
+the change-impact REPORT, a markdown artifact distinct from the map itself.
 """
 from __future__ import annotations
 
@@ -178,6 +178,8 @@ def build_diff(md_path: Path) -> DiffDict:
         if "change" in hl:
             ci = {h: i for i, h in enumerate(hl)}
             for row in rows:
+                if not row:                          # a header with a short/empty body row — skip it
+                    continue
                 eid = _first_id(row[0])
                 if not eid:
                     continue
@@ -193,6 +195,8 @@ def build_diff(md_path: Path) -> DiffDict:
                 )
         elif hl[:3] == ["from", "verb", "to"]:
             for row in rows:
+                if len(row) < 3:                     # a short body row under from|verb|to — skip it
+                    continue
                 s, d = _first_id(row[0]), _first_id(row[2])
                 if s and d:
                     new_edges.append({"src": s, "verb": row[1], "dst": d})

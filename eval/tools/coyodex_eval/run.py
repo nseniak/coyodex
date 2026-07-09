@@ -115,33 +115,35 @@ def delta_md(result: RunResult) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_html(map_path: Path, html_path: Path) -> None:
-    """Render the map to a self-contained HTML view next to its source, so each run keeps its OWN
-    viewable diagram (the live `.coyodex/project-map.html` in the clone is overwritten every rebuild).
-    Best-effort: a render hiccup warns but never loses the already-written source / profile / delta."""
+def archive_view_bundle(map_path: Path, bundle_path: Path) -> None:
+    """Archive the run's view bundle — the JSON the served viewer renders (gen_viewer.build_view_bundle)
+    — next to its source, so each run keeps its OWN diagram data even after the live map is rebuilt.
+    Best-effort: a hiccup warns but never loses the already-written source / profile / delta."""
     try:
+        import json
         from coyodex.model import load_model
-        from coyodex.viewer.gen_viewer import write_html
+        from coyodex.viewer.gen_viewer import build_view_bundle
         from coyodex.views import model_to_graph
-        write_html(model_to_graph(load_model(map_path.read_text(encoding="utf-8"))),
-                   html_path, None)
-    except Exception as e:  # archiving must survive a render failure
-        print(f"WARNING: could not render {html_path.name}: {e}", file=sys.stderr)
+        bundle = build_view_bundle(
+            model_to_graph(load_model(map_path.read_text(encoding="utf-8"))), None, bundle_path.parent)
+        bundle_path.write_text(json.dumps(bundle, indent=2), encoding="utf-8")
+    except Exception as e:  # archiving must survive a build failure
+        print(f"WARNING: could not archive {bundle_path.name}: {e}", file=sys.stderr)
 
 
 # Everything a run/baseline dir holds, in write order. A run stores project-map.json (the source)
-# + its generated md view; project-map.html is rendered (not copied) at write time; bless copies
-# whichever of these exist (a pre-migration legacy run dir may still hold project-map.md only).
-_RUN_ARTIFACTS = ("project-map.json", "project-map.md", "project-map.html", "profile.json",
+# + its generated md view + project-map.view.json (the served viewer's data snapshot, built at write
+# time); bless copies whichever of these exist (a pre-migration legacy run dir may hold .md only).
+_RUN_ARTIFACTS = ("project-map.json", "project-map.md", "project-map.view.json", "profile.json",
                   "judge.json", "delta.md")
 
 
 def write_run(out_dir: Path, result: RunResult, map_text: str,
               conversation_src: Path | None = None) -> None:
-    """Archive a run: the model, its generated md + HTML views, profile.json, judge.json (if any),
-    delta.md, and the build conversation (if the orchestrator captured one). The historical record
-    a baseline is blessed from — the views are archived so a past run stays viewable after a later
-    rebuild. Model documents only (run_eval's profiling already refused anything else)."""
+    """Archive a run: the model, its generated md view + view-bundle snapshot, profile.json,
+    judge.json (if any), delta.md, and the build conversation (if the orchestrator captured one). The
+    historical record a baseline is blessed from — the views are archived so a past run stays viewable
+    after a later rebuild. Model documents only (run_eval's profiling already refused anything else)."""
     out_dir.mkdir(parents=True, exist_ok=True)
     map_path = out_dir / "project-map.json"
     map_path.write_text(map_text, encoding="utf-8")
@@ -156,7 +158,7 @@ def write_run(out_dir: Path, result: RunResult, map_text: str,
     if result.judge is not None:
         (out_dir / "judge.json").write_text(result.judge.to_json(), encoding="utf-8")
     (out_dir / "delta.md").write_text(delta_md(result), encoding="utf-8")
-    render_html(map_path, out_dir / "project-map.html")
+    archive_view_bundle(map_path, out_dir / "project-map.view.json")
     if conversation_src is not None and conversation_src.exists():
         shutil.copytree(conversation_src, out_dir / "conversation", dirs_exist_ok=True)
 

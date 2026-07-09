@@ -403,7 +403,7 @@
       "name": "App bootstrap & runtime wiring",
       "purpose": "Build the app, pick storage, assemble per-org runtimes, drain on shutdown",
       "parent": null,
-      "source": "[entrypoints/](backend/src/mcpolis/entrypoints/)",
+      "source": "backend/src/mcpolis/entrypoints/",
       "confidence": "inferred"
     },
     {
@@ -411,7 +411,7 @@
       "name": "Gateway (MCP protocol surface)",
       "purpose": "Serve MCP clients at `/mcp`: list/call tools, route to upstreams, push changes",
       "parent": null,
-      "source": "[gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py)",
+      "source": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py",
       "confidence": "inferred"
     },
     {
@@ -419,7 +419,7 @@
       "name": "Management MCP (admin & superadmin)",
       "purpose": "Conversational management of the gateway and of the whole instance",
       "parent": null,
-      "source": "[controllers/](backend/src/mcpolis/entrypoints/controllers/)",
+      "source": "backend/src/mcpolis/entrypoints/controllers/",
       "confidence": "verified"
     },
     {
@@ -427,7 +427,7 @@
       "name": "Dashboard REST API",
       "purpose": "The `/api/*` surface the React dashboard calls",
       "parent": null,
-      "source": "[routes/](backend/src/mcpolis/entrypoints/routes/)",
+      "source": "backend/src/mcpolis/entrypoints/routes/",
       "confidence": "verified"
     },
     {
@@ -435,7 +435,7 @@
       "name": "Identity & access",
       "purpose": "Authenticate clients/admins, mint/verify tokens, enforce roles & plans",
       "parent": null,
-      "source": "[adapters/auth/](backend/src/mcpolis/adapters/auth/)",
+      "source": "backend/src/mcpolis/adapters/auth/",
       "confidence": "inferred"
     },
     {
@@ -443,7 +443,7 @@
       "name": "Gateway auth & service tokens",
       "purpose": "Bearer auth for `/mcp`: Google-backed OAuth + `svct_` service tokens",
       "parent": "S5",
-      "source": "[service_token_verifier.py](backend/src/mcpolis/adapters/auth/service_token_verifier.py)",
+      "source": "backend/src/mcpolis/adapters/auth/service_token_verifier.py",
       "confidence": "inferred"
     },
     {
@@ -451,7 +451,7 @@
       "name": "Policy, roles & plans",
       "purpose": "Role→tool authorization, settings resolution, plan-limit gates, secret scan",
       "parent": "S5",
-      "source": "[policy_engine.py](backend/src/mcpolis/domain/services/policy_engine.py)",
+      "source": "backend/src/mcpolis/domain/services/policy_engine.py",
       "confidence": "inferred"
     },
     {
@@ -459,7 +459,7 @@
       "name": "Dashboard sign-in & sessions",
       "purpose": "Browser Google login, session cookies, org-context resolution, revocation",
       "parent": "S5",
-      "source": "[dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py)",
+      "source": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py",
       "confidence": "inferred"
     },
     {
@@ -467,7 +467,7 @@
       "name": "Org & tenancy",
       "purpose": "Org/membership CRUD, creation seeding, deletion cascade",
       "parent": null,
-      "source": "[org_service.py](backend/src/mcpolis/domain/services/org_service.py)",
+      "source": "backend/src/mcpolis/domain/services/org_service.py",
       "confidence": "inferred"
     },
     {
@@ -475,7 +475,7 @@
       "name": "Upstream management",
       "purpose": "Define, persist, connect, and keep healthy the proxied upstream MCPs",
       "parent": null,
-      "source": "[upstream_clients/](backend/src/mcpolis/adapters/upstream_clients/)",
+      "source": "backend/src/mcpolis/adapters/upstream_clients/",
       "confidence": "inferred"
     },
     {
@@ -483,7 +483,7 @@
       "name": "Upstream config & catalog",
       "purpose": "Persist upstream defs + options, load/merge mcp.json, cache discovered tools",
       "parent": "S7",
-      "source": "[upstream_config_service.py](backend/src/mcpolis/domain/services/upstream_config_service.py)",
+      "source": "backend/src/mcpolis/domain/services/upstream_config_service.py",
       "confidence": "inferred"
     },
     {
@@ -491,7 +491,7 @@
       "name": "Upstream connections & clients",
       "purpose": "Long-lived MCP sessions: HTTP + stdio clients, the connection manager",
       "parent": "S7",
-      "source": "[client_manager.py](backend/src/mcpolis/adapters/upstream_clients/client_manager.py)",
+      "source": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py",
       "confidence": "verified"
     },
     {
@@ -499,7 +499,7 @@
       "name": "Upstream OAuth lifecycle",
       "purpose": "Token refresh, liveness probing, re-auth health email",
       "parent": "S7",
-      "source": "[oauth_refresh.py](backend/src/mcpolis/domain/services/oauth_refresh.py)",
+      "source": "backend/src/mcpolis/domain/services/oauth_refresh.py",
       "confidence": "inferred"
     },
     {
@@ -507,7 +507,7 @@
       "name": "Sandbox execution (stdio MCPs)",
       "purpose": "Run stdio MCPs in E2B / local sandboxes; files, variables, reconcile",
       "parent": null,
-      "source": "[sandbox_e2b/](backend/src/mcpolis/adapters/sandbox_e2b/)",
+      "source": "backend/src/mcpolis/adapters/sandbox_e2b/",
       "confidence": "verified"
     },
     {
@@ -515,7 +515,7 @@
       "name": "Persistence & storage",
       "purpose": "The cross-cutting storage machinery: Mongo client, field encryption, audit, migrations",
       "parent": null,
-      "source": "[repositories/](backend/src/mcpolis/adapters/repositories/)",
+      "source": "backend/src/mcpolis/adapters/repositories/",
       "confidence": "inferred"
     },
     {
@@ -523,7 +523,7 @@
       "name": "Realtime & infra adapters",
       "purpose": "Pub/sub event stream, rate limiter, distributed lock",
       "parent": null,
-      "source": "[adapters/](backend/src/mcpolis/adapters/)",
+      "source": "backend/src/mcpolis/adapters/",
       "confidence": "inferred"
     },
     {
@@ -531,7 +531,7 @@
       "name": "Observability & email",
       "purpose": "Structured logs, Sentry, Mixpanel, transactional email",
       "parent": null,
-      "source": "[observability/](backend/src/mcpolis/adapters/observability/)",
+      "source": "backend/src/mcpolis/adapters/observability/",
       "confidence": "verified"
     },
     {
@@ -539,7 +539,7 @@
       "name": "Dashboard SPA (frontend)",
       "purpose": "The React admin + marketing + docs single-page app",
       "parent": null,
-      "source": "[frontend/src/](frontend/src/)",
+      "source": "frontend/src/",
       "confidence": "verified"
     },
     {
@@ -547,7 +547,7 @@
       "name": "Admin dashboard",
       "purpose": "Upstreams, roles/access, team, tokens, audit, gateway, variables, files",
       "parent": "S12",
-      "source": "[pages/admin/](frontend/src/pages/admin/)",
+      "source": "frontend/src/pages/admin/",
       "confidence": "verified"
     },
     {
@@ -555,7 +555,7 @@
       "name": "User & onboarding surfaces",
       "purpose": "End-user connect / my-tools, join & signup, per-MCP OAuth popup",
       "parent": "S12",
-      "source": "[pages/user/](frontend/src/pages/user/)",
+      "source": "frontend/src/pages/user/",
       "confidence": "verified"
     },
     {
@@ -563,7 +563,7 @@
       "name": "Marketing & docs",
       "purpose": "Public landing/pricing/legal pages + the docs renderer",
       "parent": "S12",
-      "source": "[pages/marketing/](frontend/src/pages/marketing/)",
+      "source": "frontend/src/pages/marketing/",
       "confidence": "verified"
     },
     {
@@ -571,7 +571,7 @@
       "name": "Superadmin console",
       "purpose": "Cross-org operator dashboard",
       "parent": "S12",
-      "source": "[pages/superadmin/](frontend/src/pages/superadmin/)",
+      "source": "frontend/src/pages/superadmin/",
       "confidence": "verified"
     },
     {
@@ -579,7 +579,7 @@
       "name": "Shared SPA infrastructure",
       "purpose": "Router, API client, query hooks, auth context, UI kit, SSE",
       "parent": "S12",
-      "source": "[api/](frontend/src/api/)",
+      "source": "frontend/src/api/",
       "confidence": "verified"
     }
   ],
@@ -2342,72 +2342,72 @@
     {
       "action": "Start standalone (from source)",
       "command": "`bash start.sh standalone`",
-      "source": "[start.sh](start.sh)"
+      "source": "start.sh"
     },
     {
       "action": "Start cloud (default)",
       "command": "`bash start.sh`",
-      "source": "[start.sh](start.sh)"
+      "source": "start.sh"
     },
     {
       "action": "Stop (`--all` also stops mongo+redis)",
       "command": "`bash stop.sh`",
-      "source": "[stop.sh](stop.sh)"
+      "source": "stop.sh"
     },
     {
       "action": "Restart (forwards flags)",
       "command": "`bash restart.sh`",
-      "source": "[restart.sh](restart.sh)"
+      "source": "restart.sh"
     },
     {
       "action": "Backend unit tests",
       "command": "`bash backend/run-unit-tests.sh`",
-      "source": "[run-unit-tests.sh](backend/run-unit-tests.sh)"
+      "source": "backend/run-unit-tests.sh"
     },
     {
       "action": "Frontend unit tests",
       "command": "`bash frontend/run-unit-tests.sh`",
-      "source": "[run-unit-tests.sh](frontend/run-unit-tests.sh)"
+      "source": "frontend/run-unit-tests.sh"
     },
     {
       "action": "E2E (Playwright)",
       "command": "`bash tests/run-e2e-tests.sh`",
-      "source": "[run-e2e-tests.sh](tests/run-e2e-tests.sh)"
+      "source": "tests/run-e2e-tests.sh"
     },
     {
       "action": "Integration (E2B real SDK)",
       "command": "`bash backend/run-integration-tests.sh`",
-      "source": "[run-integration-tests.sh](backend/run-integration-tests.sh)"
+      "source": "backend/run-integration-tests.sh"
     },
     {
       "action": "Pyright type check",
       "command": "`bash backend/run-pyright.sh src/ tests/`",
-      "source": "[run-pyright.sh](backend/run-pyright.sh)"
+      "source": "backend/run-pyright.sh"
     },
     {
       "action": "Ruff lint",
       "command": "`cd backend && poetry run ruff check .`",
-      "source": "[pyproject.toml](backend/pyproject.toml#L90)"
+      "source": "backend/pyproject.toml#L90"
     },
     {
       "action": "Docker standalone",
       "command": "`docker compose --profile standalone up --build`",
-      "source": "[docker-compose.yml](docker-compose.yml#L80)"
+      "source": "docker-compose.yml#L80"
     },
     {
       "action": "Docker cloud (scalable)",
       "command": "`docker compose --profile cloud up --build`",
-      "source": "[docker-compose.yml](docker-compose.yml#L113)"
+      "source": "docker-compose.yml#L113"
     },
     {
       "action": "Build E2B template grid",
       "command": "`cd runner/e2b-templates && make build`",
-      "source": "[build_grid.py](runner/e2b-templates/build_grid.py#L139)"
+      "source": "runner/e2b-templates/build_grid.py#L139"
     },
     {
       "action": "Run all 3 suites concurrently",
       "command": "`make test-all`",
-      "source": "[Makefile](Makefile#L16)"
+      "source": "Makefile#L16"
     }
   ],
   "entry_points": [
@@ -2544,7 +2544,7 @@
       "name": "Tenancy & access policy",
       "purpose": "Orgs, memberships, plans, roles, and the per-tool access rules",
       "parent": null,
-      "source": "[settings.py](backend/src/mcpolis/domain/model/settings.py)",
+      "source": "backend/src/mcpolis/domain/model/settings.py",
       "confidence": "verified"
     },
     {
@@ -2552,7 +2552,7 @@
       "name": "Upstream & transport",
       "purpose": "Upstream definitions, transports, and their auth configuration",
       "parent": null,
-      "source": "[upstream.py](backend/src/mcpolis/domain/model/upstream.py)",
+      "source": "backend/src/mcpolis/domain/model/upstream.py",
       "confidence": "verified"
     },
     {
@@ -2560,7 +2560,7 @@
       "name": "Credentials & secrets",
       "purpose": "Service tokens, stored OAuth tokens, variables, sandbox files",
       "parent": null,
-      "source": "[service_token.py](backend/src/mcpolis/domain/model/service_token.py)",
+      "source": "backend/src/mcpolis/domain/model/service_token.py",
       "confidence": "verified"
     },
     {
@@ -2568,7 +2568,7 @@
       "name": "Tool catalog",
       "purpose": "The discovered tools/resources/prompts cached per upstream",
       "parent": null,
-      "source": "[tool_catalog_repository.py](backend/src/mcpolis/domain/ports/tool_catalog_repository.py)",
+      "source": "backend/src/mcpolis/domain/ports/tool_catalog_repository.py",
       "confidence": "verified"
     },
     {
@@ -2576,7 +2576,7 @@
       "name": "Audit & events",
       "purpose": "The append-only audit log and the realtime event bus",
       "parent": null,
-      "source": "[audit.py](backend/src/mcpolis/domain/model/audit.py)",
+      "source": "backend/src/mcpolis/domain/model/audit.py",
       "confidence": "verified"
     }
   ],
@@ -6511,55 +6511,55 @@
       "unit": "nginx",
       "runs_on": "container (cloud)",
       "exposed_as": "host `:80` (dropped under proxied overlay)",
-      "config_source": "[docker-compose.yml](docker-compose.yml#L155)"
+      "config_source": "docker-compose.yml#L155"
     },
     {
       "unit": "backend (uvicorn, scale to N)",
       "runs_on": "container (cloud)",
       "exposed_as": "internal `:8080` behind nginx; `/health` check",
-      "config_source": "[docker-compose.yml](docker-compose.yml#L113)"
+      "config_source": "docker-compose.yml#L113"
     },
     {
       "unit": "standalone backend (serves SPA)",
       "runs_on": "container / host",
       "exposed_as": "host `:8080`, file-backed volumes",
-      "config_source": "[docker-compose.yml](docker-compose.yml#L80)"
+      "config_source": "docker-compose.yml#L80"
     },
     {
       "unit": "MongoDB",
       "runs_on": "container (dev+cloud)",
       "exposed_as": "`127.0.0.1:27017`",
-      "config_source": "[docker-compose.yml](docker-compose.yml#L33)"
+      "config_source": "docker-compose.yml#L33"
     },
     {
       "unit": "Redis",
       "runs_on": "container (dev+cloud)",
       "exposed_as": "`127.0.0.1:6379`",
-      "config_source": "[docker-compose.yml](docker-compose.yml#L43)"
+      "config_source": "docker-compose.yml#L43"
     },
     {
       "unit": "Vector sidecar",
       "runs_on": "container (cloud)",
       "exposed_as": "metrics `127.0.0.1:9598`",
-      "config_source": "[docker-compose.yml](docker-compose.yml#L192)"
+      "config_source": "docker-compose.yml#L192"
     },
     {
       "unit": "frontend",
       "runs_on": "Vite `:5173` (dev) / prerendered static via nginx (prod)",
       "exposed_as": "dev `:5173`",
-      "config_source": "[start.sh](start.sh)"
+      "config_source": "start.sh"
     },
     {
       "unit": "E2B sandboxes",
       "runs_on": "remote (E2B hosted)",
       "exposed_as": "SDK API, 24-template grid",
-      "config_source": "[config.py](backend/src/mcpolis/entrypoints/config.py#L207)"
+      "config_source": "backend/src/mcpolis/entrypoints/config.py#L207"
     }
   ],
   "observability": [
     {
       "signal": "structlog JSON events",
-      "where_emitted": "[structlog_setup.py](backend/src/mcpolis/adapters/observability/structlog_setup.py#L74)",
+      "where_emitted": "backend/src/mcpolis/adapters/observability/structlog_setup.py#L74",
       "where_viewed": "stdout → Vector → Elastic / Kibana",
       "alerts": "Vector throttle 5000/min/event"
     },
@@ -6571,19 +6571,19 @@
     },
     {
       "signal": "Sentry errors",
-      "where_emitted": "[sentry_setup.py](backend/src/mcpolis/adapters/observability/sentry_setup.py#L162)",
+      "where_emitted": "backend/src/mcpolis/adapters/observability/sentry_setup.py#L162",
       "where_viewed": "Sentry (DSN-gated)",
       "alerts": "traces_sample_rate"
     },
     {
       "signal": "Mixpanel analytics",
-      "where_emitted": "[analytics_client.py](backend/src/mcpolis/adapters/observability/analytics_client.py#L48)",
+      "where_emitted": "backend/src/mcpolis/adapters/observability/analytics_client.py#L48",
       "where_viewed": "Mixpanel (token-gated)",
       "alerts": "—"
     },
     {
       "signal": "Health endpoints",
-      "where_emitted": "[app.py](backend/src/mcpolis/entrypoints/app.py#L1727)",
+      "where_emitted": "backend/src/mcpolis/entrypoints/app.py#L1727",
       "where_viewed": "nginx `/healthz`; compose healthcheck",
       "alerts": "LB checks `/healthz`"
     }
@@ -6592,61 +6592,61 @@
     {
       "surface": "`/mcp` gateway",
       "who": "Google bearer OR `svct_` service token",
-      "source": "[app.py](backend/src/mcpolis/entrypoints/app.py#L353)",
+      "source": "backend/src/mcpolis/entrypoints/app.py#L353",
       "risk": "Composite verifier routes svct_→registry, else→OAuth"
     },
     {
       "surface": "`/mcp` org scoping",
       "who": "user/token scoped to one org",
-      "source": "[org_context.py](backend/src/mcpolis/entrypoints/middleware/org_context.py#L267)",
+      "source": "backend/src/mcpolis/entrypoints/middleware/org_context.py#L267",
       "risk": "cross-org isolation via the slug→org contextvar"
     },
     {
       "surface": "service-token org pin",
       "who": "`svct_` holder, one pinned org",
-      "source": "[service_token_pin.py](backend/src/mcpolis/entrypoints/middleware/service_token_pin.py#L39)",
+      "source": "backend/src/mcpolis/entrypoints/middleware/service_token_pin.py#L39",
       "risk": "slug mismatch 401s; fails closed if scope missing"
     },
     {
       "surface": "`/admin-mcp/{slug}`",
       "who": "OAuth user who is admin in that org",
-      "source": "[app.py](backend/src/mcpolis/entrypoints/app.py#L521)",
+      "source": "backend/src/mcpolis/entrypoints/app.py#L521",
       "risk": "per-org gate; service tokens structurally rejected"
     },
     {
       "surface": "`/admin-mcp/system`",
       "who": "email in superadmin allowlist",
-      "source": "[app.py](backend/src/mcpolis/entrypoints/app.py#L668)",
+      "source": "backend/src/mcpolis/entrypoints/app.py#L668",
       "risk": "cloud-only; allowlist is the sole gate"
     },
     {
       "surface": "dashboard `/api/*`",
       "who": "signed-in user (cookie); admin via require_admin",
-      "source": "[dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py#L284)",
+      "source": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py#L284",
       "risk": "HMAC cookie, 7-day TTL, optional jti revocation"
     },
     {
       "surface": "org anti-enumeration",
       "who": "unknown slug → 401 (not 404)",
-      "source": "[org_routes.py](backend/src/mcpolis/entrypoints/routes/org_routes.py#L100)",
+      "source": "backend/src/mcpolis/entrypoints/routes/org_routes.py#L100",
       "risk": "one exception: `/{slug}/public` invite read"
     },
     {
       "surface": "upstream OAuth callback",
       "who": "public, HMAC-signed state",
-      "source": "[upstream_oauth_callback.py](backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py#L107)",
+      "source": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py#L107",
       "risk": "integrity rests on the signed state"
     },
     {
       "surface": "upstream URL fetch",
       "who": "gateway → upstream",
-      "source": "[url_safety.py](backend/src/mcpolis/domain/services/url_safety.py#L152)",
+      "source": "backend/src/mcpolis/domain/services/url_safety.py#L152",
       "risk": "SSRF deny-list (loopback/RFC1918/IMDS)"
     },
     {
       "surface": "rate limiting (unwired)",
       "who": "n/a",
-      "source": "[app.py](backend/src/mcpolis/entrypoints/app.py#L1630)",
+      "source": "backend/src/mcpolis/entrypoints/app.py#L1630",
       "risk": "middleware built but not installed today"
     }
   ],
@@ -6838,7 +6838,7 @@
     {
       "target": "C48/C49 field encryption at rest",
       "tested": "partial",
-      "tests": "[tests/unit](backend/tests/unit/)",
+      "tests": "backend/tests/unit/",
       "gap": "key-rotation invalidation path under-exercised",
       "confidence": "inferred"
     }

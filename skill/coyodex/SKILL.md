@@ -2,8 +2,8 @@
 name: coyodex
 description: >
   Build and maintain a coyodex project map — a top-down, drillable map of a codebase (behavioral
-  layer first, then the structural machine), committed next to the code and rendered as an
-  interactive C4 diagram. Use this skill whenever the user wants to: generate / build a project
+  layer first, then the structural machine), committed next to the code as a model and served as an
+  interactive C4 diagram by `coyodex serve`. Use this skill whenever the user wants to: generate / build a project
   map or codebase map "with the coyodex method", "map this repo", analyze the change impact of a
   diff against an existing map, or accept a change-impact report into the baseline. Triggers on
   "coyodex", "project map", "codebase map", "change impact", "accept the map".

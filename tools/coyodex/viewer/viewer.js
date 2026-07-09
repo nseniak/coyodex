@@ -1,38 +1,84 @@
 // `mermaid` is the global from the SRI-pinned UMD <script> in <head>.
 
-const GRAPH = __GRAPH_JSON__;
-const MERMAID_BASE = __MERMAID_BASE__;
-const MERMAID_DIFF = __MERMAID_DIFF__;
-const MERMAID_CONTEXT = __MERMAID_CONTEXT__;
-const MERMAID_CONTAINER = __MERMAID_CONTAINER__;
-const MERMAID_BY_SUB = __MERMAID_BY_SUB__;        // subsystem neighbourhood: sid -> sub-diagram
-const MERMAID_EDGE_CARD = __MERMAID_EDGE_CARD__;  // edge pair: 'A>B' -> two-subsystem sub-diagram
-const CONTAINER_EDGES = __CONTAINER_EDGES__;      // inter-subsystem arrow 'A>B' -> [crossing component edges]
-const MERMAID_DOMAIN = __MERMAID_DOMAIN__;        // T5 domain model as a classDiagram (flat, ungrouped)
-const MERMAID_DOMAIN_CONTAINER = __MERMAID_DOMAIN_CONTAINER__;  // Subdomains overview (flowchart of SD boxes)
-const MERMAID_DOMAIN_SUB = __MERMAID_DOMAIN_SUB__;             // per-subdomain card: SD-id -> classDiagram
-const MERMAID_DOMAIN_EDGE_CARD = __MERMAID_DOMAIN_EDGE_CARD__; // subdomain edge pair: 'A>B' -> two-subdomain classDiagram
-const MERMAID_BRIDGE_CARD = __MERMAID_BRIDGE_CARD__;           // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
-const DOMAIN_CONTAINER_EDGES = __DOMAIN_CONTAINER_EDGES__;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
-const MERMAID_GP = __MERMAID_GP__;                // Golden Path (Level 1): use cases as a black-box sequence
-const FLOWS_MM = __FLOWS_MM__;                    // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
-const FLOWS_NARR = __FLOWS_NARR__;                // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
-const GP_ACTORS = __GP_ACTORS__;                  // Golden-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
-const FLOW_ACTORS = __FLOW_ACTORS__;              // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level actor lifelines (mirrors GP_ACTORS, scoped to one flow's own steps)
-const ELEMENT_TINT = __ELEMENT_TINT__;            // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
-const MERMAID_LIBS = __MERMAID_LIBS__;            // Context "Libraries" drill: System + the folded in-process deps
-const FOLDED_LIBS = __FOLDED_LIBS__;              // [{id,name,type}] folded out of Context into the Libraries box
+// Generic frontend: this file ships identical for every map. All per-project data — the graph plus every
+// pre-rendered diagram source, use-case flow, colour table, and source-link config — is fetched at boot
+// from the coyodex server (/p/<slug>/api/view) and assigned into the module vars below by applyBundle().
+// These were `const … = __PLACEHOLDER__` back when the data was baked into a standalone HTML file; that
+// portable file:// mode was retired when the data moved server-side, so there is nothing to open offline.
+let GRAPH;
+let MERMAID_BASE, MERMAID_DIFF, MERMAID_CONTEXT, MERMAID_CONTAINER;
+let MERMAID_BY_SUB;         // subsystem neighbourhood: sid -> sub-diagram
+let MERMAID_EDGE_CARD;      // edge pair: 'A>B' -> two-subsystem sub-diagram
+let CONTAINER_EDGES;        // inter-subsystem arrow 'A>B' -> [crossing component edges]
+let MERMAID_DOMAIN;         // T5 domain model as a classDiagram (flat, ungrouped)
+let MERMAID_DOMAIN_CONTAINER;   // Subdomains overview (flowchart of SD boxes)
+let MERMAID_DOMAIN_SUB;         // per-subdomain card: SD-id -> classDiagram
+let MERMAID_DOMAIN_EDGE_CARD;   // subdomain edge pair: 'A>B' -> two-subdomain classDiagram
+let MERMAID_BRIDGE_CARD;        // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
+let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
+let MERMAID_GP;            // Golden Path (Level 1): use cases as a black-box sequence
+let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
+let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
+let GP_ACTORS;          // Golden-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
+let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level actor lifelines (mirrors GP_ACTORS, scoped to one flow's own steps)
+let ELEMENT_TINT;       // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
+let MERMAID_LIBS;       // Context "Libraries" drill: System + the folded in-process deps
+let FOLDED_LIBS;        // [{id,name,type}] folded out of Context into the Libraries box
 const LIBS_ID = 'LIBS';                           // synthetic id of that collapsed box (matches gen_viewer.LIBS_ID)
-const HAS_GROUPING = __HAS_GROUPING__;
-const HAS_DOMAIN = __HAS_DOMAIN__;
-const HAS_SUBDOMAINS = __HAS_SUBDOMAINS__;  // domain model grouped into subdomains -> Domain view leads with the overview
-const HAS_GP = __HAS_GP__;
-const HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;  // gates the Glossary tab
-const CONTEXT_EDGES = __CONTEXT_EDGES__;
-const HAS_DIFF = __HAS_DIFF__;
-const META = __META__;
-const DIFF_STATE = __DIFF_STATE__;
-const FILE_TREE = __FILE_TREE__;  // mapped repo's file tree + map-coverage overlay (null when no walkable repo)
+let HAS_GROUPING, HAS_DOMAIN;
+let HAS_SUBDOMAINS;  // domain model grouped into subdomains -> Domain view leads with the overview
+let HAS_GP;
+let HAS_GLOSSARY;    // gates the Glossary tab (derived from the graph in applyBundle)
+let CONTEXT_EDGES;
+let HAS_DIFF;
+let META;
+let DIFF_STATE;
+let REPO_ROOT_DEFAULT;  // absolute repo root for 'open in editor' links (overridable in Settings)
+let GH_REPO_DEFAULT;    // GitHub repo URL (overridable in Settings) or null
+let GH_COMMIT;          // the map's commit SHA — blob links are pinned to it
+const FILE_TREE = null;  // the file tree is fetched live (api/tree), never embedded — kept for the shared build path
+// The map's own API base ('…/p/<slug>/api/'). null only under file://, which has no server to talk to.
+const API_BASE = /^https?:$/.test(location.protocol) ? new URL('./api/', location.href).href : null;
+
+// Assign one /api/view bundle into the module vars above. Field names are the bundle's (camelCase);
+// see gen_viewer.ViewBundle for the shape. Keep this in step with that TypedDict.
+function applyBundle(b) {
+  GRAPH = b.graph;
+  MERMAID_BASE = b.mermaidBase; MERMAID_DIFF = b.mermaidDiff; MERMAID_CONTEXT = b.mermaidContext;
+  MERMAID_CONTAINER = b.mermaidContainer; MERMAID_BY_SUB = b.mermaidBySub;
+  MERMAID_EDGE_CARD = b.mermaidEdgeCard; CONTAINER_EDGES = b.containerEdges;
+  MERMAID_DOMAIN = b.mermaidDomain; MERMAID_DOMAIN_CONTAINER = b.mermaidDomainContainer;
+  MERMAID_DOMAIN_SUB = b.mermaidDomainSub; MERMAID_DOMAIN_EDGE_CARD = b.mermaidDomainEdgeCard;
+  MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
+  MERMAID_GP = b.mermaidGp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
+  GP_ACTORS = b.gpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
+  MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
+  HAS_GROUPING = b.hasGrouping; HAS_DOMAIN = b.hasDomain; HAS_SUBDOMAINS = b.hasSubdomains;
+  HAS_GP = b.hasGp; HAS_DIFF = b.hasDiff; META = b.meta; DIFF_STATE = b.diffState;
+  REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
+  HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
+}
+
+function bootError(msg) {
+  const d = document.getElementById('diagram');
+  if (d) d.innerHTML = '<div style="padding:2rem;color:#b91c1c;font:14px/1.5 system-ui,sans-serif">' + msg + '</div>';
+}
+
+// Fetch the map's data BEFORE the rest of the module runs (top-level await): every statement below —
+// the indexes built from GRAPH, the view wiring gated on HAS_*, the initial go() — needs it in place.
+if (!API_BASE) {
+  bootError('This map is served by the coyodex server. Open it via “coyodex serve”, not as a local file.');
+  throw new Error('coyodex: no server (file:// has no data source)');
+}
+try {
+  const _res = await fetch(API_BASE + 'view', { cache: 'no-store' });
+  if (!_res.ok) throw new Error('view ' + _res.status);
+  applyBundle(await _res.json());
+} catch (err) {
+  bootError('Could not load this map from the server. Is “coyodex serve” still running?');
+  throw err;  // no data -> nothing below can run; stop the module here
+}
+
 const SVGNS = 'http://www.w3.org/2000/svg';
 const R = 10;
 const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'modified'],
@@ -2774,15 +2820,14 @@ function buildFileTree() {
   if (FILE_TREE) renderFileTree(FILE_TREE);
 }
 
-// --- FULL mode: the coyodex server (file browser + code viewer) ------------------
-// The map HTML adapts to how it was opened. Served by `coyodex serve` (http://…/<project>/) it is in
-// FULL mode: the file browser and code viewer read from the server, which serves files from git at the
-// map's commit. Opened as a static file (file://) it stays in DEGRADED mode — diagram + info only —
-// because a file:// page can't read local files. Detection: an http(s) origin whose /api/health probe
-// answers. The API base is the map's own directory + "api/" (works whether the URL ends in the project
-// folder or in project-map.html).
+// --- the coyodex server: file browser + code viewer ------------------------------
+// The map is always served by `coyodex serve` (the view data is fetched from it at boot), so the file
+// browser and code viewer are always available: they read files from the server, which serves them
+// from git at the map's commit. A /api/health probe confirms the API is reachable before we reveal the
+// panes. API_BASE is the map's own directory + "api/" (works whether the URL ends in the project folder
+// or in project-map.html); it is declared at the top of the module.
 let SERVED = false;
-const API_BASE = /^https?:$/.test(location.protocol) ? new URL('./api/', location.href).href : null;
+// API_BASE is declared at the top of the module (the view bundle is fetched from it at boot).
 async function initServerMode() {
   if (!API_BASE) return;  // file:// — degraded mode, nothing to probe
   try {
@@ -3011,10 +3056,8 @@ window.addEventListener('resize', refitStage);  // keep the diagram fitted when 
 // idea://, …) or, as a portable fallback, on GitHub (blob URL pinned to the map's commit). Ported
 // from mondrian: a target table + placeholder fill + a scheme allowlist + a hidden-anchor click —
 // no server, the OS scheme handler does the opening. The absolute path is built from a repo root the
-// user sets once (seeded at build time in REPO_ROOT_DEFAULT, overridable in Settings/localStorage).
-const REPO_ROOT_DEFAULT = __REPO_ROOT__;
-const GH_REPO_DEFAULT = __GH_REPO__;   // GitHub repo URL (overridable in Settings) or null
-const GH_COMMIT = __GH_COMMIT__;       // the map's commit SHA — blob links are pinned to it
+// user sets once (from REPO_ROOT_DEFAULT, delivered in the view bundle, overridable in Settings/localStorage).
+// REPO_ROOT_DEFAULT / GH_REPO_DEFAULT / GH_COMMIT are declared + filled at boot (top of module).
 const GH_BAKED = !!(GH_REPO_DEFAULT && GH_COMMIT);  // GitHub target available out of the box
 const OPEN_TARGETS = [
   { id: 'native', label: '— choose —', uri: '' },

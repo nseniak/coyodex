@@ -3,8 +3,9 @@
 
 The markdown view is the READABLE, COMMITTED rendering of `project-map.json` (canonical section
 order, template-shaped tables, deterministic output) — never hand-edited; `coyodex validate` warns
-when the committed copy is stale. The graph view feeds the HTML viewer (`gen_viewer.write_html`)
-its `GraphDict` input, built straight from the model.
+when the committed copy is stale. The graph view feeds the viewer bundle builder
+(`gen_viewer.build_view_bundle`, served by `coyodex serve`) its `GraphDict` input, built straight
+from the model.
 
 Stdlib-only. Both functions are pure (same model → same bytes).
 """
@@ -341,7 +342,7 @@ def _node(el, kind: str, name: str, file: str | None, fields: dict[str, str],
 
 
 def model_to_graph(m: ProjectModel) -> GraphDict:
-    """The model as the viewer's GraphDict, the shape `gen_viewer.write_html` renders. A
+    """The model as the viewer's GraphDict, the shape `gen_viewer.build_view_bundle` consumes. A
     component's drill file prefers its canonical `source` and falls back to its `entry_point`,
     then a link found in its free-text fields."""
     nodes: dict[str, Node] = {}
