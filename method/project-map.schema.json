@@ -291,8 +291,7 @@
             "string",
             "null"
           ],
-          "pattern": "\\[[^\\]]*\\]\\(([^)]+)\\)",
-          "description": "a markdown link to the group's home directory, `[label](path/dir/)` \u2014 the one anchor field that keeps an authored label, since a directory needs one."
+          "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. The group's home directory (or a representative file)."
         },
         "confidence": {
           "type": "string"

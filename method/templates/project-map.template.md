@@ -82,10 +82,10 @@ why: needs the result of GP1
 
 | ID | Subsystem | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
-| **S1** | <subsystem> | <one-line purpose> |  | [dir/](path/) | inferred |
-| **S2** | <large subsystem, subdivided below> | <one-line purpose> |  | [dir2/](path2/) | inferred |
-| **S3** | <sub-part of S2> | <one-line purpose> | S2 | [dir2/a/](path2/a/) | inferred |
-| **S4** | <another sub-part of S2> | <one-line purpose> | S2 | [dir2/b/](path2/b/) | inferred |
+| **S1** | <subsystem> | <one-line purpose> |  | path/ | inferred |
+| **S2** | <large subsystem, subdivided below> | <one-line purpose> |  | path2/ | inferred |
+| **S3** | <sub-part of S2> | <one-line purpose> | S2 | path2/a/ | inferred |
+| **S4** | <another sub-part of S2> | <one-line purpose> | S2 | path2/b/ | inferred |
 
 ---
 
@@ -151,8 +151,8 @@ why: needs the result of GP1
 
 | ID | Subdomain | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
-| **SD1** | <subdomain> | <one-line purpose> |  | [dir/](path/) | inferred |
-| **SD2** | <nested subdomain> | <one-line purpose> | SD1 | [dir/sub/](path/sub/) | inferred |
+| **SD1** | <subdomain> | <one-line purpose> |  | path/ | inferred |
+| **SD2** | <nested subdomain> | <one-line purpose> | SD1 | path/sub/ | inferred |
 
 ---
 

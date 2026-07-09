@@ -139,9 +139,9 @@ Semantics, stated on the fields:
   `entry_points[].source`, and `evidence[].file` all use it — `glossary[].source` and the two file
   OR directory fields (`components[].source`, `entities[].source`) may also be a bare directory ref
   `path/`, and `glossary[].source` is additionally nullable (a pure product-level term with no single
-  code home). The one exception is group `source` fields (`subsystems[].source` /
-  `subdomains[].source`), which stay **markdown links** `[dir](path/dir/)` since a directory needs
-  an authored label. `coyodex validate` rejects any anchor written some other way.
+  code home). Group `source` fields (`subsystems[].source` / `subdomains[].source`) use the same
+  bare form — a file `path:line` or a directory ref `path/` — exactly like `components[].source`.
+  `coyodex validate` rejects any anchor written some other way.
 - **`source` is the single canonical name for "where an element is defined"** — used uniformly across
   `components[].source`, `subsystems[].source` / `subdomains[].source`, `entities[].source`,
   `non_entity_types[].source`, `glossary[].source`, `entry_points[].source`, and `security[].source`.

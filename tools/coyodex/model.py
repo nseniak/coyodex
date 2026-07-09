@@ -72,7 +72,8 @@ class Group:
     name: str
     purpose: str = ""
     parent: str | None = None
-    source: str | None = None  # md link to the group's home dir
+    source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
+                               # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""
 
 

@@ -353,9 +353,9 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                              "Trigger → Outcome": u.trigger_outcome}, None)
     for s in m.subsystems:
         parent_name = subsystem_names.get(s.parent, s.parent) if s.parent else ""
-        nodes[s.id] = _node(s, "subsystem", s.name, _first_href(s.source),
+        nodes[s.id] = _node(s, "subsystem", s.name, s.source,
                             {"Subsystem": s.name, "Purpose": s.purpose, "Parent": parent_name,
-                             "Source": s.source or "", "Conf.": s.confidence}, s.parent)
+                             "Conf.": s.confidence}, s.parent)
     for c in m.components:
         subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""
         fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
@@ -380,10 +380,9 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         nodes[d.id] = node
     for sd in m.subdomains:
         parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""
-        nodes[sd.id] = _node(sd, "subdomain", sd.name, _first_href(sd.source),
+        nodes[sd.id] = _node(sd, "subdomain", sd.name, sd.source,
                              {"Subdomain": sd.name, "Purpose": sd.purpose,
-                              "Parent": parent_name, "Source": sd.source or "",
-                              "Conf.": sd.confidence}, sd.parent)
+                              "Parent": parent_name, "Conf.": sd.confidence}, sd.parent)
     for e in m.entities:
         meta: dict[str, str] = {}
         if e.meaning:

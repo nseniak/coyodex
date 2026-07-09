@@ -25,7 +25,7 @@ from typing import Union, get_args, get_origin, get_type_hints
 
 from coyodex import grammar
 from coyodex.model import FORMAT, ID_SHAPE, ProjectModel
-from coyodex.validate_model import _ANCHOR_LINE, _MD_LINK
+from coyodex.validate_model import _ANCHOR_LINE
 
 _PRIMITIVE = {str: "string", int: "integer", bool: "boolean"}
 
@@ -34,8 +34,6 @@ _ANCHOR_DESC = ("bare `path:line` anchor: a repo-relative file path, optionally 
                 "basename, fully derivable from the path, so it is never authored).")
 _DIR_OR_FILE_DESC = ("either a bare file `path:line` anchor (see `evidence[].file`'s description) "
                       "or a bare directory ref ending in `/`.")
-_GROUP_ANCHOR_DESC = ("a markdown link to the group's home directory, `[label](path/dir/)` — the "
-                       "one anchor field that keeps an authored label, since a directory needs one.")
 _EXTRA_DESC = ("freeform authored columns — any JSON value, agent-chosen keys. The ONE place with "
                "no fixed meaning: a key `coyodex validate` gives an enforced shape to, or that the "
                "method documents as a convention, graduates to a real field instead and is then "
@@ -61,7 +59,8 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Group", "parent"): {"pattern": ID_SHAPE.pattern, "description": "the enclosing group's id, "
                            "in the SAME forest (an S parents an S, an SD parents an SD), or null "
                            "for top-level."},
-    ("Group", "source"): {"pattern": _MD_LINK.pattern, "description": _GROUP_ANCHOR_DESC},
+    ("Group", "source"): {"description": _DIR_OR_FILE_DESC + " The group's home directory (or a "
+                           "representative file)."},
     ("UseCase", "id"): {"pattern": r"^UC\d+$"},
     ("EvidenceItem", "file"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EvidenceItem", "why"): {"description": "why this citation supports the claim — what a "

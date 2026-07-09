@@ -309,6 +309,24 @@ def test_entry_point_entity_md_link_is_a_blocking_problem():
     assert any("source" in p and "not a valid" in p for p in problems_of(m))
 
 
+# --- group source: a bare file-OR-directory anchor, like components[].source (no markdown link) ---
+
+def test_group_source_accepts_bare_dir_and_file():
+    m = make_valid_model()
+    m.subsystems = [Group(id="S1", name="Core", purpose="all", source="src/core/")]
+    m.components[0].subsystem = "S1"
+    m.subdomains = [Group(id="SD1", name="Dom", purpose="d", source="src/order.py:1")]
+    m.entities[0].subdomain = "SD1"
+    assert not any("source" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_group_source_rejects_markdown_link():
+    m = make_valid_model()
+    m.subsystems = [Group(id="S1", name="Core", purpose="all", source="[core](src/core/)")]
+    m.components[0].subsystem = "S1"
+    assert any("S1 source" in p and "not a valid" in p for p in problems_of(m))
+
+
 # --- files / evidence / package / alternative: real fields, not `extra` columns ---
 
 def test_component_files_and_evidence_round_trip_clean():

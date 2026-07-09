@@ -264,12 +264,9 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
 
 # The one canonical anchor shape (method/model.md's 'Anchor formats'): a bare repo-relative file
 # ref, optionally with `:line` or `:line-line`. A bare directory ref (`_DIR_ANCHOR`) is additionally
-# valid for `anchor`/`source`, which may point at a component's/entity's home directory. Group
-# anchors are the one exception that stay markdown links, since a directory needs an authored label
-# a bare ref can't carry.
+# valid for `source`, which may point at a component's/entity's/group's home directory.
 _ANCHOR_LINE = re.compile(r"^\S+\.\w+(?::\d+(?:-\d+)?)?$")
 _DIR_ANCHOR = re.compile(r"^\S+/$")
-_MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
 def _check_anchor_format(m: ProjectModel) -> list[str]:
@@ -283,14 +280,6 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
     def bad_anchor(label: str, val: str | None) -> None:  # a file OR a directory
         if val and not (_ANCHOR_LINE.match(val) or _DIR_ANCHOR.match(val)):
             problems.append(f"{label}: '{val}' is not a valid anchor (bare `path:line` or `path/`)")
-
-    def bad_group_anchor(label: str, val: str | None) -> None:
-        # A directory home is the common case, but a representative file is also authored in
-        # practice (and was never rejected) — only require an actual markdown link, not a
-        # specific href shape.
-        if val and not _MD_LINK.search(val):
-            problems.append(f"{label}: '{val}' is not a valid group anchor "
-                            f"(a markdown link, `[label](path)`)")
 
     for c in m.components:
         bad_anchor(f"{c.id} source", c.source)
@@ -306,7 +295,7 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
     for g in m.glossary:
         bad_anchor(f"glossary '{g.term}' source", g.source)
     for group in (*m.subsystems, *m.subdomains):
-        bad_group_anchor(f"{group.id} source", group.source)
+        bad_anchor(f"{group.id} source", group.source)
     return problems
 
 
@@ -385,9 +374,8 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         if href and not url.match(href):
             out.append((u.id, href))
     for group in (*m.subsystems, *m.subdomains):
-        href = _first_link_of(group, [group.source])
-        if href and not url.match(href):
-            out.append((group.id, href))
+        if group.source and not url.match(group.source):
+            out.append((f"{group.id} source", group.source))
     for c in m.components:
         if c.source and not url.match(c.source):
             out.append((f"{c.id} source", c.source))
