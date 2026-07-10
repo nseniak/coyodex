@@ -3608,7 +3608,13 @@ function renderCode(path, text, token) {
     markLine(cvLine);  // the latest requested line (may have arrived after the fetch started)
     paintCodeTags();   // tag every element / use-case step anchored in this file on its own line
     paintMinimap();    // and place its marks on the overview ruler
+    sbOnFileChanged(); // if the sidebar is showing a "@" outline, re-list it for the newly shown file
   });
+}
+// Re-run the search when a new file finishes rendering, but only while the sidebar is showing a "@"
+// file-scoped outline — so the outline follows whatever file the code viewer now shows.
+function sbOnFileChanged() {
+  if (!searchbar.hidden && sbInput.value.trim()[0] === '@') sbRun();
 }
 // Load `path` (repo-relative) into the code viewer, scrolled to `line`. Same file + new line just moves
 // the highlight (no refetch). Only meaningful in FULL mode; a no-op otherwise.
@@ -4120,11 +4126,52 @@ function sbScore(q, s) {
   return { score: sc - s.length * 0.2, pos };
 }
 
+// The outline of the file currently open in the code viewer: its map items (elements / use-case steps
+// anchored here) plus its real code symbols, as search rows, in source-line order. Feeds the "@" scope.
+// null = no file open. This is the "go to symbol in this file" list.
+function sbFileScopedItems() {
+  const path = cvPath;
+  if (!path) return null;
+  const items = [];
+  for (const it of codeItemsForPath(path)) {
+    items.push({ text: it.name, sub: 'line ' + it.line, line: it.line,
+      cls: it.kind === 'usecase' ? 'usecase' : 'component', badge: it.label, run: it.select });
+  }
+  for (const s of ((SYMBOLS_BY_FILE && SYMBOLS_BY_FILE[treeKey(path)]) || [])) {
+    items.push({ text: s.name, sub: 'line ' + s.line, line: s.line,
+      cls: 'symbol', badge: s.kind === 'class' ? 'class' : 'function',
+      run: ((l) => () => scrollCodeToLine(l))(s.line) });
+  }
+  items.sort((a, b) => (a.line || 0) - (b.line || 0));
+  return items;
+}
+function sbShowMessage(msg) {
+  sbRows = []; sbActive = -1; sbMeta.textContent = '';
+  sbResults.innerHTML = '<div class="sb-empty">' + msg + '</div>';
+}
+
 let sbRows = [];    // current results in display order: [{ it, score, pos }]
 let sbActive = -1;
 function sbRun() {
   const raw = sbInput.value.trim();
   sbEnsureIndex();
+  // "@" scopes to the file open in the code viewer: "@" alone lists its symbols in source order (the
+  // outline); "@foo" fuzzy-matches within them. This is symbol navigation for the current file.
+  if (raw[0] === '@') {
+    const scoped = sbFileScopedItems();
+    if (scoped === null) { sbShowMessage('Open a file in the code viewer, then use <kbd>@</kbd> to jump to a symbol in it.'); return; }
+    if (!scoped.length) { sbShowMessage('No symbols found in this file.'); return; }
+    const q = raw.slice(1).trim().toLowerCase();
+    const scored = [];
+    for (const it of scoped) {
+      if (!q) { scored.push({ it, score: 0, pos: [] }); continue; }  // no query -> keep source-line order
+      const m = sbScore(q, it.text);
+      if (m) scored.push({ it, score: m.score, pos: m.pos });
+    }
+    if (q) scored.sort((a, b) => b.score - a.score || a.it.text.length - b.it.text.length);
+    sbRender(scored, raw, scored.length);
+    return;
+  }
   if (!raw) { sbRender([], '', 0); return; }
   const q = raw.toLowerCase();
   const all = SEARCH_STATIC.concat(sbFileItems(), SEARCH_SYMBOLS || []);
@@ -4149,7 +4196,7 @@ function sbHighlight(it, pos) {
 function sbRender(scored, raw, total) {
   sbRows = scored;
   sbActive = scored.length ? 0 : -1;
-  if (!raw) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">Type to search elements, files, glossary terms and fields. <kbd>↑</kbd><kbd>↓</kbd> to move, <kbd>↵</kbd> to jump.</div>'; return; }
+  if (!raw) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">Type to search elements, files, symbols, glossary terms and fields. <kbd>@</kbd> jumps to a symbol in the open file. <kbd>↑</kbd><kbd>↓</kbd> to move, <kbd>↵</kbd> to jump.</div>'; return; }
   if (!scored.length) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">No matches for “' + esc(raw) + '”.</div>'; return; }
   sbMeta.textContent = (total > scored.length ? scored.length + ' of ' + total : String(total)) + ' result' + (total === 1 ? '' : 's');
   const frag = document.createDocumentFragment();
