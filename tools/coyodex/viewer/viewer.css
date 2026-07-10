@@ -69,12 +69,16 @@ body:not(.search-open) #sbresizer { display: none; }
 .sb-badge.file     { background: #f1f5f9; color: #64748b; }
 .sb-badge.dir      { background: #f8fafc; color: #94a3b8; }
 .sb-badge.symbol   { background: #e2e8f0; color: #334155; }  /* real code symbols (class/function) */
+.sb-badge.prose    { background: #fef3c7; color: #92400e; }  /* full-text hit inside a description field */
 .sb-text { flex: 1 1 auto; min-width: 0; font-size: 13px; color: #111; overflow: hidden;
            text-overflow: ellipsis; white-space: nowrap; }
-.sb-text mark { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
+.sb-text mark, .sb-sub mark { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
 .sb-text .sb-dir { color: #9ca3af; }
 .sb-sub { flex: 0 1 auto; min-width: 0; font-size: 11px; color: #9ca3af; overflow: hidden;
           text-overflow: ellipsis; white-space: nowrap; }
+/* A full-text (description) hit: the element name stays compact and the matched snippet takes the room. */
+.sb-row.prose .sb-text { flex: 0 1 auto; font-weight: 500; }
+.sb-row.prose .sb-sub { flex: 1 1 auto; }
 .sb-empty { padding: 16px 12px; color: #9ca3af; font-size: 12px; }
 .sb-empty kbd { font: inherit; font-size: 11px; background: #f3f4f6; border: 1px solid #e5e7eb;
                 border-radius: 4px; padding: 0 4px; }

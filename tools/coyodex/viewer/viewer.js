@@ -4012,7 +4012,8 @@ document.addEventListener('mouseup', () => {
 // the browser, a term flashes on the Glossary. Collapsed by default; the header magnifier, "/" or ⌘K
 // toggles it (open/closed state persisted). No server round-trips — the graph is already in memory and
 // SEARCH_FILES is filled from the loaded tree.
-let SEARCH_STATIC = null;     // elements + fields + glossary — built once (the graph is fixed at boot)
+let SEARCH_STATIC = null;     // elements + fields + glossary (by NAME) — built once (the graph is fixed at boot)
+let SEARCH_PROSE = null;      // description bodies (purpose / meaning / …) for full-text — built once
 let SEARCH_FILES = [];        // {path,dir} for every tree entry — (re)filled by renderFileTree
 let SEARCH_SYMBOLS = null;    // code symbols (class/fn) as search rows — null = not fetched, [] = fetched
 let SYMBOLS_BY_FILE = null;   // treeKey(file) -> [{name,line,kind}] — for the code-viewer outline (Phase 2b)
@@ -4054,7 +4055,46 @@ function sbBuildStatic() {
   }
   return items;
 }
-function sbEnsureIndex() { if (!SEARCH_STATIC) SEARCH_STATIC = sbBuildStatic(); }
+// The full-text (description) index: the PROSE fields — a purpose, a "used for", a trigger→outcome, an
+// entity meaning, a glossary meaning — as searchable bodies. Structural fields (name, kind, parent,
+// entry-point path, …) are excluded: they just echo the name/paths the name index already covers. A hit
+// renders as "[field] ElementName — …snippet…" and navigates to the element (or glossary term).
+const SB_PROSE_SKIP = new Set(['Subsystem', 'Component', 'Entry point', 'Name', 'Kind', 'Type',
+                               'Parent', 'Subdomain', 'Actor', 'Use case']);
+function sbBuildProse() {
+  const items = [];
+  const nodes = GRAPH.nodes || {};
+  for (const id in nodes) {
+    const n = nodes[id];
+    if (!n || !n.name) continue;
+    for (const key in (n.fields || {})) {
+      const val = n.fields[key];
+      if (SB_PROSE_SKIP.has(key) || typeof val !== 'string' || val.trim().length < 4) continue;
+      items.push({ text: n.name, body: val, prose: true, cls: 'prose', badge: key.toLowerCase(),
+        run: ((nid) => () => selectFromTree(nid))(id) });
+    }
+  }
+  for (const g of (GRAPH.glossary || [])) {
+    if (!g || !g.term || !g.meaning) continue;
+    items.push({ text: g.term, body: g.meaning, prose: true, cls: 'prose', badge: 'meaning',
+      run: ((t, s) => () => sbGotoGlossary(t, s))(g.term, g.source) });
+  }
+  return items;
+}
+function sbEnsureIndex() {
+  if (!SEARCH_STATIC) SEARCH_STATIC = sbBuildStatic();
+  if (!SEARCH_PROSE) SEARCH_PROSE = sbBuildProse();
+}
+// A one-line excerpt of a prose body centred on the match, matched chars in <mark>, elided with "…".
+function sbSnippet(body, pos) {
+  if (!pos.length) return esc(body.slice(0, 90));
+  const first = pos[0], last = pos[pos.length - 1];
+  const start = Math.max(0, first - 24), end = Math.min(body.length, Math.max(last + 40, start + 80));
+  const set = new Set(pos);
+  let out = start > 0 ? '…' : '';
+  for (let i = start; i < end; i++) out += set.has(i) ? '<mark>' + esc(body[i]) + '</mark>' : esc(body[i]);
+  return out + (end < body.length ? '…' : '');
+}
 
 // Code symbols (real class/function definitions) from the build-time pre-index, fetched lazily from the
 // server the first time search is opened. They round out the index beyond the map's curated elements —
@@ -4107,7 +4147,7 @@ const sbBoundary = (s, i) => { if (i === 0) return true; const c = s.charCodeAt(
 // Score `q` (already lowercased) against `s`. Higher = better; null = no match. A contiguous substring is
 // the strong case (prefix / word-boundary bonuses); otherwise a subsequence match, rewarding runs and
 // boundary landings and penalising gaps. Returns the matched positions too, for highlighting.
-function sbScore(q, s) {
+function sbScore(q, s, substringOnly) {
   const sl = s.toLowerCase();
   const idx = sl.indexOf(q);
   if (idx >= 0) {
@@ -4116,6 +4156,10 @@ function sbScore(q, s) {
     if (idx === 0) sc += 600; else if (sbBoundary(sl, idx)) sc += 300;
     return { score: sc, pos };
   }
+  // Prose (full-text) matches the query as a literal phrase only — a fuzzy subsequence over a long
+  // description would match almost anything and scatter the highlight. Identifiers/names keep the
+  // subsequence fallback below (good for "IUAS" -> InMemoryUserAccountStore).
+  if (substringOnly) return null;
   let si = 0, run = 0, sc = 0; const pos = [];
   for (let i = 0; i < q.length; i++) {
     let found = -1;
@@ -4150,11 +4194,12 @@ function sbFileScopedItems() {
   return items;
 }
 function sbShowMessage(msg) {
-  sbRows = []; sbActive = -1; sbMeta.textContent = '';
+  sbRows = []; sbRowEls = []; sbActive = -1; sbMeta.textContent = '';
   sbResults.innerHTML = '<div class="sb-empty">' + msg + '</div>';
 }
 
-let sbRows = [];    // current results in display order: [{ it, score, pos }]
+let sbRows = [];    // current results in display order: [{ it, score, pos, group? }]
+let sbRowEls = [];  // the .sb-row elements, parallel to sbRows (section headers excluded) — active tracking
 let sbActive = -1;
 function sbRun() {
   const raw = sbInput.value.trim();
@@ -4178,14 +4223,28 @@ function sbRun() {
   }
   if (!raw) { sbRender([], '', 0); return; }
   const q = raw.toLowerCase();
-  const all = SEARCH_STATIC.concat(sbFileItems(), SEARCH_SYMBOLS || []);
-  const scored = [];
-  for (const it of all) {
+  // Names first: elements, entity fields, glossary terms, files/folders, and code symbols, ranked.
+  const nameItems = SEARCH_STATIC.concat(sbFileItems(), SEARCH_SYMBOLS || []);
+  const names = [];
+  for (const it of nameItems) {
     const m = sbScore(q, it.text);
-    if (m) scored.push({ it, score: m.score + (SB_TYPE_BONUS[it.cls] || 0) + (it.bonus || 0), pos: m.pos });
+    if (m) names.push({ it, score: m.score + (SB_TYPE_BONUS[it.cls] || 0) + (it.bonus || 0), pos: m.pos });
   }
-  scored.sort((a, b) => b.score - a.score || a.it.text.length - b.it.text.length);
-  sbRender(scored.slice(0, 60), raw, scored.length);
+  names.sort((a, b) => b.score - a.score || a.it.text.length - b.it.text.length);
+  const top = names.slice(0, 50);
+  // Then a separate "In descriptions" section: full-text over the prose bodies. Gated at 3+ chars (a
+  // 1–2 char query would match nearly every description) and kept below the name results, since a name
+  // hit is a stronger signal than a word buried in prose.
+  let prose = [];
+  if (q.length >= 3) {
+    for (const it of SEARCH_PROSE) {
+      const m = sbScore(q, it.body, true);   // substring-only: a literal phrase match, clean highlight
+      if (m) prose.push({ it, score: m.score, pos: m.pos, group: 'In descriptions' });
+    }
+    prose.sort((a, b) => b.score - a.score);
+    prose = prose.slice(0, 12);
+  }
+  sbRender(top.concat(prose), raw, names.length + prose.length);
 }
 // Char-by-char build with matched positions wrapped in <mark>; a path dims its directory portion.
 function sbHighlight(it, pos) {
@@ -4199,30 +4258,43 @@ function sbHighlight(it, pos) {
 }
 function sbRender(scored, raw, total) {
   sbRows = scored;
+  sbRowEls = [];
   sbActive = scored.length ? 0 : -1;
   if (!raw) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">Type to search elements, files, symbols, glossary terms and fields. <kbd>@</kbd> jumps to a symbol in the open file. <kbd>↑</kbd><kbd>↓</kbd> to move, <kbd>↵</kbd> to jump.</div>'; return; }
   if (!scored.length) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">No matches for “' + esc(raw) + '”.</div>'; return; }
   sbMeta.textContent = (total > scored.length ? scored.length + ' of ' + total : String(total)) + ' result' + (total === 1 ? '' : 's');
   const frag = document.createDocumentFragment();
+  let lastGroup = null;
   scored.forEach((r, i) => {
+    const group = r.group || null;                 // a section header appears when the group changes
+    if (group !== lastGroup) {
+      lastGroup = group;
+      if (group) { const h = document.createElement('div'); h.className = 'sb-group'; h.textContent = group; frag.appendChild(h); }
+    }
     const row = document.createElement('div');
-    row.className = 'sb-row' + (i === sbActive ? ' active' : '');
+    row.className = 'sb-row' + (r.it.prose ? ' prose' : '') + (i === sbActive ? ' active' : '');
+    // A prose (full-text) row shows the element name plain + the matched snippet; a name row highlights
+    // the name itself and shows its context sub, exactly as before.
+    const textHtml = r.it.prose ? esc(r.it.text) : sbHighlight(r.it, r.pos);
+    const subHtml = r.it.prose ? sbSnippet(r.it.body, r.pos) : (r.it.sub ? esc(r.it.sub) : '');
     row.innerHTML = '<span class="sb-badge ' + r.it.cls + '">' + esc(r.it.badge) + '</span>'
-      + '<span class="sb-text">' + sbHighlight(r.it, r.pos) + '</span>'
-      + (r.it.sub ? '<span class="sb-sub">' + esc(r.it.sub) + '</span>' : '');
+      + '<span class="sb-text">' + textHtml + '</span>'
+      + (subHtml ? '<span class="sb-sub">' + subHtml + '</span>' : '');
     row.addEventListener('mousemove', () => sbSetActive(i));
     row.addEventListener('click', () => { const rr = sbRows[i]; if (rr) rr.it.run(); });
+    sbRowEls.push(row);                             // parallel to sbRows[i]; group headers are NOT included
     frag.appendChild(row);
   });
   sbResults.innerHTML = '';
   sbResults.appendChild(frag);
 }
+// Active-row tracking keys off sbRowEls (the .sb-row elements only), not sbResults.children, so the
+// interspersed section headers don't throw off the indexing.
 function sbSetActive(i) {
   if (i === sbActive) return;
-  const rows = sbResults.children;
-  if (sbActive >= 0 && rows[sbActive]) rows[sbActive].classList.remove('active');
+  if (sbActive >= 0 && sbRowEls[sbActive]) sbRowEls[sbActive].classList.remove('active');
   sbActive = i;
-  if (rows[i]) { rows[i].classList.add('active'); rows[i].scrollIntoView({ block: 'nearest' }); }
+  if (sbRowEls[i]) { sbRowEls[i].classList.add('active'); sbRowEls[i].scrollIntoView({ block: 'nearest' }); }
 }
 
 // A folder result: reveal it in the file browser (open it in the code slot when it isn't pinned).
