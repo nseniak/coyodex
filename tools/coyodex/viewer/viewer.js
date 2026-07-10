@@ -2534,7 +2534,7 @@ function renderGlossary() {
     } else if (where) {
       cell = `<span class="gloss-plain">${esc(cleanPath(file, line))}</span>`;
     }
-    return `<tr><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${cell}</td></tr>`;
+    return `<tr data-term="${esc(g.term)}"><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${cell}</td></tr>`;
   }).join('');
   diagram.innerHTML = '<div class="glossary-wrap" style="padding-top:20px">'
     + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
@@ -3170,6 +3170,7 @@ function highlightTreePath(path) {
 // Build the file browser from a tree root (embedded FILE_TREE in the legacy path, or the server's
 // /api/tree in FULL mode). Indexes node<->path both ways, then renders the top level.
 function renderFileTree(root) {
+  SEARCH_FILES = [];  // rebuilt from this tree — feeds the search sidebar's file/folder results
   (function index(e) {
     // Only ANCHOR rows (cov 'self') feed the node->path map: an owned-file row also carries e.node (its
     // owner, for the click) but must NOT claim to be that owner's canonical path, or graph->tree would
@@ -3178,6 +3179,7 @@ function renderFileTree(root) {
       pathByNode[e.node] = treeKey(e.path);
       anchorsByPath[treeKey(e.path)] = [e.node, ...(e.others || [])];  // every element anchored at this file
     }
+    if (e.path) SEARCH_FILES.push({ path: e.path, dir: !!e.dir });  // every file + folder, for search
     for (const c of e.children) index(c);
   })(root);
   const kids = root.children || [];
@@ -3725,7 +3727,8 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', leftW: 'coyodex.leftW', panelH: 'coyodex.panelH', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned' };
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', leftW: 'coyodex.leftW', panelH: 'coyodex.panelH', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
+  searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
 // A single global key let a root saved while viewing one repo's map open files from the WRONG repo in
@@ -3992,6 +3995,222 @@ document.addEventListener('mouseup', () => {
   treeResizing = false; document.body.classList.remove('resizing');
   lsSet(LS.treeW, String(parseInt(tree.style.width, 10) || ''));
 });
+// --- search sidebar: incremental "jump to anything" ------------------------------
+// One in-memory index over the whole map — element names, entity fields, glossary terms, and (in FULL
+// mode) every file + folder — fuzzy-matched incrementally as you type. A hit reuses the viewer's own
+// navigation: an element selects in its home view, a file opens in the code viewer, a folder opens in
+// the browser, a term flashes on the Glossary. Collapsed by default; the header magnifier, "/" or ⌘K
+// toggles it (open/closed state persisted). No server round-trips — the graph is already in memory and
+// SEARCH_FILES is filled from the loaded tree.
+let SEARCH_STATIC = null;     // elements + fields + glossary — built once (the graph is fixed at boot)
+let SEARCH_FILES = [];        // {path,dir} for every tree entry — (re)filled by renderFileTree
+const searchbar = document.getElementById('searchbar');
+const searchBtn = document.getElementById('searchbtn');
+const sbInput = document.getElementById('sbinput');
+const sbClose = document.getElementById('sbclose');
+const sbResults = document.getElementById('sbresults');
+const sbMeta = document.getElementById('sbmeta');
+
+const SB_KIND_LABEL = { usecase: 'use case', subsystem: 'subsystem', component: 'component',
+                        subdomain: 'subdomain', entity: 'entity' };
+const sbElemLabel = (n) => (n.kind === 'dep' ? ((n.fields && n.fields.Kind) || 'dependency') : (SB_KIND_LABEL[n.kind] || n.kind));
+// A per-kind nudge so a same-quality name match on a behaviour/structure element outranks a raw path hit.
+const SB_TYPE_BONUS = { usecase: 45, subsystem: 40, component: 35, entity: 35, subdomain: 30, dep: 30,
+                        gloss: 25, field: 10, file: 5, dir: -5 };
+
+// The fixed half of the index: every named node, each entity's fields, every glossary term. Built once.
+function sbBuildStatic() {
+  const items = [];
+  const nodes = GRAPH.nodes || {};
+  for (const id in nodes) {
+    const n = nodes[id];
+    if (!n || !n.name) continue;
+    const parent = n.parent && nodes[n.parent] ? nodes[n.parent].name : '';
+    items.push({ text: n.name, sub: parent, cls: n.kind, badge: sbElemLabel(n),
+      run: ((nid) => () => selectFromTree(nid))(id) });
+    for (const a of (n.attrs || [])) {
+      if (!a || !a.name) continue;
+      items.push({ text: a.name, sub: n.name, cls: 'field', badge: 'field',
+        run: ((nid) => () => selectFromTree(nid))(id) });
+    }
+  }
+  for (const g of (GRAPH.glossary || [])) {
+    if (!g || !g.term) continue;
+    items.push({ text: g.term, sub: (g.meaning || '').replace(/\s+/g, ' ').slice(0, 90),
+      cls: 'gloss', badge: 'term', run: ((t, s) => () => sbGotoGlossary(t, s))(g.term, g.source) });
+  }
+  return items;
+}
+function sbEnsureIndex() { if (!SEARCH_STATIC) SEARCH_STATIC = sbBuildStatic(); }
+// The file/folder half, rebuilt each search from SEARCH_FILES so it tracks whatever tree is loaded.
+function sbFileItems() {
+  return SEARCH_FILES.map((f) => ({ text: f.path, sub: '', cls: f.dir ? 'dir' : 'file',
+    badge: f.dir ? 'folder' : 'file',
+    run: f.dir ? ((p) => () => sbGotoDir(p))(f.path) : ((p) => () => openInCodeViewer(p, null))(f.path) }));
+}
+
+const sbBoundary = (s, i) => { if (i === 0) return true; const c = s.charCodeAt(i - 1); return c === 47 || c === 95 || c === 45 || c === 32 || c === 46 || c === 58; };  // / _ - space . :
+// Score `q` (already lowercased) against `s`. Higher = better; null = no match. A contiguous substring is
+// the strong case (prefix / word-boundary bonuses); otherwise a subsequence match, rewarding runs and
+// boundary landings and penalising gaps. Returns the matched positions too, for highlighting.
+function sbScore(q, s) {
+  const sl = s.toLowerCase();
+  const idx = sl.indexOf(q);
+  if (idx >= 0) {
+    const pos = []; for (let i = 0; i < q.length; i++) pos.push(idx + i);
+    let sc = 1000 - idx - Math.max(0, s.length - q.length) * 0.4;
+    if (idx === 0) sc += 600; else if (sbBoundary(sl, idx)) sc += 300;
+    return { score: sc, pos };
+  }
+  let si = 0, run = 0, sc = 0; const pos = [];
+  for (let i = 0; i < q.length; i++) {
+    let found = -1;
+    for (let j = si; j < sl.length; j++) { if (sl[j] === q[i]) { found = j; break; } }
+    if (found < 0) return null;
+    pos.push(found);
+    let add = 12;
+    if (sbBoundary(sl, found)) add += 18;
+    if (found === si) { run += 1; add += run * 6; } else { run = 0; add -= Math.min(found - si, 8); }
+    sc += add; si = found + 1;
+  }
+  return { score: sc - s.length * 0.2, pos };
+}
+
+let sbRows = [];    // current results in display order: [{ it, score, pos }]
+let sbActive = -1;
+function sbRun() {
+  const raw = sbInput.value.trim();
+  sbEnsureIndex();
+  if (!raw) { sbRender([], '', 0); return; }
+  const q = raw.toLowerCase();
+  const all = SEARCH_STATIC.concat(sbFileItems());
+  const scored = [];
+  for (const it of all) {
+    const m = sbScore(q, it.text);
+    if (m) scored.push({ it, score: m.score + (SB_TYPE_BONUS[it.cls] || 0), pos: m.pos });
+  }
+  scored.sort((a, b) => b.score - a.score || a.it.text.length - b.it.text.length);
+  sbRender(scored.slice(0, 60), raw, scored.length);
+}
+// Char-by-char build with matched positions wrapped in <mark>; a path dims its directory portion.
+function sbHighlight(it, pos) {
+  const set = new Set(pos), s = it.text;
+  const build = (from, to) => { let out = ''; for (let i = from; i < to; i++) out += set.has(i) ? '<mark>' + esc(s[i]) + '</mark>' : esc(s[i]); return out; };
+  if (it.cls === 'file' || it.cls === 'dir') {
+    const cut = s.lastIndexOf('/') + 1;
+    return (cut ? '<span class="sb-dir">' + build(0, cut) + '</span>' : '') + build(cut, s.length);
+  }
+  return build(0, s.length);
+}
+function sbRender(scored, raw, total) {
+  sbRows = scored;
+  sbActive = scored.length ? 0 : -1;
+  if (!raw) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">Type to search elements, files, glossary terms and fields. <kbd>↑</kbd><kbd>↓</kbd> to move, <kbd>↵</kbd> to jump.</div>'; return; }
+  if (!scored.length) { sbMeta.textContent = ''; sbResults.innerHTML = '<div class="sb-empty">No matches for “' + esc(raw) + '”.</div>'; return; }
+  sbMeta.textContent = (total > scored.length ? scored.length + ' of ' + total : String(total)) + ' result' + (total === 1 ? '' : 's');
+  const frag = document.createDocumentFragment();
+  scored.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'sb-row' + (i === sbActive ? ' active' : '');
+    row.innerHTML = '<span class="sb-badge ' + r.it.cls + '">' + esc(r.it.badge) + '</span>'
+      + '<span class="sb-text">' + sbHighlight(r.it, r.pos) + '</span>'
+      + (r.it.sub ? '<span class="sb-sub">' + esc(r.it.sub) + '</span>' : '');
+    row.addEventListener('mousemove', () => sbSetActive(i));
+    row.addEventListener('click', () => { const rr = sbRows[i]; if (rr) rr.it.run(); });
+    frag.appendChild(row);
+  });
+  sbResults.innerHTML = '';
+  sbResults.appendChild(frag);
+}
+function sbSetActive(i) {
+  if (i === sbActive) return;
+  const rows = sbResults.children;
+  if (sbActive >= 0 && rows[sbActive]) rows[sbActive].classList.remove('active');
+  sbActive = i;
+  if (rows[i]) { rows[i].classList.add('active'); rows[i].scrollIntoView({ block: 'nearest' }); }
+}
+
+// A folder result: reveal it in the file browser (open it in the code slot when it isn't pinned).
+function sbGotoDir(path) {
+  if (!treePinned) setBrowsing(true);
+  const key = treeKey(path);
+  highlightTreePath(key);   // expands ancestors, highlights the row, scrolls it into view
+  expandDir(key);           // then open the folder itself
+}
+// A glossary result: switch to the Glossary view, flash the term's row, and open its source if it has one.
+// go() may animate a view change, so poll for the freshly rendered row before flashing.
+function sbGotoGlossary(term, source) {
+  go({ kind: 'glossary' });
+  const flash = (tries) => {
+    let hit = null;
+    diagram.querySelectorAll('.glossary tbody tr').forEach((r) => { if (r.dataset.term === term) hit = r; });
+    if (hit) {
+      hit.scrollIntoView({ block: 'center' });
+      hit.classList.add('sb-flash');
+      setTimeout(() => hit.classList.remove('sb-flash'), 1200);
+      if (source && localRef(source)) { const wn = whereNode(source); openInCodeViewer(wn.file, wn.line); }
+      return;
+    }
+    if (tries > 0) requestAnimationFrame(() => flash(tries - 1));
+  };
+  requestAnimationFrame(() => flash(60));
+}
+
+function setSearchOpen(on) {
+  searchbar.hidden = !on;
+  document.body.classList.toggle('search-open', on);
+  lsSet(LS.searchOpen, on ? '1' : '0');
+  refitStage();  // the diagram column just narrowed / widened — reframe it
+  if (on) { sbEnsureIndex(); sbRun(); sbInput.focus(); sbInput.select(); }
+}
+// Resizable width (persisted + clamped). The sidebar's width change is taken OUT OF the middle pane
+// (the diagram + info column), not the code viewer: as the sidebar grows by Δ the middle column shrinks
+// by Δ, so the file browser and code pane on the right stay put. resizeStagePreserve keeps the diagram's
+// current zoom instead of re-fitting on every nudge.
+const sbResizer = document.getElementById('sbresizer');
+const clampSearchW = (w) => Math.min(Math.max(w, 220), Math.round(window.innerWidth * 0.45));
+const savedSearchW = parseInt(lsGet(LS.searchW) || '', 10);
+if (savedSearchW) searchbar.style.width = clampSearchW(savedSearchW) + 'px';
+let sbResizing = false, sbDragX = 0, sbDragSbW = 0, sbDragLeftW = 0;
+sbResizer.addEventListener('mousedown', (e) => {
+  e.preventDefault(); sbResizing = true; document.body.classList.add('resizing');
+  sbDragX = e.clientX;
+  sbDragSbW = searchbar.getBoundingClientRect().width;
+  sbDragLeftW = leftcol.getBoundingClientRect().width;  // px snapshot so the middle pane can give the space back
+});
+document.addEventListener('mousemove', (e) => {
+  if (!sbResizing) return;
+  const newSbW = clampSearchW(sbDragSbW + (e.clientX - sbDragX));
+  const applied = newSbW - sbDragSbW;                 // real sidebar delta after clamping
+  searchbar.style.width = newSbW + 'px';
+  leftcol.style.width = clampLeftW(sbDragLeftW - applied) + 'px';  // middle pane absorbs it; right panes unchanged
+  resizeStagePreserve();
+});
+document.addEventListener('mouseup', () => {
+  if (!sbResizing) return;
+  sbResizing = false; document.body.classList.remove('resizing');
+  lsSet(LS.searchW, String(parseInt(searchbar.style.width, 10) || ''));
+  lsSet(LS.leftW, String(parseInt(leftcol.style.width, 10) || ''));  // the middle pane moved too — persist it
+});
+
+const toggleSearch = () => setSearchOpen(searchbar.hidden);
+searchBtn.addEventListener('click', toggleSearch);
+sbClose.addEventListener('click', () => setSearchOpen(false));
+sbInput.addEventListener('input', sbRun);
+sbInput.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown') { e.preventDefault(); if (sbRows.length) sbSetActive((sbActive + 1) % sbRows.length); }
+  else if (e.key === 'ArrowUp') { e.preventDefault(); if (sbRows.length) sbSetActive((sbActive - 1 + sbRows.length) % sbRows.length); }
+  else if (e.key === 'Enter') { e.preventDefault(); const r = sbRows[sbActive]; if (r) r.it.run(); }
+  else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setSearchOpen(false); }
+});
+// Global shortcuts: ⌘/Ctrl-K toggles; bare "/" opens + focuses (unless already typing in a field).
+document.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) { e.preventDefault(); toggleSearch(); return; }
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') || (e.target && e.target.isContentEditable);
+  if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) { e.preventDefault(); setSearchOpen(true); }
+});
+if (lsGet(LS.searchOpen) === '1') setSearchOpen(true);  // collapsed by default; reopen only if left open
+
 buildFileTree();
 initServerMode();  // probe for `coyodex serve`; on success reveal + wire the file browser and code viewer
 

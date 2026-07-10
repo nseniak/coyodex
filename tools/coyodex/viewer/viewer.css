@@ -22,10 +22,72 @@ header button:hover { background: #818cf8; }
 #zoomctl button { font-size: 13px; line-height: 1; padding: 4px 9px; }
 #zoomctl #zoomlevel { min-width: 52px; font-size: 12px; font-variant-numeric: tabular-nums; }
 main { display: flex; flex: 1; min-height: 0; }
+
+/* --- search sidebar --------------------------------------------------------------------------------
+   Far-left collapsible pane: an incremental "jump to anything" search over the in-memory map index
+   (elements, files/folders, glossary terms, entity fields). Hidden by default (the `hidden` attribute
+   wins over the flex display); the header magnifier / "/" toggles it. When open it's a fixed-width
+   column left of the diagram, so the rest of the layout just shifts right. */
+header #searchbtn { font-size: 13px; line-height: 1; padding: 4px 9px; flex: 0 0 auto; }
+body.search-open header #searchbtn { background: #a5b4fc; color: #1e1b4b; }
+#searchbar { flex: 0 0 auto; width: 300px; min-width: 0; display: flex; flex-direction: column;
+             background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
+#searchbar[hidden] { display: none; }
+/* Drag handle on the sidebar's right edge (mirror of #resizer/#treeresizer); only while search is open. */
+#sbresizer { flex: 0 0 5px; cursor: col-resize; background: #e5e7eb; }
+#sbresizer:hover, body.resizing #sbresizer { background: #818cf8; }
+body:not(.search-open) #sbresizer { display: none; }
+#sbhead { flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+          border-bottom: 1px solid #f3f4f6; }
+#sbinput { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 13px; padding: 6px 9px;
+           border: 1px solid #d1d5db; border-radius: 6px; outline: none; }
+#sbinput:focus { border-color: #818cf8; box-shadow: 0 0 0 2px #c7d2fe; }
+#sbclose { flex: 0 0 auto; font-size: 15px; line-height: 1; padding: 3px 7px; border: 1px solid #e5e7eb;
+           background: #fff; color: #6b7280; border-radius: 6px; cursor: pointer; }
+#sbclose:hover { background: #f3f4f6; color: #111; }
+#sbmeta { flex: 0 0 auto; padding: 5px 12px; font-size: 11px; color: #9ca3af;
+          border-bottom: 1px solid #f3f4f6; }
+#sbmeta:empty { display: none; }
+#sbresults { flex: 1 1 auto; overflow-y: auto; }
+.sb-group { padding: 7px 12px 3px; font-size: 10px; font-weight: 700; letter-spacing: .04em;
+            text-transform: uppercase; color: #9ca3af; }
+.sb-row { display: flex; align-items: baseline; gap: 7px; padding: 5px 12px; cursor: pointer;
+          border-left: 2px solid transparent; }
+.sb-row:hover { background: #f9fafb; }
+.sb-row.active { background: #eef2ff; border-left-color: #6366f1; }
+.sb-badge { flex: 0 0 auto; font-size: 9.5px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
+            padding: 1px 5px; border-radius: 4px; background: #f3f4f6; color: #6b7280; white-space: nowrap;
+            position: relative; top: -1px; }
+.sb-badge.usecase  { background: #dbeafe; color: #1d4ed8; }
+.sb-badge.subsystem{ background: #e0e7ff; color: #4338ca; }
+.sb-badge.component{ background: #d1fae5; color: #047857; }
+.sb-badge.entity   { background: #ede9fe; color: #6d28d9; }
+.sb-badge.subdomain{ background: #f3e8ff; color: #7e22ce; }
+.sb-badge.dep      { background: #ffedd5; color: #c2410c; }
+.sb-badge.field    { background: #f1f5f9; color: #475569; }
+.sb-badge.gloss    { background: #fce7f3; color: #be185d; }
+.sb-badge.file     { background: #f1f5f9; color: #64748b; }
+.sb-badge.dir      { background: #f8fafc; color: #94a3b8; }
+.sb-text { flex: 1 1 auto; min-width: 0; font-size: 13px; color: #111; overflow: hidden;
+           text-overflow: ellipsis; white-space: nowrap; }
+.sb-text mark { background: #fde68a; color: inherit; border-radius: 2px; padding: 0 1px; }
+.sb-text .sb-dir { color: #9ca3af; }
+.sb-sub { flex: 0 1 auto; min-width: 0; font-size: 11px; color: #9ca3af; overflow: hidden;
+          text-overflow: ellipsis; white-space: nowrap; }
+.sb-empty { padding: 16px 12px; color: #9ca3af; font-size: 12px; }
+.sb-empty kbd { font: inherit; font-size: 11px; background: #f3f4f6; border: 1px solid #e5e7eb;
+                border-radius: 4px; padding: 0 4px; }
+/* A glossary row the search jumped to — a brief highlight so the eye catches the landing. */
+.glossary tr.sb-flash > * { background: #fef9c3; transition: background .25s ease; }
+/* No server (static map): the file browser + code panes are hidden, but the search sidebar still works
+   over elements + glossary, so it stays available. */
 /* Left column (dominant): diagram on top, info pane below, stacked vertically and split by #vsplit.
    Fixed default width (persisted); the file browser + code viewer share the remaining width. When the
    map is opened statically (no server), the browser + code panes are hidden and this column fills. */
-#leftcol { flex: 0 0 auto; width: 62%; min-width: 0; display: flex; flex-direction: column; }
+/* flex-shrink 1 (not 0) so the diagram column YIELDS space when the search sidebar opens — the code
+   viewer's basis is 0, so it stays put and this column absorbs the sidebar's width instead of the row
+   overflowing the viewport. min-width keeps the diagram usable at the shrink limit. */
+#leftcol { flex: 0 1 auto; width: 62%; min-width: 340px; display: flex; flex-direction: column; }
 body:not(.served) #leftcol { flex: 1 1 auto; width: auto; }
 #stage { flex: 1 1 auto; min-width: 0; min-height: 0; position: relative; overflow: hidden; background: #fafafa;
          display: flex; flex-direction: column; }

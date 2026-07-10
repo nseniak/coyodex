@@ -24,6 +24,7 @@
 <header>
   <h1>coyodex viewer</h1>
   <span class="meta" id="meta"></span>
+  <button id="searchbtn" title="Search the map (press /)" aria-label="Search">&#128269;</button>
   <span id="nav">
     <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
     <button id="navfwd" title="Forward (⌘→ / ⌥→)">▶</button>
@@ -37,6 +38,21 @@
   <button id="toggle" style="display:none"></button>
 </header>
 <main>
+  <!-- Search sidebar (far left, collapsible): one incremental "jump to anything" box over an in-memory
+       index of the map — element names, files/folders, glossary terms, entity fields. Collapsed by
+       default (last state persisted); opened by the header magnifier or the "/" shortcut. Selecting a
+       result reuses the viewer's own navigation (switch view + highlight + open the file). -->
+  <aside id="searchbar" hidden>
+    <div id="sbhead">
+      <input id="sbinput" type="text" autocomplete="off" spellcheck="false"
+             placeholder="Search the map…" aria-label="Search the map">
+      <button id="sbclose" type="button" title="Close (Esc)" aria-label="Close search">&times;</button>
+    </div>
+    <div id="sbmeta"></div>
+    <div id="sbresults"></div>
+  </aside>
+  <!-- Drag handle to resize the search sidebar (width persisted; present only while it's open). -->
+  <div id="sbresizer" title="Drag to resize"></div>
   <!-- Left column (dominant): the diagram on top, the details/info pane below it, split by a
        horizontal drag bar (#vsplit). The diagram is the centrepiece, so this column takes the lion's
        share of the width; the file browser + code viewer are the narrower right-hand panes. -->
