@@ -23,7 +23,6 @@
 <body>
 <header>
   <h1>coyodex viewer</h1>
-  <button id="treetoggle" title="Toggle file browser">&#9776; Files</button>
   <span class="meta" id="meta"></span>
   <span id="nav">
     <button id="navback" title="Back (⌘← / ⌥←)">◀</button>
@@ -86,12 +85,8 @@
        file selects the matching component/subsystem AND shows the file in the code viewer. -->
   <aside id="tree">
     <div id="treehead">
-      <span id="treetitle">Files</span>
-      <span id="treelegend">
-        <span class="tdot tdot-self"></span>mapped
-        <span class="tdot tdot-has"></span>partial
-        <span class="tdot tdot-none"></span>unmapped
-      </span>
+      <button id="treecodebtn" type="button" title="Show the code view">&#60;/&#62; Code</button>
+      <button id="treepin" type="button" title="Pin the file browser beside the code">&#128204;</button>
     </div>
     <div id="treebody"></div>
   </aside>
@@ -101,7 +96,7 @@
        from the server (git @ commit). -->
   <section id="codeview">
     <div id="cvhead">
-      <span id="cvtitle">Code</span>
+      <button id="cvfilesbtn" type="button" title="Show the file browser">&#9776; Files</button>
       <span id="cvpath"></span>
       <button id="cvopen" type="button" hidden title="Open in external editor / on GitHub" aria-label="Open in external editor">&#8599;</button>
     </div>

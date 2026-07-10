@@ -238,6 +238,42 @@ function applyTint(rect, kind) {
   if (tint.strokeWidth) rect.style.setProperty('stroke-width', tint.strokeWidth, 'important');
   if (tint.strokeDasharray) rect.style.setProperty('stroke-dasharray', tint.strokeDasharray, 'important');
 }
+// Container kinds — the group boxes (subsystem/subdomain) the diagram draws with a thick dashed frame.
+const CONTAINER_KINDS = new Set(['subsystem', 'subdomain']);
+function isContainerKind(kind) { return CONTAINER_KINDS.has(kind); }
+// Leaf kinds that own a file set worth grouping in the tree when selected (see selection pills). Excludes
+// containers (they carry their own anchor pill) and the System node (its "files" would be the whole repo).
+const LEAF_KINDS = new Set(['component', 'entity', 'dep']);
+// The element currently selected on the diagram — file-browser pills for this element are emphasised
+// (`.pill-sel`). Kept in sync by setTreeSelection; a pill built while it's set is born emphasised.
+let treeSelId = null;
+// A readable, capitalised kind name ('dep' -> 'Dependency') for tooltips.
+function kindLabel(kind) {
+  const k = kind === 'dep' ? 'dependency' : (kind || '');
+  return k ? k.charAt(0).toUpperCase() + k.slice(1) : '';
+}
+// A coloured element pill: the element's NAME in its kind's diagram tint (pale fill + matching border +
+// text), with a thick DASHED border when it's a container — the same colour code + container signal the
+// boxes use. ONE builder, reused by the file browser (a file's container tag) and the code viewer (the
+// owning-element pill beside the path), so the look stays identical. Returns a <span>, or null when `id`
+// isn't a real element — only the tinted kinds get a pill, so the System / actor / use-case nodes (no
+// tint) never render a blank one.
+function elementPill(id) {
+  const n = id && GRAPH.nodes[id];
+  if (!n || !(isContainerKind(n.kind) || LEAF_KINDS.has(n.kind))) return null;
+  const pill = document.createElement('span');
+  pill.className = 'pill' + (isContainerKind(n.kind) ? ' pill-container' : '');
+  const tint = ELEMENT_TINT[n.kind];
+  if (tint) { pill.style.background = tint.fill; pill.style.borderColor = tint.stroke; pill.style.color = tint.stroke; }
+  pill.textContent = n.name;
+  pill.title = 'Select ' + kindLabel(n.kind).toLowerCase() + ': ' + n.name;
+  pill.dataset.id = id;
+  if (id === treeSelId) pill.classList.add('pill-sel');  // born emphasised if its element is the selection
+  // Clicking a pill selects its element in the diagram (navigating to whichever view draws it). Stop the
+  // click bubbling so a pill inside a tree row doesn't also fire the row's own select/expand.
+  pill.addEventListener('click', (ev) => { ev.stopPropagation(); selectFromTree(id); });
+  return pill;
+}
 // An EXPANDED group (a drilled subsystem / subdomain) renders as a Mermaid CLUSTER frame, which
 // defaults to pale yellow. Tint each cluster to its family so a group reads the SAME colour collapsed (a
 // box) or expanded (a frame). The cluster's DOM id ends with its element id (`<diagramId>-S1` / `-SD1`);
@@ -511,7 +547,7 @@ function resetScene(scene) {  // clear selection + focus, restore the scene's de
   scene.selectedKey = null;
   scene.defaultPanel();
   highlightTreePath(null);  // drop the file-browser highlight too
-  setTreePeek(false);       // and close any transient folder peek
+  setBrowsing(true);        // nothing selected -> the code slot defaults to the file browser
 }
 
 // A click whose pointer moved far from its mousedown is the tail of a drag-pan — ignore it,
@@ -612,7 +648,7 @@ function showNode(id) {
 // so "selecting a box" reads as "here's this one element", and its file-mates are discoverable in the code.
 function showNodeDetailSynced(id) {
   showNode(id);          // fills the panel with `id` alone and mirrors into the tree + code viewer (syncTreeToNode)
-  updateFolderPeek(id);  // a folder element peeks the file browser open when it's folded (see setTreePeek)
+  updateFolderPeek(id);  // auto-opens browsing for a folder element (see updateFolderPeek)
 }
 
 function showEdge(e) {
@@ -640,7 +676,8 @@ function showEdge(e) {
     + '<dl>' + kindRow + card + implRow + '</dl>';
   // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
   // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
-  highlightFootprint(null);  // an edge has no element footprint — clear any previous one
+  cvElement = null;  // an edge has no single owning element -> no header pill
+  setTreeSelection(null);  // clear pill emphasis + selection pills
   highlightTreePath(refTreePath(wn && wn.file, wn && wn.line));
   if (wn) syncCodeView(wn.file, wn.line, []);  // and into the code viewer (FULL mode); no switcher for an edge
 }
@@ -1701,14 +1738,113 @@ function captureViewState() {  // stash the current pan/zoom + selection on the 
 }
 function go(state) {
   if (hi >= 0 && stateKey(history[hi]) === stateKey(state)) return;  // already here
+  const from = history[hi];
   captureViewState();
   history = history.slice(0, hi + 1);  // a new branch drops any forward history
   history.push(state);
   hi = history.length - 1;
-  render();
+  driveTransition(from);
 }
-function back() { if (hi > 0) { captureViewState(); hi -= 1; render(); } }
-function fwd() { if (hi < history.length - 1) { captureViewState(); hi += 1; render(); } }
+function back() { if (hi > 0) { const from = history[hi]; captureViewState(); hi -= 1; driveTransition(from); } }
+function fwd() { if (hi < history.length - 1) { const from = history[hi]; captureViewState(); hi += 1; driveTransition(from); } }
+
+// --- drill "dive" transition ----------------------------------------------------
+// Drilling into a container is a full re-render of a different diagram, so on its own it reads as a hard
+// cut. To make the descent legible, the swap is bracketed by a "dive": the leaving view scales UP into the
+// target container's box (it grows to fill the pane) and fades, then the entering card settles in from
+// slightly oversized. Going back up plays the reverse (a zoom-out). A jump that skips levels (A ▸ B ▸ C
+// straight to C) dives once PER level, briefly flashing each intermediate card, so the multi-level descent
+// is explicit. Honors prefers-reduced-motion (instant) and bails cleanly if a newer navigation interrupts.
+const REDUCE_MOTION = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+const DIVE_EXIT_MS = 190, DIVE_ENTER_MS = 200, DIVE_FLASH_MS = 150;
+let navSeq = 0;  // bumped per navigation; a running dive bails when it changes (interrupted by a newer one)
+function focusOf(s) {  // the container a view sits "inside" (null = an overview / non-container view)
+  if (!s) return null;
+  if (s.kind === 'subsystem') return s.sid;
+  if (s.kind === 'domsub') return s.sd;
+  return null;
+}
+function cardStateFor(fid) {  // the view that shows container `fid` as its own card
+  const n = GRAPH.nodes[fid];
+  if (!n) return null;
+  if (n.kind === 'subsystem') return { kind: 'subsystem', sid: fid };
+  if (n.kind === 'subdomain') return { kind: 'domsub', sd: fid };
+  return null;
+}
+// The focus nodes to descend through from container `from` (null = an overview) down to `to`, inclusive of
+// `to`. null when `to` isn't nested under `from` (i.e. not a drill-in at all).
+function drillChain(from, to) {
+  const chain = []; let cur = to; const seen = new Set();
+  while (cur && cur !== from && !seen.has(cur)) { seen.add(cur); chain.unshift(cur); cur = GRAPH.nodes[cur] && GRAPH.nodes[cur].parent; }
+  return cur === from ? chain : null;
+}
+function diagramBoxCenter(id) {  // on-screen centre of a drawn box in the current diagram (null if absent)
+  const el = mainScene && mainScene.nodeEls[id];
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return r.width ? { x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 } : null;
+}
+function clearDiveStyle() { const d = diagram; d.style.transition = d.style.transform = d.style.transformOrigin = d.style.opacity = ''; }
+function delay(ms) { return new Promise((res) => setTimeout(res, ms)); }
+function diveOut(center, up) {  // scale the current #diagram away (toward `center` when diving in) + fade out
+  return new Promise((res) => {
+    const d = diagram, r = d.getBoundingClientRect();
+    const c = center || { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    d.style.transformOrigin = (c.x - r.left) + 'px ' + (c.y - r.top) + 'px';
+    d.style.transition = 'transform ' + DIVE_EXIT_MS + 'ms ease-in, opacity ' + DIVE_EXIT_MS + 'ms ease-in';
+    void d.offsetWidth;
+    d.style.transform = 'scale(' + (up ? 2.6 : 0.5) + ')';
+    d.style.opacity = '0';
+    setTimeout(res, DIVE_EXIT_MS);
+  });
+}
+function diveIn(up) {  // the freshly-rendered #diagram settles in from slightly off-scale
+  return new Promise((res) => {
+    const d = diagram;
+    d.style.transition = 'none'; d.style.transformOrigin = '50% 50%';
+    d.style.transform = 'scale(' + (up ? 1.06 : 0.94) + ')'; d.style.opacity = '0';
+    void d.offsetWidth;
+    d.style.transition = 'transform ' + DIVE_ENTER_MS + 'ms ease-out, opacity ' + DIVE_ENTER_MS + 'ms ease-out';
+    d.style.transform = 'scale(1)'; d.style.opacity = '1';
+    setTimeout(() => { clearDiveStyle(); res(); }, DIVE_ENTER_MS);
+  });
+}
+// Decide whether a navigation is a container drill and, if so, animate it; otherwise render straight.
+function driveTransition(from) {
+  ++navSeq;
+  clearDiveStyle();
+  const to = history[hi];
+  if (REDUCE_MOTION || !from) { render(); return; }
+  const fromF = focusOf(from), toF = focusOf(to);
+  const inChain = toF ? drillChain(fromF, toF) : null;
+  if (inChain && inChain.length) { runDrill(inChain, navSeq).catch(() => { clearDiveStyle(); render(); }); return; }
+  // drill OUT: leaving a container UP to an ancestor container's card, or to the overview tab it belongs to
+  // (NOT a lateral tab switch — going from a card to Dependencies/Domain/Happy Path stays instant).
+  const fromKind = fromF && GRAPH.nodes[fromF] && GRAPH.nodes[fromF].kind;
+  const outToAncestor = fromF && toF && drillChain(toF, fromF);
+  const outToOverview = fromF && toF == null
+    && ((fromKind === 'subsystem' && to.kind === 'container') || (fromKind === 'subdomain' && to.kind === 'domain'));
+  if (outToAncestor || outToOverview) { runDrillOut(navSeq).catch(() => { clearDiveStyle(); render(); }); return; }
+  render();  // lateral / unrelated navigation — no dive
+}
+async function runDrill(chain, my) {
+  for (let i = 0; i < chain.length; i++) {
+    const center = diagramBoxCenter(chain[i]);  // where the next container sits in the current view
+    await diveOut(center, true); if (my !== navSeq) return;
+    diagram.style.transition = 'none'; diagram.style.transform = 'none';  // untransform for the render's fit (still opacity 0)
+    const last = i === chain.length - 1;
+    await render(last ? undefined : cardStateFor(chain[i]), !last);  // final via history; intermediates transient
+    if (my !== navSeq) return;
+    await diveIn(true); if (my !== navSeq) return;
+    if (!last) { await delay(DIVE_FLASH_MS); if (my !== navSeq) return; }
+  }
+}
+async function runDrillOut(my) {
+  await diveOut(null, false); if (my !== navSeq) return;
+  diagram.style.transition = 'none'; diagram.style.transform = 'none';
+  await render(); if (my !== navSeq) return;
+  await diveIn(false);
+}
 
 // --- per-state binding ----------------------------------------------------------
 function bindContext() {
@@ -2197,6 +2333,7 @@ function mermaidFor(s) {
   return mode === 'diff' ? MERMAID_DIFF : MERMAID_BASE;  // component
 }
 function applyDefaultPanel(s) {
+  setTreeSelection(null);  // a default panel / canvas deselect drops pill emphasis + selection pills
   if (s.kind === 'subsystem') showNode(s.sid);
   else if (s.kind === 'domsub') showNode(s.sd);
   else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
@@ -2466,12 +2603,15 @@ function renderUseCases() {
   });
 }
 
-async function render() {
+// `sArg` renders a specific state (defaults to the current history entry); `transient` renders it purely
+// for the drill animation's intermediate "flash" — no panel/selection/camera-restore side effects, so it
+// doesn't disturb history or the info pane.
+async function render(sArg, transient) {
   const seq = ++renderSeq;
   hideTip();  // a re-render replaces the diagram — drop any tooltip from the old one
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
-  const s = history[hi];
+  const s = sArg || history[hi];
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
@@ -2514,9 +2654,9 @@ async function render() {
   // also plant a spurious intermediate tree-highlight that throws off the near/far centering heuristic
   // in highlightTreePath (the REAL previous selection stops being `prevRow` for the one that matters).
   // Landing on a view with nothing selected (a tab / drill, not a folder element click): show its
-  // default panel and close any folder peek carried over from the previous view. An explicit selection
-  // (pendingSelect below) instead runs through updateFolderPeek, which re-peeks if it's a folder.
-  if (!pendingSelect && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setTreePeek(false); }
+  // default panel and default the code slot to the file browser (nothing selected -> browse). An explicit
+  // selection (pendingSelect below) instead runs through updateFolderPeek, which browses only for a folder.
+  if (!transient && !pendingSelect && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setBrowsing(true); }
   if (mode === 'diff' && HAS_DIFF) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
@@ -2525,12 +2665,12 @@ async function render() {
   // instance, or null, on a fresh navigation), so it's applied below, once svgPanZoom has been
   // (re)constructed for the new view.
   let pendingMatchTextId = null;
-  if (pendingSelect) {
+  if (!transient && pendingSelect) {
     const id = pendingSelect; pendingSelect = null;
     const el = mainScene.nodeEls[id];
     if (el) selectNode(mainScene, el, id); else showNodeDetailSynced(id);
     if (el) pendingMatchTextId = id;
-  } else if (s.sel && mainScene.selectors[s.sel]) {
+  } else if (!transient && s.sel && mainScene.selectors[s.sel]) {
     mainScene.selectors[s.sel]();  // history revisit: restore the element that was selected in this view
   }
   const svgEl = diagram.querySelector('svg');
@@ -2551,7 +2691,7 @@ async function render() {
     // so a synchronous matchTextSize would measure the still-showing fit transform while the internal state
     // already held the restored vp. Those two disagreeing is what threw the selected box off-screen; leaving
     // the fresh fit in place (its transform IS applied synchronously) keeps measurement and state in step.
-    const vp = pendingMatchTextId ? null : (s.vp || vpByView[stateKey(s)]);
+    const vp = (transient || pendingMatchTextId) ? null : (s.vp || vpByView[stateKey(s)]);
     if (vp) { mainPz.zoom(vp.zoom); mainPz.pan(vp.pan); }
     updateZoomLevel();
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
@@ -2569,7 +2709,10 @@ async function render() {
 // Python (filetree.py): each entry carries `cov` (coverage shade), `node` (exact id), and `sel` (the id
 // a click selects — exact, else the nearest ancestor folder-node = the "finer grain" rule).
 const treeBody = document.getElementById('treebody');
-const treeToggleBtn = document.getElementById('treetoggle');
+const treeHead = document.getElementById('treehead');      // browser header — hosts the selected-element pill
+const treePinBtn = document.getElementById('treepin');     // pins the browser as its own pane / unpins (hides) it
+const cvFilesBtn = document.getElementById('cvfilesbtn');  // code-viewer button: shows the browser in the code slot
+const treeCodeBtn = document.getElementById('treecodebtn'); // browser button: switches the code slot back to code
 const treeResizer = document.getElementById('treeresizer');
 const rowByPath = {};   // path (no trailing slash) -> { row, kids, entry, depth, built }
 const pathByNode = {};  // node id -> its exact tree path (graph -> tree highlight for a mapped node)
@@ -2590,76 +2733,98 @@ let suppressTreeScroll = false;
 // Strip it so the two always match.
 function treeKey(p) { return String(p || '').replace(/\/+$/, ''); }
 
-// --- folder peek ----------------------------------------------------------------
-// When the file browser is folded away (tree-hidden), selecting a diagram element that anchors a FOLDER
-// reveals the browser IN the code viewer's slot (the CSS `tree-peek` state), expanded to that folder,
-// so the reader can drill into it. Picking a file there commits it to the code viewer and ends the peek.
-// The fold flag itself (tree-hidden / its localStorage) is never touched — the browser folds right back
-// once a file is chosen. Peek only applies to the folded state; when the browser is unfolded it's a no-op.
-let treePeek = false;
-let suppressPeek = false;  // one-shot: a file the reader just picked in the browser is loading — the
-                           // owning-folder reselection that follows must NOT re-peek the browser over it.
-function setTreePeek(on) {
-  if (on === treePeek) return;
-  treePeek = on;
-  document.body.classList.toggle('tree-peek', on);
-  // The header toggle reads "off" (dimmed) when the browser is folded — but during a peek the browser is
-  // visible, so it shouldn't look off then.
-  treeToggleBtn.classList.toggle('off', document.body.classList.contains('tree-hidden') && !on);
+// --- file browser show/hide: pinned vs browsing ---------------------------------
+// The browser has two ways to appear. PINNED (persisted) shows it as its own pane, left of the code
+// viewer. BROWSING (transient) shows it IN the code viewer's slot instead — opened by the code viewer's
+// Files button, or auto-opened when a selected element anchors a FOLDER (so the reader can drill).
+// Picking a file ends browsing (the code viewer returns with that file). Pinning subsumes browsing; while
+// pinned the browser is already visible, so the Files button is disabled and no auto-browse happens.
+let treePinned = false;
+let treeBrowsing = false;
+let suppressBrowse = false;  // one-shot: a file the reader just picked in the browser is loading — the
+                             // owning-folder reselection that follows must NOT re-open browsing over it.
+function applyTreeState() {
+  document.body.classList.toggle('tree-pinned', treePinned);
+  document.body.classList.toggle('tree-browsing', treeBrowsing && !treePinned);
+  if (cvFilesBtn) cvFilesBtn.disabled = treePinned;
+  if (treeCodeBtn) treeCodeBtn.disabled = treePinned;  // the browser's Code button: no-op (disabled) while pinned
+  if (treePinBtn) {
+    treePinBtn.classList.toggle('pinned', treePinned);
+    treePinBtn.title = treePinned ? 'Unpin (hide) the file browser' : 'Pin the file browser beside the code';
+  }
 }
-// After an active selection (showNodeDetailSynced): peek the browser open for a folder element, or end
-// the peek for one that shows a real file (or the suppress flag, when the reader just picked a file).
+function setBrowsing(on) {
+  on = !!on && !treePinned && !document.body.classList.contains('no-tree');  // no browsing when pinned or no tree
+  if (on === treeBrowsing) return;
+  treeBrowsing = on;
+  applyTreeState();
+}
+function setPinned(on) {
+  on = !!on;
+  if (on === treePinned) return;
+  treePinned = on;
+  // pinning subsumes browsing; unpinning falls back to the default — browse when the code slot has no file
+  // to show (nothing selected), else keep showing that file.
+  treeBrowsing = on ? false : !cvPath;
+  lsSet(LS.treePinned, on ? '1' : '0');
+  applyTreeState();
+}
+// After an active selection (showNodeDetailSynced): auto-open browsing for a folder element, or end it for
+// one that shows a real file (or the suppress flag, when the reader just picked a file). No-op while pinned.
 function updateFolderPeek(id) {
-  if (!SERVED) return;
-  const consumed = suppressPeek; suppressPeek = false;
-  if (!document.body.classList.contains('tree-hidden')) { setTreePeek(false); return; }  // browser unfolded
+  if (!SERVED || treePinned) { return; }
+  const consumed = suppressBrowse; suppressBrowse = false;
   const n = GRAPH.nodes[id];
   const showsFile = !!(n && n.file && localRef(n.file) && !isDirRef(n.file, n.line));
-  if (showsFile || consumed) { setTreePeek(false); return; }
+  if (showsFile || consumed) { setBrowsing(false); return; }
   const path = pathByNode[id] || (n ? refTreePath(n.file, n.line) : null);
-  if (path && rowByPath[path] && rowByPath[path].entry.dir) { expandDir(path); setTreePeek(true); }
+  if (path && rowByPath[path] && rowByPath[path].entry.dir) { expandDir(path); setBrowsing(true); }
 }
 
 // One row: a twisty (folders only), the name, and an id chip when a node points exactly here.
 function makeRow(entry, depth) {
   const row = document.createElement('div');
   // `ref` = referenced by a component/entity at all (source OR owned) -> bold "on the map"; broader than
-  // cov-self (anchor-only). `foot` = part of the currently-selected element's footprint.
+  // cov-self (anchor-only).
   row.className = 'trow cov-' + entry.cov + (entry.dir ? ' tdir' : ' tfile')
-    + (entry.ref ? ' ref' : '') + (!entry.dir && footSet.has(treeKey(entry.path)) ? ' foot' : '');
+    + (entry.ref ? ' ref' : '');
   row.style.paddingLeft = (8 + depth * 14) + 'px';
   row.title = entry.path || entry.name;
   const caret = document.createElement('span');
   caret.className = 'tcaret' + (entry.dir && entry.children.length ? '' : ' leaf');
   caret.textContent = '▶';  // ▶ (rotates when the folder is open)
+  if (entry.dir && entry.children.length) {
+    // The twisty just expands/collapses — it must NOT reach the row's click (which would also SELECT the
+    // directory). Only the rest of the row selects.
+    caret.addEventListener('click', (ev) => { ev.stopPropagation(); toggleDir(treeKey(entry.path)); });
+  }
   const name = document.createElement('span');
   name.className = 'tname';
   name.textContent = entry.name;
   row.appendChild(caret);
   row.appendChild(name);
-  if (entry.node && entry.cov === 'self') {
-    // The chip marks a true ANCHOR (a node's own source points exactly here). Owned files also carry
-    // entry.node (their owner, for the click) but get no chip — the bold `ref` already marks them.
-    const chip = document.createElement('span');
-    chip.className = 'tchip';
-    chip.textContent = entry.node;
-    row.appendChild(chip);
-  } else if (entry.dir && entry.mapped > 0) {
-    // A partial folder (not itself a mapped unit) carries a count of the mapped components/subsystems
-    // inside — a positive "expand me" cue. CSS hides it once the folder is open (children show their own).
-    const count = document.createElement('span');
-    count.className = 'tcount';
-    count.textContent = entry.mapped;
-    count.title = entry.mapped + ' mapped inside';
-    row.appendChild(count);
+  // Container pill: the row that is a container's MAIN file/directory carries that container's pill (name +
+  // kind colour + dashed border) — marking where the container lives in the tree. Several containers
+  // anchored at one path (rare — e.g. a folder that is both a subsystem and a subdomain) stack their pills.
+  const anchored = entry.cov === 'self' ? [entry.node, ...(entry.others || [])].filter(Boolean) : [];
+  const containers = anchored.filter((id) => GRAPH.nodes[id] && isContainerKind(GRAPH.nodes[id].kind));
+  if (containers.length) {
+    row.classList.add('has-groups');  // keep the name at natural width; the pill box scrolls (CSS)
+    const box = document.createElement('span');
+    box.className = 'tgroups';
+    for (const cid of containers) { const pill = elementPill(cid); if (pill) box.appendChild(pill); }
+    box.addEventListener('scroll', () => updatePillFade(box));  // keep the edge fade in sync while scrolling
+    row.appendChild(box);
   }
-  return row;
+  return row;  // the selection filter/count is applied in renderChildrenInto, once the row's rec exists
 }
 function renderChildrenInto(container, children, depth) {
   for (const entry of children) {
     const key = treeKey(entry.path);
     const row = makeRow(entry, depth);
     container.appendChild(row);
+    const gbox = row.querySelector('.tgroups');
+    if (gbox) updatePillFade(gbox);  // now in the live tree -> measurable; set the initial edge fade
     let kids = null;
     if (entry.dir && entry.children.length) {
       kids = document.createElement('div');
@@ -2667,6 +2832,7 @@ function renderChildrenInto(container, children, depth) {
       container.appendChild(kids);
     }
     rowByPath[key] = { row, kids, entry, depth, built: false };
+    applySelToRow(rowByPath[key]);  // a row built while a selection is active is filtered/counted immediately
     row.addEventListener('click', () => onRowClick(key));
   }
 }
@@ -2674,6 +2840,7 @@ function onRowClick(key) {
   const rec = rowByPath[key];
   if (!rec) return;
   const e = rec.entry;
+  cvPinned = null;  // a fresh click: drop any pin left by a previous unmapped-file open
   if (e.dir) {
     // A folder expands; it selects ONLY when it is itself a mapped subsystem/component (e.node set).
     // An intermediate folder that merely sits under a mapped one just expands — opening it must not
@@ -2685,31 +2852,57 @@ function onRowClick(key) {
     return;
   }
   // A file row: the reader wants its source in the code viewer, so end any folder peek and show it.
-  const wasPeeking = treePeek;
-  if (wasPeeking) setTreePeek(false);
-  if (e.node && e.cov === 'self') {
-    // An ANCHOR file (a node's own source): selecting its node also loads it into the code viewer AT the
-    // node's line (syncTreeToNode -> syncCodeView), so no separate loadCode is needed here.
+  const wasPeeking = treeBrowsing;
+  if (wasPeeking) setBrowsing(false);
+  // While a CONTAINER is selected, a plain click on one of its files PREVIEWS the source without jumping the
+  // selection to the file's owning sub-component (that would silently narrow the filter). The file's own
+  // pill is the explicit drill. Show the file + the owner's switcher in the code viewer, keep the selection.
+  const selNode = treeSelId && GRAPH.nodes[treeSelId];
+  if (selNode && isContainerKind(selNode.kind) && e.node && e.node !== treeSelId) {
+    const owner = GRAPH.nodes[e.node];
+    cvElement = e.node;
+    cvFiles = (owner && owner.files) || [];
+    loadCode(e.path, (e.cov === 'self' && owner) ? owner.line : null);
     suppressTreeScroll = true;
+    highlightTreePath(key);
+    return;
+  }
+  if (e.node && e.cov === 'self') {
+    // An ANCHOR file (a node's own source): load it AT the node's line FIRST, then select the node. The
+    // explicit load matters when the reader was already viewing ANOTHER of this same node's files (an owned
+    // file): without it, selecting the node hits the syncCodeView "belongs" guard, which keeps that other
+    // file shown and never jumps to the anchor the reader just clicked.
+    const an = GRAPH.nodes[e.node];
+    cvElement = e.node;  // owning-element pill correct from the first header render (before selection)
+    loadCode(e.path, an ? an.line : null);
+    suppressTreeScroll = true;
+    highlightTreePath(key);  // light up THIS row now, so a stale owned-file highlight doesn't linger on it
     selectFromTreeAnchors([e.node, ...e.others]);  // this exact file collided — e.others carries the rest
   } else if (e.node) {
     // An OWNED file (belongs to a component but isn't its anchor): show THIS file, and select its owner
     // (definition-first, already resolved into e.node). The syncCodeView/syncTreeToNode "belongs" guards
     // keep this file shown + highlighted since it's in the owner's `files`, instead of jumping to source.
-    if (wasPeeking) suppressPeek = true;
+    if (wasPeeking) suppressBrowse = true;
     const owner = GRAPH.nodes[e.node];
     cvFiles = (owner && owner.files) || [];
+    cvElement = e.node;
     loadCode(e.path, null);
     suppressTreeScroll = true;
     highlightTreePath(key);
     selectFromTree(e.node);
   } else {
-    // A file that is not itself a node: show its source directly (no line). If it sits under a mapped
-    // folder, also select that owning subsystem/entity — but the file the reader clicked is what the
-    // code viewer shows, not the owner's own anchor, and it must NOT re-peek the browser over that file.
-    if (wasPeeking) suppressPeek = true;
+    // A file that is not itself a node: show its OWN source (no line) and highlight its row. If it sits
+    // under a mapped folder, also select that container for graph context — but PIN this file so the
+    // container selection's tree/code sync keeps it shown + lit, instead of overriding to the container's
+    // own anchor (the file isn't in the container's `files`, so the normal "belongs" guard wouldn't
+    // protect it). The pin must NOT re-peek the browser over that file.
+    if (wasPeeking) suppressBrowse = true;
+    cvElement = e.sel || null;  // the container (for context) drives the pill; a truly-unmapped file gets none
+    cvFiles = [];               // a standalone file belongs to no element -> its switcher lists only itself
     loadCode(e.path, null);
-    if (e.sel) { suppressTreeScroll = true; selectFromTree(e.sel); }
+    suppressTreeScroll = true;
+    highlightTreePath(key);
+    if (e.sel) { cvPinned = e.path; selectFromTree(e.sel); }
   }
 }
 function toggleDir(key) {
@@ -2767,7 +2960,7 @@ function selectTargetFor(id) {
 // [] for callers that aren't file-tree-driven, e.g. a flow narrative link — no "Also defined here" then).
 function selectFromTree(nodeId) {
   const t = selectTargetFor(nodeId);
-  if (!t) { suppressTreeScroll = false; return; }  // no selection follows — don't leave the flag stuck for later
+  if (!t) { suppressTreeScroll = false; suppressBrowse = false; return; }  // no selection follows — don't leave the one-shots stuck
   const cur = history[hi];
   if (cur && stateKey(cur) === stateKey(t.state)) {       // already in the right view — select in place
     const el = mainScene && mainScene.nodeEls[t.selectId];
@@ -2793,32 +2986,149 @@ function selectFromTreeAnchors(allIds) {
 // it isn't a local repo-relative path (an off-repo URL, or no ref at all) — the same test `openSource`
 // uses to decide whether a ref is clickable.
 function refTreePath(file, line) { return file && localRef(file) ? treeKey(cleanPath(file, line)) : null; }
+
+// --- selection footprint: bold files/dirs + per-dir counts -----------------------
+// A selected element (container OR leaf) FILTERS the tree down to just its footprint: its member files
+// (a container's `files` is already its whole subtree, recursively) and the directories holding them —
+// everything else is hidden. Each kept directory shows a COUNT of the member files inside it (recursive),
+// and the header pill shows the total. The tree auto-expands so the whole footprint is visible; the
+// current/shown file keeps its `.sel` row highlight. Cleared (full tree restored) for an edge / the System
+// node / no selection.
+let selMemberFiles = new Set();   // member file paths (treeKey'd) — the files to keep
+let selDirCount = new Map();      // footprint dir path -> count of member files under it (recursive)
+let selIsContainer = false;       // the selection is a container -> its files show their owning sub-element pill
+function selActive() { return selMemberFiles.size > 0; }
+function computeSelection(id) {
+  selMemberFiles = new Set();
+  selDirCount = new Map();
+  selIsContainer = false;
+  const n = id && GRAPH.nodes[id];
+  if (!n || !(isContainerKind(n.kind) || LEAF_KINDS.has(n.kind))) return;
+  selIsContainer = isContainerKind(n.kind);
+  // The footprint is exactly the element's file set — the SAME list the code-viewer switcher shows, so a
+  // shared file appears under every element that owns it and the tree + switcher always agree.
+  for (const f of (n.files || [])) {
+    const key = treeKey(f);
+    if (!key) continue;
+    selMemberFiles.add(key);
+    const parts = key.split('/');
+    for (let i = 0; i < parts.length - 1; i++) {
+      const dir = parts.slice(0, i + 1).join('/');
+      selDirCount.set(dir, (selDirCount.get(dir) || 0) + 1);
+    }
+  }
+}
+// Apply the current filter to one row (rec = { row, kids, entry }): keep it if it's in the footprint (a
+// member file, or a directory that holds member files) — a kept directory carries its recursive count;
+// hide the row AND its child subtree otherwise. Idempotent: clears prior state first. No selection -> keep
+// everything and drop the badges.
+function applySelToRow(rec) {
+  const { row, kids, entry } = rec;
+  row.classList.remove('filtered-out', 'has-owner');
+  if (kids) kids.classList.remove('filtered-out');
+  const oldBadge = row.querySelector(':scope > .tselcount'); if (oldBadge) oldBadge.remove();
+  const oldOwner = row.querySelector(':scope > .towner'); if (oldOwner) oldOwner.remove();
+  if (!selActive()) return;
+  const key = treeKey(entry.path);
+  const keep = entry.dir ? selDirCount.has(key) : selMemberFiles.has(key);
+  if (!keep) {
+    row.classList.add('filtered-out');
+    if (kids) kids.classList.add('filtered-out');  // hide the whole hidden subtree, not just its top row
+    return;
+  }
+  if (entry.dir) {
+    const c = selDirCount.get(key);
+    const badge = document.createElement('span');
+    badge.className = 'tselcount';
+    badge.textContent = c;
+    badge.title = c + ' file' + (c === 1 ? '' : 's') + ' of the selected element, here';
+    row.querySelector('.tname').insertAdjacentElement('afterend', badge);
+  } else if (selIsContainer && entry.node && entry.node !== treeSelId) {
+    // Inside a selected CONTAINER, each kept file shows the sub-element it belongs to — so the reader sees
+    // that clicking the file's pill drills into that component/sub-container (a plain click just previews).
+    const pill = elementPill(entry.node);
+    if (pill) { pill.classList.add('towner'); row.classList.add('has-owner'); row.appendChild(pill); }
+  }
+}
+function setSelPills(id) {  // (name kept for its callers) recompute the footprint, reveal it, re-filter every row
+  computeSelection(id);
+  // Auto-expand the footprint dirs (shallowest first, so each parent is built before its child) so every
+  // member file is actually visible under the filter.
+  [...selDirCount.keys()].sort((a, b) => a.split('/').length - b.split('/').length).forEach(expandDir);
+  for (const k in rowByPath) applySelToRow(rowByPath[k]);
+}
+// Emphasise every already-built tree pill whose element is the current selection (`treeSelId`); pills
+// built later are born emphasised in elementPill.
+function highlightTreePills() {
+  treeBody.querySelectorAll('.pill[data-id]').forEach((p) => p.classList.toggle('pill-sel', p.dataset.id === treeSelId));
+}
+// When the selected container's pill sits in a horizontally-scrollable box (a path anchoring many
+// containers), scroll that box so the emphasised pill is visible. Horizontal-only — never moves the row
+// or the page. Called after the anchor row is built/revealed (syncTreeToNode).
+function scrollSelectedPillsIntoView() {
+  treeBody.querySelectorAll('.tgroups .pill.pill-sel').forEach((p) => {
+    const box = p.closest('.tgroups');
+    if (!box || box.scrollWidth <= box.clientWidth) return;  // fits — nothing to scroll
+    const b = box.getBoundingClientRect(), r = p.getBoundingClientRect();
+    // 16px clears the edge fade (14px) so the selected pill lands fully visible, not under the gradient
+    if (r.left < b.left) box.scrollLeft -= (b.left - r.left) + 16;
+    else if (r.right > b.right) box.scrollLeft += (r.right - b.right) + 16;
+    updatePillFade(box);
+  });
+}
+// Fade hint on an overflowing pill box: a CSS mask fades the edge(s) that still hide pills, hinting "more
+// pills — scroll". `scrollable` turns the mask on; `at-start`/`at-end` drop the fade on a fully-scrolled
+// side. Recomputed on scroll, on build, and when the pane/window resizes.
+function updatePillFade(box) {
+  const overflow = box.scrollWidth - box.clientWidth;
+  box.classList.toggle('scrollable', overflow > 1);
+  box.classList.toggle('at-start', box.scrollLeft <= 1);
+  box.classList.toggle('at-end', box.scrollLeft >= overflow - 1);
+}
+function updateAllPillFades() { treeBody.querySelectorAll('.tgroups').forEach(updatePillFade); }
+// The selected element's pill in the browser header — the same pill the code viewer shows beside the path,
+// so while browsing (code viewer hidden) the reader still sees what's selected. Cleared for no selection.
+function renderTreeHeadPill() {
+  const old = treeHead.querySelector('.treeheadpill');
+  if (old) old.remove();
+  const n = treeSelId && GRAPH.nodes[treeSelId];
+  if (!n || !(isContainerKind(n.kind) || LEAF_KINDS.has(n.kind))) return;  // real elements only (not the System node)
+  const pill = elementPill(treeSelId);
+  if (!pill) return;
+  pill.classList.add('treeheadpill');
+  if (selMemberFiles.size) {  // the element's total file count (same tally as the per-directory badges)
+    const c = document.createElement('span');
+    c.className = 'pillcount';
+    c.textContent = selMemberFiles.size;
+    pill.appendChild(c);
+  }
+  treeHead.insertBefore(pill, treePinBtn);
+}
+// One entry point for "the diagram selection changed": remember it (for pill emphasis), paint a selected
+// leaf element's footprint bolding, re-emphasise matching pills, and refresh the header pill. `null` clears.
+function setTreeSelection(id) {
+  treeSelId = (id && GRAPH.nodes[id]) ? id : null;
+  setSelPills(id);
+  highlightTreePills();
+  renderTreeHeadPill();
+}
+
 // graph -> tree: highlight the row for `id`'s source path (exact map, else its file/dir path), expanding
 // ancestor folders so the row exists and is visible. No path / no row -> just clear the highlight.
 function syncTreeToNode(id) {
   const n = GRAPH.nodes[id];
-  highlightFootprint(n ? n.files : null);  // light up the element's WHOLE file set in the browser
-  // Keep the 'sel' highlight on a file the reader just clicked if it belongs to this element (an owned
-  // file); otherwise move it to the element's own anchor row.
-  if (!(treeSelPath && n && (n.files || []).indexOf(treeSelPath) !== -1)) {
+  cvElement = id;  // the shown file's owning element -> the code-viewer header pill
+  setTreeSelection(id);  // emphasise this element's pills + paint a leaf element's footprint pills
+  // Highlight ONLY the element's main file (its own anchor) — not its whole file set. Keep the 'sel'
+  // highlight on a file the reader just clicked if it belongs to this element (an owned file) OR is a file
+  // the reader pinned open directly from the browser (an unmapped file under this container); otherwise
+  // move it to the anchor row.
+  if (!(treeSelPath && (treeSelPath === cvPinned || (n && (n.files || []).indexOf(treeSelPath) !== -1)))) {
     const path = pathByNode[id] || (n ? refTreePath(n.file, n.line) : null);
     highlightTreePath(path);
   }
   if (n) syncCodeView(n.file, n.line, n.files);  // mirror the node's source into the code viewer (FULL mode)
-}
-// A second, dimmer highlight over EVERY file the selected element covers (its `files`) — the "footprint"
-// — distinct from the single 'sel' row. Folders holding a footprint file are expanded so the lit rows are
-// visible; `footSet` also lets a row built later (manual expand) pick up the class in makeRow.
-let footSet = new Set();
-function highlightFootprint(files) {
-  footSet = new Set((files || []).map(treeKey));
-  for (const k in rowByPath) {
-    if (!rowByPath[k].entry.dir) rowByPath[k].row.classList.toggle('foot', footSet.has(k));
-  }
-  for (const k of footSet) {
-    const parts = k.split('/');
-    for (let i = 0, acc = ''; i < parts.length - 1; i++) { acc = acc ? acc + '/' + parts[i] : parts[i]; expandDir(acc); }
-  }
+  scrollSelectedPillsIntoView();  // reveal the selected container's pill if its row's pill box overflows
 }
 function highlightTreePath(path) {
   const skipScroll = suppressTreeScroll;
@@ -2872,7 +3182,13 @@ function renderFileTree(root) {
   })(root);
   const kids = root.children || [];
   treeBody.innerHTML = '';
-  if (!kids.length) { treeBody.innerHTML = '<div class="tempty">No files found.</div>'; return; }
+  if (!kids.length) {
+    treeBody.innerHTML = '<div class="tempty">No files found.</div>';
+    document.body.classList.add('no-tree');  // hide the browser controls + never default to browsing over the code
+    setBrowsing(false);
+    return;
+  }
+  document.body.classList.remove('no-tree');
   renderChildrenInto(treeBody, kids, 0);
 }
 function buildFileTree() {
@@ -2913,6 +3229,8 @@ async function loadServerTree() {
     renderFileTree(await r.json());
   } catch (_) {
     treeBody.innerHTML = '<div class="tempty">Could not load the file tree.</div>';
+    document.body.classList.add('no-tree');  // no browser to show -> keep the code viewer visible
+    setBrowsing(false);
   }
 }
 
@@ -2951,30 +3269,107 @@ let cvLine = null;                  // the line to highlight — a module var so
 let cvLineCount = 0;                // total lines in the shown file (positions the overview-ruler marks)
 let cvReq = 0;                      // request token — a newer load supersedes an in-flight older one
 let cvFiles = [];                   // the selected element's files (source first) — the header's switcher list
+let cvElement = null;               // the element that owns the shown file (drives the header's owning-element
+                                    // pill). Set by syncTreeToNode; nulled for a file with no owner (an edge's
+                                    // anchor, a standalone/glossary open, an unmapped file under no container).
+let cvPinned = null;                // a file the reader opened DIRECTLY from the browser that no element owns
+                                    // (an unmapped file under a mapped folder): keep it shown + its row lit
+                                    // even though the container we then select for context doesn't list it in
+                                    // its `files`, so the normal "belongs" guard wouldn't protect it. Set by
+                                    // onRowClick, consumed by syncCodeView, cleared at the next click.
 let suppressCodeScroll = false;     // one-shot: skip the next markLine re-centering (a tag click on a line
                                     // already in view must not yank the scroll — see paintCodeTags)
 
-// The code-viewer header: a plain path, or — when the selected element owns several files — a switcher
-// (its `files`, source first) so the reader can page through them without leaving the element. The
-// current file stays selected; picking one loads it + highlights its tree row (no graph re-selection).
+// The code-viewer header: the full file path IS the file switcher. When the selected element owns several
+// files the path becomes a dropdown trigger (a caret + a custom menu of its files, source first); a
+// single-file element shows a plain path. Beside it sits the owning-element pill (name + kind colour,
+// dashed for a container). Picking a file loads it + highlights its tree row (no graph re-selection).
 function renderCvHeader() {
-  const suffix = cvLine ? ':' + cvLine : '';
-  if (SERVED && cvFiles.length > 1) {
-    const opts = cvFiles.map((f) =>
-      '<option value="' + esc(f) + '"' + (f === cvPath ? ' selected' : '') + ' title="' + esc(f) + '">'
-      + esc(f.split('/').pop()) + '</option>').join('');
-    cvpath.innerHTML = '<select class="cvfiles" title="Files in this element">' + opts + '</select>'
-      + '<span class="cvpathfull">' + esc((cvPath || '') + suffix) + '</span>';
-    const sel = cvpath.querySelector('select.cvfiles');
-    if (sel) sel.addEventListener('change', () => {
-      suppressTreeScroll = false;
-      highlightTreePath(treeKey(sel.value));
-      loadCode(sel.value, null);
-    });
-  } else {
-    cvpath.textContent = (cvPath || '') + suffix;
+  closeCvMenu();  // a re-render (e.g. a line move) drops any open menu; it's rebuilt from the fresh state
+  const full = (cvPath || '') + (cvLine ? ':' + cvLine : '');
+  const multi = SERVED && cvFiles.length > 1;
+  cvpath.innerHTML = '';
+  const pathEl = document.createElement(multi ? 'button' : 'span');
+  pathEl.className = 'cvpathtext' + (multi ? ' cvpathbtn' : '');
+  const label = document.createElement('span');
+  label.className = 'cvpathlabel';
+  label.textContent = full;
+  label.title = full;  // the path truncates on a narrow pane — hover shows it in full
+  pathEl.appendChild(label);
+  if (multi) {
+    pathEl.type = 'button';
+    pathEl.title = 'Switch file in this element';
+    const caret = document.createElement('span');
+    caret.className = 'cvcaret';
+    caret.textContent = '▾';
+    pathEl.appendChild(caret);
+    pathEl.addEventListener('click', (ev) => { ev.stopPropagation(); toggleCvMenu(); });
   }
+  cvpath.appendChild(pathEl);
+  const pill = elementPill(cvElement);           // the element that owns the shown file
+  if (pill) { pill.classList.add('cvpill'); cvpath.appendChild(pill); }
   if (cvopen) cvopen.hidden = !(cvPath && localRef(cvPath));  // the ↗ only shows once a local file is open
+}
+// The custom file switcher menu (replaces the native <select>): a floating list of the element's files,
+// current one marked, each shown as filename + muted folder. Anchored under the path trigger inside
+// #cvpath (position:relative). Closes on pick, outside click, or Escape.
+let cvMenuEl = null;
+function closeCvMenu() {
+  if (!cvMenuEl) return;
+  cvMenuEl.remove();
+  cvMenuEl = null;
+  document.removeEventListener('mousedown', cvMenuOutside, true);
+  document.removeEventListener('keydown', cvMenuKey, true);
+}
+function cvMenuOutside(ev) { if (cvMenuEl && !cvMenuEl.contains(ev.target) && !cvpath.contains(ev.target)) closeCvMenu(); }
+function cvMenuKey(ev) { if (ev.key === 'Escape') closeCvMenu(); }
+// Order paths the way the file browser lists them: a depth-first walk where, at each folder level,
+// sub-directories (alpha, case-insensitive) come before files (alpha). Sorts the switcher to match the tree.
+function treeOrder(a, b) {
+  const pa = a.split('/'), pb = b.split('/');
+  const n = Math.min(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    if (pa[i] === pb[i]) continue;
+    const aFile = i === pa.length - 1, bFile = i === pb.length - 1;
+    if (aFile !== bFile) return aFile ? 1 : -1;  // a directory sorts before a file at the same level
+    const x = pa[i].toLowerCase(), y = pb[i].toLowerCase();
+    return x < y ? -1 : (x > y ? 1 : 0);
+  }
+  return pa.length - pb.length;
+}
+function toggleCvMenu() {
+  if (cvMenuEl) { closeCvMenu(); return; }
+  const menu = document.createElement('div');
+  menu.className = 'cvmenu';
+  cvFiles.slice().sort(treeOrder).forEach((f) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'cvmenu-item' + (f === cvPath ? ' current' : '');
+    const name = document.createElement('span');
+    name.className = 'cvmenu-name';
+    name.textContent = f.split('/').pop();
+    item.appendChild(name);
+    const dir = f.split('/').slice(0, -1).join('/');
+    if (dir) {
+      const d = document.createElement('span');
+      d.className = 'cvmenu-dir';
+      d.textContent = dir;
+      item.appendChild(d);
+    }
+    item.addEventListener('click', () => {
+      closeCvMenu();
+      suppressTreeScroll = false;
+      highlightTreePath(treeKey(f));
+      loadCode(f, null);
+    });
+    menu.appendChild(item);
+  });
+  cvpath.appendChild(menu);
+  cvMenuEl = menu;
+  document.addEventListener('mousedown', cvMenuOutside, true);
+  document.addEventListener('keydown', cvMenuKey, true);
+  const cur = menu.querySelector('.cvmenu-item.current');
+  if (cur) cur.scrollIntoView({ block: 'nearest' });
 }
 const HLJS_VER = '11.9.0';
 const HLJS_JS = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/' + HLJS_VER + '/highlight.min.js';
@@ -3217,6 +3612,10 @@ function renderCode(path, text, token) {
 // the highlight (no refetch). Only meaningful in FULL mode; a no-op otherwise.
 async function loadCode(path, line) {
   if (!SERVED || !path) return;
+  // A real file is being shown -> leave browsing so the code viewer is visible. For a FOLDER element this
+  // runs first (loading its first file) and updateFolderPeek re-opens browsing right after; for a leaf,
+  // an edge, or a Happy-Path step it stays off, so their source isn't hidden behind the browser.
+  setBrowsing(false);
   cvLine = line || null;
   if (path === cvPath) { renderCvHeader(); markLine(cvLine); paintCodeTags(); return; }  // same file — move the line + its tag emphasis, refresh header
   const token = ++cvReq;
@@ -3229,11 +3628,11 @@ async function loadCode(path, line) {
     if (token !== cvReq) return;
     if (!r.ok) {
       cvscroll.innerHTML = '<p class="cverr">' + (r.status === 404 ? 'Not tracked in this commit.' : 'Could not load this file.') + '</p>';
-      cvPath = null; return;
+      cvPath = null; cvPinned = null; return;  // nothing shown -> drop any pin so it can't suppress a later view
     }
     text = await r.text();
   } catch (_) {
-    if (token === cvReq) { cvscroll.innerHTML = '<p class="cverr">Could not load this file.</p>'; cvPath = null; }
+    if (token === cvReq) { cvscroll.innerHTML = '<p class="cverr">Could not load this file.</p>'; cvPath = null; cvPinned = null; }
     return;
   }
   if (token !== cvReq) return;
@@ -3246,6 +3645,11 @@ async function loadCode(path, line) {
 function syncCodeView(file, line, files) {
   if (Array.isArray(files)) cvFiles = files;
   const anchor = (file && localRef(file) && !isDirRef(file, line)) ? cleanPath(file, line) : null;
+  // Keep a file the reader opened DIRECTLY from the browser (cvPinned) even though this element (its
+  // container) doesn't list it in `files` — an unmapped-file click must not override to the container's
+  // own source. The file belongs to no element, so its switcher lists only itself: drop the container's
+  // `files` the line above just copied in. Consume the pin so a later selection updates normally.
+  if (cvPinned && cvPath === cvPinned && anchor !== cvPath) { cvFiles = []; cvPinned = null; renderCvHeader(); return; }
   // Keep the file already shown if it belongs to this element BUT is NOT the element's own anchor — i.e.
   // an OWNED file the reader clicked (show that file, not the element's source). When the element's own
   // anchor IS the shown file, fall through to loadCode so it moves the line highlight to the new
@@ -3257,11 +3661,11 @@ function syncCodeView(file, line, files) {
 }
 // Open a source ref (a glossary term's home, or any standalone file link) into the code viewer — the
 // in-app viewer when served, else fall back to the external editor / GitHub (degraded mode has no code
-// pane). Not tied to a graph selection, so it clears the element footprint + switcher.
+// pane). Not tied to a graph selection, so it just moves the tree highlight to this file's row.
 function openInCodeViewer(file, line) {
   if (!file) return;
   if (SERVED && localRef(file)) {
-    highlightFootprint(null);
+    cvElement = null;  // a standalone / glossary open isn't tied to one element -> no header pill
     highlightTreePath(refTreePath(file, line));  // highlights the file's row (or its folder, for a dir home)
     syncCodeView(file, line, []);                // shows the file; a no-op for a directory ref
     return;
@@ -3290,6 +3694,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Meta' || e.key === 
 document.addEventListener('keyup', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(false); });
 window.addEventListener('blur', () => setCmd(false));
 window.addEventListener('resize', refitStage);  // keep the diagram fitted when the window itself resizes
+window.addEventListener('resize', updateAllPillFades);  // and re-evaluate the pill-box edge fades
 
 // --- open source in an external editor / on GitHub -------------------------------
 // A node's source ref (file [+ line]) opens in the user's editor via its URL scheme (vscode://,
@@ -3320,7 +3725,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', leftW: 'coyodex.leftW', panelH: 'coyodex.panelH', treeW: 'coyodex.treeW', treeHidden: 'coyodex.treeHidden' };
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', leftW: 'coyodex.leftW', panelH: 'coyodex.panelH', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
 // A single global key let a root saved while viewing one repo's map open files from the WRONG repo in
@@ -3571,17 +3976,17 @@ const tree = document.getElementById('tree');
 const clampTreeW = (w) => Math.min(Math.max(w, 180), Math.round(window.innerWidth * 0.5));
 const savedTreeW = parseInt(lsGet(LS.treeW) || '', 10);
 if (savedTreeW) tree.style.width = clampTreeW(savedTreeW) + 'px';
-if (lsGet(LS.treeHidden) === '1') { document.body.classList.add('tree-hidden'); treeToggleBtn.classList.add('off'); }
-treeToggleBtn.addEventListener('click', () => {
-  const hidden = document.body.classList.toggle('tree-hidden');
-  treeToggleBtn.classList.toggle('off', hidden);
-  lsSet(LS.treeHidden, hidden ? '1' : '0');
-  if (!hidden) setTreePeek(false);  // unfolding the browser for real ends any transient folder peek
-  refitStage();  // the stage just got wider/narrower — re-fit the diagram into it
-});
+// Restore the persisted pinned state, then wire the two controls. The code viewer's Files button toggles
+// browsing (the browser filling the code slot); the browser's pin button pins it to its own pane, or
+// unpins it away. Both re-fit the diagram since the stage width changes when a pane appears/disappears.
+treePinned = lsGet(LS.treePinned) === '1';
+applyTreeState();
+if (cvFilesBtn) cvFilesBtn.addEventListener('click', () => { if (!treePinned) { setBrowsing(!treeBrowsing); } });
+if (treeCodeBtn) treeCodeBtn.addEventListener('click', () => { if (!treePinned) { setBrowsing(false); } });
+if (treePinBtn) treePinBtn.addEventListener('click', () => { setPinned(!treePinned); refitStage(); });
 let treeResizing = false;
 treeResizer.addEventListener('mousedown', (e) => { e.preventDefault(); treeResizing = true; document.body.classList.add('resizing'); });
-document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX - tree.getBoundingClientRect().left) + 'px'; resizeStagePreserve(); } });
+document.addEventListener('mousemove', (e) => { if (treeResizing) { tree.style.width = clampTreeW(e.clientX - tree.getBoundingClientRect().left) + 'px'; resizeStagePreserve(); updateAllPillFades(); } });
 document.addEventListener('mouseup', () => {
   if (!treeResizing) return;
   treeResizing = false; document.body.classList.remove('resizing');

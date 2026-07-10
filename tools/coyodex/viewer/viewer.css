@@ -112,24 +112,20 @@ body.resizing #stage { pointer-events: none; }  /* no canvas hovers/pans mid-dra
 body:not(.served) #tree,
 body:not(.served) #treeresizer,
 body:not(.served) #codeview,
-body:not(.served) #resizer,
-body:not(.served) #treetoggle { display: none; }
+body:not(.served) #resizer { display: none; }
 
-/* --- file browser (left pane) ------------------------------------------------------------------
-   A foldable repo tree shaded by map coverage. Same flex-item + inline-width + drag-handle model as
-   the side panel, mirrored to the left edge. #treetoggle (header) hides it; width persists. */
-#treetoggle { flex: 0 0 auto; background: #4338ca; }
-#treetoggle.off { background: #3730a3; color: #a5b4fc; }
+/* --- file browser ---------------------------------------------------------------------------------
+   A repo tree shaded by map coverage. Shown PINNED (its own pane, left of the code viewer) or while
+   BROWSING (filling the code viewer's slot); hidden otherwise. Width persists. */
 #tree { flex: 0 0 auto; width: 260px; display: flex; flex-direction: column; min-width: 0;
         background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
 #treehead { flex: 0 0 auto; padding: 8px 10px; border-bottom: 1px solid #f3f4f6;
             display: flex; align-items: center; gap: 8px; }
-#treetitle { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; font-weight: 600; }
-#treelegend { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; font-size: 10px; color: #9ca3af; }
-.tdot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 2px; vertical-align: -1px; }
-.tdot-self { background: #4f46e5; }
-.tdot-has { background: #c7d2fe; }
-.tdot-none { background: #e5e7eb; }
+/* pin toggle in the browser head (right-aligned): pins the browser to its own pane, or unpins it away */
+#treepin { flex: 0 0 auto; margin-left: auto; cursor: pointer; border: 1px solid #e5e7eb; background: #fff;
+           border-radius: 5px; padding: 1px 5px; font-size: 12px; line-height: 1.2; filter: grayscale(1) opacity(.55); }
+#treepin:hover { background: #f5f6ff; filter: grayscale(.3) opacity(.9); }
+#treepin.pinned { background: #eef2ff; border-color: #c7d2fe; filter: none; }
 #treebody { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 12px; font-size: 13px; }
 /* one row = caret + icon + name (+ a node-id chip when a node points exactly here). Depth is set
    inline via padding-left. The whole row is the click target. */
@@ -141,40 +137,80 @@ body:not(.served) #treetoggle { display: none; }
 .tcaret { flex: 0 0 14px; text-align: center; color: #9ca3af; font-size: 10px; transition: transform .1s ease; }
 .trow.open > .tcaret { transform: rotate(90deg); }
 .tcaret.leaf { visibility: hidden; }
-.tname { overflow: hidden; text-overflow: ellipsis; }
-.tchip { flex: 0 0 auto; margin-left: 6px; font-size: 9px; font-family: ui-monospace, monospace;
-         background: #eef2ff; color: #3730a3; border-radius: 8px; padding: 0 5px; }
-/* count badge on a partial folder: how many mapped items are inside — a positive "expand me" cue.
-   Muted (vs the indigo id chip) so it reads as a hint, and hidden once the folder is open. */
-.tcount { flex: 0 0 auto; margin-left: 6px; font-size: 9px; font-variant-numeric: tabular-nums;
-          background: #e0e7ff; color: #4f46e5; border-radius: 8px; padding: 0 6px; font-weight: 600; }
-.trow.open > .tcount { display: none; }
-/* coverage shading: 'none' (nothing in the map points here) dims; 'self' (a node anchors this exact
-   path) reads strongest; 'under'/'has' sit in between at full strength. */
+.tname { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Coverage shading: every file reads in normal weight; only a file unmapped by the project map (cov-none,
+   and not referenced by any element) is dimmed so it recedes. */
 .trow.cov-none { color: #b6bcc6; }
-.trow.cov-self > .tname { font-weight: 600; color: #1e1b4b; }
-/* 'ref' = a component/entity references this file at all (its source OR an owned file) -> bold "on the
-   map", broader than cov-self. An owned file can be cov-none (not under any anchored folder) yet still
-   referenced, so undim it. */
-.trow.ref > .tname { font-weight: 600; }
 .trow.cov-none.ref { color: inherit; }
-/* 'foot' = a file in the currently-selected element's footprint. A faint green wash + left marker, kept
-   distinct from the indigo 'sel' row and yielding to it when a row is both. */
-.trow.foot:not(.sel) { background: #f0fdf4; box-shadow: inset 2px 0 0 #86efac; }
+/* Selection filter: while an element is selected the tree shows ONLY its footprint — rows outside it (and
+   their child subtrees) are hidden. The current/shown file still keeps its `.sel` row highlight. */
+.trow.filtered-out, .tchildren.filtered-out { display: none; }
+/* count badge on a directory: how many of the selected element's files sit inside it (recursive) */
+.tselcount { flex: 0 0 auto; margin-left: 6px; font-size: 9px; font-variant-numeric: tabular-nums;
+             background: #e0e7ff; color: #4f46e5; border-radius: 8px; padding: 0 6px; font-weight: 600; }
+/* Shared element pill (elementPill): the element's name in its kind's diagram tint — pale fill, matching
+   border + text (all set inline from ELEMENT_TINT). A container (subsystem/subdomain) gets a thick dashed
+   border, the same colour-blind-safe signal the boxes use. Reused verbatim in the file browser and the
+   code-viewer header, so the look is identical everywhere. */
+.pill { display: inline-flex; align-items: center; box-sizing: border-box; max-width: 100%; cursor: pointer;
+        font-size: 10px; line-height: 1.6; border-radius: 9px; padding: 0 7px; border: 1px solid transparent;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pill:hover { filter: brightness(0.96); }
+.pill-container { border-style: dashed; border-width: 1.5px; }
+/* the selected element's total file count, shown inside its header pill */
+.pillcount { flex: 0 0 auto; margin-left: 5px; padding-left: 5px; border-left: 1px solid currentColor;
+             font-variant-numeric: tabular-nums; opacity: .8; }
+/* the pill whose element is the current diagram selection: bolder text, a heavier border, and a faint
+   fill darken so it stands out among the other pills. Scoped to the file browser — the code-viewer pill
+   is always the selection, so emphasising it there would be redundant. */
+.trow .pill.pill-sel { font-weight: 700; border-width: 2px; box-shadow: inset 0 0 0 999px rgba(0, 0, 0, .07); }
+/* the file browser reuses the pill on a container's own anchor row. The pill box is right-aligned and, when
+   a path anchors SEVERAL containers, scrolls horizontally so every pill shows at full width without hiding
+   the row's name (`.has-groups .tname` keeps its natural width instead of being squeezed by the pills). */
+.trow.has-groups .tname, .trow.has-owner .tname { flex: 0 0 auto; }
+/* the owning sub-element pill on a file inside a selected container (right-aligned; may ellipsis). Shown
+   only on row hover to keep the filtered list clean — it's still clickable there to drill into the owner. */
+.towner { flex: 0 1 auto; min-width: 24px; margin-left: auto; }
+.trow .towner { display: none; }
+.trow:hover .towner { display: inline-flex; }
+.tgroups { flex: 0 1 auto; min-width: 48px; margin-left: auto; display: flex; gap: 4px;
+           overflow-x: auto; overflow-y: hidden; }
+.tgroups .pill { flex: 0 0 auto; max-width: none; overflow: visible; }
+/* hide the horizontal scrollbar (it would sit over the short pills and hide their text) — the box still
+   scrolls via trackpad / shift-wheel */
+.tgroups { scrollbar-width: none; }
+.tgroups::-webkit-scrollbar { display: none; }
+/* fade the edge(s) of an overflowing pill box to hint "more pills — scroll". `at-start`/`at-end` (JS-set)
+   drop the fade on a side that's fully scrolled, so the hint only points where there's actually more. */
+.tgroups.scrollable {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+}
+.tgroups.scrollable.at-start {
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 14px), transparent 100%);
+          mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 14px), transparent 100%);
+}
+.tgroups.scrollable.at-end {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
+          mask-image: linear-gradient(to right, transparent 0, #000 14px, #000 100%);
+}
+/* the selected element's pill in the browser header (mirrors the code viewer's header pill) */
+.treeheadpill { flex: 0 1 auto; min-width: 0; }
 .tchildren { display: none; }
 .tchildren.open { display: block; }
 .tempty { padding: 10px 12px; color: #9ca3af; font-size: 12px; }
 /* the file-browser's own resize handle (mirror of #resizer, on the pane's right edge) */
 #treeresizer { flex: 0 0 5px; cursor: col-resize; background: #e5e7eb; }
 #treeresizer:hover, body.resizing #treeresizer { background: #818cf8; }
-/* folded away via the header toggle, or absent when the repo has no walkable tree */
-body.tree-hidden #tree, body.tree-hidden #treeresizer { display: none; }
-body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #treetoggle { display: none; }
-/* Folder peek: while the browser is folded away, selecting a folder element reveals it IN the code
-   viewer's slot so the reader can drill into that folder (picking a file there commits it to the code
-   viewer and ends the peek). The browser grows to fill the slot; the code viewer steps aside. */
-body.tree-hidden.tree-peek #tree { display: flex; flex: 1 1 0; width: auto; }
-body.tree-hidden.tree-peek #codeview { display: none; }
+/* Hidden by default; the resizer exists only for the pinned pane. Absent entirely when the repo has no
+   walkable tree. */
+body:not(.tree-pinned):not(.tree-browsing) #tree { display: none; }
+body:not(.tree-pinned) #treeresizer { display: none; }
+body.no-tree #tree, body.no-tree #treeresizer, body.no-tree #cvfilesbtn { display: none; }
+/* Browsing: the browser takes over the code viewer's slot (only when not pinned) so the reader can drill
+   a folder; picking a file ends browsing and the code viewer returns. It grows to fill; code steps aside. */
+body.tree-browsing:not(.tree-pinned) #tree { flex: 1 1 0; width: auto; }
+body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 
 /* Info pane: now the BOTTOM of the left column (was a fixed-width side pane). Full column width; its
    HEIGHT is the resizable dimension (dragged via #vsplit, persisted). */
@@ -368,23 +404,46 @@ g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; po
    simple; richer navigation (go-to-def, search) is planned. */
 #codeview { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; background: #fff;
             border-left: 1px solid #e5e7eb; }
-#cvhead { flex: 0 0 auto; display: flex; align-items: baseline; gap: 8px; padding: 8px 12px;
+#cvhead { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; padding: 8px 12px;
           border-bottom: 1px solid #f3f4f6; }
-#cvtitle { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; font-weight: 600; }
-#cvpath { flex: 1 1 auto; min-width: 0; font: 12px ui-monospace, monospace; color: #4338ca;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the slot-switch buttons: the code viewer's "Files" (replaces the old "CODE" label) and the browser's
+   "Code" (replaces the "FILES" label) — same design, each swaps the code slot to the other view. Both are
+   disabled (dimmed) while pinned, since both panes are already visible then. `active` = browsing is on. */
+#cvfilesbtn, #treecodebtn { flex: 0 0 auto; cursor: pointer; border: 1px solid #c7d2fe; background: #eef2ff;
+   color: #4338ca; border-radius: 5px; padding: 2px 8px; font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+#cvfilesbtn:hover, #treecodebtn:hover { background: #e0e7ff; }
+#cvfilesbtn:disabled, #treecodebtn:disabled { cursor: default; opacity: .45; background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }
+/* the path area: a flex row holding the path (itself the file switcher) + the owning-element pill, and the
+   anchor for the switcher menu (position:relative). Not clipped, so the menu can overflow it downward. */
+#cvpath { position: relative; flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
+/* the full path — a plain span for a single-file element, a dropdown trigger (button) when the element
+   owns several files. Ellipsis lives on the inner label so a long path shrinks but the caret stays put. */
+.cvpathtext { flex: 1 1 auto; display: inline-flex; align-items: center; gap: 4px; min-width: 0;
+              font: 12px ui-monospace, monospace; color: #4338ca; }
+.cvpathbtn { cursor: pointer; background: none; border: 0; border-radius: 4px; padding: 2px 4px; text-align: left; }
+.cvpathbtn:hover { background: #eef2ff; }
+.cvpathlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cvcaret { flex: 0 0 auto; font-size: 9px; color: #6b7280; }
+/* the owning-element pill: capped so a long element name can't crowd out the path (the primary content) */
+.cvpill { flex: 0 1 auto; max-width: 45%; }
+/* the custom file-switcher menu, anchored under the path trigger */
+.cvmenu { position: absolute; top: 100%; left: 0; margin-top: 4px; z-index: 50; min-width: 240px;
+          max-width: 460px; max-height: 320px; overflow: auto; padding: 4px; background: #fff;
+          border: 1px solid #e5e7eb; border-radius: 8px; box-shadow: 0 10px 28px rgba(17, 24, 39, .16); }
+.cvmenu-item { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; cursor: pointer;
+               background: none; border: 0; border-radius: 6px; padding: 5px 8px; }
+.cvmenu-item:hover { background: #f5f6ff; }
+.cvmenu-item.current { background: #eef2ff; }
+.cvmenu-name { flex: 0 0 auto; font: 12px ui-monospace, monospace; color: #1f2937; }
+.cvmenu-item.current .cvmenu-name { color: #4338ca; font-weight: 600; }
+.cvmenu-dir { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+              font-size: 10px; color: #9ca3af; }
 /* the ↗ that opens the shown file in the external editor / on GitHub — the SOLE external-open control
    (the old inline source pills are gone). Hidden until a local file is showing. */
 #cvopen { flex: 0 0 auto; cursor: pointer; border: 1px solid #c7d2fe; background: #eef2ff; color: #4338ca;
           border-radius: 4px; padding: 1px 6px; font-size: 13px; line-height: 1.2; }
 #cvopen:hover { background: #e0e7ff; }
 #cvopen[hidden] { display: none; }
-/* the element's file switcher: a compact dropdown of its files (source first), with the full current
-   path muted alongside. Only shown when the selected element owns more than one file. */
-#cvpath select.cvfiles { font: inherit; color: #4338ca; background: #eef2ff; border: 1px solid #c7d2fe;
-          border-radius: 4px; padding: 0 4px; margin-right: 6px; cursor: pointer; vertical-align: baseline;
-          max-width: 240px; }
-#cvpath .cvpathfull { color: #6b7280; }
 /* the code body is a flex row: the scrolling source on the left, a thin overview ruler pinned on the right */
 #cvbody { flex: 1; min-height: 0; overflow: hidden; background: #fbfbfd; display: flex; }
 #cvscroll { flex: 1 1 auto; min-width: 0; overflow: auto; }
