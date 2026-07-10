@@ -4343,18 +4343,23 @@ const clampSearchW = (w) => Math.min(Math.max(w, 220), Math.round(window.innerWi
 const savedSearchW = parseInt(lsGet(LS.searchW) || '', 10);
 if (savedSearchW) searchbar.style.width = clampSearchW(savedSearchW) + 'px';
 
+// A diagram snapshot for stageScaleWithColumn: the svg-pan-zoom sizes + pan, plus the diagram column's DOM
+// width — all captured BEFORE a column resize.
+function stageBaseline() { return mainPz ? { ...mainPz.getSizes(), pan: mainPz.getPan(), leftW: leftcol.getBoundingClientRect().width } : null; }
 // Scale the diagram in step with its column's WIDTH: as the column narrows / widens by ratio r, scale the
 // diagram by r too — even when the diagram is height-constrained and a plain re-fit would leave it unchanged
 // — so the whole diagram shrinks / grows proportionally with the pane (the info pane already does). Keeps the
-// same point under the viewport centre. `before` = {width, height, pan, realZoom} captured BEFORE the resize.
+// same point under the viewport centre. The ratio is measured from the column's DOM width (exactly linear),
+// NOT svg-pan-zoom's internal width (which carries a padding offset) — so scaling composes exactly: a drag
+// from an opened state lands on the same scale as opening straight to that width. `before` = stageBaseline().
 function stageScaleWithColumn(before) {
-  if (!mainPz) return;
+  if (!mainPz || !before) return;
   scheduleStage(() => {
     const cx = (before.width / 2 - before.pan.x) / before.realZoom;   // SVG point at the old viewport centre
     const cy = (before.height / 2 - before.pan.y) / before.realZoom;
     mainPz.resize();
+    const ratio = before.leftW ? leftcol.getBoundingClientRect().width / before.leftW : 1;  // column width change
     const a = mainPz.getSizes();
-    const ratio = before.width ? a.width / before.width : 1;          // how the column's width changed
     if (a.realZoom) mainPz.zoom(mainPz.getZoom() * (before.realZoom * ratio) / a.realZoom);  // apply that scale
     const s = mainPz.getSizes();
     mainPz.pan({ x: s.width / 2 - s.realZoom * cx, y: s.height / 2 - s.realZoom * cy });  // re-centre same point
@@ -4365,7 +4370,7 @@ function setSearchOpen(on) {
   const wasOpen = !searchbar.hidden;
   if (on === wasOpen) { if (on) { sbInput.focus(); sbInput.select(); } return; }
   const served = document.body.classList.contains('served');
-  const before = mainPz ? { ...mainPz.getSizes(), pan: mainPz.getPan() } : null;  // sizes BEFORE the resize
+  const before = stageBaseline();  // diagram state BEFORE the column resizes
   const anchorRight = served ? resizer.getBoundingClientRect().left : null;
   searchbar.hidden = !on;
   document.body.classList.toggle('search-open', on);
@@ -4381,14 +4386,16 @@ function setSearchOpen(on) {
 }
 // Resizable width (persisted + clamped). The sidebar's width change is taken OUT OF the middle pane (the
 // diagram + info column), not the code viewer: as the sidebar grows by Δ the middle column shrinks by Δ,
-// so the file browser and code pane on the right stay put. resizeStagePreserve keeps the diagram's current
-// zoom (re-centring on the same point) while it reflows into the narrower column, instead of re-fitting.
-let sbResizing = false, sbDragX = 0, sbDragSbW = 0, sbDragLeftW = 0;
+// so the file browser and code pane on the right stay put. The diagram scales by the column's width ratio —
+// the exact same proportional shrink/grow as opening the sidebar (stageScaleWithColumn, off the drag-start
+// baseline), so a drag and an open resize the diagram identically.
+let sbResizing = false, sbDragX = 0, sbDragSbW = 0, sbDragLeftW = 0, sbDragBefore = null;
 sbResizer.addEventListener('mousedown', (e) => {
   e.preventDefault(); sbResizing = true; document.body.classList.add('resizing');
   sbDragX = e.clientX;
   sbDragSbW = searchbar.getBoundingClientRect().width;
   sbDragLeftW = leftcol.getBoundingClientRect().width;  // px snapshot so the middle pane can give the space back
+  sbDragBefore = stageBaseline();  // diagram baseline; scaling off it composes exactly with an open resize
 });
 document.addEventListener('mousemove', (e) => {
   if (!sbResizing) return;
@@ -4396,7 +4403,7 @@ document.addEventListener('mousemove', (e) => {
   const applied = newSbW - sbDragSbW;                 // real sidebar delta after clamping
   searchbar.style.width = newSbW + 'px';
   leftcol.style.width = clampLeftW(sbDragLeftW - applied) + 'px';  // middle pane absorbs it; right panes unchanged
-  resizeStagePreserve();
+  if (sbDragBefore) stageScaleWithColumn(sbDragBefore); else resizeStagePreserve();
 });
 document.addEventListener('mouseup', () => {
   if (!sbResizing) return;
