@@ -75,7 +75,8 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
 
   "flows":       [ { "uc": "UCn", "title",
                      "steps": [ { "n", "src", "dst", "phrase", "note" } ] } ],  // T6
-  "edges":       [ { "src", "verb", "dst", "why", "where": "<call-site path:line|null>" } ],
+  "edges":       [ { "src", "verb", "dst", "why", "where": "<call-site path:line|null>",
+                     "no_call_site": false } ],
 
   "deployment":     [ { "unit", "runs_on", "exposed_as", "config_source" } ],
   "observability":  [ { "signal", "where_emitted", "where_viewed", "alerts" } ],
@@ -107,11 +108,18 @@ Semantics, stated on the fields:
   Duplicated authored rows are preserved as authored (the graph views de-duplicate by
   `(src, verb, dst)`). An edge's `why` is the canonical relationship rationale — distinct from a
   node's `purpose` (about the node itself) — and its `where` is the call site: the line in `src`'s
-  code where it invokes `dst`, so a flow arrow's drill-to-code lands on the action.
-- **`flows[].steps`**: an endpoint is an element ID or a Role display name (an actor step);
-  element↔element steps are pure references to the backbone edge (its verb + why render the step).
-  The "used in" backward view (element → the use cases whose flow steps touch it) is derived from
-  these, never authored.
+  code where it invokes `dst`, so a flow arrow's drill-to-code lands on the action. `where` is
+  **required** — `coyodex validate` blocks on a missing one (the flow arrow would have nothing to open)
+  — unless the edge sets **`no_call_site: true`**, the explicit marker for a relationship with no single
+  call site (event-driven / shared-state / config-wired coupling, where `src` never directly calls
+  `dst`). This mirrors `deps[].deployment_linked`: an honest, conscious "no code call site here", never a
+  silent null. Setting both `no_call_site` and a `where` is contradictory (an advisory warning).
+- **`flows[].steps`**: an endpoint is an element ID or a Role display name (an actor step). Every step
+  carries its own `phrase` — a short action describing what happens at that point — which the flow arrow
+  and narrative render from. A step does NOT reuse the backbone edge's label: one element pair can appear
+  in several steps meaning different things, so a shared edge label can't describe each; the step
+  describes itself (`coyodex validate` requires a non-empty `phrase`). The "used in" backward view
+  (element → the use cases whose flow steps touch it) is derived from these, never authored.
 - **`entities[].relations`** are authored on the source card only (see the schema for `verb`'s
   vocabulary); cardinality is a pair (`src_card`/`dst_card`, both or neither); `how` is the
   plain-text note for field-less relations.

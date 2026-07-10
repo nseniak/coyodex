@@ -3363,36 +3363,47 @@ def test_hp_actor_is_use_case_actor() -> None:
 
 def test_flow_mermaid_sequence_from_use_case() -> None:
     # A use case's flow renders as a sequenceDiagram: the actor + the touched elements as lifelines,
-    # each step a message whose label is the actor step's authored phrase or the backbone edge's verb.
+    # each step a message whose label is the step's own authored phrase. (make_gp_map's element steps
+    # leave the phrase empty, so they exercise the legacy backstop: the edge's descriptive Why.)
     mm = gen_viewer.flow_mermaids(parse_map(make_gp_map()))
     s1 = mm["UC1"]
     assert s1.startswith("sequenceDiagram")
     assert "actor FA0 as Andy" in s1                      # the actor lifeline
     assert "participant C1 as Gateway" in s1 and "participant C2 as Engine" in s1
     # Each arrow is prefixed with its 1-based step number (aligns with the panel narrative + step player).
-    assert "FA0->>C1: 1. submits the order" in s1        # actor step -> the authored phrase
-    assert "C1->>C2: 2. calls" in s1                      # element step -> verb from the backbone edge
+    assert "FA0->>C1: 1. submits the order" in s1        # step with a phrase -> the authored phrase
+    assert "C1->>C2: 2. reach engine" in s1              # phrase-less step -> the edge's Why (backstop)
     s2 = mm["UC2"]
-    assert "C2->>D1: 2. reads" in s2
+    assert "C2->>D1: 2. cache" in s2
 
 
-def test_flow_narrative_derives_why_from_edge() -> None:
-    # The readable narrative pulls each element↔element step's why from the backbone edge (one source).
+def test_flow_element_step_phrase_wins_on_arrow() -> None:
+    # An element↔element step carries its OWN action text now; the arrow shows that phrase, not the
+    # shared backbone edge's label (a pair used by several steps can't be described by one edge label).
+    md = make_gp_map().replace(
+        '"src": "C1",\n          "dst": "C2",\n          "phrase": "",',
+        '"src": "C1",\n          "dst": "C2",\n          "phrase": "hands the order to the engine",')
+    s1 = gen_viewer.flow_mermaids(parse_map(md))["UC1"]
+    assert "C1->>C2: 2. hands the order to the engine" in s1   # the step's own phrase
+    assert "reach engine" not in s1                            # not the shared edge Why
+    step2 = next(s for s in gen_viewer.flow_narratives(parse_map(md))["UC1"] if s["n"] == 2)
+    assert step2["verb"] == "hands the order to the engine" and step2["why"] == ""
+
+
+def test_flow_narrative_backstop_derives_from_edge() -> None:
+    # Legacy backstop only: a phrase-less element step falls back to the backbone edge (verb + why).
     narr = gen_viewer.flow_narratives(parse_map(make_gp_map()))["UC1"]
     step2 = next(s for s in narr if s["n"] == 2)
     assert step2["srcId"] == "C1" and step2["dstId"] == "C2"
     assert step2["verb"] == "calls" and step2["why"] == "reach engine"
 
 
-def test_flow_uses_arrow_shows_why() -> None:
-    # The catch-all `uses` carries no meaning on its own: when the edge has a Why, the arrow shows the
-    # Why instead. A sharper verb (calls / reads / …) stays as-is.
-    md = make_gp_map().replace('"verb": "calls",', '"verb": "uses",')
-    s1 = gen_viewer.flow_mermaids(parse_map(md))["UC1"]
-    assert "C1->>C2: 2. reach engine" in s1   # generic 'uses' -> the Why (with its step number)
-    assert "C1->>C2: 2. uses" not in s1       # the catch-all verb never shows on the arrow
-    s2 = gen_viewer.flow_mermaids(parse_map(md))["UC2"]
-    assert "C2->>D1: 2. reads" in s2          # a sharp verb is untouched
+def test_flow_arrow_backstop_prefers_why_over_verb() -> None:
+    # Backstop for a phrase-less step: the arrow shows the edge's descriptive Why, never the terse verb —
+    # for a sharp verb (reads) just as for the catch-all (uses). The step's own phrase is the normal path.
+    s2 = gen_viewer.flow_mermaids(parse_map(make_gp_map()))["UC2"]
+    assert "C2->>D1: 2. cache" in s2          # sharp verb 'reads' -> still the Why on the arrow
+    assert "C2->>D1: 2. reads" not in s2      # the verb never shows when a Why exists
 
 
 def test_bundle_carries_gp_data() -> None:

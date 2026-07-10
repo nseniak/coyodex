@@ -708,6 +708,9 @@
           ],
           "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
           "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). The call site: the line in `src`'s code where it invokes `dst`."
+        },
+        "no_call_site": {
+          "type": "boolean"
         }
       },
       "required": [

@@ -264,9 +264,36 @@ def check_whyless_steps(m: ProjectModel) -> list[Finding]:
     return findings
 
 
+# A description written as a static-wiring dependency ("A needs B to …") instead of a runtime action
+# ("A POSTs …"). Reads wrong on the diagram, where the label should say what happens, not what depends
+# on what. Kept tight to avoid noise — "used to" is intentionally excluded (usually a valid action).
+_DEPENDENCY_PHRASING = re.compile(r"\b(needs?|requires?|depends?\s+on|dependent\s+on|must\s+have)\b", re.I)
+
+
+def check_dependency_phrasing(m: ProjectModel) -> list[Finding]:
+    """Flow-step and edge descriptions should read as actions, not dependency remarks. Advisory: it
+    catches the "the page needs the client to POST" shape and asks for "POSTs … through the client"."""
+    findings: list[Finding] = []
+    for f in m.flows:
+        for st in f.steps:
+            if st.phrase and _DEPENDENCY_PHRASING.search(st.phrase):
+                findings.append(Finding(
+                    "dependency-phrasing", ADVISORY, f"{f.uc} flow step {st.n}",
+                    f"step text reads as a dependency, not an action: \"{st.phrase}\". "
+                    "Reword as what the source does (e.g. \"POSTs … through …\")."))
+    for e in m.edges:
+        if e.why and _DEPENDENCY_PHRASING.search(e.why):
+            findings.append(Finding(
+                "dependency-phrasing", ADVISORY, f"edge {e.src} → {e.dst}",
+                f"`Why` reads as a dependency, not an action: \"{e.why}\". "
+                "Reword as what the source does (e.g. \"POSTs … through …\")."))
+    return findings
+
+
 def audit_model(m: ProjectModel) -> list[Finding]:
     findings: list[Finding] = []
-    for check in (check_precedence, check_why_refs, check_actor_attribution, check_whyless_steps):
+    for check in (check_precedence, check_why_refs, check_actor_attribution, check_whyless_steps,
+                  check_dependency_phrasing):
         findings.extend(check(m))
     findings.sort(key=lambda f: (_SEV_RANK.get(f.severity, 9), f.check, f.location))
     return findings

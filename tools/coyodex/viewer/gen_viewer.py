@@ -1201,7 +1201,8 @@ def hp_actors(graph: GraphDict) -> list[dict[str, Any]]:
 # One renderer drives BOTH the use-case view and the Happy-Path step drill-down (an HP step IS a use
 # case, so it opens that use case's flow). A flow renders two derived views from ONE source — a Mermaid
 # sequenceDiagram (the visual) and a numbered narrative (the readable text) — so the "why" of each step
-# is never authored twice. Element↔element steps pull their verb + why from the backbone edge.
+# is never authored twice. Each step carries its OWN action text; the arrow and the panel render from
+# that text alone, so a step describes what happens at that point — not a shared pair-level edge label.
 
 def _edge_index(graph: GraphDict) -> dict[tuple[str, str], tuple[str, str]]:
     """{(src_id, dst_id): (verb, why)} from the backbone edges — the single source for an element↔
@@ -1215,16 +1216,18 @@ def _edge_index(graph: GraphDict) -> dict[tuple[str, str], tuple[str, str]]:
 
 
 def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, Any]) -> str:
-    """A flow step's arrow label: the authored phrase if any (actor steps carry one); else the backbone
-    edge's verb for an element↔element step; else a neutral 'uses'. The catch-all `uses` carries no
-    meaning on its own, so when the edge has a `Why`, show the Why on the arrow instead — a sharper verb
-    (reads / persists / …) stays as-is and clean."""
+    """A flow step's arrow label: the step's OWN authored text (`phrase`) describing the action at this
+    point in the scenario. Every step carries one (`coyodex validate` requires it), so this is the normal
+    path. The backbone-edge lookup is only a safety net for a legacy step that predates that rule and left
+    its text empty — a pair used by several steps can't be described correctly by one shared edge label,
+    which is exactly why the step describes itself. The net prefers the edge's descriptive `Why` over its
+    terse verb, then falls back to a neutral 'uses'."""
     phrase = str(st.get("phrase") or "").strip()
     if phrase:
         return phrase
     if st.get("src_is_id") and st.get("dst_is_id"):
         verb, why = idx.get((str(st["src"]), str(st["dst"])), ("", ""))
-        if verb.lower() == "uses" and why:
+        if why:
             return why
         if verb:
             return verb
@@ -1271,8 +1274,10 @@ def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
 
 def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
     """The readable numbered steps for the side panel — the SAME source as gen_flow_mermaid. Each step
-    carries its from/to display names + (clickable) node ids, the action verb/phrase, the why (from the
-    backbone edge for element↔element steps), and any note. The viewer renders it as the prose view."""
+    carries its from/to display names + (clickable) node ids, its own action text, and any note. The panel
+    describes the step from the step alone — it does NOT pull the shared backbone-edge description, since
+    a pair used by several steps has one edge label that can't be right for all of them. `why` stays empty
+    for a normal step; the edge lookup is only a safety net for a legacy step with no authored text."""
     idx = _edge_index(graph)
     out: list[dict[str, Any]] = []
     for st in cast("list[dict[str, Any]]", flow.get("steps") or []):
@@ -1283,11 +1288,12 @@ def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any
         dst_id = dst if (st.get("dst_is_id") and dst in graph["nodes"]) else None
         phrase = str(st.get("phrase") or "").strip()
         verb, why = phrase, ""
-        if not phrase and st.get("src_is_id") and st.get("dst_is_id"):
-            v, w = idx.get((src, dst), ("", ""))
-            verb, why = (v or "uses"), w
-        elif not phrase:
-            verb = "uses"
+        if not phrase:                             # safety net: a legacy step that left its text empty
+            if st.get("src_is_id") and st.get("dst_is_id"):
+                v, w = idx.get((src, dst), ("", ""))
+                verb, why = (v or "uses"), w
+            else:
+                verb = "uses"
         out.append({
             "n": st.get("n"),
             "srcId": src_id, "src": str(graph["nodes"][src]["name"]) if src_id else src,

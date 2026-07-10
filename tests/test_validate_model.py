@@ -146,6 +146,13 @@ def test_duplicate_flow_per_use_case_is_flagged():
     assert any("more than one T6 flow" in p for p in problems_of(m))
 
 
+def test_flow_step_without_action_text_is_flagged():
+    # Every step must carry its own action text; it is no longer derived from the backbone edge.
+    m = make_valid_model()
+    m.flows[0].steps[0].phrase = ""
+    assert any("has no action text" in p for p in problems_of(m))
+
+
 def test_invalid_dep_kind_is_flagged():
     m = make_valid_model()
     m.deps[0].kind = "databaze"
@@ -158,10 +165,33 @@ def test_empty_edge_verb_is_flagged():
     assert any("empty Verb" in p for p in problems_of(m))
 
 
-def test_edge_where_prose_warns():
+def test_edge_where_prose_is_a_blocking_problem():
+    # A present-but-malformed `where` (prose, not a `path:line`) is blocked by the anchor-format gate.
     m = make_valid_model()
     m.edges[0].where = "somewhere in the code"
-    assert any("`Where` is not a source location" in w for w in warnings_of(m))
+    assert any("where" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_edge_missing_where_is_a_blocking_problem():
+    # A call-site-less edge gives a flow arrow nothing to open — blocking, not a warning.
+    m = make_valid_model()
+    m.edges[0].where = None
+    assert any("no `Where` call-site anchor" in p for p in problems_of(m))
+
+
+def test_edge_no_call_site_opt_out_allows_missing_where():
+    # The explicit opt-out for a genuinely decoupled edge clears the missing-`where` block.
+    m = make_valid_model()
+    m.edges[0].where = None
+    m.edges[0].no_call_site = True
+    assert not any("call-site anchor" in p for p in problems_of(m))
+
+
+def test_edge_no_call_site_with_where_warns():
+    # Claiming no call site while also giving one is contradictory — advisory.
+    m = make_valid_model()
+    m.edges[0].no_call_site = True  # edges[0].where is a valid anchor from make_valid_model
+    assert any("no_call_site` is set but a `Where` is present" in w for w in warnings_of(m))
 
 
 def test_domain_card_completeness_and_relations():

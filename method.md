@@ -74,8 +74,10 @@ the spine; built after harvest + at least one full trace.
 Connect each use case to the T1/T2/T5 elements its **flow** touches, **and** the converse, so the
 reader can drill down (use case → elements) and step back (element → use cases). ONE source — the
 **T6 flow steps** — both views derived; don't store links twice (they drift). A flow step's
-endpoints (a component, dep, or entity) ARE the touches, and element↔element steps reuse the
-backbone edge (its `Verb` + `Why`), so no relationship is restated.
+endpoints (a component, dep, or entity) ARE the touches. Every step carries its **own** short action
+text describing what happens at that point in the scenario — the same pair of elements can be used by
+several steps that mean different things, so a shared pair-level edge label can't describe each one;
+the step describes itself.
 
 Deliver as:
 1. forward view = the use case's **T6 flow**, whose ordered steps name the elements it touches;
@@ -128,9 +130,11 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   diagram then leads with a Subdomains overview and drills into one subdomain's classDiagram.
 - **T6 Use-case flows** *(the inside view of each use case — a block, not a table)*: one block per
   use case, `**UCn — <title>**` + **numbered step lines**. Each step is an ordered interaction
-  `from → to`: when both ends are elements (C/D/E) it is a pure reference to the backbone edge, so the
-  edge's `Verb` + `Why` render the step from **one source** (never restated); an **actor step**
-  (`<Role> → C…`) carries a short authored phrase (the backbone has no actor edges); an optional
+  `from → to`: **every step** — element↔element and actor steps alike — carries a short authored phrase
+  saying what happens at that point (an action, present tense: "POSTs the new upstream", "returns the
+  verified email"), which is what the arrow shows. Don't lean on the backbone edge for it: the same
+  element pair can appear in several steps that do different things, and one shared edge label can't
+  describe each; the step describes itself. An optional
   `· <note>` adds flow-specific context. Renders as a Mermaid `sequenceDiagram` — the actor plus the
   touched components/deps/entities as lifelines, the steps as ordered messages — **and** as a numbered
   narrative below it. Drilling a Happy Path step opens its use case's flow here.
@@ -200,18 +204,25 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   edge** — a dep with no edge is an *un-traced* `C→D`, not an unused dependency — and a component
   graph with far fewer edges than components is under-traced. The component edge list is the primary
   trace output; the validator nudges on orphan deps (a thin-trace symptom).
-- **`Why` = a short phrase: why `From` needs `To`** (e.g. "verify service tokens", "cache
-  refreshed OAuth tokens"). The edge list is the **canonical home for relationship rationale** —
-  the verb gives the category, `Why` gives the purpose the verb can't carry (especially the
-  catch-all `uses`). Prefer a sharper verb first; let `Why` say what the verb omits. Keep it a
-  terse phrase, not a sentence, so it stays cheap to re-verify. The Happy Path / T6 flows
-  **reference** edges rather than restating their `Why` — one source, derived views.
+- **`Why` = a short phrase: what `From` does to/with `To`** — an **action**, not a dependency remark
+  (e.g. "verify service tokens", "cache refreshed OAuth tokens"). Write "POSTs the new upstream through
+  the REST client", never "the page needs the REST client to POST" — a "needs / requires / depends on"
+  framing describes a static wiring fact, not the runtime action, and reads wrong on the diagram. The
+  edge list is the **canonical home for relationship rationale** — the verb gives the category, `Why`
+  gives the purpose the verb can't carry (especially the catch-all `uses`). Prefer a sharper verb first;
+  let `Why` say what the verb omits. Keep it a terse phrase, not a sentence, so it stays cheap to
+  re-verify. This `Why` powers the **component/architecture diagram** arrows; T6 flow steps carry their
+  **own** action text (above) and do not reuse it.
 - **`Where` = the call site: the `file:line` in `From`'s code where it invokes `To`** — not `To`'s
   definition. An edge `A — verb → B` is *evidenced* by the line in **A** where A uses B, so `Where`
   points there. This is also the line a flow arrow opens (the drill-to-code link), so it should land on
   the action. When the relationship fires at several sites, pick the **primary / most representative**
   one (the edge is an aggregate — one `Where` per edge). Format it as a bare `path:line` anchor
   (never a markdown link — see [the map model](method/model.md)'s Anchor formats).
+  **`Where` is required** — a missing one is a blocking `validate` error, because a call-site-less edge
+  gives a flow arrow nothing to open. The one exception: a relationship with **no single call site**
+  (event-driven, shared-state, or config/DI-wired coupling, where `From` never directly calls `To`) —
+  set **`no_call_site: true`** on the edge to make the absence a conscious choice, not a silent gap.
 - Convenience = inline "Uses" column on T6 (the most-used slice of the edge list).
 
 ---

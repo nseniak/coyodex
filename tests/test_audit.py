@@ -1518,6 +1518,27 @@ def test_read_never_created_is_advisory_not_blocking() -> None:
     assert code == 0, "an advisory alone must not block"
 
 
+def make_dependency_phrasing_model(step_phrase: str, edge_why: str) -> audit_model.ProjectModel:
+    from coyodex.model import Edge, Flow, FlowStep, ProjectModel
+    return ProjectModel(
+        flows=[Flow(uc="UC1", title="t", steps=[FlowStep(n=1, src="C1", dst="C2", phrase=step_phrase)])],
+        edges=[Edge(src="C1", verb="uses", dst="C2", why=edge_why)])
+
+
+def test_dependency_phrasing_flags_step_and_edge() -> None:
+    # "A needs B to …" reads as static wiring, not a runtime action — advisory on step text and edge Why.
+    m = make_dependency_phrasing_model("the page needs the client to POST", "requires the store to save")
+    findings = audit_model.check_dependency_phrasing(m)
+    assert {f.location for f in findings} == {"UC1 flow step 1", "edge C1 → C2"}
+    assert all(f.severity == "ADVISORY" for f in findings)
+
+
+def test_dependency_phrasing_allows_actions() -> None:
+    # A proper action phrasing raises nothing (and "used to" is intentionally not flagged).
+    m = make_dependency_phrasing_model("POSTs the new upstream through the client", "used to save the order")
+    assert audit_model.check_dependency_phrasing(m) == []
+
+
 def test_whyless_nonfirst_step_warns() -> None:
     checks = _checks(make_whyless_map())
     assert checks.get("why-less-step") == "WARNING", checks

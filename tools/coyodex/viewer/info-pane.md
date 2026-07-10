@@ -91,9 +91,9 @@ arrow. Clicking one arrow in the diagram opens that single step's pane:
 ### Flow step (one arrow of a use case's flow)
 | Property | Display | Action |
 |---|---|---|
-| The step's action | heading (free text — a sentence for an actor step) | |
+| The step's action | heading (the step's own authored text — a phrase on every step) | |
 | source → destination | text (each endpoint is a link to that element) | |
-| Why (from the backbone edge) | prose | |
+| Why (legacy backstop only — empty for a normal step; the backbone edge's why for a phrase-less step) | prose | |
 | Note | text | |
 
 ---

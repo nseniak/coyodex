@@ -186,6 +186,9 @@ def _check_flows(m: ProjectModel) -> list[str]:
             if not st.src or not st.dst:
                 problems.append(f"{tag} is missing an endpoint (`from → to` needs both)")
                 continue
+            if not st.phrase.strip():
+                problems.append(f"{tag} has no action text (`phrase`) — every step describes what "
+                                "happens at that point; it is not derived from the backbone edge")
             if role_names:
                 for end in (st.src, st.dst):
                     if not grammar.is_step_id(end) and end.lower() not in role_names:
@@ -211,9 +214,16 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
     for e in m.edges:
         if not e.verb.strip():
             problems.append(f"Edge {e.src} → {e.dst} has an empty Verb")
-        if _where_href(e.where or "") is None:
-            warnings.append(f"{e.src} → {e.dst}: `Where` is not a source location "
-                            f"(use a bare `path:line` call-site anchor)")
+        has_where = bool(e.where)                          # a PRESENT-but-malformed `where` (incl. a
+        if not has_where and not e.no_call_site:           # whitespace-only one) is owned by the anchor-
+                                                           # format gate; here we own only the ABSENT case
+            problems.append(
+                f"{e.src} → {e.dst}: no `Where` call-site anchor — add the bare `path:line` where {e.src} "
+                f"invokes {e.dst} (a flow arrow opens it to drill to code), or set `no_call_site` if this "
+                "relationship has no single call site (event-driven / shared-state / config-wired coupling)")
+        elif has_where and e.no_call_site:
+            warnings.append(f"{e.src} → {e.dst}: `no_call_site` is set but a `Where` is present — "
+                            "drop one so the intent is unambiguous")
     return problems, warnings
 
 

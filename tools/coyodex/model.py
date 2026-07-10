@@ -177,7 +177,7 @@ class FlowStep:
     n: int
     src: str                         # an element ID or a Role display name (actor step)
     dst: str
-    phrase: str = ""                 # authored inline phrase (actor steps)
+    phrase: str = ""                 # authored inline action text (required on every step — `validate`)
     note: str = ""                   # flow-specific note
 
 
@@ -194,7 +194,10 @@ class Edge:                          # one backbone edge (C↔C, C↔D, C→E)
     verb: str
     dst: str
     why: str | None = None
-    where: str | None = None         # the call site in src's code (md link)
+    where: str | None = None         # the call site: bare `path:line` in src's code where it invokes dst
+    no_call_site: bool = False       # opt-out: this relationship has no single call site (event-driven /
+                                     # shared-state / config-wired coupling) — `where` may be null. Without
+                                     # it, a missing `where` is a blocking `validate` error, not a warning.
 
 
 @dataclass
