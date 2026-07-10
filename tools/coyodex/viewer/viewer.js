@@ -4339,9 +4339,22 @@ function sbGotoGlossary(term, source) {
 }
 
 function setSearchOpen(on) {
+  const wasOpen = !searchbar.hidden;
+  // Take the sidebar's width out of (open) / give it back to (close) the middle column, so the file
+  // browser + code viewer on the right stay put — the same anchoring the sidebar drag does. Only when the
+  // right panes are actually shown (served); otherwise the diagram column just fills the freed space.
+  const served = document.body.classList.contains('served');
+  const anchorLeft = (served && on !== wasOpen) ? resizer.getBoundingClientRect().left : null;
   searchbar.hidden = !on;
   document.body.classList.toggle('search-open', on);
   lsSet(LS.searchOpen, on ? '1' : '0');
+  if (anchorLeft !== null) {
+    const shift = resizer.getBoundingClientRect().left - anchorLeft;  // how far the right group moved
+    if (shift) {
+      leftcol.style.width = clampLeftW(leftcol.getBoundingClientRect().width - shift) + 'px';
+      lsSet(LS.leftW, String(parseInt(leftcol.style.width, 10) || ''));
+    }
+  }
   refitStage();  // the diagram column just narrowed / widened — reframe it
   if (on) { sbEnsureIndex(); sbEnsureSymbols(); sbRun(); sbInput.focus(); sbInput.select(); }
 }
