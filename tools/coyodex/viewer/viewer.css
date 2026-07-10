@@ -21,7 +21,7 @@ header button:hover { background: #818cf8; }
 #zoomctl { display: inline-flex; gap: 4px; flex: 0 0 auto; align-items: center; }
 #zoomctl button { font-size: 13px; line-height: 1; padding: 4px 9px; }
 #zoomctl #zoomlevel { min-width: 52px; font-size: 12px; font-variant-numeric: tabular-nums; }
-main { display: flex; flex: 1; min-height: 0; position: relative; }  /* relative: anchors the overlay search sidebar */
+main { display: flex; flex: 1; min-height: 0; }
 
 /* --- search sidebar --------------------------------------------------------------------------------
    Far-left collapsible pane: an incremental "jump to anything" search over the in-memory map index
@@ -33,13 +33,6 @@ body.search-open header #searchbtn { background: #a5b4fc; color: #1e1b4b; }
 #searchbar { flex: 0 0 auto; width: 300px; min-width: 0; display: flex; flex-direction: column;
              background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
 #searchbar[hidden] { display: none; }
-/* OVERLAY model (opening via the magnifier): the sidebar FLOATS over the left edge of the diagram,
-   cropping it, without taking any flow width — so the diagram column keeps its size and the diagram its
-   exact zoom + pan (no reflow). A drag on the resizer switches to the in-flow model (JS removes .sb-overlay),
-   where the sidebar takes its own column and the diagram shrinks. #main is position:relative to anchor these. */
-body.sb-overlay #searchbar { position: absolute; left: 0; top: 0; bottom: 0; z-index: 40;
-             box-shadow: 3px 0 12px rgba(15, 23, 42, .13); }
-body.sb-overlay #sbresizer { position: absolute; top: 0; bottom: 0; width: 5px; z-index: 41; /* left set inline by JS = sidebar width */ }
 /* Drag handle on the sidebar's right edge (mirror of #resizer/#treeresizer); only while search is open. */
 #sbresizer { flex: 0 0 5px; cursor: col-resize; background: #e5e7eb; }
 #sbresizer:hover, body.resizing #sbresizer { background: #818cf8; }

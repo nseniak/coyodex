@@ -4342,51 +4342,50 @@ const sbResizer = document.getElementById('sbresizer');
 const clampSearchW = (w) => Math.min(Math.max(w, 220), Math.round(window.innerWidth * 0.45));
 const savedSearchW = parseInt(lsGet(LS.searchW) || '', 10);
 if (savedSearchW) searchbar.style.width = clampSearchW(savedSearchW) + 'px';
-// The diagram column's width the moment we switched to the in-flow model — restored on close so the next
-// open floats over the diagram again instead of leaving it shrunk.
-let sbBaseLeftW = 0;
-function sbPlaceOverlayResizer() { sbResizer.style.left = searchbar.getBoundingClientRect().width + 'px'; }
+
+// Keep the diagram at the SAME on-screen scale and horizontal position after the diagram column's width
+// (and left edge) just changed — so opening/closing search crops the newly hidden left strip instead of
+// re-fitting or re-centering the diagram. `before` = {left, pan, realZoom} captured BEFORE the resize.
+function stageKeepScreenPos(before) {
+  if (!mainPz) return;
+  scheduleStage(() => {
+    mainPz.resize();                                     // tell svg-pan-zoom the container is a new size
+    const a = mainPz.getSizes();
+    if (before.realZoom && a.realZoom)                   // the base fit-scale shifted — cancel it so the
+      mainPz.zoom(mainPz.getZoom() * before.realZoom / a.realZoom);   // on-screen scale is exactly as before
+    const dx = diagram.getBoundingClientRect().left - before.left;    // how far the diagram's left edge moved
+    mainPz.pan({ x: before.pan.x - dx, y: before.pan.y });            // cancel it -> content stays screen-fixed
+  });
+}
 
 function setSearchOpen(on) {
+  const wasOpen = !searchbar.hidden;
+  if (on === wasOpen) { if (on) { sbInput.focus(); sbInput.select(); } return; }
+  // Snapshot the diagram's on-screen anchor + the right-hand panes' position BEFORE the column resizes.
+  const before = mainPz ? { left: diagram.getBoundingClientRect().left, pan: mainPz.getPan(), realZoom: mainPz.getSizes().realZoom } : null;
+  const served = document.body.classList.contains('served');
+  const anchorRight = served ? resizer.getBoundingClientRect().left : null;
   searchbar.hidden = !on;
   document.body.classList.toggle('search-open', on);
   lsSet(LS.searchOpen, on ? '1' : '0');
-  if (on) {
-    // OVERLAY: float over the diagram's left edge, cropping it, WITHOUT resizing the diagram column — so
-    // the diagram keeps its exact zoom + pan (no refit). A drag on the resizer later switches to in-flow.
-    document.body.classList.add('sb-overlay');
-    sbPlaceOverlayResizer();
-    sbEnsureIndex(); sbEnsureSymbols(); sbRun(); sbInput.focus(); sbInput.select();
-  } else {
-    // Closing. If a drag had switched us to the in-flow model, give the diagram column its width back.
-    if (!document.body.classList.contains('sb-overlay') && sbBaseLeftW) {
-      leftcol.style.width = clampLeftW(sbBaseLeftW) + 'px';
-      lsSet(LS.leftW, String(parseInt(leftcol.style.width, 10) || ''));
-      resizeStagePreserve();
-    }
-    document.body.classList.add('sb-overlay');  // reset so the next open floats
-    sbBaseLeftW = 0;
+  // In-flow: the sidebar takes real width out of the diagram column (the info pane shrinks with it), and
+  // we take that width from the middle column so the file browser + code viewer on the right stay put.
+  if (anchorRight !== null) {
+    const shift = resizer.getBoundingClientRect().left - anchorRight;  // how far the right group moved
+    if (shift) leftcol.style.width = clampLeftW(leftcol.getBoundingClientRect().width - shift) + 'px';
   }
+  // Preserve the diagram (scale + horizontal position); when there is no diagram yet, a plain refit is fine.
+  if (before) stageKeepScreenPos(before); else if (served) refitStage();
+  if (on) { sbEnsureIndex(); sbEnsureSymbols(); sbRun(); sbInput.focus(); sbInput.select(); }
 }
-// Resizable width (persisted + clamped). Dragging the handle switches OUT of the overlay model into the
-// in-flow one: the sidebar takes its own column and the width change is taken OUT OF the middle pane (the
-// diagram + info column), not the code viewer — as the sidebar grows by Δ the middle column shrinks by Δ,
+// Resizable width (persisted + clamped). The sidebar's width change is taken OUT OF the middle pane (the
+// diagram + info column), not the code viewer: as the sidebar grows by Δ the middle column shrinks by Δ,
 // so the file browser and code pane on the right stay put. resizeStagePreserve keeps the diagram's current
-// zoom while it reflows into the narrower column, instead of re-fitting on every nudge.
+// zoom (re-centring on the same point) while it reflows into the narrower column, instead of re-fitting.
 let sbResizing = false, sbDragX = 0, sbDragSbW = 0, sbDragLeftW = 0;
 sbResizer.addEventListener('mousedown', (e) => {
   e.preventDefault(); sbResizing = true; document.body.classList.add('resizing');
   sbDragX = e.clientX;
-  if (document.body.classList.contains('sb-overlay')) {
-    // Leave the overlay model: reserve the sidebar's width from the diagram column (keeping the right
-    // panes put), so the sidebar stops floating over the diagram and the diagram reflows beside it.
-    sbBaseLeftW = leftcol.getBoundingClientRect().width;
-    document.body.classList.remove('sb-overlay');
-    sbResizer.style.left = '';  // back to in-flow (static) placement
-    const w = searchbar.getBoundingClientRect().width + sbResizer.getBoundingClientRect().width;
-    leftcol.style.width = clampLeftW(sbBaseLeftW - w) + 'px';
-    resizeStagePreserve();
-  }
   sbDragSbW = searchbar.getBoundingClientRect().width;
   sbDragLeftW = leftcol.getBoundingClientRect().width;  // px snapshot so the middle pane can give the space back
 });
