@@ -255,7 +255,7 @@ First draft the behavioral layer (Goal → Glossary → Roles → Use cases → 
 **then** run the pre-index and let it *size and locate* while you keep *naming and judging*:
 
 ```
-.venv/bin/coyodex preindex --root <repo>       # writes .coyodex/preindex.json (ephemeral, gitignored)
+.venv/bin/coyodex preindex --root <repo>       # writes .coyodex/preindex.json (committed with the map)
 ```
 
 It returns, for the whole tree: a **weight map** (LOC + file count + git churn per directory), a

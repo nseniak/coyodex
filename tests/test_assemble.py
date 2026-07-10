@@ -166,9 +166,21 @@ def test_ensure_fragments_ignored_creates_appends_and_is_idempotent():
         assert ensure_fragments_ignored(out) is True
         assert (out / ".gitignore").read_text(encoding="utf-8") == "build-fragments/\n"
         assert ensure_fragments_ignored(out) is False  # idempotent
+
+
+def test_ensure_fragments_ignored_strips_stray_preindex_ignore():
+    # preindex.json is a committed artifact — a stray ignore line (older build / hand edit) must be
+    # stripped, build-fragments/ kept, and any unrelated lines left intact.
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td)
         (out / ".gitignore").write_text("preindex.json", encoding="utf-8")  # no trailing newline
         assert ensure_fragments_ignored(out) is True
-        assert (out / ".gitignore").read_text(encoding="utf-8") == "preindex.json\nbuild-fragments/\n"
+        assert (out / ".gitignore").read_text(encoding="utf-8") == "build-fragments/\n"
+        # a fuller stray gitignore: preindex stripped, build-fragments kept, other lines preserved
+        (out / ".gitignore").write_text("*.log\nbuild-fragments/\npreindex.json\n", encoding="utf-8")
+        assert ensure_fragments_ignored(out) is True
+        assert (out / ".gitignore").read_text(encoding="utf-8") == "*.log\nbuild-fragments/\n"
+        assert ensure_fragments_ignored(out) is False  # now stable
 
 
 def test_assemble_cli_writes_the_fragments_gitignore():

@@ -87,21 +87,26 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]]) -> tuple[ProjectModel
     return out, problems
 
 
+_GITIGNORE_KEEP = "build-fragments/"       # the agents' scratch dir — never committed
+# `preindex.json` is a COMMITTED artifact (the viewer's symbol search reads it, pinned to the map's
+# commit), so it must NOT be ignored. Strip any stray ignore line (an older build, a hand edit) so it
+# can't drift back out of version control. Match the plain name and a root-anchored form.
+_GITIGNORE_DROP = {"preindex.json", "/preindex.json"}
+
+
 def ensure_fragments_ignored(out_dir: Path) -> bool:
-    """Make `<out>/.gitignore` ignore `build-fragments/` (the method's scratch dir for agents'
-    fragments) — the tool writes the ignore entry the method promises, so a build in a normal
-    checkout never leaves a dirty tree for the eval's pin guard to refuse. Returns True when the
-    entry was added (False = already present)."""
+    """Normalize `<out>/.gitignore`: ensure `build-fragments/` (the agents' scratch dir) IS ignored so
+    a build never dirties the tree, and ensure `preindex.json` is NOT ignored so the committed
+    pre-index the viewer relies on stays in version control. Any other lines are left untouched.
+    Returns True when the file changed (created, the entry added, or a stray preindex ignore stripped)."""
     gi = out_dir / ".gitignore"
-    line = "build-fragments/"
-    if gi.exists():
-        content = gi.read_text(encoding="utf-8")
-        if line in (ln.strip() for ln in content.splitlines()):
-            return False
-        sep = "" if (not content or content.endswith("\n")) else "\n"
-        gi.write_text(content + sep + line + "\n", encoding="utf-8")
-    else:
-        gi.write_text(line + "\n", encoding="utf-8")
+    old_lines = gi.read_text(encoding="utf-8").splitlines() if gi.exists() else []
+    new_lines = [ln for ln in old_lines if ln.strip() not in _GITIGNORE_DROP]
+    if _GITIGNORE_KEEP not in (ln.strip() for ln in new_lines):
+        new_lines.append(_GITIGNORE_KEEP)
+    if new_lines == old_lines:
+        return False
+    gi.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
     return True
 
 
