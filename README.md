@@ -120,6 +120,33 @@ edit code
 The map is committed *with* the code, so the baseline commit and the code commit
 stay in step.
 
+## Asking for map changes
+
+The map isn't only built and updated from code — you can also **just ask for changes** in plain
+language, and coyodex edits the map for you. For example:
+
+```
+/coyodex move the payments module into a new "Billing" subsystem
+/coyodex the "utils" component is really two things — split it
+/coyodex rename the "API" subsystem to "Public API"
+/coyodex add a use case for an admin resetting a user's password
+```
+
+coyodex reads your request, makes the edit directly to `.coyodex/project-map.json`, runs the same
+checks as any other change (validate → audit → render), and commits it. There's no special mode or
+extra file — it's the same map, edited on request.
+
+Two things to know:
+
+- **It stays grounded in the code.** A map describes what the code actually does, so coyodex will
+  make changes that reorganize or rename what's there (grouping, naming, how deep an area is drilled),
+  but it won't invent things the code doesn't do — an "add a use case" only sticks if there's real
+  code behind it.
+- **A change lives in the map and in git, like any edit.** If you later rebuild the map from scratch
+  (a full regeneration, which you have to ask for explicitly), that's a fresh start — your manual
+  tweaks aren't automatically re-applied. Day to day you won't rebuild; you analyze and accept, which
+  keeps your edits.
+
 ## Status
 
 **Alpha — v0.1.0. Experimental and incomplete.** Expect breaking changes,

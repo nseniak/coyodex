@@ -15,6 +15,11 @@ If the invocation explicitly names a mode — **`build`**, **`analyze`**, or **`
 the README teaches, e.g. `/coyodex analyze`) — do that mode directly: Build → `method.md`, Analyze /
 Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall through to Step 1.)
 
+A **plain-language request to change the map itself** ("move component X into subsystem Y", "rename
+this subsystem", "split this component", "add a use case for…") is also a recognized input, even
+without a verb — it is a **Direct map change** (Step 1, "Baseline exists", item 3), not Analyze. Do
+not treat such a request as "nothing to analyze / baseline up to date".
+
 ## Step 1 — is there already a baseline?
 
 Look **only at the working tree** of the analyzed repo for `.coyodex/project-map.json`. If the file
@@ -56,7 +61,22 @@ the model's `commit` / `committed` fields, then:
 
 2. **Accept** — when the user says the report looks right, read `method/change-impact.md` (Accept).
 
-3. **Rebuild** — only when the user *explicitly* asks to regenerate from scratch. Warn that it
+3. **Direct map change** — the user asks, in plain language, to change the *map itself* (not driven
+   by a code diff): "move component X into subsystem Y", "rename the API subsystem", "split this
+   component in two", "create a subsystem for the reporting components", "add a use case for an admin
+   resetting a password". This is **not** Analyze (there may be no code change to diff) — do it
+   directly:
+   - **Make the edit surgically to the model** (`.coyodex/project-map.json`) — the same field/array
+     edits Accept applies (`method/change-impact.md`), never a rebuild.
+   - **Stay grounded in the code** (the same rule as Build): a map describes what the code does, so
+     reorganize / rename / re-drill what exists, but do not invent elements the code doesn't back — an
+     "add a use case" only stands if there is real code and a traced flow behind it; otherwise say so
+     and don't add it.
+   - **Run the gates and commit**: the invariant below — **validate → audit → render** — then commit
+     the model + regenerated markdown view (a direct map change is a write like any other; the gates
+     are not optional).
+
+4. **Rebuild** — only when the user *explicitly* asks to regenerate from scratch. Warn that it
    **overwrites the existing baseline and discards its curation and pin history**, get confirmation,
    then Build as above.
 
@@ -64,7 +84,8 @@ the model's `commit` / `committed` fields, then:
 
 The map is the single source at the analyzed repo's `.coyodex/project-map.json`; the committed
 `.coyodex/project-map.md` is a generated view of it (never hand-edited), and the interactive C4
-diagram is served live by `coyodex serve` (not a committed file). After every write:
+diagram is served live by `coyodex serve` (not a committed file). After every write — **including a
+Direct map change made at the user's request**, not only Build / Accept — the invariant is
 **validate → audit → render**. Validate (`coyodex validate --check-sources`) checks schema +
 semantics (and that the committed markdown view is fresh); audit (`coyodex audit`) is the adversarial
 pass — it makes the narrative Happy Path and
