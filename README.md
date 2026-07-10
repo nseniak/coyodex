@@ -56,8 +56,10 @@ Re-run `make install` only if you move the repo; `make uninstall` removes the sk
 ```
 
 Writes `.coyodex/project-map.json` (the map model) and `.coyodex/project-map.md` (a generated,
-readable view), pinned to the current commit. Commit both with your code. The interactive, drillable
-[C4 viewer](tools/coyodex/viewer/) is not a committed file — it is served live from the model (below).
+readable view) — plus `.coyodex/preindex.json` (the structural pre-index the viewer's symbol search
+reads) on a non-trivial repo — all pinned to the current commit. Commit them with your code. The
+interactive, drillable [C4 viewer](tools/coyodex/viewer/) is not a committed file — it is served live
+from the model (below).
 
 **3. View the map.** The whole viewer — the diagram, the file browser, and the code viewer — is
 served by a small local server (the diagram is built on demand from the model; source is read from
@@ -89,8 +91,8 @@ isn't touched yet.
 /coyodex accept
 ```
 
-Patches the map, re-renders the viewer, bumps the commit pin, and commits the map together with the
-report.
+Patches the map, re-renders the markdown view and (when the map has one) the pre-index at the new
+pin, bumps the commit pin, and commits the map together with the pre-index and the report.
 
 Then keep coding and repeat steps 4–6.
 
@@ -102,7 +104,7 @@ agent that can read this repo.
 ## The workflow
 
 ```
-/coyodex ────────▶ .coyodex/project-map.json (committed, commit-pinned; + generated markdown view)
+/coyodex ────────▶ .coyodex/project-map.json (committed, commit-pinned; + markdown view + preindex.json)
                    interactive viewer served live by `coyodex serve` (not a file)
    │
    ▼
@@ -112,7 +114,7 @@ edit code
 /coyodex analyze ──▶ .coyodex/analysis-changes/<date>.md (report: modified / added / deleted, uncommitted)
    │
    ▼
-/coyodex accept ──▶ patch the map, re-render the markdown view, bump the commit pin, commit the map + the report
+/coyodex accept ──▶ patch the map, re-render the markdown view + pre-index, bump the commit pin, commit the map + pre-index + the report
 ```
 
 The map is committed *with* the code, so the baseline commit and the code commit

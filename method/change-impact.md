@@ -9,9 +9,9 @@ meaning), scoped to the diff.
 
 | Step | Action | Writes | Committed? |
 |---|---|---|---|
-| **1 Build** | map the repo | `.coyodex/project-map.json` (+ generated md/html views) | yes — pinned to the code commit it describes |
+| **1 Build** | map the repo | `.coyodex/project-map.json` (+ generated md/html views + `preindex.json`) | yes — pinned to the code commit it describes |
 | **2 Analyze** | diff the code against the baseline | `.coyodex/analysis-changes/<date>.md` (the report) | **no** — written to disk, uncommitted |
-| **3 Accept** | fold the report into the baseline | patches `project-map.json`, regenerates the views | yes — all committed |
+| **3 Accept** | fold the report into the baseline | patches `project-map.json`, regenerates the views + pre-index | yes — all committed |
 
 The change-impact report is a **file from the moment it's generated** (step 2) — just
 uncommitted. This mirrors git's own model: the report is a *working-tree change*, accept is
@@ -127,12 +127,16 @@ clean baseline.
    **pin gate** as Build applies (`method.md`): the *code* must be committed (the `.coyodex/` report
    and map you are accepting are expected to be dirty — that's what this step commits), else give the
    user the A/B choice and record the pin `-dirty` only if they pick B.
-3. Re-render the committed markdown view (`.venv/bin/coyodex render .coyodex/project-map.json
-   .coyodex/project-map.md`) — a deterministic re-render of the patched model, no new inference. (The
+3. Regenerate the committed derived artifacts at the new pin — deterministic, no new inference:
+   (a) re-render the markdown view (`.venv/bin/coyodex render .coyodex/project-map.json
+   .coyodex/project-map.md`); (b) **if the map has a pre-index** (`.coyodex/preindex.json` exists),
+   rebuild it at the now-current commit (`.venv/bin/coyodex preindex --root <repo>`) so its
+   `file:line` anchors match the re-pinned map — the viewer's symbol search reads it, so a pin bump
+   without this leaves the committed index stale (wrong lines for the files the change touched). (The
    interactive diagram is served live from the model; there is no `.html` file to re-render.)
 4. The draft `.coyodex/analysis-changes/<date>.md` becomes the committed record (no rewrite).
-5. git-commit all (map + markdown view + report) — so baseline-commit stays aligned with code-commit.
-   The commit IS the acceptance.
+5. git-commit all (map + markdown view + pre-index + report) — so baseline-commit stays aligned with
+   code-commit. The commit IS the acceptance.
 6. **Finish by reporting the URL to open the diagram** in the coyodex map server (where the file
    browser + code viewer work): if the server isn't already running, start it from the coyodex clone
    with `make start` (or `.venv/bin/coyodex serve`), then open

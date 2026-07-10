@@ -435,8 +435,11 @@ existing `.coyodex/` map, so you should only be here for a first map or a user-c
 [dispatch](method/dispatch.md) routes an existing baseline to Analyze, not Build. The committed
 source of truth is `.coyodex/project-map.json` ([the map model](method/model.md)),
 written by `coyodex assemble` together with its generated markdown view, `.coyodex/project-map.md`
-(readable diffs) — both are committed. The interactive C4 diagram is not a committed file: it is
-served live by `coyodex serve` (built on demand from the model). Record the commit the map was built
+(readable diffs). Both are committed — and so is the structural pre-index `.coyodex/preindex.json`
+when the build produced one: the viewer's symbol search reads it, pinned to the map's commit, so it
+must ship with the map (it is generated at that commit, so its `file:line` anchors match). The
+interactive C4 diagram is not a committed file: it is served live by `coyodex serve` (built on
+demand from the model). Record the commit the map was built
 at in the model's `commit`/`committed`/`built` fields (the baseline pin — see the pin gate below).
 
 **Baseline pin — require committed code, or record it dirty.** The pin must mean "the map describes
@@ -561,8 +564,10 @@ edits), bump the baseline pin, re-stamp provenance
 which appends this session), **re-run validate → audit** (a patch can introduce a fresh
 self-contradiction — e.g. a re-ordered Happy Path step now reads before it creates), **re-render
 the markdown view** (`coyodex render … project-map.md`, so it tracks the patched model; the diagram
-is served live), save the annotated diff under `.coyodex/analysis-changes/<date>.md`, and commit the
-model + markdown view + `provenance.json` with the code.
+is served live) and, when the map has a pre-index, **regenerate it at the new pin**
+(`coyodex preindex --root <repo>`, so the viewer's symbol search stays aligned with the re-pinned
+map), save the annotated diff under `.coyodex/analysis-changes/<date>.md`, and commit the
+model + markdown view + pre-index + `provenance.json` with the code.
 
 **Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big
 to detail at its altitude (e.g. a `plugins` area holding dozens of feature units), go finer **inside the
