@@ -235,7 +235,14 @@ def project_symbols(proj: Project) -> list[dict[str, object]]:
     path = proj.map_json.parent / PREINDEX_JSON
     try:
         doc = json.loads(path.read_text(encoding="utf-8"))
-        by_name = ((doc.get("symbols") or {}).get("by_name") or {}) if isinstance(doc, dict) else {}
+    except (OSError, ValueError):
+        doc = None  # no pre-index, or unreadable/invalid JSON -> degrade to no code symbols
+    # isinstance guards at every level: a pre-index whose shape doesn't match (a list where a dict is
+    # expected, a hand-edited/older/hostile file) must yield [] here, never an AttributeError that would
+    # break the response. Only well-shaped {symbols:{by_name:{name:[{file,line,kind}]}}} contributes rows.
+    symbols = doc.get("symbols") if isinstance(doc, dict) else None
+    by_name = symbols.get("by_name") if isinstance(symbols, dict) else None
+    if isinstance(by_name, dict):
         for name, locs in by_name.items():
             if not isinstance(locs, list):
                 continue
@@ -244,8 +251,6 @@ def project_symbols(proj: Project) -> list[dict[str, object]]:
                     continue
                 out.append({"name": name, "file": loc.get("file"),
                             "line": loc.get("line"), "kind": loc.get("kind")})
-    except (OSError, ValueError):
-        out = []  # no pre-index (or malformed) -> degrade to no code symbols
     proj.symbols = out
     return out
 

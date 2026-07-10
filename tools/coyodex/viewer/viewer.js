@@ -118,7 +118,11 @@ const flowprev = document.getElementById('flowprev');
 const flownext = document.getElementById('flownext');
 const flowcount = document.getElementById('flowcount');
 document.getElementById('meta').innerHTML = META;
-const esc = (s) => (s || '').replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+// Escape for HTML output. Covers BOTH contexts esc() feeds: text content AND double/single-quoted
+// attributes (e.g. data-term="${esc(...)}"). Quotes must be escaped so a value can't break out of an
+// attribute and inject markup; in text content the quote entities render identically, so it's safe
+// everywhere. esc() output only ever lands in innerHTML, never textContent, so the entities decode back.
+const esc = (s) => (s || '').replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
 // Inline markdown -> safe HTML for prose fields (Purpose / Why / Wants / …): a link collapses to its
 // text, then we ESCAPE, then wrap `code` and **bold** — escape-first so the only tags are the ones we
 // add. Pragmatic, not a full parser: `code` is wrapped before **bold**, so a code span matches first.

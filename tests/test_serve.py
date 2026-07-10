@@ -323,6 +323,29 @@ def test_project_symbols_missing_preindex_is_empty() -> None:
         assert project_symbols(proj) == []  # no pre-index -> degrade cleanly, never raise
 
 
+def test_project_symbols_malformed_preindex_is_empty() -> None:
+    # A pre-index whose SHAPE is wrong (not just a bad value inside by_name) must still yield [] and
+    # never raise — the endpoint's "never fatal" contract. Covers the AttributeError shapes: a non-dict
+    # `symbols`, a non-dict `by_name`, and a top-level non-dict document.
+    bad_docs = [
+        {"symbols": ["not", "a", "dict"]},   # symbols is a list
+        {"symbols": "hello"},                # symbols is a string
+        {"symbols": {"by_name": [1, 2, 3]}}, # by_name is a list
+        {"symbols": {"by_name": "abc"}},     # by_name is a string
+        ["top", "level", "list"],            # whole doc is a list
+        "just a string",                     # whole doc is a string
+    ]
+    for i, doc in enumerate(bad_docs):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / ".coyodex").mkdir()
+            shutil.copy(_FIXTURE_MAP, root / ".coyodex" / "project-map.json")
+            (root / ".coyodex" / "preindex.json").write_text(json.dumps(doc), encoding="utf-8")
+            proj = Project(slug=f"p{i}", repo_root=root,
+                           map_json=root / ".coyodex" / "project-map.json", commit="abc123")
+            assert project_symbols(proj) == []  # malformed shape -> empty, not a crash
+
+
 # --- served view bundle (generic-frontend data) ---------------------------------
 def test_project_view_bundle_and_cache() -> None:
     with tempfile.TemporaryDirectory() as td:
