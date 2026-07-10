@@ -4004,6 +4004,9 @@ document.addEventListener('mouseup', () => {
 // SEARCH_FILES is filled from the loaded tree.
 let SEARCH_STATIC = null;     // elements + fields + glossary — built once (the graph is fixed at boot)
 let SEARCH_FILES = [];        // {path,dir} for every tree entry — (re)filled by renderFileTree
+let SEARCH_SYMBOLS = null;    // code symbols (class/fn) as search rows — null = not fetched, [] = fetched
+let SYMBOLS_BY_FILE = null;   // treeKey(file) -> [{name,line,kind}] — for the code-viewer outline (Phase 2b)
+let symbolsPending = null;    // in-flight fetch guard, so /api/symbols is requested at most once
 const searchbar = document.getElementById('searchbar');
 const searchBtn = document.getElementById('searchbtn');
 const sbInput = document.getElementById('sbinput');
@@ -4016,7 +4019,7 @@ const SB_KIND_LABEL = { usecase: 'use case', subsystem: 'subsystem', component: 
 const sbElemLabel = (n) => (n.kind === 'dep' ? ((n.fields && n.fields.Kind) || 'dependency') : (SB_KIND_LABEL[n.kind] || n.kind));
 // A per-kind nudge so a same-quality name match on a behaviour/structure element outranks a raw path hit.
 const SB_TYPE_BONUS = { usecase: 45, subsystem: 40, component: 35, entity: 35, subdomain: 30, dep: 30,
-                        gloss: 25, field: 10, file: 5, dir: -5 };
+                        gloss: 25, field: 10, file: 5, dir: -5, symbol: -2 };
 
 // The fixed half of the index: every named node, each entity's fields, every glossary term. Built once.
 function sbBuildStatic() {
@@ -4042,6 +4045,47 @@ function sbBuildStatic() {
   return items;
 }
 function sbEnsureIndex() { if (!SEARCH_STATIC) SEARCH_STATIC = sbBuildStatic(); }
+
+// Code symbols (real class/function definitions) from the build-time pre-index, fetched lazily from the
+// server the first time search is opened. They round out the index beyond the map's curated elements —
+// so a class the map doesn't call out (e.g. a UI badge component) is still findable. One row per NAME:
+// a name at a single site opens it; a name at many sites shows the count and opens the first. A symbol
+// whose name is already a map element is dropped (the element row represents it). By-file index kept for
+// the code outline (Phase 2b). No server -> no fetch; missing pre-index -> an empty, harmless result.
+function sbEnsureSymbols() {
+  if (SEARCH_SYMBOLS !== null || symbolsPending || !API_BASE) return;
+  symbolsPending = fetch(API_BASE + 'symbols', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : { symbols: [] }))
+    .then((j) => { sbBuildSymbols(j.symbols || []); if (!searchbar.hidden && sbInput.value.trim()) sbRun(); })
+    .catch(() => { SEARCH_SYMBOLS = []; })
+    .finally(() => { symbolsPending = null; });
+}
+function sbBuildSymbols(list) {
+  const elemNames = new Set();
+  const nodes = GRAPH.nodes || {};
+  for (const id in nodes) { if (nodes[id] && nodes[id].name) elemNames.add(nodes[id].name.toLowerCase()); }
+  const byName = new Map();     // name -> [{file,line,kind}]
+  const byFile = {};            // treeKey(file) -> [{name,line,kind}]
+  for (const s of list) {
+    if (!s || !s.name || !s.file) continue;
+    let arr = byName.get(s.name); if (!arr) { arr = []; byName.set(s.name, arr); }
+    arr.push(s);
+    const key = treeKey(s.file);
+    (byFile[key] || (byFile[key] = [])).push({ name: s.name, line: s.line, kind: s.kind });
+  }
+  const items = [];
+  byName.forEach((locs, name) => {
+    if (elemNames.has(name.toLowerCase())) return;   // the map element already represents this name
+    const first = locs[0];
+    const isClass = locs.some((l) => l.kind === 'class');
+    const sub = locs.length > 1 ? locs.length + ' places'
+      : (first.file.split('/').pop() + (first.line ? ':' + first.line : ''));
+    items.push({ text: name, sub, cls: 'symbol', badge: isClass ? 'class' : 'function',
+      bonus: isClass ? 8 : -10, run: ((f, l) => () => openInCodeViewer(f, l))(first.file, first.line) });
+  });
+  SEARCH_SYMBOLS = items;
+  SYMBOLS_BY_FILE = byFile;
+}
 // The file/folder half, rebuilt each search from SEARCH_FILES so it tracks whatever tree is loaded.
 function sbFileItems() {
   return SEARCH_FILES.map((f) => ({ text: f.path, sub: '', cls: f.dir ? 'dir' : 'file',
@@ -4083,11 +4127,11 @@ function sbRun() {
   sbEnsureIndex();
   if (!raw) { sbRender([], '', 0); return; }
   const q = raw.toLowerCase();
-  const all = SEARCH_STATIC.concat(sbFileItems());
+  const all = SEARCH_STATIC.concat(sbFileItems(), SEARCH_SYMBOLS || []);
   const scored = [];
   for (const it of all) {
     const m = sbScore(q, it.text);
-    if (m) scored.push({ it, score: m.score + (SB_TYPE_BONUS[it.cls] || 0), pos: m.pos });
+    if (m) scored.push({ it, score: m.score + (SB_TYPE_BONUS[it.cls] || 0) + (it.bonus || 0), pos: m.pos });
   }
   scored.sort((a, b) => b.score - a.score || a.it.text.length - b.it.text.length);
   sbRender(scored.slice(0, 60), raw, scored.length);
@@ -4161,7 +4205,7 @@ function setSearchOpen(on) {
   document.body.classList.toggle('search-open', on);
   lsSet(LS.searchOpen, on ? '1' : '0');
   refitStage();  // the diagram column just narrowed / widened — reframe it
-  if (on) { sbEnsureIndex(); sbRun(); sbInput.focus(); sbInput.select(); }
+  if (on) { sbEnsureIndex(); sbEnsureSymbols(); sbRun(); sbInput.focus(); sbInput.select(); }
 }
 // Resizable width (persisted + clamped). The sidebar's width change is taken OUT OF the middle pane
 // (the diagram + info column), not the code viewer: as the sidebar grows by Δ the middle column shrinks

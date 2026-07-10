@@ -40,6 +40,7 @@ from coyodex.views import model_to_graph
 
 MAP_JSON = "project-map.json"
 CHANGE_REPORT = "change-report.md"  # optional change-impact overlay, alongside the model in .coyodex/
+PREINDEX_JSON = "preindex.json"  # build-time structural pre-index (symbols/imports), alongside the map
 _DEFAULT_PORT = 8765
 
 # The generic frontend assets (shell + viewer.js/css) live next to this module and are served as-is,
@@ -68,6 +69,7 @@ class Project:
     goal: str = ""    # the map's one-paragraph goal (shown, clamped, under the title)
     tree: FileTreeNode | None = None  # cached tree (built once, on the first /api/tree)
     view: ViewBundle | None = None    # cached view bundle (built once, on the first /api/view)
+    symbols: list[dict[str, object]] | None = None  # cached code symbols (built once, on the first /api/symbols)
 
 
 def _strip_dirty(commit: str) -> str:
@@ -219,6 +221,33 @@ def project_view(proj: Project) -> ViewBundle:
     report = proj.map_json.parent / CHANGE_REPORT
     proj.view = build_view_bundle(graph, report if report.is_file() else None, proj.map_json.parent)
     return proj.view
+
+
+def project_symbols(proj: Project) -> list[dict[str, object]]:
+    """The code symbols (class/function definitions) from the build-time pre-index next to the map, as a
+    flat list of ``{name, file, line, kind}`` — one entry per definition site. The pre-index is generated
+    at the map's commit, so its file:line anchors match what the code viewer serves from git. Missing or
+    unreadable pre-index -> an empty list (the viewer then just has no code-symbol results). Cached on the
+    Project after the first request; the frontend fetches it lazily from /p/<slug>/api/symbols."""
+    if proj.symbols is not None:
+        return proj.symbols
+    out: list[dict[str, object]] = []
+    path = proj.map_json.parent / PREINDEX_JSON
+    try:
+        doc = json.loads(path.read_text(encoding="utf-8"))
+        by_name = ((doc.get("symbols") or {}).get("by_name") or {}) if isinstance(doc, dict) else {}
+        for name, locs in by_name.items():
+            if not isinstance(locs, list):
+                continue
+            for loc in locs:
+                if not isinstance(loc, dict) or not loc.get("file"):
+                    continue
+                out.append({"name": name, "file": loc.get("file"),
+                            "line": loc.get("line"), "kind": loc.get("kind")})
+    except (OSError, ValueError):
+        out = []  # no pre-index (or malformed) -> degrade to no code symbols
+    proj.symbols = out
+    return out
 
 
 # --- filesystem browser (for the "add a project" picker) ----------------------------------------
@@ -408,6 +437,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(project_tree(proj))
             except (ModelError, OSError, ValueError) as e:
                 return self._send(500, "text/plain; charset=utf-8", str(e).encode("utf-8"))
+        if rest == ["symbols"]:
+            # Never fatal: a missing/broken pre-index yields an empty list, so the search just falls back
+            # to map elements + files. No git or model work here, so nothing else to catch.
+            return self._json({"symbols": project_symbols(proj), "commit": proj.commit})
         if rest == ["src"]:
             path = (query.get("path") or [""])[0]
             if not _safe_rel(path):

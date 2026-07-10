@@ -37,6 +37,7 @@ from coyodex.viewer.serve import (
     git_show,
     list_dirs,
     load_project,
+    project_symbols,
     project_tree,
     project_view,
 )
@@ -288,6 +289,38 @@ def _all_paths(node: FileTreeNode) -> set[str]:
     for c in node["children"]:
         out |= _all_paths(c)
     return out
+
+
+def test_project_symbols_flattens_preindex() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / ".coyodex").mkdir()
+        shutil.copy(_FIXTURE_MAP, root / ".coyodex" / "project-map.json")
+        preindex = {"symbols": {"by_name": {
+            "Widget": [{"file": "src/widget.py", "line": 3, "kind": "class"}],
+            "run": [{"file": "src/a.py", "line": 5, "kind": "function"},
+                    {"file": "src/b.py", "line": 9, "kind": "function"}],
+            "bad": "not-a-list",                                  # skipped: malformed value
+        }}}
+        (root / ".coyodex" / "preindex.json").write_text(json.dumps(preindex), encoding="utf-8")
+        proj = Project(slug=root.name, repo_root=root,
+                       map_json=root / ".coyodex" / "project-map.json", commit="abc123")
+        syms = project_symbols(proj)
+        # one entry per definition SITE; ambiguous names keep every site
+        assert {"name": "Widget", "file": "src/widget.py", "line": 3, "kind": "class"} in syms
+        assert sum(1 for s in syms if s["name"] == "run") == 2
+        assert all(s["name"] != "bad" for s in syms)
+        assert proj.symbols is not None  # cached on the Project after the first build
+
+
+def test_project_symbols_missing_preindex_is_empty() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / ".coyodex").mkdir()
+        shutil.copy(_FIXTURE_MAP, root / ".coyodex" / "project-map.json")
+        proj = Project(slug=root.name, repo_root=root,
+                       map_json=root / ".coyodex" / "project-map.json", commit="abc123")
+        assert project_symbols(proj) == []  # no pre-index -> degrade cleanly, never raise
 
 
 # --- served view bundle (generic-frontend data) ---------------------------------
