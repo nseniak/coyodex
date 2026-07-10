@@ -1813,22 +1813,36 @@ function diveIn(up) {  // the freshly-rendered #diagram settles in from slightly
     setTimeout(() => { clearDiveStyle(); res(); }, DIVE_ENTER_MS);
   });
 }
+// Select the container we zoomed out FROM in the view we land on — so the reader sees where they were.
+// It may not be drawn directly (a nested container isn't on the top-level overview), so walk up its
+// lineage to the first box the new view actually draws (e.g. its top-level ancestor).
+function selectLeftContainer(fromF) {
+  let cur = fromF; const seen = new Set();
+  while (cur && !seen.has(cur)) {
+    seen.add(cur);
+    const el = mainScene && mainScene.nodeEls[cur];
+    if (el) { selectNode(mainScene, el, cur); return; }
+    cur = GRAPH.nodes[cur] && GRAPH.nodes[cur].parent;
+  }
+}
 // Decide whether a navigation is a container drill and, if so, animate it; otherwise render straight.
 function driveTransition(from) {
-  ++navSeq;
+  const my = ++navSeq;
   clearDiveStyle();
   const to = history[hi];
-  if (REDUCE_MOTION || !from) { render(); return; }
-  const fromF = focusOf(from), toF = focusOf(to);
-  const inChain = toF ? drillChain(fromF, toF) : null;
-  if (inChain && inChain.length) { runDrill(inChain, navSeq).catch(() => { clearDiveStyle(); render(); }); return; }
+  const fromF = from ? focusOf(from) : null, toF = focusOf(to);
+  const inChain = (from && toF) ? drillChain(fromF, toF) : null;
   // drill OUT: leaving a container UP to an ancestor container's card, or to the overview tab it belongs to
   // (NOT a lateral tab switch — going from a card to Dependencies/Domain/Happy Path stays instant).
   const fromKind = fromF && GRAPH.nodes[fromF] && GRAPH.nodes[fromF].kind;
-  const outToAncestor = fromF && toF && drillChain(toF, fromF);
-  const outToOverview = fromF && toF == null
-    && ((fromKind === 'subsystem' && to.kind === 'container') || (fromKind === 'subdomain' && to.kind === 'domain'));
-  if (outToAncestor || outToOverview) { runDrillOut(navSeq).catch(() => { clearDiveStyle(); render(); }); return; }
+  const isOut = !!fromF && ((toF && drillChain(toF, fromF))
+    || (toF == null && ((fromKind === 'subsystem' && to.kind === 'container') || (fromKind === 'subdomain' && to.kind === 'domain'))));
+  if (REDUCE_MOTION || !from) {  // no animation — still select the left-behind container on a zoom-out
+    render().then(() => { if (my === navSeq && isOut) selectLeftContainer(fromF); });
+    return;
+  }
+  if (inChain && inChain.length) { runDrill(inChain, my).catch(() => { clearDiveStyle(); render(); }); return; }
+  if (isOut) { runDrillOut(my, fromF).catch(() => { clearDiveStyle(); render(); }); return; }
   render();  // lateral / unrelated navigation — no dive
 }
 async function runDrill(chain, my) {
@@ -1843,10 +1857,11 @@ async function runDrill(chain, my) {
     if (!last) { await delay(DIVE_FLASH_MS); if (my !== navSeq) return; }
   }
 }
-async function runDrillOut(my) {
+async function runDrillOut(my, leftF) {
   await diveOut(null, false); if (my !== navSeq) return;
   diagram.style.transition = 'none'; diagram.style.transform = 'none';
   await render(); if (my !== navSeq) return;
+  selectLeftContainer(leftF);  // highlight the container we zoomed out from, so the reader keeps their place
   await diveIn(false);
 }
 
