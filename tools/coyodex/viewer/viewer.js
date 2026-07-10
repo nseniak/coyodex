@@ -4343,27 +4343,29 @@ const clampSearchW = (w) => Math.min(Math.max(w, 220), Math.round(window.innerWi
 const savedSearchW = parseInt(lsGet(LS.searchW) || '', 10);
 if (savedSearchW) searchbar.style.width = clampSearchW(savedSearchW) + 'px';
 
-// Keep the diagram at the SAME on-screen scale and horizontal position after the diagram column's width
-// (and left edge) just changed — so opening/closing search crops the newly hidden left strip instead of
-// re-fitting or re-centering the diagram. `before` = {left, pan, realZoom} captured BEFORE the resize.
-function stageKeepScreenPos(before) {
+// Scale the diagram in step with its column's WIDTH: as the column narrows / widens by ratio r, scale the
+// diagram by r too — even when the diagram is height-constrained and a plain re-fit would leave it unchanged
+// — so the whole diagram shrinks / grows proportionally with the pane (the info pane already does). Keeps the
+// same point under the viewport centre. `before` = {width, height, pan, realZoom} captured BEFORE the resize.
+function stageScaleWithColumn(before) {
   if (!mainPz) return;
   scheduleStage(() => {
-    mainPz.resize();                                     // tell svg-pan-zoom the container is a new size
+    const cx = (before.width / 2 - before.pan.x) / before.realZoom;   // SVG point at the old viewport centre
+    const cy = (before.height / 2 - before.pan.y) / before.realZoom;
+    mainPz.resize();
     const a = mainPz.getSizes();
-    if (before.realZoom && a.realZoom)                   // the base fit-scale shifted — cancel it so the
-      mainPz.zoom(mainPz.getZoom() * before.realZoom / a.realZoom);   // on-screen scale is exactly as before
-    const dx = diagram.getBoundingClientRect().left - before.left;    // how far the diagram's left edge moved
-    mainPz.pan({ x: before.pan.x - dx, y: before.pan.y });            // cancel it -> content stays screen-fixed
+    const ratio = before.width ? a.width / before.width : 1;          // how the column's width changed
+    if (a.realZoom) mainPz.zoom(mainPz.getZoom() * (before.realZoom * ratio) / a.realZoom);  // apply that scale
+    const s = mainPz.getSizes();
+    mainPz.pan({ x: s.width / 2 - s.realZoom * cx, y: s.height / 2 - s.realZoom * cy });  // re-centre same point
   });
 }
 
 function setSearchOpen(on) {
   const wasOpen = !searchbar.hidden;
   if (on === wasOpen) { if (on) { sbInput.focus(); sbInput.select(); } return; }
-  // Snapshot the diagram's on-screen anchor + the right-hand panes' position BEFORE the column resizes.
-  const before = mainPz ? { left: diagram.getBoundingClientRect().left, pan: mainPz.getPan(), realZoom: mainPz.getSizes().realZoom } : null;
   const served = document.body.classList.contains('served');
+  const before = mainPz ? { ...mainPz.getSizes(), pan: mainPz.getPan() } : null;  // sizes BEFORE the resize
   const anchorRight = served ? resizer.getBoundingClientRect().left : null;
   searchbar.hidden = !on;
   document.body.classList.toggle('search-open', on);
@@ -4374,8 +4376,7 @@ function setSearchOpen(on) {
     const shift = resizer.getBoundingClientRect().left - anchorRight;  // how far the right group moved
     if (shift) leftcol.style.width = clampLeftW(leftcol.getBoundingClientRect().width - shift) + 'px';
   }
-  // Preserve the diagram (scale + horizontal position); when there is no diagram yet, a plain refit is fine.
-  if (before) stageKeepScreenPos(before); else if (served) refitStage();
+  if (before) stageScaleWithColumn(before); else if (served) refitStage();  // shrink / grow the diagram with the column
   if (on) { sbEnsureIndex(); sbEnsureSymbols(); sbRun(); sbInput.focus(); sbInput.select(); }
 }
 // Resizable width (persisted + clamped). The sidebar's width change is taken OUT OF the middle pane (the
