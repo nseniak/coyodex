@@ -341,7 +341,9 @@ synthesis → parallel trace.**
     notifications** — do NOT poll the filesystem with `ls` (a not-ready file reads as an error and
     burns turns). If you must block on a condition, use the **`Monitor` tool with an until-condition**
     (or a `run_in_background` waiter) — **not** a foreground `sleep` / `until … sleep …` loop, which the
-    harness blocks. Hand every agent an **absolute** fragment output path
+    harness blocks. (`Monitor` is a deferred tool — run `ToolSearch select:Monitor` once to load its
+    schema before the first call, or that first call fails with an `InputValidationError`.) Hand every
+    agent an **absolute** fragment output path
     (`<repo-root>/.coyodex/build-fragments/<id>.json`) so it can never land in a subdirectory; `assemble`
     warns about any fragment left in `build-fragments/` that you did not pass in.
   - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
