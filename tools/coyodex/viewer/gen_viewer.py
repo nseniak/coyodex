@@ -285,9 +285,9 @@ def _class_relation_line(e: dict[str, Any]) -> str:
     suffix = f" : {label}" if label else ""
     if kind == "inheritance":
         # The inheritance triangle is a VERB-DERIVED fact: it trusts the authored `isA`/`extends`
-        # verb, which no gate verifies against the code — so it is labelled inferred, not asserted
-        # (method.md: verbs may prioritize, never gate). Never field-backed, so no label to clash.
-        return f"  {s} {arrow} {d} : {_safe_label(str(e.get('verb') or 'isA'))} {INFERRED_MARK}"
+        # verb, which no gate verifies against the code (method.md: verbs may prioritize, never
+        # gate). Never field-backed, so no cardinality label to clash with the verb.
+        return f"  {s} {arrow} {d} : {_safe_label(str(e.get('verb') or 'isA'))}"
     left = f'"{e["src_card"]}" ' if e.get("src_card") else ""
     right = f' "{e["dst_card"]}"' if e.get("dst_card") else ""
     return f"  {s} {left}{arrow}{right} {d}{suffix}"
@@ -413,17 +413,12 @@ ELEMENT_TINT = {
 # bridge arrow label, surfacing a subdomain that many subsystems own/read as a shared kernel.
 _OWN_VERBS = {"persists", "writes"}
 
-# VERB-DERIVED facts are INFERRED, never asserted (method.md: verbs may prioritize, never gate). The
-# owns/reads split and the class-diagram inheritance arrows trust an authored verb no gate verifies
-# against code, so their rendered labels carry this mark — the reader sees a derivation, not a fact.
-INFERRED_MARK = "(inferred)"
-
 
 def _bridge_rel(verb: str) -> str:
-    """The subsystem→subdomain bridge arrow's label for a C→E edge verb: `owns`/`reads` + the inferred
-    mark. One resolution shared by every bridge drawing (subsystem card, subdomain card, bridge card),
-    so the verb-derived split is computed — and softened — in exactly one place."""
-    return f"{'owns' if verb.lower() in _OWN_VERBS else 'reads'} {INFERRED_MARK}"
+    """The subsystem→subdomain bridge arrow's label for a C→E edge verb: `owns` or `reads`. One
+    resolution shared by every bridge drawing (subsystem card, subdomain card, bridge card), so the
+    verb-derived split is computed in exactly one place."""
+    return "owns" if verb.lower() in _OWN_VERBS else "reads"
 
 
 def gen_domain_container_mermaid(graph: GraphDict) -> str:
@@ -900,9 +895,7 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
     for src, dst in sorted(childcross):  # nested child-subsystem arrows (aggregated; box drills in)
         lines.append(f"  {src} --> {dst}")
     for src, sd, rel in sorted(bridges):  # bridge arrows: member -> subdomain (owns / reads)
-        # QUOTED label: the inferred mark's parentheses are a shape token in a bare flowchart edge
-        # label ('PS'), so unquoted they fail the whole diagram's parse; quoting renders them verbatim.
-        lines.append(f'  {src} -->|"{rel}"| {sd}')
+        lines.append(f"  {src} -->|{rel}| {sd}")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
     lines.append(f"  classDef dep {DEP_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")

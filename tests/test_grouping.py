@@ -2050,9 +2050,9 @@ def test_parser_domain_edge_carries_backing_and_how() -> None:
     assert e13["fk_fields"] == [] and e13["how"] == "keyed by (org, upstream)"  # indirect -> how-note
 
 
-def test_class_diagram_inheritance_arrow_labelled_inferred() -> None:
-    # Verb principle: the inheritance triangle trusts the authored `isA` verb (never code-verified),
-    # so it renders labelled inferred — a derivation, not an asserted fact (verbs prioritize, never gate).
+def test_class_diagram_inheritance_arrow_labelled_isa() -> None:
+    # Verb principle: the inheritance triangle trusts the authored `isA` verb (never code-verified) —
+    # a derivation, not an asserted fact (verbs prioritize, never gate) — rendered as the bare verb.
     md = """{
   "format": "coyodex-map",
   "title": "",
@@ -2125,7 +2125,7 @@ def test_class_diagram_inheritance_arrow_labelled_inferred() -> None:
   "extras": []
 }"""
     mm = gen_viewer.gen_domain_mermaid(parse_map(md))
-    assert "E2 --|> E1 : isA (inferred)" in mm, mm
+    assert "E2 --|> E1 : isA" in mm, mm
 
 
 def make_context_map(cards: str | None = None, contexts: str | None = None) -> str:
@@ -2790,12 +2790,11 @@ def test_gen_domain_edge_card_two_namespaces_with_inner_and_crossing() -> None:
 def test_subsystem_card_bridges_to_contexts_owns_and_reads() -> None:
     by_sub = gen_viewer.subsystem_component_mermaids(parse_map(make_bridge_map()))
     s1 = by_sub["S1"]
-    # The owns/reads split is VERB-DERIVED (persists/writes -> owns), so the label carries the
-    # inferred mark — the bridge is presented as a derivation, never asserted (verbs never gate).
-    # QUOTED: bare parens are a shape token in a flowchart edge label and fail the Mermaid parse.
-    assert "class SD1 subdomain" in s1 and 'C1 -->|"owns (inferred)"| SD1' in s1   # persists -> OWNS (inferred)
+    # The owns/reads split is VERB-DERIVED (persists/writes -> owns) — a derivation, never asserted
+    # (verbs never gate). The bridge renders the bare verb as the flowchart edge label.
+    assert "class SD1 subdomain" in s1 and "C1 -->|owns| SD1" in s1   # persists -> OWNS
     s2 = by_sub["S2"]
-    assert "class SD1 subdomain" in s2 and 'C2 -->|"reads (inferred)"| SD1' in s2  # reads -> CONSUMES (inferred)
+    assert "class SD1 subdomain" in s2 and "C2 -->|reads| SD1" in s2  # reads -> CONSUMES
 
 
 def test_subdomain_card_bridges_to_subsystems_owns_and_reads() -> None:
@@ -2804,8 +2803,8 @@ def test_subdomain_card_bridges_to_subsystems_owns_and_reads() -> None:
     # the entity — the structure↔domain bridge seen from the domain side.
     sd1 = gen_viewer.domain_subdomain_mermaids(parse_map(make_bridge_map()))["SD1"]
     assert 'namespace SD1[' in sd1 and 'class E1["Order"] {' in sd1
-    assert 'class S1["Edge"]' in sd1 and "S1 --> E1 : owns (inferred)" in sd1    # writer OWNS (verb-derived)
-    assert 'class S2["Core"]' in sd1 and "S2 --> E1 : reads (inferred)" in sd1   # reader READS (verb-derived)
+    assert 'class S1["Edge"]' in sd1 and "S1 --> E1 : owns" in sd1    # writer OWNS (verb-derived)
+    assert 'class S2["Core"]' in sd1 and "S2 --> E1 : reads" in sd1   # reader READS (verb-derived)
     assert "style S1 fill:" in sd1                                        # subsystem box styled (amber), distinct from entities
 
 
@@ -3145,8 +3144,8 @@ def test_domain_edge_card_includes_subsystem_bridges() -> None:
     # arrow (C1 persists E1 -> S1 owns E1; C2 persists E3 -> S2 owns E3). Mirrors the subdomain card.
     card = gen_viewer.domain_edge_card_mermaids(parse_map(make_both_groupings_map()))["SD1>SD2"]
     assert 'namespace SD1[' in card and 'namespace SD2[' in card
-    assert 'class S1["Edge"]' in card and "S1 --> E1 : owns (inferred)" in card
-    assert 'class S2["Core"]' in card and "S2 --> E3 : owns (inferred)" in card
+    assert 'class S1["Edge"]' in card and "S1 --> E1 : owns" in card
+    assert 'class S2["Core"]' in card and "S2 --> E3 : owns" in card
     assert "style S1 fill:" in card                        # amber subsystem box, distinct from entities
 
 
@@ -3159,7 +3158,7 @@ def test_bridge_card_pairs_subsystem_and_subdomain() -> None:
     assert card.startswith("classDiagram")
     assert 'namespace S1["Edge"] {' in card and 'class C1["Front"]' in card    # subsystem frame + its component box
     assert 'namespace SD1[' in card and 'class E1["Order"] {' in card          # subdomain frame + entity (full, attrs)
-    assert "C1 --> E1 : owns (inferred)" in card                               # the C→E bridge edge (verb-derived)
+    assert "C1 --> E1 : owns" in card                                          # the C→E bridge edge (verb-derived)
     assert "style C1 fill:" in card                                            # component box styled (indigo)
 
 
