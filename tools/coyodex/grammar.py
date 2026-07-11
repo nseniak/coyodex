@@ -187,8 +187,19 @@ _STEP_ENDPOINT_ID = re.compile(r"^(?:UC\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)$")
 
 
 def is_step_id(token: str) -> bool:
-    """True if `token` is an element ID (C/D/E/UC/S/SD); False -> treat it as a Role display name."""
+    """True if `token` is a BACKBONE element ID (C/D/E/UC/S/SD); False -> an actor step (a role).
+    Deliberately does NOT match a role id `R\\d+`: `_flow_opening_actor` finds the actor step by
+    `not is_step_id(src)`, so teaching this `R` would skip every actor step and silently blank the
+    actor-attribution check. A role id is classified by `is_role_id`, separately."""
     return bool(_STEP_ENDPOINT_ID.match(token.strip()))
+
+
+_ROLE_ID = re.compile(r"^R\d+$")
+
+
+def is_role_id(token: str) -> bool:
+    """True if `token` is a Role id (`R1`, `R2`, …) — the id an actor step / use-case actor references."""
+    return bool(_ROLE_ID.match(token.strip()))
 
 
 @dataclass
