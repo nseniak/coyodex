@@ -61,6 +61,28 @@ def test_duplicate_id_across_fragments_is_a_conflict():
     assert any("duplicate id C1" in p and "a.json" in p and "b.json" in p for p in problems)
 
 
+def test_duplicate_deps_merge_by_identity_and_repoint_edges():
+    # Two agents discover the SAME external dep (stripe) under different ids; one traces an edge to the
+    # second id. Merge collapses them to one dep and re-points the edge to the survivor (C2). No error —
+    # multi-slice discovery of the same dep is correct input, not a conflict.
+    d1 = '{"deps":[{"id":"D1","name":"stripe"}]}'
+    d2 = ('{"deps":[{"id":"D2","name":"Stripe"}],'
+          '"edges":[{"src":"C1","verb":"uses","dst":"D2","where":"a.py:1"}]}')
+    parts = [("a.json", load_fragment(d1, "a.json")), ("b.json", load_fragment(d2, "b.json"))]
+    model, problems = merge_fragments(parts)
+    assert problems == []
+    assert [d.id for d in model.deps] == ["D1"]      # collapsed to one row
+    assert model.edges[0].dst == "D1"                # edge re-pointed to the survivor
+
+
+def test_distinct_deps_are_not_merged():
+    d1 = '{"deps":[{"id":"D1","name":"stripe"}]}'
+    d2 = '{"deps":[{"id":"D2","name":"redis"}]}'
+    parts = [("a.json", load_fragment(d1, "a.json")), ("b.json", load_fragment(d2, "b.json"))]
+    model, _ = merge_fragments(parts)
+    assert {d.id for d in model.deps} == {"D1", "D2"}  # different deps stay separate
+
+
 def test_conflicting_singletons_are_a_conflict():
     a = load_fragment(json.dumps({"title": "One"}), "a.json")
     b = load_fragment(json.dumps({"title": "Two"}), "b.json")

@@ -186,15 +186,16 @@ def granularity_advisory(n_components: int, root: Path) -> list[str]:
     if lo <= n_components <= hi:
         return []
     if n_components < lo:
-        hint = ("likely folding subsystem-shaped dirs into single components — promote them to "
-                "subsystems and map their units")
+        hint = ("possibly folding subsystem-shaped dirs into single components — consider promoting "
+                "them to subsystems")
     else:
-        hint = "likely splitting module-sized units too fine — merge cohesive siblings"
+        hint = "possibly splitting module-sized units too fine — consider merging cohesive siblings"
     return [
-        f"Granularity: the map has {n_components} components vs a code-derived expectation of "
-        f"~{tree.expected} (band {lo}–{hi} at ±{GRANULARITY_BAND_PCT:.0%}; a component ≈ "
-        f"≤{GRANULARITY_FILE_CAP} source files / ≤{GRANULARITY_LOC_CAP} LOC, re-measured at validate "
-        f"time) — {hint}"
+        f"Granularity: {n_components} components vs a code-derived ~{tree.expected} "
+        f"(band {lo}–{hi} at ±{GRANULARITY_BAND_PCT:.0%}; a component ≈ ≤{GRANULARITY_FILE_CAP} files / "
+        f"≤{GRANULARITY_LOC_CAP} LOC) — {hint}. This is a rough zoom anchor, NOT a verdict: a "
+        f"deliberately high-altitude map of a large repo, or a very modular clean-architecture repo, "
+        f"legitimately sits outside the band — ignore if the chosen altitude is intentional."
     ]
 
 

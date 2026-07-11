@@ -84,7 +84,42 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]]) -> tuple[ProjectModel
                     problems.append(f"duplicate id {el.id}: defined by both {id_owner[el.id]} "
                                     f"and {label} — agents must keep to their pre-allocated ID ranges")
                 id_owner.setdefault(el.id, label)
+    _merge_duplicate_deps(out)
     return out, problems
+
+
+def _dep_identity(d) -> tuple[str, str]:
+    """A dependency's real identity: its kind + normalized name (or package). The same external dep
+    discovered by several harvest agents (different ids) shares this."""
+    name = (d.name or d.package or "").strip().lower()
+    return ((d.kind or "").strip().lower(), name)
+
+
+def _merge_duplicate_deps(m: ProjectModel) -> None:
+    """Collapse deps that share a real identity (kind + normalized name) into ONE row, and RE-POINT
+    every edge from the merged-away id to the survivor. Multiple agents discovering the same dependency
+    is CORRECT input (not an error), so slicing harvest by directory no longer duplicates deps. Only an
+    exact identity match merges — a differing kind is a different identity, left as two rows (never a
+    wrong merge). Deterministic: the first occurrence is the survivor."""
+    survivor_of: dict[tuple[str, str], str] = {}
+    remap: dict[str, str] = {}
+    kept = []
+    for d in m.deps:
+        ident = _dep_identity(d)
+        if not ident[1]:            # no name/package → not identifiable, keep as-is
+            kept.append(d)
+            continue
+        if ident in survivor_of:
+            remap[d.id] = survivor_of[ident]
+        else:
+            survivor_of[ident] = d.id
+            kept.append(d)
+    if not remap:
+        return
+    m.deps = kept
+    for e in m.edges:               # edges are the only refs into a dep id (C→D)
+        e.src = remap.get(e.src, e.src)
+        e.dst = remap.get(e.dst, e.dst)
 
 
 _GITIGNORE_KEEP = "build-fragments/"       # the agents' scratch dir — never committed
@@ -179,10 +214,25 @@ def main(argv: list[str] | None = None) -> int:
     register_project(out_dir)
     if ensure_fragments_ignored(out_dir):
         print(f"note: added 'build-fragments/' to {out_dir / '.gitignore'}")
+    for note in _unconsumed_fragment_notes(out_dir, frags):
+        print(note, file=sys.stderr)
     print(f"Assembled {len(parts)} fragment(s) -> {out_dir / 'project-map.json'} "
           f"(+ generated markdown view)\n"
           f"Next: coyodex validate {out_dir / 'project-map.json'} --check-sources")
     return 0
+
+
+def _unconsumed_fragment_notes(out_dir: Path, consumed: list[Path]) -> list[str]:
+    """Warn about fragments sitting in `<out>/build-fragments/` that were NOT passed to assemble — a
+    sub-agent that wrote to the wrong folder (`voice/.coyodex/…`) or a stale file the lead forgot. A
+    silently-dropped fragment reads as "assembled everything" when a whole slice is missing."""
+    frag_dir = out_dir / "build-fragments"
+    if not frag_dir.is_dir():
+        return []
+    consumed_resolved = {p.resolve() for p in consumed}
+    strays = [f for f in sorted(frag_dir.glob("*.json")) if f.resolve() not in consumed_resolved]
+    return [f"note: {frag_dir / f.name} is in build-fragments/ but was NOT assembled — a sub-agent may "
+            "have written to the wrong path, or it is stale; pass it or delete it." for f in strays]
 
 
 if __name__ == "__main__":
