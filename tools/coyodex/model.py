@@ -151,6 +151,11 @@ class EntityRelation:
     dst_card: str | None = None
     display: str = ""                # optional display text after the target id
     how: str | None = None           # plain-text note: how a field-less relation is implemented
+    keyed_by: list[str] = field(default_factory=list)  # storage KEY name(s) whose value identifies
+                                     # the target — a lookup/partition key the store imposes, NOT a
+                                     # field on the entity row (e.g. a per-parent store keyed by
+                                     # `parent_id`). Distinct from a real FK field (`fk_fields`);
+                                     # drawn on the arrow with the «key» marker, never in the field box.
 
 
 @dataclass

@@ -242,10 +242,14 @@ def _relation_label(edge: dict[str, Any]) -> str:
     The backing field(s) are resolved once in build_graph (`fk_fields` / `fk_side`); here we only
     format them: forward (fields on the source / arrow-tail) -> the field name (`subscription`,
     `org_id`), or a comma-joined list for a composite key (`user_id, page_id`); reverse (FK on the
-    target / arrow-head) -> `↩ field`; blank when no field backs the relation (the `{how}` note then
-    explains it in the click-panel)."""
+    target / arrow-head) -> `↩ field`. When no field backs the relation, a storage key (`keyed_by`)
+    draws as `«key» name(s)` — a lookup/partition key the store imposes, marked distinct from a real
+    row FK; blank when there is neither (the `{how}` note then explains it in the click-panel)."""
     fields = edge.get("fk_fields") or []
     if not fields:
+        keyed = edge.get("keyed_by") or []
+        if keyed:  # a storage/lookup key (not a row FK) — marked distinct with «key»
+            return "«key» " + _safe_label(", ".join(str(k) for k in keyed))
         return ""
     label = _safe_label(", ".join(str(f) for f in fields))
     return label if edge.get("fk_side") == "src" else "↩ " + label

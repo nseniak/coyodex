@@ -611,6 +611,13 @@
             "string",
             "null"
           ]
+        },
+        "keyed_by": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "storage key name(s) whose value identifies the target \u2014 a lookup/partition key the store imposes, NOT a field on the entity row. Use ONLY for a field-less relation; mutually exclusive with a real backing FK field. Drawn on the arrow with the \u00abkey\u00bb marker."
         }
       },
       "required": [

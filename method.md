@@ -453,8 +453,10 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > relate** — the entities + their `E↔E` relations are the whole point of the slice. Each entity is a
 > **real named type** (class / dataclass / enum) whose `source` anchors its **definition** — do NOT
 > synthesize an entity for an unnamed concept; type embedded fields by their entity (`auth:E7`) so
-> relations carry the field name. Mark plumbing types you deliberately did NOT model in
-> `non_entity_types` (name + why). A directory- or subsystem-sliced agent that is **not** the T5
+> relations carry the field name. For a **field-less** relation a store realizes by keying (no FK on
+> the row — e.g. a per-parent store keyed by `parent_id`), set the relation's **`keyed_by`** so the
+> arrow shows the key (`«key» parent_id`) instead of a bare line — see [domain-cards.md](method/domain-cards.md).
+> Mark plumbing types you deliberately did NOT model in `non_entity_types` (name + why). A directory- or subsystem-sliced agent that is **not** the T5
 > owner returns its components / entry-points only and leaves `entities` to the owner.
 > (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)
 

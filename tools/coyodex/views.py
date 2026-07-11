@@ -114,6 +114,10 @@ def _relation_item(r) -> str:
     parts.append(r.target)
     if r.display:
         parts.append(r.display)
+    if r.keyed_by:
+        # a storage key, shown with the «key» marker (comma-joined — never `·`, the relation
+        # separator); mirrors the canvas arrow label so the text view reads the same.
+        parts.append("«key» " + ", ".join(r.keyed_by))
     if r.how:
         parts.append("{" + r.how + "}")
     return " ".join(parts)
@@ -414,7 +418,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         for r in ent.relations:
             edges.append(GraphEdge(ent.id, r.verb, r.target, None, None,
                                    kind=grammar.REL_KIND.get(r.verb.lower(), "association"),
-                                   src_card=r.src_card, dst_card=r.dst_card, how=r.how))
+                                   src_card=r.src_card, dst_card=r.dst_card, how=r.how,
+                                   keyed_by=r.keyed_by))
     # Resolve which real field backs each domain relation (drives the arrow label + panel line) —
     # the same second pass the v1 parser ran once all entity nodes existed.
     backing = {e.id: [(f.name, f.type, grammar.fk_targets(f.markers)) for f in e.fields]

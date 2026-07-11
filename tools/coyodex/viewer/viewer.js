@@ -671,13 +671,20 @@ function showEdge(e) {
       + (e.fk_side === 'dst' ? ' <span class="muted">(back-reference)</span>' : '')
     : (e.how ? mdInline(e.how) : '');
   const implRow = impl ? '<dt>Implemented by</dt><dd>' + impl + '</dd>' : '';
+  // A storage/lookup key the store imposes to relate the two — NOT a field on the row (so it's shown
+  // apart from "Implemented by", with the «key» marker and an explicit note).
+  const keyed = e.keyed_by || [];
+  const keyedRow = keyed.length
+    ? '<dt>Keyed by</dt><dd>«key» ' + esc(keyed.join(', '))
+      + ' <span class="muted">(storage key, not a row field)</span></dd>'
+    : '';
   // No source ref in the panel: selecting the edge already mirrors its `where` location into the file
   // browser + code viewer below, which carry the path and the sole "open externally" control.
   const wn = e.where ? whereNode(e.where) : null;
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
     + '<span class="badge edge">' + esc(e.verb) + '</span></div>'
     + (e.why ? '<p class="explain">' + mdInline(e.why) + '</p>' : '')
-    + '<dl>' + kindRow + card + implRow + '</dl>';
+    + '<dl>' + kindRow + card + implRow + keyedRow + '</dl>';
   // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
   // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
   cvElement = null;  // an edge has no single owning element -> no header pill

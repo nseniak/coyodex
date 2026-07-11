@@ -92,6 +92,11 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("EntityRelation", "verb"): {"description": "contains / has / isA (structural, canonical) or "
                                   "a free association verb."},
     ("EntityRelation", "target"): {"pattern": r"^E\d+$"},
+    ("EntityRelation", "keyed_by"): {"description": "storage key name(s) whose value identifies the "
+                                      "target — a lookup/partition key the store imposes, NOT a field "
+                                      "on the entity row. Use ONLY for a field-less relation; mutually "
+                                      "exclusive with a real backing FK field. Drawn on the arrow with "
+                                      "the «key» marker."},
     ("Entity", "id"): {"pattern": r"^E\d+$"},
     ("Entity", "subdomain"): {"pattern": r"^SD\d+$", "description": "the owning subdomain's id, "
                                "or null if ungrouped."},

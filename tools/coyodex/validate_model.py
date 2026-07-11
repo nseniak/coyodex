@@ -325,15 +325,30 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
                                 f"'{r.verb} … {r.target}' twice")
             seen_pairs.add((r.verb, r.target))
             directed.add((e.id, r.target))
+            # resolve the backing field(s) ONCE — reused by the keyed_by XOR rule and the
+            # field-less-association nudge below (either side: forward source field or reverse FK).
+            back_names: list[str] = []
+            if r.target in backing:
+                back_names, _side = grammar.resolve_backing(e.id, r.target, backing[e.id],
+                                                            backing[r.target])
+            if r.keyed_by:
+                if any(not k.strip() for k in r.keyed_by):
+                    problems.append(f"Domain card {e.id}: relation '{r.verb} … {r.target}' has an "
+                                    f"empty `keyed_by` entry")
+                if back_names:
+                    problems.append(
+                        f"Domain card {e.id}: relation '{r.verb} … {r.target}' declares `keyed_by` "
+                        f"but a real field ({', '.join(back_names)}) already backs it — a storage "
+                        f"key is for FIELD-LESS relations only; drop one")
             kind = grammar.REL_KIND.get(r.verb.lower(), "association")
-            if kind == "association" and r.target in backing and not r.how:
-                names, _side = grammar.resolve_backing(e.id, r.target, backing[e.id],
-                                                        backing[r.target])
-                if not names:
-                    warnings.append(
-                        f"Domain card {e.id}: relation '{r.verb} … {r.target}' is not backed by a "
-                        f"field and has no {{…}} note — mark the implementing field `FK→{r.target}` "
-                        f"(or `FK→{e.id}` on {r.target}), or add a `{{how}}` note explaining the link")
+            # a keyed_by storage key counts as "explained" exactly like a {how} note, so the nudge
+            # doesn't false-fire once the key moves out of the free-text note into keyed_by.
+            if (kind == "association" and r.target in backing and not r.how and not r.keyed_by
+                    and not back_names):
+                warnings.append(
+                    f"Domain card {e.id}: relation '{r.verb} … {r.target}' is not backed by a "
+                    f"field and has no {{…}} note — mark the implementing field `FK→{r.target}` "
+                    f"(or `FK→{e.id}` on {r.target}), or add a `{{how}}` note explaining the link")
     for a, b in directed:
         if a < b and (b, a) in directed:
             problems.append(f"Relation between {a} and {b} is declared on both cards — author it "

@@ -56,6 +56,9 @@ class Edge:
     fk_fields: list[str] = field(default_factory=list)  # REAL field(s) backing the relation (drive the
                                   # arrow label) — more than one is a composite key, e.g. (user_id, page_id)
     fk_side: str | None = None    # 'src' = field on the tail (forward), 'dst' = FK on the head (reverse)
+    keyed_by: list[str] = field(default_factory=list)  # storage KEY name(s) identifying the target
+                                  # (a lookup/partition key the store imposes, not a row field) — drawn
+                                  # on the arrow with the «key» marker when no fk_fields back the link
 
 
 @dataclass

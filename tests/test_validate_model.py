@@ -249,6 +249,38 @@ def test_domain_card_completeness_and_relations():
     assert any("half-stated cardinality" in p for p in probs)
 
 
+def make_keyed_relation(keyed_by: list[str], verb: str = "attachedTo") -> EntityRelation:
+    return EntityRelation(verb=verb, target="E2", src_card="*", dst_card="1", keyed_by=keyed_by)
+
+
+def test_keyed_by_alone_is_clean_and_quiets_fieldless_nudge():
+    # a field-less association whose key lives in `keyed_by` (not a `{how}` note) must NOT trip the
+    # "not backed by a field and has no note" warning, and must raise no problems.
+    m = make_valid_model()
+    m.entities = [make_entity("E1", "Order", relations=[make_keyed_relation(["parent_id"])]),
+                  make_entity("E2", "Parent")]
+    assert not any("keyed_by" in p for p in problems_of(m))
+    assert not any("not backed by a field" in w for w in warnings_of(m))
+
+
+def test_keyed_by_with_backing_fk_is_rejected():
+    # a real FK field already backs the relation → declaring `keyed_by` too is the honesty error.
+    e1 = Entity(id="E1", name="Order", store="orders", meaning="a thing", source="src/o.py:1",
+                fields=[EntityField(name="id", type="str", markers=["PK"]),
+                        EntityField(name="parent_id", type="str", markers=["FK→E2"])],
+                relations=[make_keyed_relation(["parent_id"])])
+    m = make_valid_model()
+    m.entities = [e1, make_entity("E2", "Parent")]
+    assert any("already backs it" in p and "keyed_by" in p for p in problems_of(m))
+
+
+def test_keyed_by_empty_entry_is_rejected():
+    m = make_valid_model()
+    m.entities = [make_entity("E1", "Order", relations=[make_keyed_relation([" "])]),
+                  make_entity("E2", "Parent")]
+    assert any("empty `keyed_by` entry" in p for p in problems_of(m))
+
+
 # --- v2-only behaviors ----------------------------------------------------------------
 
 def test_orphan_dep_warns_unless_deployment_linked():

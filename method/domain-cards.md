@@ -95,7 +95,7 @@ entity name, and the relation arrow rendered unlabelled.)
 Each relation, authored **on the source entity's card only** (one side — see "Single source"):
 
 ```
-<verb> <srcCard>→<dstCard> <target-Eid> [display] [{how}] · …
+<verb> <srcCard>→<dstCard> <target-Eid> [display] [«key» k1, k2] [{how}] · …
 ```
 
 ```
@@ -116,12 +116,19 @@ Parse one item with:
   pair entirely for inheritance). A **lone** token like `contains 0..1 E2` has no `→`, so it is **not**
   valid and fails to parse; write the pair, e.g. `contains 1→0..1 E2`.
 - each side of the pair is one of: `1`, `*`, `0..1`, `1..*` — e.g. `1→0..1`, `*→1`, `0..1→*`.
-- an optional trailing **`{how}` note** is a plain-text explanation of how a *field-less* relation is
-  implemented — `tracks *→1 E11 {keyed by (org_id, upstream_id) in the connection store}`. It is
-  peeled off before the grammar match and shown in the click-panel's **Implemented by** line (a `·`
-  may not appear inside it — it is the item separator). Use it for the indirect / key-composition
-  links that no single field backs; the validator warns on a field-less **association** that has
-  neither a backing FK nor a note (see "Arrow labels").
+- an optional **`keyed_by`** annotation (JSON: `"keyed_by": ["upstream_id"]`, or a composite
+  `["org_id", "upstream_id"]`) names the **storage key(s)** whose value identifies the target — a
+  lookup / partition key the store imposes to relate the two, **not** a field on the entity row. Use
+  it for a *field-less* relation realized by keying (a per-parent store keyed by `parent_id`; a
+  backend may realize the key as a document field OR as a tree path — the annotation states the key,
+  not the mechanism). It renders on the arrow as **`«key» name(s)`** (marked distinct from a real row
+  FK) and gets its own **Keyed by** line in the click-panel. It is **mutually exclusive** with a real
+  backing FK field — the validator rejects declaring both (the FK label would win and hide the key).
+- an optional trailing **`{how}` note** is a plain-text explanation for a *field-less* relation that
+  `keyed_by` can't express — extra prose like scope or lifecycle (`tracks *→1 E11 {admin or
+  per-user scope}`). It shows in the click-panel's **Implemented by** line (a `·` may not appear
+  inside it — it is the item separator). The validator warns on a field-less **association** that has
+  **none** of a backing FK, a `keyed_by`, or a `{how}` note (see "Arrow labels").
 
 **One canonical verb per relationship kind** — the verb selects the `classDiagram` arrow; use
 exactly the canonical verb (the validator rejects aliases). Association is free-form: any other
@@ -138,9 +145,10 @@ verb; it picks the plain arrow and shows in the click-panel, but is **never draw
 Aliases the validator rejects in favour of the canonical verb: `owns` / `composedOf` → `contains`,
 `aggregates` → `has`, `extends` → `isA`.
 
-**Arrow labels are REAL field names, never the verb.** The marker already conveys the kind, and an
-invented relationship verb (`authorizes`, `pinnedTo`, `identifies`) isn't grounded in the code — so
-a label is shown **only when a real field backs the relation**. **One** resolution (in `build_graph`,
+**Arrow labels are REAL field names, never the verb** (the one exception: a `keyed_by` storage key,
+drawn as `«key» name` — see below). The marker already conveys the kind, and an invented relationship
+verb (`authorizes`, `pinnedTo`, `identifies`) isn't grounded in the code — so a label is shown **only
+when a real field backs the relation, or the store keys it (`keyed_by`)**. **One** resolution (in `build_graph`,
 `resolve_backing`) finds that field and feeds *both* the canvas label and the panel's **Implemented
 by** line, so the two never drift:
 
@@ -148,9 +156,14 @@ by** line, so the two never drift:
   marked `FK→target`** (`role:string FK→E5`) → that **field name** (`subscription`, `role`);
 - **reverse** — the *target's* foreign key back to the source (`FK→source`) → **`↩ field`**
   (`↩ org_id`), the `↩` flagging that the field lives on the far / arrow-head end;
+- **storage key** — no field backs the relation, but the store keys the source under a value that
+  identifies the target (`keyed_by`) → **`«key» name(s)`** (`«key» upstream_id`). This is the **one
+  non-field label** the arrow carries, and the `«key»` marker keeps it honest: it is a real key in
+  the *store*, not a field on the row (you can follow it via the repository, not from the object). It
+  is mutually exclusive with a backing FK — a real field always wins;
 - **otherwise → blank**, and the relation should carry a **`{how}` note** (see RELATIONS
   micro-format) — the marker + the target box convey the *kind*, but a field-less relation needs
-  prose to say *how* it is wired (it is keyed in a store, composed from two ids, …).
+  prose to say *how* it is wired (composed from two ids, event-derived, …).
 
 Forward wins over reverse when a field exists on both sides (show the near-side field). FK markers
 match the whole id token, so `FK→E1` never matches `E11`.

@@ -157,6 +157,21 @@ def test_absent_optional_fields_take_defaults():
     assert m.deps == [] and m.flows == []
 
 
+def test_relation_keyed_by_round_trips_and_defaults_when_absent():
+    # keyed_by serializes + reloads unchanged.
+    m = make_model()
+    m.entities[0].relations[0].keyed_by = ["upstream_id", "org_id"]
+    reloaded = load_model(to_canonical_json(m))
+    assert reloaded.entities[0].relations[0].keyed_by == ["upstream_id", "org_id"]
+    assert reloaded == m
+    # a pre-existing map with no keyed_by on its relations still loads → default [] (back-compat).
+    doc = json.loads(to_canonical_json(m))
+    for r in doc["entities"][0]["relations"]:
+        r.pop("keyed_by", None)
+    old = load_model(json.dumps(doc))
+    assert old.entities[0].relations[0].keyed_by == []
+
+
 # --- helpers ---------------------------------------------------------------------
 
 def test_all_elements_keyed_by_id():

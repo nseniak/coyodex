@@ -175,7 +175,10 @@ For a map M:
    worklist is ranked most-dangerous-first, so the cap grounds the riskiest claims and keeps cost
    bounded on a large map. Anchors are **repo-root-relative** file refs (e.g. `backend/x.py#L70` →
    `<repo>/backend/x.py`); `detail` carries each endpoint's name + source file taken from the claim
-   itself.
+   itself. The worklist is "actually-does" behavioral claims (auth surfaces, C→E writes/reads) — it
+   does **not** include E↔E domain-relation notes, so a relation's `{how}` note and its `keyed_by`
+   storage key are **not** sent to the skeptic (a correct `keyed_by` may be rewarded by the domain
+   rubric, but it is never grounded here — same stance as `{how}`).
 2. **Ground — N-skeptic majority vote.** For EACH sampled claim, fan out **3 fresh-context skeptic
    sub-agents** (`judge.n_skeptics`) on the pinned model, each told to *disprove* the claim against
    the code. The claim's verdict is the majority of the usable votes — one dissenting skeptic can't

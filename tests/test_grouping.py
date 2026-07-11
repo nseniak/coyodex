@@ -15,9 +15,9 @@ from pathlib import Path
 from typing import cast
 
 from coyodex import grammar
-from coyodex.model import load_model
+from coyodex.model import EntityRelation, load_model
 from coyodex.viewer import build_graph, gen_viewer
-from coyodex.views import model_to_graph
+from coyodex.views import _relation_item, model_to_graph
 
 VIEWER_DIR = Path(gen_viewer.__file__).resolve().parent  # the served shell + viewer.js/css live here
 
@@ -2042,6 +2042,27 @@ def test_relation_label_composite_key_joins_fields() -> None:
     # Reverse (FK on the head) keeps the back-reference marker in front of the joined list.
     assert gen_viewer._relation_label({"fk_fields": ["user_id", "page_id"], "fk_side": "dst"}) \
         == "↩ user_id, page_id"
+
+
+def test_relation_label_keyed_by_marks_storage_key() -> None:
+    # A field-less relation with a storage key draws the «key» marker + name(s), distinct from an FK.
+    assert gen_viewer._relation_label({"keyed_by": ["upstream_id"]}) == "«key» upstream_id"
+    # composite key: comma-joined after the marker.
+    assert gen_viewer._relation_label({"keyed_by": ["org_id", "upstream_id"]}) \
+        == "«key» org_id, upstream_id"
+    # a real backing FK WINS over keyed_by (they are mutually exclusive; the field label takes over).
+    assert gen_viewer._relation_label(
+        {"fk_fields": ["parent_id"], "fk_side": "src", "keyed_by": ["upstream_id"]}) == "parent_id"
+    assert gen_viewer._relation_label({}) == ""            # neither -> blank
+
+
+def test_relation_item_markdown_shows_keyed_by_with_marker() -> None:
+    # The markdown RELATIONS view mirrors the canvas: «key» + comma-joined names, before the {how}.
+    r = EntityRelation(verb="attachedTo", target="E2", src_card="*", dst_card="1",
+                       keyed_by=["upstream_id"], how="admin scope")
+    item = _relation_item(r)
+    assert "«key» upstream_id" in item
+    assert item.index("«key»") < item.index("{admin scope}")   # key before the prose note
 
 
 def test_parser_domain_edge_carries_backing_and_how() -> None:
