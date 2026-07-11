@@ -235,11 +235,15 @@ body:not(.served) #resizer { display: none; }
    a path anchors SEVERAL containers, scrolls horizontally so every pill shows at full width without hiding
    the row's name (`.has-groups .tname` keeps its natural width instead of being squeezed by the pills). */
 .trow.has-groups .tname, .trow.has-owner .tname { flex: 0 0 auto; }
-/* the owning sub-element pill on a file inside a selected container (right-aligned; may ellipsis). Shown
-   only on row hover to keep the filtered list clean — it's still clickable there to drill into the owner. */
-.towner { flex: 0 1 auto; min-width: 24px; margin-left: auto; }
-.trow .towner { display: none; }
-.trow:hover .towner { display: inline-flex; }
+/* the owning-element pill on a footprint file lives in the SAME horizontally-scrollable line as a
+   container's anchor pills (reusing .tgroups), so a long filename shrinks/scrolls the box instead of the
+   pill overflowing and overlapping. Shown only on row hover to keep the filtered list clean — still
+   clickable there to drill into the owner. `.towner-box` is the dedicated box for a row that has no
+   container pills of its own; `.pill.towner` hover-gating covers the pill when it shares a container box. */
+.trow .tgroups.towner-box { display: none; }
+.trow:hover .tgroups.towner-box { display: flex; }
+.trow .tgroups .pill.towner { display: none; }
+.trow:hover .tgroups .pill.towner { display: inline-flex; }
 .tgroups { flex: 0 1 auto; min-width: 48px; margin-left: auto; display: flex; gap: 4px;
            overflow-x: auto; overflow-y: hidden; }
 .tgroups .pill { flex: 0 0 auto; max-width: none; overflow: visible; }

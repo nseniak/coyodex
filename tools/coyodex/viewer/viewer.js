@@ -2873,11 +2873,12 @@ function onRowClick(key) {
   // A file row: the reader wants its source in the code viewer, so end any folder peek and show it.
   const wasPeeking = treeBrowsing;
   if (wasPeeking) setBrowsing(false);
-  // While a CONTAINER is selected, a plain click on one of its files PREVIEWS the source without jumping the
-  // selection to the file's owning sub-component (that would silently narrow the filter). The file's own
-  // pill is the explicit drill. Show the file + the owner's switcher in the code viewer, keep the selection.
-  const selNode = treeSelId && GRAPH.nodes[treeSelId];
-  if (selNode && isContainerKind(selNode.kind) && e.node && e.node !== treeSelId) {
+  // A file that shows an owner pill — its primary element differs from the current selection AND it sits in
+  // the selection's footprint — PREVIEWS the source without changing the selection. Clicking the file must
+  // not silently jump the selection to that other element (which would narrow the filter); the pill is the
+  // explicit way to switch. Same test as the pill-rendering rule (applySelToRow), so it fires for exactly
+  // the rows that carry a pill — any selection, container or leaf. Keep the selection; show file + switcher.
+  if (e.node && e.node !== treeSelId && selMemberFiles.has(key)) {
     const owner = GRAPH.nodes[e.node];
     cvElement = e.node;
     cvFiles = (owner && owner.files) || [];
@@ -2981,8 +2982,13 @@ function selectFromTree(nodeId) {
   const t = selectTargetFor(nodeId);
   if (!t) { suppressTreeScroll = false; suppressBrowse = false; return; }  // no selection follows — don't leave the one-shots stuck
   const cur = history[hi];
-  if (cur && stateKey(cur) === stateKey(t.state)) {       // already in the right view — select in place
-    const el = mainScene && mainScene.nodeEls[t.selectId];
+  // Select in place when the target box is ALREADY drawn in the current view — even if this isn't the
+  // node's "home" view (e.g. a component shown inside a two-subsystem edge card, or beside another
+  // container). Routing to the home view in that case would needlessly swap the diagram out from under a
+  // node that's already on screen (and often already selected). Only when the box isn't drawn here do we
+  // navigate to a view that draws it.
+  const el = mainScene && mainScene.nodeEls[t.selectId];
+  if (el || (cur && stateKey(cur) === stateKey(t.state))) {  // drawn here, or already in the home view
     if (el) selectNode(mainScene, el, t.selectId); else showNodeDetailSynced(t.selectId);
     // A node reached via the file tree ALWAYS gets the zoom-to-match-sidebar-text-size move — there's
     // no modifier key on a tree row to gate it on, unlike a canvas click (see selectNodeFromCanvas).
@@ -3015,15 +3021,12 @@ function refTreePath(file, line) { return file && localRef(file) ? treeKey(clean
 // node / no selection.
 let selMemberFiles = new Set();   // member file paths (treeKey'd) — the files to keep
 let selDirCount = new Map();      // footprint dir path -> count of member files under it (recursive)
-let selIsContainer = false;       // the selection is a container -> its files show their owning sub-element pill
 function selActive() { return selMemberFiles.size > 0; }
 function computeSelection(id) {
   selMemberFiles = new Set();
   selDirCount = new Map();
-  selIsContainer = false;
   const n = id && GRAPH.nodes[id];
   if (!n || !(isContainerKind(n.kind) || LEAF_KINDS.has(n.kind))) return;
-  selIsContainer = isContainerKind(n.kind);
   // The footprint is exactly the element's file set — the SAME list the code-viewer switcher shows, so a
   // shared file appears under every element that owns it and the tree + switcher always agree.
   for (const f of (n.files || [])) {
@@ -3046,7 +3049,10 @@ function applySelToRow(rec) {
   row.classList.remove('filtered-out', 'has-owner');
   if (kids) kids.classList.remove('filtered-out');
   const oldBadge = row.querySelector(':scope > .tselcount'); if (oldBadge) oldBadge.remove();
-  const oldOwner = row.querySelector(':scope > .towner'); if (oldOwner) oldOwner.remove();
+  // Strip any owner pill left by a prior selection — it may sit in the row's own container pill-box or in a
+  // hover-only box we created just for it; drop that created box too so nothing empty lingers.
+  row.querySelectorAll('.pill.towner').forEach((p) => p.remove());
+  const ownBox = row.querySelector(':scope > .tgroups.towner-box'); if (ownBox) ownBox.remove();
   if (!selActive()) return;
   const key = treeKey(entry.path);
   const keep = entry.dir ? selDirCount.has(key) : selMemberFiles.has(key);
@@ -3062,11 +3068,29 @@ function applySelToRow(rec) {
     badge.textContent = c;
     badge.title = c + ' file' + (c === 1 ? '' : 's') + ' of the selected element, here';
     row.querySelector('.tname').insertAdjacentElement('afterend', badge);
-  } else if (selIsContainer && entry.node && entry.node !== treeSelId) {
-    // Inside a selected CONTAINER, each kept file shows the sub-element it belongs to — so the reader sees
-    // that clicking the file's pill drills into that component/sub-container (a plain click just previews).
+  } else if (entry.node && entry.node !== treeSelId) {
+    // A kept file whose primary owner is a DIFFERENT element than the selection shows that owner's pill —
+    // so the reader sees the file is co-located with (or drills into) another component. Applies to both a
+    // container selection (files owned by its sub-elements) and a leaf (files it shares with a sibling);
+    // the `!== treeSelId` guard drops the common case where the file belongs to the selection itself.
+    // The pill goes in a horizontally-scrollable line, exactly like a container's anchor pills: it reuses
+    // the row's existing pill-box when there is one, else a hover-only box of its own — so a long filename
+    // shrinks/scrolls the box instead of letting a bare pill overflow and overlap the name (or a sibling
+    // pill). Hover-only to keep the filtered list clean.
     const pill = elementPill(entry.node);
-    if (pill) { pill.classList.add('towner'); row.classList.add('has-owner'); row.appendChild(pill); }
+    if (pill) {
+      pill.classList.add('towner');
+      row.classList.add('has-owner');
+      let box = row.querySelector(':scope > .tgroups');
+      if (!box) {
+        box = document.createElement('span');
+        box.className = 'tgroups towner-box';
+        box.addEventListener('scroll', () => updatePillFade(box));
+        row.appendChild(box);
+      }
+      box.appendChild(pill);
+      updatePillFade(box);
+    }
   }
 }
 function setSelPills(id) {  // (name kept for its callers) recompute the footprint, reveal it, re-filter every row
