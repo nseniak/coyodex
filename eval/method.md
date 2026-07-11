@@ -194,9 +194,15 @@ For a map M:
    - judge ONLY the RELATIONSHIP the claim states — an imprecise/drifted anchor does not refute a true
      relationship (anchor exactness is the `drill_accuracy` rubric dimension, not grounding);
    - resolve names and ids ONLY from the claim text (+ its `detail`) and the code; **do NOT read any
-     project-map file**.
+     project-map file**;
+   - the **evidence** is the ONE `file:line` where the operation the claim describes **actually
+     happens** (the true call site), so it is directly comparable to the map's stored anchor. Reporting
+     the true line does NOT change the grounded verdict — it feeds the deterministic drift check below.
    Collect one row per VOTE: `{claim, grounded, evidence}`, with `grounded` true, false, or the
-   string `"unverifiable"`. If a skeptic returns "unverifiable" or no usable verdict (malformed
+   string `"unverifiable"`. **After grounding, run `coyodex anchor-drift --map <map> --verdicts <the
+   {claim,grounded,evidence} rows>`** — a deterministic Layer-2 check that flags any CONFIRMED claim
+   whose stored `where` drifts from the line the skeptics found; the eval records `anchor_drift_rate` in
+   `judge.json` (informational). The LLM only observed the line; the drift judgment is deterministic. If a skeptic returns "unverifiable" or no usable verdict (malformed
    output, no `grounded` value), retry it once — an environment hiccup is usually transient; if it
    still fails, keep the row as returned (`"unverifiable"`, or without a usable `grounded`) — the
    aggregation counts it as a **judge failure**, surfaced separately and excluded from the

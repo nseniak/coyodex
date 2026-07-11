@@ -29,6 +29,8 @@ Commands:
              project-map.json (+ generated views).
   lint-fragment  Self-check ONE build fragment before returning it (schema + anchor
              format + extra-key conventions, and with --repo that anchors exist).
+  anchor-drift  Deterministic Layer-2 check: for each grounding-confirmed claim, flag
+             when the stored `where` line drifts from the line the skeptics found.
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
 
@@ -89,6 +91,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "lint-fragment":
         from coyodex import lint_fragment  # stdlib-only
         return lint_fragment.main(rest)
+    if cmd == "anchor-drift":
+        from coyodex import anchor_drift  # stdlib-only
+        return anchor_drift.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)

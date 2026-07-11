@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Protocol
 
 from coyodex import audit_model
+from coyodex.anchors import anchor_drift
 from coyodex.model import load_model
 
 # The rubric dimensions scored 0–4, in report order. Keys match config/rubric.md (external workspace);
@@ -38,13 +39,15 @@ DIMENSIONS = ("faithfulness", "completeness", "drill_accuracy", "altitude", "hap
 # Grounding defaults — mirrored by eval/method.md Step 4 (change them together).
 DEFAULT_N_SKEPTICS = 3     # majority-of-N vote per claim: one dissenting skeptic can't flip a verdict
 DEFAULT_GROUNDING_CAP = 40  # K: ground only the top-K risk-ranked claims (the worklist is ranked)
+DRIFT_TOLERANCE = 2        # anchor-drift band: a confirmed claim whose reported line is > this many
+                           # lines off the stored `where` is drift (matches `coyodex anchor-drift`)
 
 # The grounding-prompt REGIME version, part of the judge-protocol fingerprint: verdicts produced
 # under different prompt rules (e.g. before/after the "unverifiable" channel) are not comparable,
 # so bump this whenever build_grounding_prompt's rules change semantically. "v2": three-verdict
 # vocabulary (grounded / refuted / unverifiable) + the pinned-repo-root statement — the fix for
 # environment failures masquerading as refutations (35/240 votes in the Phase-2 boundary run).
-GROUNDING_PROMPT_VERSION = "grounding-v2"
+GROUNDING_PROMPT_VERSION = "grounding-v3"
 
 
 # ── data model ───────────────────────────────────────────────────────────────────────────────────────
@@ -106,6 +109,10 @@ class JudgeReport:
     n_failures: int = 0                   # sampled claims with NO usable verdict — excluded from the
                                           # pass-rate denominator, surfaced separately (never "refuted")
     protocol: JudgeProtocol | None = None  # the fingerprint of the judging regime (None = pre-v2 report)
+    n_anchor_checked: int = 0             # confirmed claims whose stored anchor vs reported line was
+                                          # comparable (Layer-2 anchor-drift, Phase G)
+    n_anchor_drifted: int = 0             # of those, how many drifted beyond DRIFT_TOLERANCE
+    anchor_drift_rate: float | None = None  # n_anchor_drifted / n_anchor_checked; None when none checked
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
@@ -120,6 +127,10 @@ class JudgeReport:
             kw["protocol"] = JudgeProtocol(**kw["protocol"])
         # A report written before the sampling cap existed grounded the whole worklist.
         kw.setdefault("n_worklist", kw.get("n_claims", 0))
+        # Reports written before Layer-2 anchor-drift carry no drift fields.
+        kw.setdefault("n_anchor_checked", 0)
+        kw.setdefault("n_anchor_drifted", 0)
+        kw.setdefault("anchor_drift_rate", None)
         return cls(**kw)
 
 
@@ -168,8 +179,11 @@ def build_grounding_prompt(claim: str, anchor: str | None, detail: str | None = 
         "true — anchor exactness is scored separately, by the drill_accuracy rubric dimension.\n"
         "Resolve names and ids ONLY from the claim text and the code; do NOT read any project-map "
         f"file.{where}\n\nCLAIM: {claim}{about}{start}\n\n"
-        "Return: grounded (true / false / \"unverifiable\"), and one file:line as evidence for your "
-        "verdict (for unverifiable, a short note on what failed)."
+        "Return: grounded (true / false / \"unverifiable\"), and — as evidence — the ONE `file:line` "
+        "where the operation the claim describes ACTUALLY happens in the code (the true call site), so "
+        "it is directly comparable to the map's stored anchor (for unverifiable, a short note on what "
+        "failed). Reporting the true line does NOT change your grounded verdict — a drifted anchor is "
+        "still grounded=true; the line is used by a separate deterministic drift check."
     )
 
 
@@ -219,17 +233,32 @@ def build_judge_report(map_text: str, repo_root: Path, rubric: str, judge: Judge
     `judge`; the model-facing work is entirely inside `judge`."""
     worklist = audit_model.l2_worklist_model(load_model(map_text))
     sample = worklist[:grounding_cap] if grounding_cap > 0 else worklist
-    outcomes = [majority_verdict(votes) for votes in run_grounding(sample, judge, repo_root, n_skeptics)]
+    grounding = run_grounding(sample, judge, repo_root, n_skeptics)
+    outcomes = [majority_verdict(votes) for votes in grounding]
     n_claims = len(outcomes)
     n_failures = sum(1 for o in outcomes if o is None)
     n_grounded = sum(1 for o in outcomes if o is True)
     denom = n_claims - n_failures
     passrate = (n_grounded / denom) if denom else None
+    # Layer-2 anchor drift: only for CONFIRMED claims (a confirmed relationship with a mismatched line
+    # is pure anchor drift), comparing the stored `where` to the median line the grounded skeptics read.
+    n_anchor_checked = n_anchor_drifted = 0
+    for item, votes, outcome in zip(sample, grounding, outcomes):
+        if outcome is not True:
+            continue
+        evidence = [v.evidence for v in votes if v.grounded and v.evidence]
+        d = anchor_drift(item.anchor, evidence, DRIFT_TOLERANCE)
+        if d is not None:
+            n_anchor_checked += 1
+            n_anchor_drifted += 1 if d.drifted else 0
+    drift_rate = (n_anchor_drifted / n_anchor_checked) if n_anchor_checked else None
     dims = [run_dimension(d, rubric, map_text, repo_root, judge, n_judges) for d in dimensions]
     overall = float(statistics.mean(d.score for d in dims)) if dims else None
     return JudgeReport(n_claims=n_claims, n_grounded=n_grounded, grounding_passrate=passrate,
                        dimensions=dims, overall=overall,
-                       n_worklist=len(worklist), n_failures=n_failures, protocol=protocol)
+                       n_worklist=len(worklist), n_failures=n_failures, protocol=protocol,
+                       n_anchor_checked=n_anchor_checked, n_anchor_drifted=n_anchor_drifted,
+                       anchor_drift_rate=drift_rate)
 
 
 # ── replaying externally-produced verdicts ────────────────────────────────────────────────────────────

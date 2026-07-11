@@ -468,6 +468,37 @@ def test_grounding_cap_keeps_the_highest_risk_claims() -> None:
     assert rep.grounding_passrate == 1.0, rep
 
 
+def test_anchor_drift_counted_only_for_confirmed_claims() -> None:
+    # Phase G: for a CONFIRMED claim whose grounded skeptic reports a line far from the stored anchor,
+    # the drift is counted; a confirmed claim whose reported line matches the anchor is not.
+    from coyodex.anchors import parse_anchor
+    from coyodex.audit_model import l2_worklist_model
+    from coyodex.model import load_model
+    map_text = make_l2_map()
+    items = [w for w in l2_worklist_model(load_model(map_text)) if w.anchor]
+    assert len(items) >= 2
+    a, b = items[0], items[1]
+    assert a.anchor is not None and b.anchor is not None
+    a_loc = parse_anchor(a.anchor)
+    assert a_loc is not None and a_loc.lo is not None
+    a_file = a.anchor.split(":")[0].split("#")[0]
+    drift_ev = f"{a_file}:{a_loc.lo + 50}"   # 50 lines off → drift
+    grounding = [{"claim": a.claim, "grounded": True, "evidence": drift_ev},
+                 {"claim": b.claim, "grounded": True, "evidence": b.anchor}]  # matches → no drift
+    rep = report_from_verdicts(map_text, HERE, "R", grounding, [])
+    assert rep.n_anchor_checked == 2
+    assert rep.n_anchor_drifted == 1
+    assert rep.anchor_drift_rate == 0.5
+
+
+def test_judge_report_from_json_backcompat_without_drift_fields() -> None:
+    import json
+    old = json.dumps({"n_claims": 3, "n_grounded": 2, "grounding_passrate": 1.0,
+                      "dimensions": [], "overall": None})
+    rep = JudgeReport.from_json(old)
+    assert rep.n_anchor_checked == 0 and rep.n_anchor_drifted == 0 and rep.anchor_drift_rate is None
+
+
 # --- rubric median --------------------------------------------------------------
 def test_dimension_score_is_the_median_of_the_judges() -> None:
     j = ScriptedJudge(score_lists={"faithfulness": [2, 4, 3]})

@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from coyodex import grammar
+from coyodex.anchors import FILEREF as _FILEREF
 from coyodex.model import ProjectModel, load_model
 
 # ── the audit vocabulary (shared with the eval, which imports it from here) ──────────────────────
@@ -43,7 +44,7 @@ WARNING = "WARNING"
 _SEV_RANK = {CONTRADICTION: 0, ADVISORY: 1, WARNING: 2}
 
 _LINK = re.compile(r"\[([^\]]*)\]\(([^)]+)\)")  # markdown link → (label, href)
-_FILEREF = re.compile(r"[\w./-]+(?:#L\d+|:\d+)")  # a bare `path#Lnnn` / `file:line` drill anchor
+# `_FILEREF` (the bare `path#Lnnn`/`file:line` finder) now lives in coyodex.anchors — imported above.
 
 
 def _anchor(cell: str) -> str | None:

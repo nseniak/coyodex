@@ -91,9 +91,13 @@ def delta_md(result: RunResult) -> str:
         j = result.judge
         denom = j.n_claims - j.n_failures
         pr = "n/a" if j.grounding_passrate is None else f"{j.grounding_passrate:.0%}"
+        dr = ("n/a" if not j.n_anchor_checked
+              else f"{j.n_anchor_drifted}/{j.n_anchor_checked} confirmed anchors drifted "
+                   f"({j.anchor_drift_rate:.0%})")
         lines += ["## Judge", "```",
                   f"grounding : {j.n_grounded}/{denom} claims ({pr}) — top {j.n_claims} of "
                   f"{j.n_worklist} risk-ranked claim(s), {j.n_failures} judge failure(s) excluded",
+                  f"drift     : {dr}",
                   f"rubric    : " + " · ".join(f"{d.dimension} {d.score:g}" for d in j.dimensions)
                   + (f"  (overall {j.overall:g})" if j.overall is not None else ""),
                   "```", ""]
@@ -367,7 +371,10 @@ def judge_cli(argv: list[str]) -> int:
     out_path.write_text(report.to_json(), encoding="utf-8")
     pr = "n/a" if report.grounding_passrate is None else f"{report.grounding_passrate:.0%}"
     ov = "n/a" if report.overall is None else f"{report.overall:g}/4"
-    print(f"Wrote {out_path} — grounding {report.n_grounded}/{report.n_claims} ({pr}), overall {ov}")
+    drift = (f", anchor-drift {report.n_anchor_drifted}/{report.n_anchor_checked}"
+             if report.n_anchor_checked else "")
+    print(f"Wrote {out_path} — grounding {report.n_grounded}/{report.n_claims} ({pr}), "
+          f"overall {ov}{drift}")
     return 0
 
 

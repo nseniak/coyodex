@@ -73,6 +73,10 @@ DEFAULT_JUDGE_BANDS: dict[str, float] = {
     "l2_grounding_passrate_drop": 0.10,
     "judge_score_drop": 0.10,
     "grounding_failure_rate_max": 0.25,
+    # Phase G: Layer-2 anchor-drift rate. v1 INFORMATIONAL ONLY — surfaced in the report, not gated,
+    # until real drift distributions are seen. The named hook is here so it can be promoted to a
+    # blocking DRIFT verdict later without a config migration.
+    "anchor_drift_rate_max": 1.0,
 }
 
 

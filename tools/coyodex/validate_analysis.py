@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 
 # Grammar (regexes, membership rule) lives in grammar, shared with the parser — one grammar.
-from coyodex.anchors import FILE_ANCHOR as _BARE_PATH
+from coyodex.anchors import FILE_ANCHOR as _BARE_PATH, LINE_ANCHOR, strip_anchor
 from coyodex.grammar import DEEP_NEST_WARN
 
 
@@ -202,13 +202,9 @@ def granularity_advisory(n_components: int, root: Path) -> list[str]:
 # optional `:line`/`:line-line` (extension optional — `Dockerfile:1` is valid), shared from
 # `coyodex.anchors` so format lives in one place. A markdown link is not a valid `Where`/anchor shape —
 # `_check_anchor_format` (validate_model.py) rejects it rather than this function extracting its href.
-_LINE_ANCHOR = re.compile(r":\d+(?:-\d+)?$")  # a trailing `:line`/`:line-line` suffix
-
-
-def strip_anchor(href: str) -> str:
-    """The bare path from a `path:line` / `path:line-line` anchor — resolving a SOURCE/anchor href
-    against the repo needs the path alone."""
-    return _LINE_ANCHOR.sub("", href)
+# `strip_anchor` / `_LINE_ANCHOR` live in `coyodex.anchors` (one anchor home); re-exported here so the
+# existing `from coyodex.validate_analysis import strip_anchor` importers keep working.
+_LINE_ANCHOR = LINE_ANCHOR
 
 
 def _where_href(cell: str) -> str | None:

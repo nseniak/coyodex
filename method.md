@@ -356,16 +356,22 @@ synthesis → parallel trace.**
   **direct** use — so structural entity-usage is captured at component granularity, not only
   behaviorally via the flow steps. This is *additional*: the `C↔C`/`C↔D` edges
   remain the primary output and must stay complete (every dep wired, the component graph not sparse).
-- Phase 4 Adversarial verify (fan out, one skeptic per L2 worklist claim — **fresh context**). After
-  the map validates and `coyodex audit` runs (fix any blocking `why:`-ref contradiction; reconcile the
-  read-before-create / actor advisories), take the audit's
-  **L2 grounding worklist** and launch one sub-agent per high-risk claim, each told to *disprove* the
-  claim against the code (default to *refuted* on doubt; for the riskiest claims — auth, scoping,
-  encryption — use N skeptics + majority vote). This is the *breaking* twin of the parallel *build*:
-  the same fan-out shape, aimed at falsification. **Fresh context is the whole point** — a verifier
-  that can see the build reasoning inherits its blind spots, so independence comes from an isolated
-  sub-agent, not from a separate run. Reconcile every refutation (fix the map, or justify the claim
-  and record why); this reconcile is **not delegated**. Re-validate → re-audit → render after fixes.
+- Phase 4 Adversarial verify (fan out, **fresh context**). After the map validates and `coyodex audit`
+  runs (fix any blocking `why:`-ref contradiction; reconcile the read-before-create / actor advisories),
+  take the audit's **L2 grounding worklist** and disprove it against the code. **Batch by theme/risk,
+  don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group the claims into a
+  handful of themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage), one
+  fresh-context skeptic per batch, and for the riskiest claims (auth, scoping, encryption) run **N
+  skeptics + majority vote**. Each is told to *disprove* the claim (default to *refuted* on doubt). This
+  is the *breaking* twin of the parallel *build*, aimed at falsification. **Fresh context is the whole
+  point** — a verifier that sees the build reasoning inherits its blind spots. Each skeptic also reports
+  the ONE `file:line` where the operation **actually** happens (the true call site); a drifted anchor
+  does NOT refute a true relationship (grounding truth is separate). **Then run
+  `coyodex anchor-drift --map … --verdicts …`** — a deterministic check that flags any CONFIRMED claim
+  whose stored `where` drifts from the line the skeptics found; reconcile each by **fixing the map's
+  `where`** (the check flags, you apply — the LLM only observed the line). Reconcile every refutation and
+  every drift (fix the map, or justify and record why); this reconcile is **not delegated**.
+  Re-validate → re-audit → render after fixes.
 - Guardrails: all agents share the same schema + edge-verb vocabulary; Phase 1 produces
   the canonical node inventory FIRST (nodes before edges, agents reference nodes and
   never invent them); every agent keeps inferred-vs-verified labels + returns `file:line`;
