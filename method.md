@@ -535,7 +535,10 @@ wrote its JSON fragment to the scratch dir (`.coyodex/build-fragments/<agent>.js
 prompt's output rule); `coyodex assemble` itself writes a `.coyodex/.gitignore` entry ignoring
 `build-fragments/`, so the scratch dir never dirties the tree (you may still delete it after a
 successful assemble — the model is the record). Write one small `header.json` fragment yourself
-(`title`, `goal`, the pin fields), then run:
+(`title`, `goal`, the pin fields — as **top-level keys**, NOT wrapped in a `header` object), and
+**lint it too before assembling** (`coyodex lint-fragment .coyodex/build-fragments/header.json`): the
+header is the one hand-authored fragment that otherwise skips the self-check every sub-agent runs, so a
+stray key here is the one thing that still fails `assemble`. Then run:
 
 ```
 .venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex
