@@ -46,6 +46,16 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
     return problems
 
 
+def lint_fragment_warnings(m: ProjectModel) -> list[str]:
+    """Advisory (non-blocking) findings for one fragment — the domain-relation *warnings*: the
+    field-less-association nudge and the heuristic "this field-less relation looks like a by-name FK,
+    mark `FK→…`" hint. These are HEURISTIC (they read prose), so unlike `lint_fragment_problems` they
+    must NOT fail the lint — the authoring agent sees them and decides. Kept separate from the blocking
+    problems so the fatal/advisory split is explicit."""
+    _problems, warnings = check_domain_relations(m.entities)
+    return warnings
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv or not argv:
@@ -94,8 +104,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"{p.name}: {pr}", file=sys.stderr)
         else:
             print(f"{p.name}: OK")
+        # advisory warnings never fail the lint — heuristic nudges the agent can act on or ignore
+        for w in lint_fragment_warnings(m):
+            print(f"{p.name}: warning: {w}", file=sys.stderr)
     if not clean:
-        print("LINT FAILED: fix the rows above before returning this fragment.", file=sys.stderr)
+        print("LINT FAILED: fix the rows above before returning this fragment. "
+              "(`warning:` lines are advisory heuristics — they do not fail the lint.)", file=sys.stderr)
         return 1
     return 0
 

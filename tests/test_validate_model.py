@@ -29,12 +29,15 @@ from coyodex.model import (
     NonEntityType,
     ProjectModel,
     Role,
+    SecurityRow,
     UseCase,
     to_canonical_json,
 )
 from coyodex.validate_model import (
+    _anchor_pairs,
     check_anchor_existence_model,
     check_domain_coverage_model,
+    check_domain_relations,
     validate_model,
 )
 from coyodex.views import model_to_markdown
@@ -312,6 +315,46 @@ def test_validate_warns_on_duplicate_edges_with_differing_anchors():
     m.edges = [Edge(src="C1", verb="uses", dst="D1", why="q", where="a.py:3"),
                Edge(src="C1", verb="uses", dst="D1", why="q", where="a.py:9")]
     assert any("declared 2 times" in w for w in warnings_of(m))
+
+
+def make_fk_heuristic_entities() -> list[Entity]:
+    # a field-less association whose {how} note names a plain source field (the role→RoleDefinition
+    # class): no FK marker, no keyed_by — a by-name FK hidden behind prose.
+    e1 = make_entity("E1", "Membership")
+    e1.fields.append(EntityField(name="role", type="string", markers=[]))
+    e1.relations.append(EntityRelation(verb="grantsRole", target="E2", src_card="*", dst_card="1",
+                                        how="role string names a RoleDefinition key"))
+    return [e1, make_entity("E2", "RoleDefinition")]
+
+
+def test_fk_heuristic_warns_when_note_names_a_source_field():
+    m = make_valid_model()
+    m.entities = make_fk_heuristic_entities()
+    assert any("FK→E2" in w and "role" in w for w in warnings_of(m))
+    assert not any("FK→E2" in p for p in problems_of(m))    # a warning, never a blocking problem
+
+
+def test_fk_heuristic_guard_skips_when_target_absent():
+    # at lint a fragment may hold the source but not the FK target — the r.target-in-backing guard
+    # must keep the heuristic from false-firing on an entity-typed relation resolved cross-fragment.
+    src_only = [make_fk_heuristic_entities()[0]]        # E1 only, no E2
+    _problems, warnings = check_domain_relations(src_only)
+    assert not any("FK→" in w for w in warnings)
+
+
+def test_deployment_linked_dep_that_is_a_call_target_warns():
+    m = make_valid_model()
+    m.deps[0].deployment_linked = True                  # D1 marked deploy-only …
+    m.edges = [Edge(src="C1", verb="uses", dst="D1", why="q", where="a.py:3")]  # … but is a call target
+    assert any("deployment_linked" in w and "call target" in w for w in warnings_of(m))
+
+
+def test_security_anchor_is_collected_for_existence_check():
+    m = make_valid_model()
+    m.security = [SecurityRow(surface="/admin", who="admin",
+                              source="[require_admin](backend/auth.py#L70)")]
+    pairs = _anchor_pairs(m)
+    assert any(lbl.startswith("security") and href == "backend/auth.py#L70" for lbl, href in pairs)
 
 
 # --- v2-only behaviors ----------------------------------------------------------------

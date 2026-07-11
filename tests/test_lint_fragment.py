@@ -54,6 +54,20 @@ def test_lint_catches_no_call_site_with_where_in_fragment():
     assert any("no_call_site" in p and "Where" in p for p in problems)
 
 
+def test_lint_surfaces_fk_heuristic_as_nonfatal_warning():
+    # the by-name-FK heuristic is advisory: it appears in lint WARNINGS (nudge the agent) but is NOT
+    # a blocking problem (it reads prose, so it must never fail the lint).
+    m = make_fragment({"entities": [
+        {"id": "E1", "name": "Membership", "meaning": "m", "source": "src/m.py:1",
+         "fields": [{"name": "role", "type": "string"}],
+         "relations": [{"verb": "grantsRole", "target": "E2",
+                        "how": "role string names a RoleDefinition key"}]},
+        {"id": "E2", "name": "RoleDefinition", "meaning": "m", "source": "src/r.py:1",
+         "fields": [{"name": "id", "type": "str", "markers": ["PK"]}]}]})
+    assert any("FK→E2" in w for w in lint_fragment.lint_fragment_warnings(m))
+    assert not any("FK→E2" in p for p in lint_fragment.lint_fragment_problems(m, None))
+
+
 def test_lint_extensionless_anchor_is_accepted():
     # A2: an extensionless ops file with a line is a valid anchor, so lint must not reject it.
     m = make_fragment({"deps": [{"id": "D1", "name": "img", "where_configured": "Dockerfile:1"}]})

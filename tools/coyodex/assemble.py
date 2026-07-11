@@ -227,12 +227,16 @@ def main(argv: list[str] | None = None) -> int:
         print("ASSEMBLY FAILED: fix (or re-request) the fragments above; nothing was written.",
               file=sys.stderr)
         return 1
+    raw_edges = sum(len(fr.edges) for _, fr in parts)  # before merge, to report the dedup
     model, problems = merge_fragments(parts)
     if problems:
         for pr in problems:
             print(f"ERROR: {pr}", file=sys.stderr)
         print("ASSEMBLY FAILED: merge conflicts above; nothing was written.", file=sys.stderr)
         return 1
+    collapsed = raw_edges - len(model.edges)  # only _merge_duplicate_edges removes edges (deps re-point)
+    if collapsed > 0:
+        print(f"note: collapsed {collapsed} duplicate backbone edge(s) (same call site)")
     from coyodex.views import model_to_markdown
 
     out_dir.mkdir(parents=True, exist_ok=True)

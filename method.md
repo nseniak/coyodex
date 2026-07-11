@@ -152,7 +152,10 @@ prose level, the model has no field for it, and builders rightly skipped it — 
 - **Deployment & topology**: `Unit | Runs on | Exposed as | Config source`.
 - **Observability**: `Signal | Where emitted | Where viewed | Alerts`.
 - **Security & auth**: `Surface | Who can reach | Auth check | Risk note` (trust
-  boundaries often inferred — flag).
+  boundaries often inferred — flag). The **`Auth check`** anchor must point at the line that
+  ENFORCES — the `if`/`raise`/`require_*`/decorator call — **never its docstring, comment, or `def`
+  header** (the same operative-line rule as an edge `Where`, below). It is an L2 grounding claim, so
+  `--check-sources` now verifies the linked file/line exists.
 - **Config & environments**: `Key | Purpose | Default | Per-env / secret?` (secrets =
   where they live, never values).
 - On-demand extras: state machines/lifecycles, event/message catalog, error/failure
@@ -207,6 +210,11 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   edge** — a dep with no edge is an *un-traced* `C→D`, not an unused dependency — and a component
   graph with far fewer edges than components is under-traced. The component edge list is the primary
   trace output; the validator nudges on orphan deps (a thin-trace symptom).
+- **Trace the routing spine (frontend / any router).** A routing or app-shell component MUST emit a
+  `routes-to` edge to each page/view component it mounts — the route table is real structure, not
+  "wiring" to skip. Page components are **traced destinations, not dead-ends** (they still make their
+  own outgoing calls to API clients / hooks). A frontend whose pages have zero incoming edges is
+  under-traced, not leaf-clean.
 - **`Why` = a short phrase: what `From` does to/with `To`** — an **action**, not a dependency remark
   (e.g. "verify service tokens", "cache refreshed OAuth tokens"). Write "POSTs the new upstream through
   the REST client", never "the page needs the REST client to POST" — a "needs / requires / depends on"
@@ -309,6 +317,16 @@ subsystem-shaped dirs into single components — make them subsystems and recurs
 you split module-sized units too fine. `validate --check-coverage` and the eval **re-compute E from
 the tree independently** (GR4) and nudge when the map's component count leaves the band — the nudge
 is advisory; a justified exception stays a judgement call.
+
+**Correctness exception — a port with divergent backends splits, even if small.** When one abstract
+port has **two or more backend implementations whose behavior diverges** (e.g. a file repository that
+stores JSON on disk and a Mongo repository that encrypts — one raises in standalone mode), do NOT
+lump them into one component just because each adapter is under the size cap. Model the **port (or
+its use-site) and each backend adapter as separate components**, so every `C→E` edge is true for
+**exactly one** box. Lumping makes a claim like `persists X` true for one backend and false for the
+other — a grounding hazard a skeptic will (correctly) refute. This overrides the size-based leaf rule
+above: split for *correctness*, not size. (No validator detects the lump; the Phase-4 skeptic is the
+backstop.)
 
 **The hand-off — read the stderr summary first; don't reverse-engineer the JSON.** `preindex` writes
 the JSON to `.coyodex/preindex.json` **and** prints a one-line human summary to **stderr** (heaviest

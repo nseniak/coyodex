@@ -380,6 +380,20 @@ def check_domain_relations(entities: list[Entity]) -> tuple[list[str], list[str]
                     f"Domain card {e.id}: relation '{r.verb} … {r.target}' is not backed by a "
                     f"field and has no {{…}} note — mark the implementing field `FK→{r.target}` "
                     f"(or `FK→{e.id}` on {r.target}), or add a `{{how}}` note explaining the link")
+            elif (kind == "association" and r.target in backing and not back_names
+                    and not r.keyed_by):
+                # HEURISTIC: a field-less association whose note/label NAMES a source field is likely
+                # a by-name foreign key dodging the marker via prose (the role→RoleDefinition class).
+                # A warning only (scans free text). The `r.target in backing` + `not back_names` guard
+                # keeps it from firing on an entity-TYPED field whose target sits in another fragment.
+                note = f"{r.display} {r.how or ''}"
+                named = sorted({n for n in field_names.get(e.id, set())
+                                if re.search(rf"\b{re.escape(n)}\b", note)})
+                if named:
+                    warnings.append(
+                        f"Domain card {e.id}: relation '{r.verb} … {r.target}' is field-less but its "
+                        f"note/label names the field(s) {', '.join(named)} — if that field references "
+                        f"{r.target}, mark it `FK→{r.target}` for a grounded arrow, not a prose note")
     return problems, warnings
 
 
@@ -538,6 +552,12 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for ep in m.entry_points:
         if ep.source and not url.match(ep.source):
             out.append((f"entry_points[{ep.component} {ep.kind}]", ep.source))
+    for s in m.security:
+        # the Auth-check anchor is a markdown link (an L2 grounding claim) — extract its href so
+        # `--check-sources` verifies the enforcement site exists (previously unchecked entirely).
+        href = _first_link_of(s, [s.source])
+        if href and not url.match(href):
+            out.append((f"security '{s.surface}'", href))
     return out
 
 
@@ -794,6 +814,16 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
                                                    if len(orphan_deps) > 12 else "")
             warnings.append(f"External deps with no incoming edge (un-traced — which component "
                             f"uses each?): {shown}")
+        # The mirror nudge: a dep marked `deployment_linked` (declares NO code call site) that is
+        # nonetheless an edge target has a real call site — the marker is wrong (a harvest agent
+        # over-marked it). Drop the marker (or, if the edge is `no_call_site`, drop that edge).
+        mislabeled = sorted(d.id for d in m.deps if d.deployment_linked and d.id in targets)
+        if mislabeled:
+            shown = ", ".join(mislabeled[:12]) + (f", +{len(mislabeled) - 12} more"
+                                                  if len(mislabeled) > 12 else "")
+            warnings.append(f"Deps marked `deployment_linked` but which are a code call target "
+                            f"(they have a real call site — drop the marker, or drop the edge if it "
+                            f"is `no_call_site`): {shown}")
 
     if model_path is not None:
         warnings.extend(_check_view_fresh(m, model_path))
