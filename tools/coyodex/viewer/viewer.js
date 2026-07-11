@@ -3734,11 +3734,13 @@ function openInCodeViewer(file, line) {
 // --- startup --------------------------------------------------------------------
 stage.addEventListener('mousedown', (e) => { downX = e.clientX; downY = e.clientY; }, true);
 document.addEventListener('keydown', (e) => {
-  // ⌘/⌥ + ←/→ navigate history (preventDefault so ⌘+arrows don't trigger the browser's back/forward)
-  if ((e.metaKey || e.altKey) && e.key === 'ArrowLeft') { e.preventDefault(); back(); return; }
-  if ((e.metaKey || e.altKey) && e.key === 'ArrowRight') { e.preventDefault(); fwd(); return; }
-  // Bare ←/→ walk the use-case flow step by step (only on a flow view, and not while typing in a field).
+  // While typing in a field, arrows (bare or with ⌘/⌥) are the native text-cursor moves — ⌘←/→ line
+  // start/end, ⌥←/→ by word — so we never hijack them for history/flow navigation.
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target && e.target.tagName) || '') || (e.target && e.target.isContentEditable);
+  // ⌘/⌥ + ←/→ navigate history (preventDefault so ⌘+arrows don't trigger the browser's back/forward)
+  if (!typing && (e.metaKey || e.altKey) && e.key === 'ArrowLeft') { e.preventDefault(); back(); return; }
+  if (!typing && (e.metaKey || e.altKey) && e.key === 'ArrowRight') { e.preventDefault(); fwd(); return; }
+  // Bare ←/→ walk the use-case flow step by step (only on a flow view, and not while typing in a field).
   if (flowPlay && !typing && !e.metaKey && !e.altKey && !e.ctrlKey) {
     if (e.key === 'ArrowLeft') { e.preventDefault(); flowStepBy(-1); return; }
     if (e.key === 'ArrowRight') { e.preventDefault(); flowStepBy(1); return; }
