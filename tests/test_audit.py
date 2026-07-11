@@ -1539,6 +1539,27 @@ def test_dependency_phrasing_allows_actions() -> None:
     assert audit_model.check_dependency_phrasing(m) == []
 
 
+def test_hp_whyref_ignores_word_with_embedded_hp() -> None:
+    # An HP<n> EMBEDDED in a longer word ("PHP7", "BHP2") must NOT read as a Happy-Path cross-reference.
+    # The missing word boundary used to make the audit BLOCK (dangling/backward why-ref) on prose like this.
+    # (A standalone "HP15" is still ref-shaped and correctly matches — that residual needs typed refs.)
+    from coyodex.model import HappyStep, ProjectModel
+    m = ProjectModel(happy_path=[
+        HappyStep(id="HP1", title="a", uc="UC1"),
+        HappyStep(id="HP2", title="b", uc="UC2", why="runs on PHP7 runtime (not BHP2)"),
+    ])
+    assert audit_model.happy_path_steps(m)[1].why_refs == []
+
+
+def test_hp_whyref_reads_whole_token() -> None:
+    from coyodex.model import HappyStep, ProjectModel
+    m = ProjectModel(happy_path=[
+        HappyStep(id="HP1", title="a", uc="UC1"),
+        HappyStep(id="HP2", title="b", uc="UC2", why="needs the org from HP1"),
+    ])
+    assert audit_model.happy_path_steps(m)[1].why_refs == [1]
+
+
 def test_whyless_nonfirst_step_warns() -> None:
     checks = _checks(make_whyless_map())
     assert checks.get("why-less-step") == "WARNING", checks
@@ -1635,6 +1656,15 @@ def test_l2_worklist_detail_reaches_the_cli_output() -> None:
     code, out = run_audit(make_described_map())
     assert code == 0, out
     assert "who: From: C1 = AuthGate (src/auth/gate.py:10)" in out, out  # #L10 normalized to :10
+
+
+def test_l2_worklist_risk_prose_collapsed_by_default() -> None:
+    # A3: the near-identical per-claim `risk:` rationale is hidden by default (behind --verbose); the
+    # anchor + `who:` endpoint detail a skeptic actually needs is always kept (see the detail test above).
+    worklist = audit_model.l2_worklist_model(audit_model.load_model(make_l2_map()))
+    assert worklist
+    assert "risk:" not in audit_model._format([], worklist, verbose=False)
+    assert "risk:" in audit_model._format([], worklist, verbose=True)
 
 
 # --- built-in runner ------------------------------------------------------------

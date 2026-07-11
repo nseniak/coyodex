@@ -16,6 +16,7 @@ import re
 from pathlib import Path
 
 # Grammar (regexes, membership rule) lives in grammar, shared with the parser — one grammar.
+from coyodex.anchors import FILE_ANCHOR as _BARE_PATH
 from coyodex.grammar import DEEP_NEST_WARN
 
 
@@ -197,11 +198,10 @@ def granularity_advisory(n_components: int, root: Path) -> list[str]:
     ]
 
 
-# A `Where` / anchor cell is a SOURCE LOCATION (the call site a flow arrow opens) — a bare
-# `path.ext` with an optional `:line` / `:line-line` suffix. A markdown link is not a valid
-# `Where`/anchor shape — `_check_anchor_format` (validate_model.py) rejects it outright rather than
-# this function silently extracting its href.
-_BARE_PATH = re.compile(r"^\S+\.\w+(?::\d+(?:-\d+)?)?$")
+# A `Where` / anchor cell is a SOURCE LOCATION (the call site a flow arrow opens): a file ref with an
+# optional `:line`/`:line-line` (extension optional — `Dockerfile:1` is valid), shared from
+# `coyodex.anchors` so format lives in one place. A markdown link is not a valid `Where`/anchor shape —
+# `_check_anchor_format` (validate_model.py) rejects it rather than this function extracting its href.
 _LINE_ANCHOR = re.compile(r":\d+(?:-\d+)?$")  # a trailing `:line`/`:line-line` suffix
 
 

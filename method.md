@@ -407,10 +407,10 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > and a truncated fragment fails `assemble`. An empty slice is an empty array plus a one-line note.
 > **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
 > rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
-> `deps[].where_configured`, `edges[].where`, and `entry_points[].source` are all **bare**
-> repo-root-relative refs (`path/to/file.py:120`; a directory anchor keeps its trailing slash,
-> `path/dir/`). The one exception is group `source` fields (`subsystems[].source` /
-> `subdomains[].source`), which are **markdown links** `[dir](path/dir/)`.
+> `deps[].where_configured`, `edges[].where`, `entry_points[].source`, **and the group `source`
+> fields** (`subsystems[].source` / `subdomains[].source`) are all **bare** repo-root-relative refs
+> (`path/to/file.py:120`; a directory anchor keeps its trailing slash, `path/dir/`) — a bare file or
+> directory ref, never a markdown link.
 > **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
 > also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
 > `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is

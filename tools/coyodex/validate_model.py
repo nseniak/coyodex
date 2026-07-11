@@ -25,6 +25,7 @@ import sys
 from pathlib import Path
 
 from coyodex import grammar
+from coyodex.anchors import DIR_ANCHOR as _DIR_ANCHOR, FILE_ANCHOR as _ANCHOR_LINE
 from coyodex.model import ID_ARRAYS, ID_SHAPE, ModelError, ProjectModel, all_elements, load_model
 from coyodex.validate_analysis import (
     _ALTITUDE_MIN,
@@ -142,11 +143,65 @@ def _check_ids(m: ProjectModel) -> list[str]:
     return problems
 
 
+# An explicit in-prose cross-reference: `[[C12]]`. A BARE id-shaped token in prose or an anchor
+# (the PKCE value `S256`, a `D3`/`C4` library name, an `infra/S3/` path segment) is NOT a reference —
+# `_referenced_ids` reads ids only from typed id fields and these `[[...]]` markers, so a domain string
+# is never misread as a dangling ref (the class the whole-document scan used to false-positive on).
+_BRACKET_REF = re.compile(r"\[\[([^\]]+)\]\]")
+
+
+def _referenced_ids(m: ProjectModel) -> set[str]:
+    """The ids the model genuinely cross-references, gathered ONLY from typed id-bearing fields and
+    explicit `[[ID]]` prose markers — never scanned out of free prose or anchor strings."""
+    refs: set[str] = set()
+    for c in m.components:
+        if c.subsystem:
+            refs.add(c.subsystem)
+    for s in m.subsystems:
+        if s.parent:
+            refs.add(s.parent)
+    for sd in m.subdomains:
+        if sd.parent:
+            refs.add(sd.parent)
+    for g in m.happy_path:
+        if g.uc:
+            refs.add(g.uc)
+    for f in m.flows:
+        if f.uc:
+            refs.add(f.uc)
+        for st in f.steps:
+            for end in (st.src, st.dst):
+                if end and grammar.is_step_id(end):  # element-id step endpoints; role names are not ids
+                    refs.add(end)
+    for e in m.edges:
+        refs.add(e.src)
+        refs.add(e.dst)
+    for en in m.entities:
+        if en.subdomain:
+            refs.add(en.subdomain)
+        for r in en.relations:
+            if r.target:
+                refs.add(r.target)
+        for fld in en.fields:
+            refs |= grammar.fk_targets(fld.markers)            # FK→En markers
+            refs.update(grammar.ID_TOKEN.findall(fld.type))    # entity-typed field, e.g. `auth:E7`
+    for r in m.roles:
+        refs.update(grammar.ID_TOKEN.findall(r.drives))        # `drives` holds the UC ids a role drives
+    for s in _strings(m):                                      # deliberate prose cross-refs `[[ID]]`
+        for inner in _BRACKET_REF.findall(s):
+            tok = inner.strip()
+            if grammar.ID_TOKEN.fullmatch(tok):
+                refs.add(tok)
+    return refs
+
+
 def _check_references(m: ProjectModel) -> list[str]:
-    """Every ID token stored anywhere in the model must resolve to a defined element — with schema
-    v1's additivity rule: stray S/SD tokens are ignored while the map has no grouping/subdomains."""
+    """Every cross-referenced ID resolves to a defined element. References are read only from typed id
+    fields + `[[ID]]` markers (`_referenced_ids`), never scanned out of prose/anchors — so a domain
+    string shaped like an id (`S256`, `D3`) is never a false dangling ref. Additivity: stray S/SD refs
+    are ignored while the map has no grouping/subdomains."""
     defined = set(all_elements(m)) | {g.id for g in m.happy_path}
-    referenced = {tok for s in _strings(m) for tok in grammar.ID_TOKEN.findall(s)}
+    referenced = _referenced_ids(m)
     parents = _parents(m)
     grouping_present = (any(_is_subsystem_id(i) for i in defined)
                         or any(_is_subsystem_id(p) for p in parents.values()))
@@ -272,11 +327,9 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
-# The one canonical anchor shape (method/model.md's 'Anchor formats'): a bare repo-relative file
-# ref, optionally with `:line` or `:line-line`. A bare directory ref (`_DIR_ANCHOR`) is additionally
-# valid for `source`, which may point at a component's/entity's/group's home directory.
-_ANCHOR_LINE = re.compile(r"^\S+\.\w+(?::\d+(?:-\d+)?)?$")
-_DIR_ANCHOR = re.compile(r"^\S+/$")
+# The canonical anchor shapes live in one place now — `coyodex.anchors` (method/model.md's 'Anchor
+# formats'): a repo-relative file ref with an optional `:line`/`:line-line` (extension optional, so
+# `Dockerfile:1` is valid), or a bare directory ref (`_DIR_ANCHOR`) additionally valid for `source`.
 
 
 def _check_anchor_format(m: ProjectModel) -> list[str]:

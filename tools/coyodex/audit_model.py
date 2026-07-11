@@ -116,7 +116,7 @@ class HPStep:
 def happy_path_steps(m: ProjectModel) -> list[HPStep]:
     steps: list[HPStep] = []
     for pos, g in enumerate(m.happy_path):
-        refs = [int(x) for x in re.findall(r"HP(\d+)", g.why or "")]
+        refs = [int(x) for x in re.findall(r"\bHP(\d+)\b", g.why or "")]
         steps.append(HPStep(pos=pos, hp_id=g.id, uc=g.uc, title=g.title, why=g.why, why_refs=refs))
     return steps
 
@@ -418,7 +418,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 
-def _format(findings: list[Finding], worklist: list[WorkItem]) -> str:
+def _format(findings: list[Finding], worklist: list[WorkItem], verbose: bool = False) -> str:
     out: list[str] = []
     contradictions = [f for f in findings if f.severity == CONTRADICTION]
     if not findings:
@@ -431,14 +431,16 @@ def _format(findings: list[Finding], worklist: list[WorkItem]) -> str:
             out.append(f"    issue: {f.message}")
     out.append("")
     if worklist:
+        risk_note = "" if verbose else " (per-claim rationale under --verbose)"
         out.append(f"L2 grounding worklist ({len(worklist)} claims to disprove against the code — "
-                   "farm each to a fresh-context skeptic, method.md Phase 4):")
+                   f"group by theme/risk and farm to fresh-context skeptics, method.md Phase 4){risk_note}:")
         for i, w in enumerate(worklist, 1):
             anchor = f"  [{w.anchor}]" if w.anchor else ""
             out.append(f"  {i}. {w.claim}{anchor}")
             if w.detail:  # G1: the claim carries its endpoints' names + files — no map needed
                 out.append(f"     who: {w.detail}")
-            out.append(f"     risk: {w.why_risky}")
+            if verbose:  # the near-identical per-category rationale — collapsed by default (A3)
+                out.append(f"     risk: {w.why_risky}")
     else:
         out.append("L2 grounding worklist: no high-risk claims detected to ground.")
     advisories = sum(1 for f in findings if f.severity in (ADVISORY, WARNING))
@@ -455,10 +457,12 @@ def _format(findings: list[Finding], worklist: list[WorkItem]) -> str:
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex audit [.coyodex/project-map.json]\n\n"
+        print("usage: coyodex audit [.coyodex/project-map.json] [--verbose]\n\n"
               "The adversarial pass over a model map: L1 deterministic self-contradiction\n"
-              "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.")
+              "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.\n"
+              "--verbose adds each worklist claim's `risk:` rationale (collapsed by default).")
         return 0
+    verbose = "--verbose" in argv
     args = [a for a in argv if not a.startswith("-")]
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():
@@ -471,7 +475,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     findings = audit_model(m)
     worklist = l2_worklist_model(m)
-    print(_format(findings, worklist))
+    print(_format(findings, worklist, verbose=verbose))
     return 1 if any(f.severity == CONTRADICTION for f in findings) else 0
 
 

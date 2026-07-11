@@ -329,7 +329,7 @@
             "string",
             "null"
           ],
-          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
           "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). Where the component is TRIGGERED \u2014 distinct from `source` (where it LIVES)."
         },
         "depends_on": {
@@ -374,7 +374,7 @@
       "properties": {
         "file": {
           "type": "string",
-          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
           "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
         },
         "why": {
@@ -422,7 +422,7 @@
         },
         "where_configured": {
           "type": "string",
-          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
           "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
         },
         "confidence": {
@@ -485,7 +485,7 @@
         },
         "source": {
           "type": "string",
-          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
           "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
         },
         "component": {
@@ -706,7 +706,7 @@
             "string",
             "null"
           ],
-          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
           "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). The call site: the line in `src`'s code where it invokes `dst`."
         },
         "no_call_site": {

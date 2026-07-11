@@ -25,7 +25,7 @@ from typing import Union, get_args, get_origin, get_type_hints
 
 from coyodex import grammar
 from coyodex.model import FORMAT, ID_SHAPE, ProjectModel
-from coyodex.validate_model import _ANCHOR_LINE
+from coyodex.anchors import FILE_ANCHOR as _ANCHOR_LINE
 
 _PRIMITIVE = {str: "string", int: "integer", bool: "boolean"}
 

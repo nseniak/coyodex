@@ -91,12 +91,23 @@ def test_stray_s_token_suppressed_without_grouping():
     assert problems_of(m) == []
 
 
-def test_s_token_flags_once_grouping_exists():
+def test_prose_id_token_is_not_a_reference():
+    # An id-shaped token in PROSE (the PKCE value "S256", "AWS S3", a "D3" library) is a domain string,
+    # not a cross-reference — even when grouping exists. The old whole-document scan false-positived here
+    # (and a build once "fixed" it by corrupting "S256" to "S-256"); references now come only from typed
+    # id fields + `[[ID]]` markers.
     m = make_valid_model()
     m.subsystems = [Group(id="S1", name="Core", purpose="all")]
     m.components[0].subsystem = "S1"
-    m.goal = "Files are stored in AWS S3 buckets."
-    assert any("S3" in p for p in problems_of(m))
+    m.goal = "Auth uses S256 (PKCE); files sit in AWS S3; charts use the D3 lib."
+    assert not any("S256" in p or "S3" in p or "D3" in p for p in problems_of(m))
+
+
+def test_bracket_marker_reference_is_resolved():
+    # A deliberate in-prose cross-reference uses the `[[ID]]` marker, which IS resolved.
+    m = make_valid_model()
+    m.components[0].purpose = "Delegates to [[C9]] for the heavy lifting."
+    assert any("undefined IDs" in p and "C9" in p for p in problems_of(m))
 
 
 def test_duplicate_ids_flagged():
@@ -170,6 +181,15 @@ def test_edge_where_prose_is_a_blocking_problem():
     m = make_valid_model()
     m.edges[0].where = "somewhere in the code"
     assert any("where" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_extensionless_file_anchor_is_valid():
+    # An extensionless ops file carrying a line (`Dockerfile:1`, `Makefile:6-9`) is a valid file anchor —
+    # file-ness is not decided by "has a dot". Format must not reject these real run/build anchors.
+    for anchor in ("Dockerfile:1", "Makefile:6-9"):
+        m = make_valid_model()
+        m.edges[0].where = anchor
+        assert not any("not a valid" in p and "where" in p.lower() for p in problems_of(m)), anchor
 
 
 def test_edge_missing_where_is_a_blocking_problem():
