@@ -189,11 +189,11 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   it against the code. So a verb may set *attention* (the audit ranks its L2 worklist by verb —
   security verbs like `enforces`/`encrypts` first) but must never decide *truth*: no gate may branch
   pass/fail on a verb, no claim may be dropped from grounding because its verb sounds benign, and a
-  rendered fact derived from a verb is **inferred**, never asserted. Two viewer facts are
-  verb-derived: the subsystem→subdomain bridge's **owns/reads** split (owns = `persists`/`writes`)
-  and the class-diagram **inheritance** arrows (`isA`). The viewer renders these verbs plainly, so a
-  derived fact reads like any asserted edge — if one matters, ground the underlying edge (L2), don't
-  trust the verb.
+  rendered fact derived from a verb is **inferred**, never asserted. The one verb-derived viewer fact
+  is the class-diagram **inheritance** arrow (`isA`): the viewer renders the authored verb plainly, so
+  it reads like any asserted edge — if it matters, ground the underlying edge (L2), don't trust the
+  verb. (The subsystem→subdomain bridge is **not** verb-derived — it shows a count of underlying C→E
+  edges, like the container arrows.)
 - **The edge list spans C↔C, C↔D, *and* C→E.** It is not only component↔component: a component's
   link to the domain model is a backbone edge `C — persists/writes/reads → E` (its repository
   `persists` the entity; a service/controller `reads` it — **direct** use only, never a transitive

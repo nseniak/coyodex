@@ -70,8 +70,9 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   - Click a **box** → its *neighbourhood* view: the subsystem framed around its **immediate** children
     (its direct components inline, plus any **child subsystems as drillable boxes**), with the deps those
     direct components touch outside the frame, and every other subsystem its members link to/from drawn
-    as a collapsed box. Click a child box to drill **deeper** (nesting goes to any depth); click a
-    neighbour box to re-center on it; click a cross arrow to open that pair's edge view.
+    as a collapsed box joined by a count-labelled arrow (like the overview; a subdomain the components
+    touch is bridged the same way). Click a child box to drill **deeper** (nesting goes to any depth);
+    click a neighbour box to re-center on it; click a cross arrow to open that pair's edge view.
   - Click an `S→S` **arrow** → its edge view: the two subsystems framed with the concrete crossings
     between them. A cross arrow into a box that *contains* (or is contained by) the current one instead
     **navigates** to that box (drill in / zoom out), since one can't frame the other.

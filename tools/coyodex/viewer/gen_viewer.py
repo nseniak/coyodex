@@ -408,19 +408,6 @@ ELEMENT_TINT = {
     "subdomain": _fill_stroke(SUBDOMAIN_STYLE),
 }
 
-# The bridge verb split (C→E edges): a component that `persists`/`writes` an entity OWNS that
-# subdomain's data; any other verb (typically `reads`) merely CONSUMES it. Drives the subsystem-card
-# bridge arrow label, surfacing a subdomain that many subsystems own/read as a shared kernel.
-_OWN_VERBS = {"persists", "writes"}
-
-
-def _bridge_rel(verb: str) -> str:
-    """The subsystem→subdomain bridge arrow's label for a C→E edge verb: `owns` or `reads`. One
-    resolution shared by every bridge drawing (subsystem card, subdomain card, bridge card), so the
-    verb-derived split is computed in exactly one place."""
-    return "owns" if verb.lower() in _OWN_VERBS else "reads"
-
-
 def gen_domain_container_mermaid(graph: GraphDict) -> str:
     """Domain Container altitude: each top-level subdomain (`SD`) a box labelled `Name (N)` (N = its
     entity count), with inter-subdomain arrows DERIVED from the E→E relation list (a `SDa → SDb` arrow
@@ -515,11 +502,11 @@ def _subdomain_namespace(graph: GraphDict, sdid: str,
 
 def _subsystem_bridge_lines(graph: GraphDict, member_ids: set[str]) -> list[str]:
     """`classDiagram` lines for the reverse structure↔domain bridge over `member_ids`: every subsystem
-    whose components own/read one of those entities, drawn as a collapsed (indigo) box with an owns/reads
-    arrow into the entity. The mirror of the subsystem card's subdomain bridge; shared by the subdomain
-    card and the domain edge card. owns = persists/writes, reads = anything else."""
+    whose components touch one of those entities, drawn as a collapsed (indigo) box with an arrow into
+    the entity labelled by the COUNT of underlying C→E edges. The mirror of the subsystem card's
+    subdomain bridge; shared by the subdomain card and the domain edge card."""
     nodes = graph["nodes"]
-    bridges: set[tuple[str, str, str]] = set()  # (subsystem box, member entity, 'owns'|'reads')
+    counts: dict[tuple[str, str], int] = {}  # (subsystem box, member entity) -> underlying C→E edge count
     nb_subs: set[str] = set()
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
@@ -527,13 +514,13 @@ def _subsystem_bridge_lines(graph: GraphDict, member_ids: set[str]) -> list[str]
             sub = _top_subsystem(graph, s)
             if sub:
                 nb_subs.add(sub)
-                bridges.add((sub, d, _bridge_rel(str(e["verb"]))))
+                counts[(sub, d)] = counts.get((sub, d), 0) + 1
     out: list[str] = []
     for sub in sorted(nb_subs):  # collapsed neighbour-subsystem boxes (indigo, like a subsystem anywhere)
         out.append(f'  class {sub}["{_safe_label(str(nodes[sub]["name"]))}"]')
         out.append(f"  style {sub} {SUBSYSTEM_STYLE}")
-    for sub, ent, rel in sorted(bridges):  # bridge arrows: subsystem -> entity (owns / reads)
-        out.append(f"  {sub} --> {ent} : {rel}")
+    for (sub, ent), c in sorted(counts.items()):  # bridge arrows: subsystem -> entity (underlying edge count)
+        out.append(f"  {sub} --> {ent} : {c}")
     return out
 
 
@@ -541,10 +528,11 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
     """A per-subdomain `classDiagram` neighbourhood: `sdid` framed as a `namespace` holding its own
     entities (full attributes), every OTHER subdomain its entities relate to drawn as a collapsed
     member-less box (one per neighbour subdomain, labelled `Name (N)`), the focal subdomain's internal
-    relations drawn in full, and one arrow per (focal entity, neighbour subdomain) crossing pair. It
-    ALSO draws the structure↔domain bridge in reverse: every subsystem whose components own/read one of
-    these entities is drawn as a collapsed (indigo) box with a `owns`/`reads` arrow into that entity —
-    the mirror of the subsystem card's subdomain bridge. The entity analog of gen_subsystem_card_mermaid
+    relations drawn in full, and one arrow (labelled by its count of crossing relations) per (focal
+    entity, neighbour subdomain) pair. It ALSO draws the structure↔domain bridge in reverse: every
+    subsystem whose components touch one of these entities is drawn as a collapsed (indigo) box with an
+    arrow into that entity labelled by the count of underlying C→E edges — the mirror of the subsystem
+    card's subdomain bridge. The entity analog of gen_subsystem_card_mermaid
     — each screen stays small no matter the total model size, neighbours stay collapsed, and the viewer
     turns a click on a neighbour subdomain box into that subdomain's card, a neighbour subsystem box into
     that subsystem's card, and a click on a cross arrow into the two-subdomain edge card. Node ids +
@@ -562,8 +550,8 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
         name = _safe_label(str(nodes[sdid]["name"])) if sdid in nodes else sdid
         return f'classDiagram\n  class EmptySubdomain["{name} — no entities"]'
     internal: list[dict[str, Any]] = []   # both endpoints DIRECT entities of this subdomain — drawn full
-    cross: set[tuple[str, str]] = set()   # focal box ↔ a neighbour-subdomain box (direction kept)
-    childcross: set[tuple[str, str]] = set()  # aggregated arrows touching a nested child-subdomain box
+    cross: dict[tuple[str, str], int] = {}   # (focal box, neighbour-subdomain box) -> crossing count
+    childcross: dict[tuple[str, str], int] = {}  # (box, nested child-subdomain box) -> aggregated count
     nb_sds: set[str] = set()
     # Bucket each relation endpoint at THIS card's level via `_child_under` (the domain mirror of the
     # subsystem card): a direct entity buckets to itself, a deeper one to the child-subdomain box that
@@ -576,16 +564,16 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
             if bs == s and bd == d:
                 internal.append(e)                     # two direct entities -> full relation
             elif bs != bd:
-                childcross.add((bs, bd))               # a child-subdomain box is involved -> aggregated
+                childcross[(bs, bd)] = childcross.get((bs, bd), 0) + 1  # child-subdomain box -> aggregated
         elif bs is not None:                           # outbound crossing to outside sdid
             nb = _sibling_subdomain_box(graph, d, sdid)
             if nb and nb != sdid:
-                cross.add((bs, nb))
+                cross[(bs, nb)] = cross.get((bs, nb), 0) + 1
                 nb_sds.add(nb)
         elif bd is not None:                           # inbound crossing from outside sdid
             nb = _sibling_subdomain_box(graph, s, sdid)
             if nb and nb != sdid:
-                cross.add((nb, bd))
+                cross[(nb, bd)] = cross.get((nb, bd), 0) + 1
                 nb_sds.add(nb)
     lines = ["classDiagram", *_subdomain_namespace(graph, sdid, members)]
     for cid in sorted(child_sd_ids):  # style the nested child-subdomain boxes (declared inside the namespace)
@@ -597,10 +585,10 @@ def gen_domain_subdomain_card(graph: GraphDict, sdid: str) -> str:
     lines += _subsystem_bridge_lines(graph, member_ids)  # reverse structure↔domain bridge over DIRECT members
     for e in internal:  # the focal subdomain's own relations, full
         lines.append(_class_relation_line(e))
-    for src, dst in sorted(cross):  # crossing arrows to/from collapsed neighbour boxes (click → edge card)
-        lines.append(f"  {src} --> {dst}")
-    for src, dst in sorted(childcross):  # nested child-subdomain arrows (aggregated; box drills in)
-        lines.append(f"  {src} --> {dst}")
+    for (src, dst), c in sorted(cross.items()):  # crossing arrows to/from collapsed neighbour boxes (click → edge card)
+        lines.append(f"  {src} --> {dst} : {c}")
+    for (src, dst), c in sorted(childcross.items()):  # nested child-subdomain arrows (aggregated; box drills in)
+        lines.append(f"  {src} --> {dst} : {c}")
     return "\n".join(lines)
 
 
@@ -629,7 +617,7 @@ def gen_domain_edge_card(graph: GraphDict, a: str, b: str) -> str:
     for cid, _ in _child_subdomains(graph, a) + _child_subdomains(graph, b):  # style the child boxes drawn in the frames
         lines.append(f"  style {cid} {SUBDOMAIN_STYLE}")
     lines += _subsystem_bridge_lines(graph, ids_a | ids_b)  # subsystems owning/reading either subdomain's direct entities
-    agg: set[tuple[str, str]] = set()
+    agg: dict[tuple[str, str], int] = {}
     for e in _domain_relation_edges(graph):
         s, d = str(e["src"]), str(e["dst"])
         if (s in ids_a and d in ids_a) or (s in ids_b and d in ids_b):  # a frame's inner wiring (both direct)
@@ -640,9 +628,9 @@ def gen_domain_edge_card(graph: GraphDict, a: str, b: str) -> str:
             if ba == s and bb == d:                                      # both direct entities -> full relation
                 lines.append(_class_relation_line(cast("dict[str, Any]", e)))
             else:                                                        # reaches into a child subdomain -> aggregated box arrow
-                agg.add((str(ba), str(bb)))
-    for src, dst in sorted(agg):
-        lines.append(f"  {src} --> {dst}")
+                agg[(str(ba), str(bb))] = agg.get((str(ba), str(bb)), 0) + 1
+    for (src, dst), c in sorted(agg.items()):
+        lines.append(f"  {src} --> {dst} : {c}")
     return "\n".join(lines)
 
 
@@ -655,7 +643,9 @@ def domain_edge_card_mermaids(graph: GraphDict) -> dict[str, str]:
 
 def gen_bridge_card_mermaid(graph: GraphDict, sid: str, sdid: str) -> str:
     """Bridge card: subsystem `sid` and subdomain `sdid` framed side by side — the structure↔domain
-    relationship — with every component→entity owns/reads edge between them drawn in full. The analog of
+    relationship — with the component→entity edges between them: a direct link drawn unlabelled (one
+    concrete edge, resolves to it on click), a crossing into a child group aggregated into a
+    count-labelled box arrow. The analog of
     the edge cards across the two groupings (S×S pairs two subsystems, SD×SD two subdomains; this pairs a
     subsystem with a subdomain). Rendered as a classDiagram so the subsystem's components (member-less,
     simple boxes) and the subdomain's entities (full boxes) share one canvas; node ids + the C→E edges
@@ -676,24 +666,31 @@ def gen_bridge_card_mermaid(graph: GraphDict, sid: str, sdid: str) -> str:
         lines.append(f"  style {ssid} {SUBSYSTEM_STYLE}")
     for cid, _ in _child_subdomains(graph, sdid):
         lines.append(f"  style {cid} {SUBDOMAIN_STYLE}")
-    # owns/reads C→E edges crossing sid's subtree -> sdid's subtree, bucketed to each frame's immediate
-    # children: a direct member->direct entity edge stays labelled (resolves to the real edge); a
-    # crossing into a child group is an aggregated arrow.
-    bridges: set[tuple[str, str, str]] = set()
+    # C→E edges crossing sid's subtree -> sdid's subtree, bucketed to each frame's immediate children:
+    # a direct member->direct entity link is ONE concrete edge (resolves to it on click, not drillable),
+    # drawn UNLABELLED; a crossing into a child group aggregates several edges -> count-labelled box arrow.
+    direct: set[tuple[str, str]] = set()
+    agg: dict[tuple[str, str], int] = {}
     for e in graph["edges"]:
         s, d = str(e["src"]), str(e["dst"])
         if str(nodes.get(s, {}).get("kind")) != "component" or str(nodes.get(d, {}).get("kind")) != "entity":
             continue
-        if _in_subtree(graph, s, sid) and _in_subtree(graph, d, sdid):
-            rel = _bridge_rel(str(e["verb"]))
-            bridges.add((str(_child_under(graph, s, sid)), str(_child_under(graph, d, sdid)), rel))
-    for bs, bd, rel in sorted(bridges):
-        lines.append(f"  {bs} --> {bd} : {rel}")
+        if not (_in_subtree(graph, s, sid) and _in_subtree(graph, d, sdid)):
+            continue
+        bs, bd = str(_child_under(graph, s, sid)), str(_child_under(graph, d, sdid))
+        if bs == s and bd == d:            # both direct -> one concrete link, unlabelled
+            direct.add((bs, bd))
+        else:                              # reaches into a child group -> aggregated, count-labelled
+            agg[(bs, bd)] = agg.get((bs, bd), 0) + 1
+    for bs, bd in sorted(direct):
+        lines.append(f"  {bs} --> {bd}")
+    for (bs, bd), c in sorted(agg.items()):
+        lines.append(f"  {bs} --> {bd} : {c}")
     return "\n".join(lines)
 
 
 def bridge_card_mermaids(graph: GraphDict) -> dict[str, str]:
-    """One bridge card per (subsystem-ancestor, subdomain-ancestor) pair joined by a C→E owns/reads edge
+    """One bridge card per (subsystem-ancestor, subdomain-ancestor) pair joined by a C→E edge
     — at EVERY drill level, so a NESTED subsystem card's bridge arrow (key `nestedS>SD`) and a nested
     subdomain card's reverse bridge (key `S>nestedSD`) both resolve. Keyed 'S>SD'; the cross-grouping
     analog of edge_card_mermaids (no disjoint check — the two forests never overlap)."""
@@ -824,18 +821,18 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
     """Subsystem card: `sid` drawn as a frame around its components (with their internal wiring),
     the deps those components touch drawn outside the frame, AND the subsystem's neighbourhood —
     every other subsystem its components link to/from is drawn as a collapsed box, with one
-    unlabelled arrow per (component, neighbour) pair (Q2-style aggregation, no count). A component
+    arrow per (component, neighbour) pair labelled by the count of underlying edges. A component
     inside the frame points to the neighbour box (outbound) or is pointed at by it (inbound). The
     viewer turns a click on such an arrow into the matching edge card, and a click on a neighbour
     box into that subsystem's own card. When the subsystem's components touch the domain model
-    (`C→E` edges), the subdomains they own/read are also drawn as collapsed boxes — the bridge between
-    the structural and domain groupings (owns = persists/writes, reads = anything else)."""
+    (`C→E` edges), the subdomains they touch are also drawn as collapsed boxes — the bridge between
+    the structural and domain groupings, labelled by the count of underlying C→E edges."""
     members = {cid for cid, _ in _components_of(graph, sid)}   # direct component members (drawn nodes)
     deps: set[str] = set()
     neighbours: set[str] = set()
-    cross: set[tuple[str, str]] = set()       # drawn-box -> neighbour-subsystem box (or reverse), unlabelled
-    childcross: set[tuple[str, str]] = set()  # aggregated arrows touching a nested child-subsystem box
-    bridges: set[tuple[str, str, str]] = set()  # (drawn box, subdomain box, 'owns'|'reads')
+    cross: dict[tuple[str, str], int] = {}       # (drawn-box, neighbour-subsystem box) -> crossing count
+    childcross: dict[tuple[str, str], int] = {}  # (box, nested child-subsystem box) -> aggregated count
+    bridges: dict[tuple[str, str], int] = {}     # (drawn box, subdomain box) -> underlying C→E edge count
     # Every endpoint is bucketed at THIS card's level: `_child_under` gives the immediate child of `sid`
     # that contains it — the component itself when a direct member, the child-subsystem box when deeper,
     # None when outside sid's subtree. A leaf subsystem has no child boxes, so each bs/bd is the endpoint
@@ -856,25 +853,25 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
             if bs == s:
                 sd = _top_subdomain(graph, d)
                 if sd:
-                    bridges.add((s, sd, _bridge_rel(str(e["verb"]))))
+                    bridges[(s, sd)] = bridges.get((s, sd), 0) + 1
             continue
         if ks == "entity":
             continue
         if bs is not None and bd is not None:            # both inside sid's subtree
             if not (bs == s and bd == d) and bs != bd:   # a child-subsystem box is involved -> aggregated
-                childcross.add((bs, bd))
+                childcross[(bs, bd)] = childcross.get((bs, bd), 0) + 1
             continue                                     # two direct members -> labelled (via keep) below
         if bs is not None:                               # outbound crossing to outside sid
             nb = _sibling_level_box(graph, d, sid)
             if nb and nb != sid:
                 neighbours.add(nb)
-                cross.add((bs, nb))
+                cross[(bs, nb)] = cross.get((bs, nb), 0) + 1
             continue
         if bd is not None:                               # inbound crossing from outside sid
             nb = _sibling_level_box(graph, s, sid)
             if nb and nb != sid:
                 neighbours.add(nb)
-                cross.add((nb, bd))
+                cross[(nb, bd)] = cross.get((nb, bd), 0) + 1
     keep = members | deps  # the set whose internal (labelled) edges are drawn
     lines = ["flowchart TB", *_component_subgraph(graph, sid)]
     for nb in sorted(neighbours):  # collapsed neighbour-subsystem boxes
@@ -884,18 +881,18 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
     for did in sorted(deps):  # deps belong to no subsystem — draw them outside the frame
         lines.append(f'  {did}{open_b}{_safe_label(str(graph["nodes"][did]["name"]))}{close_b}:::cy-{did}')
         lines.append(f"  class {did} dep")
-    bridge_sd = {sd for _, sd, _ in bridges}
+    bridge_sd = {sd for (_, sd) in bridges}
     for sd in sorted(bridge_sd):  # collapsed subdomain boxes the subsystem's data bridges to
         lines.append(f'  {sd}["{_safe_label(str(graph["nodes"][sd]["name"]))}"]:::cy-{sd}')
         lines.append(f"  class {sd} subdomain")
     for src, verb, dst in _diagram_edges(graph, None, keep):  # internal + dep edges (labelled)
         lines.append(f"  {src} -->|{verb}| {dst}")
-    for src, dst in sorted(cross):  # neighbourhood arrows (unlabelled; click -> edge card)
-        lines.append(f"  {src} --> {dst}")
-    for src, dst in sorted(childcross):  # nested child-subsystem arrows (aggregated; box drills in)
-        lines.append(f"  {src} --> {dst}")
-    for src, sd, rel in sorted(bridges):  # bridge arrows: member -> subdomain (owns / reads)
-        lines.append(f"  {src} -->|{rel}| {sd}")
+    for (src, dst), c in sorted(cross.items()):  # neighbourhood arrows (click -> edge card)
+        lines.append(f"  {src} -->|{c}| {dst}")
+    for (src, dst), c in sorted(childcross.items()):  # nested child-subsystem arrows (aggregated; box drills in)
+        lines.append(f"  {src} -->|{c}| {dst}")
+    for (src, sd), c in sorted(bridges.items()):  # bridge arrows: member -> subdomain (underlying edge count)
+        lines.append(f"  {src} -->|{c}| {sd}")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
     lines.append(f"  classDef dep {DEP_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
@@ -927,7 +924,7 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
         lines.append(f"  {src} -->|{verb}| {dst}")
     for src, verb, dst in _diagram_edges(graph, None, members_b):  # b's inner links
         lines.append(f"  {src} -->|{verb}| {dst}")
-    agg: set[tuple[str, str]] = set()
+    agg: dict[tuple[str, str], int] = {}
     for e in graph["edges"]:  # the a->b crossings, bucketed to each frame's immediate children
         s, d = str(e["src"]), str(e["dst"])
         if not (_in_subtree(graph, s, a) and _in_subtree(graph, d, b)):
@@ -936,9 +933,9 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
         if ba == s and bb == d:                      # both direct members -> labelled (resolves to the edge)
             lines.append(f"  {s} -->|{e['verb']}| {d}")
         else:                                        # reaches into a child subsystem -> aggregated box arrow
-            agg.add((str(ba), str(bb)))
-    for src, dst in sorted(agg):
-        lines.append(f"  {src} --> {dst}")
+            agg[(str(ba), str(bb))] = agg.get((str(ba), str(bb)), 0) + 1
+    for (src, dst), c in sorted(agg.items()):
+        lines.append(f"  {src} -->|{c}| {dst}")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
     if _child_subsystems(graph, a) or _child_subsystems(graph, b):  # child boxes present -> style them
         lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
