@@ -14,7 +14,7 @@ serializer.
 A fragment is the model document minus the strictness that only the WHOLE map needs: `format` is
 optional in a fragment, every top-level field is optional, and cross-fragment references are NOT
 resolved here — that is `coyodex validate`'s job on the assembled result (the usual invariant
-`validate → audit → render` still runs after assembly). Stdlib-only.
+`validate --check-sources → audit → render` still runs after assembly). Stdlib-only.
 """
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
               "fragment named — nothing is silently fixed up; run `coyodex validate` on the\n"
               "result to catch anything else wrong.\n"
               "<dir>/.gitignore gets a 'build-fragments/' entry so the scratch dir never\n"
-              "dirties the tree. Then run the usual invariant: validate → audit → render.")
+              "dirties the tree. Then run the usual invariant: validate --check-sources → audit → render.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
     out_dir: Path | None = None
     frags: list[Path] = []

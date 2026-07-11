@@ -32,7 +32,11 @@ from coyodex.model import (
     UseCase,
     to_canonical_json,
 )
-from coyodex.validate_model import check_domain_coverage_model, validate_model
+from coyodex.validate_model import (
+    check_anchor_existence_model,
+    check_domain_coverage_model,
+    validate_model,
+)
 from coyodex.views import model_to_markdown
 
 
@@ -284,12 +288,14 @@ def test_check_sources_flags_synthesized_entity():
         assert not any("not defined in its SOURCE" in p for p in problems)
 
 
-def test_check_sources_warns_on_dead_anchor():
+def test_check_sources_blocks_on_dead_anchor():
+    # B3: a nonexistent-file anchor (wrong repo-root prefix / stale path) is a BLOCKING problem now,
+    # not a warning — so a bad prefix can never reach the committed map with `validate` all-green.
     with tempfile.TemporaryDirectory() as td:
         m = make_valid_model()
         m.entities[0].source = "src/nowhere.py:1"
-        _, warnings = validate_model(m, repo_root=Path(td), check_sources=True)
-        assert any("does not resolve" in w for w in warnings)
+        problems, _ = validate_model(m, repo_root=Path(td), check_sources=True)
+        assert any("does not resolve" in p for p in problems)
 
 
 # --- anchor syntax gate: `path#Lnnn` is retired, `path:line`/`path:line-line` is mandatory ---
@@ -317,12 +323,25 @@ def test_glossary_where_rejects_markdown_link():
     assert any("glossary 'Order' source" in p and "not a valid" in p for p in problems_of(m))
 
 
-def test_glossary_where_dead_anchor_warns_with_check_sources():
+def test_glossary_where_dead_anchor_blocks_with_check_sources():
     with tempfile.TemporaryDirectory() as td:
         m = make_valid_model()
         m.glossary = [GlossaryRow(term="Ghost", meaning="gone", source="src/nowhere.py:1")]
-        _, warnings = validate_model(m, repo_root=Path(td), check_sources=True)
-        assert any("glossary 'Ghost'" in w and "does not resolve" in w for w in warnings)
+        problems, _ = validate_model(m, repo_root=Path(td), check_sources=True)
+        assert any("glossary 'Ghost'" in p and "does not resolve" in p for p in problems)
+
+
+def test_extensionless_edge_where_existence_is_verified():
+    # A2 + B3: an extensionless edge anchor (`Dockerfile:1`) is format-valid AND its existence is
+    # actually checked (the `_where_href`/`_BARE_PATH` path used to skip extensionless files silently).
+    from coyodex.model import Edge, ProjectModel
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "Dockerfile").write_text("FROM scratch\n", encoding="utf-8")
+        ok = ProjectModel(edges=[Edge(src="C1", verb="uses", dst="C2", where="Dockerfile:1")])
+        assert check_anchor_existence_model(ok, [root]) == []                 # exists → clean
+        bad = ProjectModel(edges=[Edge(src="C1", verb="uses", dst="C2", where="Nope.file:1")])
+        assert any("does not resolve" in p for p in check_anchor_existence_model(bad, [root]))
 
 
 def test_colon_range_anchor_is_not_flagged():

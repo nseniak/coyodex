@@ -409,8 +409,20 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
 > `deps[].where_configured`, `edges[].where`, `entry_points[].source`, **and the group `source`
 > fields** (`subsystems[].source` / `subdomains[].source`) are all **bare** repo-root-relative refs
-> (`path/to/file.py:120`; a directory anchor keeps its trailing slash, `path/dir/`) — a bare file or
-> directory ref, never a markdown link.
+> (`path/to/file.py:120`; a directory anchor keeps its trailing slash, `path/dir/`; an extensionless
+> ops file carrying a line is fine — `Dockerfile:1`, `Makefile:6-9`) — a bare file or directory ref,
+> never a markdown link.
+> **Field discipline** (what `assemble` / `validate` reject — get it right at the source): (a) every
+> **required** field is present and non-null; for an **optional** field with no value **omit the key**
+> entirely — do NOT emit `null` (rejected on defaulted-string fields) and do NOT emit a placeholder like
+> `(none)` (fails the anchor gate). (b) Use **only** each array's exact field names — no stray keys
+> (`confidence`, `notes`, `slice`, `loc`, …). (c) Every anchor is **repo-root-relative**: the repo root
+> is «absolute repo path» — prefix every path with it. Minimal valid fragment:
+> `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
+> **SELF-CHECK BEFORE RETURNING (required):** run
+> `«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «repo» «your-fragment».json` and fix every row
+> it reports until it exits clean — this catches schema / anchor-format / extra-key / missing-file
+> errors in YOUR context (in parallel), so nothing bounces back from the lead's `assemble`.
 > **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
 > also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
 > `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
@@ -546,7 +558,8 @@ a false "uses <lib>" is benign). Ground each
 by spawning a **fresh-context skeptic** (Phase 4 below) that sees only the finished map + the code —
 never your build reasoning — and tries to *disprove* the claim; **reconcile every finding — advisory
 or blocking — (fix the map, or justify and note why)** before rendering. So the invariant after every
-write is **validate → audit → render**.
+write is **validate --check-sources → audit → render** (`--check-sources` is not optional — it is the
+deterministic backstop that a nonexistent-file anchor / wrong repo-root prefix can never slip through).
 **Then render the markdown view** — once the
 map validates and the adversarial pass has no blocking contradiction (advisories reconciled),
 regenerate the committed markdown view next to the model (assemble already wrote it; re-run after any patch):

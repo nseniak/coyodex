@@ -629,7 +629,10 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         [repo_root.resolve()] if repo_root is not None else [])
     if check_sources:
         problems.extend(check_entity_sources_model(m, roots))
-        warnings.extend(check_anchor_existence_model(m, roots))
+        # A nonexistent-file anchor means a wrong repo-root prefix or a stale path reached the map — a
+        # real error, not a nudge. Blocking (B3) so `validate --check-sources` is the deterministic
+        # backstop for the source-side prefix rule (a missing file can never slip through all-green).
+        problems.extend(check_anchor_existence_model(m, roots))
 
     parents = _parents(m)
     hier_problems, hier_warnings = check_hierarchy(parents, defined)

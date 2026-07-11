@@ -27,6 +27,8 @@ Commands:
              read from git at the map's commit). One server covers every project.
   assemble   Merge build agents' structured-row fragments into the canonical
              project-map.json (+ generated views).
+  lint-fragment  Self-check ONE build fragment before returning it (schema + anchor
+             format + extra-key conventions, and with --repo that anchors exist).
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
 
@@ -84,6 +86,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "dump":
         from coyodex import dump  # stdlib-only; defaults to .coyodex/project-map.json
         return dump.main(rest)
+    if cmd == "lint-fragment":
+        from coyodex import lint_fragment  # stdlib-only
+        return lint_fragment.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)

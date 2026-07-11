@@ -72,7 +72,7 @@ the model's `commit` / `committed` fields, then:
      reorganize / rename / re-drill what exists, but do not invent elements the code doesn't back — an
      "add a use case" only stands if there is real code and a traced flow behind it; otherwise say so
      and don't add it.
-   - **Run the gates and commit**: the invariant below — **validate → audit → render** — then commit
+   - **Run the gates and commit**: the invariant below — **validate --check-sources → audit → render** — then commit
      the model + regenerated markdown view (a direct map change is a write like any other; the gates
      are not optional).
 
