@@ -605,7 +605,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -703,7 +703,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -785,7 +785,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -887,7 +887,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -1011,7 +1011,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -1097,7 +1097,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -1190,7 +1190,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -1303,19 +1303,22 @@ def make_gp_map() -> str:
   "commit": null,
   "committed": null,
   "built": null,
-  "roles": [],
+  "roles": [
+    {"id": "R1", "name": "Andy", "kind": "", "wants": "", "drives": "UC1"},
+    {"id": "R2", "name": "Adam", "kind": "", "wants": "", "drives": "UC2"}
+  ],
   "glossary": [],
   "use_cases": [
     {
       "id": "UC1",
       "name": "Submit",
-      "actor": "Andy",
+      "actors": ["R1"],
       "trigger_outcome": "submits -> stored"
     },
     {
       "id": "UC2",
       "name": "Approve",
-      "actor": "Adam",
+      "actors": ["R2"],
       "trigger_outcome": "approves -> done"
     }
   ],
@@ -1458,6 +1461,7 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
   "built": null,
   "roles": [
     {
+      "id": "R1",
       "name": "Org admin",
       "kind": "human",
       "wants": "manage",
@@ -1469,7 +1473,7 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
     {
       "id": "UC22",
       "name": "Create org",
-      "actor": "Org admin",
+      "actors": ["R1"],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -1508,7 +1512,7 @@ def make_gp_role_actor_map(flow_actor: str = "Org admin") -> str:
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R1",
           "dst": "C1",
           "phrase": "creates the org",
           "note": ""
@@ -2146,7 +2150,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -2288,7 +2292,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -2427,7 +2431,7 @@ def make_nested_subdomain_map() -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -2854,7 +2858,7 @@ def _two_context_map(cards_extra: str = "") -> str:
     {
       "id": "UC1",
       "name": "Search",
-      "actor": "Shopper",
+      "actors": [],
       "trigger_outcome": "types -> list"
     }
   ],
@@ -3259,13 +3263,13 @@ def test_hp_actors_links_roles_and_steps() -> None:
     assert a["steps"] == [{"id": "HP1", "title": "Admin creates the org"}]
 
 
-def test_hp_actors_without_matching_role_has_blank_wants() -> None:
-    # An actor derived from a UC with no matching Roles row still appears, just without wants/kind;
-    # ids follow first-appearance order and stepIdx points at each actor's messages.
+def test_hp_actors_follow_first_appearance_order() -> None:
+    # HP-actor ids follow first-appearance order across the steps, and stepIdx points at each actor's
+    # messages. (Under role-ids an actor always resolves to its role, so the old "no matching Roles row"
+    # variant is unexpressible — a use-case actor is a role id that must resolve.)
     actors = gen_viewer.hp_actors(parse_map(make_gp_map()))
     by_name = {a["name"]: a for a in actors}
     assert by_name["Andy"]["aid"] == "HPA0" and by_name["Adam"]["aid"] == "HPA1"
-    assert by_name["Andy"]["wants"] == "" and by_name["Andy"]["kind"] == ""
     assert by_name["Andy"]["stepIdx"] == [0] and by_name["Adam"]["stepIdx"] == [1]
 
 
@@ -3279,25 +3283,28 @@ def test_parser_hp_captures_first_uc_of_multi_tag() -> None:
   "commit": null,
   "committed": null,
   "built": null,
-  "roles": [],
+  "roles": [
+    {"id": "R1", "name": "Org admin", "kind": "human", "wants": "", "drives": "UC1"},
+    {"id": "R2", "name": "End user", "kind": "human", "wants": "", "drives": "UC3"}
+  ],
   "glossary": [],
   "use_cases": [
     {
       "id": "UC1",
       "name": "Sign in",
-      "actor": "Org admin",
+      "actors": ["R1"],
       "trigger_outcome": "a -> b"
     },
     {
       "id": "UC2",
       "name": "Create",
-      "actor": "Org admin",
+      "actors": ["R1"],
       "trigger_outcome": "a -> b"
     },
     {
       "id": "UC3",
       "name": "Renew",
-      "actor": "End user",
+      "actors": ["R2"],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -3427,6 +3434,7 @@ def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> st
   "built": null,
   "roles": [
     {
+      "id": "R1",
       "name": "User",
       "kind": "human",
       "wants": "use it",
@@ -3438,7 +3446,7 @@ def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> st
     {
       "id": "UC1",
       "name": "Use",
-      "actor": "User",
+      "actors": ["R1"],
       "trigger_outcome": "a -> b"
     }
   ],

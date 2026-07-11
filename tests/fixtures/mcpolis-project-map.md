@@ -142,29 +142,29 @@ why: terminal — purges everything created above
 
 | ID | Subsystem | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
-| **S1** | App bootstrap & runtime wiring | Build the app, pick storage, assemble per-org runtimes, drain on shutdown |  | [entrypoints/](backend/src/mcpolis/entrypoints/) | inferred |
-| **S2** | Gateway (MCP protocol surface) | Serve MCP clients at `/mcp`: list/call tools, route to upstreams, push changes |  | [gateway_controller.py](backend/src/mcpolis/entrypoints/controllers/gateway_controller.py) | inferred |
-| **S3** | Management MCP (admin & superadmin) | Conversational management of the gateway and of the whole instance |  | [controllers/](backend/src/mcpolis/entrypoints/controllers/) | verified |
-| **S4** | Dashboard REST API | The `/api/*` surface the React dashboard calls |  | [routes/](backend/src/mcpolis/entrypoints/routes/) | verified |
-| **S5** | Identity & access | Authenticate clients/admins, mint/verify tokens, enforce roles & plans |  | [adapters/auth/](backend/src/mcpolis/adapters/auth/) | inferred |
-| **S13** | Gateway auth & service tokens | Bearer auth for `/mcp`: Google-backed OAuth + `svct_` service tokens | S5 | [service_token_verifier.py](backend/src/mcpolis/adapters/auth/service_token_verifier.py) | inferred |
-| **S14** | Policy, roles & plans | Role→tool authorization, settings resolution, plan-limit gates, secret scan | S5 | [policy_engine.py](backend/src/mcpolis/domain/services/policy_engine.py) | inferred |
-| **S15** | Dashboard sign-in & sessions | Browser Google login, session cookies, org-context resolution, revocation | S5 | [dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py) | inferred |
-| **S6** | Org & tenancy | Org/membership CRUD, creation seeding, deletion cascade |  | [org_service.py](backend/src/mcpolis/domain/services/org_service.py) | inferred |
-| **S7** | Upstream management | Define, persist, connect, and keep healthy the proxied upstream MCPs |  | [upstream_clients/](backend/src/mcpolis/adapters/upstream_clients/) | inferred |
-| **S16** | Upstream config & catalog | Persist upstream defs + options, load/merge mcp.json, cache discovered tools | S7 | [upstream_config_service.py](backend/src/mcpolis/domain/services/upstream_config_service.py) | inferred |
-| **S17** | Upstream connections & clients | Long-lived MCP sessions: HTTP + stdio clients, the connection manager | S7 | [client_manager.py](backend/src/mcpolis/adapters/upstream_clients/client_manager.py) | verified |
-| **S18** | Upstream OAuth lifecycle | Token refresh, liveness probing, re-auth health email | S7 | [oauth_refresh.py](backend/src/mcpolis/domain/services/oauth_refresh.py) | inferred |
-| **S8** | Sandbox execution (stdio MCPs) | Run stdio MCPs in E2B / local sandboxes; files, variables, reconcile |  | [sandbox_e2b/](backend/src/mcpolis/adapters/sandbox_e2b/) | verified |
-| **S9** | Persistence & storage | The cross-cutting storage machinery: Mongo client, field encryption, audit, migrations |  | [repositories/](backend/src/mcpolis/adapters/repositories/) | inferred |
-| **S10** | Realtime & infra adapters | Pub/sub event stream, rate limiter, distributed lock |  | [adapters/](backend/src/mcpolis/adapters/) | inferred |
-| **S11** | Observability & email | Structured logs, Sentry, Mixpanel, transactional email |  | [observability/](backend/src/mcpolis/adapters/observability/) | verified |
-| **S12** | Dashboard SPA (frontend) | The React admin + marketing + docs single-page app |  | [frontend/src/](frontend/src/) | verified |
-| **S19** | Admin dashboard | Upstreams, roles/access, team, tokens, audit, gateway, variables, files | S12 | [pages/admin/](frontend/src/pages/admin/) | verified |
-| **S20** | User & onboarding surfaces | End-user connect / my-tools, join & signup, per-MCP OAuth popup | S12 | [pages/user/](frontend/src/pages/user/) | verified |
-| **S21** | Marketing & docs | Public landing/pricing/legal pages + the docs renderer | S12 | [pages/marketing/](frontend/src/pages/marketing/) | verified |
-| **S22** | Superadmin console | Cross-org operator dashboard | S12 | [pages/superadmin/](frontend/src/pages/superadmin/) | verified |
-| **S23** | Shared SPA infrastructure | Router, API client, query hooks, auth context, UI kit, SSE | S12 | [api/](frontend/src/api/) | verified |
+| **S1** | App bootstrap & runtime wiring | Build the app, pick storage, assemble per-org runtimes, drain on shutdown |  | backend/src/mcpolis/entrypoints/ | inferred |
+| **S2** | Gateway (MCP protocol surface) | Serve MCP clients at `/mcp`: list/call tools, route to upstreams, push changes |  | backend/src/mcpolis/entrypoints/controllers/gateway_controller.py | inferred |
+| **S3** | Management MCP (admin & superadmin) | Conversational management of the gateway and of the whole instance |  | backend/src/mcpolis/entrypoints/controllers/ | verified |
+| **S4** | Dashboard REST API | The `/api/*` surface the React dashboard calls |  | backend/src/mcpolis/entrypoints/routes/ | verified |
+| **S5** | Identity & access | Authenticate clients/admins, mint/verify tokens, enforce roles & plans |  | backend/src/mcpolis/adapters/auth/ | inferred |
+| **S13** | Gateway auth & service tokens | Bearer auth for `/mcp`: Google-backed OAuth + `svct_` service tokens | S5 | backend/src/mcpolis/adapters/auth/service_token_verifier.py | inferred |
+| **S14** | Policy, roles & plans | Role→tool authorization, settings resolution, plan-limit gates, secret scan | S5 | backend/src/mcpolis/domain/services/policy_engine.py | inferred |
+| **S15** | Dashboard sign-in & sessions | Browser Google login, session cookies, org-context resolution, revocation | S5 | backend/src/mcpolis/entrypoints/routes/dashboard_auth.py | inferred |
+| **S6** | Org & tenancy | Org/membership CRUD, creation seeding, deletion cascade |  | backend/src/mcpolis/domain/services/org_service.py | inferred |
+| **S7** | Upstream management | Define, persist, connect, and keep healthy the proxied upstream MCPs |  | backend/src/mcpolis/adapters/upstream_clients/ | inferred |
+| **S16** | Upstream config & catalog | Persist upstream defs + options, load/merge mcp.json, cache discovered tools | S7 | backend/src/mcpolis/domain/services/upstream_config_service.py | inferred |
+| **S17** | Upstream connections & clients | Long-lived MCP sessions: HTTP + stdio clients, the connection manager | S7 | backend/src/mcpolis/adapters/upstream_clients/client_manager.py | verified |
+| **S18** | Upstream OAuth lifecycle | Token refresh, liveness probing, re-auth health email | S7 | backend/src/mcpolis/domain/services/oauth_refresh.py | inferred |
+| **S8** | Sandbox execution (stdio MCPs) | Run stdio MCPs in E2B / local sandboxes; files, variables, reconcile |  | backend/src/mcpolis/adapters/sandbox_e2b/ | verified |
+| **S9** | Persistence & storage | The cross-cutting storage machinery: Mongo client, field encryption, audit, migrations |  | backend/src/mcpolis/adapters/repositories/ | inferred |
+| **S10** | Realtime & infra adapters | Pub/sub event stream, rate limiter, distributed lock |  | backend/src/mcpolis/adapters/ | inferred |
+| **S11** | Observability & email | Structured logs, Sentry, Mixpanel, transactional email |  | backend/src/mcpolis/adapters/observability/ | verified |
+| **S12** | Dashboard SPA (frontend) | The React admin + marketing + docs single-page app |  | frontend/src/ | verified |
+| **S19** | Admin dashboard | Upstreams, roles/access, team, tokens, audit, gateway, variables, files | S12 | frontend/src/pages/admin/ | verified |
+| **S20** | User & onboarding surfaces | End-user connect / my-tools, join & signup, per-MCP OAuth popup | S12 | frontend/src/pages/user/ | verified |
+| **S21** | Marketing & docs | Public landing/pricing/legal pages + the docs renderer | S12 | frontend/src/pages/marketing/ | verified |
+| **S22** | Superadmin console | Cross-org operator dashboard | S12 | frontend/src/pages/superadmin/ | verified |
+| **S23** | Shared SPA infrastructure | Router, API client, query hooks, auth context, UI kit, SSE | S12 | frontend/src/api/ | verified |
 
 ---
 
@@ -319,20 +319,20 @@ why: terminal — purges everything created above
 
 | Action | Command | Source |
 |---|---|---|
-| Start standalone (from source) | `bash start.sh standalone` | [start.sh](start.sh) |
-| Start cloud (default) | `bash start.sh` | [start.sh](start.sh) |
-| Stop (`--all` also stops mongo+redis) | `bash stop.sh` | [stop.sh](stop.sh) |
-| Restart (forwards flags) | `bash restart.sh` | [restart.sh](restart.sh) |
-| Backend unit tests | `bash backend/run-unit-tests.sh` | [run-unit-tests.sh](backend/run-unit-tests.sh) |
-| Frontend unit tests | `bash frontend/run-unit-tests.sh` | [run-unit-tests.sh](frontend/run-unit-tests.sh) |
-| E2E (Playwright) | `bash tests/run-e2e-tests.sh` | [run-e2e-tests.sh](tests/run-e2e-tests.sh) |
-| Integration (E2B real SDK) | `bash backend/run-integration-tests.sh` | [run-integration-tests.sh](backend/run-integration-tests.sh) |
-| Pyright type check | `bash backend/run-pyright.sh src/ tests/` | [run-pyright.sh](backend/run-pyright.sh) |
-| Ruff lint | `cd backend && poetry run ruff check .` | [pyproject.toml](backend/pyproject.toml#L90) |
-| Docker standalone | `docker compose --profile standalone up --build` | [docker-compose.yml](docker-compose.yml#L80) |
-| Docker cloud (scalable) | `docker compose --profile cloud up --build` | [docker-compose.yml](docker-compose.yml#L113) |
-| Build E2B template grid | `cd runner/e2b-templates && make build` | [build_grid.py](runner/e2b-templates/build_grid.py#L139) |
-| Run all 3 suites concurrently | `make test-all` | [Makefile](Makefile#L16) |
+| Start standalone (from source) | `bash start.sh standalone` | start.sh |
+| Start cloud (default) | `bash start.sh` | start.sh |
+| Stop (`--all` also stops mongo+redis) | `bash stop.sh` | stop.sh |
+| Restart (forwards flags) | `bash restart.sh` | restart.sh |
+| Backend unit tests | `bash backend/run-unit-tests.sh` | backend/run-unit-tests.sh |
+| Frontend unit tests | `bash frontend/run-unit-tests.sh` | frontend/run-unit-tests.sh |
+| E2E (Playwright) | `bash tests/run-e2e-tests.sh` | tests/run-e2e-tests.sh |
+| Integration (E2B real SDK) | `bash backend/run-integration-tests.sh` | backend/run-integration-tests.sh |
+| Pyright type check | `bash backend/run-pyright.sh src/ tests/` | backend/run-pyright.sh |
+| Ruff lint | `cd backend && poetry run ruff check .` | backend/pyproject.toml#L90 |
+| Docker standalone | `docker compose --profile standalone up --build` | docker-compose.yml#L80 |
+| Docker cloud (scalable) | `docker compose --profile cloud up --build` | docker-compose.yml#L113 |
+| Build E2B template grid | `cd runner/e2b-templates && make build` | runner/e2b-templates/build_grid.py#L139 |
+| Run all 3 suites concurrently | `make test-all` | Makefile#L16 |
 
 ---
 
@@ -368,11 +368,11 @@ why: terminal — purges everything created above
 
 | ID | Subdomain | Purpose | Parent | Source | Conf. |
 |---|---|---|---|---|---|
-| **SD1** | Tenancy & access policy | Orgs, memberships, plans, roles, and the per-tool access rules |  | [settings.py](backend/src/mcpolis/domain/model/settings.py) | verified |
-| **SD2** | Upstream & transport | Upstream definitions, transports, and their auth configuration |  | [upstream.py](backend/src/mcpolis/domain/model/upstream.py) | verified |
-| **SD3** | Credentials & secrets | Service tokens, stored OAuth tokens, variables, sandbox files |  | [service_token.py](backend/src/mcpolis/domain/model/service_token.py) | verified |
-| **SD4** | Tool catalog | The discovered tools/resources/prompts cached per upstream |  | [tool_catalog_repository.py](backend/src/mcpolis/domain/ports/tool_catalog_repository.py) | verified |
-| **SD5** | Audit & events | The append-only audit log and the realtime event bus |  | [audit.py](backend/src/mcpolis/domain/model/audit.py) | verified |
+| **SD1** | Tenancy & access policy | Orgs, memberships, plans, roles, and the per-tool access rules |  | backend/src/mcpolis/domain/model/settings.py | verified |
+| **SD2** | Upstream & transport | Upstream definitions, transports, and their auth configuration |  | backend/src/mcpolis/domain/model/upstream.py | verified |
+| **SD3** | Credentials & secrets | Service tokens, stored OAuth tokens, variables, sandbox files |  | backend/src/mcpolis/domain/model/service_token.py | verified |
+| **SD4** | Tool catalog | The discovered tools/resources/prompts cached per upstream |  | backend/src/mcpolis/domain/ports/tool_catalog_repository.py | verified |
+| **SD5** | Audit & events | The append-only audit log and the realtime event bus |  | backend/src/mcpolis/domain/model/audit.py | verified |
 
 ---
 
@@ -783,39 +783,39 @@ SOURCE: [events.py](backend/src/mcpolis/domain/model/events.py:9)
 
 | Unit | Runs on | Exposed as | Config source |
 |---|---|---|---|
-| nginx | container (cloud) | host `:80` (dropped under proxied overlay) | [docker-compose.yml](docker-compose.yml#L155) |
-| backend (uvicorn, scale to N) | container (cloud) | internal `:8080` behind nginx; `/health` check | [docker-compose.yml](docker-compose.yml#L113) |
-| standalone backend (serves SPA) | container / host | host `:8080`, file-backed volumes | [docker-compose.yml](docker-compose.yml#L80) |
-| MongoDB | container (dev+cloud) | `127.0.0.1:27017` | [docker-compose.yml](docker-compose.yml#L33) |
-| Redis | container (dev+cloud) | `127.0.0.1:6379` | [docker-compose.yml](docker-compose.yml#L43) |
-| Vector sidecar | container (cloud) | metrics `127.0.0.1:9598` | [docker-compose.yml](docker-compose.yml#L192) |
-| frontend | Vite `:5173` (dev) / prerendered static via nginx (prod) | dev `:5173` | [start.sh](start.sh) |
-| E2B sandboxes | remote (E2B hosted) | SDK API, 24-template grid | [config.py](backend/src/mcpolis/entrypoints/config.py#L207) |
+| nginx | container (cloud) | host `:80` (dropped under proxied overlay) | docker-compose.yml#L155 |
+| backend (uvicorn, scale to N) | container (cloud) | internal `:8080` behind nginx; `/health` check | docker-compose.yml#L113 |
+| standalone backend (serves SPA) | container / host | host `:8080`, file-backed volumes | docker-compose.yml#L80 |
+| MongoDB | container (dev+cloud) | `127.0.0.1:27017` | docker-compose.yml#L33 |
+| Redis | container (dev+cloud) | `127.0.0.1:6379` | docker-compose.yml#L43 |
+| Vector sidecar | container (cloud) | metrics `127.0.0.1:9598` | docker-compose.yml#L192 |
+| frontend | Vite `:5173` (dev) / prerendered static via nginx (prod) | dev `:5173` | start.sh |
+| E2B sandboxes | remote (E2B hosted) | SDK API, 24-template grid | backend/src/mcpolis/entrypoints/config.py#L207 |
 
 ### Observability
 
 | Signal | Where emitted | Where viewed | Alerts |
 |---|---|---|---|
-| structlog JSON events | [structlog_setup.py](backend/src/mcpolis/adapters/observability/structlog_setup.py#L74) | stdout → Vector → Elastic / Kibana | Vector throttle 5000/min/event |
+| structlog JSON events | backend/src/mcpolis/adapters/observability/structlog_setup.py#L74 | stdout → Vector → Elastic / Kibana | Vector throttle 5000/min/event |
 | uvicorn access logs | reshaped in Vector | Elastic (`http.access.<status>`) | low-cardinality bucketing |
-| Sentry errors | [sentry_setup.py](backend/src/mcpolis/adapters/observability/sentry_setup.py#L162) | Sentry (DSN-gated) | traces_sample_rate |
-| Mixpanel analytics | [analytics_client.py](backend/src/mcpolis/adapters/observability/analytics_client.py#L48) | Mixpanel (token-gated) | — |
-| Health endpoints | [app.py](backend/src/mcpolis/entrypoints/app.py#L1727) | nginx `/healthz`; compose healthcheck | LB checks `/healthz` |
+| Sentry errors | backend/src/mcpolis/adapters/observability/sentry_setup.py#L162 | Sentry (DSN-gated) | traces_sample_rate |
+| Mixpanel analytics | backend/src/mcpolis/adapters/observability/analytics_client.py#L48 | Mixpanel (token-gated) | — |
+| Health endpoints | backend/src/mcpolis/entrypoints/app.py#L1727 | nginx `/healthz`; compose healthcheck | LB checks `/healthz` |
 
 ### Security & auth
 
 | Surface | Who can reach | Auth check | Risk note |
 |---|---|---|---|
-| `/mcp` gateway | Google bearer OR `svct_` service token | [app.py](backend/src/mcpolis/entrypoints/app.py#L353) | Composite verifier routes svct_→registry, else→OAuth |
-| `/mcp` org scoping | user/token scoped to one org | [org_context.py](backend/src/mcpolis/entrypoints/middleware/org_context.py#L267) | cross-org isolation via the slug→org contextvar |
-| service-token org pin | `svct_` holder, one pinned org | [service_token_pin.py](backend/src/mcpolis/entrypoints/middleware/service_token_pin.py#L39) | slug mismatch 401s; fails closed if scope missing |
-| `/admin-mcp/{slug}` | OAuth user who is admin in that org | [app.py](backend/src/mcpolis/entrypoints/app.py#L521) | per-org gate; service tokens structurally rejected |
-| `/admin-mcp/system` | email in superadmin allowlist | [app.py](backend/src/mcpolis/entrypoints/app.py#L668) | cloud-only; allowlist is the sole gate |
-| dashboard `/api/*` | signed-in user (cookie); admin via require_admin | [dashboard_auth.py](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py#L284) | HMAC cookie, 7-day TTL, optional jti revocation |
-| org anti-enumeration | unknown slug → 401 (not 404) | [org_routes.py](backend/src/mcpolis/entrypoints/routes/org_routes.py#L100) | one exception: `/{slug}/public` invite read |
-| upstream OAuth callback | public, HMAC-signed state | [upstream_oauth_callback.py](backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py#L107) | integrity rests on the signed state |
-| upstream URL fetch | gateway → upstream | [url_safety.py](backend/src/mcpolis/domain/services/url_safety.py#L152) | SSRF deny-list (loopback/RFC1918/IMDS) |
-| rate limiting (unwired) | n/a | [app.py](backend/src/mcpolis/entrypoints/app.py#L1630) | middleware built but not installed today |
+| `/mcp` gateway | Google bearer OR `svct_` service token | backend/src/mcpolis/entrypoints/app.py#L353 | Composite verifier routes svct_→registry, else→OAuth |
+| `/mcp` org scoping | user/token scoped to one org | backend/src/mcpolis/entrypoints/middleware/org_context.py#L267 | cross-org isolation via the slug→org contextvar |
+| service-token org pin | `svct_` holder, one pinned org | backend/src/mcpolis/entrypoints/middleware/service_token_pin.py#L39 | slug mismatch 401s; fails closed if scope missing |
+| `/admin-mcp/{slug}` | OAuth user who is admin in that org | backend/src/mcpolis/entrypoints/app.py#L521 | per-org gate; service tokens structurally rejected |
+| `/admin-mcp/system` | email in superadmin allowlist | backend/src/mcpolis/entrypoints/app.py#L668 | cloud-only; allowlist is the sole gate |
+| dashboard `/api/*` | signed-in user (cookie); admin via require_admin | backend/src/mcpolis/entrypoints/routes/dashboard_auth.py#L284 | HMAC cookie, 7-day TTL, optional jti revocation |
+| org anti-enumeration | unknown slug → 401 (not 404) | backend/src/mcpolis/entrypoints/routes/org_routes.py#L100 | one exception: `/{slug}/public` invite read |
+| upstream OAuth callback | public, HMAC-signed state | backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py#L107 | integrity rests on the signed state |
+| upstream URL fetch | gateway → upstream | backend/src/mcpolis/domain/services/url_safety.py#L152 | SSRF deny-list (loopback/RFC1918/IMDS) |
+| rate limiting (unwired) | n/a | backend/src/mcpolis/entrypoints/app.py#L1630 | middleware built but not installed today |
 
 ### Config & environments
 
@@ -1034,7 +1034,7 @@ SOURCE: [events.py](backend/src/mcpolis/domain/model/events.py:9)
 | UC8 per-user OAuth refresh/liveness | partial | [tests/unit](backend/tests/unit/) (oauth_refresh) | stall/reattach edge cases are flaky per project notes | inferred |
 | Full-stack journeys (UC1, UC2, UC17) | yes | [tests/e2e](tests/e2e/) (Playwright) | covered end-to-end via the dashboard | inferred |
 | C45 SSRF deny-list | yes | [tests/unit](backend/tests/unit/) (url_safety) | DNS-resolved IP checks present | inferred |
-| C48/C49 field encryption at rest | partial | [tests/unit](backend/tests/unit/) | key-rotation invalidation path under-exercised | inferred |
+| C48/C49 field encryption at rest | partial | backend/tests/unit/ | key-rotation invalidation path under-exercised | inferred |
 
 ---
 

@@ -86,7 +86,9 @@ def test_golden_graph_carries_every_defined_element():
     assert g["title"] and g["commit"] == m.commit and g["goal"]
     node_ids = set(g["nodes"])
     for eid in all_elements(m):
-        if not eid.startswith("HP"):  # HP steps ride the `happy_path` list, not the node dict
+        # HP steps ride the `happy_path` list; roles ride the `roles` list (actors resolve to names,
+        # they are not backbone nodes) — neither is a node in the graph dict.
+        if not eid.startswith("HP") and not eid.startswith("R"):
             assert eid in node_ids, f"{eid} missing from the graph"
     assert len(g["happy_path"]) == len(m.happy_path)
     assert len(g["roles"]) == len(m.roles)

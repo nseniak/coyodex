@@ -46,9 +46,9 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "goal":   "<T0 prose — the problem the project solves and for whom>",
   "commit": "<short sha>", "committed": "<YYYY-MM-DD>", "built": "<YYYY-MM-DD HH:MM>",
 
-  "roles":       [ { "name", "kind": "human|service", "wants", "drives" } ],
+  "roles":       [ { "id": "Rn", "name", "kind": "human|service", "wants", "drives" } ],
   "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>" } ],
-  "use_cases":   [ { "id": "UCn", "name", "actor", "trigger_outcome" } ],
+  "use_cases":   [ { "id": "UCn", "name", "actors": ["Rn", ...], "trigger_outcome" } ],
   "happy_path": [ { "id": "HPn", "title", "uc": "UCn", "why": "<prerequisite or null>" } ],
 
   "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "source", "confidence" } ],
@@ -114,7 +114,7 @@ Semantics, stated on the fields:
   call site (event-driven / shared-state / config-wired coupling, where `src` never directly calls
   `dst`). This mirrors `deps[].deployment_linked`: an honest, conscious "no code call site here", never a
   silent null. Setting both `no_call_site` and a `where` is contradictory (an advisory warning).
-- **`flows[].steps`**: an endpoint is an element ID or a Role display name (an actor step). Every step
+- **`flows[].steps`**: an endpoint is an element ID or a **Role id `Rn`** (an actor step). Every step
   carries its own `phrase` — a short action describing what happens at that point — which the flow arrow
   and narrative render from. A step does NOT reuse the backbone edge's label: one element pair can appear
   in several steps meaning different things, so a shared edge label can't describe each; the step

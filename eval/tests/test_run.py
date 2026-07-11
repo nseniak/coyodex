@@ -40,7 +40,7 @@ def make_map() -> str:
     {
       "id": "UC1",
       "name": "Admin action",
-      "actor": "Admin",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],

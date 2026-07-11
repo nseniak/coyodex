@@ -7,30 +7,35 @@
   "built": "2026-07-01",
   "roles": [
     {
+      "id": "R1",
       "name": "Org creator",
       "kind": "human",
       "wants": "Sign up and create an organization to govern their team's MCPs",
       "drives": "UC1"
     },
     {
+      "id": "R2",
       "name": "Org admin",
       "kind": "human",
       "wants": "Add/configure upstreams, define roles and per-tool access, manage the team, mint tokens, read audit",
       "drives": "UC2, UC3, UC4, UC5, UC6, UC9, UC10, UC13, UC14, UC15, UC16, UC18, UC19, UC20, UC21, UC22, UC24, UC25"
     },
     {
+      "id": "R3",
       "name": "Team member",
       "kind": "human",
       "wants": "Connect their AI client through the gateway and call the tools their role allows",
       "drives": "UC7, UC8, UC12"
     },
     {
+      "id": "R4",
       "name": "Headless agent",
       "kind": "service",
       "wants": "Connect without a browser sign-in and call tools under a least-privilege role",
       "drives": "UC11"
     },
     {
+      "id": "R5",
       "name": "Superadmin",
       "kind": "human",
       "wants": "Step into orgs for support, end sessions, clear stuck connections without seeing secrets",
@@ -50,7 +55,7 @@
     },
     {
       "term": "Organization (org)",
-      "meaning": "A tenant — the top-level isolation boundary everything is scoped to",
+      "meaning": "A tenant \u2014 the top-level isolation boundary everything is scoped to",
       "source": "backend/src/mcpolis/domain/ports/organization_repository.py:41"
     },
     {
@@ -163,152 +168,202 @@
     {
       "id": "UC1",
       "name": "Sign up and create an organization",
-      "actor": "Org creator",
-      "trigger_outcome": "Google sign-in first time → name the org, land on Upstream MCPs"
+      "trigger_outcome": "Google sign-in first time \u2192 name the org, land on Upstream MCPs",
+      "actors": [
+        "R1"
+      ]
     },
     {
       "id": "UC2",
       "name": "Add a remote HTTP upstream MCP",
-      "actor": "Org admin",
-      "trigger_outcome": "Paste URL, pick auth mode → upstream added, tools discovered"
+      "trigger_outcome": "Paste URL, pick auth mode \u2192 upstream added, tools discovered",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC3",
       "name": "Add a hosted stdio upstream MCP",
-      "actor": "Org admin",
-      "trigger_outcome": "Paste command JSON, fill variables, size sandbox → upstream added"
+      "trigger_outcome": "Paste command JSON, fill variables, size sandbox \u2192 upstream added",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC4",
       "name": "Connect or start an upstream",
-      "actor": "Org admin",
-      "trigger_outcome": "Click Connect / Start / Authenticate → live session, tools light up"
+      "trigger_outcome": "Click Connect / Start / Authenticate \u2192 live session, tools light up",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC5",
       "name": "Configure roles and per-MCP access",
-      "actor": "Org admin",
-      "trigger_outcome": "Create role, toggle MCP enabled per role → role scoped to chosen MCPs"
+      "trigger_outcome": "Create role, toggle MCP enabled per role \u2192 role scoped to chosen MCPs",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC6",
       "name": "Configure per-tool access and argument checks",
-      "actor": "Org admin",
-      "trigger_outcome": "Set 3-state tool toggles and regex allow/forbid → tool calls constrained"
+      "trigger_outcome": "Set 3-state tool toggles and regex allow/forbid \u2192 tool calls constrained",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC7",
       "name": "Connect human AI client via Google OAuth",
-      "actor": "Team member",
-      "trigger_outcome": "Point client at gateway URL, sign in → role's tools usable"
+      "trigger_outcome": "Point client at gateway URL, sign in \u2192 role's tools usable",
+      "actors": [
+        "R3"
+      ]
     },
     {
       "id": "UC8",
       "name": "Per-user OAuth to an upstream",
-      "actor": "Team member",
-      "trigger_outcome": "Click Authenticate, consent in popup → personal upstream tokens stored encrypted"
+      "trigger_outcome": "Click Authenticate, consent in popup \u2192 personal upstream tokens stored encrypted",
+      "actors": [
+        "R3"
+      ]
     },
     {
       "id": "UC9",
       "name": "Shared / admin OAuth to an upstream",
-      "actor": "Org admin",
-      "trigger_outcome": "Sign in once on team's behalf → every member's call goes out as admin"
+      "trigger_outcome": "Sign in once on team's behalf \u2192 every member's call goes out as admin",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC10",
       "name": "Mint a service token",
-      "actor": "Org admin",
-      "trigger_outcome": "New token, pick name and role → `svct_` value shown once, JSON snippet given"
+      "trigger_outcome": "New token, pick name and role \u2192 `svct_` value shown once, JSON snippet given",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC11",
       "name": "Headless agent calls tools via service token",
-      "actor": "Headless agent",
-      "trigger_outcome": "Send Bearer `svct_` to org gateway URL → tools at token's role, no sign-in"
+      "trigger_outcome": "Send Bearer `svct_` to org gateway URL \u2192 tools at token's role, no sign-in",
+      "actors": [
+        "R4"
+      ]
     },
     {
       "id": "UC12",
       "name": "List and call tools through the gateway",
-      "actor": "Team member",
-      "trigger_outcome": "Ask client to list/call tools → prefixed upstream tools returned and forwarded"
+      "trigger_outcome": "Ask client to list/call tools \u2192 prefixed upstream tools returned and forwarded",
+      "actors": [
+        "R3"
+      ]
     },
     {
       "id": "UC13",
       "name": "Invite a team member",
-      "actor": "Org admin",
-      "trigger_outcome": "Add Google email, pick role, share invite link → member joins on sign-in"
+      "trigger_outcome": "Add Google email, pick role, share invite link \u2192 member joins on sign-in",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC14",
       "name": "Change a member's role",
-      "actor": "Org admin",
-      "trigger_outcome": "Edit member, pick new role → access updates on next request"
+      "trigger_outcome": "Edit member, pick new role \u2192 access updates on next request",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC15",
       "name": "Remove a team member",
-      "actor": "Org admin",
-      "trigger_outcome": "Remove member → tokens revoked, per-user sessions dropped"
+      "trigger_outcome": "Remove member \u2192 tokens revoked, per-user sessions dropped",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC16",
       "name": "Revoke or rotate a service token",
-      "actor": "Org admin",
-      "trigger_outcome": "Revoke / create-new-then-revoke → agent's next request fails"
+      "trigger_outcome": "Revoke / create-new-then-revoke \u2192 agent's next request fails",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC17",
       "name": "View and filter the audit log",
-      "actor": "Org admin",
-      "trigger_outcome": "Open Audit, set filters → matching entries, live SSE tail"
+      "trigger_outcome": "Open Audit, set filters \u2192 matching entries, live SSE tail",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC18",
       "name": "Manage template variables and passwords",
-      "actor": "Org admin",
-      "trigger_outcome": "Add NAME values, toggle Treat-as-password → secrets encrypted and redacted"
+      "trigger_outcome": "Add NAME values, toggle Treat-as-password \u2192 secrets encrypted and redacted",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC19",
       "name": "Manage sandbox credential files",
-      "actor": "Org admin",
-      "trigger_outcome": "Upload file, set target path → file written into sandbox at session start"
+      "trigger_outcome": "Upload file, set target path \u2192 file written into sandbox at session start",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC20",
       "name": "Import multiple MCPs at once",
-      "actor": "Org admin",
-      "trigger_outcome": "Paste mcpServers JSON, pick entries → upstreams created in one go"
+      "trigger_outcome": "Paste mcpServers JSON, pick entries \u2192 upstreams created in one go",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC21",
       "name": "Extract an inline secret into a variable",
-      "actor": "Org admin",
-      "trigger_outcome": "Paste JSON with raw token → dialog offers extraction, config rewritten to NAME"
+      "trigger_outcome": "Paste JSON with raw token \u2192 dialog offers extraction, config rewritten to NAME",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC22",
       "name": "Manage MCP Hero via the Admin MCP",
-      "actor": "Org admin",
-      "trigger_outcome": "Connect AI client to `/admin-mcp` → conversational management tools usable"
+      "trigger_outcome": "Connect AI client to `/admin-mcp` \u2192 conversational management tools usable",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC23",
       "name": "Operator steps into an org for support",
-      "actor": "Superadmin",
-      "trigger_outcome": "Enter org, end sessions or clear stuck connection → recorded, no secrets seen"
+      "trigger_outcome": "Enter org, end sessions or clear stuck connection \u2192 recorded, no secrets seen",
+      "actors": [
+        "R5"
+      ]
     },
     {
       "id": "UC24",
       "name": "Edit or remove an upstream",
-      "actor": "Org admin",
-      "trigger_outcome": "Edit config or delete → config/variables/files/tools removed, dirty banner on edit"
+      "trigger_outcome": "Edit config or delete \u2192 config/variables/files/tools removed, dirty banner on edit",
+      "actors": [
+        "R2"
+      ]
     },
     {
       "id": "UC25",
       "name": "Delete an organization",
-      "actor": "Org admin",
-      "trigger_outcome": "Delete org → org and all its scoped data purged"
+      "trigger_outcome": "Delete org \u2192 org and all its scoped data purged",
+      "actors": [
+        "R2"
+      ]
     }
   ],
   "happy_path": [
@@ -394,7 +449,7 @@
       "id": "HP14",
       "title": "Admin deletes the organization",
       "uc": "UC25",
-      "why": "terminal — purges everything created above"
+      "why": "terminal \u2014 purges everything created above"
     }
   ],
   "subsystems": [
@@ -449,7 +504,7 @@
     {
       "id": "S14",
       "name": "Policy, roles & plans",
-      "purpose": "Role→tool authorization, settings resolution, plan-limit gates, secret scan",
+      "purpose": "Role\u2192tool authorization, settings resolution, plan-limit gates, secret scan",
       "parent": "S5",
       "source": "backend/src/mcpolis/domain/services/policy_engine.py",
       "confidence": "inferred"
@@ -718,7 +773,7 @@
       "id": "C11",
       "name": "Org-context middleware",
       "subsystem": "S15",
-      "purpose": "Resolves `/mcp/{slug}` → org_id, rewrites path, anti-enumeration 401",
+      "purpose": "Resolves `/mcp/{slug}` \u2192 org_id, rewrites path, anti-enumeration 401",
       "entry_point": "backend/src/mcpolis/entrypoints/middleware/org_context.py:111",
       "depends_on": "C55 C21",
       "source": null,
@@ -757,7 +812,7 @@
       "id": "C14",
       "name": "Dashboard REST API router",
       "subsystem": "S4",
-      "purpose": "Composes 14 per-concern `/api/*` routers (upstreams, roles, users, audit…)",
+      "purpose": "Composes 14 per-concern `/api/*` routers (upstreams, roles, users, audit\u2026)",
       "entry_point": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
       "depends_on": "C21 C26 C22 C41",
       "source": null,
@@ -874,7 +929,7 @@
       "id": "C23",
       "name": "PolicyEngine",
       "subsystem": "S14",
-      "purpose": "Role→tool authorization, argument checks, is_admin",
+      "purpose": "Role\u2192tool authorization, argument checks, is_admin",
       "entry_point": "backend/src/mcpolis/domain/services/policy_engine.py:61",
       "depends_on": "C42 C54",
       "source": null,
@@ -978,7 +1033,7 @@
       "id": "C31",
       "name": "UpstreamRuntimeHash",
       "subsystem": "S16",
-      "purpose": "SHA-256 fingerprint of runtime inputs → dashboard \"dirty / restart\" banner",
+      "purpose": "SHA-256 fingerprint of runtime inputs \u2192 dashboard \"dirty / restart\" banner",
       "entry_point": "backend/src/mcpolis/domain/services/upstream_runtime_hash.py:108",
       "depends_on": "",
       "source": null,
@@ -1485,7 +1540,7 @@
       "id": "C70",
       "name": "E2B template grid",
       "subsystem": "S8",
-      "purpose": "The 24-template grid (node/python/docker × 8 CPU/RAM) + capabilities",
+      "purpose": "The 24-template grid (node/python/docker \u00d7 8 CPU/RAM) + capabilities",
       "entry_point": "backend/src/mcpolis/adapters/sandbox_e2b/template_grid.py:35",
       "depends_on": "",
       "source": null,
@@ -2018,7 +2073,7 @@
       "id": "C111",
       "name": "Gateway session registry",
       "subsystem": "S2",
-      "purpose": "In-process map of gateway session_id → (org,user)",
+      "purpose": "In-process map of gateway session_id \u2192 (org,user)",
       "entry_point": "backend/src/mcpolis/adapters/gateway_session_registry.py:14",
       "depends_on": "",
       "source": null,
@@ -2419,25 +2474,25 @@
     },
     {
       "kind": "Mounted ASGI",
-      "trigger": "`/mcp` — gateway MCP (bearer)",
+      "trigger": "`/mcp` \u2014 gateway MCP (bearer)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2068",
       "component": "C2"
     },
     {
       "kind": "Mounted ASGI",
-      "trigger": "`/admin-mcp/{slug}` — admin MCP (per-org admin)",
+      "trigger": "`/admin-mcp/{slug}` \u2014 admin MCP (per-org admin)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2100",
       "component": "C3"
     },
     {
       "kind": "Mounted ASGI",
-      "trigger": "`/admin-mcp/system` — superadmin MCP (allowlist)",
+      "trigger": "`/admin-mcp/system` \u2014 superadmin MCP (allowlist)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2093",
       "component": "C4"
     },
     {
       "kind": "Mounted ASGI",
-      "trigger": "`/dev/mcp-demo` — demo MCP",
+      "trigger": "`/dev/mcp-demo` \u2014 demo MCP",
       "source": "backend/src/mcpolis/entrypoints/app.py:2114",
       "component": "C20"
     },
@@ -2527,7 +2582,7 @@
     },
     {
       "kind": "Signal",
-      "trigger": "SIGTERM → graceful drain",
+      "trigger": "SIGTERM \u2192 graceful drain",
       "source": "backend/src/mcpolis/entrypoints/app.py:1517",
       "component": "C9"
     },
@@ -2585,7 +2640,7 @@
       "id": "E1",
       "name": "Organization",
       "store": "Mongo `organizations` / file `config/`",
-      "meaning": "A tenant — the top-level isolation boundary everything is scoped to.",
+      "meaning": "A tenant \u2014 the top-level isolation boundary everything is scoped to.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/ports/organization_repository.py:15",
       "fields": [
@@ -2703,7 +2758,7 @@
           "name": "org_id",
           "type": "string",
           "markers": [
-            "FK→E1"
+            "FK\u2192E1"
           ]
         },
         {
@@ -2715,7 +2770,7 @@
           "name": "role",
           "type": "string",
           "markers": [
-            "FK→E5"
+            "FK\u2192E5"
           ]
         },
         {
@@ -2747,7 +2802,7 @@
       "id": "E4",
       "name": "SettingsConfig",
       "store": "Mongo `settings` per-org / `config/settings.json`",
-      "meaning": "The per-org policy config root — upstream options, roles, and user→role assignments.",
+      "meaning": "The per-org policy config root \u2014 upstream options, roles, and user\u2192role assignments.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:77",
       "fields": [
@@ -2847,7 +2902,7 @@
           "name": "role",
           "type": "string",
           "markers": [
-            "FK→E5"
+            "FK\u2192E5"
           ]
         }
       ],
@@ -3043,7 +3098,7 @@
       "id": "E10",
       "name": "UpstreamDefinition",
       "store": "Mongo `upstreams` / `mcp.json`, per-org",
-      "meaning": "A registered backend MCP server — transport choice, its config, and auth.",
+      "meaning": "A registered backend MCP server \u2014 transport choice, its config, and auth.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/upstream.py:84",
       "fields": [
@@ -3438,7 +3493,7 @@
           "name": "org_id",
           "type": "string",
           "markers": [
-            "FK→E1"
+            "FK\u2192E1"
           ]
         },
         {
@@ -3450,7 +3505,7 @@
           "name": "role_name",
           "type": "string",
           "markers": [
-            "FK→E5"
+            "FK\u2192E5"
           ]
         },
         {
@@ -3493,7 +3548,7 @@
     {
       "id": "E17",
       "name": "OAuthToken",
-      "store": "ConnectionStore — Mongo per-org / file",
+      "store": "ConnectionStore \u2014 Mongo per-org / file",
       "meaning": "A stored OAuth credential for an upstream (admin or per-user) with refresh bookkeeping.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/adapters/repositories/connection_store.py:9",
@@ -3553,7 +3608,7 @@
     {
       "id": "E22",
       "name": "TemplateVarSummary",
-      "store": "TemplateVarRepository — Mongo encrypted / file",
+      "store": "TemplateVarRepository \u2014 Mongo encrypted / file",
       "meaning": "A per-MCP `${NAME}` variable (secret or plain) substituted into upstream config at launch.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/domain/model/template_var.py:66",
@@ -3679,7 +3734,7 @@
     {
       "id": "E24",
       "name": "SandboxFileSummary",
-      "store": "view DTO — never persisted with contents",
+      "store": "view DTO \u2014 never persisted with contents",
       "meaning": "Metadata-only view of a SandboxFile (no contents) for the dashboard.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/domain/model/sandbox_file.py:146",
@@ -3725,7 +3780,7 @@
     {
       "id": "E26",
       "name": "ToolCatalogSnapshot",
-      "store": "ToolCatalogRepository — Mongo / file",
+      "store": "ToolCatalogRepository \u2014 Mongo / file",
       "meaning": "Cached per-upstream catalog of tools/resources/prompts so the admin UI renders without a reconnect.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/ports/tool_catalog_repository.py:15",
@@ -3814,7 +3869,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK→E10"
+            "FK\u2192E10"
           ]
         },
         {
@@ -3937,7 +3992,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK→E10"
+            "FK\u2192E10"
           ]
         },
         {
@@ -3993,7 +4048,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK→E10"
+            "FK\u2192E10"
           ]
         },
         {
@@ -4049,7 +4104,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK→E10"
+            "FK\u2192E10"
           ]
         },
         {
@@ -4136,7 +4191,7 @@
       "id": "E35",
       "name": "AuditEntry",
       "store": "Mongo `audit` / file audit log, per-org",
-      "meaning": "One audited gateway action — what tool was called and whether policy allowed it (never argument values).",
+      "meaning": "One audited gateway action \u2014 what tool was called and whether policy allowed it (never argument values).",
       "subdomain": "SD5",
       "source": "backend/src/mcpolis/domain/model/audit.py:8",
       "fields": [
@@ -4154,7 +4209,7 @@
           "name": "org_id",
           "type": "string",
           "markers": [
-            "FK→E1"
+            "FK\u2192E1"
           ]
         },
         {
@@ -4166,7 +4221,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK→E10"
+            "FK\u2192E10"
           ]
         },
         {
@@ -4298,7 +4353,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org creator",
+          "src": "R1",
           "dst": "C15",
           "phrase": "signs in with Google in the browser",
           "note": ""
@@ -4326,7 +4381,7 @@
         },
         {
           "n": 5,
-          "src": "Org creator",
+          "src": "R1",
           "dst": "C17",
           "phrase": "posts the new org name and slug",
           "note": ""
@@ -4369,7 +4424,7 @@
         {
           "n": 11,
           "src": "C17",
-          "dst": "Org creator",
+          "dst": "R1",
           "phrase": "returns the created org, lands on Upstream MCPs",
           "note": ""
         }
@@ -4381,7 +4436,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C77",
           "phrase": "pastes the upstream URL and picks an auth mode",
           "note": ""
@@ -4431,7 +4486,7 @@
         {
           "n": 8,
           "src": "C14",
-          "dst": "Org admin",
+          "dst": "R2",
           "phrase": "shows the upstream added, ready to connect",
           "note": ""
         }
@@ -4443,7 +4498,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C77",
           "phrase": "pastes command JSON, fills variables, sizes the sandbox",
           "note": ""
@@ -4512,7 +4567,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C98",
           "phrase": "clicks Connect / Start",
           "note": ""
@@ -4590,7 +4645,7 @@
         {
           "n": 12,
           "src": "C14",
-          "dst": "Org admin",
+          "dst": "R2",
           "phrase": "tools light up, live status via SSE",
           "note": ""
         }
@@ -4602,7 +4657,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C79",
           "phrase": "creates a role and toggles which MCPs it can use",
           "note": ""
@@ -4671,7 +4726,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C79",
           "phrase": "sets 3-state tool toggles and regex allow/forbid rules",
           "note": ""
@@ -4733,7 +4788,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C81",
           "phrase": "adds a Google email and picks a role",
           "note": ""
@@ -4776,7 +4831,7 @@
         {
           "n": 7,
           "src": "C14",
-          "dst": "Org admin",
+          "dst": "R2",
           "phrase": "returns a shareable invite link",
           "note": ""
         }
@@ -4788,7 +4843,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Team member",
+          "src": "R3",
           "dst": "C2",
           "phrase": "points their MCP client at the gateway URL",
           "note": ""
@@ -4838,7 +4893,7 @@
         {
           "n": 8,
           "src": "C2",
-          "dst": "Team member",
+          "dst": "R3",
           "phrase": "the role's tools are now available in the client",
           "note": ""
         }
@@ -4850,7 +4905,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Team member",
+          "src": "R3",
           "dst": "C91",
           "phrase": "clicks Authenticate on a per-user-OAuth upstream",
           "note": ""
@@ -4921,7 +4976,7 @@
         {
           "n": 11,
           "src": "C27",
-          "dst": "Team member",
+          "dst": "R3",
           "phrase": "the upstream's tools become callable as themselves",
           "note": ""
         }
@@ -4933,7 +4988,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Team member",
+          "src": "R3",
           "dst": "C5",
           "phrase": "asks the client to list and call a tool",
           "note": ""
@@ -4997,7 +5052,7 @@
         {
           "n": 10,
           "src": "C25",
-          "dst": "Team member",
+          "dst": "R3",
           "phrase": "returns the tool result",
           "note": ""
         }
@@ -5009,7 +5064,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C82",
           "phrase": "names a token and picks a least-privilege role",
           "note": ""
@@ -5052,7 +5107,7 @@
         {
           "n": 7,
           "src": "C14",
-          "dst": "Org admin",
+          "dst": "R2",
           "phrase": "returns the raw `svct_` value once, with a config snippet",
           "note": ""
         }
@@ -5064,9 +5119,9 @@
       "steps": [
         {
           "n": 1,
-          "src": "Headless agent",
+          "src": "R4",
           "dst": "C2",
-          "phrase": "sends `Authorization: Bearer svct_…` to the org gateway URL",
+          "phrase": "sends `Authorization: Bearer svct_\u2026` to the org gateway URL",
           "note": ""
         },
         {
@@ -5128,7 +5183,7 @@
         {
           "n": 10,
           "src": "C25",
-          "dst": "Headless agent",
+          "dst": "R4",
           "phrase": "returns the tool result, no sign-in needed",
           "note": ""
         }
@@ -5140,7 +5195,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C83",
           "phrase": "opens Audit and sets user/MCP/tool filters",
           "note": ""
@@ -5197,7 +5252,7 @@
         {
           "n": 9,
           "src": "C14",
-          "dst": "Org admin",
+          "dst": "R2",
           "phrase": "returns matching entries plus the live tail",
           "note": ""
         }
@@ -5209,7 +5264,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C3",
           "phrase": "connects their AI client to `/admin-mcp/{slug}`",
           "note": ""
@@ -5252,7 +5307,7 @@
         {
           "n": 7,
           "src": "C6",
-          "dst": "Org admin",
+          "dst": "R2",
           "phrase": "returns the management result conversationally",
           "note": ""
         }
@@ -5264,7 +5319,7 @@
       "steps": [
         {
           "n": 1,
-          "src": "Org admin",
+          "src": "R2",
           "dst": "C17",
           "phrase": "confirms deleting the org",
           "note": ""
@@ -5321,7 +5376,7 @@
         {
           "n": 9,
           "src": "C22",
-          "dst": "Org admin",
+          "dst": "R2",
           "phrase": "confirms the org and all scoped data are gone",
           "note": ""
         }
@@ -6560,7 +6615,7 @@
     {
       "signal": "structlog JSON events",
       "where_emitted": "backend/src/mcpolis/adapters/observability/structlog_setup.py#L74",
-      "where_viewed": "stdout → Vector → Elastic / Kibana",
+      "where_viewed": "stdout \u2192 Vector \u2192 Elastic / Kibana",
       "alerts": "Vector throttle 5000/min/event"
     },
     {
@@ -6579,7 +6634,7 @@
       "signal": "Mixpanel analytics",
       "where_emitted": "backend/src/mcpolis/adapters/observability/analytics_client.py#L48",
       "where_viewed": "Mixpanel (token-gated)",
-      "alerts": "—"
+      "alerts": "\u2014"
     },
     {
       "signal": "Health endpoints",
@@ -6593,13 +6648,13 @@
       "surface": "`/mcp` gateway",
       "who": "Google bearer OR `svct_` service token",
       "source": "backend/src/mcpolis/entrypoints/app.py#L353",
-      "risk": "Composite verifier routes svct_→registry, else→OAuth"
+      "risk": "Composite verifier routes svct_\u2192registry, else\u2192OAuth"
     },
     {
       "surface": "`/mcp` org scoping",
       "who": "user/token scoped to one org",
       "source": "backend/src/mcpolis/entrypoints/middleware/org_context.py#L267",
-      "risk": "cross-org isolation via the slug→org contextvar"
+      "risk": "cross-org isolation via the slug\u2192org contextvar"
     },
     {
       "surface": "service-token org pin",
@@ -6627,7 +6682,7 @@
     },
     {
       "surface": "org anti-enumeration",
-      "who": "unknown slug → 401 (not 404)",
+      "who": "unknown slug \u2192 401 (not 404)",
       "source": "backend/src/mcpolis/entrypoints/routes/org_routes.py#L100",
       "risk": "one exception: `/{slug}/public` invite read"
     },
@@ -6639,7 +6694,7 @@
     },
     {
       "surface": "upstream URL fetch",
-      "who": "gateway → upstream",
+      "who": "gateway \u2192 upstream",
       "source": "backend/src/mcpolis/domain/services/url_safety.py#L152",
       "risk": "SSRF deny-list (loopback/RFC1918/IMDS)"
     },
@@ -6726,7 +6781,7 @@
     {
       "key": "ALLOW_STDIO_MCP",
       "purpose": "enable stdio MCP servers",
-      "default": "`True` (cloud→False)",
+      "default": "`True` (cloud\u2192False)",
       "per_env": "per-env"
     },
     {
@@ -6737,7 +6792,7 @@
     },
     {
       "key": "SMTP_HOST/PORT/USERNAME/FROM",
-      "purpose": "email transport (empty host → stub)",
+      "purpose": "email transport (empty host \u2192 stub)",
       "default": "port `587`",
       "per_env": "per-env"
     },
@@ -6761,7 +6816,7 @@
     },
     {
       "key": "ELASTIC_ENDPOINT / ELASTIC_API_KEY",
-      "purpose": "Vector→Elastic forwarding",
+      "purpose": "Vector\u2192Elastic forwarding",
       "default": "n/a",
       "per_env": "secret"
     },
@@ -6784,7 +6839,7 @@
       "per_env": "per-env"
     }
   ],
-  "tests_note": "No — read-only against the test layout and CLAUDE.md; all rows",
+  "tests_note": "No \u2014 read-only against the test layout and CLAUDE.md; all rows",
   "tests": [
     {
       "target": "UC11 service-token auth + org pin",

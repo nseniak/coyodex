@@ -62,6 +62,8 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Group", "source"): {"description": _DIR_OR_FILE_DESC + " The group's home directory (or a "
                            "representative file)."},
     ("UseCase", "id"): {"pattern": r"^UC\d+$"},
+    ("Role", "id"): {"pattern": r"^R\d+$", "description": "a role is a first-class element (`R<n>`), "
+                     "referenced by id — a use case's `actors` and a flow's actor steps carry role ids."},
     ("EvidenceItem", "file"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EvidenceItem", "why"): {"description": "why this citation supports the claim — what a "
                                "skeptic re-reading `file` should find true."},

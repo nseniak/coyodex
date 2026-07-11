@@ -51,15 +51,15 @@ def make_entity(eid: str = "E1", name: str = "Order", source: str | None = "src/
 
 def make_valid_model() -> ProjectModel:
     m = ProjectModel(title="Demo", goal="A demo.")
-    m.roles = [Role(name="Andy", kind="human", wants="orders", drives="UC1")]
-    m.use_cases = [UseCase(id="UC1", name="View order", actor="Andy")]
+    m.roles = [Role(id="R1", name="Andy", kind="human", wants="orders", drives="UC1")]
+    m.use_cases = [UseCase(id="UC1", name="View order", actors=["R1"])]
     m.happy_path = [HappyStep(id="HP1", title="View", uc="UC1")]
     m.components = [Component(id="C1", name="Viewer", purpose="shows",
                               entry_point="src/v.py:1")]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
     m.entities = [make_entity()]
     m.flows = [Flow(uc="UC1", title="View order",
-                    steps=[FlowStep(n=1, src="Andy", dst="C1", phrase="opens")])]
+                    steps=[FlowStep(n=1, src="R1", dst="C1", phrase="opens")])]
     m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show", where="src/v.py:5"),
                Edge(src="C1", verb="uses", dst="D1", why="query", where="src/v.py:7")]
     return m
@@ -112,6 +112,23 @@ def test_bracket_marker_reference_is_resolved():
     m = make_valid_model()
     m.components[0].purpose = "Delegates to [[C9]] for the heavy lifting."
     assert any("undefined IDs" in p and "C9" in p for p in problems_of(m))
+
+
+def test_empty_actors_blocks_when_roles_defined():
+    # Loud guard (the anti-silent-no-op): with roles defined, a use case that names NO actor FAILS
+    # validate — so the actor-attribution audit can never silently have nothing to compare.
+    m = make_valid_model()
+    m.use_cases[0].actors = []
+    assert any("no actor" in p and "UC1" in p for p in problems_of(m))
+
+
+def test_empty_actors_allowed_when_no_roles():
+    # A roles-less map legitimately has no actors and no role-id references — the guard does not fire.
+    m = make_valid_model()
+    m.roles = []
+    m.use_cases[0].actors = []
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="E1", phrase="reads")]  # no actor step / role ref
+    assert not any("no actor" in p for p in problems_of(m))
 
 
 def test_duplicate_ids_flagged():

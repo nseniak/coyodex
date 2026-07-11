@@ -166,12 +166,14 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     for g in m.happy_path:
         if g.uc:
             refs.add(g.uc)
+    for u in m.use_cases:
+        refs.update(u.actors)                        # a use case's actors are role ids
     for f in m.flows:
         if f.uc:
             refs.add(f.uc)
         for st in f.steps:
-            for end in (st.src, st.dst):
-                if end and grammar.is_step_id(end):  # element-id step endpoints; role names are not ids
+            for end in (st.src, st.dst):              # backbone-element OR role-id (actor step) endpoints
+                if end and (grammar.is_step_id(end) or grammar.is_role_id(end)):
                     refs.add(end)
     for e in m.edges:
         refs.add(e.src)
@@ -234,7 +236,7 @@ def _check_flows(m: ProjectModel) -> list[str]:
     if dups:
         problems.append("Use cases with more than one T6 flow block (each use case has exactly one "
                         f"flow): {', '.join(dups)}")
-    role_names = {r.name.lower() for r in m.roles}
+    role_ids = {r.id for r in m.roles}
     for f in m.flows:
         for st in f.steps:
             tag = f"{f.uc} flow step {st.n}"
@@ -244,10 +246,10 @@ def _check_flows(m: ProjectModel) -> list[str]:
             if not st.phrase.strip():
                 problems.append(f"{tag} has no action text (`phrase`) — every step describes what "
                                 "happens at that point; it is not derived from the backbone edge")
-            if role_names:
+            if role_ids:  # a non-backbone endpoint is an actor step — it must be a defined Role id
                 for end in (st.src, st.dst):
-                    if not grammar.is_step_id(end) and end.lower() not in role_names:
-                        problems.append(f"{tag}: actor '{end}' is not a defined Role")
+                    if not grammar.is_step_id(end) and end not in role_ids:
+                        problems.append(f"{tag}: actor '{end}' is not a defined Role id")
     return problems
 
 
@@ -255,6 +257,18 @@ def _check_roles(m: ProjectModel) -> list[str]:
     if m.roles and all(not r.kind.strip() for r in m.roles):
         return ["Roles carry no Kind (human/service) — every role states one"]
     return []
+
+
+def _check_actors(m: ProjectModel) -> list[str]:
+    """Loud guard (the anti-silent-no-op): when roles are defined, EVERY use case must name at least one
+    actor (a role id). Otherwise `check_actor_attribution` has nothing to compare and silently passes —
+    the exact failure the role-id model exists to prevent. A roles-less map legitimately has no actors."""
+    if not m.roles:
+        return []
+    missing = [u.id for u in m.use_cases if not u.actors]
+    if not missing:
+        return []
+    return [f"Use cases with no actor (roles are defined, so each names ≥1 role id): {', '.join(missing)}"]
 
 
 def _check_dep_kinds(m: ProjectModel) -> list[str]:
@@ -433,7 +447,7 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         if href:
             out.append((f"{e.src} → {e.dst} `Where`", href))
     for u in m.use_cases:
-        href = _first_link_of(u, [u.name, u.actor, u.trigger_outcome])
+        href = _first_link_of(u, [u.name, u.trigger_outcome])  # actors are role ids now, not a link cell
         if href and not url.match(href):
             out.append((u.id, href))
     for group in (*m.subsystems, *m.subdomains):
@@ -612,6 +626,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_hp(m))
     problems.extend(_check_flows(m))
     problems.extend(_check_roles(m))
+    problems.extend(_check_actors(m))
     problems.extend(_check_dep_kinds(m))
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
