@@ -80,13 +80,13 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
     {{
       "id": "UC1",
       "name": "View order",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "opens -> sees"
     }},
     {{
       "id": "UC2",
       "name": "Create order",
-      "actor": "Adam",
+      "actors": [],
       "trigger_outcome": "submits -> stored"
     }}
   ],
@@ -188,160 +188,32 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
 
 
 def make_actor_mismatch_map(flow_actor: str = "Zoe") -> str:
-    """UC1's declared Actor is Andy, but its flow opens with `flow_actor` — a mismatch when it isn't
-    Andy (the two layers disagree about who drives the use case)."""
+    """UC1's declared actor is Andy (R1); its flow opens with `flow_actor`. A mismatch when flow_actor
+    isn't Andy — the two layers disagree on who drives the use case (both sides are role ids now)."""
+    roles = [("R1", "Andy")]
+    open_id = "R1"
+    if flow_actor != "Andy":
+        roles.append(("R2", flow_actor))
+        open_id = "R2"
+    roles_json = ", ".join(
+        f'{{"id": "{i}", "name": "{n}", "kind": "human", "wants": "", "drives": "UC1"}}'
+        for i, n in roles)
     return f"""{{
-  "format": "coyodex-map",
-  "title": "",
-  "goal": "",
-  "commit": null,
-  "committed": null,
-  "built": null,
-  "roles": [],
+  "format": "coyodex-map", "title": "", "goal": "",
+  "commit": null, "committed": null, "built": null,
+  "roles": [{roles_json}],
   "glossary": [],
-  "use_cases": [
-    {{
-      "id": "UC1",
-      "name": "View order",
-      "actor": "Andy",
-      "trigger_outcome": "opens -> sees"
-    }}
-  ],
-  "happy_path": [
-    {{
-      "id": "HP1",
-      "title": "View the order",
-      "uc": "UC1",
-      "why": null
-    }}
-  ],
+  "use_cases": [{{"id": "UC1", "name": "View order", "actors": ["R1"], "trigger_outcome": "opens -> sees"}}],
+  "happy_path": [{{"id": "HP1", "title": "View the order", "uc": "UC1", "why": null}}],
   "subsystems": [],
-  "components": [
-    {{
-      "id": "C1",
-      "name": "Viewer",
-      "subsystem": null,
-      "purpose": "x",
-      "entry_point": "f",
-      "depends_on": "",
-      "source": null,
-      "confidence": "",
-      "extra": {{}}
-    }}
-  ],
-  "deps": [],
-  "run_commands": [],
-  "entry_points": [],
-  "subdomains": [],
-  "entities": [],
+  "components": [{{"id": "C1", "name": "Viewer", "subsystem": null, "purpose": "x", "entry_point": "f",
+                  "depends_on": "", "source": null, "confidence": "", "extra": {{}}}}],
+  "deps": [], "run_commands": [], "entry_points": [], "subdomains": [], "entities": [],
   "non_entity_types": [],
-  "flows": [
-    {{
-      "uc": "UC1",
-      "title": "View order",
-      "steps": [
-        {{
-          "n": 1,
-          "src": "{flow_actor}",
-          "dst": "C1",
-          "phrase": "views the order",
-          "note": ""
-        }}
-      ]
-    }}
-  ],
-  "edges": [],
-  "deployment": [],
-  "observability": [],
-  "security": [],
-  "config": [],
-  "tests_note": "",
-  "tests": [],
-  "extras": []
-}}"""
-
-
-def make_actor_variant_map(declared: str, opening: str, roles: bool = False) -> str:
-    """UC1's declared Actor is `declared`; its flow opens with `opening`. `roles=True` adds a Roles
-    list containing only 'Andy', so an opener that is not a defined Role (a background trigger) is
-    skipped. Covers the markdown / compound / background-trigger false-positive cases."""
-    roles_list = (
-        """[
-    {
-      "name": "Andy",
-      "kind": "human",
-      "wants": "see it",
-      "drives": "UC1"
-    }
-  ]""" if roles else "[]")
-    return f"""{{
-  "format": "coyodex-map",
-  "title": "",
-  "goal": "",
-  "commit": null,
-  "committed": null,
-  "built": null,
-  "roles": {roles_list},
-  "glossary": [],
-  "use_cases": [
-    {{
-      "id": "UC1",
-      "name": "View order",
-      "actor": "{declared}",
-      "trigger_outcome": "opens -> sees"
-    }}
-  ],
-  "happy_path": [
-    {{
-      "id": "HP1",
-      "title": "View the order",
-      "uc": "UC1",
-      "why": null
-    }}
-  ],
-  "subsystems": [],
-  "components": [
-    {{
-      "id": "C1",
-      "name": "Viewer",
-      "subsystem": null,
-      "purpose": "x",
-      "entry_point": "f",
-      "depends_on": "",
-      "source": null,
-      "confidence": "",
-      "extra": {{}}
-    }}
-  ],
-  "deps": [],
-  "run_commands": [],
-  "entry_points": [],
-  "subdomains": [],
-  "entities": [],
-  "non_entity_types": [],
-  "flows": [
-    {{
-      "uc": "UC1",
-      "title": "View order",
-      "steps": [
-        {{
-          "n": 1,
-          "src": "{opening}",
-          "dst": "C1",
-          "phrase": "views the order",
-          "note": ""
-        }}
-      ]
-    }}
-  ],
-  "edges": [],
-  "deployment": [],
-  "observability": [],
-  "security": [],
-  "config": [],
-  "tests_note": "",
-  "tests": [],
-  "extras": []
+  "flows": [{{"uc": "UC1", "title": "View order", "steps": [
+    {{"n": 1, "src": "{open_id}", "dst": "C1", "phrase": "views the order", "note": ""}}]}}],
+  "edges": [], "deployment": [], "observability": [], "security": [], "config": [],
+  "tests_note": "", "tests": [], "extras": []
 }}"""
 
 
@@ -361,19 +233,19 @@ def make_shared_read_map() -> str:
     {
       "id": "UC1",
       "name": "A",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     },
     {
       "id": "UC2",
       "name": "B",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     },
     {
       "id": "UC3",
       "name": "C",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -542,13 +414,13 @@ def make_cc_routed_read_map() -> str:
     {
       "id": "UC1",
       "name": "Sign in",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     },
     {
       "id": "UC2",
       "name": "Create org",
-      "actor": "Adam",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -695,13 +567,13 @@ def make_backward_whyref_map() -> str:
     {
       "id": "UC1",
       "name": "A",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     },
     {
       "id": "UC2",
       "name": "B",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -793,7 +665,7 @@ def make_read_never_created_map() -> str:
     {
       "id": "UC1",
       "name": "Load config",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -885,13 +757,13 @@ def make_whyless_map() -> str:
     {
       "id": "UC1",
       "name": "A",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     },
     {
       "id": "UC2",
       "name": "B",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -983,7 +855,7 @@ def make_l2_map() -> str:
     {
       "id": "UC1",
       "name": "Call",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -1065,7 +937,7 @@ def make_l2_dep_map() -> str:
     {
       "id": "UC1",
       "name": "Call",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -1189,7 +1061,7 @@ def make_duplicated_edge_map() -> str:
     {
       "id": "UC1",
       "name": "Call",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -1487,22 +1359,6 @@ def test_actor_attribution_matches_when_actors_agree() -> None:
     assert "actor-attribution" not in _checks(make_actor_mismatch_map("Andy"))
 
 
-def test_actor_markdown_is_not_a_false_positive() -> None:
-    """Finding 4: `**Andy**` (bold) must match `Andy`."""
-    assert "actor-attribution" not in _checks(make_actor_variant_map("**Andy**", "Andy"))
-
-
-def test_compound_actor_matches_any_alternative() -> None:
-    """Finding 4: a compound Actor cell 'Admin or Manager' matches an opener of either."""
-    assert "actor-attribution" not in _checks(make_actor_variant_map("Admin or Manager", "Admin"))
-
-
-def test_background_trigger_opener_is_skipped() -> None:
-    """Finding 3: with a Roles table, an opener that is not a defined Role (a Scheduler / webhook)
-    is a background trigger, not an actor mismatch — skipped."""
-    assert "actor-attribution" not in _checks(make_actor_variant_map("Andy", "Scheduler", roles=True))
-
-
 def test_backward_why_ref_is_still_blocking() -> None:
     """The why-ref checks have no false positives, so they stay blocking contradictions."""
     checks = _checks(make_backward_whyref_map())
@@ -1560,22 +1416,15 @@ def test_hp_whyref_reads_whole_token() -> None:
     assert audit_model.happy_path_steps(m)[1].why_refs == [1]
 
 
-def test_actor_alternatives_does_not_split_a_slash_role_name() -> None:
-    # A role NAME containing "/" is one whole alternative — "/" is no longer an actor separator; a
-    # genuine `or`/`,` compound still splits.
-    assert audit_model._actor_alternatives("Host LLM / MCP client") == {"host llm / mcp client"}
-    assert audit_model._actor_alternatives("Admin or Manager") == {"admin", "manager"}
-
-
 def test_slash_role_name_yields_no_actor_mismatch() -> None:
-    # End-to-end: a use case driven by "Host LLM / MCP client" whose flow opens with that same role
-    # must NOT produce an actor-attribution advisory (the slash used to split it into two half-names).
+    # A role NAME containing "/" ("Host LLM / MCP client") is now referenced by its id, so the old
+    # string-splitting can't misfire: the use case's actor id and the flow's opening actor id are the
+    # same role, so no advisory. (Role ids make the "/"-split bug structurally impossible.)
     from coyodex.model import Flow, FlowStep, ProjectModel, Role, UseCase
-    role = "Host LLM / MCP client"
     m = ProjectModel(
-        roles=[Role(name=role)],
-        use_cases=[UseCase(id="UC1", name="x", actor=role)],
-        flows=[Flow(uc="UC1", title="t", steps=[FlowStep(n=1, src=role, dst="C1", phrase="acts")])],
+        roles=[Role(id="R1", name="Host LLM / MCP client", kind="service")],
+        use_cases=[UseCase(id="UC1", name="x", actors=["R1"])],
+        flows=[Flow(uc="UC1", title="t", steps=[FlowStep(n=1, src="R1", dst="C1", phrase="acts")])],
     )
     assert audit_model.check_actor_attribution(m) == []
 

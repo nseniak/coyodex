@@ -23,7 +23,7 @@ FORMAT = "coyodex-map"
 
 # Each element array's required id prefix — structural (a `Cn` in `deps` is a shape error, caught at
 # load), while uniqueness/resolution stay semantic (validate_model).
-ID_SHAPE = re.compile(r"^(UC|HP|SD|C|D|E|S)\d+$")
+ID_SHAPE = re.compile(r"^(UC|HP|SD|C|D|E|S|R)\d+$")
 
 
 class ModelError(ValueError):
@@ -34,6 +34,7 @@ class ModelError(ValueError):
 
 @dataclass
 class Role:
+    id: str                   # Rn — a role is a first-class element, referenced by id (not by name)
     name: str
     kind: str = ""            # human | service (free text preserved; the viewer normalizes)
     wants: str = ""
@@ -53,7 +54,8 @@ class GlossaryRow:
 class UseCase:
     id: str
     name: str
-    actor: str = ""
+    actors: list[str] = field(default_factory=list)  # the role ids that drive this use case (was a
+                                                     # single free-text `actor` name in the pre-role-id format)
     trigger_outcome: str = ""
 
 
@@ -284,7 +286,7 @@ class ProjectModel:
 # start with "S"), so validation matches the WHOLE id against ID_SHAPE and then the exact prefix.
 ID_ARRAYS: dict[str, str] = {
     "use_cases": "UC", "happy_path": "HP", "subsystems": "S", "components": "C",
-    "deps": "D", "subdomains": "SD", "entities": "E",
+    "deps": "D", "subdomains": "SD", "entities": "E", "roles": "R",
 }
 
 

@@ -56,21 +56,8 @@ def _anchor(cell: str) -> str | None:
     return fm.group(0) if fm else None
 
 
-# Split a compound Actor cell into alternatives on UNAMBIGUOUS separators (`or`, `,`). NOT on `/`: a
-# slash legitimately belongs INSIDE a single role name ("Host LLM / MCP client", "Visitor / prospect"),
-# and splitting it invented two bogus half-names that never matched the flow's opening actor — 12 false
-# "differs" advisories in one real run. NOT on `and` either (an atomic "Research and Development").
-_ACTOR_SEP = re.compile(r"\s+or\s+|\s*,\s*", re.I)
-
-
-def _norm_actor(actor: str) -> str:
-    """A role name reduced for comparison: markdown emphasis/backticks stripped, lowercased."""
-    return re.sub(r"[*`]", "", actor).strip().lower()
-
-
-def _actor_alternatives(cell: str) -> set[str]:
-    """The normalised roles a compound Actor cell allows: `Admin or Manager` → {admin, manager}."""
-    return {_norm_actor(p) for p in _ACTOR_SEP.split(cell) if p.strip()}
+# (Actor cells are role-id lists now; the old string-splitting helpers `_ACTOR_SEP` / `_norm_actor` /
+# `_actor_alternatives` are gone — `check_actor_attribution` does deterministic id-set membership.)
 
 
 def _claim_text(cell: str) -> str:
@@ -231,23 +218,26 @@ def check_why_refs(m: ProjectModel) -> list[Finding]:
 
 
 def check_actor_attribution(m: ProjectModel) -> list[Finding]:
-    actors = {u.id: u.actor for u in m.use_cases if u.actor}
-    role_names = {r.name.lower() for r in m.roles}
+    """The Use-cases table's declared actors vs the flow's opening actor — now a deterministic id-set
+    membership test (no string matching): both sides are role ids, so a mismatch is unambiguous."""
+    declared_by_uc = {u.id: set(u.actors) for u in m.use_cases if u.actors}
+    role_ids = {r.id for r in m.roles}
+    role_name = {r.id: r.name for r in m.roles}
     findings: list[Finding] = []
     for f in m.flows:
-        declared = actors.get(f.uc)
-        opening = _flow_opening_actor(f)
-        if not declared or not opening:
+        declared = declared_by_uc.get(f.uc)
+        opening = _flow_opening_actor(f)  # the opening actor step's endpoint — a role id
+        if not declared or not opening or not grammar.is_role_id(opening):
             continue
-        op = _norm_actor(opening)
-        if role_names and op not in {_norm_actor(r) for r in role_names}:
-            continue  # opener is not a defined actor → a background/system trigger, not a mismatch
-        if op in _actor_alternatives(declared):
+        if role_ids and opening not in role_ids:
+            continue  # opener is not a defined role → a background/system trigger, not a mismatch
+        if opening in declared:
             continue
+        shown = ", ".join(f"{a} ({role_name.get(a, a)})" for a in sorted(declared))
         findings.append(Finding(
             "actor-attribution", ADVISORY, f"{f.uc} — {f.title}",
-            f"declared Actor '{declared}' (Use-cases table) differs from the flow's opening "
-            f"actor '{opening}'."))
+            f"declared actors [{shown}] (Use-cases table) do not include the flow's opening actor "
+            f"{opening} ({role_name.get(opening, opening)})."))
     return findings
 
 

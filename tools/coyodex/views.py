@@ -185,9 +185,11 @@ def model_to_markdown(m: ProjectModel) -> str:
                 _table(["Role", "Kind", "What they want", "Use cases they drive"],
                        [[f"**{r.name}**", r.kind, r.wants, r.drives] for r in m.roles]))
     if m.use_cases:
+        rn = {r.id: r.name for r in m.roles}  # render actors as role NAMES, resolved from their ids
         section("Use cases",
                 _table(["ID", "Use case", "Actor", "Trigger → Outcome"],
-                       [[f"**{u.id}**", u.name, u.actor, u.trigger_outcome] for u in m.use_cases]))
+                       [[f"**{u.id}**", u.name, ", ".join(rn.get(a, a) for a in u.actors),
+                         u.trigger_outcome] for u in m.use_cases]))
     if m.happy_path:
         body = ["The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag",
                 "names it); the step's detail lives in that use case's T6 flow. An optional `why:`",
@@ -272,11 +274,15 @@ def model_to_markdown(m: ProjectModel) -> str:
                 _table(["Type", "Source", "Why"],
                        [[t.name, t.source or "", t.why] for t in m.non_entity_types]))
     if m.flows:
+        rn = {r.id: r.name for r in m.roles}  # an actor step carries a role id → show the role NAME
+
+        def _ep(x: str) -> str:
+            return rn.get(x, x) if grammar.is_role_id(x) else x
         body = []
         for f in m.flows:
             body.append(f"**{f.uc} — {f.title}**")
             for st in f.steps:
-                line = f"{st.n}. {st.src} → {st.dst}"
+                line = f"{st.n}. {_ep(st.src)} → {_ep(st.dst)}"
                 if st.phrase:
                     line += f" : {st.phrase}"
                 if st.note:
@@ -348,9 +354,11 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     nodes: dict[str, Node] = {}
     subsystem_names = {s.id: s.name for s in m.subsystems}
     subdomain_names = {sd.id: sd.name for sd in m.subdomains}
+    role_names = {r.id: r.name for r in m.roles}  # role ids → display names (the frontend sees names)
     for u in m.use_cases:
+        actor_names = ", ".join(role_names.get(a, a) for a in u.actors)
         nodes[u.id] = _node(u, "usecase", u.name, _first_href(u.trigger_outcome),
-                            {"Use case": u.name, "Actor": u.actor,
+                            {"Use case": u.name, "Actor": actor_names,
                              "Trigger → Outcome": u.trigger_outcome}, None)
     for s in m.subsystems:
         parent_name = subsystem_names.get(s.parent, s.parent) if s.parent else ""
@@ -416,9 +424,11 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
             ge.fk_fields, ge.fk_side = grammar.resolve_backing(
                 ge.src, ge.dst, backing[ge.src], backing[ge.dst])
 
+    def _endpoint(x: str) -> str:  # an actor step carries a role id → show the role NAME
+        return role_names.get(x, x) if grammar.is_role_id(x) else x
     flows = [grammar.Flow(
         uc=f.uc, title=f.title, line_no=0,
-        steps=[grammar.FlowStep(n=st.n, src=st.src, dst=st.dst,
+        steps=[grammar.FlowStep(n=st.n, src=_endpoint(st.src), dst=_endpoint(st.dst),
                                   src_is_id=grammar.is_step_id(st.src),
                                   dst_is_id=grammar.is_step_id(st.dst),
                                   phrase=st.phrase, note=st.note, ok=True)

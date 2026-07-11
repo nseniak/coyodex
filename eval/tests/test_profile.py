@@ -38,13 +38,13 @@ def make_counts_map() -> str:
     {
       "id": "UC1",
       "name": "View order",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "opens -> sees"
     },
     {
       "id": "UC2",
       "name": "Create order",
-      "actor": "Adam",
+      "actors": [],
       "trigger_outcome": "submits -> stored"
     }
   ],
@@ -248,12 +248,14 @@ def make_roles_then_usecases_map() -> str:
   "built": null,
   "roles": [
     {
+      "id": "R1",
       "name": "Andy",
       "kind": "human",
       "wants": "",
       "drives": "views orders"
     },
     {
+      "id": "R2",
       "name": "Adam",
       "kind": "human",
       "wants": "",
@@ -265,13 +267,13 @@ def make_roles_then_usecases_map() -> str:
     {
       "id": "UC1",
       "name": "View order",
-      "actor": "Andy",
+      "actors": ["R1"],
       "trigger_outcome": "opens -> sees"
     },
     {
       "id": "UC2",
       "name": "Create order",
-      "actor": "Adam",
+      "actors": ["R2"],
       "trigger_outcome": "submits -> stored"
     }
   ],
@@ -344,7 +346,7 @@ def make_broken_map() -> str:
     {
       "id": "UC1",
       "name": "View",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -417,13 +419,13 @@ def make_backward_whyref_map() -> str:
     {
       "id": "UC1",
       "name": "A",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     },
     {
       "id": "UC2",
       "name": "B",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],
@@ -516,13 +518,13 @@ def make_read_before_create_map() -> str:
     {
       "id": "UC1",
       "name": "View order",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "opens -> sees"
     },
     {
       "id": "UC2",
       "name": "Create order",
-      "actor": "Adam",
+      "actors": [],
       "trigger_outcome": "submits -> stored"
     }
   ],
@@ -651,7 +653,7 @@ def make_single_use_case_map() -> str:
     {
       "id": "UC1",
       "name": "View",
-      "actor": "Andy",
+      "actors": [],
       "trigger_outcome": "a -> b"
     }
   ],

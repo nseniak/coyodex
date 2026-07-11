@@ -32,7 +32,7 @@ CLI = [sys.executable, "-m", "coyodex.cli", "dump"]
 
 def make_model() -> ProjectModel:
     m = ProjectModel(title="Demo", goal="A demo.")
-    m.use_cases = [UseCase(id="UC1", name="View", actor="Andy")]
+    m.use_cases = [UseCase(id="UC1", name="View", actors=[])]
     m.subsystems = [Group(id="S1", name="Core", source="[core](backend/core/)"),
                     Group(id="S2", name="Edge", parent="S1")]
     m.components = [
