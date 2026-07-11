@@ -355,7 +355,13 @@ synthesis → parallel trace.**
     entities relate; the `E↔E` RELATIONS are the domain backbone and only the T5 owner authors them.
     (`--check-coverage` independently flags a sparse / under-harvested domain model — see below.)
 - Phase 2 Synthesize (barrier, one agent): T1 clusters/dedups all harvest outputs, and (large
-  maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier.
+  maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier. **Synthesis
+  is the final-ID authority.** Harvest agents may use per-slice *provisional* ids; synthesis assigns the
+  final canonical ids here. This is the safe place to renumber: Phase 1 produced only nodes (no edges
+  yet — those are Phase 3), so the only intra-slice references to fix up are `entry_point.component`,
+  `entity.subdomain`, and the `E↔E` `relation.target` / `FK→En` markers. Because collisions are resolved
+  before any edge is traced, a range overlap between two harvest agents can never reach the backbone;
+  `assemble`'s duplicate-id error remains the loud backstop if a stray collision slips through.
 - Phase 3 Trace (fan out, one agent per use case; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
   Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps) and also
