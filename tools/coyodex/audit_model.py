@@ -56,10 +56,11 @@ def _anchor(cell: str) -> str | None:
     return fm.group(0) if fm else None
 
 
-# Split a compound Actor cell into alternatives on UNAMBIGUOUS separators (`or`, `/`, `,`). NOT on
-# `and`: it usually belongs to an atomic role name ("Research and Development"), and splitting it
-# would let a fragment ("Research") wrongly match and hide a real mismatch.
-_ACTOR_SEP = re.compile(r"\s+or\s+|\s*/\s*|\s*,\s*", re.I)
+# Split a compound Actor cell into alternatives on UNAMBIGUOUS separators (`or`, `,`). NOT on `/`: a
+# slash legitimately belongs INSIDE a single role name ("Host LLM / MCP client", "Visitor / prospect"),
+# and splitting it invented two bogus half-names that never matched the flow's opening actor — 12 false
+# "differs" advisories in one real run. NOT on `and` either (an atomic "Research and Development").
+_ACTOR_SEP = re.compile(r"\s+or\s+|\s*,\s*", re.I)
 
 
 def _norm_actor(actor: str) -> str:

@@ -1560,6 +1560,26 @@ def test_hp_whyref_reads_whole_token() -> None:
     assert audit_model.happy_path_steps(m)[1].why_refs == [1]
 
 
+def test_actor_alternatives_does_not_split_a_slash_role_name() -> None:
+    # A role NAME containing "/" is one whole alternative — "/" is no longer an actor separator; a
+    # genuine `or`/`,` compound still splits.
+    assert audit_model._actor_alternatives("Host LLM / MCP client") == {"host llm / mcp client"}
+    assert audit_model._actor_alternatives("Admin or Manager") == {"admin", "manager"}
+
+
+def test_slash_role_name_yields_no_actor_mismatch() -> None:
+    # End-to-end: a use case driven by "Host LLM / MCP client" whose flow opens with that same role
+    # must NOT produce an actor-attribution advisory (the slash used to split it into two half-names).
+    from coyodex.model import Flow, FlowStep, ProjectModel, Role, UseCase
+    role = "Host LLM / MCP client"
+    m = ProjectModel(
+        roles=[Role(name=role)],
+        use_cases=[UseCase(id="UC1", name="x", actor=role)],
+        flows=[Flow(uc="UC1", title="t", steps=[FlowStep(n=1, src=role, dst="C1", phrase="acts")])],
+    )
+    assert audit_model.check_actor_attribution(m) == []
+
+
 def test_whyless_nonfirst_step_warns() -> None:
     checks = _checks(make_whyless_map())
     assert checks.get("why-less-step") == "WARNING", checks
