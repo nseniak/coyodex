@@ -16,19 +16,29 @@ from coyodex.assemble import load_fragment
 from coyodex.model import ModelError, ProjectModel
 from coyodex.validate_model import (
     _check_anchor_format,
+    _check_edges,
     _check_extra_conventions,
     check_anchor_existence_model,
+    check_domain_relations,
     check_entity_sources_model,
 )
 
 
 def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]:
-    """Every non-schema problem in one (partial) fragment: anchor format + `extra`-key conventions,
-    plus — when a repo root is given — that each anchor / entity source actually exists (a wrong
-    repo-root prefix or a stale `:line` surfaces here)."""
+    """Every non-schema problem in one (partial) fragment: anchor format + `extra`-key conventions +
+    the domain-relation rules (`keyed_by` misuse, verb alias, cardinality, dup) + the per-edge rules
+    (missing/contradictory `where`, empty verb, intra-fragment dup), plus — when a repo root is given
+    — that each anchor / entity source actually exists. This is the shift-left: an authoring agent
+    catches its own `keyed_by`/edge mistakes in-context instead of the lead reconciling them a phase
+    later at `validate`. Edge-level *warnings* (e.g. `no_call_site` + `where` together) are surfaced as
+    lint problems here — at authoring time they are worth fixing before returning the fragment."""
     problems: list[str] = list(_check_anchor_format(m))
     extra_problems, _extra_warnings = _check_extra_conventions(m)
     problems += extra_problems
+    rel_problems, _rel_warnings = check_domain_relations(m.entities)
+    problems += rel_problems
+    edge_problems, edge_warnings = _check_edges(m)
+    problems += edge_problems + edge_warnings
     if repo_root is not None:
         roots = [repo_root.resolve()]
         problems += check_anchor_existence_model(m, roots)

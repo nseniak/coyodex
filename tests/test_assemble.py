@@ -61,6 +61,56 @@ def test_duplicate_id_across_fragments_is_a_conflict():
     assert any("duplicate id C1" in p and "a.json" in p and "b.json" in p for p in problems)
 
 
+def test_assemble_collapses_same_edge_same_call_site():
+    # Two trace slices emit the SAME relationship at the SAME call site, differing only in the `why`
+    # wording (the real duplication pattern) → one row kept (the first `why`).
+    a = json.dumps({"edges": [{"src": "C1", "verb": "persists", "dst": "E1",
+                               "why": "insert the row", "where": "src/a.py:3"}]})
+    b = json.dumps({"edges": [{"src": "C1", "verb": "persists", "dst": "E1",
+                               "why": "creates and stores the record", "where": "src/a.py:3"}]})
+    parts = [("t1.json", load_fragment(a, "t1.json")), ("t2.json", load_fragment(b, "t2.json"))]
+    model, problems = merge_fragments(parts)
+    assert problems == []
+    assert len(model.edges) == 1 and model.edges[0].why == "insert the row"
+
+
+def test_assemble_keeps_edges_that_differ_in_anchor():
+    # Same (src,verb,dst) but a DIFFERENT where is a real conflict — NOT silently merged; both kept
+    # (validate then warns so a human picks the primary call site).
+    a = json.dumps({"edges": [{"src": "C1", "verb": "uses", "dst": "D1", "why": "q", "where": "a.py:3"}]})
+    b = json.dumps({"edges": [{"src": "C1", "verb": "uses", "dst": "D1", "why": "q", "where": "a.py:9"}]})
+    parts = [("a.json", load_fragment(a, "a.json")), ("b.json", load_fragment(b, "b.json"))]
+    model, _problems = merge_fragments(parts)
+    assert len(model.edges) == 2
+
+
+def test_assemble_never_merges_no_call_site_edges():
+    # A no_call_site edge has no anchor to disambiguate, so a differing `why` may be two DISTINCT
+    # couplings (two events on the same pair) — never silently merged; both kept for validate to warn.
+    a = json.dumps({"edges": [{"src": "C1", "verb": "notifies", "dst": "C2",
+                               "why": "publishes OrderCreated", "no_call_site": True}]})
+    b = json.dumps({"edges": [{"src": "C1", "verb": "notifies", "dst": "C2",
+                               "why": "publishes OrderCancelled", "no_call_site": True}]})
+    parts = [("a.json", load_fragment(a, "a.json")), ("b.json", load_fragment(b, "b.json"))]
+    model, _problems = merge_fragments(parts)
+    assert len(model.edges) == 2
+
+
+def test_dep_merge_then_edge_dedup_collapses_repointed_duplicates():
+    # dep-merge re-points two edges (C1→D2, C1→D1) onto the SAME survivor dep at the SAME call site;
+    # edge-dedup (which runs after) must then collapse the now-identical pair to one.
+    d1 = json.dumps({"deps": [{"id": "D1", "name": "stripe", "kind": "saas", "type": "payments"}],
+                     "edges": [{"src": "C1", "verb": "uses", "dst": "D1", "why": "charge",
+                                "where": "pay.py:5"}]})
+    d2 = json.dumps({"deps": [{"id": "D2", "name": "stripe", "kind": "saas", "type": "payments"}],
+                     "edges": [{"src": "C1", "verb": "uses", "dst": "D2", "why": "charge",
+                                "where": "pay.py:5"}]})
+    parts = [("a.json", load_fragment(d1, "a.json")), ("b.json", load_fragment(d2, "b.json"))]
+    model, _problems = merge_fragments(parts)
+    assert len(model.deps) == 1                       # stripe merged to one dep
+    assert len(model.edges) == 1 and model.edges[0].dst == "D1"   # re-pointed pair collapsed
+
+
 def test_duplicate_deps_merge_by_identity_and_repoint_edges():
     # Two agents discover the SAME external dep (stripe) under different ids; one traces an edge to the
     # second id. Merge collapses them to one dep and re-points the edge to the survivor (C2). No error —

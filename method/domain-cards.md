@@ -117,13 +117,17 @@ Parse one item with:
   valid and fails to parse; write the pair, e.g. `contains 1→0..1 E2`.
 - each side of the pair is one of: `1`, `*`, `0..1`, `1..*` — e.g. `1→0..1`, `*→1`, `0..1→*`.
 - an optional **`keyed_by`** annotation (JSON: `"keyed_by": ["upstream_id"]`, or a composite
-  `["org_id", "upstream_id"]`) names the **storage key(s)** whose value identifies the target — a
-  lookup / partition key the store imposes to relate the two, **not** a field on the entity row. Use
-  it for a *field-less* relation realized by keying (a per-parent store keyed by `parent_id`; a
-  backend may realize the key as a document field OR as a tree path — the annotation states the key,
-  not the mechanism). It renders on the arrow as **`«key» name(s)`** (marked distinct from a real row
-  FK) and gets its own **Keyed by** line in the click-panel. It is **mutually exclusive** with a real
-  backing FK field — the validator rejects declaring both (the FK label would win and hide the key).
+  `["org_id", "upstream_id"]`) names the **storage key(s)** the store uses to relate the two — a
+  lookup / partition key it imposes, **not** a field on EITHER entity's row. Use it for a *field-less*
+  relation realized by keying (a per-parent store keyed by `parent_id`; a backend may realize the key
+  as a document field OR as a tree path — the annotation states the key, not the mechanism). It
+  renders on the arrow as **`«key» name(s)`** (marked distinct from a real row FK) and gets its own
+  **Keyed by** line in the click-panel.
+  **Decision rule — `keyed_by` vs FK.** Use `keyed_by` ONLY when NO field on EITHER entity backs the
+  link. If a field carries the id — marked `FK→` OR a plain same-named column (`org_id`, `role`) —
+  that is a (reverse) foreign key: mark the field, do NOT use `keyed_by`. The validator rejects both a
+  `keyed_by` declared alongside a backing FK AND a `keyed_by` whose name matches a declared field (the
+  by-name FK the marker check would miss).
 - an optional trailing **`{how}` note** is a plain-text explanation for a *field-less* relation that
   `keyed_by` can't express — extra prose like scope or lifecycle (`tracks *→1 E11 {admin or
   per-user scope}`). It shows in the click-panel's **Implemented by** line (a `·` may not appear
@@ -156,11 +160,11 @@ by** line, so the two never drift:
   marked `FK→target`** (`role:string FK→E5`) → that **field name** (`subscription`, `role`);
 - **reverse** — the *target's* foreign key back to the source (`FK→source`) → **`↩ field`**
   (`↩ org_id`), the `↩` flagging that the field lives on the far / arrow-head end;
-- **storage key** — no field backs the relation, but the store keys the source under a value that
-  identifies the target (`keyed_by`) → **`«key» name(s)`** (`«key» upstream_id`). This is the **one
-  non-field label** the arrow carries, and the `«key»` marker keeps it honest: it is a real key in
-  the *store*, not a field on the row (you can follow it via the repository, not from the object). It
-  is mutually exclusive with a backing FK — a real field always wins;
+- **storage key** — no field on EITHER entity backs the relation, but the store keys the two together
+  under a lookup/partition key (`keyed_by`) → **`«key» name(s)`** (`«key» upstream_id`). This is the
+  **one non-field label** the arrow carries, and the `«key»` marker keeps it honest: it is a real key
+  in the *store*, not a field on the row (you can follow it via the repository, not from the object).
+  If the key IS a field on either row it is a (reverse) FK — mark the field, not `keyed_by`;
 - **otherwise → blank**, and the relation should carry a **`{how}` note** (see RELATIONS
   micro-format) — the marker + the target box convey the *kind*, but a field-less relation needs
   prose to say *how* it is wired (composed from two ids, event-derived, …).

@@ -263,12 +263,36 @@ def test_keyed_by_alone_is_clean_and_quiets_fieldless_nudge():
     assert not any("not backed by a field" in w for w in warnings_of(m))
 
 
-def test_keyed_by_with_backing_fk_is_rejected():
-    # a real FK field already backs the relation → declaring `keyed_by` too is the honesty error.
+def test_keyed_by_naming_a_declared_source_field_is_rejected():
+    # the key IS a plain (unmarked) field on the source row → it's a foreign key, not a storage key.
+    # This is the `Membership.role` misuse class the FK-marker XOR rule alone would miss.
+    e1 = Entity(id="E1", name="Membership", store="x", meaning="a thing", source="src/o.py:1",
+                fields=[EntityField(name="id", type="str", markers=["PK"]),
+                        EntityField(name="role", type="string", markers=[])],
+                relations=[EntityRelation(verb="assignedRole", target="E2", src_card="*",
+                                          dst_card="1", keyed_by=["role"])])
+    m = make_valid_model()
+    m.entities = [e1, make_entity("E2", "RoleDefinition")]
+    assert any("which is a declared field" in p and "role" in p for p in problems_of(m))
+
+
+def test_keyed_by_naming_a_declared_target_field_is_rejected():
+    # the key matches a field on the TARGET row → a reverse FK; still not a storage key.
+    e2 = Entity(id="E2", name="Child", store="x", meaning="a thing", source="src/c.py:1",
+                fields=[EntityField(name="id", type="str", markers=["PK"]),
+                        EntityField(name="parent_id", type="str", markers=[])])
+    m = make_valid_model()
+    m.entities = [make_entity("E1", "Parent", relations=[make_keyed_relation(["parent_id"], "has")]),
+                  e2]
+    assert any("which is a declared field" in p for p in problems_of(m))
+
+
+def test_keyed_by_with_differently_named_backing_fk_is_rejected():
+    # a real FK field (a DIFFERENT name than the key) backs the relation → the XOR rule catches it.
     e1 = Entity(id="E1", name="Order", store="orders", meaning="a thing", source="src/o.py:1",
                 fields=[EntityField(name="id", type="str", markers=["PK"]),
-                        EntityField(name="parent_id", type="str", markers=["FK→E2"])],
-                relations=[make_keyed_relation(["parent_id"])])
+                        EntityField(name="parent", type="E2", markers=[])],   # typed by the target
+                relations=[make_keyed_relation(["some_store_key"])])
     m = make_valid_model()
     m.entities = [e1, make_entity("E2", "Parent")]
     assert any("already backs it" in p and "keyed_by" in p for p in problems_of(m))
@@ -279,6 +303,15 @@ def test_keyed_by_empty_entry_is_rejected():
     m.entities = [make_entity("E1", "Order", relations=[make_keyed_relation([" "])]),
                   make_entity("E2", "Parent")]
     assert any("empty `keyed_by` entry" in p for p in problems_of(m))
+
+
+def test_validate_warns_on_duplicate_edges_with_differing_anchors():
+    # After assemble's exact-dedup, a remaining (src,verb,dst) duplicate differs in where/why — a real
+    # conflict the lead must reconcile; validate names it (non-blocking warning).
+    m = make_valid_model()
+    m.edges = [Edge(src="C1", verb="uses", dst="D1", why="q", where="a.py:3"),
+               Edge(src="C1", verb="uses", dst="D1", why="q", where="a.py:9")]
+    assert any("declared 2 times" in w for w in warnings_of(m))
 
 
 # --- v2-only behaviors ----------------------------------------------------------------

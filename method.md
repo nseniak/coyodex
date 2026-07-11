@@ -218,10 +218,15 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   **own** action text (above) and do not reuse it.
 - **`Where` = the call site: the `file:line` in `From`'s code where it invokes `To`** — not `To`'s
   definition. An edge `A — verb → B` is *evidenced* by the line in **A** where A uses B, so `Where`
-  points there. This is also the line a flow arrow opens (the drill-to-code link), so it should land on
-  the action. When the relationship fires at several sites, pick the **primary / most representative**
-  one (the edge is an aggregate — one `Where` per edge). Format it as a bare `path:line` anchor
-  (never a markdown link — see [the map model](method/model.md)'s Anchor formats).
+  points there. **Anchor the exact operative statement** — the write / call / enforce line itself —
+  **not the enclosing `def` or the surrounding assignment**; anchoring at the function header instead
+  of the operative line is the common drift the Phase-4 anchor-drift check flags. This is also the
+  line a flow arrow opens (the drill-to-code link), so it should land on the action. When the
+  relationship fires at several sites, pick the **primary / most representative** one (the edge is an
+  aggregate — one `Where` per edge; do NOT emit the same `(From, verb, To)` from several trace slices
+  with different anchors — `assemble` collapses same-call-site duplicates and `validate` flags
+  conflicting-anchor ones). Format it as a bare `path:line` anchor (never a markdown link — see
+  [the map model](method/model.md)'s Anchor formats).
   **`Where` is required** — a missing one is a blocking `validate` error, because a call-site-less edge
   gives a flow arrow nothing to open. The one exception: a relationship with **no single call site**
   (event-driven, shared-state, or config/DI-wired coupling, where `From` never directly calls `To`) —
@@ -383,7 +388,11 @@ synthesis → parallel trace.**
   is the *breaking* twin of the parallel *build*, aimed at falsification. **Fresh context is the whole
   point** — a verifier that sees the build reasoning inherits its blind spots. Each skeptic also reports
   the ONE `file:line` where the operation **actually** happens (the true call site); a drifted anchor
-  does NOT refute a true relationship (grounding truth is separate). **Then run
+  does NOT refute a true relationship (grounding truth is separate). Collect the skeptics' output as
+  the **verdicts file** `anchor-drift` consumes: `{"grounding": [{"claim": <the worklist claim
+  string>, "grounded": true|false|"unverifiable", "evidence": "path:line"}]}` — one row per claim
+  (or per vote when N skeptics run), `claim` matching the worklist text verbatim so the tool can pair
+  it, `evidence` the true call site. **Then run
   `coyodex anchor-drift --map … --verdicts …`** — a deterministic check that flags any CONFIRMED claim
   whose stored `where` drifts from the line the skeptics found; reconcile each by **fixing the map's
   `where`** (the check flags, you apply — the LLM only observed the line). Reconcile every refutation and

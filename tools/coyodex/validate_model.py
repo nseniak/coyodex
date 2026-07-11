@@ -26,7 +26,15 @@ from pathlib import Path
 
 from coyodex import grammar
 from coyodex.anchors import DIR_ANCHOR as _DIR_ANCHOR, FILE_ANCHOR as _ANCHOR_LINE
-from coyodex.model import ID_ARRAYS, ID_SHAPE, ModelError, ProjectModel, all_elements, load_model
+from coyodex.model import (
+    ID_ARRAYS,
+    ID_SHAPE,
+    Entity,
+    ModelError,
+    ProjectModel,
+    all_elements,
+    load_model,
+)
 from coyodex.validate_analysis import (
     _ALTITUDE_MIN,
     _COVERAGE_SAMPLE,
@@ -293,25 +301,37 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
         elif has_where and e.no_call_site:
             warnings.append(f"{e.src} → {e.dst}: `no_call_site` is set but a `Where` is present — "
                             "drop one so the intent is unambiguous")
+    # Duplicate backbone edges: `assemble` collapses same-call-site duplicates (identical anchor), so
+    # any (src,verb,dst) left here more than once points at DIFFERENT call sites (or is a no-call-site
+    # pair) — a real conflict (which call site is the true one? a duplicate once masked a wrong
+    # anchor). Flag for the lead to pick the primary site and move the other rationales to the T6 flow
+    # steps; a warning (non-blocking) so the map still renders.
+    triples: dict[tuple[str, str, str], int] = {}
+    for e in m.edges:
+        triples[(e.src, e.verb, e.dst)] = triples.get((e.src, e.verb, e.dst), 0) + 1
+    for (s, v, d), n in triples.items():
+        if n > 1:
+            warnings.append(f"{s} → {d}: the '{v}' edge is declared {n} times with differing call "
+                            "sites — keep the primary one, move the other rationales to the T6 flow "
+                            "steps (or set `no_call_site` if the coupling truly has no single site)")
     return problems, warnings
 
 
-def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
+def check_domain_relations(entities: list[Entity]) -> tuple[list[str], list[str]]:
+    """Per-relation problems + warnings for a set of domain cards: verb alias, half-cardinality,
+    duplicate relation, and the `keyed_by` rules (empty entry / names a real field / redundant with a
+    backing FK), plus the field-less-association nudge. Shared by `_check_domain_cards` (the whole map)
+    and `lint-fragment` (one fragment) so a `keyed_by` misuse is caught in the AUTHORING agent's own
+    turn, not only at the lead's `validate` — a fix lands once. Operates on whatever entities it is
+    given: a relation whose target lives in another fragment simply skips the target-side field checks
+    (the `r.target in backing` guard). The whole-map-only checks — entity completeness and the
+    'declared on both cards' direction rule — stay in `_check_domain_cards`."""
     problems: list[str] = []
     warnings: list[str] = []
-    directed: set[tuple[str, str]] = set()
     backing = {e.id: [(f.name, f.type, grammar.fk_targets(f.markers)) for f in e.fields]
-               for e in m.entities}
-    for e in m.entities:
-        if not e.meaning:
-            problems.append(f"Domain card {e.id} is missing a MEANING line")
-        if not e.source:
-            problems.append(f"Domain card {e.id} is missing a SOURCE link")
-        if not e.fields:
-            problems.append(f"Domain card {e.id} has no FIELDS")
-        for f in e.fields:
-            if not f.type:
-                problems.append(f"Domain card {e.id} field '{f.name}' has no type")
+               for e in entities}
+    field_names = {eid: {n for n, _t, _fk in flds} for eid, flds in backing.items()}
+    for e in entities:
         seen_pairs: set[tuple[str, str]] = set()
         for r in e.relations:
             if r.verb.lower() in grammar.REL_ALIAS:
@@ -324,7 +344,6 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
                 problems.append(f"Domain card {e.id} declares the relation "
                                 f"'{r.verb} … {r.target}' twice")
             seen_pairs.add((r.verb, r.target))
-            directed.add((e.id, r.target))
             # resolve the backing field(s) ONCE — reused by the keyed_by XOR rule and the
             # field-less-association nudge below (either side: forward source field or reverse FK).
             back_names: list[str] = []
@@ -335,7 +354,19 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
                 if any(not k.strip() for k in r.keyed_by):
                     problems.append(f"Domain card {e.id}: relation '{r.verb} … {r.target}' has an "
                                     f"empty `keyed_by` entry")
-                if back_names:
+                # keyed_by is for a key that is NOT a field on either row. If it NAMES a declared field
+                # (source or target) it is really a (reverse) foreign key — mark the field, don't key
+                # it. This catches the unmarked by-name FK the XOR rule (FK-marked only) misses.
+                clash = sorted({k for k in r.keyed_by
+                                if k in field_names.get(e.id, set())
+                                or k in field_names.get(r.target, set())})
+                if clash:
+                    problems.append(
+                        f"Domain card {e.id}: relation '{r.verb} … {r.target}' keys on "
+                        f"{', '.join(clash)}, which is a declared field — that's a foreign key; mark "
+                        f"the field `FK→{r.target}` (or `FK→{e.id}` on {r.target}), not `keyed_by`. "
+                        f"(If it is an unrelated key that only shares the name, rename the key.)")
+                elif back_names:
                     problems.append(
                         f"Domain card {e.id}: relation '{r.verb} … {r.target}' declares `keyed_by` "
                         f"but a real field ({', '.join(back_names)}) already backs it — a storage "
@@ -349,6 +380,24 @@ def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
                     f"Domain card {e.id}: relation '{r.verb} … {r.target}' is not backed by a "
                     f"field and has no {{…}} note — mark the implementing field `FK→{r.target}` "
                     f"(or `FK→{e.id}` on {r.target}), or add a `{{how}}` note explaining the link")
+    return problems, warnings
+
+
+def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
+    problems, warnings = check_domain_relations(m.entities)
+    directed: set[tuple[str, str]] = set()
+    for e in m.entities:
+        if not e.meaning:
+            problems.append(f"Domain card {e.id} is missing a MEANING line")
+        if not e.source:
+            problems.append(f"Domain card {e.id} is missing a SOURCE link")
+        if not e.fields:
+            problems.append(f"Domain card {e.id} has no FIELDS")
+        for f in e.fields:
+            if not f.type:
+                problems.append(f"Domain card {e.id} field '{f.name}' has no type")
+        for r in e.relations:
+            directed.add((e.id, r.target))
     for a, b in directed:
         if a < b and (b, a) in directed:
             problems.append(f"Relation between {a} and {b} is declared on both cards — author it "

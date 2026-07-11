@@ -85,6 +85,7 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]]) -> tuple[ProjectModel
                                     f"and {label} — agents must keep to their pre-allocated ID ranges")
                 id_owner.setdefault(el.id, label)
     _merge_duplicate_deps(out)
+    _merge_duplicate_edges(out)  # AFTER dep-merge: re-pointing src/dst can create new exact dups
     return out, problems
 
 
@@ -120,6 +121,35 @@ def _merge_duplicate_deps(m: ProjectModel) -> None:
     for e in m.edges:               # edges are the only refs into a dep id (C→D)
         e.src = remap.get(e.src, e.src)
         e.dst = remap.get(e.dst, e.dst)
+
+
+def _merge_duplicate_edges(m: ProjectModel) -> None:
+    """Collapse backbone edges that are the SAME relationship at the SAME call site — identical
+    `(src, verb, dst, where)` with a CONCRETE `where` — into one, keeping the first (deterministic).
+    Parallel trace agents each independently emit the same `C→E`/`enforces` edge; nothing deduped
+    them, so the stored map + markdown table carried the redundant rows. Merging on a real anchor is
+    SAFE — the exact `file:line` pins the fact, so it is unambiguously one edge; only the `why`
+    rationale varies in wording (both describe the same fact), and the backbone keeps one `why` per
+    edge (the differing prose belongs in the T6 flow steps).
+
+    A `no_call_site` edge (null `where`) is NEVER merged — with no anchor to disambiguate, a differing
+    `why` may be the only signal that two DISTINCT couplings exist (two events on the same C→C pair),
+    so those fall through to `validate`'s duplicate-edge warning for a human to reconcile. Likewise an
+    edge that shares `(src, verb, dst)` but points at a DIFFERENT anchor is left as-is (which call
+    site is the true one — a duplicate once masked a wrong anchor). Mirrors `_merge_duplicate_deps`:
+    only an unambiguous identity merges, never a wrong one."""
+    seen: set[tuple[str, str, str, str]] = set()
+    kept = []
+    for e in m.edges:
+        if not e.where:                        # no concrete anchor → can't safely disambiguate; keep
+            kept.append(e)                     # (validate's duplicate-triple warning surfaces these)
+            continue
+        key = (e.src, e.verb, e.dst, e.where)
+        if key in seen:
+            continue
+        seen.add(key)
+        kept.append(e)
+    m.edges = kept
 
 
 _GITIGNORE_KEEP = "build-fragments/"       # the agents' scratch dir — never committed

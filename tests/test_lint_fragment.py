@@ -34,6 +34,26 @@ def test_lint_clean_fragment_has_no_problems():
     assert lint_fragment.lint_fragment_problems(m, None) == []
 
 
+def test_lint_catches_keyed_by_misuse_in_fragment():
+    # shift-left: the keyed_by-vs-field misuse is caught in the authoring agent's own lint, not only
+    # a phase later at the lead's validate.
+    m = make_fragment({"entities": [
+        {"id": "E1", "name": "Membership", "meaning": "m", "source": "src/m.py:1",
+         "fields": [{"name": "role", "type": "string"}],
+         "relations": [{"verb": "assignedRole", "target": "E2", "keyed_by": ["role"]}]}]})
+    problems = lint_fragment.lint_fragment_problems(m, None)
+    assert any("which is a declared field" in p for p in problems)
+
+
+def test_lint_catches_no_call_site_with_where_in_fragment():
+    # shift-left: an edge that sets both `no_call_site` and a `where` is caught at lint (was a
+    # validate-only warning before).
+    m = make_fragment({"edges": [
+        {"src": "C1", "verb": "uses", "dst": "C2", "where": "a.py:3", "no_call_site": True}]})
+    problems = lint_fragment.lint_fragment_problems(m, None)
+    assert any("no_call_site" in p and "Where" in p for p in problems)
+
+
 def test_lint_extensionless_anchor_is_accepted():
     # A2: an extensionless ops file with a line is a valid anchor, so lint must not reject it.
     m = make_fragment({"deps": [{"id": "D1", "name": "img", "where_configured": "Dockerfile:1"}]})
