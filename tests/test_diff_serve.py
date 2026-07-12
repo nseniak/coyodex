@@ -24,6 +24,7 @@ from coyodex.viewer.serve import (
     diff_changes,
     file_diff,
     load_project,
+    project_commits,
     project_diff,
     resolve_ref,
 )
@@ -201,6 +202,27 @@ def test_file_diff_rejects_bad_range() -> None:
         except ValueError:
             raised = True
         assert raised
+
+
+def test_project_commits_lists_from_pin() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        commit(root, {"a.py": "1\n"}, msg="first")
+        commit(root, {"a.py": "2\n"}, msg="second")
+        x = commit(root, {"a.py": "3\n"}, msg="third")
+        write_map(root, x, [Component(id="C1", name="C1", source="a.py:1")])
+        commit(root, {}, msg="commit the map")   # a later commit; the pin stays x
+        proj = load_project(str(root))
+        assert proj is not None
+        out = project_commits(proj, limit=10)
+        commits = out["commits"]
+        assert isinstance(commits, list)
+        subjects = [c["subject"] for c in commits]
+        assert subjects[0] == "third"        # the list starts at the pin (x), newest first
+        assert "second" in subjects and "first" in subjects
+        assert "commit the map" not in subjects   # a commit AFTER the pin is not reachable from it
+        for c in commits:
+            assert set(c.keys()) == {"sha", "date", "subject"}
 
 
 # --- project_diff: guard rails --------------------------------------------------

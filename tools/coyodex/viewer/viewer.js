@@ -4849,6 +4849,31 @@ function openDiffPop() {
   diffpop.hidden = false;
   document.getElementById('diffRef').value = '';
   document.getElementById('diffpopmsg').textContent = '';
+  loadDiffCommits();
+}
+// Recent commits (from the pin) as one-click compare targets for direction B — so you needn't know a
+// SHA. The list drops its first entry (the pin itself, which can't be a base) and each row compares
+// that commit → the map. Fetched lazily each time the picker opens.
+let diffCommitsLoaded = false;
+async function loadDiffCommits() {
+  const host = document.getElementById('diffcommits');
+  if (!host || diffCommitsLoaded) return;
+  host.innerHTML = '<div class="diffpop-loading">Loading recent commits…</div>';
+  let data;
+  try {
+    const r = await fetch(API_BASE + 'commits', { cache: 'no-store' });
+    if (!r.ok) throw new Error('commits ' + r.status);
+    data = await r.json();
+  } catch (_) { host.innerHTML = ''; return; }
+  const commits = (data.commits || []).slice(1);   // drop the pin itself (base must differ from it)
+  diffCommitsLoaded = true;
+  if (!commits.length) { host.innerHTML = ''; return; }
+  host.innerHTML = commits.map((c) =>
+    '<button type="button" class="diffcommit" data-sha="' + esc(c.sha) + '" title="' + esc(c.subject) + '">'
+    + '<span class="dc-sha">' + esc(c.sha) + '</span>'
+    + '<span class="dc-subj">' + esc(c.subject) + '</span></button>').join('');
+  host.querySelectorAll('.diffcommit').forEach((b) =>
+    b.addEventListener('click', () => loadLiveDiff(b.getAttribute('data-sha'), ghRef())));
 }
 diffbtn.addEventListener('click', (e) => { e.stopPropagation(); diffpop.hidden ? openDiffPop() : closeDiffPop(); });
 document.addEventListener('click', (e) => { if (!diffpop.hidden && !diffctl.contains(e.target)) closeDiffPop(); });

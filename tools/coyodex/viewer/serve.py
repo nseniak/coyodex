@@ -338,6 +338,28 @@ def file_diff(proj: Project, path: str, base_ref: str, target_ref: str) -> dict[
     }
 
 
+def project_commits(proj: Project, limit: int = 25) -> dict[str, object]:
+    """Recent commits reachable from the map's pin — the picker's list of things to compare the map
+    against (direction B: an older commit → the pin). The first entry IS the pin; the frontend offers
+    the rest as base candidates. Empty list if the pin is missing/unresolvable."""
+    pin = proj.commit
+    if not pin or not _valid_commit(pin):
+        return {"commits": [], "pin": None}
+    pin_sha = resolve_ref(proj.repo_root, pin)
+    if pin_sha is None:
+        return {"commits": [], "pin": None}
+    code, out = _git(proj.repo_root, ["log", f"-n{max(1, min(limit, 100))}",
+                                      "--format=%h%x1f%ad%x1f%s", "--date=short", pin_sha])
+    if code != 0:
+        return {"commits": [], "pin": pin_sha}
+    commits: list[dict[str, str]] = []
+    for line in out.decode("utf-8", "replace").splitlines():
+        parts = line.split("\x1f")
+        if len(parts) == 3:
+            commits.append({"sha": parts[0], "date": parts[1], "subject": parts[2]})
+    return {"commits": commits, "pin": pin_sha}
+
+
 def project_tree(proj: Project) -> FileTreeNode:
     """The file-browser tree for a project — git file set at the commit, overlaid with map coverage.
 
@@ -619,6 +641,9 @@ class Handler(BaseHTTPRequestHandler):
             except (ModelError, OSError, KeyError, IndexError, TypeError) as e:
                 return self._send(500, "text/plain; charset=utf-8",
                                   f"could not build the diff: {e}".encode("utf-8"))
+        if rest == ["commits"]:
+            # Recent commits from the pin — the diff picker's list of things to compare the map against.
+            return self._json(project_commits(proj))
         if rest == ["srcdiff"]:
             # One file's inline diff across the active range, for the code view's diff mode.
             path = (query.get("path") or [""])[0]
