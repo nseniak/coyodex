@@ -15,6 +15,7 @@ let MERMAID_DOMAIN_CONTAINER;   // Subdomains overview (flowchart of SD boxes)
 let MERMAID_DOMAIN_SUB;         // per-subdomain card: SD-id -> classDiagram
 let MERMAID_DOMAIN_EDGE_CARD;   // subdomain edge pair: 'A>B' -> two-subdomain classDiagram
 let MERMAID_BRIDGE_CARD;        // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
+let BRIDGE_EDGES;               // flat list of every component->entity edge (structure<->domain bridge atoms)
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
 let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box sequence
 let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
@@ -50,7 +51,7 @@ function applyBundle(b) {
   MERMAID_EDGE_CARD = b.mermaidEdgeCard; CONTAINER_EDGES = b.containerEdges;
   MERMAID_DOMAIN = b.mermaidDomain; MERMAID_DOMAIN_CONTAINER = b.mermaidDomainContainer;
   MERMAID_DOMAIN_SUB = b.mermaidDomainSub; MERMAID_DOMAIN_EDGE_CARD = b.mermaidDomainEdgeCard;
-  MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
+  MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; BRIDGE_EDGES = b.bridgeEdges; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
   MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
   HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
@@ -174,6 +175,12 @@ for (const f of GRAPH.flows || []) {
 // When a click navigates to another view to reveal a node (the file browser, a flow element link, the
 // change-impact summary), the node id to select is stashed here and applied once that view has rendered.
 let pendingSelect = null;
+// A focus-drill (⌘-drill a single component/entity cross arrow) stashes that node id here so the target
+// edge card, once rendered, centers it (at the fresh-fit zoom) — guaranteeing the focused element is
+// on-screen instead of restoring the pair card's last camera, which could leave it off-screen. One-shot:
+// the next non-transient render consumes and clears it, so a plain history revisit (which sets no
+// pendingCenter) still restores the camera where it was left.
+let pendingCenter = null;
 
 // node id -> its injected corner-action icon element (see decorateActionIcons), so a ⌘-click / double
 // click drill (isDrillClick) can flash the SAME icon a direct icon-click would have used — one visual
@@ -753,32 +760,104 @@ function showBridge(sid, sd) {
     + '<span class="badge edge">bridge</span></div>'
     + subsystemBlock(sid) + '<hr>' + subsystemBlock(sd);
 }
+// Each synthetic-arrow row (a listed sub-arrow) is SELECTABLE when it carries a LOCAL call site: this
+// attribute stamps the row's `where` onto its <li> (off-repo/absent rows stay plain, non-selectable).
+// bindArrowRows then wires a click to reveal that location in the code viewer. Shared by the
+// container/domain/bridge arrow panels.
+function whereAttr(where) {
+  return (where && localRef(where)) ? ' data-where="' + esc(where) + '"' : '';
+}
+// Wire every selectable arrow row in a just-rendered panel: a click selects it (one at a time) and
+// shows its call site in the code viewer — the same reveal a real edge selection does.
+function bindArrowRows(root) {
+  const rows = root.querySelectorAll('li.xrow[data-where]');
+  rows.forEach((li) => li.addEventListener('click', () => {
+    rows.forEach((o) => o.classList.remove('sel'));
+    li.classList.add('sel');
+    const wn = whereNode(li.getAttribute('data-where'));
+    openInCodeViewer(wn.file, wn.line);
+  }));
+}
 // Selecting (not drilling) a Subsystems arrow: list every component→component crossing it bundles as
-// `from → to:` with its explanation indented below — one uniform font, no verb — so the wiring is
-// readable without leaving the map.
-function showContainerEdge(a, b) {
+// `from → to:` with its explanation (and a link to its call site) indented below — one uniform font, no
+// verb — so the wiring is readable without leaving the map.
+function showContainerEdge(a, b, drawn) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  const list = CONTAINER_EDGES[a + '>' + b] || [];
+  let list = CONTAINER_EDGES[a + '>' + b] || [];
+  // In a subsystem card the clicked arrow is drawn from/to ONE member component (the neighbour is a
+  // collapsed box), so its LABEL counts only that component's crossings. Narrow the pair's crossing
+  // list to the same component so the panel count matches the label. A drawn endpoint that is the
+  // subsystem box itself (a or b) doesn't constrain — every component inside it stays. In the
+  // Subsystems overview both drawn ends ARE a/b (subsystems), so nothing is filtered.
+  const isComp = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'component';
+  const srcC = drawn && isComp(drawn.src) ? drawn.src : null;
+  const dstC = drawn && isComp(drawn.dst) ? drawn.dst : null;
+  if (srcC) list = list.filter((r) => r.src === srcC);
+  if (dstC) list = list.filter((r) => r.dst === dstC);
   const items = list.map((r) =>
-    '<li><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
+    '<li class="xrow"' + whereAttr(r.where) + '><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
     + (r.why ? '<div class="xwhy">' + mdInline(r.why) + '</div>' : '') + '</li>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+  const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
     + '<span class="badge edge">connections</span></div>'
     + '<div class="xcount">' + list.length + ' connection' + (list.length === 1 ? '' : 's') + '</div>'
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no connections recorded</p>');
+  bindArrowRows(panel);
 }
 // Selecting an inter-subdomain arrow (Domain overview): list every entity→entity relation it bundles as
 // `from → to:` with its verb (+ kind) below — the domain analog of showContainerEdge.
-function showDomainContainerEdge(a, b) {
+function showDomainContainerEdge(a, b, drawn) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  const list = DOMAIN_CONTAINER_EDGES[a + '>' + b] || [];
+  let list = DOMAIN_CONTAINER_EDGES[a + '>' + b] || [];
+  // Mirror showContainerEdge: in a subdomain card the clicked arrow is drawn from/to ONE focal entity
+  // (the neighbour is a collapsed box), so its LABEL counts only that entity's relations. Narrow the
+  // pair's relation list to the same entity so the panel count matches the label. A drawn endpoint that
+  // is the subdomain box itself (a or b) doesn't constrain. In the Domain overview both ends ARE a/b.
+  const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
+  const srcE = drawn && isEnt(drawn.src) ? drawn.src : null;
+  const dstE = drawn && isEnt(drawn.dst) ? drawn.dst : null;
+  if (srcE) list = list.filter((r) => r.src === srcE);
+  if (dstE) list = list.filter((r) => r.dst === dstE);
   const items = list.map((r) =>
-    '<li><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
+    '<li class="xrow"' + whereAttr(r.where) + '><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
     + '<div class="xwhy">' + esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : '') + '</div></li>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
+  const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
     + '<span class="badge edge">relations</span></div>'
     + '<div class="xcount">' + list.length + ' relation' + (list.length === 1 ? '' : 's') + '</div>'
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no relations recorded</p>');
+  bindArrowRows(panel);
+}
+// Selecting a BRIDGE arrow (structure↔domain): the component↔subdomain arrow in a subsystem card, or the
+// subsystem↔entity arrow in a subdomain/domain view. It bundles component→entity edges; list each as
+// `component → entity:` with its verb, explanation, and call-site link — the bridge analog of
+// showContainerEdge. BRIDGE_EDGES is one flat list of every C→E edge; narrow it to the arrow's drawn
+// endpoints by KIND (component→src, entity→dst, subsystem→sub, subdomain→sd), which covers both arrow
+// orientations, so the panel count matches the arrow's label.
+function showBridgeEdge(drawn) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const ends = [drawn.src, drawn.dst];
+  // Match each drawn end against the C→E atom by kind. A leaf end (component/entity) matches its own
+  // id. A GROUP end (subsystem/subdomain box) matches any atom whose component/entity is in that box's
+  // subtree — `isAncestorOf` covers BOTH the top-level box (a subsystem/subdomain overview arrow) AND a
+  // NESTED child box (a bridge card draws arrows from child boxes), so the panel count matches the
+  // arrow's label at every level. (A pre-computed top-ancestor field would miss the nested boxes.)
+  const list = (BRIDGE_EDGES || []).filter((r) => ends.every((id) => {
+    const k = GRAPH.nodes[id] && GRAPH.nodes[id].kind;
+    return k === 'component' ? r.src === id
+      : k === 'entity' ? r.dst === id
+        : k === 'subsystem' ? isAncestorOf(id, r.src)
+          : k === 'subdomain' ? isAncestorOf(id, r.dst)
+            : true;
+  }));
+  const items = list.map((r) =>
+    '<li class="xrow"' + whereAttr(r.where) + '><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
+    + '<div class="xwhy">' + esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : '') + '</div></li>').join('');
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(drawn.src)) + ' → ' + esc(nm(drawn.dst)) + '</h2>'
+    + '<span class="badge edge">bridge</span></div>'
+    + '<div class="xcount">' + list.length + ' link' + (list.length === 1 ? '' : 's') + '</div>'
+    + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no links recorded</p>');
+  bindArrowRows(panel);
 }
 
 // --- Happy Path + use-case panels -----------------------------------------------
@@ -1201,9 +1280,12 @@ function actionTipNode(id) {
     return '<div class="tt">Open Libraries</div><div class="tm">' + FOLDED_LIBS.length + ' bundled</div>';
   return null;
 }
-function actionTipEdge(a, b) {
+function actionTipEdge(a, b, drawn) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  return '<div class="tt">Open</div><div class="tm">' + esc(nm(a)) + ' &rarr; ' + esc(nm(b)) + '</div>';
+  // Preview the DRAWN endpoints when given (a card's single-component cross arrow), so the ⌘-hover tip
+  // names what the zoom will land focused on rather than the whole collapsed pair. Falls back to a/b.
+  const ha = drawn ? drawn.src : a, hb = drawn ? drawn.dst : b;
+  return '<div class="tt">Open</div><div class="tm">' + esc(nm(ha)) + ' &rarr; ' + esc(nm(hb)) + '</div>';
 }
 function actionTipHP(hpId) {
   const s = HP_BY_ID[hpId];
@@ -1682,19 +1764,39 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
 // subsystem card the arrow is drawn component→neighbour, so the caller passes the DRAWN endpoints —
 // otherwise selecting the component wouldn't keep its own cross arrow + the neighbour box lit.
 function bindContainerEdge(scene, p, label, a, b, focusE) {
-  bindSelectEdge(scene, p, label, focusE || { src: a, dst: b }, 'sedge:' + a + '>' + b,
-    () => showContainerEdge(a, b),
-    { onDrill: () => go({ kind: 'edge', a, b }), actionFn: () => actionTipEdge(a, b) });
+  const drawn = focusE || { src: a, dst: b };
+  const isComp = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'component';
+  // When the clicked arrow is a single member component's cross arrow, ⌘-drill lands on the pair's edge
+  // card with THAT component selected (its crossings lit, the rest of the pair dimmed) — so the zoom
+  // keeps the same focus as the click instead of widening to the whole subsystem. A box↔box arrow (the
+  // Subsystems overview) has no component end, so it opens the pair unfocused, as before. If the picked
+  // component isn't drawn in the edge card, render falls back to the plain two-subsystem panel.
+  const focusComp = isComp(drawn.src) ? drawn.src : (isComp(drawn.dst) ? drawn.dst : null);
+  const edge = focusComp ? { kind: 'edge', a, b, sel: 'node:' + focusComp } : { kind: 'edge', a, b };
+  // Key the selection by the DRAWN endpoints, not the collapsed pair: a card can draw several arrows to
+  // the same neighbour (one per member component), and each is its own selectable arrow with its own
+  // filtered panel.
+  bindSelectEdge(scene, p, label, drawn, 'sedge:' + drawn.src + '>' + drawn.dst,
+    () => showContainerEdge(a, b, drawn),
+    { onDrill: () => { if (focusComp) pendingCenter = focusComp; go(edge); }, actionFn: () => actionTipEdge(a, b, drawn) });
 }
 // A bridge arrow across the structural↔domain groupings (component↔subdomain in a subsystem card,
 // subsystem↔entity in a subdomain card, labelled owns/reads). Registered as an edge with its DRAWN
 // endpoints so a focus pass keeps it + both ends lit; a plain click shows the collapsed `box`'s panel,
 // a ⌘-click drills into `target` (that box's own card). The bridge has no `why`, so the default tip
 // shows nothing on hover — consistent with a why-less component edge.
-function bindBridgeEdge(scene, p, label, a, b, target, box) {
-  bindSelectEdge(scene, p, label, { src: a, dst: b }, 'bridge:' + a + '>' + b,
-    () => showNode(box),
-    { onDrill: () => go(target), actionFn: () => actionTipNode(box) });
+function bindBridgeEdge(scene, p, label, a, b, target) {
+  const drawn = { src: a, dst: b };
+  const kindOf = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind;
+  // Focus the LEAF end (the component or entity) on drill: it's a real, selectable node in the bridge
+  // card (the subsystem/subdomain end is a frame), and highlighting it lights exactly its C→E links —
+  // the bridge analog of the container drill focusing its member. pendingCenter centres it on arrival.
+  const leaf = (kindOf(a) === 'component' || kindOf(a) === 'entity') ? a
+    : (kindOf(b) === 'component' || kindOf(b) === 'entity') ? b : null;
+  const tgt = leaf ? { ...target, sel: 'node:' + leaf } : target;
+  bindSelectEdge(scene, p, label, drawn, 'bridge:' + a + '>' + b,
+    () => showBridgeEdge(drawn),
+    { onDrill: () => { if (leaf) pendingCenter = leaf; go(tgt); }, actionFn: () => actionTipEdge(a, b, drawn) });
 }
 
 // `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn } or null to skip.
@@ -1939,9 +2041,16 @@ function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', s
 // (the sidebar lists every entity→entity relation it bundles) and a ⌘-click drills into the
 // two-subdomain edge view. The domain analog of bindContainerEdge.
 function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
-  bindSelectEdge(scene, p, label, focusE || { src: a, dst: b }, 'dctxedge:' + a + '>' + b,
-    () => showDomainContainerEdge(a, b),
-    { onDrill: () => go({ kind: 'domedge', a, b }), actionFn: () => actionTipEdge(a, b) });
+  const drawn = focusE || { src: a, dst: b };
+  const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
+  // Mirror bindContainerEdge: ⌘-drill a single focal-entity relation arrow lands on the pair's edge
+  // card with THAT entity selected (its relations lit, the rest of the pair dimmed); a box↔box arrow
+  // (the Domain overview) opens the pair unfocused, as before.
+  const focusEnt = isEnt(drawn.src) ? drawn.src : (isEnt(drawn.dst) ? drawn.dst : null);
+  const dom = focusEnt ? { kind: 'domedge', a, b, sel: 'node:' + focusEnt } : { kind: 'domedge', a, b };
+  bindSelectEdge(scene, p, label, drawn, 'dctxedge:' + drawn.src + '>' + drawn.dst,
+    () => showDomainContainerEdge(a, b, drawn),
+    { onDrill: () => { if (focusEnt) pendingCenter = focusEnt; go(dom); }, actionFn: () => actionTipEdge(a, b, drawn) });
 }
 // Subdomain neighbourhood (a classDiagram): the focal subdomain's entities (framed in a namespace)
 // SELECT / open-source like the flat Domain view; each collapsed neighbour-subdomain box ⌘-drills
@@ -1986,7 +2095,7 @@ function bindDomainSub(sd) {
       bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showEdge(e));
     } else if (kx === 'subsystem' || ky === 'subsystem') {  // a bridge arrow: subsystem -> entity (owns/reads)
       const sub = kx === 'subsystem' ? x : y;
-      bindBridgeEdge(mainScene, p, label, x, y, { kind: 'bridge', sid: sub, sd: sd }, sub);  // ⌘ -> the S×SD bridge card
+      bindBridgeEdge(mainScene, p, label, x, y, { kind: 'bridge', sid: sub, sd: sd });  // ⌘ -> the S×SD bridge card
     } else {  // a cross arrow involving a collapsed subdomain box — disjoint pairs card, overlapping ones navigate
       const subX = kx === 'subdomain', subY = ky === 'subdomain';
       if (subX && subY) {  // box <-> box (child subdomain <-> neighbour, or child <-> child)
@@ -2037,7 +2146,7 @@ function bindSubsystem(sid) {  // neighbourhood: component -> detail; ⌘-click 
     const kb = GRAPH.nodes[b] && GRAPH.nodes[b].kind;
     if (ka === 'subdomain' || kb === 'subdomain') {  // bridge arrow: a member component <-> a subdomain box
       const sd = ka === 'subdomain' ? a : b;
-      bindBridgeEdge(mainScene, p, label, a, b, { kind: 'bridge', sid: sid, sd: sd }, sd);  // ⌘ -> the S×SD bridge card
+      bindBridgeEdge(mainScene, p, label, a, b, { kind: 'bridge', sid: sid, sd: sd });  // ⌘ -> the S×SD bridge card
       return;
     }
     const subA = ka === 'subsystem', subB = kb === 'subsystem';
@@ -2161,7 +2270,7 @@ function bindDomain() {
     const ks = GRAPH.nodes[src] && GRAPH.nodes[src].kind, kd = GRAPH.nodes[dst] && GRAPH.nodes[dst].kind;
     if (ks === 'subsystem' || kd === 'subsystem') {  // a bridge arrow subsystem -> entity (owns/reads)
       const sub = ks === 'subsystem' ? src : dst, ent = ks === 'subsystem' ? dst : src;
-      bindBridgeEdge(mainScene, p, label, src, dst, { kind: 'bridge', sid: sub, sd: topSubdomainOf(ent) }, sub);  // ⌘ -> bridge card
+      bindBridgeEdge(mainScene, p, label, src, dst, { kind: 'bridge', sid: sub, sd: topSubdomainOf(ent) });  // ⌘ -> bridge card
       return;
     }
     const arr = COMP_LOOKUP[src + '>' + dst];
@@ -2691,14 +2800,19 @@ async function render(sArg, transient) {
   // instance, or null, on a fresh navigation), so it's applied below, once svgPanZoom has been
   // (re)constructed for the new view.
   let pendingMatchTextId = null;
+  let pendingCenterId = null;
   if (!transient && pendingSelect) {
     const id = pendingSelect; pendingSelect = null;
     const el = mainScene.nodeEls[id];
     if (el) selectNode(mainScene, el, id); else showNodeDetailSynced(id);
     if (el) pendingMatchTextId = id;
   } else if (!transient && s.sel && mainScene.selectors[s.sel]) {
-    mainScene.selectors[s.sel]();  // history revisit: restore the element that was selected in this view
+    mainScene.selectors[s.sel]();  // history revisit OR fresh focus-drill: apply the selection
+    // A fresh focus-drill (pendingCenter set at drill time) centers its focused node at the fit zoom so
+    // it can't land off-screen; a plain history revisit leaves pendingCenter null and keeps the camera.
+    if (pendingCenter && s.sel === 'node:' + pendingCenter && mainScene.nodeEls[pendingCenter]) pendingCenterId = pendingCenter;
   }
+  if (!transient) pendingCenter = null;
   const svgEl = diagram.querySelector('svg');
   if (svgEl && window.svgPanZoom) {
     svgEl.removeAttribute('style');
@@ -2717,10 +2831,14 @@ async function render(sArg, transient) {
     // so a synchronous matchTextSize would measure the still-showing fit transform while the internal state
     // already held the restored vp. Those two disagreeing is what threw the selected box off-screen; leaving
     // the fresh fit in place (its transform IS applied synchronously) keeps measurement and state in step.
-    const vp = (transient || pendingMatchTextId) ? null : (s.vp || vpByView[stateKey(s)]);
+    // A focus-drill centre (pendingCenterId) skips the restore for the same reason a matchTextSize does:
+    // it re-aims the camera, and it must measure against the synchronously-applied fresh fit, not a
+    // restored vp that svg-pan-zoom won't paint until the next frame.
+    const vp = (transient || pendingMatchTextId || pendingCenterId) ? null : (s.vp || vpByView[stateKey(s)]);
     if (vp) { mainPz.zoom(vp.zoom); mainPz.pan(vp.pan); }
     updateZoomLevel();
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
+    else if (pendingCenterId) applyZoomAndCenter(mainScene.nodeEls[pendingCenterId], 1);  // centre only, keep the fit zoom
     flowInit();  // a flow view: show the step player (unstarted on a fresh open; nothing auto-selected)
   }
   if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e)) resetScene(mainScene); });  // empty space deselects

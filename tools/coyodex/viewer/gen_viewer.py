@@ -476,6 +476,7 @@ def gen_domain_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str
             "dstName": str(graph["nodes"][str(e["dst"])]["name"]) if str(e["dst"]) in graph["nodes"] else str(e["dst"]),
             "verb": str(e["verb"]),
             "kind": str(e.get("kind") or ""),
+            "where": str(e["where"]) if e.get("where") else "",  # call-site path:line -> per-row source link
         } for e in edges]
     return out
 
@@ -785,7 +786,35 @@ def gen_container_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
             "dstName": str(graph["nodes"][str(e["dst"])]["name"]) if str(e["dst"]) in graph["nodes"] else str(e["dst"]),
             "verb": str(e["verb"]),
             "why": str(e["why"]) if e["why"] else "",
+            "where": str(e["where"]) if e.get("where") else "",  # call-site path:line -> per-row source link
         } for e in edges]
+    return out
+
+
+def gen_bridge_edges(graph: GraphDict) -> list[dict[str, str]]:
+    """Every component->entity edge — the structure<->domain bridge ATOM — with resolved endpoint names
+    and call site. A bridge arrow (component->subdomain box in a subsystem card, subsystem box->entity in
+    a subdomain/domain view, or a child-box arrow inside a bridge card) bundles a subset of these; the
+    viewer filters this ONE flat list by the clicked arrow's drawn endpoints — a leaf end by id, a group
+    (subsystem/subdomain) end by subtree membership — to list exactly the C->E links that arrow stands
+    for at any level. The bridge analog of gen_container_edges (flat, not pre-keyed, because the same
+    edge is reachable from differently-keyed arrow shapes; subtree tests live in the viewer, which
+    already walks the parent chain, so no per-level ancestor is baked here)."""
+    nodes = graph["nodes"]
+    out: list[dict[str, str]] = []
+    for e in graph["edges"]:
+        s, d = str(e["src"]), str(e["dst"])
+        if str(nodes.get(s, {}).get("kind")) != "component" or str(nodes.get(d, {}).get("kind")) != "entity":
+            continue
+        out.append({
+            "src": s,
+            "dst": d,
+            "srcName": str(nodes[s]["name"]) if s in nodes else s,
+            "dstName": str(nodes[d]["name"]) if d in nodes else d,
+            "verb": str(e["verb"]),
+            "why": str(e["why"]) if e["why"] else "",
+            "where": str(e["where"]) if e.get("where") else "",
+        })
     return out
 
 
@@ -1397,6 +1426,7 @@ class ViewBundle(TypedDict):
     mermaidDomainSub: dict[str, str]
     mermaidDomainEdgeCard: dict[str, str]
     mermaidBridgeCard: dict[str, str]
+    bridgeEdges: list[dict[str, str]]
     domainContainerEdges: dict[str, list[dict[str, str]]]
     mermaidHp: str
     flowsMm: dict[str, str]
@@ -1465,6 +1495,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         mermaidDomainSub=domain_subdomain_mermaids(graph) if subdomains else {},
         mermaidDomainEdgeCard=domain_edge_card_mermaids(graph) if subdomains else {},
         mermaidBridgeCard=bridge_card_mermaids(graph) if (grouping and subdomains) else {},
+        bridgeEdges=gen_bridge_edges(graph) if (grouping and subdomains) else [],
         domainContainerEdges=gen_domain_container_edges(graph) if subdomains else {},
         mermaidHp=gen_hp_mermaid(graph) if hp else "",
         # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so
