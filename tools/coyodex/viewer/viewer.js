@@ -1716,6 +1716,11 @@ function eachEdge(root, fn) {
 
 // Stroke an edge's path + glow its label (selection highlight); returns a cleanup fn.
 function glowEdge(p, label) {
+  // Preserve any BASE inline stroke/width the arrow already carries (a synthetic arrow sets its own thick
+  // dashed base — see markSyntheticEdge) so deselecting restores it, not Mermaid's default. dasharray is
+  // never touched here, so a dashed synthetic arrow stays dashed through the whole select cycle.
+  const s0 = p.style.getPropertyValue('stroke'), sp0 = p.style.getPropertyPriority('stroke');
+  const w0 = p.style.getPropertyValue('stroke-width'), wp0 = p.style.getPropertyPriority('stroke-width');
   p.style.setProperty('stroke', '#2563eb', 'important');
   p.style.setProperty('stroke-width', '3px', 'important');
   if (label) label.style.filter = HILITE;
@@ -1724,10 +1729,24 @@ function glowEdge(p, label) {
   // see its drill option short of hovering again.
   if (p._actionIcon) showIcon(p._actionIcon);
   return () => {
-    p.style.removeProperty('stroke'); p.style.removeProperty('stroke-width');
+    if (s0) p.style.setProperty('stroke', s0, sp0); else p.style.removeProperty('stroke');
+    if (w0) p.style.setProperty('stroke-width', w0, wp0); else p.style.removeProperty('stroke-width');
     if (label) label.style.filter = '';
     if (p._actionIcon) hideIcon(p._actionIcon);
   };
+}
+// Synthetic (aggregated, count-labelled) arrows — the ones that bundle several sub-arrows and drill to a
+// card — take the same visual language as a container BOX border: dashed, and (SYN_EDGE_THICK) a medium
+// weight. So a dashed line reads as "a collapsed bundle, open it", mirroring a dashed box = "a collapsed
+// container". The width sits BETWEEN a normal arrow and the 2.5px container border, so a bundle stands
+// out without shouting like a frame. Set inline !important because an id-scoped Mermaid rule would
+// otherwise outrank a class; glowEdge save/restores the width across a selection.
+const SYN_EDGE_THICK = true;      // B: dashed + medium weight. Flip to false for A: dashed only.
+const SYN_EDGE_WIDTH = '2px';     // between a normal arrow and the 2.5px container border (tune to taste)
+function markSyntheticEdge(p) {
+  if (!p) return;
+  p.style.setProperty('stroke-dasharray', '6 3', 'important');
+  if (SYN_EDGE_THICK) p.style.setProperty('stroke-width', SYN_EDGE_WIDTH, 'important');
 }
 
 // Wire one edge for the SELECT model (highlight + focus + panel) — context, components, internal edges.
@@ -1764,6 +1783,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
 // subsystem card the arrow is drawn component→neighbour, so the caller passes the DRAWN endpoints —
 // otherwise selecting the component wouldn't keep its own cross arrow + the neighbour box lit.
 function bindContainerEdge(scene, p, label, a, b, focusE) {
+  markSyntheticEdge(p);
   const drawn = focusE || { src: a, dst: b };
   const isComp = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'component';
   // When the clicked arrow is a single member component's cross arrow, ⌘-drill lands on the pair's edge
@@ -1786,6 +1806,7 @@ function bindContainerEdge(scene, p, label, a, b, focusE) {
 // a ⌘-click drills into `target` (that box's own card). The bridge has no `why`, so the default tip
 // shows nothing on hover — consistent with a why-less component edge.
 function bindBridgeEdge(scene, p, label, a, b, target) {
+  markSyntheticEdge(p);
   const drawn = { src: a, dst: b };
   const kindOf = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind;
   // Focus the LEAF end (the component or entity) on drill: it's a real, selectable node in the bridge
@@ -2041,6 +2062,7 @@ function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', s
 // (the sidebar lists every entity→entity relation it bundles) and a ⌘-click drills into the
 // two-subdomain edge view. The domain analog of bindContainerEdge.
 function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
+  markSyntheticEdge(p);
   const drawn = focusE || { src: a, dst: b };
   const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
   // Mirror bindContainerEdge: ⌘-drill a single focal-entity relation arrow lands on the pair's edge
@@ -2121,6 +2143,7 @@ function disjointBoxes(x, y) { return x !== y && !isAncestorOf(x, y) && !isAnces
 // navigates to a single box: plain click shows that box's panel, ⌘-click opens its card (descend into a
 // child, or zoom out to an ancestor). Also the fallback when an edge card happens not to exist.
 function bindNavEdge(p, label, a, b, target) {
+  markSyntheticEdge(p);  // an overlapping-pair nav arrow is also an aggregate (count-labelled) bundle
   const k = GRAPH.nodes[target] && GRAPH.nodes[target].kind;
   const dest = k === 'subdomain' ? { kind: 'domsub', sd: target } : { kind: 'subsystem', sid: target };
   bindSelectEdge(mainScene, p, label, { src: a, dst: b }, 'navedge:' + a + '>' + b,
