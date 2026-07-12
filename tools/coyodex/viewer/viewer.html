@@ -35,6 +35,22 @@
     <button id="zoomin" title="Zoom in">+</button>
   </span>
   <button id="setbtn" title="Source link settings (editor + repo root)">&#9881;</button>
+  <!-- Mechanical diff picker: choose a range (map's commit → working tree, or an earlier commit → the
+       map) and the changed elements light up. The old #toggle then flips baseline⇄diff. -->
+  <span id="diffctl">
+    <button id="diffbtn" title="Show what changed since a commit">Diff…</button>
+    <div id="diffpop" hidden>
+      <div class="diffpop-title">What changed</div>
+      <button id="diffSinceMap" type="button" class="diffpop-opt">Since the map's commit<span>including uncommitted edits</span></button>
+      <div class="diffpop-sep">or an earlier commit → the map</div>
+      <div class="diffpop-row">
+        <input id="diffRef" type="text" placeholder="commit / branch / tag" spellcheck="false" autocomplete="off">
+        <button id="diffRefGo" type="button">Compare</button>
+      </div>
+      <button id="diffClear" type="button" class="diffpop-opt">Clear diff</button>
+      <div id="diffpopmsg"></div>
+    </div>
+  </span>
   <button id="toggle" style="display:none"></button>
 </header>
 <main>

@@ -262,13 +262,18 @@ def project_diff(proj: Project, base_ref: str, target_ref: str) -> dict[str, obj
     pin = proj.commit
     if not pin or not _valid_commit(pin):
         raise ValueError("this map has no pinned commit to diff against")
+    # The map usually stores a SHORT sha; resolve it (and the range) to full shas so the
+    # pin-at-one-end check compares like for like.
+    pin_sha = resolve_ref(proj.repo_root, pin)
+    if pin_sha is None:
+        raise ValueError("the map's pinned commit is not in this repo")
     base_sha = resolve_ref(proj.repo_root, base_ref)
     target_sha = resolve_ref(proj.repo_root, target_ref)
     if base_sha is None or target_sha is None:
         raise ValueError("could not resolve the base or target commit")
-    if base_sha == pin and target_sha != pin:      # pin is the OLDER end: changes since the map
+    if base_sha == pin_sha and target_sha != pin_sha:      # pin is the OLDER end: changes since the map
         map_side, direction = "base", "A"
-    elif target_sha == pin and base_sha != pin:    # pin is the NEWER end: retrospective to the map
+    elif target_sha == pin_sha and base_sha != pin_sha:    # pin is the NEWER end: retrospective to the map
         map_side, direction = "target", "B"
     else:
         raise ValueError("the diff range must have the map's commit at exactly one end")

@@ -132,6 +132,20 @@ const mdInline = (s) => esc(String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
 let mode = HAS_DIFF ? 'diff' : 'base';  // a diff render arms the change-impact overlay from the start
+// Live mechanical diff (fetched from api/diff for a chosen range), distinct from the baked AI-report
+// diff that may arrive in the bundle. When LIVE_DIFF is set it OWNS the overlay: DIFF_STATE is derived
+// from it and the base diagram (not MERMAID_DIFF, which only the baked report has) carries the badges.
+// BAKED_DIFF_STATE snapshots the bundle's diffState so clearing a live diff restores the baked one.
+const DIFF_WORKTREE = 'WORKTREE';  // sentinel target = the current working tree (mirrors diffmap.WORKTREE)
+const BAKED_DIFF_STATE = DIFF_STATE || null;
+let LIVE_DIFF = null;  // {base,target,mapSide,direction,elements,changes,counts} or null
+function hasDiff() { return !!(LIVE_DIFF || HAS_DIFF); }  // any diff overlay available for this render
+// The endpoint speaks created/modified/deleted; the viewer's badge vocabulary is added/modified/deleted.
+function diffStateFromElements(elements) {
+  const out = {};
+  for (const id in elements) out[id] = elements[id] === 'created' ? 'added' : elements[id];
+  return out;
+}
 let mainPz = null;     // svg-pan-zoom for the current diagram
 let rc = 0;
 let renderSeq = 0;     // bumped each render(); an in-flight render bails if it's no longer current
@@ -1374,8 +1388,14 @@ function showDiffSummary() {
   for (const id in DIFF_STATE) { const st = DIFF_STATE[id]; if (groups[st]) groups[st].push(id); }
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   const total = order.reduce((sum, k) => sum + groups[k].length, 0);
-  let html = '<h2>Change impact</h2>'
-    + '<div class="badges"><span class="badge kind">' + total + ' change' + (total === 1 ? '' : 's') + '</span></div>';
+  let html = '<h2>Change impact</h2>';
+  if (LIVE_DIFF) {   // show the range being compared + the changed-file count for a live mechanical diff
+    const short = (r) => (r === DIFF_WORKTREE ? 'working tree' : (r || '').slice(0, 8));
+    const files = (LIVE_DIFF.counts && LIVE_DIFF.counts.files) || (LIVE_DIFF.changes || []).length;
+    html += '<p class="muted" style="margin:0 0 8px">' + esc(short(LIVE_DIFF.base)) + ' → '
+      + esc(short(LIVE_DIFF.target)) + ' · ' + files + ' file' + (files === 1 ? '' : 's') + ' changed</p>';
+  }
+  html += '<div class="badges"><span class="badge kind">' + total + ' change' + (total === 1 ? '' : 's') + '</span></div>';
   for (const st of order) {
     const ids = groups[st];
     if (!ids.length) continue;
@@ -2488,7 +2508,9 @@ function mermaidFor(s) {
   if (s.kind === 'hp') return MERMAID_HP;
   if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
   if (s.kind === 'libs') return MERMAID_LIBS;
-  return mode === 'diff' ? MERMAID_DIFF : MERMAID_BASE;  // component
+  // component: the baked report ships a diff-styled diagram (MERMAID_DIFF); a live diff has none, so it
+  // renders the base diagram and lets applyDiffOverlay badge it.
+  return (mode === 'diff' && MERMAID_DIFF && !LIVE_DIFF) ? MERMAID_DIFF : MERMAID_BASE;  // component
 }
 function applyDefaultPanel(s) {
   setTreeSelection(null);  // a default panel / canvas deselect drops pill emphasis + selection pills
@@ -2504,7 +2526,7 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'hp' && GRAPH.nodes['SYS']) showNode('SYS');
   // The Subsystems overview in diff mode leads with the change-impact summary (which subsystems/elements
   // changed), since that is the whole point of opening a diff render.
-  else if (s.kind === 'container' && mode === 'diff' && HAS_DIFF) showDiffSummary();
+  else if (s.kind === 'container' && mode === 'diff' && hasDiff()) showDiffSummary();
   // Every overview without a more specific default (Context, Subsystems, Domain) opens on the System's
   // overview — its overall functionality — instead of a blank panel.
   else if (GRAPH.nodes['SYS']) showNode('SYS');
@@ -2585,7 +2607,7 @@ function renderChrome(s) {
   // and the cards badge their member components (via bindNodes).
   const diffHost = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge';
   legend.classList.toggle('on', diffHost && mode === 'diff');
-  toggle.style.display = (HAS_DIFF && diffHost) ? '' : 'none';
+  toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
@@ -2815,7 +2837,7 @@ async function render(sArg, transient) {
   // default panel and default the code slot to the file browser (nothing selected -> browse). An explicit
   // selection (pendingSelect below) instead runs through updateFolderPeek, which browses only for a folder.
   if (!transient && !pendingSelect && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setBrowsing(true); }
-  if (mode === 'diff' && HAS_DIFF) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
+  if (mode === 'diff' && hasDiff()) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
   // pendingMatchTextId: a node reached this way ALWAYS gets the zoom-to-match-sidebar-text-size move
@@ -4623,11 +4645,65 @@ zoomout.addEventListener('click', () => { if (mainPz) { mainPz.zoomOut(); update
 zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); updateZoomLevel(); } });  // fit to screen
 flowprev.addEventListener('click', () => flowStepBy(-1));  // step player: previous / next flow action
 flownext.addEventListener('click', () => flowStepBy(1));
-if (HAS_DIFF) {
-  // Same view, different overlay — capture the live pan/zoom + selection first so the toggle keeps
-  // them (render() restores from the state) instead of resetting to a fresh, unselected fit.
-  toggle.addEventListener('click', () => { captureViewState(); mode = mode === 'diff' ? 'base' : 'diff'; render(); });
+// Same view, different overlay — capture the live pan/zoom + selection first so the toggle keeps them
+// (render() restores from the state) instead of resetting to a fresh, unselected fit. Registered
+// unconditionally: renderChrome hides #toggle unless a diff (baked or live) is active.
+toggle.addEventListener('click', () => { captureViewState(); mode = mode === 'diff' ? 'base' : 'diff'; render(); });
+
+// --- mechanical diff picker ------------------------------------------------------
+// Load a live diff for a range and arm the overlay. base/target are refs (or the WORKTREE sentinel);
+// empty base/target let the server default to "the map's commit → the working tree" (direction A).
+async function loadLiveDiff(base, target) {
+  const msg = document.getElementById('diffpopmsg');
+  if (msg) msg.textContent = '';
+  const qs = new URLSearchParams();
+  if (base) qs.set('base', base);
+  if (target) qs.set('target', target);
+  let data;
+  try {
+    const res = await fetch(API_BASE + 'diff?' + qs.toString(), { cache: 'no-store' });
+    const body = await res.text();
+    if (!res.ok) { if (msg) msg.textContent = body || ('diff failed (' + res.status + ')'); return; }
+    data = JSON.parse(body);
+  } catch (_) { if (msg) msg.textContent = 'Could not reach the server for the diff.'; return; }
+  LIVE_DIFF = data;
+  DIFF_STATE = diffStateFromElements(data.elements || {});
+  mode = 'diff';
+  document.getElementById('diffbtn').classList.add('armed');
+  closeDiffPop();
+  if (HAS_GROUPING) go({ kind: 'container' });   // land on the Subsystems overview so the badges show
+  else { captureViewState(); render(); }
 }
+function clearLiveDiff() {
+  LIVE_DIFF = null;
+  DIFF_STATE = BAKED_DIFF_STATE || {};
+  mode = HAS_DIFF ? 'diff' : 'base';
+  document.getElementById('diffbtn').classList.remove('armed');
+  closeDiffPop();
+  captureViewState();
+  render();
+}
+const diffctl = document.getElementById('diffctl');
+const diffbtn = document.getElementById('diffbtn');
+const diffpop = document.getElementById('diffpop');
+function closeDiffPop() { if (diffpop) diffpop.hidden = true; }
+function openDiffPop() {
+  if (!diffpop) return;
+  diffpop.hidden = false;
+  document.getElementById('diffRef').value = '';
+  document.getElementById('diffpopmsg').textContent = '';
+}
+diffbtn.addEventListener('click', (e) => { e.stopPropagation(); diffpop.hidden ? openDiffPop() : closeDiffPop(); });
+document.addEventListener('click', (e) => { if (!diffpop.hidden && !diffctl.contains(e.target)) closeDiffPop(); });
+document.getElementById('diffSinceMap').addEventListener('click', () => loadLiveDiff('', DIFF_WORKTREE));
+function compareFromRef() {
+  const ref = document.getElementById('diffRef').value.trim();
+  if (!ref) { document.getElementById('diffpopmsg').textContent = 'Enter a commit, branch, or tag.'; return; }
+  loadLiveDiff(ref, GH_COMMIT || '');   // base = the earlier ref, target = the map's commit (direction B)
+}
+document.getElementById('diffRefGo').addEventListener('click', compareFromRef);
+document.getElementById('diffRef').addEventListener('keydown', (e) => { if (e.key === 'Enter') compareFromRef(); });
+document.getElementById('diffClear').addEventListener('click', clearLiveDiff);
 // Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise the
 // Happy Path — the behavioural spine, lead-with-behaviour — falling back to Subsystems, then the
 // Dependencies (context) view, when a map has no Happy Path.

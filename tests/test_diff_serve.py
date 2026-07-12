@@ -155,6 +155,19 @@ def test_project_diff_direction_a_since_map_default() -> None:
         assert counts["deleted"] == 1 and counts["modified"] == 1
 
 
+def test_project_diff_short_pin_matches_full_sha() -> None:
+    # The map commonly stores a SHORT sha; project_diff must still recognize it as an end of the range.
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        y = commit(root, {"src/a.py": "1\n"})
+        x = commit(root, {"src/a.py": "1\n2\n"})
+        write_map(root, x[:7], [Component(id="C1", name="C1", source="src/a.py:1")])  # short pin
+        proj = load_project(str(root))
+        assert proj is not None and proj.commit == x[:7]
+        out = project_diff(proj, y, x)                 # target is the full sha, pin is short
+        assert out["direction"] == "B" and out["elements"] == {"C1": "modified"}
+
+
 # --- project_diff: guard rails --------------------------------------------------
 def test_project_diff_rejects_range_without_pin() -> None:
     with tempfile.TemporaryDirectory() as td:
