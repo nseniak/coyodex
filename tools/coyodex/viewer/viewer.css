@@ -610,3 +610,17 @@ table.cvcode td.cvtag { position: sticky; right: 0; width: 1%; white-space: nowr
 #diffpopmsg { margin-top: 8px; color: #b91c1c; font-size: 11px; min-height: 0; }
 #diffpopmsg:empty { display: none; }
 #diffbtn.armed { background: #9a6700; }
+
+/* --- code-view inline diff ---------------------------------------------------------------------- */
+/* Reuses the .cvcode table shell (font, gutter, padding); rows get +/- colouring and a sign column. */
+table.cvcode.cvdiff td.code { white-space: pre; }
+table.cvcode.cvdiff .cvsign { display: inline-block; width: 1ch; margin-right: 4px; color: #9ca3af;
+           user-select: none; text-align: center; }
+tr.cvadd td.code { background: #e6ffec; }
+tr.cvadd td.ln { background: #ccffd8; color: #1a7f37; }
+tr.cvadd .cvsign { color: #1a7f37; }
+tr.cvdel td.code { background: #ffebe9; }
+tr.cvdel td.ln { background: #ffd7d5; color: #cf222e; }
+tr.cvdel .cvsign { color: #cf222e; }
+tr.cvhunk td { background: #eef2ff; color: #64748b; font-size: 11px; font-style: italic;
+           padding-top: 3px; padding-bottom: 3px; }

@@ -22,6 +22,7 @@ from coyodex.viewer.serve import (
     Handler,
     build_projects,
     diff_changes,
+    file_diff,
     load_project,
     project_diff,
     resolve_ref,
@@ -166,6 +167,40 @@ def test_project_diff_short_pin_matches_full_sha() -> None:
         assert proj is not None and proj.commit == x[:7]
         out = project_diff(proj, y, x)                 # target is the full sha, pin is short
         assert out["direction"] == "B" and out["elements"] == {"C1": "modified"}
+
+
+def test_file_diff_worktree_rows() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        x = commit(root, {"src/a.py": "one\ntwo\nthree\n"})
+        write_map(root, x, [Component(id="C1", name="C1", source="src/a.py:1")])
+        write_files(root, {"src/a.py": "one\nTWO\nthree\n"})   # edit line 2, uncommitted
+        proj = load_project(str(root))
+        assert proj is not None
+        out = file_diff(proj, "src/a.py", proj.commit, WORKTREE)
+        rows = out["rows"]
+        assert isinstance(rows, list)
+        ops = [r["op"] for r in rows]
+        assert "del" in ops and "add" in ops and ops[0] == "hunk"
+        dels = [r["text"] for r in rows if r["op"] == "del"]
+        adds = [r["text"] for r in rows if r["op"] == "add"]
+        assert dels == ["two"] and adds == ["TWO"]
+
+
+def test_file_diff_rejects_bad_range() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        y = commit(root, {"src/a.py": "1\n"})
+        x = commit(root, {"src/a.py": "2\n"})
+        write_map(root, x, [Component(id="C1", name="C1", source="src/a.py:1")])
+        proj = load_project(str(root))
+        assert proj is not None
+        raised = False
+        try:
+            file_diff(proj, "src/a.py", y, y)   # neither end is the pin
+        except ValueError:
+            raised = True
+        assert raised
 
 
 # --- project_diff: guard rails --------------------------------------------------

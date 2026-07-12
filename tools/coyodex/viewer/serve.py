@@ -35,8 +35,10 @@ from urllib.parse import parse_qs, unquote, urlparse
 from coyodex.model import ModelError, load_model
 from coyodex.viewer.diffmap import (
     WORKTREE,
+    DiffRow,
     FileChange,
     parse_name_status,
+    parse_unified_diff,
     project_changes,
     untracked_changes,
 )
@@ -299,6 +301,43 @@ def project_diff(proj: Project, base_ref: str, target_ref: str) -> dict[str, obj
     }
 
 
+def file_diff(proj: Project, path: str, base_ref: str, target_ref: str) -> dict[str, object]:
+    """The `/api/srcdiff` payload for one file: the inline unified diff across the range, as rows the
+    code view renders. Same range rules as `project_diff` (the pin at one end). A binary or too-large
+    diff is flagged instead of returned as rows. Raises ValueError for a bad range/path (→ 400)."""
+    if not _safe_rel(path):
+        raise ValueError("bad path")
+    pin = proj.commit
+    if not pin or not _valid_commit(pin):
+        raise ValueError("this map has no pinned commit to diff against")
+    pin_sha = resolve_ref(proj.repo_root, pin)
+    base_sha = resolve_ref(proj.repo_root, base_ref)
+    target_sha = resolve_ref(proj.repo_root, target_ref)
+    if pin_sha is None or base_sha is None or target_sha is None:
+        raise ValueError("could not resolve the diff range")
+    if not (base_sha == pin_sha) != (target_sha == pin_sha):   # exactly one end is the pin
+        raise ValueError("the diff range must have the map's commit at exactly one end")
+    args = ["diff", "--no-color", f"-U{_DIFF_CONTEXT}", base_sha]
+    if target_sha != WORKTREE and target_ref != WORKTREE:
+        if not _valid_commit(target_sha):
+            raise ValueError("could not resolve the diff range")
+        args.append(target_sha)
+    args += ["--", path]
+    code, out = _git(proj.repo_root, args)
+    if code != 0:
+        raise ValueError("git diff failed for that file")
+    text = out.decode("utf-8", "replace")
+    if "\nBinary files " in ("\n" + text) or text.startswith("Binary files "):
+        return {"path": path, "base": base_sha, "target": target_sha, "binary": True, "rows": []}
+    rows: list[DiffRow] = parse_unified_diff(text)
+    if len(rows) > _DIFF_MAX_ROWS:  # guard a pathological diff from ballooning the response
+        return {"path": path, "base": base_sha, "target": target_sha, "tooLarge": True, "rows": []}
+    return {
+        "path": path, "base": base_sha, "target": target_sha,
+        "rows": [{"op": r.op, "oldLn": r.old_ln, "newLn": r.new_ln, "text": r.text} for r in rows],
+    }
+
+
 def project_tree(proj: Project) -> FileTreeNode:
     """The file-browser tree for a project — git file set at the commit, overlaid with map coverage.
 
@@ -385,6 +424,8 @@ def list_dirs(path: Path) -> dict[str, object]:
 # --- HTTP -----------------------------------------------------------------------------------------
 
 _TEXT_MAX = 4_000_000  # refuse to stream an absurdly large blob into the browser code viewer
+_DIFF_CONTEXT = 3      # lines of unchanged context around each hunk in the code-view diff
+_DIFF_MAX_ROWS = 20_000  # cap the rows in one file's diff response (a pathological diff guard)
 _LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "::1"}
 
 
@@ -578,6 +619,18 @@ class Handler(BaseHTTPRequestHandler):
             except (ModelError, OSError, KeyError, IndexError, TypeError) as e:
                 return self._send(500, "text/plain; charset=utf-8",
                                   f"could not build the diff: {e}".encode("utf-8"))
+        if rest == ["srcdiff"]:
+            # One file's inline diff across the active range, for the code view's diff mode.
+            path = (query.get("path") or [""])[0]
+            base = (query.get("base") or [proj.commit])[0]
+            target = (query.get("target") or [WORKTREE])[0]
+            try:
+                return self._json(file_diff(proj, path, base, target))
+            except ValueError as e:
+                return self._send(400, "text/plain; charset=utf-8", str(e).encode("utf-8"))
+            except (OSError, KeyError, IndexError, TypeError) as e:
+                return self._send(500, "text/plain; charset=utf-8",
+                                  f"could not build the file diff: {e}".encode("utf-8"))
         return self._send(404, "text/plain; charset=utf-8", b"unknown api")
 
     # --- response helpers ---

@@ -20,6 +20,7 @@ it without a cycle.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from coyodex.anchors import DIR_ANCHOR, strip_anchor
@@ -75,6 +76,57 @@ def untracked_changes(paths: list[str]) -> list[FileChange]:
     """New files git doesn't track yet (from `git ls-files --others --exclude-standard`) — each is an
     add on the target side. Only meaningful when the target is the working tree."""
     return [FileChange(status="A", path=p) for p in paths if p]
+
+
+# ── parsing a single-file unified diff into renderable rows (pure text → DiffRow) ─────────────────
+
+@dataclass(frozen=True)
+class DiffRow:
+    """One line of a rendered file diff. `op` is 'hunk' (a `@@` separator), 'ctx' (unchanged), 'add',
+    or 'del'. `old_ln`/`new_ln` are 1-based line numbers on each side (None where the line doesn't
+    exist on that side, and on a 'hunk' row). `text` is the line content (no +/-/space prefix)."""
+    op: str
+    old_ln: int | None
+    new_ln: int | None
+    text: str
+
+
+_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$")
+
+
+def parse_unified_diff(text: str) -> list[DiffRow]:
+    """Parse `git diff`'s unified output for ONE file into display rows. Header lines (`diff --git`,
+    `index`, `---`, `+++`) are skipped; `@@` starts a hunk and resets the line counters; the `\\ No
+    newline at end of file` marker is dropped. Text before the first `@@` (an empty/binary/pure-mode
+    diff) yields no rows."""
+    rows: list[DiffRow] = []
+    old_ln = new_ln = 0
+    in_hunk = False
+    for line in text.split("\n"):
+        m = _HUNK_RE.match(line)
+        if m:
+            old_ln, new_ln = int(m.group(1)), int(m.group(2))
+            rows.append(DiffRow("hunk", None, None, line))
+            in_hunk = True
+            continue
+        if not in_hunk:
+            continue                              # skip the diff/index/---/+++ preamble
+        if line == "":
+            continue                              # trailing split artifact of the final newline (a real
+            #                                       blank context line is " ", never bare "")
+        if line.startswith("\\"):
+            continue                              # "\ No newline at end of file"
+        if line.startswith("+"):
+            rows.append(DiffRow("add", None, new_ln, line[1:]))
+            new_ln += 1
+        elif line.startswith("-"):
+            rows.append(DiffRow("del", old_ln, None, line[1:]))
+            old_ln += 1
+        else:                                     # ' ' context (leading space stripped)
+            rows.append(DiffRow("ctx", old_ln, new_ln, line[1:] if line.startswith(" ") else line))
+            old_ln += 1
+            new_ln += 1
+    return rows
 
 
 # ── the side map: changed paths as the map's anchors see them ─────────────────────────────────────

@@ -3824,6 +3824,45 @@ function renderCode(path, text, token) {
     sbOnFileChanged(); // if the sidebar is showing a "@" outline, re-list it for the newly shown file
   });
 }
+// --- code-view diff mode --------------------------------------------------------
+// When a live diff is armed, opening a changed file shows its inline diff (from api/srcdiff) instead
+// of the plain blob. cvDiffMode tracks which mode the currently shown file is in, so a same-file call
+// re-renders when the mode should flip (diff armed/cleared).
+let cvDiffMode = false;
+function liveDiffPaths() {
+  const s = new Set();
+  if (LIVE_DIFF && Array.isArray(LIVE_DIFF.changes)) {
+    for (const c of LIVE_DIFF.changes) { if (c.path) s.add(c.path); if (c.oldPath) s.add(c.oldPath); }
+  }
+  return s;
+}
+function wantDiffFor(path) { return !!LIVE_DIFF && liveDiffPaths().has(path); }
+function diffRangeQS() {  // the active range as query params for api/srcdiff (mirrors the loaded diff)
+  if (!LIVE_DIFF) return '';
+  return '&base=' + encodeURIComponent(LIVE_DIFF.base || '') + '&target=' + encodeURIComponent(LIVE_DIFF.target || '');
+}
+// Render one file's inline diff (server rows) into the code table. No hljs (per-line highlight loses
+// cross-line context); +/- rows are coloured, `@@` hunks separate. Reuses the .cvcode table shell.
+function renderCodeDiff(data, token) {
+  if (token !== cvReq) return;
+  if (data && data.binary) { cvscroll.innerHTML = '<p class="cvempty">Binary file — no text diff.</p>'; cvTable = null; return; }
+  if (data && data.tooLarge) { cvscroll.innerHTML = '<p class="cvempty">Diff too large to show.</p>'; cvTable = null; return; }
+  const rows = data && Array.isArray(data.rows) ? data.rows : [];
+  if (!rows.length) { cvscroll.innerHTML = '<p class="cvempty">No changes in this file for the selected range.</p>'; cvTable = null; return; }
+  const sign = { add: '+', del: '-', ctx: ' ' };
+  const body = rows.map((r) => {
+    if (r.op === 'hunk') return '<tr class="cvhunk"><td class="ln"></td><td class="code">' + esc(r.text) + '</td><td class="cvtag"></td></tr>';
+    const ln = r.op === 'del' ? r.oldLn : r.newLn;
+    return '<tr class="cv' + r.op + '"' + (r.newLn ? ' data-ln="' + r.newLn + '"' : '') + '>'
+      + '<td class="ln">' + (ln == null ? '' : ln) + '</td>'
+      + '<td class="code"><span class="cvsign">' + sign[r.op] + '</span>' + (esc(r.text) || '&nbsp;') + '</td>'
+      + '<td class="cvtag"></td></tr>';
+  }).join('');
+  cvscroll.innerHTML = '<table class="cvcode cvdiff"><tbody>' + body + '</tbody></table>';
+  cvTable = cvscroll.querySelector('table.cvcode');
+  cvLineCount = rows.length;
+  cvminimap.textContent = '';   // no overview ruler in diff mode
+}
 // Re-run the search when a new file finishes rendering, but only while the sidebar is showing a "@"
 // file-scoped outline — so the outline follows whatever file the code viewer now shows.
 function sbOnFileChanged() {
@@ -3838,25 +3877,40 @@ async function loadCode(path, line) {
   // an edge, or a Happy-Path step it stays off, so their source isn't hidden behind the browser.
   setBrowsing(false);
   cvLine = line || null;
-  if (path === cvPath) { renderCvHeader(); markLine(cvLine); paintCodeTags(); return; }  // same file — move the line + its tag emphasis, refresh header
+  const asDiff = wantDiffFor(path);
+  // same file AND same mode -> just move the line + refresh header (no refetch). A mode flip (diff
+  // armed/cleared for this file) falls through to reload in the right mode.
+  if (path === cvPath && asDiff === cvDiffMode) { renderCvHeader(); markLine(cvLine); paintCodeTags(); return; }
   const token = ++cvReq;
   cvPath = path; cvTable = null; cvminimap.textContent = '';  // clear the old file's ruler while the new one loads
+  cvDiffMode = asDiff;
   renderCvHeader();  // set the header (dropdown marks the new file) AFTER cvPath is updated
   cvscroll.innerHTML = '<p class="cvempty">Loading…</p>';
-  let text = null;
+  const url = asDiff
+    ? (API_BASE + 'srcdiff?path=' + encodeURIComponent(path) + diffRangeQS())
+    : (API_BASE + 'src?path=' + encodeURIComponent(path));
+  let r = null;
   try {
-    const r = await fetch(API_BASE + 'src?path=' + encodeURIComponent(path), { cache: 'no-store' });
+    r = await fetch(url, { cache: 'no-store' });
     if (token !== cvReq) return;
     if (!r.ok) {
       cvscroll.innerHTML = '<p class="cverr">' + (r.status === 404 ? 'Not tracked in this commit.' : 'Could not load this file.') + '</p>';
       cvPath = null; cvPinned = null; return;  // nothing shown -> drop any pin so it can't suppress a later view
     }
-    text = await r.text();
   } catch (_) {
     if (token === cvReq) { cvscroll.innerHTML = '<p class="cverr">Could not load this file.</p>'; cvPath = null; cvPinned = null; }
     return;
   }
-  if (token !== cvReq) return;
+  if (asDiff) {
+    let data = null;
+    try { data = await r.json(); } catch (_) { data = null; }
+    if (token !== cvReq) return;
+    renderCodeDiff(data, token);
+    return;
+  }
+  let text = null;
+  try { text = await r.text(); } catch (_) { text = null; }
+  if (token !== cvReq || text === null) return;
   renderCode(path, text, token);
 }
 // Mirror a selection's source ref into the code viewer — from a node/edge with a local file anchor.
@@ -4671,6 +4725,7 @@ async function loadLiveDiff(base, target) {
   mode = 'diff';
   document.getElementById('diffbtn').classList.add('armed');
   closeDiffPop();
+  if (cvPath) loadCode(cvPath, cvLine);          // flip an already-open file into diff mode
   if (HAS_GROUPING) go({ kind: 'container' });   // land on the Subsystems overview so the badges show
   else { captureViewState(); render(); }
 }
@@ -4680,6 +4735,7 @@ function clearLiveDiff() {
   mode = HAS_DIFF ? 'diff' : 'base';
   document.getElementById('diffbtn').classList.remove('armed');
   closeDiffPop();
+  if (cvPath && cvDiffMode) loadCode(cvPath, cvLine);   // revert an open diff back to the plain file
   captureViewState();
   render();
 }
