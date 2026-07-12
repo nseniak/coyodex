@@ -3831,14 +3831,11 @@ function renderCode(path, text, token) {
 // of the plain blob. cvDiffMode tracks which mode the currently shown file is in, so a same-file call
 // re-renders when the mode should flip (diff armed/cleared).
 let cvDiffMode = false;
-function liveDiffPaths() {
-  const s = new Set();
-  if (LIVE_DIFF && Array.isArray(LIVE_DIFF.changes)) {
-    for (const c of LIVE_DIFF.changes) { if (c.path) s.add(c.path); if (c.oldPath) s.add(c.oldPath); }
-  }
-  return s;
-}
-function wantDiffFor(path) { return !!LIVE_DIFF && liveDiffPaths().has(path); }
+let cvDiffKey = null;   // the range (base+target) the current inline diff was rendered for
+// A file is shown as a diff when a live diff is armed and it changed in that range. The changed-path
+// set is DIFF_FILE_STATUS (built once per (un)load by recomputeDiffPaths) — no per-call rebuild.
+function wantDiffFor(path) { return !!LIVE_DIFF && DIFF_FILE_STATUS[path] != null; }
+function diffKeyFor(asDiff) { return asDiff && LIVE_DIFF ? (LIVE_DIFF.base + ' ' + LIVE_DIFF.target) : null; }
 function diffRangeQS() {  // the active range as query params for api/srcdiff (mirrors the loaded diff)
   if (!LIVE_DIFF) return '';
   return '&base=' + encodeURIComponent(LIVE_DIFF.base || '') + '&target=' + encodeURIComponent(LIVE_DIFF.target || '');
@@ -3940,12 +3937,13 @@ async function loadCode(path, line) {
   setBrowsing(false);
   cvLine = line || null;
   const asDiff = wantDiffFor(path);
-  // same file AND same mode -> just move the line + refresh header (no refetch). A mode flip (diff
-  // armed/cleared for this file) falls through to reload in the right mode.
-  if (path === cvPath && asDiff === cvDiffMode) { renderCvHeader(); markLine(cvLine); paintCodeTags(); return; }
+  const diffKey = diffKeyFor(asDiff);
+  // same file AND same mode AND same range -> just move the line + refresh header (no refetch). A mode
+  // flip (diff armed/cleared) OR a range change (a new diff armed) falls through to reload.
+  if (path === cvPath && asDiff === cvDiffMode && diffKey === cvDiffKey) { renderCvHeader(); markLine(cvLine); paintCodeTags(); return; }
   const token = ++cvReq;
   cvPath = path; cvTable = null; cvminimap.textContent = '';  // clear the old file's ruler while the new one loads
-  cvDiffMode = asDiff;
+  cvDiffMode = asDiff; cvDiffKey = diffKey;
   renderCvHeader();  // set the header (dropdown marks the new file) AFTER cvPath is updated
   cvscroll.innerHTML = '<p class="cvempty">Loading…</p>';
   const url = asDiff
@@ -4819,7 +4817,8 @@ document.getElementById('diffSinceMap').addEventListener('click', () => loadLive
 function compareFromRef() {
   const ref = document.getElementById('diffRef').value.trim();
   if (!ref) { document.getElementById('diffpopmsg').textContent = 'Enter a commit, branch, or tag.'; return; }
-  loadLiveDiff(ref, GH_COMMIT || '');   // base = the earlier ref, target = the map's commit (direction B)
+  loadLiveDiff(ref, ghRef());   // base = the earlier ref, target = the map's commit (direction B).
+  //                               ghRef() (not raw GH_COMMIT) so a `-dirty`/`git describe` pin still resolves.
 }
 document.getElementById('diffRefGo').addEventListener('click', compareFromRef);
 document.getElementById('diffRef').addEventListener('keydown', (e) => { if (e.key === 'Enter') compareFromRef(); });
