@@ -1330,10 +1330,23 @@ function makeBadge(cx, cy, state) {
   g.appendChild(c); g.appendChild(t);
   return g;
 }
-// Overlay technique: inject the badge into the node's SVG group so it pans/zooms with the node.
+// Injected diagram diff badges, tracked so a zoom change can re-hold their screen size constant.
+const DIFF_BADGES = [];
+// Overlay technique: inject the badge into the node's SVG group so it PANS with the node — but, like
+// the drill/open action icons, it holds a CONSTANT on-screen SIZE regardless of zoom (built at the
+// origin, then positioned by `translate(corner) scale(curIconInv())`; rescaleDiffBadges re-applies the
+// counter-zoom on every zoom change). Without this the badge grew/shrank with the diagram.
 function addBadge(el, state) {
-  const bb = el.getBBox();
-  el.appendChild(makeBadge(bb.x + bb.width, bb.y, state));
+  let bb; try { bb = el.getBBox(); } catch (_) { return; }
+  const g = makeBadge(0, 0, state);
+  g._anchor = { x: bb.x + bb.width, y: bb.y };
+  g.setAttribute('transform', `translate(${g._anchor.x},${g._anchor.y}) scale(${curIconInv()})`);
+  el.appendChild(g);
+  DIFF_BADGES.push(g);
+}
+function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a fixed screen size (mirrors rescaleActionIcons)
+  const inv = curIconInv();
+  for (const g of DIFF_BADGES) if (g && g._anchor) g.setAttribute('transform', `translate(${g._anchor.x},${g._anchor.y}) scale(${inv})`);
 }
 function buildLegend() {
   const d = 2 * R + 4;
@@ -1369,6 +1382,7 @@ function subsystemDiffState(sid) {
   return changed ? 'modified' : (rippled ? 'rippled' : null);
 }
 function applyDiffOverlay(s) {
+  DIFF_BADGES.length = 0;                            // this render re-adds them; drop the old (now-detached) refs
   if (s.kind === 'container') {                     // overview: badge each subsystem box with its subtree's change
     for (const id in mainScene.nodeEls) {
       const st = subsystemDiffState(id);
@@ -2686,6 +2700,7 @@ function rescaleActionIcons() {
 function updateZoomLevel() {  // reflect the current pan-zoom scale in the header control + the icons
   if (zoomlevel) zoomlevel.textContent = mainPz ? Math.round(mainPz.getZoom() * 100) + '%' : '100%';
   rescaleActionIcons();
+  rescaleDiffBadges();
 }
 
 // Keep the diagram fitted to the stage as the side bars (or the window) resize it. svg-pan-zoom caches
