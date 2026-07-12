@@ -318,16 +318,6 @@ you split module-sized units too fine. `validate --check-coverage` and the eval 
 the tree independently** (GR4) and nudge when the map's component count leaves the band — the nudge
 is advisory; a justified exception stays a judgement call.
 
-**Correctness exception — a port with divergent backends splits, even if small.** When one abstract
-port has **two or more backend implementations whose behavior diverges** (e.g. a file repository that
-stores JSON on disk and a Mongo repository that encrypts — one raises in standalone mode), do NOT
-lump them into one component just because each adapter is under the size cap. Model the **port (or
-its use-site) and each backend adapter as separate components**, so every `C→E` edge is true for
-**exactly one** box. Lumping makes a claim like `persists X` true for one backend and false for the
-other — a grounding hazard a skeptic will (correctly) refute. This overrides the size-based leaf rule
-above: split for *correctness*, not size. (No validator detects the lump; the Phase-4 skeptic is the
-backstop.)
-
 **The hand-off — read the stderr summary first; don't reverse-engineer the JSON.** `preindex` writes
 the JSON to `.coyodex/preindex.json` **and** prints a one-line human summary to **stderr** (heaviest
 top-level dirs, file/LOC totals, ambiguous-symbol count, languages without symbols, the GR1/GR2
