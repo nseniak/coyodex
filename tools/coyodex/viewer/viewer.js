@@ -3022,6 +3022,8 @@ function renderChildrenInto(container, children, depth) {
     }
     rowByPath[key] = { row, kids, entry, depth, built: false };
     applySelToRow(rowByPath[key]);  // a row built while a selection is active is filtered/counted immediately
+    badgeDiffRow(row, entry);           // and badged/filtered if a live diff is armed
+    applyDiffFilterToRow(rowByPath[key]);
     row.addEventListener('click', () => onRowClick(key));
   }
 }
@@ -3840,6 +3842,66 @@ function wantDiffFor(path) { return !!LIVE_DIFF && liveDiffPaths().has(path); }
 function diffRangeQS() {  // the active range as query params for api/srcdiff (mirrors the loaded diff)
   if (!LIVE_DIFF) return '';
   return '&base=' + encodeURIComponent(LIVE_DIFF.base || '') + '&target=' + encodeURIComponent(LIVE_DIFF.target || '');
+}
+// --- file-browser diff overlay (badges + "changed only" filter) ------------------
+// Rebuilt whenever a live diff is (un)loaded: which files changed (path -> A/M/D) and which folders
+// contain a change (so an ancestor dir stays visible under the filter).
+let DIFF_FILE_STATUS = {};
+let DIFF_ANCESTOR_DIRS = new Set();
+let diffOnly = false;   // "changed files only" filter state
+function recomputeDiffPaths() {
+  DIFF_FILE_STATUS = {};
+  DIFF_ANCESTOR_DIRS = new Set();
+  if (!LIVE_DIFF || !Array.isArray(LIVE_DIFF.changes)) return;
+  for (const c of LIVE_DIFF.changes) {
+    for (const p of [c.path, c.oldPath]) {   // badge both sides so a rename lights up whichever exists at the pin
+      if (!p) continue;
+      DIFF_FILE_STATUS[p] = c.status;
+      for (let i = p.lastIndexOf('/'); i > 0; i = p.lastIndexOf('/', i - 1)) DIFF_ANCESTOR_DIRS.add(p.slice(0, i));
+    }
+  }
+}
+const _DIFF_LABEL = { A: 'added', M: 'modified', D: 'deleted', R: 'renamed' };
+function badgeDiffRow(row, entry) {   // add/remove one row's change dot; called at build + on (un)load
+  row.classList.remove('diff-row', 'diff-A', 'diff-M', 'diff-D', 'diff-R', 'diff-anc');
+  const old = row.querySelector(':scope > .tdiffdot'); if (old) old.remove();
+  if (!LIVE_DIFF) return;
+  const st = entry.dir ? null : DIFF_FILE_STATUS[entry.path];
+  if (st) {
+    row.classList.add('diff-row', 'diff-' + st);
+    const dot = document.createElement('span');
+    dot.className = 'tdiffdot diff-' + st;
+    dot.title = _DIFF_LABEL[st] || 'changed';
+    row.querySelector('.tname').insertAdjacentElement('afterend', dot);
+  } else if (entry.dir && DIFF_ANCESTOR_DIRS.has(treeKey(entry.path))) {
+    row.classList.add('diff-anc');
+  }
+}
+function applyDiffBadges() { for (const k in rowByPath) badgeDiffRow(rowByPath[k].row, rowByPath[k].entry); }
+function diffFilterActive() { return diffOnly && !!LIVE_DIFF; }
+function applyDiffFilterToRow(rec) {   // hide a row (and its subtree) unless it is/holds a change
+  const { row, kids, entry } = rec;
+  row.classList.remove('diff-hidden');
+  if (kids) kids.classList.remove('diff-hidden');
+  if (!diffFilterActive()) return;
+  const keep = entry.dir ? DIFF_ANCESTOR_DIRS.has(treeKey(entry.path)) : (DIFF_FILE_STATUS[entry.path] != null);
+  if (!keep) { row.classList.add('diff-hidden'); if (kids) kids.classList.add('diff-hidden'); }
+}
+function applyDiffFilterAll() {
+  if (diffFilterActive()) {   // expand every changed folder (shallowest first) so its files are reachable
+    [...DIFF_ANCESTOR_DIRS].sort((a, b) => a.split('/').length - b.split('/').length).forEach(expandDir);
+  }
+  for (const k in rowByPath) applyDiffFilterToRow(rowByPath[k]);
+}
+// Reflect the current live diff into the file browser: badge rows, (re)apply the filter, show/hide the
+// "Changed only" control. Called from loadLiveDiff (a diff armed) and clearLiveDiff (diff dropped).
+function syncTreeDiff() {
+  recomputeDiffPaths();
+  const btn = document.getElementById('treediffonly');
+  if (!LIVE_DIFF) { diffOnly = false; if (btn) { btn.hidden = true; btn.classList.remove('on'); } }
+  else if (btn) btn.hidden = false;
+  applyDiffBadges();
+  applyDiffFilterAll();
 }
 // Render one file's inline diff (server rows) into the code table. No hljs (per-line highlight loses
 // cross-line context); +/- rows are coloured, `@@` hunks separate. Reuses the .cvcode table shell.
@@ -4725,6 +4787,7 @@ async function loadLiveDiff(base, target) {
   mode = 'diff';
   document.getElementById('diffbtn').classList.add('armed');
   closeDiffPop();
+  syncTreeDiff();                                // badge the file browser + reveal the "Changed only" filter
   if (cvPath) loadCode(cvPath, cvLine);          // flip an already-open file into diff mode
   if (HAS_GROUPING) go({ kind: 'container' });   // land on the Subsystems overview so the badges show
   else { captureViewState(); render(); }
@@ -4735,6 +4798,7 @@ function clearLiveDiff() {
   mode = HAS_DIFF ? 'diff' : 'base';
   document.getElementById('diffbtn').classList.remove('armed');
   closeDiffPop();
+  syncTreeDiff();                                       // clear the file-browser badges + hide the filter
   if (cvPath && cvDiffMode) loadCode(cvPath, cvLine);   // revert an open diff back to the plain file
   captureViewState();
   render();
@@ -4760,6 +4824,12 @@ function compareFromRef() {
 document.getElementById('diffRefGo').addEventListener('click', compareFromRef);
 document.getElementById('diffRef').addEventListener('keydown', (e) => { if (e.key === 'Enter') compareFromRef(); });
 document.getElementById('diffClear').addEventListener('click', clearLiveDiff);
+const treeDiffOnlyBtn = document.getElementById('treediffonly');
+if (treeDiffOnlyBtn) treeDiffOnlyBtn.addEventListener('click', () => {
+  diffOnly = !diffOnly;
+  treeDiffOnlyBtn.classList.toggle('on', diffOnly);
+  applyDiffFilterAll();
+});
 // Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise the
 // Happy Path — the behavioural spine, lead-with-behaviour — falling back to Subsystems, then the
 // Dependencies (context) view, when a map has no Happy Path.

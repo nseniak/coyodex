@@ -624,3 +624,13 @@ tr.cvdel td.ln { background: #ffd7d5; color: #cf222e; }
 tr.cvdel .cvsign { color: #cf222e; }
 tr.cvhunk td { background: #eef2ff; color: #64748b; font-size: 11px; font-style: italic;
            padding-top: 3px; padding-bottom: 3px; }
+
+/* --- file-browser diff badges + "changed only" filter ------------------------------------------- */
+.tdiffdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 6px;
+           flex: 0 0 auto; align-self: center; }
+.tdiffdot.diff-A { background: #1a7f37; }
+.tdiffdot.diff-M { background: #9a6700; }
+.tdiffdot.diff-D { background: #cf222e; }
+.trow.diff-anc > .tname { color: inherit; }   /* a folder containing changes: kept visible, name normal */
+.trow.diff-hidden, .tchildren.diff-hidden { display: none; }
+#treediffonly.on { background: #6366f1; color: #fff; }
