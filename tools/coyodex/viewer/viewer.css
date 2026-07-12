@@ -634,3 +634,7 @@ tr.cvhunk td { background: #eef2ff; color: #64748b; font-size: 11px; font-style:
 .trow.diff-anc > .tname { color: inherit; }   /* a folder containing changes: kept visible, name normal */
 .trow.diff-hidden, .tchildren.diff-hidden { display: none; }
 #treediffonly.on { background: #6366f1; color: #fff; }
+
+/* --- use-case catalog "changed" badge (behavioural diff) ---------------------------------------- */
+.uc-head .badge.modified { margin-left: 6px; font-size: 10px; vertical-align: middle; }
+#panel dl.diff-uc dd { margin-left: 0; }

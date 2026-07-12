@@ -1380,6 +1380,17 @@ function applyDiffOverlay(s) {
     }
   }
 }
+// A use case "contains changes" when any element its T6 flow touches is changed (FLOWS_NARR × DIFF_STATE)
+// — the behavioural layer of the diff, DERIVED from the element changes, not a separate source.
+function usecaseDiffState(uc) {
+  for (const st of (FLOWS_NARR[uc] || [])) {
+    for (const id of [st.srcId, st.dstId]) {
+      if (id && DIFF_STATE[id] && DIFF_STATE[id] !== 'rippled') return 'modified';
+    }
+  }
+  return null;
+}
+function changedUseCaseIds() { return (UC_NODES || []).map((n) => n.id).filter((uc) => usecaseDiffState(uc)); }
 // The Subsystems-overview panel in diff mode: every changed element grouped by state, each name
 // clickable to locate it in its home view. Added elements appear here even though they badge no box.
 function showDiffSummary() {
@@ -1407,10 +1418,21 @@ function showDiffSummary() {
           return '<dd><a href="#" class="diffref" data-id="' + esc(id) + '">' + esc(nm(id)) + '</a>' + kind + '</dd>';
         }).join('') + '</dl>';
   }
+  // Behavioural layer: which use cases a code change reaches, via their flow steps. Derived, so it
+  // rides the same element diff — each links to that use case's flow.
+  const changedUCs = changedUseCaseIds().sort((a, b) => nm(a).localeCompare(nm(b)));
+  if (changedUCs.length) {
+    html += '<dl class="diff-uc"><dt><span class="badge modified">use cases affected</span></dt>'
+      + changedUCs.map((uc) => '<dd><a href="#" class="diffucref" data-uc="' + esc(uc) + '">' + esc(nm(uc)) + '</a></dd>').join('')
+      + '</dl>';
+  }
   if (!total) html += '<p class="empty">No changes recorded.</p>';
   panel.innerHTML = html;
   panel.querySelectorAll('a.diffref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); selectFromTree(a.getAttribute('data-id'));
+  }));
+  panel.querySelectorAll('a.diffucref').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
   }));
 }
 
@@ -2761,8 +2783,10 @@ function renderUseCases() {
     const wants = g.role && g.role.wants ? `<span class="uc-actor-wants">${mdInline(g.role.wants)}</span>` : '';
     const rows = g.ucs.map((n) => {
       const to = (n.fields && n.fields['Trigger → Outcome']) || '';
-      return `<li class="uc-row" data-uc="${esc(n.id)}" tabindex="0">`
-        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${pill(n.id)}</span>`
+      // In diff mode, flag a use case whose flow touches changed code (derived from the element diff).
+      const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(n.id)) ? '<span class="badge modified">changed</span>' : '';
+      return `<li class="uc-row${changed ? ' uc-changed' : ''}" data-uc="${esc(n.id)}" tabindex="0">`
+        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${changed}${pill(n.id)}</span>`
         + (to ? `<span class="uc-to">${mdInline(to)}</span>` : '')
         + '</li>';
     }).join('');
