@@ -83,7 +83,6 @@ try {
 }
 
 const SVGNS = 'http://www.w3.org/2000/svg';
-const R = 10;
 const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'modified'],
                 deleted: ['#cf222e', '×', 'deleted'], rippled: ['#d97706', '≈', 'ripples to'] };
 const HILITE = 'drop-shadow(0 0 4px #2563eb) drop-shadow(0 0 2px #2563eb)';  // selection glow (nodes + edge labels)
@@ -1307,38 +1306,51 @@ function actionTipHP(hpId) {
 }
 
 // --- diff badges + legend -------------------------------------------------------
-// One badge builder used by BOTH the diagram and the legend, so they're pixel-identical.
-// Inline !important is needed because Mermaid sets SVG text font/fill with !important.
-function makeBadge(cx, cy, state) {
+// The diff badge is the drill/open action icon's TWIN: same plate construction (a white halo of
+// ACTION_ICON_R so it sits cleanly over a dashed container border + a disc + a glyph), the same
+// paintImportant styling (to beat Mermaid's id-scoped !important box rules), and the same
+// constant-on-screen sizing (built at the origin; addBadge/rescaleDiffBadges position it with
+// `translate(corner) scale(curIconInv())`). It differs only in what an action icon must NOT be: a
+// SOLID colour-filled disc + a +/✎/× glyph (the change state), and it sits on the RIGHT corner where
+// the drill icon takes the LEFT — so a box can carry both without collision. Used by the legend too,
+// so the key and the diagram badge are pixel-identical.
+const BADGE_R = 13;   // disc radius — matches the action icon's circle (addActionIcon)
+function makeBadge(state) {
   const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('class', 'diff-badge');
   const spec = BADGE[state];
   if (!spec) return g;
   const [color, glyph] = spec;
-  const c = document.createElementNS(SVGNS, 'circle');
-  c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', R);
-  c.style.setProperty('fill', color, 'important');
-  c.style.setProperty('stroke', '#fff', 'important');
-  c.style.setProperty('stroke-width', '1.5px', 'important');
+  const halo = document.createElementNS(SVGNS, 'circle');
+  halo.setAttribute('r', String(ACTION_ICON_R));
+  paintImportant(halo, { fill: '#fff', stroke: 'none' });
+  const disc = document.createElementNS(SVGNS, 'circle');
+  disc.setAttribute('r', String(BADGE_R));
+  paintImportant(disc, { fill: color, stroke: '#fff', 'stroke-width': '1.6px', 'stroke-dasharray': 'none' });
   const t = document.createElementNS(SVGNS, 'text');
-  t.setAttribute('x', cx); t.setAttribute('y', cy);
   t.setAttribute('text-anchor', 'middle'); t.setAttribute('dominant-baseline', 'central');
-  t.style.setProperty('fill', '#fff', 'important');
-  t.style.setProperty('font-family', '-apple-system, system-ui, sans-serif', 'important');
-  t.style.setProperty('font-size', '13px', 'important');
-  t.style.setProperty('font-weight', '700', 'important');
+  paintImportant(t, { fill: '#fff', 'font-family': '-apple-system, system-ui, sans-serif',
+                      'font-size': '15px', 'font-weight': '700' });
   t.textContent = glyph;
-  g.appendChild(c); g.appendChild(t);
+  g.append(halo, disc, t);
   return g;
 }
 // Injected diagram diff badges, tracked so a zoom change can re-hold their screen size constant.
 const DIFF_BADGES = [];
-// Overlay technique: inject the badge into the node's SVG group so it PANS with the node — but, like
-// the drill/open action icons, it holds a CONSTANT on-screen SIZE regardless of zoom (built at the
-// origin, then positioned by `translate(corner) scale(curIconInv())`; rescaleDiffBadges re-applies the
-// counter-zoom on every zoom change). Without this the badge grew/shrank with the diagram.
+// The node's VISIBLE box shape (the largest rect) — its geometry is the true corner. The node GROUP's
+// getBBox can extend past the box (a wider hit-area / hover glow / label), which would float the badge
+// off the corner; the box rect does not. A direct child of the group, so its bbox is in the same space.
+function boxShape(el) {
+  const rects = [...el.querySelectorAll('rect')];
+  if (!rects.length) return el;
+  const area = (r) => { try { const b = r.getBBox(); return b.width * b.height; } catch (_) { return -1; } };
+  return rects.reduce((big, r) => (area(r) > area(big) ? r : big));
+}
+// Anchor the badge at the box's top-RIGHT corner (the drill icon takes top-LEFT), then hold it at a
+// constant on-screen size with the same counter-zoom the action icons use.
 function addBadge(el, state) {
-  let bb; try { bb = el.getBBox(); } catch (_) { return; }
-  const g = makeBadge(0, 0, state);
+  let bb; try { bb = boxShape(el).getBBox(); } catch (_) { return; }
+  const g = makeBadge(state);
   g._anchor = { x: bb.x + bb.width, y: bb.y };
   g.setAttribute('transform', `translate(${g._anchor.x},${g._anchor.y}) scale(${curIconInv()})`);
   el.appendChild(g);
@@ -1349,13 +1361,14 @@ function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a 
   for (const g of DIFF_BADGES) if (g && g._anchor) g.setAttribute('transform', `translate(${g._anchor.x},${g._anchor.y}) scale(${inv})`);
 }
 function buildLegend() {
-  const d = 2 * R + 4;
+  const d = 2 * ACTION_ICON_R + 2;   // the full badge (halo included) centred on the origin
   const frag = document.createDocumentFragment();
   for (const state of ['added', 'modified', 'deleted', 'rippled']) {
     const row = document.createElement('div'); row.className = 'row';
     const svg = document.createElementNS(SVGNS, 'svg');
-    svg.setAttribute('width', d); svg.setAttribute('height', d); svg.setAttribute('viewBox', '0 0 ' + d + ' ' + d);
-    svg.appendChild(makeBadge(d / 2, d / 2, state));
+    svg.setAttribute('width', 20); svg.setAttribute('height', 20);
+    svg.setAttribute('viewBox', `${-d / 2} ${-d / 2} ${d} ${d}`);
+    svg.appendChild(makeBadge(state));
     const span = document.createElement('span'); span.textContent = BADGE[state][2];
     row.appendChild(svg); row.appendChild(span); frag.appendChild(row);
   }
