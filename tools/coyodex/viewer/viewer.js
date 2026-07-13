@@ -200,6 +200,13 @@ let pendingCenter = null;
 // language regardless of which of the three ways you triggered it.
 const ACTION_ICONS = {};
 let EDGE_ICON_SEQ = 0;  // fallback ACTION_ICONS key for a drillable edge path with no (or a stripped) DOM id
+// The front overlay layer that box + cluster action icons and diff badges are homed in. SVG has no
+// z-index — stacking is document order only — so an icon appended into its OWN node/cluster group is
+// painted over by any sibling group Mermaid draws later (a cluster's inner nodes, an overlapping
+// neighbour box). This <g> is appended LAST inside the diagram's content group (see ensureIconOverlay),
+// so everything in it paints on top of every box/edge — which is what keeps the drill pill from hiding
+// behind a component. Recreated per render; null between renders.
+let iconOverlay = null;
 // The step player's live context on a use-case flow view: the flow's uc, its ordered narrative steps, the
 // per-step DOM (arrow line + label) and participant columns bindFlow already resolved, and the current
 // 0-based step. null on every non-flow view (so the strip stays hidden and the arrow keys stay inert).
@@ -236,6 +243,7 @@ function applyFocus(scene, keepNode, keepEdge) {
     x.path.style.opacity = on ? '' : DIM;
     if (x.label) x.label.style.opacity = on ? '' : DIM;
   }
+  refreshAllPills();  // a box that just became dimmed must drop its pill even if it's under the cursor
 }
 function focusNode(scene, id) {
   const keep = new Set([id]);
@@ -435,13 +443,54 @@ const ACTION_ICON_R = 16.5;  // the halo's radius — shared with addLabelAction
 function paintImportant(el, props) {
   for (const k in props) el.style.setProperty(k, props[k], 'important');
 }
+// Box + cluster action icons live in the front overlay (iconOverlay), NOT inside their own node group,
+// so the CSS descendant reveal rule (`g.node:hover .action-icon`) can no longer reach them — their
+// show/hide is driven here in JS instead. It mirrors exactly what that CSS did: visible while the owner
+// box is hovered OR selected, but NEVER on a DIMMED box even under the cursor (a box you're not focused
+// on shouldn't invite drilling just because the pointer passed over it). A label/edge pill (opts.host)
+// keeps its own showIcon/hideIcon path and is not wired through this.
+function refreshPillReveal(icon) {
+  const owner = icon._owner;
+  const dimmed = owner && owner.classList.contains('dim');
+  const show = !!icon._selected || (!!icon._hover && !dimmed);
+  icon.classList.toggle('revealed', show);
+}
+function setPillHover(icon, hovering) { icon._hover = hovering; refreshPillReveal(icon); }
+// Recompute every box/cluster pill's visibility — called whenever the shared dim state changes
+// (applyFocus/clearFocus), so a pill on a box that just became (or stopped being) dimmed updates even
+// with no fresh hover event to trigger it.
+function refreshAllPills() { for (const id in ACTION_ICONS) { const ic = ACTION_ICONS[id]; if (ic && ic._owner) refreshPillReveal(ic); } }
+// The front overlay layer for corner icons + badges: a <g> appended LAST inside the diagram's top
+// content group, so it paints on top of every cluster/edge/node. Added BEFORE svg-pan-zoom wraps the
+// content into its viewport, so it rides inside the same pan/zoom transform the boxes do — the icons'
+// own counter-zoom (rescaleActionIcons) then holds them at a fixed screen size, exactly as it did when
+// they lived in their box group. The old <g> is thrown away with the rest of the SVG on each re-render.
+function ensureIconOverlay(container) {
+  const svg = container.querySelector('svg');
+  if (!svg) return null;
+  const root = svg.querySelector(':scope > g') || svg;   // Mermaid's outermost content group (holds clusters/edges/nodes) — a DIRECT child, never a <g> buried in <defs>
+  const g = document.createElementNS(SVGNS, 'g');
+  g.setAttribute('class', 'coyodex-icon-overlay');
+  root.appendChild(g);
+  return g;
+}
 // Inject `action`'s icon (circle + glyph) into `el`'s own top-left corner, in `el`'s local coordinate
 // space (getBBox), so it rides along with whatever transform Mermaid gave the node/cluster group.
 // `opts.anchor` + `opts.host` override where the icon is placed/attached — for a label that has no box
 // of its own to sit in the corner of (see addLabelActionIcon), the caller supplies both instead.
 function addActionIcon(el, id, action, opts) {
+  const host = opts && opts.host;                 // a label/edge pill supplies its own host + anchor
+  // A box/cluster pill (no host) homes in the front overlay so a later sibling group can't paint over it
+  // (see iconOverlay); its top-left corner, read in the box's own space, is carried into the overlay's
+  // space so the on-screen position is unchanged. Falls back to the box's own group only if the overlay
+  // isn't up yet (never in practice — render() builds it before any pill is added).
+  const parent = host || iconOverlay || el;
   let anchor = opts && opts.anchor;
-  if (!anchor) { let bbox; try { bbox = el.getBBox(); } catch (_) { return; } anchor = { x: bbox.x, y: bbox.y }; }
+  if (!anchor) {
+    let bbox; try { bbox = el.getBBox(); } catch (_) { return; }
+    if (parent === el) anchor = { x: bbox.x, y: bbox.y };
+    else { anchor = pointToHostSpace(el, bbox.x, bbox.y, parent); if (!anchor) return; }
+  }
   const paint = ICON_PAINT[action.kind];
   const icon = document.createElementNS(SVGNS, 'g');
   icon.setAttribute('class', 'action-icon ' + (action.kind === 'drill' ? 'is-drill' : 'is-open'));
@@ -479,8 +528,21 @@ function addActionIcon(el, id, action, opts) {
     flashIcon(icon);
     action.run();
   });
-  (opts && opts.host || el).appendChild(icon);
+  parent.appendChild(icon);
   ACTION_ICONS[id] = icon;
+  // A box/cluster pill: link it to its owner box and drive its reveal off the box's hover + selection.
+  // The icon carries its OWN hover listeners too — now that it's not a child of the box, the box's
+  // mouseleave fires the moment the cursor crosses onto the pill, so without this the pill would vanish
+  // just as you reach it. The two hover regions overlap at the box corner, so the paired leave/enter
+  // fire in the same tick (no repaint between) and the pill never flickers. Selection reveal: glowNode.
+  if (!host) {
+    el._actionIcon = icon;
+    icon._owner = el;
+    el.addEventListener('mouseenter', () => setPillHover(icon, true));
+    el.addEventListener('mouseleave', () => setPillHover(icon, false));
+    icon.addEventListener('mouseenter', () => setPillHover(icon, true));
+    icon.addEventListener('mouseleave', () => setPillHover(icon, false));
+  }
 }
 // A message label has no box to anchor a corner badge to — sit the pill just before the label's left
 // edge instead (so it reads first, like a bullet), vertically centered on it. Used for a Happy Path
@@ -564,6 +626,7 @@ function clearFocus(scene) {
   for (const nid in scene.nodeEls) { scene.nodeEls[nid].style.opacity = ''; scene.nodeEls[nid].classList.remove('dim'); }
   for (const x of scene.edgeEls) { x.path.style.opacity = ''; if (x.label) x.label.style.opacity = ''; }
   for (const el of scene.dimEls) el.style.opacity = '';
+  refreshAllPills();  // un-dimming restores hover-reveal for a box the cursor is still over
 }
 function resetScene(scene) {  // clear selection + focus, restore the scene's default panel
   clearFocus(scene);
@@ -1349,11 +1412,19 @@ function boxShape(el) {
 // Anchor the badge at the box's top-RIGHT corner (the drill icon takes top-LEFT), then hold it at a
 // constant on-screen size with the same counter-zoom the action icons use.
 function addBadge(el, state) {
-  let bb; try { bb = boxShape(el).getBBox(); } catch (_) { return; }
+  const shape = boxShape(el);
+  let bb; try { bb = shape.getBBox(); } catch (_) { return; }
   const g = makeBadge(state);
-  g._anchor = { x: bb.x + bb.width, y: bb.y };
-  g.setAttribute('transform', `translate(${g._anchor.x},${g._anchor.y}) scale(${curIconInv()})`);
-  el.appendChild(g);
+  // Same front-overlay home as the action icons (see iconOverlay), so a badge on a container's corner
+  // isn't painted over by that container's inner boxes. The box's top-RIGHT corner, read in the box
+  // shape's own space, is carried into the overlay's space so the on-screen spot is unchanged.
+  const parent = iconOverlay || el;
+  const corner = { x: bb.x + bb.width, y: bb.y };
+  const anchor = parent === el ? corner : pointToHostSpace(shape, corner.x, corner.y, parent);
+  if (!anchor) return;
+  g._anchor = anchor;
+  g.setAttribute('transform', `translate(${anchor.x},${anchor.y}) scale(${curIconInv()})`);
+  parent.appendChild(g);
   DIFF_BADGES.push(g);
 }
 function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a fixed screen size (mirrors rescaleActionIcons)
@@ -1500,7 +1571,15 @@ function shapeOf(el) { return el.querySelector('rect, polygon, path, circle') ||
 function glowNode(el) {
   shapeOf(el).style.filter = HILITE;
   el.classList.add('is-selected');
-  return () => { shapeOf(el).style.filter = ''; el.classList.remove('is-selected'); };
+  // Keep the box's corner pill visible after the cursor leaves it while it's the selection. The pill now
+  // lives in the front overlay (not this group), so this is a JS flag rather than the old `.is-selected`
+  // descendant CSS rule; `_actionIcon` is set by addActionIcon for every box/cluster pill.
+  const icon = el._actionIcon;
+  if (icon) { icon._selected = true; refreshPillReveal(icon); }
+  return () => {
+    shapeOf(el).style.filter = ''; el.classList.remove('is-selected');
+    if (icon) { icon._selected = false; refreshPillReveal(icon); }
+  };
 }
 // Hover glow — same shape-only rule as glowNode, so hovering a box's corner action icon (visually
 // inside the box) never tints the icon itself; the icon has its own :hover reaction (viewer.css).
@@ -2930,6 +3009,7 @@ async function render(sArg, transient) {
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
   emphasizeZoomedFrame(diagram, s);  // thicker border + bigger title on the group you drilled into
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
+  iconOverlay = ensureIconOverlay(diagram);  // front layer for corner icons + badges — must exist before bindFor/decorate add any
   for (const id in ACTION_ICONS) delete ACTION_ICONS[id];  // reset before bindFor's bindFrameDrill re-populates it
   bindFor(s);
   decorateActionIcons(mainScene);  // corner icon = each drawn box's one useful secondary action

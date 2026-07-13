@@ -365,12 +365,15 @@ body.cmd .opensrc, body.cmd .opensrc * {
    Mermaid's own default colour/dash pattern the whole time — drill only looked "right" by coincidence
    (its intended indigo is a similarly-toned purple to Mermaid's default). */
 .action-icon { cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
-g.node:hover .action-icon, g.cluster:hover .action-icon,
-g.node.is-selected .action-icon, g.cluster.is-selected .action-icon { opacity: 1; pointer-events: auto; }
-/* A dimmed box (`.dim`, set alongside the DIM opacity in applyFocus when focus is on something else)
-   isn't a candidate for a next action — hovering it just to read a label while dimmed shouldn't
-   surface the pill. Wins over the plain :hover rule above on specificity (one extra class). */
-g.node.dim:hover .action-icon, g.cluster.dim:hover .action-icon { opacity: 0; pointer-events: none; }
+/* Box + cluster pills now live in a front overlay (see iconOverlay in viewer.js), NOT inside their own
+   node group, so the old descendant reveal rule (`g.node:hover .action-icon`) can't reach them. JS
+   toggles `.revealed` off the owner box's hover + selection state instead (see refreshPillReveal),
+   including the "never on a dimmed box, even under the cursor" case the old `.dim:hover` rule covered. */
+.action-icon.revealed { opacity: 1; pointer-events: auto; }
+/* Diff badges are purely informational (no click/hover) and now live in the same front overlay as the
+   pills, so they'd otherwise sit above everything and swallow pointer events meant for whatever is under
+   a box's top-right corner (a frame, an inner element). They must never intercept input. */
+.diff-badge { pointer-events: none; }
 /* transform-box/transform-origin here (not repeated below) because a CSS `transform` on an SVG element
    scales/animates around the SVG viewport's origin by default, not the shape's own center — needed by
    both the hover grow and the flash pulse further down. transform-box:fill-box; transform-origin:center
