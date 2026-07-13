@@ -8,23 +8,22 @@
 
 </div>
 
-When your agent generates a lot of code for you, you can end up with code you've
-completely lost track of. It runs fine until the day you need to understand it,
-and then you find there's nothing under your feet. This is the Coyote Effect.
+## What is coyodex?
 
-coyodex lets you keep a high-level view of your whole project without reading all of it,
-and drill into the code only when and where you need to. You drive it from your AI coding
-agent to:
-
-- **build a baseline map**: an annotated view of your whole project, functional and
-  technical, drillable to `file:line`, committed next to the code so the two don't drift.
-- **analyze a code diff** against it: what each change adds, touches, and ripples to,
-  in the project's own terms.
+coyodex analyzes your project and builds an interactive map where every box is
+annotated in plain language by your coding agent and anchored to code locations.
+Use it to understand what your system does and how, top-down, without reading all
+of it. Drill into the code only where and when you actually need to.
 
 <img src="assets/happy-path.png" alt="The coyodex viewer: the Happy Path of a project on the left as a sequence of use cases, and the grounded source of a selected element on the right" width="100%">
 
-*The interactive viewer: the Happy Path (what the system does, end to end) beside the real source
-each step is grounded in.*
+*The viewer: a project's Happy Path beside the source each step is grounded in.*
+
+## Why coyodex?
+
+When your agent generates a lot of code for you, you can end up with code you've
+completely lost track of. It runs fine until the day you need to understand it,
+and then you find there's nothing under your feet. This is the Coyote Effect.
 
 ## Why not just generate mermaid diagrams from the code?
 
@@ -34,7 +33,7 @@ You could ask an agent to draw a mermaid diagram of your code. coyodex differs i
    an interactive UI: drillable top-down (system → subsystem → component → source) and bidirectional
    (from a use case to the elements it touches, and from any element back to the use cases that touch
    it).
-2. **Explained in plain language.** Every box and arrow carries a natural-language annotation: what a
+2. **Annotated in plain language.** Every box and arrow carries a natural-language annotation: what a
    component is for, what one thing does to another, what a domain entity means. Not just a labeled
    graph.
 3. **Reliable extraction + verification.** Indexing and code-sizing tools help the agent read facts
