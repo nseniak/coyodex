@@ -25,22 +25,17 @@ When your agent generates a lot of code for you, you can end up with code you've
 completely lost track of. It runs fine until the day you need to understand it,
 and then you find there's nothing under your feet. This is the Coyote Effect.
 
+coyodex helps you recover from this situation and oversee your agent's work moving forward.
+
 ## Why not just generate mermaid diagrams from the code?
 
-You could ask an agent to draw a mermaid diagram of your code. coyodex differs in four ways:
+You could ask an agent to draw a mermaid diagram of your code. coyodex differs in three ways:
 
 1. **Grounded, explorable map.** Every box is anchored to a real `file:line`, and explorable through
-   an interactive UI: drillable top-down (system → subsystem → component → source) and bidirectional
-   (from a use case to the elements it touches, and from any element back to the use cases that touch
-   it).
-2. **Annotated in plain language.** Every box and arrow carries a natural-language annotation: what a
-   component is for, what one thing does to another, what a domain entity means. Not just a labeled
-   graph.
-3. **Reliable extraction + verification.** Indexing and code-sizing tools help the agent read facts
-   from the code instead of guessing. Then two checks: a validation pass that flags internal
-   contradictions and boxes that don't map to real code, and an adversarial pass where fresh agents
-   try to disprove each relationship against the code.
-4. **Change-impact analysis.** What a diff adds, touches, and ripples to, in the project's own terms.
+   an interactive UI: drillable top-down, from high level components to code locations, and back.
+2. **Annotated in plain language.** Every box and arrow carries a natural-language explanation of the functionality and the implementation.
+3. **Tool-guided extraction and verification.** Indexing and code-sizing tools help the agent extract information from the code, then a final adversarial pass has fresh agents try to disprove each claim against the code.
+
 
 ## How to use
 
@@ -152,6 +147,8 @@ Two things to know:
   invent things the code doesn't do; an "add a use case" only sticks if there's real code behind it.
 - **A rebuild is a fresh start.** If you later rebuild the map from scratch (which you have to ask for
   explicitly), your manual tweaks aren't re-applied. Day to day you analyze and accept, which keeps them.
+
+
 
 ## Status
 
