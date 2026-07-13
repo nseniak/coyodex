@@ -27,8 +27,10 @@ CORE_MODULES = [
     "coyodex.viewer.gen_viewer",
     "coyodex.viewer.filetree",
     "coyodex.grammar",
+    "coyodex.balance_lib",
+    "coyodex.balance",
 ]
-CORE_SOURCES = ["validate_analysis.py", "grammar.py",
+CORE_SOURCES = ["validate_analysis.py", "grammar.py", "balance_lib.py", "balance.py",
                 "viewer/render.py", "viewer/build_graph.py", "viewer/gen_viewer.py", "viewer/filetree.py"]
 
 
@@ -98,6 +100,19 @@ def test_validate_and_audit_reject_a_markdown_file_like_any_other_bad_input() ->
         md.write_text("## Not JSON\n", encoding="utf-8")
         assert cli.main(["validate", str(md)]) == 1
         assert cli.main(["audit", str(md)]) == 1
+
+
+def test_balance_dispatch_propagates_not_found() -> None:
+    """`coyodex balance <missing>` routes to the balance report, which returns 1 (file not found)."""
+    with tempfile.TemporaryDirectory() as d:
+        assert cli.main(["balance", str(Path(d) / "nope.json")]) == 1
+
+
+def test_balance_help_exits_zero() -> None:
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert cli.main(["balance", "--help"]) == 0
+    assert "fan-out" in buf.getvalue()
 
 
 def test_render_dispatch_propagates_usage_error() -> None:

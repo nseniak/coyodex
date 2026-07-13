@@ -33,6 +33,9 @@ Commands:
              when the stored `where` line drifts from the line the skeptics found.
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
+  balance    Report per-diagram fan-out (target 5±2), the inter-subsystem edge
+             matrix, and advisory split proposals for over-dense diagrams —
+             apply accepted proposals via a Direct map change.
 
 The method-quality regression eval is a separate command: `coyodex-eval` (see eval/).
 
@@ -88,6 +91,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "dump":
         from coyodex import dump  # stdlib-only; defaults to .coyodex/project-map.json
         return dump.main(rest)
+    if cmd == "balance":
+        from coyodex import balance  # stdlib-only; defaults its own map path
+        return balance.main(rest)
     if cmd == "lint-fragment":
         from coyodex import lint_fragment  # stdlib-only
         return lint_fragment.main(rest)

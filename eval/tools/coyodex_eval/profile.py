@@ -25,7 +25,7 @@ import sys
 from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
-from coyodex import audit_model, validate_model
+from coyodex import audit_model, balance_lib, validate_model
 from coyodex.model import ModelError, ProjectModel, load_model
 from coyodex.preindex_lib import expected_components  # the granularity expectation E, RE-COMPUTED
 # from the repo tree at score time (shared code, never the pre-index's JSON — GR4)
@@ -65,6 +65,12 @@ class MapProfile:
     # ── granularity (the code-derived component expectation E — the leaf anchor both maps are
     #    measured against; None when scored without the repo, or the profile predates the field) ──
     granularity_expected: int | None = None
+    # ── diagram balance (fan-out of the rendered S-forest diagrams — report-only, no gate; None
+    #    when the profile predates the fields. Gating is opt-in per project via thresholds bands.) ──
+    root_fanout: int | None = None
+    max_fanout: int | None = None
+    fanout_in_band_pct: float | None = None    # share of diagrams inside [3,9], exemptions included
+    nesting_depth: int | None = None
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
     use_case_names: list[str] = field(default_factory=list)
@@ -117,6 +123,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     surfaces = [s.surface for s in m.security if s.surface.strip()]
     n_components = len({c.id for c in m.components})
     n_edges = len(m.edges)
+    root_fanout, max_fanout, in_band_pct, depth = balance_lib.fanout_summary(m)
 
     return MapProfile(
         use_cases=len({u.id for u in m.use_cases}),
@@ -139,6 +146,10 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         coverage_flags=coverage_flags,
         edges_per_component=round(n_edges / n_components, 3) if n_components else None,
         granularity_expected=granularity_expected,
+        root_fanout=root_fanout,
+        max_fanout=max_fanout,
+        fanout_in_band_pct=in_band_pct,
+        nesting_depth=depth,
         auth_surfaces=surfaces,
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],
@@ -163,6 +174,11 @@ def _format(p: MapProfile) -> str:
         f"{p.audit_warnings} warning(s) · {p.l2_claims} L2 claim(s)",
         f"  coverage    : {cov} compression/absent flag(s)",
         f"  granularity : {gran}",
+        ("  balance     : n/a (profile predates the balance fields)"
+         if p.fanout_in_band_pct is None else
+         f"  balance     : root fan-out {p.root_fanout} · max {p.max_fanout} · "
+         f"{p.fanout_in_band_pct:.0%} of diagrams in the 3–9 band · depth {p.nesting_depth} "
+         f"(report-only)"),
     ])
 
 

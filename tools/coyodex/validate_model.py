@@ -24,7 +24,7 @@ import re
 import sys
 from pathlib import Path
 
-from coyodex import grammar
+from coyodex import balance_lib, grammar
 from coyodex.anchors import DIR_ANCHOR as _DIR_ANCHOR, FILE_ANCHOR as _ANCHOR_LINE
 from coyodex.model import (
     ID_ARRAYS,
@@ -782,6 +782,10 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     if redundant:
         warnings.append("Groups whose only child is another group of the same kind (redundant "
                         f"nesting level): {', '.join(redundant)}")
+
+    # Diagram balance (advisory, never blocking): per-diagram fan-out vs the 5±2 target —
+    # sparse roots, over-dense screens, single-child wrapper levels. Model-only, so always on.
+    warnings.extend(balance_lib.balance_warnings(m))
 
     # Grouping guards + nudges (unchanged semantics from v1).
     comp_ids = {c.id for c in m.components}

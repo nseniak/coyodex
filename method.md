@@ -106,7 +106,9 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   column on T1); the member list and the inter-subsystem edges are *derived*, never authored. Present
   this first on large maps; drill into T1. **Nesting renders as recursive drill**: each subsystem's card
   shows only its *immediate* children (sub-subsystems as drillable boxes), so a large area drills down
-  level by level inside the one map — there is no depth limit (deep chains only warn).
+  level by level inside the one map — there is no depth limit (deep chains only warn). Group the **top
+  levels by capability** (what the system does), not by tech tier, and keep every card's fan-out near
+  the **5±2 target** — see *Diagram balance — the fan-out rule* under Cross-cutting rules.
 - **T1 Components**: `Component | Subsystem | Purpose | Entry point | Depends on` (the `Subsystem`
   cell is the component's one parent `S`, or empty = ungrouped).
 - **T2 External dependencies**: `Name | Kind | Type | Used for | Where configured`. `Kind` (optional,
@@ -275,12 +277,20 @@ self-starting entry points** — anything that runs with no caller: scheduled/cr
 **consumers** (`.consume`/`.subscribe`/poll), boot/**startup** hooks (`on_event('startup')`,
 lifespan, `atexit`), and OS **signal** handlers. Tag each entry point `activation` (self|external);
 a long-running service with **zero** self-starting entry points is a red flag — assert why, don't
-leave the list front-doors-only) → synthesize T1 → **cluster components into Subsystems** (large maps: by
-directory first, then dependency/behavioral cohesion; minimize inter-group edges; mark
-directory-derived = verified, cohesion-derived = inferred) → **cluster entities into Subdomains**
+leave the list front-doors-only) → synthesize T1 → **cluster components into Subsystems** (large maps —
+two axes, one per altitude: the **top 1–2 levels group by capability** — what the system *does*, read
+from use-case / Happy-Path affinity, so the first screen describes the product; a tech-tier-only root
+(`Backend` / `Frontend`, or by-language) is an anti-pattern — that axis belongs in a group's name or a
+lower tier, not the top cut. **Leaf grouping stays directory-first**, then dependency/behavioral
+cohesion; minimize inter-group edges *at the leaf/sibling level only* — a capability top level
+legitimately has many cross-group edges, so never judge the top cut by edge counts; mark
+directory-derived = verified, cohesion-derived = inferred — a cross-directory capability group has no
+single directory home, so it simply **omits `source`**, never fabricates one) → **cluster entities into Subdomains**
 (large domain models: the same recipe on the entity graph — by `SOURCE` directory first, then
 `RELATIONS` cohesion) → trace T6 + edge list (**including the `C→E` edges**: which component
-persists/writes/reads each entity) → **measure test completeness against the finished inventory**
+persists/writes/reads each entity) → **re-balance the grouping against the traced edges** (the
+grouping was cut edge-blind — run `coyodex balance`, fix or justify each finding; Phase 3.5 in
+parallel mode) → **measure test completeness against the finished inventory**
 (the last structural step — it reads the assembled nodes + flows: use cases, T4 entry points, T5
 entities, critical-path branches). Nodes (T4/T5/T2)
 before the edges/flows that connect them. **Present** top-down (T1–T3 first). The "Depends on"
@@ -330,6 +340,27 @@ subsystem-shaped dirs into single components — make them subsystems and recurs
 you split module-sized units too fine. `validate --check-coverage` and the eval **re-compute E from
 the tree independently** (GR4) and nudge when the map's component count leaves the band — the nudge
 is advisory; a justified exception stays a judgement call.
+
+**Diagram balance — the fan-out rule (what "one readable screen" means).** The leaf rule sizes the
+*boxes*; this rule sizes the *screens*. Every rendered diagram shows a node's **immediate children**
+(the root shows the top-level subsystems; a subsystem card shows its child subsystems + member
+components), so each screen should carry **5±2 boxes** — advisory band **[3, 9]**. The arithmetic
+follows: N leaves at fan-out F need ≈ log_F(N) grouping levels (122 components at F≈5 want ~3
+levels, not 2). Two named anti-patterns: the **sparse tech-tier root** (a 2-box `Backend`/`Frontend`
+top screen tells the reader the tech stack, not the product — sparseness is an anti-pattern *at the
+root only*; a mid-tree 2-child subsystem is normal) and the **single-child subsystem** (a wrapper
+level pulling no weight — inline it or grow it). One exemption: a **homogeneous family** — a dense
+screen of same-kind siblings (11 repositories, 14 plugins) sharing a directory or a name suffix —
+reads fine as a list up to ~15. `coyodex validate` warns (always-on, advisory) outside [3, 12];
+`coyodex balance` shows the full per-diagram picture (including the 10–12 soft tier), the
+inter-subsystem edge matrix, and deterministic split proposals for over-dense screens — proposals
+are **starting points for judgment, not ready-to-apply** (on list-shaped or star-shaped screens it
+says so instead of proposing noise). A durably justified exception is recorded in the model's
+`extras` under the heading **"Balance exceptions"** (name the diagrams: `root`, `S7`, …) and
+silences those warnings. The contract that keeps balance safe: **balance never gates and only ever
+re-groups** — grouping is a free, view-only choice (membership on the child, member lists derived),
+while the **leaf decision is grounded by E and out of bounds for balance tooling**: no balance
+finding may merge or split components to hit a number.
 
 **The hand-off — read the stderr summary first; don't reverse-engineer the JSON.** `preindex` writes
 the JSON to `.coyodex/preindex.json` **and** prints a one-line human summary to **stderr** (heaviest
@@ -399,6 +430,15 @@ synthesis → parallel trace.**
   **direct** use — so structural entity-usage is captured at component granularity, not only
   behaviorally via the flow steps. This is *additional*: the `C↔C`/`C↔D` edges
   remain the primary output and must stay complete (every dep wired, the component graph not sparse).
+- Phase 3.5 Re-balance reconcile (lead, not delegated — runs ONCE, after the trace). The grouping was
+  cut at Phase 2 **before any edge existed**, so re-check it now against the real graph: run
+  `coyodex balance` and reconcile each finding — apply a Drilling-deeper operation (nest / promote /
+  flatten) via a Direct map change, or record a one-line justification under the model's
+  `extras` "Balance exceptions" heading. The **sparse-root fix is judgment-only** (no proposal
+  machinery exists for it — the capability-first guidance drives it); the split proposals are
+  starting points, not facts. Exit criterion: `coyodex validate` emits no balance warning that is
+  neither fixed nor justified. This step is not part of the per-write validate → audit → render
+  invariant; maintenance re-surfaces imbalance for free through validate's always-on warnings.
 - Test completeness (one agent, after the Phase 3 trace — it needs the finished inventory + flows).
   Walk the assembled map (use cases, T4 entry points, T5 entities, failure modes, critical-path
   branches) and for each ask "is there a test that exercises it?", emitting the risk-ranked gap table
@@ -673,8 +713,11 @@ model + markdown view + pre-index + `provenance.json` with the code.
 
 **Drilling deeper (refine altitude in place — never a second map file).** When a subsystem is too big
 to detail at its altitude (e.g. a `plugins` area holding dozens of feature units), go finer **inside the
-one map**, two ways:
+one map**, three ways:
 - **Nest** — add child subsystems (their `Parent` is the bigger `S`) and move the members onto them.
+- **Flatten** — dissolve a level that isn't pulling its weight (a single-child wrapper, a group the
+  balance check flags as redundant): reparent its children onto its own parent and delete the group
+  row. Pure regrouping — no edge moves, since a subsystem is never an edge endpoint.
 - **Promote a leaf component into a subsystem** — when a component turns out to *be* a group (its
   Purpose enumerates many sub-units; the validator nudges this), retire the component, add a subsystem in
   its place, and add its real units as components under it. **Re-trace its edges**: the old component's
@@ -682,7 +725,7 @@ one map**, two ways:
   be an edge endpoint, so the validator's "every reference resolves" check fails on any leftover edge
   to the retired id, which forces (and guards) the re-trace.
 
-Both are ordinary single-map edits; the viewer then drills the new level automatically. **Altitude may
+All three are ordinary single-map edits; the viewer then drills the new level automatically. **Altitude may
 be uneven** — refine only where you need detail; an area you haven't drilled stays a single box. This
 **supersedes child maps** (a second `.coyodex/<area>/project-map.md`): a separate file is a separate ID
 space, so links can't cross it and Analyze/Accept won't track it — see [dispatch](method/dispatch.md).

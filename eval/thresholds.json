@@ -1,6 +1,6 @@
 {
   "schema": "coyodex-eval/thresholds/v1",
-  "note": "Regression gates for `coyodex eval` — RELATIVE to the baseline, not absolute (a real baseline map carries some validate problems, so the gate is 'no NEW problems'). Hard gates trip REGRESSED; bands trip a softer DRIFT. A partial `bands`/`judge_bands` block MERGES onto the built-in defaults. Band keys: `<metric>_pct` = symmetric drift band; `<metric>_shrink_pct` = shrink-only (growth never breaches). The raw counts are shrink-only — growth means a finer map (the altitude/completeness rubric judges whether the fineness is right), a shrink is lost information, including the proportional collapse that holds density steady. The density ratio (edges_per_component) keeps a tight symmetric band (the secondary check behind granularity). `granularity_band_pct` is the ONE non-baseline-relative band: the candidate's component count vs the CODE-DERIVED expectation E (profile granularity_expected, re-computed from the tree — the leaf anchor); the report shows both maps' distance to E but only the candidate gates. No `l2_claims` band — the worklist derives from edges + auth rows, so it would double-jeopardize movement the edges band and the auth-surface gate already catch. `grounding_failure_rate_max` caps the candidate's judge-failure rate (a broken grounding orchestration must not PASS). `advisories` and `audit_warnings` are intentionally ungated (noisy non-blocking audit output). Starter values — tune per project via .coyodex-eval or a --thresholds override.",
+  "note": "Regression gates for `coyodex eval` \u2014 RELATIVE to the baseline, not absolute (a real baseline map carries some validate problems, so the gate is 'no NEW problems'). Hard gates trip REGRESSED; bands trip a softer DRIFT. A partial `bands`/`judge_bands` block MERGES onto the built-in defaults. Band keys: `<metric>_pct` = symmetric drift band; `<metric>_shrink_pct` = shrink-only (growth never breaches). The raw counts are shrink-only \u2014 growth means a finer map (the altitude/completeness rubric judges whether the fineness is right), a shrink is lost information, including the proportional collapse that holds density steady. The density ratio (edges_per_component) keeps a tight symmetric band (the secondary check behind granularity). `granularity_band_pct` is the ONE non-baseline-relative band: the candidate's component count vs the CODE-DERIVED expectation E (profile granularity_expected, re-computed from the tree \u2014 the leaf anchor); the report shows both maps' distance to E but only the candidate gates. No `l2_claims` band \u2014 the worklist derives from edges + auth rows, so it would double-jeopardize movement the edges band and the auth-surface gate already catch. `grounding_failure_rate_max` caps the candidate's judge-failure rate (a broken grounding orchestration must not PASS). `advisories` and `audit_warnings` are intentionally ungated (noisy non-blocking audit output). The diagram-balance profile fields (root_fanout, max_fanout, fanout_in_band_pct, nesting_depth) ship REPORT-ONLY \u2014 balance never gates by default; a project may opt into gating via a band on any of them (e.g. `fanout_in_band_pct_shrink_pct`), since the band loop reads any numeric profile field. Starter values \u2014 tune per project via .coyodex-eval or a --thresholds override.",
   "global": {
     "hard_gates": {
       "validate_must_not_regress": true,
@@ -9,26 +9,26 @@
       "auth_surfaces_must_not_drop": true
     },
     "bands": {
-      "use_cases_shrink_pct": 0.30,
-      "subsystems_shrink_pct": 0.30,
-      "subdomains_shrink_pct": 0.30,
-      "components_shrink_pct": 0.30,
-      "deps_shrink_pct": 0.30,
-      "entities_shrink_pct": 0.30,
-      "edges_shrink_pct": 0.30,
-      "hp_steps_shrink_pct": 0.30,
-      "flows_shrink_pct": 0.30,
+      "use_cases_shrink_pct": 0.3,
+      "subsystems_shrink_pct": 0.3,
+      "subdomains_shrink_pct": 0.3,
+      "components_shrink_pct": 0.3,
+      "deps_shrink_pct": 0.3,
+      "entities_shrink_pct": 0.3,
+      "edges_shrink_pct": 0.3,
+      "hp_steps_shrink_pct": 0.3,
+      "flows_shrink_pct": 0.3,
       "edges_per_component_pct": 0.25
     },
-    "granularity_band_pct": 0.40,
+    "granularity_band_pct": 0.4,
     "judge_bands": {
-      "l2_grounding_passrate_drop": 0.10,
-      "judge_score_drop": 0.10,
+      "l2_grounding_passrate_drop": 0.1,
+      "judge_score_drop": 0.1,
       "grounding_failure_rate_max": 0.25
     }
   },
   "judge": {
-    "note": "Read by the orchestration (eval/method.md Step 4), not by the CLI. `grounding_model` is the PINNED sub-agent model for grounding skeptics and rubric judges — a comparison is only meaningful when both sides were judged by the same model; changing it invalidates cached baseline judge scores (delete .coyodex-eval/baseline/judge.json to re-judge). `n_skeptics` and `grounding_cap` mirror the tool defaults in coyodex_eval/judge.py (DEFAULT_N_SKEPTICS / DEFAULT_GROUNDING_CAP) — change them together.",
+    "note": "Read by the orchestration (eval/method.md Step 4), not by the CLI. `grounding_model` is the PINNED sub-agent model for grounding skeptics and rubric judges \u2014 a comparison is only meaningful when both sides were judged by the same model; changing it invalidates cached baseline judge scores (delete .coyodex-eval/baseline/judge.json to re-judge). `n_skeptics` and `grounding_cap` mirror the tool defaults in coyodex_eval/judge.py (DEFAULT_N_SKEPTICS / DEFAULT_GROUNDING_CAP) \u2014 change them together.",
     "grounding_model": "sonnet",
     "n_skeptics": 3,
     "grounding_cap": 40

@@ -104,7 +104,10 @@ Semantics, stated on the fields:
 - **Membership is single-source on the child**: `components[].subsystem`, `subsystems[].parent`,
   `entities[].subdomain`, `subdomains[].parent`. Member lists, inter-group edges, and the
   subsystem→subdomain bridge stay **derived, never stored**. Nesting depth isn't capped — the
-  validator only warns past a handful of levels, as an "is each level pulling its weight?" nudge.
+  validator only warns past a handful of levels, as an "is each level pulling its weight?" nudge,
+  and (advisory, never blocking) when a diagram's immediate-children count leaves the fan-out band —
+  the balance guidance in [method.md](../method.md) ("Diagram balance — the fan-out rule"); a
+  justified exception is recorded in `extras` under a **"Balance exceptions"** heading.
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).
   Duplicated authored rows are preserved as authored (the graph views de-duplicate by
   `(src, verb, dst)`). An edge's `why` is the canonical relationship rationale — distinct from a
