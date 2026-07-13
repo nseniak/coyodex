@@ -441,6 +441,9 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
         bad_file(f"{c.id} entry_point", c.entry_point)
     for d in m.deps:
         bad_file(f"{d.id} where_configured", d.where_configured)
+    for el in (*m.components, *m.deps):                     # evidence citations are file:line anchors too
+        for i, ev in enumerate(el.evidence):
+            bad_file(f"{el.id} evidence[{i}].file", ev.file)
     for e in m.edges:
         bad_file(f"{e.src} → {e.dst} where", e.where)
     for ep in m.entry_points:
@@ -451,6 +454,15 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
         bad_anchor(f"glossary '{g.term}' source", g.source)
     for group in (*m.subsystems, *m.subdomains):
         bad_anchor(f"{group.id} source", group.source)
+    # Operational-table source fields that the viewer turns into code links — same bare-anchor rule as
+    # every other source (the deployment/observability/tests location fields stay free prose, so they
+    # are NOT checked here: they describe topology, not a single line, and the viewer renders them as text).
+    for i, r in enumerate(m.run_commands):
+        bad_file(f"run_commands[{i}].source", r.source)
+    for i, s in enumerate(m.security):
+        bad_file(f"security[{i}].source", s.source)
+    for t in m.non_entity_types:
+        bad_anchor(f"non_entity_types '{t.name}' source", t.source)
     return problems
 
 

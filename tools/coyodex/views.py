@@ -351,6 +351,42 @@ def _node(el, kind: str, name: str, file: str | None, fields: dict[str, str],
                 fields=clean, parent=parent)
 
 
+_TARGET_ID = re.compile(r"\b(UC|HP|SD|C|D|E|S)\d+\b")  # a leading element id inside a test `target`
+_CRITICAL = re.compile(r"\b(money|payment|auth|login|token|secret|credential|security|"
+                       r"data[- ]?loss|irreversible|delete|destroy|privacy)\b", re.I)
+
+
+def _coverage_state(row) -> str:
+    """A test row's `tested` cell → a badge state. `no`/blank escalates to `untested-critical`
+    when the target or its gap names a critical concern (money/auth/data-loss/…), matching the
+    method's 'lead with untested critical paths' rule."""
+    t = row.tested.strip().lower()
+    if t.startswith("y"):
+        return "tested"
+    if "partial" in t:
+        return "partial"
+    return "untested-critical" if _CRITICAL.search(f"{row.target} {row.gap}") else "untested"
+
+
+def _coverage_map(tests, nodes: dict[str, Node]) -> dict[str, str]:
+    """Resolve each `tests[].target` (free text like "UC1 login" or a bare element name) to a node
+    id and its coverage state, SERVER-SIDE where names are authoritative. An id token wins; else a
+    case-insensitive name match. Unresolvable targets are simply dropped (no guessed badge)."""
+    by_name = {n.name.strip().lower(): nid for nid, n in nodes.items()}
+    out: dict[str, str] = {}
+    for row in tests:
+        target = row.target.strip()
+        hit = _TARGET_ID.search(target)
+        nid = hit.group(0) if (hit and hit.group(0) in nodes) else None
+        if nid is None:
+            # strip a leading id token then match the remaining label against a node name
+            label = _TARGET_ID.sub("", target).strip(" —-:·").lower()
+            nid = by_name.get(label) or by_name.get(target.lower())
+        if nid:
+            out.setdefault(nid, _coverage_state(row))  # first row for a node wins
+    return out
+
+
 def model_to_graph(m: ProjectModel) -> GraphDict:
     """The model as the viewer's GraphDict, the shape `gen_viewer.build_view_bundle` consumes. A
     component's drill file prefers its canonical `source` and falls back to its `entry_point`,
@@ -369,6 +405,19 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         nodes[s.id] = _node(s, "subsystem", s.name, s.source,
                             {"Subsystem": s.name, "Purpose": s.purpose, "Parent": parent_name},
                             s.parent)
+    # T4 entry points grouped by the component they name — surfaced as each component's "Triggered by"
+    # list in the info pane (the standalone table also lives on the System tab). Each flat entry point
+    # also carries `index` = its position within its component's list, so the viewer's search hits and
+    # System-tab component links can select the exact entry point in that component's pane.
+    eps_by_comp: dict[str, list[dict[str, str]]] = {}
+    flat_entry_points: list[dict[str, object]] = []
+    for ep in m.entry_points:
+        ep_dict: dict[str, object] = asdict(ep)
+        if ep.component:
+            ep_dict["index"] = len(eps_by_comp.setdefault(ep.component, []))
+            eps_by_comp[ep.component].append(
+                {"kind": ep.kind, "trigger": ep.trigger, "source": ep.source})
+        flat_entry_points.append(ep_dict)
     for c in m.components:
         subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""
         fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
@@ -379,6 +428,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         href = c.source or c.entry_point or _first_href(c.purpose, c.depends_on)
         node = _node(c, "component", c.name, href, fields, c.subsystem)
         node.files = _component_files(c)
+        node.entry_points = eps_by_comp.get(c.id, [])
         nodes[c.id] = node
     for d in m.deps:
         fields = {"Name": d.name, "Kind": d.kind or "", "Type": d.type, "Used for": d.used_for,
@@ -470,6 +520,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     return {
         "commit": m.commit,
         "committed": m.committed,
+        "built": m.built,
+        "format": m.format or None,
         "title": m.title or None,
         "goal": m.goal or None,
         "nodes": {nid: asdict(n) for nid, n in nodes.items()},
@@ -481,4 +533,16 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                   for r in m.roles],
         "glossary": [{"term": g.term, "meaning": g.meaning, "source": g.source or ""}
                      for g in m.glossary],
+        # ── reference collections (System / Tests tabs) — carried straight from the model ──
+        "run_commands": [asdict(r) for r in m.run_commands],
+        "entry_points": flat_entry_points,
+        "non_entity_types": [asdict(t) for t in m.non_entity_types],
+        "deployment": [asdict(r) for r in m.deployment],
+        "observability": [asdict(r) for r in m.observability],
+        "security": [asdict(r) for r in m.security],
+        "config": [asdict(r) for r in m.config],
+        "tests_note": m.tests_note,
+        "tests": [asdict(r) for r in m.tests],
+        "coverage": _coverage_map(m.tests, nodes),
+        "extras": [asdict(x) for x in m.extras],
     }

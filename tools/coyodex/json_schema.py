@@ -110,7 +110,13 @@ FIELD_META: dict[tuple[str, str], dict] = {
                          "site: the line in `src`'s code where it invokes `dst`."},
     ("Edge", "why"): {"description": "the relationship's rationale — distinct from either "
                        "endpoint's own `purpose`."},
-    ("SecurityRow", "source"): {"description": "markdown link to the auth check in code."},
+    ("RunRow", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC
+                            + " Where the run command is defined — the script, Makefile target, or "
+                            "config line the action runs."},
+    ("SecurityRow", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC
+                                 + " The auth check in code (the enforcement site)."},
+    ("NonEntityType", "source"): {"description": _DIR_OR_FILE_DESC
+                                   + " Where the deliberately-unmodelled type is defined."},
     ("ProjectModel", "format"): {"const": FORMAT},
     ("ProjectModel", "commit"): {"description": "short commit sha the map was built at."},
     ("ProjectModel", "committed"): {"description": "YYYY-MM-DD."},

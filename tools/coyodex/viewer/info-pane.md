@@ -42,7 +42,8 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 | Purpose | prose | |
 | Entry point | text | |
 | *(extra authored fields)* | text | |
-| Used in | list | |
+| Used in | list of use-case links | |
+| Triggered by | list of its T4 entry points (kind · trigger · source) | source link opens the code viewer |
 | *(kind)* | badge: "component" | |
 
 ### Dependency
@@ -179,3 +180,11 @@ On a change-impact map, any box or edge can carry one extra **change pill**
 | Property | Display | Action |
 |---|---|---|
 | change | badge | |
+
+## The coverage badge
+
+When the map has a test-completeness table, each use-case / component **box** carries a small
+**bottom-right** corner badge for its test coverage — tested (✓), partly tested (~), untested (·),
+or untested-critical (!). Resolved from the Tests-tab table; the corner legend names the states.
+This is a diagram-box badge, not a pane row, and shows only on non-diff views (a diff badge takes
+the corner in diff mode).

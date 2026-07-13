@@ -96,6 +96,62 @@ def test_golden_graph_carries_every_defined_element():
     assert g["edges"], "the fixture's backbone must survive into the graph"
 
 
+def test_golden_graph_carries_reference_collections_and_metadata():
+    """The operational/reference collections the viewer's System & Tests tabs read (and the header
+    metadata) must ride into the graph, one graph row per model row — nothing dropped at model→graph."""
+    m = make_fixture_model()
+    g = model_to_graph(m)
+    assert g["built"] == m.built and g["format"] == m.format
+    for key, coll in [("run_commands", m.run_commands), ("entry_points", m.entry_points),
+                      ("non_entity_types", m.non_entity_types), ("deployment", m.deployment),
+                      ("observability", m.observability), ("security", m.security),
+                      ("config", m.config), ("tests", m.tests), ("extras", m.extras)]:
+        assert len(g[key]) == len(coll), f"{key} lost rows at model→graph"
+    assert g["tests_note"] == m.tests_note
+
+
+def test_golden_graph_attaches_entry_points_and_resolves_coverage():
+    """Entry points that name a component surface on that component's node (the 'Triggered by' list),
+    and each tests[] row resolves to a real node id + a coverage state (the diagram badge source)."""
+    m = make_fixture_model()
+    g = model_to_graph(m)
+    # every node carrying entry points is a component, and each entry point has the expected shape
+    carriers = [nid for nid, n in g["nodes"].items() if n.get("entry_points")]
+    assert carriers, "the fixture has entry points that name components"
+    for nid in carriers:
+        assert g["nodes"][nid]["kind"] == "component"
+        eps = g["nodes"][nid]["entry_points"]
+        assert isinstance(eps, list)
+        for ep in eps:
+            assert set(ep) == {"kind", "trigger", "source"}
+    # each flat entry point that names a component carries its 0-based position within that component's
+    # list (the viewer uses it to select the exact entry point from a search hit / System link)
+    counts: dict[str, int] = {}
+    for e in g["entry_points"]:
+        comp = str(e.get("component") or "")
+        if comp:
+            assert e["index"] == counts.get(comp, 0)
+            counts[comp] = counts.get(comp, 0) + 1
+    # coverage resolves to real nodes with a known state
+    assert g["coverage"], "the fixture's tests table must resolve to at least one node"
+    for nid, state in g["coverage"].items():
+        assert nid in g["nodes"]
+        assert state in {"tested", "partial", "untested", "untested-critical"}
+
+
+def test_coverage_resolves_id_token_and_escalates_critical():
+    """`tests[].target` maps to a node by a leading id token (or a name fallback); an untested row whose
+    target/gap names a critical concern (auth/money/…) escalates to `untested-critical`."""
+    from coyodex.model import TestRow, UseCase
+    m = ProjectModel(title="Tiny")
+    m.use_cases = [UseCase(id="UC1", name="Login"), UseCase(id="UC2", name="Browse")]
+    m.tests = [TestRow(target="UC1 login", tested="no", gap="auth path unchecked"),
+               TestRow(target="Browse", tested="yes")]  # name fallback (no id token)
+    g = model_to_graph(m)
+    assert g["coverage"]["UC1"] == "untested-critical"
+    assert g["coverage"]["UC2"] == "tested"
+
+
 def test_glossary_where_renders_as_link_and_reaches_graph():
     """The bare `source` anchor becomes a clickable basename link in the md view, and the glossary
     (with `source` preserved, "" for a null home) rides into the graph the Glossary tab reads."""

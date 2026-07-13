@@ -87,6 +87,8 @@
             <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
             <button data-view="context">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
             <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
+            <button data-view="system">System</button>  <!-- operational reference tables: run/deploy/observability/security/config/entry-points (hidden when empty) -->
+            <button data-view="tests">Tests</button>  <!-- test-completeness gap table (hidden when empty) -->
 
             <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
                  landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's

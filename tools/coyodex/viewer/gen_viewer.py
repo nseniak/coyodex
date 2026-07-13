@@ -1475,6 +1475,12 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         commit = graph['commit'] or 'unknown'
         committed = graph.get('committed')
         meta = f"baseline @ commit <code>{commit}</code>" + (f" from {committed}" if committed else "")
+        built = graph.get('built')
+        fmt = graph.get('format')
+        if built:
+            meta += f" · built {html_escape(built)}"
+        if fmt:
+            meta += f" · schema <code>{html_escape(fmt)}</code>"
     meta = repo_tag + meta
     grouping = has_grouping(graph)
     domain = has_domain(graph)

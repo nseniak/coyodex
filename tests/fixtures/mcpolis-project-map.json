@@ -55,7 +55,7 @@
     },
     {
       "term": "Organization (org)",
-      "meaning": "A tenant \u2014 the top-level isolation boundary everything is scoped to",
+      "meaning": "A tenant — the top-level isolation boundary everything is scoped to",
       "source": "backend/src/mcpolis/domain/ports/organization_repository.py:41"
     },
     {
@@ -168,202 +168,202 @@
     {
       "id": "UC1",
       "name": "Sign up and create an organization",
-      "trigger_outcome": "Google sign-in first time \u2192 name the org, land on Upstream MCPs",
       "actors": [
         "R1"
-      ]
+      ],
+      "trigger_outcome": "Google sign-in first time → name the org, land on Upstream MCPs"
     },
     {
       "id": "UC2",
       "name": "Add a remote HTTP upstream MCP",
-      "trigger_outcome": "Paste URL, pick auth mode \u2192 upstream added, tools discovered",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Paste URL, pick auth mode → upstream added, tools discovered"
     },
     {
       "id": "UC3",
       "name": "Add a hosted stdio upstream MCP",
-      "trigger_outcome": "Paste command JSON, fill variables, size sandbox \u2192 upstream added",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Paste command JSON, fill variables, size sandbox → upstream added"
     },
     {
       "id": "UC4",
       "name": "Connect or start an upstream",
-      "trigger_outcome": "Click Connect / Start / Authenticate \u2192 live session, tools light up",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Click Connect / Start / Authenticate → live session, tools light up"
     },
     {
       "id": "UC5",
       "name": "Configure roles and per-MCP access",
-      "trigger_outcome": "Create role, toggle MCP enabled per role \u2192 role scoped to chosen MCPs",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Create role, toggle MCP enabled per role → role scoped to chosen MCPs"
     },
     {
       "id": "UC6",
       "name": "Configure per-tool access and argument checks",
-      "trigger_outcome": "Set 3-state tool toggles and regex allow/forbid \u2192 tool calls constrained",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Set 3-state tool toggles and regex allow/forbid → tool calls constrained"
     },
     {
       "id": "UC7",
       "name": "Connect human AI client via Google OAuth",
-      "trigger_outcome": "Point client at gateway URL, sign in \u2192 role's tools usable",
       "actors": [
         "R3"
-      ]
+      ],
+      "trigger_outcome": "Point client at gateway URL, sign in → role's tools usable"
     },
     {
       "id": "UC8",
       "name": "Per-user OAuth to an upstream",
-      "trigger_outcome": "Click Authenticate, consent in popup \u2192 personal upstream tokens stored encrypted",
       "actors": [
         "R3"
-      ]
+      ],
+      "trigger_outcome": "Click Authenticate, consent in popup → personal upstream tokens stored encrypted"
     },
     {
       "id": "UC9",
       "name": "Shared / admin OAuth to an upstream",
-      "trigger_outcome": "Sign in once on team's behalf \u2192 every member's call goes out as admin",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Sign in once on team's behalf → every member's call goes out as admin"
     },
     {
       "id": "UC10",
       "name": "Mint a service token",
-      "trigger_outcome": "New token, pick name and role \u2192 `svct_` value shown once, JSON snippet given",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "New token, pick name and role → `svct_` value shown once, JSON snippet given"
     },
     {
       "id": "UC11",
       "name": "Headless agent calls tools via service token",
-      "trigger_outcome": "Send Bearer `svct_` to org gateway URL \u2192 tools at token's role, no sign-in",
       "actors": [
         "R4"
-      ]
+      ],
+      "trigger_outcome": "Send Bearer `svct_` to org gateway URL → tools at token's role, no sign-in"
     },
     {
       "id": "UC12",
       "name": "List and call tools through the gateway",
-      "trigger_outcome": "Ask client to list/call tools \u2192 prefixed upstream tools returned and forwarded",
       "actors": [
         "R3"
-      ]
+      ],
+      "trigger_outcome": "Ask client to list/call tools → prefixed upstream tools returned and forwarded"
     },
     {
       "id": "UC13",
       "name": "Invite a team member",
-      "trigger_outcome": "Add Google email, pick role, share invite link \u2192 member joins on sign-in",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Add Google email, pick role, share invite link → member joins on sign-in"
     },
     {
       "id": "UC14",
       "name": "Change a member's role",
-      "trigger_outcome": "Edit member, pick new role \u2192 access updates on next request",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Edit member, pick new role → access updates on next request"
     },
     {
       "id": "UC15",
       "name": "Remove a team member",
-      "trigger_outcome": "Remove member \u2192 tokens revoked, per-user sessions dropped",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Remove member → tokens revoked, per-user sessions dropped"
     },
     {
       "id": "UC16",
       "name": "Revoke or rotate a service token",
-      "trigger_outcome": "Revoke / create-new-then-revoke \u2192 agent's next request fails",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Revoke / create-new-then-revoke → agent's next request fails"
     },
     {
       "id": "UC17",
       "name": "View and filter the audit log",
-      "trigger_outcome": "Open Audit, set filters \u2192 matching entries, live SSE tail",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Open Audit, set filters → matching entries, live SSE tail"
     },
     {
       "id": "UC18",
       "name": "Manage template variables and passwords",
-      "trigger_outcome": "Add NAME values, toggle Treat-as-password \u2192 secrets encrypted and redacted",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Add NAME values, toggle Treat-as-password → secrets encrypted and redacted"
     },
     {
       "id": "UC19",
       "name": "Manage sandbox credential files",
-      "trigger_outcome": "Upload file, set target path \u2192 file written into sandbox at session start",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Upload file, set target path → file written into sandbox at session start"
     },
     {
       "id": "UC20",
       "name": "Import multiple MCPs at once",
-      "trigger_outcome": "Paste mcpServers JSON, pick entries \u2192 upstreams created in one go",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Paste mcpServers JSON, pick entries → upstreams created in one go"
     },
     {
       "id": "UC21",
       "name": "Extract an inline secret into a variable",
-      "trigger_outcome": "Paste JSON with raw token \u2192 dialog offers extraction, config rewritten to NAME",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Paste JSON with raw token → dialog offers extraction, config rewritten to NAME"
     },
     {
       "id": "UC22",
       "name": "Manage MCP Hero via the Admin MCP",
-      "trigger_outcome": "Connect AI client to `/admin-mcp` \u2192 conversational management tools usable",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Connect AI client to `/admin-mcp` → conversational management tools usable"
     },
     {
       "id": "UC23",
       "name": "Operator steps into an org for support",
-      "trigger_outcome": "Enter org, end sessions or clear stuck connection \u2192 recorded, no secrets seen",
       "actors": [
         "R5"
-      ]
+      ],
+      "trigger_outcome": "Enter org, end sessions or clear stuck connection → recorded, no secrets seen"
     },
     {
       "id": "UC24",
       "name": "Edit or remove an upstream",
-      "trigger_outcome": "Edit config or delete \u2192 config/variables/files/tools removed, dirty banner on edit",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Edit config or delete → config/variables/files/tools removed, dirty banner on edit"
     },
     {
       "id": "UC25",
       "name": "Delete an organization",
-      "trigger_outcome": "Delete org \u2192 org and all its scoped data purged",
       "actors": [
         "R2"
-      ]
+      ],
+      "trigger_outcome": "Delete org → org and all its scoped data purged"
     }
   ],
   "happy_path": [
@@ -449,7 +449,7 @@
       "id": "HP14",
       "title": "Admin deletes the organization",
       "uc": "UC25",
-      "why": "terminal \u2014 purges everything created above"
+      "why": "terminal — purges everything created above"
     }
   ],
   "subsystems": [
@@ -504,7 +504,7 @@
     {
       "id": "S14",
       "name": "Policy, roles & plans",
-      "purpose": "Role\u2192tool authorization, settings resolution, plan-limit gates, secret scan",
+      "purpose": "Role→tool authorization, settings resolution, plan-limit gates, secret scan",
       "parent": "S5",
       "source": "backend/src/mcpolis/domain/services/policy_engine.py",
       "confidence": "inferred"
@@ -773,7 +773,7 @@
       "id": "C11",
       "name": "Org-context middleware",
       "subsystem": "S15",
-      "purpose": "Resolves `/mcp/{slug}` \u2192 org_id, rewrites path, anti-enumeration 401",
+      "purpose": "Resolves `/mcp/{slug}` → org_id, rewrites path, anti-enumeration 401",
       "entry_point": "backend/src/mcpolis/entrypoints/middleware/org_context.py:111",
       "depends_on": "C55 C21",
       "source": null,
@@ -812,7 +812,7 @@
       "id": "C14",
       "name": "Dashboard REST API router",
       "subsystem": "S4",
-      "purpose": "Composes 14 per-concern `/api/*` routers (upstreams, roles, users, audit\u2026)",
+      "purpose": "Composes 14 per-concern `/api/*` routers (upstreams, roles, users, audit…)",
       "entry_point": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
       "depends_on": "C21 C26 C22 C41",
       "source": null,
@@ -929,7 +929,7 @@
       "id": "C23",
       "name": "PolicyEngine",
       "subsystem": "S14",
-      "purpose": "Role\u2192tool authorization, argument checks, is_admin",
+      "purpose": "Role→tool authorization, argument checks, is_admin",
       "entry_point": "backend/src/mcpolis/domain/services/policy_engine.py:61",
       "depends_on": "C42 C54",
       "source": null,
@@ -1033,7 +1033,7 @@
       "id": "C31",
       "name": "UpstreamRuntimeHash",
       "subsystem": "S16",
-      "purpose": "SHA-256 fingerprint of runtime inputs \u2192 dashboard \"dirty / restart\" banner",
+      "purpose": "SHA-256 fingerprint of runtime inputs → dashboard \"dirty / restart\" banner",
       "entry_point": "backend/src/mcpolis/domain/services/upstream_runtime_hash.py:108",
       "depends_on": "",
       "source": null,
@@ -1540,7 +1540,7 @@
       "id": "C70",
       "name": "E2B template grid",
       "subsystem": "S8",
-      "purpose": "The 24-template grid (node/python/docker \u00d7 8 CPU/RAM) + capabilities",
+      "purpose": "The 24-template grid (node/python/docker × 8 CPU/RAM) + capabilities",
       "entry_point": "backend/src/mcpolis/adapters/sandbox_e2b/template_grid.py:35",
       "depends_on": "",
       "source": null,
@@ -2073,7 +2073,7 @@
       "id": "C111",
       "name": "Gateway session registry",
       "subsystem": "S2",
-      "purpose": "In-process map of gateway session_id \u2192 (org,user)",
+      "purpose": "In-process map of gateway session_id → (org,user)",
       "entry_point": "backend/src/mcpolis/adapters/gateway_session_registry.py:14",
       "depends_on": "",
       "source": null,
@@ -2442,27 +2442,27 @@
     {
       "action": "Ruff lint",
       "command": "`cd backend && poetry run ruff check .`",
-      "source": "backend/pyproject.toml#L90"
+      "source": "backend/pyproject.toml:90"
     },
     {
       "action": "Docker standalone",
       "command": "`docker compose --profile standalone up --build`",
-      "source": "docker-compose.yml#L80"
+      "source": "docker-compose.yml:80"
     },
     {
       "action": "Docker cloud (scalable)",
       "command": "`docker compose --profile cloud up --build`",
-      "source": "docker-compose.yml#L113"
+      "source": "docker-compose.yml:113"
     },
     {
       "action": "Build E2B template grid",
       "command": "`cd runner/e2b-templates && make build`",
-      "source": "runner/e2b-templates/build_grid.py#L139"
+      "source": "runner/e2b-templates/build_grid.py:139"
     },
     {
       "action": "Run all 3 suites concurrently",
       "command": "`make test-all`",
-      "source": "Makefile#L16"
+      "source": "Makefile:16"
     }
   ],
   "entry_points": [
@@ -2474,25 +2474,25 @@
     },
     {
       "kind": "Mounted ASGI",
-      "trigger": "`/mcp` \u2014 gateway MCP (bearer)",
+      "trigger": "`/mcp` — gateway MCP (bearer)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2068",
       "component": "C2"
     },
     {
       "kind": "Mounted ASGI",
-      "trigger": "`/admin-mcp/{slug}` \u2014 admin MCP (per-org admin)",
+      "trigger": "`/admin-mcp/{slug}` — admin MCP (per-org admin)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2100",
       "component": "C3"
     },
     {
       "kind": "Mounted ASGI",
-      "trigger": "`/admin-mcp/system` \u2014 superadmin MCP (allowlist)",
+      "trigger": "`/admin-mcp/system` — superadmin MCP (allowlist)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2093",
       "component": "C4"
     },
     {
       "kind": "Mounted ASGI",
-      "trigger": "`/dev/mcp-demo` \u2014 demo MCP",
+      "trigger": "`/dev/mcp-demo` — demo MCP",
       "source": "backend/src/mcpolis/entrypoints/app.py:2114",
       "component": "C20"
     },
@@ -2582,7 +2582,7 @@
     },
     {
       "kind": "Signal",
-      "trigger": "SIGTERM \u2192 graceful drain",
+      "trigger": "SIGTERM → graceful drain",
       "source": "backend/src/mcpolis/entrypoints/app.py:1517",
       "component": "C9"
     },
@@ -2640,7 +2640,7 @@
       "id": "E1",
       "name": "Organization",
       "store": "Mongo `organizations` / file `config/`",
-      "meaning": "A tenant \u2014 the top-level isolation boundary everything is scoped to.",
+      "meaning": "A tenant — the top-level isolation boundary everything is scoped to.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/ports/organization_repository.py:15",
       "fields": [
@@ -2688,7 +2688,8 @@
           "src_card": "1",
           "dst_card": "1",
           "display": "Subscription",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "scopes",
@@ -2696,7 +2697,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "UpstreamDefinition",
-          "how": "org-scoped by org_id; no field on the definition"
+          "how": "org-scoped by org_id; no field on the definition",
+          "keyed_by": []
         }
       ]
     },
@@ -2721,7 +2723,8 @@
           "src_card": "1",
           "dst_card": "1",
           "display": "PlanName",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -2758,7 +2761,7 @@
           "name": "org_id",
           "type": "string",
           "markers": [
-            "FK\u2192E1"
+            "FK→E1"
           ]
         },
         {
@@ -2770,7 +2773,7 @@
           "name": "role",
           "type": "string",
           "markers": [
-            "FK\u2192E5"
+            "FK→E5"
           ]
         },
         {
@@ -2786,7 +2789,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "Organization",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "assignedRole",
@@ -2794,7 +2798,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "RoleDefinition",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -2802,7 +2807,7 @@
       "id": "E4",
       "name": "SettingsConfig",
       "store": "Mongo `settings` per-org / `config/settings.json`",
-      "meaning": "The per-org policy config root \u2014 upstream options, roles, and user\u2192role assignments.",
+      "meaning": "The per-org policy config root — upstream options, roles, and user→role assignments.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:77",
       "fields": [
@@ -2835,7 +2840,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "UpstreamOptions",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -2843,7 +2849,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "RoleDefinition",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -2851,7 +2858,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "UserDefinition",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -2886,7 +2894,8 @@
           "src_card": "1",
           "dst_card": "1",
           "display": "RoleSettings",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -2902,7 +2911,7 @@
           "name": "role",
           "type": "string",
           "markers": [
-            "FK\u2192E5"
+            "FK→E5"
           ]
         }
       ],
@@ -2913,7 +2922,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "RoleDefinition",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -2957,7 +2967,8 @@
           "src_card": "1",
           "dst_card": "1",
           "display": "McpAccessConfig",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -2965,7 +2976,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "ToolAccessConfig",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -2973,7 +2985,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "ArgumentConstraint",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -3098,7 +3111,7 @@
       "id": "E10",
       "name": "UpstreamDefinition",
       "store": "Mongo `upstreams` / `mcp.json`, per-org",
-      "meaning": "A registered backend MCP server \u2014 transport choice, its config, and auth.",
+      "meaning": "A registered backend MCP server — transport choice, its config, and auth.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/upstream.py:84",
       "fields": [
@@ -3151,7 +3164,8 @@
           "src_card": "0..1",
           "dst_card": "1",
           "display": "StdioTransportConfig",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -3159,7 +3173,8 @@
           "src_card": "0..1",
           "dst_card": "1",
           "display": "HttpTransportConfig",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -3167,7 +3182,8 @@
           "src_card": "1",
           "dst_card": "1",
           "display": "UpstreamAuthConfig",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "isOfType",
@@ -3175,7 +3191,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "TransportType",
-          "how": "transport field"
+          "how": "transport field",
+          "keyed_by": []
         }
       ]
     },
@@ -3339,7 +3356,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "AuthMode",
-          "how": "mode field"
+          "how": "mode field",
+          "keyed_by": []
         }
       ]
     },
@@ -3442,7 +3460,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "UpstreamDefinition",
-          "how": "keyed by upstream id at connect time"
+          "how": "keyed by upstream id at connect time",
+          "keyed_by": []
         }
       ]
     },
@@ -3493,7 +3512,7 @@
           "name": "org_id",
           "type": "string",
           "markers": [
-            "FK\u2192E1"
+            "FK→E1"
           ]
         },
         {
@@ -3505,7 +3524,7 @@
           "name": "role_name",
           "type": "string",
           "markers": [
-            "FK\u2192E5"
+            "FK→E5"
           ]
         },
         {
@@ -3533,7 +3552,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "Organization",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "grantsRole",
@@ -3541,14 +3561,15 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "RoleDefinition",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
     {
       "id": "E17",
       "name": "OAuthToken",
-      "store": "ConnectionStore \u2014 Mongo per-org / file",
+      "store": "ConnectionStore — Mongo per-org / file",
       "meaning": "A stored OAuth credential for an upstream (admin or per-user) with refresh bookkeeping.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/adapters/repositories/connection_store.py:9",
@@ -3601,14 +3622,15 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "UpstreamDefinition",
-          "how": "keyed by (org,upstream,user) in the connection store"
+          "how": "keyed by (org,upstream,user) in the connection store",
+          "keyed_by": []
         }
       ]
     },
     {
       "id": "E22",
       "name": "TemplateVarSummary",
-      "store": "TemplateVarRepository \u2014 Mongo encrypted / file",
+      "store": "TemplateVarRepository — Mongo encrypted / file",
       "meaning": "A per-MCP `${NAME}` variable (secret or plain) substituted into upstream config at launch.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/domain/model/template_var.py:66",
@@ -3657,7 +3679,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "UpstreamDefinition",
-          "how": "keyed by (org,upstream)"
+          "how": "keyed by (org,upstream)",
+          "keyed_by": []
         }
       ]
     },
@@ -3719,7 +3742,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "UpstreamDefinition",
-          "how": "keyed by (org,upstream)"
+          "how": "keyed by (org,upstream)",
+          "keyed_by": []
         },
         {
           "verb": "summarizedBy",
@@ -3727,14 +3751,15 @@
           "src_card": "1",
           "dst_card": "1",
           "display": "SandboxFileSummary",
-          "how": "the metadata-only dashboard view, contents stripped"
+          "how": "the metadata-only dashboard view, contents stripped",
+          "keyed_by": []
         }
       ]
     },
     {
       "id": "E24",
       "name": "SandboxFileSummary",
-      "store": "view DTO \u2014 never persisted with contents",
+      "store": "view DTO — never persisted with contents",
       "meaning": "Metadata-only view of a SandboxFile (no contents) for the dashboard.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/domain/model/sandbox_file.py:146",
@@ -3780,7 +3805,7 @@
     {
       "id": "E26",
       "name": "ToolCatalogSnapshot",
-      "store": "ToolCatalogRepository \u2014 Mongo / file",
+      "store": "ToolCatalogRepository — Mongo / file",
       "meaning": "Cached per-upstream catalog of tools/resources/prompts so the admin UI renders without a reconnect.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/ports/tool_catalog_repository.py:15",
@@ -3821,7 +3846,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "UpstreamDefinition",
-          "how": "keyed by (org,upstream)"
+          "how": "keyed by (org,upstream)",
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -3829,7 +3855,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "DiscoveredTool",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -3837,7 +3864,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "DiscoveredResource",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -3845,7 +3873,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "DiscoveredResourceTemplate",
-          "how": null
+          "how": null,
+          "keyed_by": []
         },
         {
           "verb": "contains",
@@ -3853,7 +3882,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "DiscoveredPrompt",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -3869,7 +3899,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK\u2192E10"
+            "FK→E10"
           ]
         },
         {
@@ -3930,7 +3960,8 @@
           "src_card": "0..1",
           "dst_card": "1",
           "display": "ToolAnnotations",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -3992,7 +4023,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK\u2192E10"
+            "FK→E10"
           ]
         },
         {
@@ -4048,7 +4079,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK\u2192E10"
+            "FK→E10"
           ]
         },
         {
@@ -4104,7 +4135,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK\u2192E10"
+            "FK→E10"
           ]
         },
         {
@@ -4153,7 +4184,8 @@
           "src_card": "1",
           "dst_card": "*",
           "display": "PromptArgument",
-          "how": null
+          "how": null,
+          "keyed_by": []
         }
       ]
     },
@@ -4191,7 +4223,7 @@
       "id": "E35",
       "name": "AuditEntry",
       "store": "Mongo `audit` / file audit log, per-org",
-      "meaning": "One audited gateway action \u2014 what tool was called and whether policy allowed it (never argument values).",
+      "meaning": "One audited gateway action — what tool was called and whether policy allowed it (never argument values).",
       "subdomain": "SD5",
       "source": "backend/src/mcpolis/domain/model/audit.py:8",
       "fields": [
@@ -4209,7 +4241,7 @@
           "name": "org_id",
           "type": "string",
           "markers": [
-            "FK\u2192E1"
+            "FK→E1"
           ]
         },
         {
@@ -4221,7 +4253,7 @@
           "name": "upstream_id",
           "type": "string",
           "markers": [
-            "FK\u2192E10"
+            "FK→E10"
           ]
         },
         {
@@ -4299,7 +4331,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "Organization",
-          "how": "org_id field"
+          "how": "org_id field",
+          "keyed_by": []
         },
         {
           "verb": "records",
@@ -4307,7 +4340,8 @@
           "src_card": "*",
           "dst_card": "1",
           "display": "UpstreamDefinition",
-          "how": "upstream_id field"
+          "how": "upstream_id field",
+          "keyed_by": []
         }
       ]
     },
@@ -5121,7 +5155,7 @@
           "n": 1,
           "src": "R4",
           "dst": "C2",
-          "phrase": "sends `Authorization: Bearer svct_\u2026` to the org gateway URL",
+          "phrase": "sends `Authorization: Bearer svct_…` to the org gateway URL",
           "note": ""
         },
         {
@@ -5389,1176 +5423,1344 @@
       "verb": "uses",
       "dst": "C8",
       "why": "build the per-mode storage bundle",
-      "where": "backend/src/mcpolis/entrypoints/app.py:934"
+      "where": "backend/src/mcpolis/entrypoints/app.py:934",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "C21",
       "why": "assemble per-org runtimes",
-      "where": "backend/src/mcpolis/entrypoints/app.py:957"
+      "where": "backend/src/mcpolis/entrypoints/app.py:957",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "C2",
       "why": "mount the gateway MCP app",
-      "where": "backend/src/mcpolis/entrypoints/app.py:1091"
+      "where": "backend/src/mcpolis/entrypoints/app.py:1091",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "C3",
       "why": "mount the admin MCP app",
-      "where": "backend/src/mcpolis/entrypoints/app.py:1121"
+      "where": "backend/src/mcpolis/entrypoints/app.py:1121",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "C9",
       "why": "wire graceful drain",
-      "where": "backend/src/mcpolis/entrypoints/app.py:972"
+      "where": "backend/src/mcpolis/entrypoints/app.py:972",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "C105",
       "why": "init Sentry before app construction",
-      "where": "backend/src/mcpolis/entrypoints/app.py:904"
+      "where": "backend/src/mcpolis/entrypoints/app.py:904",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "C104",
       "why": "register the analytics singleton",
-      "where": "backend/src/mcpolis/entrypoints/app.py:909"
+      "where": "backend/src/mcpolis/entrypoints/app.py:909",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "C106",
       "why": "configure the JSON log stream",
-      "where": "backend/src/mcpolis/entrypoints/app.py:42"
+      "where": "backend/src/mcpolis/entrypoints/app.py:42",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "D13",
       "why": "build the FastAPI / Starlette app",
-      "where": "backend/src/mcpolis/entrypoints/app.py:13"
+      "where": "backend/src/mcpolis/entrypoints/app.py:13",
+      "no_call_site": false
     },
     {
       "src": "C1",
       "verb": "uses",
       "dst": "D15",
       "why": "typed env-var Settings",
-      "where": "backend/src/mcpolis/entrypoints/app.py:895"
+      "where": "backend/src/mcpolis/entrypoints/app.py:895",
+      "no_call_site": false
     },
     {
       "src": "C2",
       "verb": "enforces",
       "dst": "C72",
       "why": "bearer auth on the gateway",
-      "where": "backend/src/mcpolis/entrypoints/app.py:353"
+      "where": "backend/src/mcpolis/entrypoints/app.py:353",
+      "no_call_site": false
     },
     {
       "src": "C2",
       "verb": "routes-to",
       "dst": "C5",
       "why": "dispatch to the MCP server",
-      "where": "backend/src/mcpolis/entrypoints/app.py:341"
+      "where": "backend/src/mcpolis/entrypoints/app.py:341",
+      "no_call_site": false
     },
     {
       "src": "C2",
       "verb": "uses",
       "dst": "C12",
       "why": "pin service tokens to their org",
-      "where": "backend/src/mcpolis/entrypoints/app.py:366"
+      "where": "backend/src/mcpolis/entrypoints/app.py:366",
+      "no_call_site": false
     },
     {
       "src": "C2",
       "verb": "uses",
       "dst": "C10",
       "why": "slug-aware protected-resource metadata",
-      "where": "backend/src/mcpolis/entrypoints/app.py:411"
+      "where": "backend/src/mcpolis/entrypoints/app.py:411",
+      "no_call_site": false
     },
     {
       "src": "C2",
       "verb": "uses",
       "dst": "C111",
       "why": "register the gateway session",
-      "where": "backend/src/mcpolis/entrypoints/app.py:343"
+      "where": "backend/src/mcpolis/entrypoints/app.py:343",
+      "no_call_site": false
     },
     {
       "src": "C3",
       "verb": "enforces",
       "dst": "C72",
       "why": "bearer auth on the admin MCP",
-      "where": "backend/src/mcpolis/entrypoints/app.py:472"
+      "where": "backend/src/mcpolis/entrypoints/app.py:472",
+      "no_call_site": false
     },
     {
       "src": "C3",
       "verb": "enforces",
       "dst": "C23",
       "why": "per-org admin-role gate",
-      "where": "backend/src/mcpolis/entrypoints/app.py:554"
+      "where": "backend/src/mcpolis/entrypoints/app.py:554",
+      "no_call_site": false
     },
     {
       "src": "C3",
       "verb": "routes-to",
       "dst": "C6",
       "why": "dispatch to the admin tools",
-      "where": "backend/src/mcpolis/entrypoints/app.py:1119"
+      "where": "backend/src/mcpolis/entrypoints/app.py:1119",
+      "no_call_site": false
     },
     {
       "src": "C4",
       "verb": "enforces",
       "dst": "C72",
       "why": "bearer auth on the superadmin MCP",
-      "where": "backend/src/mcpolis/entrypoints/app.py:625"
+      "where": "backend/src/mcpolis/entrypoints/app.py:625",
+      "no_call_site": false
     },
     {
       "src": "C4",
       "verb": "routes-to",
       "dst": "C7",
       "why": "dispatch to the superadmin tools",
-      "where": "backend/src/mcpolis/entrypoints/app.py:602"
+      "where": "backend/src/mcpolis/entrypoints/app.py:602",
+      "no_call_site": false
     },
     {
       "src": "C5",
       "verb": "uses",
       "dst": "C21",
       "why": "get the request's org runtime",
-      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:535"
+      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:535",
+      "no_call_site": false
     },
     {
       "src": "C5",
       "verb": "enforces",
       "dst": "C23",
       "why": "filter tools to the caller's role",
-      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:412"
+      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:412",
+      "no_call_site": false
     },
     {
       "src": "C5",
       "verb": "uses",
       "dst": "C24",
       "why": "render prefixed wire tools",
-      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:537"
+      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:537",
+      "no_call_site": false
     },
     {
       "src": "C5",
       "verb": "routes-to",
       "dst": "C25",
       "why": "dispatch a tool call",
-      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:412"
+      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:412",
+      "no_call_site": false
     },
     {
       "src": "C5",
       "verb": "uses",
       "dst": "C45",
       "why": "wrap/unwrap resource & widget URIs",
-      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:446"
+      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:446",
+      "no_call_site": false
     },
     {
       "src": "C5",
       "verb": "reads",
       "dst": "E27",
       "why": "list the discovered tools",
-      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:537"
+      "where": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:537",
+      "no_call_site": false
     },
     {
       "src": "C6",
       "verb": "uses",
       "dst": "C26",
       "why": "run upstream-management tools",
-      "where": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:231"
+      "where": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:231",
+      "no_call_site": false
     },
     {
       "src": "C6",
       "verb": "uses",
       "dst": "C22",
       "why": "run user/org tools",
-      "where": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99"
+      "where": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99",
+      "no_call_site": false
     },
     {
       "src": "C6",
       "verb": "uses",
       "dst": "C33",
       "why": "enforce plan limits in admin tools",
-      "where": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99"
+      "where": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:99",
+      "no_call_site": false
     },
     {
       "src": "C7",
       "verb": "uses",
       "dst": "C55",
       "why": "list/get/delete orgs cross-tenant",
-      "where": "backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:36"
+      "where": "backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:36",
+      "no_call_site": false
     },
     {
       "src": "C7",
       "verb": "uses",
       "dst": "C22",
       "why": "delete an org with cascade",
-      "where": "backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:107"
+      "where": "backend/src/mcpolis/entrypoints/controllers/superadmin_controller.py:107",
+      "no_call_site": false
     },
     {
       "src": "C8",
       "verb": "uses",
       "dst": "C49",
       "why": "build the Mongo client (cloud)",
-      "where": "backend/src/mcpolis/entrypoints/storage_factory.py:253"
+      "where": "backend/src/mcpolis/entrypoints/storage_factory.py:253",
+      "no_call_site": false
     },
     {
       "src": "C8",
       "verb": "uses",
       "dst": "C108",
       "why": "build the event stream",
-      "where": "backend/src/mcpolis/entrypoints/storage_factory.py:180"
+      "where": "backend/src/mcpolis/entrypoints/storage_factory.py:180",
+      "no_call_site": false
     },
     {
       "src": "C8",
       "verb": "uses",
       "dst": "C109",
       "why": "build the rate limiter",
-      "where": "backend/src/mcpolis/entrypoints/storage_factory.py:180"
+      "where": "backend/src/mcpolis/entrypoints/storage_factory.py:180",
+      "no_call_site": false
     },
     {
       "src": "C8",
       "verb": "uses",
       "dst": "C107",
       "why": "build the distributed lock",
-      "where": "backend/src/mcpolis/entrypoints/storage_factory.py:180"
+      "where": "backend/src/mcpolis/entrypoints/storage_factory.py:180",
+      "no_call_site": false
     },
     {
       "src": "C11",
       "verb": "uses",
       "dst": "C55",
       "why": "resolve the slug to an org",
-      "where": "backend/src/mcpolis/entrypoints/middleware/org_context.py:84"
+      "where": "backend/src/mcpolis/entrypoints/middleware/org_context.py:84",
+      "no_call_site": false
     },
     {
       "src": "C13",
       "verb": "uses",
       "dst": "C109",
       "why": "per-category limit check",
-      "where": "backend/src/mcpolis/entrypoints/middleware/rate_limit_middleware.py:123"
+      "where": "backend/src/mcpolis/entrypoints/middleware/rate_limit_middleware.py:123",
+      "no_call_site": false
     },
     {
       "src": "C14",
       "verb": "uses",
       "dst": "C21",
       "why": "per-org admin operations",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
+      "no_call_site": false
     },
     {
       "src": "C14",
       "verb": "uses",
       "dst": "C26",
       "why": "upstream CRUD from the dashboard",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
+      "no_call_site": false
     },
     {
       "src": "C14",
       "verb": "uses",
       "dst": "C22",
       "why": "org/member operations",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
+      "no_call_site": false
     },
     {
       "src": "C14",
       "verb": "uses",
       "dst": "C41",
       "why": "service-token operations",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
+      "no_call_site": false
     },
     {
       "src": "C14",
       "verb": "uses",
       "dst": "C62",
       "why": "serve the audit log",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
+      "no_call_site": false
     },
     {
       "src": "C14",
       "verb": "enforces",
       "dst": "C15",
       "why": "require_admin on admin routes",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:284"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:284",
+      "no_call_site": false
     },
     {
       "src": "C14",
       "verb": "listens-to",
       "dst": "C108",
       "why": "stream events over SSE",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
+      "no_call_site": false
     },
     {
       "src": "C15",
       "verb": "uses",
       "dst": "C101",
       "why": "complete the browser Google login",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217",
+      "no_call_site": false
     },
     {
       "src": "C15",
       "verb": "uses",
       "dst": "C110",
       "why": "revoke the cookie on logout",
-      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217"
+      "where": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217",
+      "no_call_site": false
     },
     {
       "src": "C16",
       "verb": "calls",
       "dst": "C72",
       "why": "finish the gateway bearer issue",
-      "where": "backend/src/mcpolis/entrypoints/routes/google_callback.py:56"
+      "where": "backend/src/mcpolis/entrypoints/routes/google_callback.py:56",
+      "no_call_site": false
     },
     {
       "src": "C17",
       "verb": "uses",
       "dst": "C22",
       "why": "create/list/switch/delete orgs",
-      "where": "backend/src/mcpolis/entrypoints/routes/org_routes.py:82"
+      "where": "backend/src/mcpolis/entrypoints/routes/org_routes.py:82",
+      "no_call_site": false
     },
     {
       "src": "C18",
       "verb": "uses",
       "dst": "C100",
       "why": "complete the upstream OAuth flow",
-      "where": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:182"
+      "where": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:182",
+      "no_call_site": false
     },
     {
       "src": "C19",
       "verb": "uses",
       "dst": "C37",
       "why": "report sandbox capabilities",
-      "where": "backend/src/mcpolis/entrypoints/routes/sandbox_routes.py:80"
+      "where": "backend/src/mcpolis/entrypoints/routes/sandbox_routes.py:80",
+      "no_call_site": false
     },
     {
       "src": "C21",
       "verb": "uses",
       "dst": "C23",
       "why": "build the org's policy engine",
-      "where": "backend/src/mcpolis/domain/services/org_runtime.py:100"
+      "where": "backend/src/mcpolis/domain/services/org_runtime.py:100",
+      "no_call_site": false
     },
     {
       "src": "C21",
       "verb": "uses",
       "dst": "C24",
       "why": "build the org's tool registry",
-      "where": "backend/src/mcpolis/domain/services/org_runtime.py:100"
+      "where": "backend/src/mcpolis/domain/services/org_runtime.py:100",
+      "no_call_site": false
     },
     {
       "src": "C21",
       "verb": "uses",
       "dst": "C25",
       "why": "build the org's tool router",
-      "where": "backend/src/mcpolis/domain/services/org_runtime.py:100"
+      "where": "backend/src/mcpolis/domain/services/org_runtime.py:100",
+      "no_call_site": false
     },
     {
       "src": "C21",
       "verb": "uses",
       "dst": "C64",
       "why": "build the org's client manager",
-      "where": "backend/src/mcpolis/domain/services/org_runtime.py:100"
+      "where": "backend/src/mcpolis/domain/services/org_runtime.py:100",
+      "no_call_site": false
     },
     {
       "src": "C22",
       "verb": "writes",
       "dst": "C55",
       "why": "persist orgs + memberships",
-      "where": "backend/src/mcpolis/domain/services/org_service.py:113"
+      "where": "backend/src/mcpolis/domain/services/org_service.py:113",
+      "no_call_site": false
     },
     {
       "src": "C22",
       "verb": "uses",
       "dst": "C54",
       "why": "seed + purge policy config",
-      "where": "backend/src/mcpolis/domain/services/org_service.py:113"
+      "where": "backend/src/mcpolis/domain/services/org_service.py:113",
+      "no_call_site": false
     },
     {
       "src": "C22",
       "verb": "uses",
       "dst": "C57",
       "why": "purge service tokens on delete",
-      "where": "backend/src/mcpolis/domain/services/org_service.py:113"
+      "where": "backend/src/mcpolis/domain/services/org_service.py:113",
+      "no_call_site": false
     },
     {
       "src": "C22",
       "verb": "uses",
       "dst": "C47",
       "why": "purge stored tokens on delete",
-      "where": "backend/src/mcpolis/domain/services/org_service.py:113"
+      "where": "backend/src/mcpolis/domain/services/org_service.py:113",
+      "no_call_site": false
     },
     {
       "src": "C22",
       "verb": "uses",
       "dst": "C62",
       "why": "purge the audit log on delete",
-      "where": "backend/src/mcpolis/domain/services/org_service.py:113"
+      "where": "backend/src/mcpolis/domain/services/org_service.py:113",
+      "no_call_site": false
     },
     {
       "src": "C22",
       "verb": "persists",
       "dst": "E1",
       "why": "own the Organization record",
-      "where": "backend/src/mcpolis/domain/services/org_service.py:113"
+      "where": "backend/src/mcpolis/domain/services/org_service.py:113",
+      "no_call_site": false
     },
     {
       "src": "C22",
       "verb": "persists",
       "dst": "E3",
       "why": "own the Membership record",
-      "where": "backend/src/mcpolis/domain/services/org_service.py:113"
+      "where": "backend/src/mcpolis/domain/services/org_service.py:113",
+      "no_call_site": false
     },
     {
       "src": "C23",
       "verb": "uses",
       "dst": "C42",
       "why": "resolve effective settings",
-      "where": "backend/src/mcpolis/domain/services/policy_engine.py:61"
+      "where": "backend/src/mcpolis/domain/services/policy_engine.py:61",
+      "no_call_site": false
     },
     {
       "src": "C23",
       "verb": "reads",
       "dst": "E5",
       "why": "authorize against the role",
-      "where": "backend/src/mcpolis/domain/services/policy_engine.py:61"
+      "where": "backend/src/mcpolis/domain/services/policy_engine.py:61",
+      "no_call_site": false
     },
     {
       "src": "C24",
       "verb": "uses",
       "dst": "C64",
       "why": "discover tools over a session",
-      "where": "backend/src/mcpolis/domain/services/tool_registry.py:103"
+      "where": "backend/src/mcpolis/domain/services/tool_registry.py:103",
+      "no_call_site": false
     },
     {
       "src": "C24",
       "verb": "writes",
       "dst": "C61",
       "why": "cache the discovered catalog",
-      "where": "backend/src/mcpolis/domain/services/tool_registry.py:103"
+      "where": "backend/src/mcpolis/domain/services/tool_registry.py:103",
+      "no_call_site": false
     },
     {
       "src": "C24",
       "verb": "persists",
       "dst": "E26",
       "why": "own the ToolCatalogSnapshot",
-      "where": "backend/src/mcpolis/domain/services/tool_registry.py:103"
+      "where": "backend/src/mcpolis/domain/services/tool_registry.py:103",
+      "no_call_site": false
     },
     {
       "src": "C25",
       "verb": "enforces",
       "dst": "C23",
       "why": "check tool + argument policy",
-      "where": "backend/src/mcpolis/domain/services/tool_router.py:256"
+      "where": "backend/src/mcpolis/domain/services/tool_router.py:256",
+      "no_call_site": false
     },
     {
       "src": "C25",
       "verb": "routes-to",
       "dst": "C64",
       "why": "dispatch to the upstream session",
-      "where": "backend/src/mcpolis/domain/services/tool_router.py:256"
+      "where": "backend/src/mcpolis/domain/services/tool_router.py:256",
+      "no_call_site": false
     },
     {
       "src": "C25",
       "verb": "writes",
       "dst": "C62",
       "why": "audit each call decision",
-      "where": "backend/src/mcpolis/domain/services/tool_router.py:256"
+      "where": "backend/src/mcpolis/domain/services/tool_router.py:256",
+      "no_call_site": false
     },
     {
       "src": "C25",
       "verb": "emits",
       "dst": "C104",
       "why": "track tool-call analytics",
-      "where": "backend/src/mcpolis/domain/services/tool_router.py:256"
+      "where": "backend/src/mcpolis/domain/services/tool_router.py:256",
+      "no_call_site": false
     },
     {
       "src": "C25",
       "verb": "reads",
       "dst": "E10",
       "why": "resolve the target upstream",
-      "where": "backend/src/mcpolis/domain/services/tool_router.py:256"
+      "where": "backend/src/mcpolis/domain/services/tool_router.py:256",
+      "no_call_site": false
     },
     {
       "src": "C26",
       "verb": "writes",
       "dst": "C53",
       "why": "persist upstream definitions",
-      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28"
+      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28",
+      "no_call_site": false
     },
     {
       "src": "C26",
       "verb": "uses",
       "dst": "C40",
       "why": "secret-scan the config on save",
-      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28"
+      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28",
+      "no_call_site": false
     },
     {
       "src": "C26",
       "verb": "uses",
       "dst": "C64",
       "why": "register/connect the upstream",
-      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28"
+      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28",
+      "no_call_site": false
     },
     {
       "src": "C26",
       "verb": "uses",
       "dst": "C24",
       "why": "refresh tools after a change",
-      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28"
+      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28",
+      "no_call_site": false
     },
     {
       "src": "C26",
       "verb": "persists",
       "dst": "E10",
       "why": "own the UpstreamDefinition",
-      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28"
+      "where": "backend/src/mcpolis/domain/services/upstream_config_service.py:28",
+      "no_call_site": false
     },
     {
       "src": "C27",
       "verb": "uses",
       "dst": "C64",
       "why": "acquire/heal a live session",
-      "where": "backend/src/mcpolis/domain/services/upstream_connection_service.py:735"
+      "where": "backend/src/mcpolis/domain/services/upstream_connection_service.py:735",
+      "no_call_site": false
     },
     {
       "src": "C27",
       "verb": "writes",
       "dst": "C47",
       "why": "store the per-user token",
-      "where": "backend/src/mcpolis/domain/services/upstream_connection_service.py:735"
+      "where": "backend/src/mcpolis/domain/services/upstream_connection_service.py:735",
+      "no_call_site": false
     },
     {
       "src": "C27",
       "verb": "uses",
       "dst": "C100",
       "why": "run the pending-auth dance",
-      "where": "backend/src/mcpolis/domain/services/upstream_connection_service.py:735"
+      "where": "backend/src/mcpolis/domain/services/upstream_connection_service.py:735",
+      "no_call_site": false
     },
     {
       "src": "C28",
       "verb": "uses",
       "dst": "C47",
       "why": "read/refresh stored tokens",
-      "where": "backend/src/mcpolis/domain/services/oauth_refresh.py:105"
+      "where": "backend/src/mcpolis/domain/services/oauth_refresh.py:105",
+      "no_call_site": false
     },
     {
       "src": "C28",
       "verb": "uses",
       "dst": "C107",
       "why": "serialize refresh across backends",
-      "where": "backend/src/mcpolis/domain/services/oauth_refresh.py:105"
+      "where": "backend/src/mcpolis/domain/services/oauth_refresh.py:105",
+      "no_call_site": false
     },
     {
       "src": "C28",
       "verb": "uses",
       "dst": "C103",
       "why": "notify on invalid_grant",
-      "where": "backend/src/mcpolis/domain/services/oauth_refresh.py:105"
+      "where": "backend/src/mcpolis/domain/services/oauth_refresh.py:105",
+      "no_call_site": false
     },
     {
       "src": "C29",
       "verb": "uses",
       "dst": "C64",
       "why": "probe live sessions",
-      "where": "backend/src/mcpolis/domain/services/oauth_liveness.py:76"
+      "where": "backend/src/mcpolis/domain/services/oauth_liveness.py:76",
+      "no_call_site": false
     },
     {
       "src": "C29",
       "verb": "uses",
       "dst": "C27",
       "why": "reconnect dead sessions",
-      "where": "backend/src/mcpolis/domain/services/oauth_liveness.py:76"
+      "where": "backend/src/mcpolis/domain/services/oauth_liveness.py:76",
+      "no_call_site": false
     },
     {
       "src": "C30",
       "verb": "uses",
       "dst": "C47",
       "why": "scan tokens for invalid_grant",
-      "where": "backend/src/mcpolis/domain/services/upstream_health_check.py:173"
+      "where": "backend/src/mcpolis/domain/services/upstream_health_check.py:173",
+      "no_call_site": false
     },
     {
       "src": "C30",
       "verb": "uses",
       "dst": "C103",
       "why": "send the re-auth email",
-      "where": "backend/src/mcpolis/domain/services/upstream_health_check.py:173"
+      "where": "backend/src/mcpolis/domain/services/upstream_health_check.py:173",
+      "no_call_site": false
     },
     {
       "src": "C32",
       "verb": "uses",
       "dst": "C52",
       "why": "match a host to an OAuth app",
-      "where": "backend/src/mcpolis/domain/services/oauth_app_resolver.py:9"
+      "where": "backend/src/mcpolis/domain/services/oauth_app_resolver.py:9",
+      "no_call_site": false
     },
     {
       "src": "C33",
       "verb": "uses",
       "dst": "C34",
       "why": "read the plan's limits",
-      "where": "backend/src/mcpolis/domain/services/plan_gates.py:93"
+      "where": "backend/src/mcpolis/domain/services/plan_gates.py:93",
+      "no_call_site": false
     },
     {
       "src": "C33",
       "verb": "emits",
       "dst": "C104",
       "why": "track plan_limit_hit",
-      "where": "backend/src/mcpolis/domain/services/plan_gates.py:93"
+      "where": "backend/src/mcpolis/domain/services/plan_gates.py:93",
+      "no_call_site": false
     },
     {
       "src": "C35",
       "verb": "uses",
       "dst": "C111",
       "why": "target affected sessions",
-      "where": "backend/src/mcpolis/domain/services/policy_notifier.py:43"
+      "where": "backend/src/mcpolis/domain/services/policy_notifier.py:43",
+      "no_call_site": false
     },
     {
       "src": "C35",
       "verb": "uses",
       "dst": "C24",
       "why": "refresh the changed upstream",
-      "where": "backend/src/mcpolis/domain/services/policy_notifier.py:43"
+      "where": "backend/src/mcpolis/domain/services/policy_notifier.py:43",
+      "no_call_site": false
     },
     {
       "src": "C40",
       "verb": "reads",
       "dst": "E10",
       "why": "scan env/headers for secrets",
-      "where": "backend/src/mcpolis/domain/services/secret_scanner.py:119"
+      "where": "backend/src/mcpolis/domain/services/secret_scanner.py:119",
+      "no_call_site": false
     },
     {
       "src": "C41",
       "verb": "writes",
       "dst": "C57",
       "why": "mint/revoke service tokens",
-      "where": "backend/src/mcpolis/domain/services/service_token_service.py:42"
+      "where": "backend/src/mcpolis/domain/services/service_token_service.py:42",
+      "no_call_site": false
     },
     {
       "src": "C41",
       "verb": "persists",
       "dst": "E16",
       "why": "own the ServiceTokenRecord",
-      "where": "backend/src/mcpolis/domain/services/service_token_service.py:42"
+      "where": "backend/src/mcpolis/domain/services/service_token_service.py:42",
+      "no_call_site": false
     },
     {
       "src": "C42",
       "verb": "reads",
       "dst": "C54",
       "why": "load the org's settings config",
-      "where": "backend/src/mcpolis/domain/services/settings_resolver.py:33"
+      "where": "backend/src/mcpolis/domain/services/settings_resolver.py:33",
+      "no_call_site": false
     },
     {
       "src": "C42",
       "verb": "reads",
       "dst": "E4",
       "why": "resolve access from settings",
-      "where": "backend/src/mcpolis/domain/services/settings_resolver.py:33"
+      "where": "backend/src/mcpolis/domain/services/settings_resolver.py:33",
+      "no_call_site": false
     },
     {
       "src": "C44",
       "verb": "reads",
       "dst": "C58",
       "why": "load variable values to substitute",
-      "where": "backend/src/mcpolis/domain/services/template_var_substitution.py:64"
+      "where": "backend/src/mcpolis/domain/services/template_var_substitution.py:64",
+      "no_call_site": false
     },
     {
       "src": "C44",
       "verb": "reads",
       "dst": "E22",
       "why": "substitute `${NAME}` values",
-      "where": "backend/src/mcpolis/domain/services/template_var_substitution.py:64"
+      "where": "backend/src/mcpolis/domain/services/template_var_substitution.py:64",
+      "no_call_site": false
     },
     {
       "src": "C47",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed token store (cloud)",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_connection_repository.py:112"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_connection_repository.py:112",
+      "no_call_site": false
     },
     {
       "src": "C47",
       "verb": "persists",
       "dst": "E17",
       "why": "own the stored OAuthToken",
-      "where": "backend/src/mcpolis/adapters/repositories/connection_store.py:27"
+      "where": "backend/src/mcpolis/adapters/repositories/connection_store.py:27",
+      "no_call_site": false
     },
     {
       "src": "C49",
       "verb": "uses",
       "dst": "D1",
       "why": "drive MongoDB via motor",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_client.py:19"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_client.py:19",
+      "no_call_site": false
     },
     {
       "src": "C49",
       "verb": "uses",
       "dst": "D17",
       "why": "the async motor driver",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_client.py:19"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_client.py:19",
+      "no_call_site": false
     },
     {
       "src": "C49",
       "verb": "encrypts",
       "dst": "C48",
       "why": "transparently crypt fields",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_client.py:149"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_client.py:149",
+      "no_call_site": false
     },
     {
       "src": "C48",
       "verb": "uses",
       "dst": "D16",
       "why": "AES-256-GCM via cryptography",
-      "where": "backend/src/mcpolis/adapters/repositories/encryption.py:54"
+      "where": "backend/src/mcpolis/adapters/repositories/encryption.py:54",
+      "no_call_site": false
     },
     {
       "src": "C51",
       "verb": "uses",
       "dst": "C52",
       "why": "resolve upstream OAuth apps",
-      "where": "backend/src/mcpolis/adapters/repositories/upstream_config_loader.py:169"
+      "where": "backend/src/mcpolis/adapters/repositories/upstream_config_loader.py:169",
+      "no_call_site": false
     },
     {
       "src": "C53",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed upstream store",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_upstream_config_repository.py:32"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_upstream_config_repository.py:32",
+      "no_call_site": false
     },
     {
       "src": "C54",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed config store",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_config_repository.py:26"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_config_repository.py:26",
+      "no_call_site": false
     },
     {
       "src": "C54",
       "verb": "persists",
       "dst": "E4",
       "why": "own the SettingsConfig",
-      "where": "backend/src/mcpolis/adapters/repositories/file_config_store.py:20"
+      "where": "backend/src/mcpolis/adapters/repositories/file_config_store.py:20",
+      "no_call_site": false
     },
     {
       "src": "C55",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed org store",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_organization_repository.py:18"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_organization_repository.py:18",
+      "no_call_site": false
     },
     {
       "src": "C56",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed oauth-state store",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_oauth_state_repository.py:57"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_oauth_state_repository.py:57",
+      "no_call_site": false
     },
     {
       "src": "C57",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed token registry",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_service_token_repository.py:49"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_service_token_repository.py:49",
+      "no_call_site": false
     },
     {
       "src": "C58",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed variable store",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_template_var_repository.py:52"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_template_var_repository.py:52",
+      "no_call_site": false
     },
     {
       "src": "C58",
       "verb": "persists",
       "dst": "E22",
       "why": "own the TemplateVarSummary",
-      "where": "backend/src/mcpolis/adapters/repositories/file_template_var_repository.py:45"
+      "where": "backend/src/mcpolis/adapters/repositories/file_template_var_repository.py:45",
+      "no_call_site": false
     },
     {
       "src": "C59",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed file store",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_sandbox_file_repository.py:61"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_sandbox_file_repository.py:61",
+      "no_call_site": false
     },
     {
       "src": "C59",
       "verb": "persists",
       "dst": "E23",
       "why": "own the SandboxFile",
-      "where": "backend/src/mcpolis/adapters/repositories/file_sandbox_file_repository.py:53"
+      "where": "backend/src/mcpolis/adapters/repositories/file_sandbox_file_repository.py:53",
+      "no_call_site": false
     },
     {
       "src": "C60",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed sandbox refs",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_sandbox_persistence_repository.py:46"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_sandbox_persistence_repository.py:46",
+      "no_call_site": false
     },
     {
       "src": "C61",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed catalog store",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_tool_catalog_repository.py:14"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_tool_catalog_repository.py:14",
+      "no_call_site": false
     },
     {
       "src": "C62",
       "verb": "uses",
       "dst": "C49",
       "why": "Mongo-backed audit store",
-      "where": "backend/src/mcpolis/adapters/repositories/mongo_audit_repository.py:18"
+      "where": "backend/src/mcpolis/adapters/repositories/mongo_audit_repository.py:18",
+      "no_call_site": false
     },
     {
       "src": "C62",
       "verb": "persists",
       "dst": "E35",
       "why": "own the AuditEntry",
-      "where": "backend/src/mcpolis/adapters/repositories/file_audit_repository.py:22"
+      "where": "backend/src/mcpolis/adapters/repositories/file_audit_repository.py:22",
+      "no_call_site": false
     },
     {
       "src": "C63",
       "verb": "uses",
       "dst": "C49",
       "why": "migrate Mongo data at rest",
-      "where": "backend/src/mcpolis/adapters/repositories/migrations/upstreams_encrypt_phase_a.py:211"
+      "where": "backend/src/mcpolis/adapters/repositories/migrations/upstreams_encrypt_phase_a.py:211",
+      "no_call_site": false
     },
     {
       "src": "C64",
       "verb": "uses",
       "dst": "C65",
       "why": "drive HTTP upstream sessions",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103",
+      "no_call_site": false
     },
     {
       "src": "C64",
       "verb": "uses",
       "dst": "C66",
       "why": "drive stdio upstream sessions",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103",
+      "no_call_site": false
     },
     {
       "src": "C64",
       "verb": "uses",
       "dst": "C67",
       "why": "shared task lifecycle",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103",
+      "no_call_site": false
     },
     {
       "src": "C64",
       "verb": "uses",
       "dst": "C44",
       "why": "substitute variables at launch",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103",
+      "no_call_site": false
     },
     {
       "src": "C64",
       "verb": "reads",
       "dst": "C59",
       "why": "materialize sandbox files",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103",
+      "no_call_site": false
     },
     {
       "src": "C65",
       "verb": "uses",
       "dst": "C67",
       "why": "SSRF-safe httpx transport",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:36"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:36",
+      "no_call_site": false
     },
     {
       "src": "C65",
       "verb": "uses",
       "dst": "D14",
       "why": "MCP client over streamable-http",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:8"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:8",
+      "no_call_site": false
     },
     {
       "src": "C65",
       "verb": "calls",
       "dst": "D5",
       "why": "connect to the upstream MCP",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:91"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:91",
+      "no_call_site": false
     },
     {
       "src": "C65",
       "verb": "enforces",
       "dst": "C45",
       "why": "validate the upstream URL",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:87"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/http_adapter.py:87",
+      "no_call_site": false
     },
     {
       "src": "C66",
       "verb": "uses",
       "dst": "C36",
       "why": "open a stdio session in a sandbox",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/stdio_adapter.py:178"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/stdio_adapter.py:178",
+      "no_call_site": false
     },
     {
       "src": "C66",
       "verb": "uses",
       "dst": "C43",
       "why": "frame the sandboxed stdout",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/stdio_adapter.py:329"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/stdio_adapter.py:329",
+      "no_call_site": false
     },
     {
       "src": "C66",
       "verb": "uses",
       "dst": "D14",
       "why": "MCP ClientSession over stdio",
-      "where": "backend/src/mcpolis/adapters/upstream_clients/stdio_adapter.py:9"
+      "where": "backend/src/mcpolis/adapters/upstream_clients/stdio_adapter.py:9",
+      "no_call_site": false
     },
     {
       "src": "C68",
       "verb": "implements",
       "dst": "C36",
       "why": "E2B SandboxService backend",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123",
+      "no_call_site": false
     },
     {
       "src": "C68",
       "verb": "uses",
       "dst": "C70",
       "why": "pick the right E2B template",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123",
+      "no_call_site": false
     },
     {
       "src": "C68",
       "verb": "writes",
       "dst": "C60",
       "why": "persist the sandbox ref",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123",
+      "no_call_site": false
     },
     {
       "src": "C68",
       "verb": "uses",
       "dst": "C39",
       "why": "confine materialized file paths",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/service.py:123",
+      "no_call_site": false
     },
     {
       "src": "C68",
       "verb": "calls",
       "dst": "D3",
       "why": "run the stdio MCP in E2B",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/real_client.py:62"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/real_client.py:62",
+      "no_call_site": false
     },
     {
       "src": "C68",
       "verb": "uses",
       "dst": "D19",
       "why": "the E2B Python SDK",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/real_client.py:62"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/real_client.py:62",
+      "no_call_site": false
     },
     {
       "src": "C69",
       "verb": "uses",
       "dst": "C60",
       "why": "reconcile persisted refs",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/reconciler.py:34"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/reconciler.py:34",
+      "no_call_site": false
     },
     {
       "src": "C69",
       "verb": "uses",
       "dst": "C38",
       "why": "apply the GC / kill policy",
-      "where": "backend/src/mcpolis/adapters/sandbox_e2b/reconciler.py:34"
+      "where": "backend/src/mcpolis/adapters/sandbox_e2b/reconciler.py:34",
+      "no_call_site": false
     },
     {
       "src": "C71",
       "verb": "implements",
       "dst": "C36",
       "why": "local-subprocess SandboxService",
-      "where": "backend/src/mcpolis/adapters/sandbox_services/local_subprocess.py:64"
+      "where": "backend/src/mcpolis/adapters/sandbox_services/local_subprocess.py:64",
+      "no_call_site": false
     },
     {
       "src": "C72",
       "verb": "uses",
       "dst": "C41",
       "why": "verify svct_ bearers",
-      "where": "backend/src/mcpolis/adapters/auth/service_token_verifier.py:29"
+      "where": "backend/src/mcpolis/adapters/auth/service_token_verifier.py:29",
+      "no_call_site": false
     },
     {
       "src": "C72",
       "verb": "writes",
       "dst": "C56",
       "why": "persist gateway OAuth state",
-      "where": "backend/src/mcpolis/adapters/auth/mcp_gateway_oauth_provider.py:76"
+      "where": "backend/src/mcpolis/adapters/auth/mcp_gateway_oauth_provider.py:76",
+      "no_call_site": false
     },
     {
       "src": "C72",
       "verb": "calls",
       "dst": "D4",
       "why": "delegate identity to Google",
-      "where": "backend/src/mcpolis/adapters/auth/mcp_gateway_oauth_provider.py:296"
+      "where": "backend/src/mcpolis/adapters/auth/mcp_gateway_oauth_provider.py:296",
+      "no_call_site": false
     },
     {
       "src": "C100",
       "verb": "uses",
       "dst": "C27",
       "why": "complete the connect flow",
-      "where": "backend/src/mcpolis/adapters/auth/pending_auth.py:169"
+      "where": "backend/src/mcpolis/adapters/auth/pending_auth.py:169",
+      "no_call_site": false
     },
     {
       "src": "C101",
       "verb": "calls",
       "dst": "D4",
       "why": "dashboard Google sign-in",
-      "where": "backend/src/mcpolis/adapters/auth/google_oauth_provider.py:84"
+      "where": "backend/src/mcpolis/adapters/auth/google_oauth_provider.py:84",
+      "no_call_site": false
     },
     {
       "src": "C102",
       "verb": "uses",
       "dst": "C46",
       "why": "token storage over ConnectionStore",
-      "where": "backend/src/mcpolis/adapters/auth/mcp_token_storage.py:23"
+      "where": "backend/src/mcpolis/adapters/auth/mcp_token_storage.py:23",
+      "no_call_site": false
     },
     {
       "src": "C103",
       "verb": "calls",
       "dst": "D6",
       "why": "submit mail over SMTP",
-      "where": "backend/src/mcpolis/adapters/email/smtp_email_sender.py:46"
+      "where": "backend/src/mcpolis/adapters/email/smtp_email_sender.py:46",
+      "no_call_site": false
     },
     {
       "src": "C103",
       "verb": "uses",
       "dst": "D21",
       "why": "async SMTP transport",
-      "where": "backend/src/mcpolis/adapters/email/smtp_email_sender.py:26"
+      "where": "backend/src/mcpolis/adapters/email/smtp_email_sender.py:26",
+      "no_call_site": false
     },
     {
       "src": "C104",
       "verb": "calls",
       "dst": "D8",
       "why": "send Mixpanel events",
-      "where": "backend/src/mcpolis/adapters/observability/analytics_client.py:48"
+      "where": "backend/src/mcpolis/adapters/observability/analytics_client.py:48",
+      "no_call_site": false
     },
     {
       "src": "C105",
       "verb": "uses",
       "dst": "D7",
       "why": "init the Sentry SDK",
-      "where": "backend/src/mcpolis/adapters/observability/sentry_setup.py:162"
+      "where": "backend/src/mcpolis/adapters/observability/sentry_setup.py:162",
+      "no_call_site": false
     },
     {
       "src": "C106",
       "verb": "uses",
       "dst": "D20",
       "why": "configure structlog",
-      "where": "backend/src/mcpolis/adapters/observability/structlog_setup.py:74"
+      "where": "backend/src/mcpolis/adapters/observability/structlog_setup.py:74",
+      "no_call_site": false
     },
     {
       "src": "C107",
       "verb": "uses",
       "dst": "D1",
       "why": "Mongo TTL lock collection",
-      "where": "backend/src/mcpolis/adapters/distributed_lock_mongo.py:25"
+      "where": "backend/src/mcpolis/adapters/distributed_lock_mongo.py:25",
+      "no_call_site": false
     },
     {
       "src": "C108",
       "verb": "uses",
       "dst": "D2",
       "why": "Redis pub/sub channels",
-      "where": "backend/src/mcpolis/adapters/event_stream_redis.py:67"
+      "where": "backend/src/mcpolis/adapters/event_stream_redis.py:67",
+      "no_call_site": false
     },
     {
       "src": "C108",
       "verb": "uses",
       "dst": "D18",
       "why": "the async coredis client",
-      "where": "backend/src/mcpolis/adapters/event_stream_redis.py:27"
+      "where": "backend/src/mcpolis/adapters/event_stream_redis.py:27",
+      "no_call_site": false
     },
     {
       "src": "C109",
       "verb": "uses",
       "dst": "D2",
       "why": "Redis ZSET sliding window",
-      "where": "backend/src/mcpolis/adapters/rate_limiter_redis.py:82"
+      "where": "backend/src/mcpolis/adapters/rate_limiter_redis.py:82",
+      "no_call_site": false
     },
     {
       "src": "C110",
       "verb": "uses",
       "dst": "D2",
       "why": "Redis jti deny-list",
-      "where": "backend/src/mcpolis/adapters/session_revocation_redis.py:31"
+      "where": "backend/src/mcpolis/adapters/session_revocation_redis.py:31",
+      "no_call_site": false
     },
     {
       "src": "C74",
       "verb": "calls",
       "dst": "C14",
       "why": "dashboard REST calls",
-      "where": "frontend/src/api/client.ts:70"
+      "where": "frontend/src/api/client.ts:70",
+      "no_call_site": false
     },
     {
       "src": "C74",
       "verb": "calls",
       "dst": "C15",
       "why": "auth/session calls",
-      "where": "frontend/src/api/auth.ts:4"
+      "where": "frontend/src/api/auth.ts:4",
+      "no_call_site": false
     },
     {
       "src": "C74",
       "verb": "calls",
       "dst": "C17",
       "why": "org create/switch/delete",
-      "where": "frontend/src/api/orgs.ts:9"
+      "where": "frontend/src/api/orgs.ts:9",
+      "no_call_site": false
     },
     {
       "src": "C73",
       "verb": "uses",
       "dst": "C74",
       "why": "the shared fetch client",
-      "where": "frontend/src/App.tsx:127"
+      "where": "frontend/src/App.tsx:127",
+      "no_call_site": false
     },
     {
       "src": "C73",
       "verb": "uses",
       "dst": "C76",
       "why": "the auth/session context",
-      "where": "frontend/src/App.tsx:127"
+      "where": "frontend/src/App.tsx:127",
+      "no_call_site": false
     },
     {
       "src": "C97",
       "verb": "listens-to",
       "dst": "C14",
       "why": "subscribe to the SSE stream",
-      "where": "frontend/src/hooks/useEventSource.ts:21"
+      "where": "frontend/src/hooks/useEventSource.ts:21",
+      "no_call_site": false
     },
     {
       "src": "C75",
       "verb": "uses",
       "dst": "C74",
       "why": "react-query resource fetches",
-      "where": "frontend/src/hooks/useUpstreams.ts:6"
+      "where": "frontend/src/hooks/useUpstreams.ts:6",
+      "no_call_site": false
     },
     {
       "src": "C77",
       "verb": "uses",
       "dst": "C75",
       "why": "live upstream list + status",
-      "where": "frontend/src/pages/admin/UpstreamsPage.tsx:1"
+      "where": "frontend/src/pages/admin/UpstreamsPage.tsx:1",
+      "no_call_site": false
     },
     {
       "src": "C99",
       "verb": "uses",
       "dst": "D7",
       "why": "Sentry React error capture",
-      "where": "frontend/src/lib/sentry.ts:1"
+      "where": "frontend/src/lib/sentry.ts:1",
+      "no_call_site": false
     },
     {
       "src": "C99",
       "verb": "uses",
       "dst": "D8",
       "why": "Mixpanel browser analytics",
-      "where": "frontend/src/lib/analytics.ts:1"
+      "where": "frontend/src/lib/analytics.ts:1",
+      "no_call_site": false
     },
     {
       "src": "C88",
       "verb": "uses",
       "dst": "D22",
       "why": "render via React + router",
-      "where": "frontend/src/components/layout/MarketingLayout.tsx:1"
+      "where": "frontend/src/components/layout/MarketingLayout.tsx:1",
+      "no_call_site": false
     }
   ],
   "deployment": [
@@ -6615,7 +6817,7 @@
     {
       "signal": "structlog JSON events",
       "where_emitted": "backend/src/mcpolis/adapters/observability/structlog_setup.py#L74",
-      "where_viewed": "stdout \u2192 Vector \u2192 Elastic / Kibana",
+      "where_viewed": "stdout → Vector → Elastic / Kibana",
       "alerts": "Vector throttle 5000/min/event"
     },
     {
@@ -6634,7 +6836,7 @@
       "signal": "Mixpanel analytics",
       "where_emitted": "backend/src/mcpolis/adapters/observability/analytics_client.py#L48",
       "where_viewed": "Mixpanel (token-gated)",
-      "alerts": "\u2014"
+      "alerts": "—"
     },
     {
       "signal": "Health endpoints",
@@ -6647,61 +6849,61 @@
     {
       "surface": "`/mcp` gateway",
       "who": "Google bearer OR `svct_` service token",
-      "source": "backend/src/mcpolis/entrypoints/app.py#L353",
-      "risk": "Composite verifier routes svct_\u2192registry, else\u2192OAuth"
+      "source": "backend/src/mcpolis/entrypoints/app.py:353",
+      "risk": "Composite verifier routes svct_→registry, else→OAuth"
     },
     {
       "surface": "`/mcp` org scoping",
       "who": "user/token scoped to one org",
-      "source": "backend/src/mcpolis/entrypoints/middleware/org_context.py#L267",
-      "risk": "cross-org isolation via the slug\u2192org contextvar"
+      "source": "backend/src/mcpolis/entrypoints/middleware/org_context.py:267",
+      "risk": "cross-org isolation via the slug→org contextvar"
     },
     {
       "surface": "service-token org pin",
       "who": "`svct_` holder, one pinned org",
-      "source": "backend/src/mcpolis/entrypoints/middleware/service_token_pin.py#L39",
+      "source": "backend/src/mcpolis/entrypoints/middleware/service_token_pin.py:39",
       "risk": "slug mismatch 401s; fails closed if scope missing"
     },
     {
       "surface": "`/admin-mcp/{slug}`",
       "who": "OAuth user who is admin in that org",
-      "source": "backend/src/mcpolis/entrypoints/app.py#L521",
+      "source": "backend/src/mcpolis/entrypoints/app.py:521",
       "risk": "per-org gate; service tokens structurally rejected"
     },
     {
       "surface": "`/admin-mcp/system`",
       "who": "email in superadmin allowlist",
-      "source": "backend/src/mcpolis/entrypoints/app.py#L668",
+      "source": "backend/src/mcpolis/entrypoints/app.py:668",
       "risk": "cloud-only; allowlist is the sole gate"
     },
     {
       "surface": "dashboard `/api/*`",
       "who": "signed-in user (cookie); admin via require_admin",
-      "source": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py#L284",
+      "source": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:284",
       "risk": "HMAC cookie, 7-day TTL, optional jti revocation"
     },
     {
       "surface": "org anti-enumeration",
-      "who": "unknown slug \u2192 401 (not 404)",
-      "source": "backend/src/mcpolis/entrypoints/routes/org_routes.py#L100",
+      "who": "unknown slug → 401 (not 404)",
+      "source": "backend/src/mcpolis/entrypoints/routes/org_routes.py:100",
       "risk": "one exception: `/{slug}/public` invite read"
     },
     {
       "surface": "upstream OAuth callback",
       "who": "public, HMAC-signed state",
-      "source": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py#L107",
+      "source": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:107",
       "risk": "integrity rests on the signed state"
     },
     {
       "surface": "upstream URL fetch",
-      "who": "gateway \u2192 upstream",
-      "source": "backend/src/mcpolis/domain/services/url_safety.py#L152",
+      "who": "gateway → upstream",
+      "source": "backend/src/mcpolis/domain/services/url_safety.py:152",
       "risk": "SSRF deny-list (loopback/RFC1918/IMDS)"
     },
     {
       "surface": "rate limiting (unwired)",
       "who": "n/a",
-      "source": "backend/src/mcpolis/entrypoints/app.py#L1630",
+      "source": "backend/src/mcpolis/entrypoints/app.py:1630",
       "risk": "middleware built but not installed today"
     }
   ],
@@ -6781,7 +6983,7 @@
     {
       "key": "ALLOW_STDIO_MCP",
       "purpose": "enable stdio MCP servers",
-      "default": "`True` (cloud\u2192False)",
+      "default": "`True` (cloud→False)",
       "per_env": "per-env"
     },
     {
@@ -6792,7 +6994,7 @@
     },
     {
       "key": "SMTP_HOST/PORT/USERNAME/FROM",
-      "purpose": "email transport (empty host \u2192 stub)",
+      "purpose": "email transport (empty host → stub)",
       "default": "port `587`",
       "per_env": "per-env"
     },
@@ -6816,7 +7018,7 @@
     },
     {
       "key": "ELASTIC_ENDPOINT / ELASTIC_API_KEY",
-      "purpose": "Vector\u2192Elastic forwarding",
+      "purpose": "Vector→Elastic forwarding",
       "default": "n/a",
       "per_env": "secret"
     },
@@ -6839,7 +7041,7 @@
       "per_env": "per-env"
     }
   ],
-  "tests_note": "No \u2014 read-only against the test layout and CLAUDE.md; all rows",
+  "tests_note": "No — read-only against the test layout and CLAUDE.md; all rows",
   "tests": [
     {
       "target": "UC11 service-token auth + org pin",

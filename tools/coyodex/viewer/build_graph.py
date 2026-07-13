@@ -40,6 +40,9 @@ class Node:
                                   # component's owned files; a group's = union of its members' files;
                                   # an entity's single source file. Drives the code-viewer file
                                   # switcher + the tree footprint highlight.
+    entry_points: list[dict[str, str]] = field(default_factory=list)  # components only: the T4 entry
+                                  # points that name this component ({kind, trigger, source}) — the
+                                  # "Triggered by" list in the info pane
 
 
 @dataclass
@@ -75,6 +78,8 @@ class HappyStep:
 class GraphDict(TypedDict):
     commit: str | None
     committed: str | None  # commit date of the pin (None for older maps without the field)
+    built: str | None      # build timestamp (YYYY-MM-DD HH:MM); shown in the header meta line
+    format: str | None     # schema/format tag (e.g. "coyodex-map"); shown in the header meta line
     title: str | None
     goal: str | None
     nodes: dict[str, dict[str, object]]
@@ -84,6 +89,19 @@ class GraphDict(TypedDict):
     roles: list[dict[str, str]]
     glossary: list[dict[str, str]]  # ubiquitous-language terms: {term, meaning, where} (where = bare
                                     # `path:line`/`path/` anchor, or "" when the term has no code home)
+    # ── reference collections shown on the System / Tests tabs (rows the diagram doesn't hold) ──
+    run_commands: list[dict[str, str]]      # T3: {action, command, source}
+    entry_points: list[dict[str, object]]   # T4: {kind, trigger, source, component, index} (component = owning
+                                            # C id; index = position within that component's list, for pane select)
+    non_entity_types: list[dict[str, str]]  # deliberately-unmodelled types: {name, source, why}
+    deployment: list[dict[str, str]]        # {unit, runs_on, exposed_as, config_source}
+    observability: list[dict[str, str]]     # {signal, where_emitted, where_viewed, alerts}
+    security: list[dict[str, str]]          # {surface, who, source, risk}
+    config: list[dict[str, str]]            # {key, purpose, default, per_env}
+    tests_note: str                         # the "Tests run for this table?" honesty line
+    tests: list[dict[str, str]]             # {target, tested, tests, gap, confidence}
+    coverage: dict[str, str]                # resolved node-id → coverage state (tested/partial/untested)
+    extras: list[dict[str, str]]            # freeform authored sections: {heading, body}
 
 
 class DiffChange(TypedDict):

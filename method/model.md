@@ -80,7 +80,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
 
   "deployment":     [ { "unit", "runs_on", "exposed_as", "config_source" } ],
   "observability":  [ { "signal", "where_emitted", "where_viewed", "alerts" } ],
-  "security":       [ { "surface", "who", "source": "<md link to the auth check>", "risk" } ],
+  "security":       [ { "surface", "who", "source": "<bare path:line anchor to the auth check>", "risk" } ],
   "config":         [ { "key", "purpose", "default", "per_env" } ],
 
   "tests_note":  "<the 'Tests run for this table?' honesty line>",
@@ -143,14 +143,19 @@ Semantics, stated on the fields:
     `api_key`, `noop_without`, `wired_by`) triggers an advisory `coyodex validate` warning to check
     whether the fact belongs in the Deployment or Config table instead of a per-element note.
 - **Anchor formats.** Every source-location string in the map uses ONE canonical, bare `path:line`
-  syntax (see the schema for the exact shape). `components[].source`, `entities[].source`,
-  `glossary[].source`, `components[].entry_point`, `deps[].where_configured`, `edges[].where`,
-  `entry_points[].source`, and `evidence[].file` all use it — `glossary[].source` and the two file
-  OR directory fields (`components[].source`, `entities[].source`) may also be a bare directory ref
-  `path/`, and `glossary[].source` is additionally nullable (a pure product-level term with no single
-  code home). Group `source` fields (`subsystems[].source` / `subdomains[].source`) use the same
-  bare form — a file `path:line` or a directory ref `path/` — exactly like `components[].source`.
-  `coyodex validate` rejects any anchor written some other way.
+  syntax (see the schema for the exact shape) — never a markdown link, never prose, never two refs
+  joined by a separator. `components[].source`, `entities[].source`, `glossary[].source`,
+  `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `entry_points[].source`,
+  `evidence[].file`, **`run_commands[].source`**, **`security[].source`**, and
+  **`non_entity_types[].source`** all use it — `glossary[].source` and the file OR directory fields
+  (`components[].source`, `entities[].source`, `non_entity_types[].source`) may also be a bare
+  directory ref `path/`, and `glossary[].source` is additionally nullable (a pure product-level term
+  with no single code home). Group `source` fields (`subsystems[].source` / `subdomains[].source`)
+  use the same bare form — a file `path:line` or a directory ref `path/` — exactly like
+  `components[].source`. `coyodex validate` rejects any anchor written some other way. **The
+  operational tables' free-prose location fields are deliberately NOT anchors** — `deployment[].config_source`,
+  `observability[].where_emitted` / `where_viewed`, and `tests[].tests` describe topology / test sets
+  in prose, so they are neither constrained nor turned into code links by the viewer.
 - **`source` is the single canonical name for "where an element is defined"** — used uniformly across
   `components[].source`, `subsystems[].source` / `subdomains[].source`, `entities[].source`,
   `non_entity_types[].source`, `glossary[].source`, `entry_points[].source`, and `security[].source`.

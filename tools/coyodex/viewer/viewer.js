@@ -31,6 +31,8 @@ let HAS_SUBDOMAINS;  // domain model grouped into subdomains -> Domain view lead
 let HAS_HP;
 let HAS_GLOSSARY;    // gates the Glossary tab (derived from the graph in applyBundle)
 let HAS_USECASES;    // gates the Use Cases tab (any use-case node present)
+let HAS_SYSTEM;      // gates the System tab (any operational/reference collection present)
+let HAS_TESTS;       // gates the Tests tab (a test-completeness table or honesty note present)
 let CONTEXT_EDGES;
 let HAS_DIFF;
 let META;
@@ -60,6 +62,9 @@ function applyBundle(b) {
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
+  HAS_SYSTEM = ['run_commands', 'entry_points', 'non_entity_types', 'deployment', 'observability',
+    'security', 'config', 'extras'].some((k) => Array.isArray(GRAPH[k]) && GRAPH[k].length > 0);
+  HAS_TESTS = (Array.isArray(GRAPH.tests) && GRAPH.tests.length > 0) || !!(GRAPH.tests_note || '').trim();
 }
 
 function bootError(msg) {
@@ -85,6 +90,12 @@ try {
 const SVGNS = 'http://www.w3.org/2000/svg';
 const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'modified'],
                 deleted: ['#cf222e', '×', 'deleted'], rippled: ['#d97706', '≈', 'ripples to'] };
+// Test-coverage overlay states (derived from the tests[] table, resolved to node ids server-side in
+// GRAPH.coverage). Distinct glyphs+colours from the diff BADGE map; makeBadge falls back to this map,
+// and the overlay anchors these to the box's BOTTOM-right so they never collide with a diff badge.
+const COVERAGE_BADGE = { tested: ['#1a7f37', '✓', 'tested'], partial: ['#9a6700', '~', 'partly tested'],
+                         untested: ['#6b7280', '·', 'untested'],
+                         'untested-critical': ['#b91c1c', '!', 'untested — critical'] };
 const HILITE = 'drop-shadow(0 0 4px #2563eb) drop-shadow(0 0 2px #2563eb)';  // selection glow (nodes + edge labels)
 const HOVER = 'drop-shadow(0 0 3px #60a5fa)';  // softer hover glow: signals "clickable" without competing with HILITE
 const HP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Happy-Path selection: just a touch stronger than HOVER (not the heavy HILITE)
@@ -188,6 +199,10 @@ for (const f of GRAPH.flows || []) {
 // When a click navigates to another view to reveal a node (the file browser, a flow element link, the
 // change-impact summary), the node id to select is stashed here and applied once that view has rendered.
 let pendingSelect = null;
+// An entry point to highlight once its component's detail pane renders — set by selectEntryPoint (a
+// search hit / a System-tab component link), consumed in bindNodeDetailHandlers so the selection survives
+// the (possibly async) navigation's final pane render instead of being wiped by it.
+let pendingEpSelect = null;
 // A focus-drill (⌘-drill a single component/entity cross arrow) stashes that node id here so the target
 // edge card, once rendered, centers it (at the fresh-fit zoom) — guaranteeing the focused element is
 // on-screen instead of restoring the pair card's last camera, which could leave it off-screen. One-shot:
@@ -666,6 +681,60 @@ function usedInHtml(id) {
     + esc(GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc) + '</a>').join(', ');
   return '<dt>Used in</dt><dd>' + links + '</dd>';
 }
+// The "Triggered by" forward view for a component: its T4 entry points — how the outside world reaches
+// it (an HTTP route, a CLI command, a cron, an event). Like the arrow/crossing rows, each entry point is
+// a SELECTABLE paragraph (no source pill): selecting it highlights the paragraph and — when it has a
+// local source — reveals that source in the code viewer (see bindTriggeredBy). '' when none. The same
+// entry points also appear (grouped by kind) on the System tab, and a search hit / a System component
+// link selects the exact row here (selectEntryPoint).
+function triggeredByHtml(id) {
+  const n = GRAPH.nodes[id];
+  const eps = (n && n.entry_points) || [];
+  if (!eps.length) return '';
+  const rows = eps.map((e, i) => {
+    const kind = e.kind ? `<span class="tb-kind">${esc(e.kind)}</span>` : '';
+    const trig = e.trigger ? `<span class="tb-trig">${mdInline(e.trigger)}</span>` : '<span class="muted">(entry point)</span>';
+    const where = (e.source && localRef(e.source)) ? ` data-where="${esc(e.source)}"` : '';
+    return `<li class="tb-ep" data-ep-idx="${i}"${where}>${kind}${trig}</li>`;
+  }).join('');
+  return `<dt>Triggered by</dt><dd><ul class="tb-list" data-comp="${esc(id)}">${rows}</ul></dd>`;
+}
+// Wire the "Triggered by" entry-point rows: every row is selectable (click highlights it, like an arrow
+// row); a row with a local source also reveals it in the code viewer on select.
+function bindTriggeredBy(root) {
+  const rows = [...root.querySelectorAll('.tb-list .tb-ep')];
+  rows.forEach((li) => li.addEventListener('click', () => {
+    rows.forEach((o) => o.classList.remove('sel'));
+    li.classList.add('sel');
+    if (li.hasAttribute('data-where')) { const wn = whereNode(li.getAttribute('data-where')); openInCodeViewer(wn.file, wn.line); }
+  }));
+}
+// Programmatically select the `epIdx`-th entry point in a component's "Triggered by" pane list — highlight
+// the paragraph + reveal its source. Guarded on the owning component id; returns false if that row isn't
+// in the pane yet (the pane may still be rendering after a navigation).
+function selectTriggeredBy(componentId, epIdx) {
+  const list = panel.querySelector(`.tb-list[data-comp="${componentId}"]`);
+  const li = list && list.querySelector(`.tb-ep[data-ep-idx="${epIdx}"]`);
+  if (!li) return false;
+  list.querySelectorAll('.tb-ep').forEach((o) => o.classList.remove('sel'));
+  li.classList.add('sel');
+  li.scrollIntoView({ block: 'nearest' });
+  if (li.hasAttribute('data-where')) { const wn = whereNode(li.getAttribute('data-where')); openInCodeViewer(wn.file, wn.line); }
+  return true;
+}
+// Navigate to a component (showing its pane) AND select one of its entry points — used by the search list
+// and the System tab's entry-point rows. The selection is stashed in pendingEpSelect and applied when the
+// component's pane renders (bindNodeDetailHandlers → applyPendingEpSelect), which handles both the
+// in-place select (pane renders synchronously inside selectFromTree) and the async navigation case.
+function selectEntryPoint(componentId, epIdx) {
+  pendingEpSelect = { comp: componentId, idx: epIdx };
+  selectFromTree(componentId);
+}
+// Apply a stashed entry-point selection if the just-rendered pane is showing its component; clears the
+// stash once applied so it fires exactly once.
+function applyPendingEpSelect() {
+  if (pendingEpSelect && selectTriggeredBy(pendingEpSelect.comp, pendingEpSelect.idx)) pendingEpSelect = null;
+}
 // The one free-text "what/why" field a node kind carries — Purpose (subsystem/subdomain/component),
 // Used for (dep), Meaning (entity). Shown as plain prose with no label, since the field IS the
 // description (mirrors how showContextEdge/showHPActor treat Wants, and showEdge treats Why).
@@ -712,13 +781,16 @@ function nodeDetailHtml(id) {
   // code viewer, which carry the path and the sole "open externally" control.
   return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`
     + explain
-    + `<dl>${rows}${usedInHtml(id)}</dl>`;
+    + `<dl>${rows}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`;
 }
-// Wire the interactive bits inside the just-written detail panel: the use-case-flow refs.
+// Wire the interactive bits inside the just-written detail panel: the use-case-flow refs and the
+// selectable "Triggered by" entry-point rows.
 function bindNodeDetailHandlers(root) {
   root.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
   }));
+  bindTriggeredBy(root);
+  applyPendingEpSelect();  // a search hit / System link asked to select one of this component's entry points
 }
 function showNode(id) {
   if (!GRAPH.nodes[id]) return;
@@ -1409,7 +1481,7 @@ const BADGE_R = 13;   // disc radius — matches the action icon's circle (addAc
 function makeBadge(state) {
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'diff-badge');
-  const spec = BADGE[state];
+  const spec = BADGE[state] || COVERAGE_BADGE[state];
   if (!spec) return g;
   const [color, glyph] = spec;
   const halo = document.createElementNS(SVGNS, 'circle');
@@ -1437,18 +1509,19 @@ function boxShape(el) {
   const area = (r) => { try { const b = r.getBBox(); return b.width * b.height; } catch (_) { return -1; } };
   return rects.reduce((big, r) => (area(r) > area(big) ? r : big));
 }
-// Anchor the badge at the box's top-RIGHT corner (the drill icon takes top-LEFT), then hold it at a
+// Anchor the badge at a box CORNER (default top-RIGHT — the drill icon takes top-LEFT; the coverage
+// overlay passes 'br' for bottom-right so it never collides with a diff badge), then hold it at a
 // constant on-screen size with the same counter-zoom the action icons use.
-function addBadge(el, state) {
+function addBadge(el, state, corner) {
   const shape = boxShape(el);
   let bb; try { bb = shape.getBBox(); } catch (_) { return; }
   const g = makeBadge(state);
   // Same front-overlay home as the action icons (see iconOverlay), so a badge on a container's corner
-  // isn't painted over by that container's inner boxes. The box's top-RIGHT corner, read in the box
-  // shape's own space, is carried into the overlay's space so the on-screen spot is unchanged.
+  // isn't painted over by that container's inner boxes. The chosen corner, read in the box shape's own
+  // space, is carried into the overlay's space so the on-screen spot is unchanged.
   const parent = iconOverlay || el;
-  const corner = { x: bb.x + bb.width, y: bb.y };
-  const anchor = parent === el ? corner : pointToHostSpace(shape, corner.x, corner.y, parent);
+  const pt = { x: bb.x + bb.width, y: corner === 'br' ? bb.y + bb.height : bb.y };
+  const anchor = parent === el ? pt : pointToHostSpace(shape, pt.x, pt.y, parent);
   if (!anchor) return;
   g._anchor = anchor;
   g.setAttribute('transform', `translate(${anchor.x},${anchor.y}) scale(${curIconInv()})`);
@@ -1459,22 +1532,34 @@ function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a 
   const inv = curIconInv();
   for (const g of DIFF_BADGES) if (g && g._anchor) g.setAttribute('transform', `translate(${g._anchor.x},${g._anchor.y}) scale(${inv})`);
 }
-function buildLegend() {
+// Fill the legend with one row per badge state (swatch + its label from the badge map), plus an optional
+// grey tail note. Shared by the diff and coverage legends — they differ only in state list + badge map.
+function fillLegend(states, badgeMap, tailNote) {
   const d = 2 * ACTION_ICON_R + 2;   // the full badge (halo included) centred on the origin
   const frag = document.createDocumentFragment();
-  for (const state of ['added', 'modified', 'deleted', 'rippled']) {
+  for (const state of states) {
     const row = document.createElement('div'); row.className = 'row';
     const svg = document.createElementNS(SVGNS, 'svg');
     svg.setAttribute('width', 20); svg.setAttribute('height', 20);
     svg.setAttribute('viewBox', `${-d / 2} ${-d / 2} ${d} ${d}`);
     svg.appendChild(makeBadge(state));
-    const span = document.createElement('span'); span.textContent = BADGE[state][2];
+    const span = document.createElement('span'); span.textContent = badgeMap[state][2];
     row.appendChild(svg); row.appendChild(span); frag.appendChild(row);
   }
-  const note = document.createElement('div'); note.className = 'row'; note.style.color = '#9ca3af';
-  note.textContent = 'no badge = unchanged';
-  frag.appendChild(note);
+  if (tailNote) {
+    const note = document.createElement('div'); note.className = 'row'; note.style.color = '#9ca3af';
+    note.textContent = tailNote;
+    frag.appendChild(note);
+  }
   legend.innerHTML = ''; legend.appendChild(frag);
+}
+// Swap the legend to the given kind, rebuilding its rows only when the kind actually changes (renderChrome
+// runs on every render, so this avoids needless DOM churn / flicker).
+function setLegendMode(kind) {
+  if (legend.dataset.kind === kind) return;
+  legend.dataset.kind = kind;
+  if (kind === 'diff') fillLegend(['added', 'modified', 'deleted', 'rippled'], BADGE, 'no badge = unchanged');
+  else if (kind === 'coverage') fillLegend(['tested', 'partial', 'untested', 'untested-critical'], COVERAGE_BADGE, 'test coverage');
 }
 
 // --- diff overlay on the Subsystems views ---------------------------------------
@@ -1504,6 +1589,18 @@ function applyDiffOverlay(s) {
     for (const id in mainScene.nodeEls) {
       if (DIFF_STATE[id]) addBadge(mainScene.nodeEls[id], DIFF_STATE[id]);
     }
+  }
+}
+// Test-coverage overlay (non-diff views): badge every drawn use-case / component box with its coverage
+// state from GRAPH.coverage (resolved server-side from the tests[] table). Bottom-right corner keeps it
+// clear of the top-left drill icon. Shares the DIFF_BADGES registry, so rescaleDiffBadges re-holds it on
+// zoom. No-op when the map has no tests table (coverage is empty).
+function applyCoverageOverlay() {
+  const cov = GRAPH.coverage || {};
+  if (!mainScene || !Object.keys(cov).length) return;
+  DIFF_BADGES.length = 0;                            // re-added each render; drop the old detached refs
+  for (const id in mainScene.nodeEls) {
+    if (cov[id]) addBadge(mainScene.nodeEls[id], cov[id], 'br');
   }
 }
 // A use case "contains changes" when any element its T6 flow touches is changed (FLOWS_NARR × DIFF_STATE)
@@ -2768,7 +2865,7 @@ function bindFor(s) {
   else bindComponent();
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
-  if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary') return kind;
+  if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'tests') return kind;
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
   if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog (incl. a Happy Path drill)
@@ -2782,6 +2879,8 @@ function stateTitle(s) {
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
   if (s.kind === 'glossary') return 'Glossary';
+  if (s.kind === 'system') return 'System';
+  if (s.kind === 'tests') return 'Tests';
   if (s.kind === 'usecases') return 'Use Cases';
   if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
@@ -2817,6 +2916,8 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
   if (s.kind === 'glossary') return [{ kind: 'glossary' }];
+  if (s.kind === 'system') return [{ kind: 'system' }];
+  if (s.kind === 'tests') return [{ kind: 'tests' }];
   const trail = [{ kind: 'container' }];                  // the Subsystems overview is the root of this branch
   if (s.kind === 'subsystem') trail.push(...groupChain('subsystem', 'sid', s.sid));  // full nesting path top → sid
   else if (s.kind === 'edge') trail.push({ kind: 'edge', a: s.a, b: s.b });  // a pair lives beside the subsystems
@@ -2827,7 +2928,13 @@ function renderChrome(s) {
   // not the removed flat Components map: the overview badges each subsystem with its subtree's change,
   // and the cards badge their member components (via bindNodes).
   const diffHost = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge';
-  legend.classList.toggle('on', diffHost && mode === 'diff');
+  // The legend shows diff states in diff mode; otherwise coverage states on the views that draw
+  // component/use-case boxes (where applyCoverageOverlay places badges) when the map has a tests table.
+  const hasCoverage = GRAPH.coverage && Object.keys(GRAPH.coverage).length > 0;
+  const coverageHost = s.kind === 'subsystem' || s.kind === 'component';
+  if (mode === 'diff' && diffHost) { setLegendMode('diff'); legend.classList.add('on'); }
+  else if (hasCoverage && coverageHost) { setLegendMode('coverage'); legend.classList.add('on'); }
+  else legend.classList.remove('on');
   toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
@@ -2923,28 +3030,46 @@ function resizeStagePreserve() {
 // the term's code home). Not a diagram — written straight into #diagram. Each `where` is a bare
 // `path:line`/`path/` anchor; a local one becomes a source-open button (editor/GitHub, exactly like a
 // node's ⌘-click), an off-repo/absent one stays plain text.
-function renderGlossary() {
-  const rows = (GRAPH.glossary || []).map((g) => {
-    const where = g.source || '';
-    const { file, line } = where ? whereNode(where) : { file: '', line: null };
-    let cell = '<span class="gloss-none">—</span>';
-    if (where && localRef(where)) {
-      const rel = cleanPath(file, line);
-      const base = rel.replace(/\/+$/, '').split('/').pop() + (line ? ':' + line : '');
-      cell = `<button type="button" class="src srclink gloss-src" data-where="${esc(where)}"`
-        + ` title="Open in the code viewer">${esc(base)}</button>`;
-    } else if (where) {
-      cell = `<span class="gloss-plain">${esc(cleanPath(file, line))}</span>`;
-    }
-    return `<tr data-term="${esc(g.term)}"><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${cell}</td></tr>`;
-  }).join('');
-  diagram.innerHTML = '<div class="glossary-wrap" style="padding-top:20px">'
-    + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
-    + `<tbody>${rows}</tbody></table></div>`;
-  diagram.querySelectorAll('.gloss-src').forEach((btn) => {
+// A `path:line`/`path/` code anchor as a table cell: a clickable code-viewer link for an in-repo
+// ref, plain text for an off-repo ref, an em-dash when absent. Every button carries `srclink` +
+// `data-where`, so one `wireSrcLinks(container)` pass after the table is written wires them all.
+// Shared by the Glossary, System and Tests reference tables (the one source-link contract).
+function srcCell(where) {
+  where = where || '';
+  const { file, line } = where ? whereNode(where) : { file: '', line: null };
+  if (where && localRef(where)) {
+    const rel = cleanPath(file, line);
+    const base = rel.replace(/\/+$/, '').split('/').pop() + (line ? ':' + line : '');
+    return `<button type="button" class="src srclink" data-where="${esc(where)}"`
+      + ` title="Open in the code viewer">${esc(base)}</button>`;
+  }
+  if (where) return `<span class="gloss-plain">${esc(cleanPath(file, line))}</span>`;
+  return '<span class="gloss-none">—</span>';
+}
+function wireSrcLinks(root) {
+  root.querySelectorAll('.srclink').forEach((btn) => {
     const wn = whereNode(btn.getAttribute('data-where'));
     btn.addEventListener('click', () => openInCodeViewer(wn.file, wn.line));
   });
+}
+// A small test-coverage pill for a use case in the catalog. Use cases aren't diagram boxes, so the
+// coverage badge overlay can't reach them — their coverage shows here instead. '' when the use case has
+// no test row. Reuses the Tests-tab pill colours; `untested-critical` shows as an emphasised "untested!".
+function coveragePill(id) {
+  const st = GRAPH.coverage && GRAPH.coverage[id];
+  if (!st) return '';
+  const cls = st === 'untested-critical' ? 'untested' : st;
+  const label = st === 'untested-critical' ? 'untested!' : st;
+  return `<span class="tst-pill tst-${cls}" title="test coverage — see the Tests tab">${esc(label)}</span>`;
+}
+function renderGlossary() {
+  const rows = (GRAPH.glossary || []).map((g) =>
+    `<tr data-term="${esc(g.term)}"><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${srcCell(g.source || '')}</td></tr>`
+  ).join('');
+  diagram.innerHTML = '<div class="glossary-wrap" style="padding-top:20px">'
+    + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
+    + `<tbody>${rows}</tbody></table></div>`;
+  wireSrcLinks(diagram);
 }
 
 // The Use Cases tab: the full catalog, GROUPED BY ACTOR — each actor section header IS the Role (the
@@ -2986,7 +3111,7 @@ function renderUseCases() {
       // In diff mode, flag a use case whose flow touches changed code (derived from the element diff).
       const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(n.id)) ? '<span class="badge modified">changed</span>' : '';
       return `<li class="uc-row${changed ? ' uc-changed' : ''}" data-uc="${esc(n.id)}" tabindex="0">`
-        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${changed}${pill(n.id)}</span>`
+        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${changed}${coveragePill(n.id)}${pill(n.id)}</span>`
         + (to ? `<span class="uc-to">${mdInline(to)}</span>` : '')
         + '</li>';
     }).join('');
@@ -3007,6 +3132,110 @@ function renderUseCases() {
   });
 }
 
+// One titled reference table on the System tab: an `<h3>` heading + a `.glossary`-styled table.
+// `cols` = [{head, get}]; get(row) returns a prose string (rendered via mdInline) or {src:'path:line'}
+// for a code link. Returns '' for an empty collection so the section is omitted (mirrors the markdown
+// view's `if m.x:` guards). Grows no new table CSS — reuses `.glossary` inside `.system-wrap`.
+function refSection(title, rows, cols) {
+  if (!rows || !rows.length) return '';
+  const head = cols.map((c) => `<th>${esc(c.head)}</th>`).join('');
+  const body = rows.map((r) => '<tr>' + cols.map((c) => {
+    const v = c.get(r);
+    const cell = (v && typeof v === 'object' && 'src' in v) ? srcCell(v.src) : mdInline(v || '');
+    return `<td>${cell}</td>`;
+  }).join('') + '</tr>').join('');
+  return `<section class="uc-group"><h3 class="uc-actor">${esc(title)}</h3>`
+    + `<table class="glossary"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`;
+}
+// The System tab: the operational / reference collections the diagram doesn't hold (run commands, entry
+// points, deployment, observability, security, config, non-entity types, freeform extras). A stack of
+// titled tables rendered straight into #diagram, like the Glossary/Use Cases tabs. Entry points are
+// grouped by kind and link to their owning component; source cells open the code viewer.
+function renderSystem() {
+  const G = GRAPH;
+  const nodeName = (id) => (G.nodes && G.nodes[id] ? G.nodes[id].name : id);
+  const sections = [];
+  // Entry points — grouped by kind; each row links to its owning component.
+  const eps = G.entry_points || [];
+  if (eps.length) {
+    const byKind = {};
+    const order = [];
+    for (const e of eps) {
+      const k = (e.kind || 'other').trim() || 'other';
+      if (!byKind[k]) { byKind[k] = []; order.push(k); }
+      byKind[k].push(e);
+    }
+    let inner = '';
+    for (const k of order) {
+      const rows = byKind[k].map((e) => {
+        const comp = (e.component && G.nodes && G.nodes[e.component])
+          ? `<button type="button" class="src sys-node" data-id="${esc(e.component)}" data-idx="${e.index || 0}">${esc(nodeName(e.component))}</button>`
+          : '<span class="gloss-none">—</span>';
+        return `<tr><td>${mdInline(e.trigger || '')}</td><td>${comp}</td><td>${srcCell(e.source || '')}</td></tr>`;
+      }).join('');
+      inner += `<h4 class="sys-subhead">${esc(k)}</h4>`
+        + '<table class="glossary"><thead><tr><th>Trigger</th><th>Component</th><th>Source</th></tr></thead>'
+        + `<tbody>${rows}</tbody></table>`;
+    }
+    sections.push(`<section class="uc-group"><h3 class="uc-actor">Entry points</h3>${inner}</section>`);
+  }
+  sections.push(refSection('Run commands', G.run_commands, [
+    { head: 'Action', get: (r) => r.action }, { head: 'Command', get: (r) => r.command },
+    { head: 'Source', get: (r) => ({ src: r.source }) }]));
+  sections.push(refSection('Deployment & topology', G.deployment, [
+    { head: 'Unit', get: (r) => r.unit }, { head: 'Runs on', get: (r) => r.runs_on },
+    { head: 'Exposed as', get: (r) => r.exposed_as }, { head: 'Config source', get: (r) => r.config_source }]));
+  sections.push(refSection('Observability', G.observability, [
+    { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
+    { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }]));
+  sections.push(refSection('Security & auth', G.security, [
+    { head: 'Surface', get: (r) => r.surface }, { head: 'Who can reach', get: (r) => r.who },
+    { head: 'Auth check', get: (r) => ({ src: r.source }) }, { head: 'Risk', get: (r) => r.risk }]));
+  sections.push(refSection('Config & environments', G.config, [
+    { head: 'Key', get: (r) => r.key }, { head: 'Purpose', get: (r) => r.purpose },
+    { head: 'Default', get: (r) => r.default }, { head: 'Per-env / secret?', get: (r) => r.per_env }]));
+  sections.push(refSection('Types deliberately not modelled', G.non_entity_types, [
+    { head: 'Type', get: (r) => r.name }, { head: 'Source', get: (r) => ({ src: r.source }) },
+    { head: 'Why', get: (r) => r.why }]));
+  for (const x of (G.extras || [])) {
+    if (!x || !x.heading) continue;
+    sections.push(`<section class="uc-group"><h3 class="uc-actor">${esc(x.heading)}</h3>`
+      + `<div class="sys-extra">${mdInline(x.body || '')}</div></section>`);
+  }
+  const html = sections.filter(Boolean).join('');
+  diagram.innerHTML = `<div class="usecases-wrap system-wrap">${html || '<p class="empty">No system facts recorded.</p>'}</div>`;
+  wireSrcLinks(diagram);
+  // A System-tab entry-point Component link navigates to that component AND selects the exact entry
+  // point in its "Triggered by" pane list (same as a search hit).
+  diagram.querySelectorAll('.sys-node').forEach((btn) => {
+    btn.addEventListener('click', () => selectEntryPoint(
+      btn.getAttribute('data-id'), parseInt(btn.getAttribute('data-idx'), 10) || 0));
+  });
+}
+
+// The Tests tab: the test-completeness gap table (tests[]) led by the honesty note (tests_note — was the
+// suite actually run, or is every row inferred?). Each row's coverage also badges its target node on the
+// diagram (see applyCoverageOverlay). Rendered like the System/Glossary tabs.
+function renderTests() {
+  const note = (GRAPH.tests_note || '').trim();
+  const noteHtml = note ? `<div class="tests-note">${mdInline(note)}</div>` : '';
+  const rows = (GRAPH.tests || []).map((t) => {
+    const tested = (t.tested || '').trim();
+    const low = tested.toLowerCase();
+    const cls = low.startsWith('y') ? 'tested' : (low.includes('partial') ? 'partial' : 'untested');
+    const pill = tested ? `<span class="tst-pill tst-${cls}">${esc(tested)}</span>` : '';
+    return `<tr><td>${mdInline(t.target || '')}</td><td>${pill}</td><td>${mdInline(t.tests || '')}</td>`
+      + `<td>${mdInline(t.gap || '')}</td><td>${mdInline(t.confidence || '')}</td></tr>`;
+  }).join('');
+  const table = (GRAPH.tests || []).length
+    ? '<table class="glossary"><thead><tr><th>Target</th><th>Tested?</th><th>Test(s)</th>'
+      + '<th>Gap / risk</th><th>Confidence</th></tr></thead>'
+      + `<tbody>${rows}</tbody></table>`
+    : '<p class="empty">No test-completeness rows recorded.</p>';
+  diagram.innerHTML = `<div class="usecases-wrap system-wrap">${noteHtml}${table}</div>`;
+  wireSrcLinks(diagram);
+}
+
 // `sArg` renders a specific state (defaults to the current history entry); `transient` renders it purely
 // for the drill animation's intermediate "flash" — no panel/selection/camera-restore side effects, so it
 // doesn't disturb history or the info pane.
@@ -3022,6 +3251,10 @@ async function render(sArg, transient) {
   if (s.kind === 'glossary') { renderGlossary(); mainScene = null; renderChrome(s); return; }
   // The Use Cases tab is an actor-grouped HTML catalog, not a mermaid diagram — same shape as Glossary.
   if (s.kind === 'usecases') { renderUseCases(); mainScene = null; renderChrome(s); return; }
+  // The System tab is a set of operational reference tables (HTML), not a mermaid diagram — same shape.
+  if (s.kind === 'system') { renderSystem(); mainScene = null; renderChrome(s); return; }
+  // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
+  if (s.kind === 'tests') { renderTests(); mainScene = null; renderChrome(s); return; }
   // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,
   // not throw an unhandled rejection that freezes the view mid-navigation. Show a message + keep the
   // chrome (back/forward still work) so the user can step out.
@@ -3063,6 +3296,7 @@ async function render(sArg, transient) {
   // selection (pendingSelect below) instead runs through updateFolderPeek, which browses only for a folder.
   if (!transient && !pendingSelect && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setBrowsing(true); }
   if (mode === 'diff' && hasDiff()) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
+  else applyCoverageOverlay();  // test-coverage badges (non-diff views); no-op when the map has no tests
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
   // pendingMatchTextId: a node reached this way ALWAYS gets the zoom-to-match-sidebar-text-size move
@@ -4606,7 +4840,7 @@ const SB_KIND_LABEL = { usecase: 'use case', subsystem: 'subsystem', component: 
 const sbElemLabel = (n) => (n.kind === 'dep' ? ((n.fields && n.fields.Kind) || 'dependency') : (SB_KIND_LABEL[n.kind] || n.kind));
 // A per-kind nudge so a same-quality name match on a behaviour/structure element outranks a raw path hit.
 const SB_TYPE_BONUS = { usecase: 45, subsystem: 40, component: 35, entity: 35, subdomain: 30, dep: 30,
-                        gloss: 25, field: 10, file: 5, dir: -5, symbol: -2 };
+                        gloss: 25, sys: 12, field: 10, file: 5, dir: -5, symbol: -2 };
 
 // The fixed half of the index: every named node, each entity's fields, every glossary term. Built once.
 function sbBuildStatic() {
@@ -4629,6 +4863,25 @@ function sbBuildStatic() {
     items.push({ text: g.term, sub: (g.meaning || '').replace(/\s+/g, ' ').slice(0, 90),
       cls: 'gloss', badge: 'term', run: ((t, s) => () => sbGotoGlossary(t, s))(g.term, g.source) });
   }
+  // System-tab reference rows. An entry point navigates to its owning component (a real node); every
+  // other reference row jumps to the System tab and flashes the matching row (sbGotoSystem).
+  const sysRow = (text, sub, badge) => ({ text, sub, cls: 'sys', badge,
+    run: ((t) => () => sbGotoSystem(t))(text) });
+  for (const e of (GRAPH.entry_points || [])) {
+    if (!e || !e.trigger) continue;
+    const cid = e.component;
+    // A hit navigates to the owning component AND selects this exact entry point in its pane; an entry
+    // point with no component falls back to flashing the System-tab row.
+    items.push({ text: e.trigger, sub: (e.kind || 'entry point'), cls: 'sys', badge: 'entry point',
+      run: (cid && (GRAPH.nodes || {})[cid]) ? ((c, i) => () => selectEntryPoint(c, i))(cid, e.index || 0)
+                                             : ((t) => () => sbGotoSystem(t))(e.trigger) });
+  }
+  for (const c of (GRAPH.config || [])) { if (c && c.key) items.push(sysRow(c.key, 'config', 'config')); }
+  for (const s of (GRAPH.security || [])) { if (s && s.surface) items.push(sysRow(s.surface, 'security surface', 'security')); }
+  for (const d of (GRAPH.deployment || [])) { if (d && d.unit) items.push(sysRow(d.unit, 'deployment', 'deploy')); }
+  for (const o of (GRAPH.observability || [])) { if (o && o.signal) items.push(sysRow(o.signal, 'observability', 'signal')); }
+  for (const r of (GRAPH.run_commands || [])) { if (r && r.action) items.push(sysRow(r.action, 'run command', 'run')); }
+  for (const t of (GRAPH.non_entity_types || [])) { if (t && t.name) items.push(sysRow(t.name, 'not modelled', 'type')); }
   return items;
 }
 // The full-text (description) index: the PROSE fields — a purpose, a "used for", a trigger→outcome, an
@@ -4655,6 +4908,12 @@ function sbBuildProse() {
     items.push({ text: g.term, body: g.meaning, prose: true, cls: 'prose', badge: 'meaning',
       run: ((t, s) => () => sbGotoGlossary(t, s))(g.term, g.source) });
   }
+  // Full-text over the System tab's descriptive cells (config purpose, security risk, unmodelled-type why).
+  const sysProse = (text, body, badge) => { if (text && body) items.push({ text, body, prose: true,
+    cls: 'prose', badge, run: ((t) => () => sbGotoSystem(t))(text) }); };
+  for (const c of (GRAPH.config || [])) { if (c) sysProse(c.key, c.purpose, 'config'); }
+  for (const s of (GRAPH.security || [])) { if (s) sysProse(s.surface, s.risk, 'risk'); }
+  for (const t of (GRAPH.non_entity_types || [])) { if (t) sysProse(t.name, t.why, 'type'); }
   return items;
 }
 function sbEnsureIndex() {
@@ -4898,6 +5157,27 @@ function sbGotoGlossary(term, source) {
   };
   requestAnimationFrame(() => flash(60));
 }
+// Jump to the System tab and flash the first table row whose text contains `text` (a config key, a
+// security surface, a run action, …). The System tab has no per-row id, so we match on cell text —
+// good enough to land the eye on the right row after navigating.
+function sbGotoSystem(text) {
+  go({ kind: 'system' });
+  const needle = (text || '').trim().toLowerCase();
+  const flash = (tries) => {
+    let hit = null;
+    diagram.querySelectorAll('.system-wrap tbody tr').forEach((r) => {
+      if (!hit && r.textContent.toLowerCase().includes(needle)) hit = r;
+    });
+    if (hit) {
+      hit.scrollIntoView({ block: 'center' });
+      hit.classList.add('sb-flash');
+      setTimeout(() => hit.classList.remove('sb-flash'), 1200);
+      return;
+    }
+    if (tries > 0) requestAnimationFrame(() => flash(tries - 1));
+  };
+  requestAnimationFrame(() => flash(60));
+}
 
 const sbResizer = document.getElementById('sbresizer');
 const clampSearchW = (w) => Math.min(Math.max(w, 220), Math.round(window.innerWidth * 0.45));
@@ -4994,13 +5274,15 @@ if (lsGet(LS.searchOpen) === '1') setSearchOpen(true);  // collapsed by default;
 buildFileTree();
 initServerMode();  // probe for `coyodex serve`; on success reveal + wire the file browser and code viewer
 
-buildLegend();
+setLegendMode('diff');  // seed the legend (renderChrome swaps it to coverage on non-diff views when apt)
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'hp' && !HAS_HP) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'usecases' && !HAS_USECASES) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'glossary' && !HAS_GLOSSARY) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'system' && !HAS_SYSTEM) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'tests' && !HAS_TESTS) { b.style.display = 'none'; return; }
   b.addEventListener('click', () => go({ kind: b.dataset.view }));
 });
 navback.addEventListener('click', back);

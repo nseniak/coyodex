@@ -15,7 +15,8 @@ from pathlib import Path
 from typing import cast
 
 from coyodex import grammar
-from coyodex.model import EntityRelation, load_model
+from coyodex.model import EntityRelation, ProjectModel, UseCase, load_model
+from coyodex.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
 from coyodex.viewer import build_graph, gen_viewer
 from coyodex.views import _relation_item, model_to_graph
 
@@ -3684,6 +3685,20 @@ def test_bundle_carries_libs_fold_data() -> None:
     folded_names = [x.get("name", "") for x in b["foldedLibs"]]
     assert "pydantic" in b["mermaidLibs"] or "pydantic" in folded_names
     assert "Libraries (2)" in b["mermaidContext"]   # the fold box label in the Context diagram
+
+
+def test_bundle_meta_carries_built_schema_and_coverage() -> None:
+    # The header meta line states the build date + schema tag, and the graph ships the resolved
+    # coverage map the diagram's coverage overlay (applyCoverageOverlay in viewer.js) reads.
+    m = ProjectModel(title="Tiny", built="2026-01-02 03:04", format="coyodex-map")
+    m.use_cases = [UseCase(id="UC1", name="Login")]
+    m.tests = [GapRow(target="UC1", tested="yes")]
+    b = gen_viewer.build_view_bundle(model_to_graph(m), None, VIEWER_DIR)
+    assert "built 2026-01-02 03:04" in b["meta"]
+    assert "coyodex-map" in b["meta"]
+    assert b["graph"]["coverage"] == {"UC1": "tested"}
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     failed = 0

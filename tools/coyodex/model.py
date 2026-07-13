@@ -125,7 +125,8 @@ class Dep:
 class RunRow:                        # T3
     action: str
     command: str = ""
-    source: str = ""
+    source: str = ""                 # bare `path:line` anchor: where the command is defined (script /
+                                     # Makefile target / config line) — not a markdown link, not prose
 
 
 @dataclass
@@ -176,7 +177,8 @@ class NonEntityType:
     """v2: an explicit plumbing marker — a named type in the domain dirs that is deliberately NOT an
     entity, so the under-harvest coverage check must not count it as unmodelled."""
     name: str
-    source: str | None = None
+    source: str | None = None        # bare `path:line` anchor (or a `path/` dir) to where the type is
+                                     # defined — same shape as entity.source, not a markdown link
     why: str = ""
 
 
@@ -228,7 +230,8 @@ class ObservabilityRow:
 class SecurityRow:
     surface: str
     who: str = ""
-    source: str = ""                 # md link to the auth check — an L2 grounding claim
+    source: str = ""                 # bare `path:line` anchor to the auth check in code — an L2
+                                     # grounding claim (was a markdown link; now a bare anchor)
     risk: str = ""
 
 

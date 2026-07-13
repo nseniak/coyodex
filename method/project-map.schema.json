@@ -475,7 +475,9 @@
           "type": "string"
         },
         "source": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). Where the run command is defined \u2014 the script, Makefile target, or config line the action runs."
         }
       },
       "required": [
@@ -636,7 +638,8 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. Where the deliberately-unmodelled type is defined."
         },
         "why": {
           "type": "string"
@@ -789,7 +792,8 @@
         },
         "source": {
           "type": "string",
-          "description": "markdown link to the auth check in code."
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). The auth check in code (the enforcement site)."
         },
         "risk": {
           "type": "string"

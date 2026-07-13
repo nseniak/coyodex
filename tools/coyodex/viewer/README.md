@@ -114,12 +114,26 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   diagram: each term with its meaning and a link to its code home (the term's bare `where` anchor,
   opened in the editor / on GitHub exactly like a node's source ⌘-click). A term with no single code
   home shows no link.
+- **System** *(when the map records any operational fact)* — the reference tables the diagram doesn't
+  hold, as a stack of small tables: **entry points** (grouped by kind, each linking to its owning
+  component), **run commands**, **deployment**, **observability**, **security**, **config**, the
+  deliberately-**unmodelled types**, and any freeform **extras**. Every `path:line` cell opens in the
+  code viewer, like a glossary source link.
+- **Tests** *(when the map has a test-completeness table)* — the honesty note ("was the suite run, or is
+  every row inferred?") above the risk-ranked gap table (`Target · Tested? · Test(s) · Gap/risk ·
+  Confidence`). Each row's coverage also badges its target on the diagram (see the coverage overlay).
+- **Coverage overlay** *(non-diff views, when the map has a tests table)* — each drawn use-case /
+  component box gets a small **bottom-right** badge for its test coverage (tested ✓ / partly ~ /
+  untested · / untested-critical !), resolved from the Tests table. The corner legend explains the
+  states. It never collides with a diff badge (top-right) or the drill icon (top-left).
 - **Diff overlay** *(on the Subsystems views)* — pass a change-impact report and the viewer lands on
   the Subsystems overview in **diff** mode: each subsystem box is badged with its subtree's change
   (added/modified/deleted/rippled), drilling a subsystem badges its changed components, and the side
   panel lists every change (added elements included, since they have no box to badge). A
   baseline⇄diff toggle switches the badges off/on. *(The overlay used to live on the flat Components
   map; it moved here when that tab was removed.)*
+
+The header meta line states the map's **commit** + date, its **build time**, and the **schema** tag.
 
 ## Tests
 

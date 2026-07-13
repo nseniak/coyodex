@@ -115,7 +115,8 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   `platform` — are drawn at Context by name; in-process code — `framework` / `library` — folds into
   one collapsed "Libraries" box. `Type` stays the free-text human label; when `Kind` is omitted it is
   inferred from `Type`.
-- **T3 How to run/build/test**: `Action | Command | Source`.
+- **T3 How to run/build/test**: `Action | Command | Source` — `Source` is a bare `path:line` anchor to
+  where the command is defined (the script / Makefile target / config line), not a doc pointer.
 
 ### Level 1 (one Level-0 row expanded)
 - **T4 Entry points**: `Kind | Trigger | Code entity | Component`.
@@ -162,6 +163,9 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   modes, change hotspots (git churn), permissions matrix (Role × use case).
 
 ### Test completeness — measure against the MAP, not line %
+**This table is shown in the viewer**: the `coyodex serve` Tests tab renders the honesty note + the
+gap table, and each row's `Tested?` also badges its `target` element (use case / component) on the
+diagram (tested / partial / untested-critical) — so an empty table is a visible gap, not an invisible one.
 **Be honest about whether you ran it.** A gap table built by *reading* tests is **inferred**; only
 running the suite with coverage makes it **verified**. If you don't run it (the suite is slow or
 costs money — e.g. paid integration tests), state that above the table and mark every row inferred;
@@ -457,11 +461,15 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > and a truncated fragment fails `assemble`. An empty slice is an empty array plus a one-line note.
 > **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
 > rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
-> `deps[].where_configured`, `edges[].where`, `entry_points[].source`, **and the group `source`
+> `deps[].where_configured`, `edges[].where`, `entry_points[].source`, `evidence[].file`,
+> `run_commands[].source`, `security[].source`, `non_entity_types[].source`, **and the group `source`
 > fields** (`subsystems[].source` / `subdomains[].source`) are all **bare** repo-root-relative refs
 > (`path/to/file.py:120`; a directory anchor keeps its trailing slash, `path/dir/`; an extensionless
 > ops file carrying a line is fine — `Dockerfile:1`, `Makefile:6-9`) — a bare file or directory ref,
-> never a markdown link.
+> never a markdown link and never two refs joined by a separator (put a run command's doc pointer in
+> its `command`/prose, not its `source`). The operational free-prose fields
+> (`deployment[].config_source`, `observability[].where_emitted`/`where_viewed`, `tests[].tests`) are
+> the deliberate exception — they stay prose, not anchors.
 > **Field discipline** (what `assemble` / `validate` reject — get it right at the source): (a) every
 > **required** field is present and non-null; for an **optional** field with no value **omit the key**
 > entirely — do NOT emit `null` (rejected on defaulted-string fields) and do NOT emit a placeholder like
