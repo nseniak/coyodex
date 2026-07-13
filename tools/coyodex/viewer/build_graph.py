@@ -75,6 +75,21 @@ class HappyStep:
     why: str = ""          # optional `why:` line — the prerequisite that places this step in the walk
 
 
+class TestTarget(TypedDict):
+    id: str
+    name: str
+    node: str | None       # the id when it is a drawn diagram node (clickable to locate), else None
+
+
+class TestRowView(TypedDict):
+    targets: list[TestTarget]
+    label: str
+    tested: str
+    tests: list[dict[str, str]]   # exercising suites: {file (bare anchor), why}
+    gap: str
+    confidence: str
+
+
 class GraphDict(TypedDict):
     commit: str | None
     committed: str | None  # commit date of the pin (None for older maps without the field)
@@ -99,8 +114,8 @@ class GraphDict(TypedDict):
     security: list[dict[str, str]]          # {surface, who, source, risk}
     config: list[dict[str, str]]            # {key, purpose, default, per_env}
     tests_note: str                         # the "Tests run for this table?" honesty line
-    tests: list[dict[str, str]]             # {target, tested, tests, gap, confidence}
-    coverage: dict[str, str]                # resolved node-id → coverage state (tested/partial/untested)
+    # targets resolved server-side (name + node-locatability) so the Tests tab needs no id parsing.
+    tests: list[TestRowView]
     extras: list[dict[str, str]]            # freeform authored sections: {heading, body}
 
 

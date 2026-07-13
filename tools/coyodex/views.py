@@ -13,10 +13,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import asdict
 
 from coyodex import grammar
-from coyodex.model import Component, Dep, Entity, EvidenceItem, Group, ProjectModel, UseCase
+from coyodex.model import Component, Dep, Entity, EvidenceItem, Group, ProjectModel, TestRow, UseCase, all_elements
 from coyodex.validate_analysis import strip_anchor
 from coyodex.viewer.build_graph import (
     LINK,
@@ -24,6 +25,7 @@ from coyodex.viewer.build_graph import (
     HappyStep as GraphHappyStep,
     GraphDict,
     Node,
+    TestTarget,
     _ensure_default_subsystem,
     _line_of,
     _role_kind,
@@ -103,8 +105,36 @@ def _component_files(c: Component) -> list[str]:
 
 
 def _evidence_str(items: list[EvidenceItem]) -> str:
-    """`evidence` as a table cell: one clickable anchor + its why per citation, `·`-separated."""
-    return " · ".join(f"{_anchor_link(ev.file)} — {ev.why}" for ev in items)
+    """`evidence` as a table cell: one clickable anchor + its why per citation, `·`-separated.
+    A blank `why` (allowed for a test suite whose dir name speaks for itself) drops the ` — `."""
+    return " · ".join(f"{_anchor_link(ev.file)} — {ev.why}" if ev.why.strip() else _anchor_link(ev.file)
+                      for ev in items)
+
+
+def _resolve_targets(row: TestRow, elems: Mapping[str, object], nodes: Mapping[str, object]) -> list[TestTarget]:
+    """A test row's `targets` ids → `{id, name, node}`, resolved server-side (no prose parsing). `name`
+    is the defined element's name (falls back to the id when unresolved); `node` is the id when it is a
+    drawn diagram node — the viewer makes that clickable to locate the element — else None."""
+    out: list[TestTarget] = []
+    for tid in row.targets:
+        out.append({"id": tid, "name": _element_label(elems.get(tid), tid), "node": tid if tid in nodes else None})
+    return out
+
+
+def _element_label(el: object, fallback: str) -> str:
+    """A defined element's human name for display — `name` (most elements), `term` (glossary),
+    or `title` (a happy-path step) — falling back to the id when the element is unknown."""
+    return str(getattr(el, "name", None) or getattr(el, "term", None)
+               or getattr(el, "title", None) or fallback)
+
+
+def _targets_label(row: TestRow, elems: dict[str, object]) -> str:
+    """A test row's targets as a Markdown-view cell: the resolved element names, prefixed by the
+    row's optional grouping `label`."""
+    joined = ", ".join(_element_label(elems.get(t), t) for t in row.targets)
+    if row.label and joined:
+        return f"{row.label} ({joined})"
+    return row.label or joined
 
 
 def _relation_item(r) -> str:
@@ -322,8 +352,10 @@ def model_to_markdown(m: ProjectModel) -> str:
         if m.tests_note:
             body += [f"> **Tests run for this table?** {m.tests_note}", ""]
         if m.tests:
+            elems = all_elements(m)
             body += _table(["Target", "Tested?", "Test(s)", "Gap / risk", "Confidence"],
-                           [[t.target, t.tested, t.tests, t.gap, t.confidence] for t in m.tests])
+                           [[_targets_label(t, elems), t.tested, _evidence_str(t.tests), t.gap, t.confidence]
+                            for t in m.tests])
         section("Test completeness — gaps against the map", body)
     for ex in m.extras:
         section(ex.heading, [ex.body] if ex.body else [])
@@ -349,42 +381,6 @@ def _node(el, kind: str, name: str, file: str | None, fields: dict[str, str],
     clean = {k: v for k, v in fields.items() if v}
     return Node(id=el.id, kind=kind, name=name or el.id, file=file, line=_line_of(file),
                 fields=clean, parent=parent)
-
-
-_TARGET_ID = re.compile(r"\b(UC|HP|SD|C|D|E|S)\d+\b")  # a leading element id inside a test `target`
-_CRITICAL = re.compile(r"\b(money|payment|auth|login|token|secret|credential|security|"
-                       r"data[- ]?loss|irreversible|delete|destroy|privacy)\b", re.I)
-
-
-def _coverage_state(row) -> str:
-    """A test row's `tested` cell → a badge state. `no`/blank escalates to `untested-critical`
-    when the target or its gap names a critical concern (money/auth/data-loss/…), matching the
-    method's 'lead with untested critical paths' rule."""
-    t = row.tested.strip().lower()
-    if t.startswith("y"):
-        return "tested"
-    if "partial" in t:
-        return "partial"
-    return "untested-critical" if _CRITICAL.search(f"{row.target} {row.gap}") else "untested"
-
-
-def _coverage_map(tests, nodes: dict[str, Node]) -> dict[str, str]:
-    """Resolve each `tests[].target` (free text like "UC1 login" or a bare element name) to a node
-    id and its coverage state, SERVER-SIDE where names are authoritative. An id token wins; else a
-    case-insensitive name match. Unresolvable targets are simply dropped (no guessed badge)."""
-    by_name = {n.name.strip().lower(): nid for nid, n in nodes.items()}
-    out: dict[str, str] = {}
-    for row in tests:
-        target = row.target.strip()
-        hit = _TARGET_ID.search(target)
-        nid = hit.group(0) if (hit and hit.group(0) in nodes) else None
-        if nid is None:
-            # strip a leading id token then match the remaining label against a node name
-            label = _TARGET_ID.sub("", target).strip(" —-:·").lower()
-            nid = by_name.get(label) or by_name.get(target.lower())
-        if nid:
-            out.setdefault(nid, _coverage_state(row))  # first row for a node wins
-    return out
 
 
 def model_to_graph(m: ProjectModel) -> GraphDict:
@@ -549,7 +545,15 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         "security": [asdict(r) for r in m.security],
         "config": [asdict(r) for r in m.config],
         "tests_note": m.tests_note,
-        "tests": [asdict(r) for r in m.tests],
-        "coverage": _coverage_map(m.tests, nodes),
+        # Rows carry SERVER-RESOLVED targets ({id, name, node}) so the Tests tab renders element
+        # names + locate-links with no client-side id parsing; `tests` cites suites as {file, why}.
+        "tests": [{
+            "targets": _resolve_targets(r, all_elements(m), nodes),
+            "label": r.label,
+            "tested": r.tested,
+            "tests": [asdict(ev) for ev in r.tests],
+            "gap": r.gap,
+            "confidence": r.confidence,
+        } for r in m.tests],
         "extras": [asdict(x) for x in m.extras],
     }

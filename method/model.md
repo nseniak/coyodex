@@ -85,7 +85,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "config":         [ { "key", "purpose", "default", "per_env" } ],
 
   "tests_note":  "<the 'Tests run for this table?' honesty line>",
-  "tests":       [ { "target", "tested", "tests", "gap", "confidence" } ],
+  "tests":       [ { "targets": ["Cn", …], "label", "tested", "tests": [ { "file": "<path:line|path/>", "why" }, … ], "gap", "confidence" } ],
   "extras":      [ { "heading", "body": "<verbatim markdown>" } ] }
 ```
 
@@ -153,10 +153,11 @@ Semantics, stated on the fields:
   directory ref `path/`, and `glossary[].source` is additionally nullable (a pure product-level term
   with no single code home). Group `source` fields (`subsystems[].source` / `subdomains[].source`)
   use the same bare form — a file `path:line` or a directory ref `path/` — exactly like
-  `components[].source`. `coyodex validate` rejects any anchor written some other way. **The
-  operational tables' free-prose location fields are deliberately NOT anchors** — `deployment[].config_source`,
-  `observability[].where_emitted` / `where_viewed`, and `tests[].tests` describe topology / test sets
-  in prose, so they are neither constrained nor turned into code links by the viewer.
+  `components[].source`. `coyodex validate` rejects any anchor written some other way. `tests[].tests[].file` is the same
+  bare form (a `path:line` or a `path/` test dir) and IS turned into a code link. **The remaining
+  operational-table location fields are deliberately NOT anchors** — `deployment[].config_source` and
+  `observability[].where_emitted` / `where_viewed` describe topology in prose, so they are neither
+  constrained nor turned into code links by the viewer.
 - **`source` is the single canonical name for "where an element is defined"** — used uniformly across
   `components[].source`, `subsystems[].source` / `subdomains[].source`, `entities[].source`,
   `non_entity_types[].source`, `glossary[].source`, `entry_points[].source`, and `security[].source`.

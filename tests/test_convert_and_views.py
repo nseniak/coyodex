@@ -111,9 +111,9 @@ def test_golden_graph_carries_reference_collections_and_metadata():
     assert g["tests_note"] == m.tests_note
 
 
-def test_golden_graph_attaches_entry_points_and_resolves_coverage():
+def test_golden_graph_attaches_entry_points_and_resolves_test_targets():
     """Entry points that name a component surface on that component's node (the 'Triggered by' list),
-    and each tests[] row resolves to a real node id + a coverage state (the diagram badge source)."""
+    and each tests[] row resolves its target ids to `{id, name, node}` for the Tests tab."""
     m = make_fixture_model()
     g = model_to_graph(m)
     # every node carrying entry points is a component, and each entry point has the expected shape
@@ -134,11 +134,16 @@ def test_golden_graph_attaches_entry_points_and_resolves_coverage():
         if comp:
             assert e["index"] == counts.get(comp, 0)
             counts[comp] = counts.get(comp, 0) + 1
-    # coverage resolves to real nodes with a known state
-    assert g["coverage"], "the fixture's tests table must resolve to at least one node"
-    for nid, state in g["coverage"].items():
-        assert nid in g["nodes"]
-        assert state in {"tested", "partial", "untested", "untested-critical"}
+    # each tests[] row carries its targets resolved to real nodes (or id-as-name when unresolved),
+    # and cites suites as {file, why} bare anchors
+    assert g["tests"], "the fixture has a test-completeness table"
+    for row in g["tests"]:
+        assert row["targets"], "a tests row names at least one target element"
+        for tgt in row["targets"]:
+            assert set(tgt) == {"id", "name", "node"}
+            assert tgt["node"] is None or tgt["node"] in g["nodes"]
+        for ev in row["tests"]:
+            assert set(ev) == {"file", "why"}
 
 
 def test_classify_activation_reads_kind_signatures():
@@ -175,17 +180,23 @@ def test_entry_point_activation_authored_wins_else_derived():
     assert [e["activation"] for e in comp_eps] == acts
 
 
-def test_coverage_resolves_id_token_and_escalates_critical():
-    """`tests[].target` maps to a node by a leading id token (or a name fallback); an untested row whose
-    target/gap names a critical concern (auth/money/…) escalates to `untested-critical`."""
-    from coyodex.model import TestRow, UseCase
+def test_tests_rows_resolve_targets_to_names_and_nodes():
+    """Each tests[] row carries its `targets` resolved SERVER-SIDE to `{id, name, node}`: a defined
+    element gets its name + a node id (the Tests tab makes it clickable to locate); an undefined id
+    keeps its id as the name and `node=None` — no client-side id parsing, no guessed link."""
+    from coyodex.model import EvidenceItem, TestRow, UseCase
     m = ProjectModel(title="Tiny")
     m.use_cases = [UseCase(id="UC1", name="Login"), UseCase(id="UC2", name="Browse")]
-    m.tests = [TestRow(target="UC1 login", tested="no", gap="auth path unchecked"),
-               TestRow(target="Browse", tested="yes")]  # name fallback (no id token)
+    m.tests = [TestRow(targets=["UC1", "UC9"], label="auth", tested="no",
+                       tests=[EvidenceItem(file="tests/unit/", why="login suite")]),
+               TestRow(targets=["UC2"], tested="yes")]
     g = model_to_graph(m)
-    assert g["coverage"]["UC1"] == "untested-critical"
-    assert g["coverage"]["UC2"] == "tested"
+    r0 = g["tests"][0]
+    assert r0["label"] == "auth" and r0["tested"] == "no"
+    assert r0["targets"][0] == {"id": "UC1", "name": "Login", "node": "UC1"}
+    assert r0["targets"][1] == {"id": "UC9", "name": "UC9", "node": None}  # undefined → id as name, no node
+    assert r0["tests"] == [{"file": "tests/unit/", "why": "login suite"}]  # bare anchor → clickable code link
+    assert g["tests"][1]["targets"][0] == {"id": "UC2", "name": "Browse", "node": "UC2"}
 
 
 def test_glossary_where_renders_as_link_and_reaches_graph():

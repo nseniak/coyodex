@@ -121,11 +121,7 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   code viewer, like a glossary source link.
 - **Tests** *(when the map has a test-completeness table)* — the honesty note ("was the suite run, or is
   every row inferred?") above the risk-ranked gap table (`Target · Tested? · Test(s) · Gap/risk ·
-  Confidence`). Each row's coverage also badges its target on the diagram (see the coverage overlay).
-- **Coverage overlay** *(non-diff views, when the map has a tests table)* — each drawn use-case /
-  component box gets a small **bottom-right** badge for its test coverage (tested ✓ / partly ~ /
-  untested · / untested-critical !), resolved from the Tests table. The corner legend explains the
-  states. It never collides with a diff badge (top-right) or the drill icon (top-left).
+  Confidence`).
 - **Diff overlay** *(on the Subsystems views)* — pass a change-impact report and the viewer lands on
   the Subsystems overview in **diff** mode: each subsystem box is badged with its subtree's change
   (added/modified/deleted/rippled), drilling a subsystem badges its changed components, and the side

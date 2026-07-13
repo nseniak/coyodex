@@ -246,9 +246,13 @@ class ConfigRow:
 
 @dataclass
 class TestRow:
-    target: str
-    tested: str = ""
-    tests: str = ""
+    """One row of the test-completeness gap table. `targets` names the element ids this row assesses
+    (explicit, not parsed out of prose), `tests` cites the exercising suites/files as `{file, why}`
+    evidence (bare anchors, so the viewer renders them as clickable code links)."""
+    targets: list[str]                                        # element ids assessed, e.g. ["C48", "C49"]
+    tested: str = ""                                          # yes / partial / no
+    label: str = ""                                           # optional display text (grouping / journey name)
+    tests: list[EvidenceItem] = field(default_factory=list)   # exercising suites: {file: bare anchor, why: what it covers}
     gap: str = ""
     confidence: str = ""
 

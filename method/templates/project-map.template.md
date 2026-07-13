@@ -271,7 +271,12 @@ SOURCE: [file](path/sub:1)
 
 | Target | Tested? | Test(s) | Gap / risk | Confidence |
 |---|---|---|---|---|
-| UC1 <target> | yes / partial / no | [test](path:1) | <gap or risk> | inferred / verified |
+| <label> (<Element name>) | yes / partial / no | [dir/](backend/tests/unit/) — <what it covers> | <gap or risk> | inferred / verified |
+
+<!-- In the JSON source a row is { "targets": ["UC1","C4"], "label", "tested", "tests": [ {file, why} ], "gap", "confidence" }:
+     `targets` names element IDs explicitly (the viewer resolves them to names + locate-links, no prose parsing);
+     each `tests[].file` is a bare anchor (a `path:line` or a `path/` test dir), rendered as a clickable code link. -->
+
 
 ---
 

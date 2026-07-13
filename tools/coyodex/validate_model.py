@@ -197,6 +197,8 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
             refs.update(grammar.ID_TOKEN.findall(fld.type))    # entity-typed field, e.g. `auth:E7`
     for r in m.roles:
         refs.update(grammar.ID_TOKEN.findall(r.drives))        # `drives` holds the UC ids a role drives
+    for tr in m.tests:
+        refs.update(tr.targets)                                # test-completeness rows name element ids
     for s in _strings(m):                                      # deliberate prose cross-refs `[[ID]]`
         for inner in _BRACKET_REF.findall(s):
             tok = inner.strip()
@@ -455,14 +457,19 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
     for group in (*m.subsystems, *m.subdomains):
         bad_anchor(f"{group.id} source", group.source)
     # Operational-table source fields that the viewer turns into code links — same bare-anchor rule as
-    # every other source (the deployment/observability/tests location fields stay free prose, so they
-    # are NOT checked here: they describe topology, not a single line, and the viewer renders them as text).
+    # every other source (the deployment/observability location fields stay free prose, so they are NOT
+    # checked here: they describe topology, not a single line, and the viewer renders them as text).
     for i, r in enumerate(m.run_commands):
         bad_file(f"run_commands[{i}].source", r.source)
     for i, s in enumerate(m.security):
         bad_file(f"security[{i}].source", s.source)
     for t in m.non_entity_types:
         bad_anchor(f"non_entity_types '{t.name}' source", t.source)
+    # Test-completeness rows cite exercising suites as {file, why} — `file` is a bare anchor (a
+    # `path:line` OR a `path/` test dir), so the viewer renders it as a clickable code link.
+    for i, tr in enumerate(m.tests):
+        for j, ev in enumerate(tr.tests):
+            bad_anchor(f"tests[{i}].tests[{j}].file", ev.file)
     return problems
 
 

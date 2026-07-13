@@ -3687,16 +3687,16 @@ def test_bundle_carries_libs_fold_data() -> None:
     assert "Libraries (2)" in b["mermaidContext"]   # the fold box label in the Context diagram
 
 
-def test_bundle_meta_carries_built_schema_and_coverage() -> None:
-    # The header meta line states the build date + schema tag, and the graph ships the resolved
-    # coverage map the diagram's coverage overlay (applyCoverageOverlay in viewer.js) reads.
+def test_bundle_meta_carries_built_schema_and_tests() -> None:
+    # The header meta line states the build date + schema tag, and the graph ships each tests[] row
+    # with its targets resolved server-side (the Tests tab renders names + locate-links, no parsing).
     m = ProjectModel(title="Tiny", built="2026-01-02 03:04", format="coyodex-map")
     m.use_cases = [UseCase(id="UC1", name="Login")]
-    m.tests = [GapRow(target="UC1", tested="yes")]
+    m.tests = [GapRow(targets=["UC1"], tested="yes")]
     b = gen_viewer.build_view_bundle(model_to_graph(m), None, VIEWER_DIR)
     assert "built 2026-01-02 03:04" in b["meta"]
     assert "coyodex-map" in b["meta"]
-    assert b["graph"]["coverage"] == {"UC1": "tested"}
+    assert b["graph"]["tests"][0]["targets"][0] == {"id": "UC1", "name": "Login", "node": "UC1"}
 
 
 if __name__ == "__main__":

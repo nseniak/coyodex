@@ -2470,127 +2470,148 @@
       "kind": "Process boot",
       "trigger": "`uvicorn.run(create_app(settings))`",
       "source": "backend/src/mcpolis/entrypoints/app.py:2246",
-      "component": "C1"
+      "component": "C1",
+      "activation": ""
     },
     {
       "kind": "Mounted ASGI",
       "trigger": "`/mcp` — gateway MCP (bearer)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2068",
-      "component": "C2"
+      "component": "C2",
+      "activation": ""
     },
     {
       "kind": "Mounted ASGI",
       "trigger": "`/admin-mcp/{slug}` — admin MCP (per-org admin)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2100",
-      "component": "C3"
+      "component": "C3",
+      "activation": ""
     },
     {
       "kind": "Mounted ASGI",
       "trigger": "`/admin-mcp/system` — superadmin MCP (allowlist)",
       "source": "backend/src/mcpolis/entrypoints/app.py:2093",
-      "component": "C4"
+      "component": "C4",
+      "activation": ""
     },
     {
       "kind": "Mounted ASGI",
       "trigger": "`/dev/mcp-demo` — demo MCP",
       "source": "backend/src/mcpolis/entrypoints/app.py:2114",
-      "component": "C20"
+      "component": "C20",
+      "activation": ""
     },
     {
       "kind": "MCP method",
       "trigger": "list/call tools, list/read resources, prompts",
       "source": "backend/src/mcpolis/entrypoints/controllers/gateway_controller.py:399",
-      "component": "C5"
+      "component": "C5",
+      "activation": ""
     },
     {
       "kind": "MCP tool surface",
       "trigger": "~40 admin tools",
       "source": "backend/src/mcpolis/entrypoints/controllers/admin_mcp_controller.py:231",
-      "component": "C6"
+      "component": "C6",
+      "activation": ""
     },
     {
       "kind": "HTTP route group",
       "trigger": "Dashboard REST `/api/admin/*`, `/api/user/*`, `/api/config/*`, `/api/events`",
       "source": "backend/src/mcpolis/entrypoints/routes/dashboard_api.py:73",
-      "component": "C14"
+      "component": "C14",
+      "activation": ""
     },
     {
       "kind": "HTTP route group",
       "trigger": "Dashboard auth `/api/auth/*` (session cookie)",
       "source": "backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:217",
-      "component": "C15"
+      "component": "C15",
+      "activation": ""
     },
     {
       "kind": "HTTP route group",
       "trigger": "Org routes `/api/orgs/*` (+ `/{slug}/public`)",
       "source": "backend/src/mcpolis/entrypoints/routes/org_routes.py:82",
-      "component": "C17"
+      "component": "C17",
+      "activation": ""
     },
     {
       "kind": "HTTP route",
       "trigger": "Gateway Google OAuth callback",
       "source": "backend/src/mcpolis/entrypoints/routes/google_callback.py:56",
-      "component": "C16"
+      "component": "C16",
+      "activation": ""
     },
     {
       "kind": "HTTP route",
       "trigger": "Upstream OAuth callback",
       "source": "backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:182",
-      "component": "C18"
+      "component": "C18",
+      "activation": ""
     },
     {
       "kind": "HTTP route",
       "trigger": "Liveness `/health` / `/healthz` (503 draining)",
       "source": "backend/src/mcpolis/entrypoints/app.py:1727",
-      "component": "C9"
+      "component": "C9",
+      "activation": ""
     },
     {
       "kind": "Background loop",
       "trigger": "Connect all org runtimes + seed demo at boot",
       "source": "backend/src/mcpolis/entrypoints/app.py:1129",
-      "component": "C1"
+      "component": "C1",
+      "activation": ""
     },
     {
       "kind": "Background loop",
       "trigger": "Periodic upstream OAuth token refresh",
       "source": "backend/src/mcpolis/entrypoints/app.py:1284",
-      "component": "C28"
+      "component": "C28",
+      "activation": ""
     },
     {
       "kind": "Background loop",
       "trigger": "Hourly OAuth liveness probe",
       "source": "backend/src/mcpolis/entrypoints/app.py:1379",
-      "component": "C29"
+      "component": "C29",
+      "activation": ""
     },
     {
       "kind": "Background loop",
       "trigger": "Hourly re-auth health-email sweep",
       "source": "backend/src/mcpolis/entrypoints/app.py:1342",
-      "component": "C30"
+      "component": "C30",
+      "activation": ""
     },
     {
       "kind": "Background loop",
       "trigger": "Per-org policy-event listener",
       "source": "backend/src/mcpolis/entrypoints/app.py:1209",
-      "component": "C35"
+      "component": "C35",
+      "activation": ""
     },
     {
       "kind": "Boot task",
       "trigger": "E2B orphan-sandbox reconcile before traffic",
       "source": "backend/src/mcpolis/entrypoints/app.py:807",
-      "component": "C69"
+      "component": "C69",
+      "activation": ""
     },
     {
       "kind": "Signal",
       "trigger": "SIGTERM → graceful drain",
       "source": "backend/src/mcpolis/entrypoints/app.py:1517",
-      "component": "C9"
+      "component": "C9",
+      "activation": ""
     },
     {
       "kind": "SPA route",
       "trigger": "`/`, `/docs/:slug`, `/orgs/:slug/admin/*`, `/superadmin/*`",
       "source": "frontend/src/App.tsx:136",
-      "component": "C73"
+      "component": "C73",
+      "activation": ""
     }
   ],
   "subdomains": [
@@ -7044,58 +7065,127 @@
   "tests_note": "No — read-only against the test layout and CLAUDE.md; all rows",
   "tests": [
     {
-      "target": "UC11 service-token auth + org pin",
+      "targets": [
+        "UC11"
+      ],
       "tested": "yes",
-      "tests": "[tests/unit](backend/tests/unit/) (service_token / pin suites)",
+      "label": "service-token auth + org pin",
+      "tests": [
+        {
+          "file": "backend/tests/unit/",
+          "why": "service_token / pin suites"
+        }
+      ],
       "gap": "role-surface + fail-closed pinning are pinned by unit tests",
       "confidence": "inferred"
     },
     {
-      "target": "UC7/UC12 gateway tool call + policy",
+      "targets": [
+        "UC7",
+        "UC12"
+      ],
       "tested": "yes",
-      "tests": "[tests/unit](backend/tests/unit/) (policy_engine, tool_router)",
+      "label": "gateway tool call + policy",
+      "tests": [
+        {
+          "file": "backend/tests/unit/",
+          "why": "policy_engine, tool_router"
+        }
+      ],
       "gap": "per-org `is_admin` isolation gate has a named test",
       "confidence": "inferred"
     },
     {
-      "target": "UC25 org-deletion cascade",
+      "targets": [
+        "UC25"
+      ],
       "tested": "yes",
-      "tests": "[tests/unit](backend/tests/unit/) (org_service)",
+      "label": "org-deletion cascade",
+      "tests": [
+        {
+          "file": "backend/tests/unit/",
+          "why": "org_service"
+        }
+      ],
       "gap": "drift guard asserts every org-scoped repo is purged",
       "confidence": "inferred"
     },
     {
-      "target": "UC3/UC4 stdio sandbox (E2B)",
+      "targets": [
+        "UC3",
+        "UC4"
+      ],
       "tested": "partial",
-      "tests": "[tests/integration](backend/tests/integration/) (paid, gated)",
+      "label": "stdio sandbox (E2B)",
+      "tests": [
+        {
+          "file": "backend/tests/integration/",
+          "why": "paid, gated"
+        }
+      ],
       "gap": "real-SDK path only runs when `E2B_API_KEY` is set",
       "confidence": "inferred"
     },
     {
-      "target": "UC8 per-user OAuth refresh/liveness",
+      "targets": [
+        "UC8"
+      ],
       "tested": "partial",
-      "tests": "[tests/unit](backend/tests/unit/) (oauth_refresh)",
+      "label": "per-user OAuth refresh/liveness",
+      "tests": [
+        {
+          "file": "backend/tests/unit/",
+          "why": "oauth_refresh"
+        }
+      ],
       "gap": "stall/reattach edge cases are flaky per project notes",
       "confidence": "inferred"
     },
     {
-      "target": "Full-stack journeys (UC1, UC2, UC17)",
+      "targets": [
+        "UC1",
+        "UC2",
+        "UC17"
+      ],
       "tested": "yes",
-      "tests": "[tests/e2e](tests/e2e/) (Playwright)",
+      "label": "Full-stack journeys",
+      "tests": [
+        {
+          "file": "tests/e2e/",
+          "why": "Playwright"
+        }
+      ],
       "gap": "covered end-to-end via the dashboard",
       "confidence": "inferred"
     },
     {
-      "target": "C45 SSRF deny-list",
+      "targets": [
+        "C45"
+      ],
       "tested": "yes",
-      "tests": "[tests/unit](backend/tests/unit/) (url_safety)",
+      "label": "SSRF deny-list",
+      "tests": [
+        {
+          "file": "backend/tests/unit/",
+          "why": "url_safety"
+        }
+      ],
       "gap": "DNS-resolved IP checks present",
       "confidence": "inferred"
     },
     {
-      "target": "C48/C49 field encryption at rest",
+      "targets": [
+        "C48",
+        "C49"
+      ],
       "tested": "partial",
-      "tests": "backend/tests/unit/",
+      "label": "field encryption at rest",
+      "tests": [
+        {
+          "file": "backend/tests/unit/",
+          "why": "field-crypto suite"
+        }
+      ],
       "gap": "key-rotation invalidation path under-exercised",
       "confidence": "inferred"
     }

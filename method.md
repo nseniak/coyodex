@@ -174,7 +174,9 @@ inventory (use cases, T4 entry points, failure modes, invariants, state
 transitions, critical-path branches) and ask "is there a test that exercises it?" —
 gaps are the deliverable.
 - Map tests → targets as `test — covers → element`; gap = element with no incoming
-  "covers" edge.
+  "covers" edge. Each row names its `targets` as explicit element IDs (e.g. `["UC1","C4"]`, not
+  prose) and cites the exercising suites in `tests` as `{file, why}` — `file` a bare `path:line`
+  or `path/` anchor the viewer turns into a code link.
 - Run the suite with a coverage tool for real line+branch data — running beats reading.
 - Cross them: coverage says which lines ran, the map says which matter; flag critical
   targets (money/auth/data-loss/irreversible) with low branch coverage first.
@@ -472,8 +474,9 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > (`path/to/file.py:120`; a directory anchor keeps its trailing slash, `path/dir/`; an extensionless
 > ops file carrying a line is fine — `Dockerfile:1`, `Makefile:6-9`) — a bare file or directory ref,
 > never a markdown link and never two refs joined by a separator (put a run command's doc pointer in
-> its `command`/prose, not its `source`). The operational free-prose fields
-> (`deployment[].config_source`, `observability[].where_emitted`/`where_viewed`, `tests[].tests`) are
+> its `command`/prose, not its `source`). `tests[].tests[].file` is also a bare anchor (a `path:line`
+> or a `path/` test dir), turned into a code link. The operational free-prose fields
+> (`deployment[].config_source`, `observability[].where_emitted`/`where_viewed`) are
 > the deliberate exception — they stay prose, not anchors.
 > **Field discipline** (what `assemble` / `validate` reject — get it right at the source): (a) every
 > **required** field is present and non-null; for an **optional** field with no value **omit the key**

@@ -837,14 +837,23 @@
     "TestRow": {
       "type": "object",
       "properties": {
-        "target": {
-          "type": "string"
+        "targets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "tested": {
           "type": "string"
         },
-        "tests": {
+        "label": {
           "type": "string"
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EvidenceItem"
+          }
         },
         "gap": {
           "type": "string"
@@ -854,7 +863,7 @@
         }
       },
       "required": [
-        "target"
+        "targets"
       ],
       "additionalProperties": false
     },

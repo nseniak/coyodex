@@ -3236,6 +3236,17 @@ function bindSysIndex() {
   spy();
 }
 
+// A test row's Target cell: each target element by NAME (the server already resolved id -> name +
+// node, so there is NO client-side id parsing). A target that is a drawn node links out to locate it
+// in its home view; an unresolved one is plain text. The optional grouping `label` prefixes them.
+function testTargets(t) {
+  const refs = (t.targets || []).map((g) => g.node
+    ? `<a href="#" class="tstref" data-id="${esc(g.node)}">${esc(g.name)}</a>`
+    : `<span>${esc(g.name)}</span>`).join(', ');
+  const label = (t.label || '').trim();
+  if (label && refs) return `${esc(label)} <span class="muted">(${refs})</span>`;
+  return label ? esc(label) : refs;
+}
 // The Tests tab: the test-completeness gap table (tests[]) led by the honesty note (tests_note — was the
 // suite actually run, or is every row inferred?). Rendered like the System/Glossary tabs.
 function renderTests() {
@@ -3246,7 +3257,11 @@ function renderTests() {
     const low = tested.toLowerCase();
     const cls = low.startsWith('y') ? 'tested' : (low.includes('partial') ? 'partial' : 'untested');
     const pill = tested ? `<span class="tst-pill tst-${cls}">${esc(tested)}</span>` : '';
-    return `<tr><td>${mdInline(t.target || '')}</td><td>${pill}</td><td>${mdInline(t.tests || '')}</td>`
+    // Each test suite/file is a bare anchor rendered by the shared srcCell -> a clickable code link,
+    // plus its optional "what it covers" note. Same source-link contract as Glossary / System.
+    const testsCell = (t.tests || []).map((ev) =>
+      srcCell(ev.file || '') + (ev.why ? ' — ' + esc(ev.why) : '')).join(' · ');
+    return `<tr><td>${testTargets(t)}</td><td>${pill}</td><td>${testsCell}</td>`
       + `<td>${mdInline(t.gap || '')}</td><td>${mdInline(t.confidence || '')}</td></tr>`;
   }).join('');
   const table = (GRAPH.tests || []).length
@@ -3256,6 +3271,9 @@ function renderTests() {
     : '<p class="empty">No test-completeness rows recorded.</p>';
   diagram.innerHTML = `<div class="usecases-wrap system-wrap">${noteHtml}${table}</div>`;
   wireSrcLinks(diagram);
+  diagram.querySelectorAll('a.tstref').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); selectFromTree(a.getAttribute('data-id'));
+  }));
 }
 
 // `sArg` renders a specific state (defaults to the current history entry); `transient` renders it purely
