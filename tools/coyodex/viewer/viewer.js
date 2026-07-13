@@ -1930,14 +1930,61 @@ function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '');
 }
-function captureViewState() {  // stash the current pan/zoom + selection on the entry we're about to leave
-  if (hi < 0 || !history[hi]) return;
+// The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
+// scroll offset, or the file browser showing. Restored on back/forward so returning to a point reopens
+// the exact file (where you were) or the browser — not merely whatever the selection would imply.
+function snapContent() {
+  if (!SERVED) return null;
+  if (treeBrowsing) return { browse: true };
+  if (cvPath) return { file: cvPath, top: cvscroll ? cvscroll.scrollTop : 0 };
+  return null;
+}
+// A transition sometimes needs the LEAVING pane recorded as something other than "what's showing right
+// now" — e.g. "the browser", captured before the browser is torn down to reveal the opened file. Set
+// this and the next captureViewState uses it once.
+let pendingLeaveContent;
+// Apply a remembered pane. A file already fully shown just gets its scroll restored (no refetch);
+// otherwise the file loads (renderCode applies cvPendingTop once its table exists) or the browser opens.
+let cvPendingTop = null;
+function applyContent(c) {
+  if (!SERVED || !c) return;
+  if (c.browse) { setBrowsing(true); return; }
+  if (c.file) {
+    suppressBrowse = true; setBrowsing(false);
+    if (c.file === cvPath && cvTable) { cvscroll.scrollTop = c.top || 0; return; }
+    cvPendingTop = { file: c.file, top: c.top || 0 };
+    loadCode(c.file, null);
+  }
+}
+// Consume a pending scroll offset once the matching file's table has been (re)built by renderCode/-Diff.
+function applyPendingScroll(path) {
+  if (cvPendingTop && path && cvPendingTop.file === path && cvscroll) {
+    cvscroll.scrollTop = cvPendingTop.top;
+    cvPendingTop = null;
+  }
+}
+function captureViewState() {  // stash the leaving entry's pan/zoom + selection + right-pane content
+  if (hi < 0 || !history[hi]) { pendingLeaveContent = undefined; return; }
   if (mainPz) {
     const vp = { zoom: mainPz.getZoom(), pan: mainPz.getPan() };
     history[hi].vp = vp;
     vpByView[stateKey(history[hi])] = vp;  // remember this diagram's view so any later return reuses it
   }
   history[hi].sel = mainScene ? mainScene.selectedKey : null;
+  history[hi].content = (pendingLeaveContent !== undefined) ? pendingLeaveContent : snapContent();
+  pendingLeaveContent = undefined;
+}
+// Record a new history point that keeps the CURRENT diagram view + selection and changes only the right
+// pane (a file switch in the menu, or opening a file from the browser). Back/forward step through these
+// like any other point; the caller has already applied `content` to the pane.
+function pushContentPoint(content) {
+  if (hi < 0) return;
+  captureViewState();
+  const c = history[hi];
+  history = history.slice(0, hi + 1);
+  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd, sel: c.sel, content });
+  hi = history.length - 1;
+  renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
 function go(state) {
   if (hi >= 0 && stateKey(history[hi]) === stateKey(state)) return;  // already here
@@ -2026,9 +2073,18 @@ function selectLeftContainer(fromF) {
 }
 // Decide whether a navigation is a container drill and, if so, animate it; otherwise render straight.
 function driveTransition(from) {
+  const to = history[hi];
+  // A content-only step (same diagram view — a file switch, or a browser open/close): leave the diagram
+  // untouched and just restore the right pane (+ any selection change) and refresh the chrome.
+  if (from && to && mainScene && stateKey(from) === stateKey(to)) {
+    if (to.sel && mainScene.selectors[to.sel]) mainScene.selectors[to.sel]();
+    else if (!to.sel) resetScene(mainScene);
+    applyContent(to.content);
+    renderChrome(to);
+    return;
+  }
   const my = ++navSeq;
   clearDiveStyle();
-  const to = history[hi];
   const fromF = from ? focusOf(from) : null, toF = focusOf(to);
   const inChain = (from && toF) ? drillChain(fromF, toF) : null;
   // drill OUT: leaving a container UP to an ancestor container's card, or to the overview tab it belongs to
@@ -2939,6 +2995,10 @@ async function render(sArg, transient) {
     flowInit();  // a flow view: show the step player (unstarted on a fresh open; nothing auto-selected)
   }
   if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e)) resetScene(mainScene); });  // empty space deselects
+  // Restore this point's remembered right pane (file+scroll or browser), overriding the selection-derived
+  // pane above — so back/forward reopens the exact file/browser the point was left with, not just the
+  // selection's source. Only history points carry `content` (set on leave); a fresh go() has none.
+  if (!transient && s.content) applyContent(s.content);
   renderChrome(s);
 }
 
@@ -3100,29 +3160,28 @@ function onRowClick(key) {
     if (e.node) { suppressTreeScroll = true; selectFromTreeAnchors([e.node, ...e.others]); }
     return;
   }
-  // A file row: the reader wants its source in the code viewer, so end any folder peek and show it.
-  const wasPeeking = treeBrowsing;
-  if (wasPeeking) setBrowsing(false);
-  // A file that shows an owner pill — its primary element differs from the current selection AND it sits in
-  // the selection's footprint — PREVIEWS the source without changing the selection. Clicking the file must
-  // not silently jump the selection to that other element (which would narrow the filter); the pill is the
-  // explicit way to switch. Same test as the pill-rendering rule (applySelToRow), so it fires for exactly
-  // the rows that carry a pill — any selection, container or leaf. Keep the selection; show file + switcher.
+  // A file row: the reader wants its source in the code viewer, so end any folder peek and show it. If we
+  // were BROWSING, the point we leave is the browser (item 3: Back returns here in one step) — record that
+  // before the pane is torn down, and note whether the select below navigates the diagram (a go()).
+  const wasBrowsing = treeBrowsing;
+  const hiBefore = hi;
+  if (wasBrowsing) { pendingLeaveContent = { browse: true }; setBrowsing(false); }
   if (e.node && e.node !== treeSelId && selMemberFiles.has(key)) {
+    // A file that shows an owner pill — its primary element differs from the current selection AND it sits
+    // in the selection's footprint — PREVIEWS the source WITHOUT changing the selection (the pill is the
+    // explicit way to switch). Keep the selection; show file + switcher.
     const owner = GRAPH.nodes[e.node];
     cvElement = e.node;
     cvFiles = (owner && owner.files) || [];
     loadCode(e.path, (e.cov === 'self' && owner) ? owner.line : null);
     suppressTreeScroll = true;
     highlightTreePath(key);
-    return;
-  }
-  if (e.node && e.cov === 'self') {
+  } else if (e.node && e.cov === 'self') {
     // An ANCHOR file (a node's own source): load it AT the node's line FIRST, then select the node. The
     // explicit load matters when the reader was already viewing ANOTHER of this same node's files (an owned
     // file): without it, selecting the node hits the syncCodeView "belongs" guard, which keeps that other
     // file shown and never jumps to the anchor the reader just clicked.
-    if (wasPeeking) suppressBrowse = true;  // picked in the browser -> keep it shown (a multi-file element would else re-peek the browser)
+    if (wasBrowsing) suppressBrowse = true;  // picked in the browser -> keep it shown (a multi-file element would else re-peek the browser)
     const an = GRAPH.nodes[e.node];
     cvElement = e.node;  // owning-element pill correct from the first header render (before selection)
     loadCode(e.path, an ? an.line : null);
@@ -3133,7 +3192,7 @@ function onRowClick(key) {
     // An OWNED file (belongs to a component but isn't its anchor): show THIS file, and select its owner
     // (definition-first, already resolved into e.node). The syncCodeView/syncTreeToNode "belongs" guards
     // keep this file shown + highlighted since it's in the owner's `files`, instead of jumping to source.
-    if (wasPeeking) suppressBrowse = true;
+    if (wasBrowsing) suppressBrowse = true;
     const owner = GRAPH.nodes[e.node];
     cvFiles = (owner && owner.files) || [];
     cvElement = e.node;
@@ -3147,13 +3206,21 @@ function onRowClick(key) {
     // container selection's tree/code sync keeps it shown + lit, instead of overriding to the container's
     // own anchor (the file isn't in the container's `files`, so the normal "belongs" guard wouldn't
     // protect it). The pin must NOT re-peek the browser over that file.
-    if (wasPeeking) suppressBrowse = true;
+    if (wasBrowsing) suppressBrowse = true;
     cvElement = e.sel || null;  // the container (for context) drives the pill; a truly-unmapped file gets none
     cvFiles = [];               // a standalone file belongs to no element -> its switcher lists only itself
     loadCode(e.path, null);
     suppressTreeScroll = true;
     highlightTreePath(key);
     if (e.sel) { cvPinned = e.path; selectFromTree(e.sel); }
+  }
+  // Record the browser->file step. If the select above navigated the diagram, go() already pushed the new
+  // point (and stashed {browse:true} on the one we left) — just tag its pane as this file. Otherwise no
+  // point was pushed, so push a content point now. Back then returns to the browser in one step.
+  if (wasBrowsing) {
+    if (hi === hiBefore) pushContentPoint({ file: e.path, top: 0 });
+    else history[hi].content = { file: e.path, top: 0 };
+    pendingLeaveContent = undefined;
   }
 }
 function toggleDir(key) {
@@ -3633,9 +3700,11 @@ function toggleCvMenu() {
       item.appendChild(d);
     }
     item.addEventListener('click', () => {
+      if (f === cvPath) { closeCvMenu(); return; }   // already showing this file — no history churn
       closeCvMenu();
       suppressTreeScroll = false;
       highlightTreePath(treeKey(f));
+      pushContentPoint({ file: f, top: 0 });  // record a point so Back returns to the previous file (at its scroll)
       loadCode(f, null);
     });
     menu.appendChild(item);
@@ -3883,6 +3952,7 @@ function renderCode(path, text, token) {
     paintCodeTags();   // tag every element / use-case step anchored in this file on its own line
     paintMinimap();    // and place its marks on the overview ruler
     sbOnFileChanged(); // if the sidebar is showing a "@" outline, re-list it for the newly shown file
+    applyPendingScroll(path);  // a history restore asked to reopen this file at a saved scroll offset
   });
 }
 // --- code-view diff mode --------------------------------------------------------
@@ -3980,6 +4050,7 @@ function renderCodeDiff(data, token) {
   cvTable = cvscroll.querySelector('table.cvcode');
   cvLineCount = rows.length;
   cvminimap.textContent = '';   // no overview ruler in diff mode
+  applyPendingScroll(data && data.path);  // honor a history restore's saved scroll offset for this file
 }
 // Re-run the search when a new file finishes rendering, but only while the sidebar is showing a "@"
 // file-scoped outline — so the outline follows whatever file the code viewer now shows.
