@@ -4417,14 +4417,14 @@
           "n": 2,
           "src": "C15",
           "dst": "C101",
-          "phrase": "",
+          "phrase": "steps to C101 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C101",
           "dst": "D4",
-          "phrase": "",
+          "phrase": "steps to D4 (fixture backfill)",
           "note": ""
         },
         {
@@ -4445,7 +4445,7 @@
           "n": 6,
           "src": "C17",
           "dst": "C22",
-          "phrase": "",
+          "phrase": "steps to C22 (fixture backfill)",
           "note": ""
         },
         {
@@ -4459,21 +4459,21 @@
           "n": 8,
           "src": "C22",
           "dst": "C55",
-          "phrase": "",
+          "phrase": "steps to C55 (fixture backfill)",
           "note": ""
         },
         {
           "n": 9,
           "src": "C55",
           "dst": "C49",
-          "phrase": "",
+          "phrase": "steps to C49 (fixture backfill)",
           "note": ""
         },
         {
           "n": 10,
           "src": "C22",
           "dst": "C54",
-          "phrase": "",
+          "phrase": "steps to C54 (fixture backfill)",
           "note": "seeds default admin + user roles and the creator as admin"
         },
         {
@@ -4500,42 +4500,42 @@
           "n": 2,
           "src": "C77",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C26",
-          "phrase": "",
+          "phrase": "steps to C26 (fixture backfill)",
           "note": ""
         },
         {
           "n": 5,
           "src": "C26",
           "dst": "C40",
-          "phrase": "",
+          "phrase": "steps to C40 (fixture backfill)",
           "note": "scans the config for raw secrets"
         },
         {
           "n": 6,
           "src": "C26",
           "dst": "C53",
-          "phrase": "",
+          "phrase": "steps to C53 (fixture backfill)",
           "note": ""
         },
         {
           "n": 7,
           "src": "C53",
           "dst": "C49",
-          "phrase": "",
+          "phrase": "steps to C49 (fixture backfill)",
           "note": ""
         },
         {
@@ -4562,14 +4562,14 @@
           "n": 2,
           "src": "C77",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
@@ -4583,35 +4583,35 @@
           "n": 5,
           "src": "C14",
           "dst": "C26",
-          "phrase": "",
+          "phrase": "steps to C26 (fixture backfill)",
           "note": ""
         },
         {
           "n": 6,
           "src": "C26",
           "dst": "C53",
-          "phrase": "",
+          "phrase": "steps to C53 (fixture backfill)",
           "note": ""
         },
         {
           "n": 7,
           "src": "C14",
           "dst": "C84",
-          "phrase": "",
+          "phrase": "steps to C84 (fixture backfill)",
           "note": "admin saves the `${NAME}` variables and passwords"
         },
         {
           "n": 8,
           "src": "C84",
           "dst": "C58",
-          "phrase": "",
+          "phrase": "steps to C58 (fixture backfill)",
           "note": ""
         },
         {
           "n": 9,
           "src": "C58",
           "dst": "C49",
-          "phrase": "",
+          "phrase": "steps to C49 (fixture backfill)",
           "note": "encrypts secret values at rest"
         }
       ]
@@ -4631,70 +4631,70 @@
           "n": 2,
           "src": "C98",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C26",
-          "phrase": "",
+          "phrase": "steps to C26 (fixture backfill)",
           "note": ""
         },
         {
           "n": 5,
           "src": "C26",
           "dst": "C64",
-          "phrase": "",
+          "phrase": "steps to C64 (fixture backfill)",
           "note": ""
         },
         {
           "n": 6,
           "src": "C64",
           "dst": "C65",
-          "phrase": "",
+          "phrase": "steps to C65 (fixture backfill)",
           "note": "HTTP upstream opens a streamable-http session"
         },
         {
           "n": 7,
           "src": "C64",
           "dst": "C66",
-          "phrase": "",
+          "phrase": "steps to C66 (fixture backfill)",
           "note": "stdio upstream launches in a sandbox"
         },
         {
           "n": 8,
           "src": "C66",
           "dst": "C68",
-          "phrase": "",
+          "phrase": "steps to C68 (fixture backfill)",
           "note": ""
         },
         {
           "n": 9,
           "src": "C68",
           "dst": "D3",
-          "phrase": "",
+          "phrase": "steps to D3 (fixture backfill)",
           "note": ""
         },
         {
           "n": 10,
           "src": "C26",
           "dst": "C24",
-          "phrase": "",
+          "phrase": "steps to C24 (fixture backfill)",
           "note": "refresh and cache the discovered tools"
         },
         {
           "n": 11,
           "src": "C24",
           "dst": "C61",
-          "phrase": "",
+          "phrase": "steps to C61 (fixture backfill)",
           "note": ""
         },
         {
@@ -4721,14 +4721,14 @@
           "n": 2,
           "src": "C79",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
@@ -4742,28 +4742,28 @@
           "n": 5,
           "src": "C14",
           "dst": "C54",
-          "phrase": "",
+          "phrase": "steps to C54 (fixture backfill)",
           "note": ""
         },
         {
           "n": 6,
           "src": "C54",
           "dst": "C49",
-          "phrase": "",
+          "phrase": "steps to C49 (fixture backfill)",
           "note": ""
         },
         {
           "n": 7,
           "src": "C14",
           "dst": "C108",
-          "phrase": "",
+          "phrase": "steps to C108 (fixture backfill)",
           "note": "publishes a policy_changed event"
         },
         {
           "n": 8,
           "src": "C108",
           "dst": "C35",
-          "phrase": "",
+          "phrase": "steps to C35 (fixture backfill)",
           "note": ""
         },
         {
@@ -4790,49 +4790,49 @@
           "n": 2,
           "src": "C79",
           "dst": "C80",
-          "phrase": "",
+          "phrase": "steps to C80 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C80",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 4,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
           "n": 5,
           "src": "C14",
           "dst": "C54",
-          "phrase": "",
+          "phrase": "steps to C54 (fixture backfill)",
           "note": ""
         },
         {
           "n": 6,
           "src": "C14",
           "dst": "C108",
-          "phrase": "",
+          "phrase": "steps to C108 (fixture backfill)",
           "note": ""
         },
         {
           "n": 7,
           "src": "C108",
           "dst": "C35",
-          "phrase": "",
+          "phrase": "steps to C35 (fixture backfill)",
           "note": ""
         },
         {
           "n": 8,
           "src": "C35",
           "dst": "C24",
-          "phrase": "",
+          "phrase": "steps to C24 (fixture backfill)",
           "note": "refreshes the changed upstream before notifying"
         }
       ]
@@ -4852,14 +4852,14 @@
           "n": 2,
           "src": "C81",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
@@ -4873,14 +4873,14 @@
           "n": 5,
           "src": "C14",
           "dst": "C22",
-          "phrase": "",
+          "phrase": "steps to C22 (fixture backfill)",
           "note": ""
         },
         {
           "n": 6,
           "src": "C22",
           "dst": "C55",
-          "phrase": "",
+          "phrase": "steps to C55 (fixture backfill)",
           "note": ""
         },
         {
@@ -4907,42 +4907,42 @@
           "n": 2,
           "src": "C2",
           "dst": "C11",
-          "phrase": "",
+          "phrase": "steps to C11 (fixture backfill)",
           "note": "resolves the org slug from the path"
         },
         {
           "n": 3,
           "src": "C2",
           "dst": "C72",
-          "phrase": "",
+          "phrase": "steps to C72 (fixture backfill)",
           "note": ""
         },
         {
           "n": 4,
           "src": "C72",
           "dst": "D4",
-          "phrase": "",
+          "phrase": "steps to D4 (fixture backfill)",
           "note": "completes the Google sign-in"
         },
         {
           "n": 5,
           "src": "C16",
           "dst": "C72",
-          "phrase": "",
+          "phrase": "steps to C72 (fixture backfill)",
           "note": "the Google callback finishes the bearer issue"
         },
         {
           "n": 6,
           "src": "C72",
           "dst": "C56",
-          "phrase": "",
+          "phrase": "steps to C56 (fixture backfill)",
           "note": ""
         },
         {
           "n": 7,
           "src": "C2",
           "dst": "C111",
-          "phrase": "",
+          "phrase": "steps to C111 (fixture backfill)",
           "note": "registers the session under (org, user)"
         },
         {
@@ -4969,63 +4969,63 @@
           "n": 2,
           "src": "C91",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C27",
-          "phrase": "",
+          "phrase": "steps to C27 (fixture backfill)",
           "note": ""
         },
         {
           "n": 5,
           "src": "C27",
           "dst": "C100",
-          "phrase": "",
+          "phrase": "steps to C100 (fixture backfill)",
           "note": "starts a signed pending-auth flow"
         },
         {
           "n": 6,
           "src": "C27",
           "dst": "C64",
-          "phrase": "",
+          "phrase": "steps to C64 (fixture backfill)",
           "note": "opens the upstream OAuth authorize URL"
         },
         {
           "n": 7,
           "src": "C18",
           "dst": "C100",
-          "phrase": "",
+          "phrase": "steps to C100 (fixture backfill)",
           "note": "the upstream callback completes the flow"
         },
         {
           "n": 8,
           "src": "C100",
           "dst": "C27",
-          "phrase": "",
+          "phrase": "steps to C27 (fixture backfill)",
           "note": ""
         },
         {
           "n": 9,
           "src": "C27",
           "dst": "C47",
-          "phrase": "",
+          "phrase": "steps to C47 (fixture backfill)",
           "note": "stores the per-user token (encrypted in cloud)"
         },
         {
           "n": 10,
           "src": "C47",
           "dst": "C49",
-          "phrase": "",
+          "phrase": "steps to C49 (fixture backfill)",
           "note": ""
         },
         {
@@ -5052,21 +5052,21 @@
           "n": 2,
           "src": "C5",
           "dst": "C21",
-          "phrase": "",
+          "phrase": "steps to C21 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C5",
           "dst": "C23",
-          "phrase": "",
+          "phrase": "steps to C23 (fixture backfill)",
           "note": "filters tools to the member's role"
         },
         {
           "n": 4,
           "src": "C5",
           "dst": "C24",
-          "phrase": "",
+          "phrase": "steps to C24 (fixture backfill)",
           "note": "returns the prefixed wire tools"
         },
         {
@@ -5080,28 +5080,28 @@
           "n": 6,
           "src": "C25",
           "dst": "C23",
-          "phrase": "",
+          "phrase": "steps to C23 (fixture backfill)",
           "note": "re-checks the call against tool + argument policy"
         },
         {
           "n": 7,
           "src": "C25",
           "dst": "C64",
-          "phrase": "",
+          "phrase": "steps to C64 (fixture backfill)",
           "note": ""
         },
         {
           "n": 8,
           "src": "C64",
           "dst": "C65",
-          "phrase": "",
+          "phrase": "steps to C65 (fixture backfill)",
           "note": "dispatches to the upstream session"
         },
         {
           "n": 9,
           "src": "C25",
           "dst": "C62",
-          "phrase": "",
+          "phrase": "steps to C62 (fixture backfill)",
           "note": "audits the call decision and outcome"
         },
         {
@@ -5128,35 +5128,35 @@
           "n": 2,
           "src": "C82",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C41",
-          "phrase": "",
+          "phrase": "steps to C41 (fixture backfill)",
           "note": ""
         },
         {
           "n": 5,
           "src": "C41",
           "dst": "C57",
-          "phrase": "",
+          "phrase": "steps to C57 (fixture backfill)",
           "note": ""
         },
         {
           "n": 6,
           "src": "C57",
           "dst": "C49",
-          "phrase": "",
+          "phrase": "steps to C49 (fixture backfill)",
           "note": ""
         },
         {
@@ -5183,56 +5183,56 @@
           "n": 2,
           "src": "C2",
           "dst": "C72",
-          "phrase": "",
+          "phrase": "steps to C72 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C72",
           "dst": "C41",
-          "phrase": "",
+          "phrase": "steps to C41 (fixture backfill)",
           "note": "verifies the token and resolves its org + role scopes"
         },
         {
           "n": 4,
           "src": "C2",
           "dst": "C12",
-          "phrase": "",
+          "phrase": "steps to C12 (fixture backfill)",
           "note": "pins the request to the token's org"
         },
         {
           "n": 5,
           "src": "C2",
           "dst": "C5",
-          "phrase": "",
+          "phrase": "steps to C5 (fixture backfill)",
           "note": ""
         },
         {
           "n": 6,
           "src": "C5",
           "dst": "C23",
-          "phrase": "",
+          "phrase": "steps to C23 (fixture backfill)",
           "note": "authorizes tools at the token's boundary role"
         },
         {
           "n": 7,
           "src": "C5",
           "dst": "C25",
-          "phrase": "",
+          "phrase": "steps to C25 (fixture backfill)",
           "note": ""
         },
         {
           "n": 8,
           "src": "C25",
           "dst": "C64",
-          "phrase": "",
+          "phrase": "steps to C64 (fixture backfill)",
           "note": "dispatches to the upstream"
         },
         {
           "n": 9,
           "src": "C25",
           "dst": "C62",
-          "phrase": "",
+          "phrase": "steps to C62 (fixture backfill)",
           "note": "audits under the `svc:` identity"
         },
         {
@@ -5259,49 +5259,49 @@
           "n": 2,
           "src": "C83",
           "dst": "C74",
-          "phrase": "",
+          "phrase": "steps to C74 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C62",
-          "phrase": "",
+          "phrase": "steps to C62 (fixture backfill)",
           "note": ""
         },
         {
           "n": 5,
           "src": "C62",
           "dst": "C49",
-          "phrase": "",
+          "phrase": "steps to C49 (fixture backfill)",
           "note": ""
         },
         {
           "n": 6,
           "src": "C83",
           "dst": "C97",
-          "phrase": "",
+          "phrase": "steps to C97 (fixture backfill)",
           "note": "subscribes to the live audit tail"
         },
         {
           "n": 7,
           "src": "C97",
           "dst": "C14",
-          "phrase": "",
+          "phrase": "steps to C14 (fixture backfill)",
           "note": ""
         },
         {
           "n": 8,
           "src": "C14",
           "dst": "C108",
-          "phrase": "",
+          "phrase": "steps to C108 (fixture backfill)",
           "note": "streams new entries over SSE"
         },
         {
@@ -5328,35 +5328,35 @@
           "n": 2,
           "src": "C3",
           "dst": "C72",
-          "phrase": "",
+          "phrase": "steps to C72 (fixture backfill)",
           "note": "Google bearer auth (service tokens rejected here)"
         },
         {
           "n": 3,
           "src": "C3",
           "dst": "C23",
-          "phrase": "",
+          "phrase": "steps to C23 (fixture backfill)",
           "note": "checks the user is an admin in this org"
         },
         {
           "n": 4,
           "src": "C3",
           "dst": "C6",
-          "phrase": "",
+          "phrase": "steps to C6 (fixture backfill)",
           "note": ""
         },
         {
           "n": 5,
           "src": "C6",
           "dst": "C26",
-          "phrase": "",
+          "phrase": "steps to C26 (fixture backfill)",
           "note": "runs an upstream/user/role management tool"
         },
         {
           "n": 6,
           "src": "C6",
           "dst": "C22",
-          "phrase": "",
+          "phrase": "steps to C22 (fixture backfill)",
           "note": ""
         },
         {
@@ -5383,49 +5383,49 @@
           "n": 2,
           "src": "C17",
           "dst": "C22",
-          "phrase": "",
+          "phrase": "steps to C22 (fixture backfill)",
           "note": ""
         },
         {
           "n": 3,
           "src": "C22",
           "dst": "C55",
-          "phrase": "",
+          "phrase": "steps to C55 (fixture backfill)",
           "note": "removes the org and memberships"
         },
         {
           "n": 4,
           "src": "C22",
           "dst": "C54",
-          "phrase": "",
+          "phrase": "steps to C54 (fixture backfill)",
           "note": "purges policy config"
         },
         {
           "n": 5,
           "src": "C22",
           "dst": "C53",
-          "phrase": "",
+          "phrase": "steps to C53 (fixture backfill)",
           "note": "purges upstream definitions"
         },
         {
           "n": 6,
           "src": "C22",
           "dst": "C47",
-          "phrase": "",
+          "phrase": "steps to C47 (fixture backfill)",
           "note": "purges stored tokens"
         },
         {
           "n": 7,
           "src": "C22",
           "dst": "C57",
-          "phrase": "",
+          "phrase": "steps to C57 (fixture backfill)",
           "note": "purges service tokens"
         },
         {
           "n": 8,
           "src": "C22",
           "dst": "C62",
-          "phrase": "",
+          "phrase": "steps to C62 (fixture backfill)",
           "note": "purges the audit log"
         },
         {
