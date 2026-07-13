@@ -774,8 +774,9 @@ function showEdge(e) {
   const facts = card + implRow + keyedRow;
   const wn = e.where ? whereNode(e.where) : null;
   panel.innerHTML = '<ul class="xlist">'
-    + arrowRow(e.src, e.dst, nm(e.src), nm(e.dst), whyLine, e.where, true)
-    + '</ul>' + (facts ? '<dl>' + facts + '</dl>' : '');
+    + arrowRow(e.src, e.dst, nm(e.src), nm(e.dst), whyLine, e.where, true,
+              facts ? '<dl class="xfacts">' + facts + '</dl>' : '')
+    + '</ul>';
   // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
   // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
   cvElement = null;  // an edge has no single owning element -> no header pill
@@ -841,11 +842,11 @@ function whereAttr(where) {
 // One crossings-list row: the from→to pair + a why line, tagged with its endpoint ids (so hovering it
 // highlights the arrow in the diagram) and its call site (so clicking it opens the code). `sel` renders
 // it in the selected state — used for the single-arrow view (showEdge), which reuses this exact row.
-function arrowRow(srcId, dstId, srcName, dstName, whyHtml, where, sel) {
+function arrowRow(srcId, dstId, srcName, dstName, whyHtml, where, sel, extra) {
   return '<li class="xrow' + (sel ? ' sel' : '') + '"' + whereAttr(where)
     + (srcId ? ' data-src="' + esc(srcId) + '"' : '') + (dstId ? ' data-dst="' + esc(dstId) + '"' : '')
     + '><div class="xpair">' + esc(srcName) + ' → ' + esc(dstName) + ':</div>'
-    + (whyHtml ? '<div class="xwhy">' + whyHtml + '</div>' : '') + '</li>';
+    + (whyHtml ? '<div class="xwhy">' + whyHtml + '</div>' : '') + (extra || '') + '</li>';
 }
 // Glow (or un-glow) the drawn arrow that represents the `src`→`dst` crossing in the current diagram.
 // Prefer the exact concrete arrow; else the arrow that COVERS the crossing — a component→collapsed-box

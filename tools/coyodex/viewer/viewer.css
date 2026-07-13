@@ -330,11 +330,18 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 #panel .xwhy { padding-left: 14px; margin-top: 2px; }
 /* A crossing row that carries a call site is selectable: click reveals its location in the code viewer.
    A hover tint + pointer signal the affordance; the selected row keeps an indigo tint + left accent.
-   Rows with no local source have no [data-where] and stay plain, non-interactive text. */
-#panel .xlist li.xrow[data-where] { cursor: pointer; border-radius: 4px; padding: 3px 6px;
-                                    margin-left: -6px; transition: background .1s; }
+   Rows with no local source have no [data-where] and stay plain, non-interactive text — BUT the padded,
+   rounded box also applies to any SELECTED row (.sel), so a selected arrow with no call site (e.g. an
+   entity relation) gets the same tidy accent bar as a component arrow, not a cramped one. */
+#panel .xlist li.xrow[data-where],
+#panel .xlist li.xrow.sel { border-radius: 4px; padding: 3px 6px; margin-left: -6px; }
+#panel .xlist li.xrow[data-where] { cursor: pointer; transition: background .1s; }
 #panel .xlist li.xrow[data-where]:hover { background: #f3f4f6; }
 #panel .xlist li.xrow.sel { background: #e0e7ff; box-shadow: inset 3px 0 0 #4f46e5; }
+/* The relation facts (cardinality / implemented-by / keyed-by) live INSIDE the selected arrow row —
+   part of the item, aligned under its why line — not as a separate block below. */
+#panel .xlist .xfacts { padding-left: 14px; }
+#panel .xlist .xfacts dt:first-child { margin-top: 8px; }
 
 /* While ⌘ is held (body.cmd), drillable subsystem boxes + inter-subsystem arrows show a drill-in
    cursor — the affordance for ⌘-click drilling. !important beats the inline cursor:pointer. */
