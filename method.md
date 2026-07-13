@@ -269,7 +269,9 @@ directory first, then dependency/behavioral cohesion; minimize inter-group edges
 directory-derived = verified, cohesion-derived = inferred) → **cluster entities into Subdomains**
 (large domain models: the same recipe on the entity graph — by `SOURCE` directory first, then
 `RELATIONS` cohesion) → trace T6 + edge list (**including the `C→E` edges**: which component
-persists/writes/reads each entity). Nodes (T4/T5/T2)
+persists/writes/reads each entity) → **measure test completeness against the finished inventory**
+(the last structural step — it reads the assembled nodes + flows: use cases, T4 entry points, T5
+entities, critical-path branches). Nodes (T4/T5/T2)
 before the edges/flows that connect them. **Present** top-down (T1–T3 first). The "Depends on"
 columns and relationship rows harden last (they need tracing) — keep them inferred until
 traced. Drilling can correct an inferred upper row; upper tables get more accurate as the
@@ -386,6 +388,14 @@ synthesis → parallel trace.**
   **direct** use — so structural entity-usage is captured at component granularity, not only
   behaviorally via the flow steps. This is *additional*: the `C↔C`/`C↔D` edges
   remain the primary output and must stay complete (every dep wired, the component graph not sparse).
+- Test completeness (one agent, after the Phase 3 trace — it needs the finished inventory + flows).
+  Walk the assembled map (use cases, T4 entry points, T5 entities, failure modes, critical-path
+  branches) and for each ask "is there a test that exercises it?", emitting the risk-ranked gap table
+  `tests[]` + `tests_note` (the **Test completeness** section above carries the full recipe — don't
+  duplicate it). **Read-only by default:** build the table by *reading* tests, mark every row
+  **inferred**, and set `tests_note` to state the suite was not run. Running the suite with coverage
+  (upgrading rows to **verified**) is the opt-in upgrade described in that section — never run an
+  unknown suite by default. The table is always produced; it must never ship empty.
 - Phase 4 Adversarial verify (fan out, **fresh context**). After the map validates and `coyodex audit`
   runs (fix any blocking `why:`-ref contradiction; reconcile the read-before-create / actor advisories),
   take the audit's **L2 grounding worklist** and disprove it against the code. **Batch by theme/risk,
@@ -481,7 +491,11 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 lead confirms **every prescribed slice came back with its sections** — in particular that the T5 owner
 returned per-entity cards *with* RELATIONS, and that each agent that wrote `(none found)` is genuinely
 empty rather than under-delivered. Re-ping any agent that dropped or thinned its sections; a missing
-section caught here is cheap, one discovered after synthesis is a re-trace.
+section caught here is cheap, one discovered after synthesis is a re-trace. The same "every prescribed
+table came back" rule reaches past the barrier to the **test-completeness table**: after the Phase 3
+trace's test-completeness step, confirm `tests[]` came back non-empty before finalizing (an empty
+`tests[]` is a dropped section — the step always produces a gap table — not a project with zero
+targets); re-run that step, exactly as a missing harvest section is re-pinged here.
 
 **Expected yield per slice — judge each return against its E (under-delivery guidance).** A
 well-formed return can still be an under-delivered one: a slice that comes back with far fewer
