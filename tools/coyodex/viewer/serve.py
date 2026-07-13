@@ -67,8 +67,11 @@ class Project:
     """One served map: its slug (URL segment), repo root, the model file, and the map's commit.
 
     ``commit`` is the SHA every git read is pinned to — ``-dirty`` stripped, since a working-tree
-    marker isn't a real ref. ``tree`` caches the built file-browser tree (lazy, on first request);
-    ``view`` caches the view bundle (lazy, on first request)."""
+    marker isn't a real ref. ``tree``/``view``/``symbols`` cache their built artifacts lazily, keyed
+    to one map version: ``map_mtime`` records the model file's st_mtime_ns at load, and
+    ``ensure_fresh`` drops the caches (and re-reads commit/title/goal) when the file changes — so an
+    edited map (a Direct map change, an Accept, a re-balance) shows up on the next refresh without
+    restarting the server."""
 
     slug: str
     repo_root: Path
@@ -76,9 +79,10 @@ class Project:
     commit: str
     title: str = ""   # the map's human title (shown on the landing card) — folder name if the map has none
     goal: str = ""    # the map's one-paragraph goal (shown, clamped, under the title)
-    tree: FileTreeNode | None = None  # cached tree (built once, on the first /api/tree)
-    view: ViewBundle | None = None    # cached view bundle (built once, on the first /api/view)
-    symbols: list[dict[str, object]] | None = None  # cached code symbols (built once, on the first /api/symbols)
+    map_mtime: int | None = None      # st_mtime_ns of map_json when loaded — the staleness key
+    tree: FileTreeNode | None = None  # cached tree (built once per map version, on first /api/tree)
+    view: ViewBundle | None = None    # cached view bundle (built once per map version, on first /api/view)
+    symbols: list[dict[str, object]] | None = None  # cached code symbols (built once per map version)
 
 
 def _strip_dirty(commit: str) -> str:
@@ -121,9 +125,34 @@ def load_project(folder: str) -> Project | None:
     commit = _strip_dirty(str(graph.get("commit") or "").strip())
     if commit and not _valid_commit(commit):
         return None
+    try:
+        mtime: int | None = map_json.stat().st_mtime_ns
+    except OSError:
+        mtime = None
     return Project(slug=root.name or "project", repo_root=root, map_json=map_json, commit=commit,
                    title=str(graph.get("title") or "").strip() or (root.name or "project"),
-                   goal=str(graph.get("goal") or "").strip())
+                   goal=str(graph.get("goal") or "").strip(), map_mtime=mtime)
+
+
+def ensure_fresh(proj: Project) -> None:
+    """Drop a project's cached artifacts when its map file changed on disk (mtime_ns mismatch), and
+    re-read the header fields (commit/title/goal — an Accept bumps the pin, and ``tree`` reads git AT
+    that pin). Called on every /p/<slug>/ request, so a map edited while the server runs is picked up
+    on the next refresh. Failure modes stay serve-friendly: an unstat-able file keeps the cached copy;
+    a map that no longer loads (e.g. caught mid-write) keeps the cached copy AND leaves ``map_mtime``
+    stale, so the very next request retries the reload."""
+    try:
+        mtime = proj.map_json.stat().st_mtime_ns
+    except OSError:
+        return
+    if mtime == proj.map_mtime:
+        return
+    fresh = load_project(str(proj.repo_root))
+    if fresh is None:   # mid-write or newly-invalid map — serve the old bundle, retry next request
+        return
+    proj.commit, proj.title, proj.goal = fresh.commit, fresh.title, fresh.goal
+    proj.map_mtime = fresh.map_mtime
+    proj.tree = proj.view = proj.symbols = None
 
 
 def build_projects(folders: list[str]) -> dict[str, Project]:
@@ -513,6 +542,7 @@ class Handler(BaseHTTPRequestHandler):
             proj = self.projects.get(parts[1])
             if proj is None:
                 return self._send(404, "text/plain; charset=utf-8", b"unknown project")
+            ensure_fresh(proj)  # a map edited while the server runs is picked up on the next request
             return self._project(proj, parts[2:], query)
         return self._send(404, "text/plain; charset=utf-8", b"not found")
 
