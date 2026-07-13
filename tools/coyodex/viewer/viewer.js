@@ -3132,11 +3132,11 @@ function renderUseCases() {
   });
 }
 
-// One titled reference table on the System tab: an `<h3>` heading + a `.glossary`-styled table.
-// `cols` = [{head, get}]; get(row) returns a prose string (rendered via mdInline) or {src:'path:line'}
-// for a code link. Returns '' for an empty collection so the section is omitted (mirrors the markdown
-// view's `if m.x:` guards). Grows no new table CSS — reuses `.glossary` inside `.system-wrap`.
-function refSection(title, rows, cols) {
+// One titled reference table's BODY on the System tab: a `.glossary`-styled table. `cols` = [{head, get}];
+// get(row) returns a prose string (rendered via mdInline) or {src:'path:line'} for a code link. Returns ''
+// for an empty collection so the section is omitted (mirrors the markdown view's `if m.x:` guards). The
+// caller wraps it in a titled `<section>` (see the `sec` helper). Reuses `.glossary` inside `.system-wrap`.
+function refTable(rows, cols) {
   if (!rows || !rows.length) return '';
   const head = cols.map((c) => `<th>${esc(c.head)}</th>`).join('');
   const body = rows.map((r) => '<tr>' + cols.map((c) => {
@@ -3144,17 +3144,29 @@ function refSection(title, rows, cols) {
     const cell = (v && typeof v === 'object' && 'src' in v) ? srcCell(v.src) : mdInline(v || '');
     return `<td>${cell}</td>`;
   }).join('') + '</tr>').join('');
-  return `<section class="uc-group"><h3 class="uc-actor">${esc(title)}</h3>`
-    + `<table class="glossary"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></section>`;
+  return `<table class="glossary"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
 }
 // The System tab: the operational / reference collections the diagram doesn't hold (run commands, entry
 // points, deployment, observability, security, config, non-entity types, freeform extras). A stack of
-// titled tables rendered straight into #diagram, like the Glossary/Use Cases tabs. Entry points are
-// grouped by kind and link to their owning component; source cells open the code viewer.
+// titled tables rendered straight into #diagram, led by a pinned section index (scroll-spy + click-to-jump,
+// see bindSysIndex) so you see all sections at once and know which one you're in. Entry points are grouped
+// by kind and link to their owning component; source cells open the code viewer.
 function renderSystem() {
   const G = GRAPH;
   const nodeName = (id) => (G.nodes && G.nodes[id] ? G.nodes[id].name : id);
-  const sections = [];
+  const secs = [];  // {id, title} per rendered section — drives the pinned index
+  const usedIds = new Set();
+  // Wrap a section body in a titled, id'd `<section>` and register it for the index. '' body -> omitted.
+  const sec = (title, inner) => {
+    if (!inner) return '';
+    let id = 'sys-' + String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    const base = id || 'sys-section';
+    for (let n = 2; usedIds.has(id); n++) id = base + '-' + n;  // dedupe (e.g. an extra named like a table)
+    usedIds.add(id);
+    secs.push({ id, title });
+    return `<section class="uc-group" id="${id}"><h3 class="uc-actor">${esc(title)}</h3>${inner}</section>`;
+  };
+  const parts = [];
   // Entry points — grouped by kind; each row links to its owning component.
   const eps = G.entry_points || [];
   if (eps.length) {
@@ -3177,33 +3189,36 @@ function renderSystem() {
         + '<table class="glossary"><thead><tr><th>Trigger</th><th>Component</th><th>Source</th></tr></thead>'
         + `<tbody>${rows}</tbody></table>`;
     }
-    sections.push(`<section class="uc-group"><h3 class="uc-actor">Entry points</h3>${inner}</section>`);
+    parts.push(sec('Entry points', inner));
   }
-  sections.push(refSection('Run commands', G.run_commands, [
+  parts.push(sec('Run commands', refTable(G.run_commands, [
     { head: 'Action', get: (r) => r.action }, { head: 'Command', get: (r) => r.command },
-    { head: 'Source', get: (r) => ({ src: r.source }) }]));
-  sections.push(refSection('Deployment & topology', G.deployment, [
+    { head: 'Source', get: (r) => ({ src: r.source }) }])));
+  parts.push(sec('Deployment & topology', refTable(G.deployment, [
     { head: 'Unit', get: (r) => r.unit }, { head: 'Runs on', get: (r) => r.runs_on },
-    { head: 'Exposed as', get: (r) => r.exposed_as }, { head: 'Config source', get: (r) => r.config_source }]));
-  sections.push(refSection('Observability', G.observability, [
+    { head: 'Exposed as', get: (r) => r.exposed_as }, { head: 'Config source', get: (r) => r.config_source }])));
+  parts.push(sec('Observability', refTable(G.observability, [
     { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
-    { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }]));
-  sections.push(refSection('Security & auth', G.security, [
+    { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }])));
+  parts.push(sec('Security & auth', refTable(G.security, [
     { head: 'Surface', get: (r) => r.surface }, { head: 'Who can reach', get: (r) => r.who },
-    { head: 'Auth check', get: (r) => ({ src: r.source }) }, { head: 'Risk', get: (r) => r.risk }]));
-  sections.push(refSection('Config & environments', G.config, [
+    { head: 'Auth check', get: (r) => ({ src: r.source }) }, { head: 'Risk', get: (r) => r.risk }])));
+  parts.push(sec('Config & environments', refTable(G.config, [
     { head: 'Key', get: (r) => r.key }, { head: 'Purpose', get: (r) => r.purpose },
-    { head: 'Default', get: (r) => r.default }, { head: 'Per-env / secret?', get: (r) => r.per_env }]));
-  sections.push(refSection('Types deliberately not modelled', G.non_entity_types, [
+    { head: 'Default', get: (r) => r.default }, { head: 'Per-env / secret?', get: (r) => r.per_env }])));
+  parts.push(sec('Types deliberately not modelled', refTable(G.non_entity_types, [
     { head: 'Type', get: (r) => r.name }, { head: 'Source', get: (r) => ({ src: r.source }) },
-    { head: 'Why', get: (r) => r.why }]));
+    { head: 'Why', get: (r) => r.why }])));
   for (const x of (G.extras || [])) {
     if (!x || !x.heading) continue;
-    sections.push(`<section class="uc-group"><h3 class="uc-actor">${esc(x.heading)}</h3>`
-      + `<div class="sys-extra">${mdInline(x.body || '')}</div></section>`);
+    parts.push(sec(x.heading, `<div class="sys-extra">${mdInline(x.body || '')}</div>`));
   }
-  const html = sections.filter(Boolean).join('');
-  diagram.innerHTML = `<div class="usecases-wrap system-wrap">${html || '<p class="empty">No system facts recorded.</p>'}</div>`;
+  const body = parts.filter(Boolean).join('');
+  const nav = secs.length
+    ? `<nav class="sys-index">${secs.map((s) =>
+        `<button type="button" class="sys-index-chip" data-target="${s.id}">${esc(s.title)}</button>`).join('')}</nav>`
+    : '';
+  diagram.innerHTML = `<div class="usecases-wrap system-wrap">${body ? nav + body : '<p class="empty">No system facts recorded.</p>'}</div>`;
   wireSrcLinks(diagram);
   // A System-tab entry-point Component link navigates to that component AND selects the exact entry
   // point in its "Triggered by" pane list (same as a search hit).
@@ -3211,6 +3226,38 @@ function renderSystem() {
     btn.addEventListener('click', () => selectEntryPoint(
       btn.getAttribute('data-id'), parseInt(btn.getAttribute('data-idx'), 10) || 0));
   });
+  bindSysIndex();
+}
+// Wire the System tab's pinned section index: click a chip to jump to its section, and highlight the chip
+// of the section you're currently scrolled into (scroll-spy). Also measures the index bar's height into a
+// CSS var so the sticky section headers sit just below it.
+function bindSysIndex() {
+  const wrap = diagram.querySelector('.system-wrap');
+  const nav = wrap && wrap.querySelector('.sys-index');
+  if (!wrap || !nav) return;
+  const chips = [...nav.querySelectorAll('.sys-index-chip')];
+  const sections = chips.map((c) => wrap.querySelector('#' + c.dataset.target));
+  // Two stacked sticky offsets: the pinned index (top), then each section header below it, then each
+  // table's column headers below THAT. Measure both heights into CSS vars so the stack lines up even when
+  // the index bar / a header wraps on a narrow pane.
+  const header0 = wrap.querySelector('.uc-actor');
+  const setH = () => {
+    wrap.style.setProperty('--sys-index-h', nav.offsetHeight + 'px');
+    wrap.style.setProperty('--sys-header-h', (header0 ? header0.offsetHeight : 30) + 'px');
+  };
+  setH();
+  if (window.ResizeObserver) new ResizeObserver(setH).observe(wrap);  // recompute when the pane resizes
+  chips.forEach((chip, i) => chip.addEventListener('click', () => {
+    if (sections[i]) sections[i].scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }));
+  const spy = () => {
+    const line = nav.getBoundingClientRect().bottom + 6;  // just under the pinned index
+    let active = 0;
+    sections.forEach((sec2, i) => { if (sec2 && sec2.getBoundingClientRect().top <= line) active = i; });
+    chips.forEach((c, i) => c.classList.toggle('active', i === active));
+  };
+  wrap.addEventListener('scroll', spy, { passive: true });
+  spy();
 }
 
 // The Tests tab: the test-completeness gap table (tests[]) led by the honesty note (tests_note — was the

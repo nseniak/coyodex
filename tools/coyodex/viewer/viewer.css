@@ -28,8 +28,12 @@ main { display: flex; flex: 1; min-height: 0; }
    (elements, files/folders, glossary terms, entity fields). Hidden by default (the `hidden` attribute
    wins over the flex display); the header magnifier / "/" toggles it. When open it's a fixed-width
    column left of the diagram, so the rest of the layout just shifts right. */
-header #searchbtn { font-size: 13px; line-height: 1; padding: 4px 9px; flex: 0 0 auto; }
-body.search-open header #searchbtn { background: #a5b4fc; color: #1e1b4b; }
+/* The search button sits in the stage head row, just left of the view selector (#viewsw), and matches
+   its pill styling. */
+#searchbtn { font-size: 13px; line-height: 1; padding: 4px 9px; flex: 0 0 auto; cursor: pointer;
+             border: 1px solid #c7d2fe; border-radius: 6px; background: #fff; color: #4338ca; }
+#searchbtn:hover { background: #eef2ff; }
+body.search-open #searchbtn { background: #6366f1; color: #fff; border-color: #6366f1; }
 #searchbar { flex: 0 0 auto; width: 300px; min-width: 0; display: flex; flex-direction: column;
              background: #fff; border-right: 1px solid #e5e7eb; overflow: hidden; }
 #searchbar[hidden] { display: none; }
@@ -109,7 +113,8 @@ body.vresizing #stage { pointer-events: none; }
 #diagram { flex: 1 1 auto; min-width: 0; min-height: 0; }
 /* View selector + breadcrumb, a normal-flow bar at the top of the graph pane. */
 #stagehead { flex: 0 0 auto; z-index: 6; }
-#stageheadrow { background: #fff; padding: 8px 14px; border-bottom: 1px solid #e5e7eb; }
+#stageheadrow { display: flex; align-items: center; gap: 8px; background: #fff; padding: 8px 14px;
+                border-bottom: 1px solid #e5e7eb; }
 #viewsw { display: inline-flex; border: 1px solid #c7d2fe; border-radius: 6px; overflow: hidden; }
 #viewsw button { font: inherit; font-size: 12px; padding: 4px 10px; border: 0; background: transparent;
                  color: #4338ca; border-radius: 0; cursor: pointer; }
@@ -145,6 +150,32 @@ body.vresizing #stage { pointer-events: none; }
 .system-wrap .sys-node { font-family: inherit; font-size: 13px; color: #2563eb; background: none;
                          border: 0; padding: 0; cursor: pointer; text-align: left; }
 .system-wrap .sys-node:hover { text-decoration: underline; }
+/* Pinned section index (all sections at a glance + scroll-spy + click-to-jump) and sticky section headers
+   (always know which section you're in). The index bar height is measured into --sys-index-h (bindSysIndex)
+   so the sticky headers stack just below it. */
+.system-wrap { --sys-index-h: 40px; }
+.system-wrap .sys-index { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; gap: 6px;
+                          margin: -16px 0 6px; padding: 10px 0 8px; background: #f8fafc;
+                          border-bottom: 1px solid #e2e8f0; }
+.system-wrap .sys-index-chip { font-size: 12px; font-weight: 600; color: #475569; background: #eef2f7;
+                               border: 1px solid transparent; border-radius: 9px; padding: 3px 10px;
+                               cursor: pointer; white-space: nowrap; }
+.system-wrap .sys-index-chip:hover { background: #e2e8f0; }
+.system-wrap .sys-index-chip.active { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }
+.system-wrap .uc-group { scroll-margin-top: calc(var(--sys-index-h) + 8px); }
+.system-wrap .uc-actor { position: sticky; top: var(--sys-index-h); z-index: 3; background: #fff;
+                         margin-top: 0; }
+/* The table's own column headers stay sticky (they were, at top:0) — but now BELOW the pinned index and
+   the section header, so all three stack instead of hiding each other. */
+.system-wrap .glossary thead th { top: calc(var(--sys-index-h) + var(--sys-header-h, 30px)); z-index: 2; }
+/* A soft shadow lifts the bottom-most sticky line off the scrolling rows: the column-header line in a
+   table section, or the section-header itself in a prose section (extras) that has no column line.
+   Chromium doesn't paint box-shadow on table cells under `border-collapse: collapse`, so the column
+   header draws its shadow with a gradient pseudo-element (the sticky `th` is its containing block). */
+.system-wrap .glossary thead th::after { content: ''; position: absolute; left: 0; right: 0; top: 100%;
+                                         height: 6px; pointer-events: none;
+                                         background: linear-gradient(rgba(15, 23, 42, .16), rgba(15, 23, 42, 0)); }
+.system-wrap .uc-group:not(:has(.glossary)) .uc-actor { box-shadow: 0 4px 6px -3px rgba(15, 23, 42, .18); }
 /* Tests tab: the honesty note reads as a callout above the gap table; the Tested? cell is a coloured pill. */
 .tests-note { max-width: 1100px; margin: 0 auto 14px; padding: 10px 14px; font-size: 13px;
               color: #713f12; background: #fef9c3; border: 1px solid #fde68a; border-radius: 8px; line-height: 1.5; }
