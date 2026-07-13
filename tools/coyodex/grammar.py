@@ -69,6 +69,32 @@ def classify_dep(kind_cell: str, type_cell: str) -> str:
     return "library"
 
 
+# An entry point's ACTIVATION — a closed vocabulary describing WHO starts it. "self" = the system
+# starts it with no outside caller (a scheduled/cron job, a while-True or interval loop, a
+# background worker/thread, a queue/stream consumer, a boot/startup hook, an OS signal handler);
+# "external" = something outside asks (an HTTP route, a CLI invocation, a callback, a webhook).
+# Authored in an OPTIONAL T4 `activation` column; when absent, classify_activation() infers it from
+# `kind`. Lets a reader answer "what runs with no user?" at a glance.
+ACTIVATIONS = ("self", "external")
+
+# Keyword signatures for a SELF-starting entry point, matched case-insensitively as substrings of
+# the free-text `kind`. Deliberately excludes "webhook" (an external caller invokes it).
+_SELF_START_SIGNATURES = ("background", "loop", "cron", "schedul", "timer", "tick", "interval",
+                          "poll", "boot", "startup", "start-up", "on_event", "lifespan", "signal",
+                          "sigterm", "sighup", "atexit", "shutdown", "daemon", "worker", "consumer",
+                          "subscrib", "queue", "listener", "watch")
+
+
+def classify_activation(kind: str) -> str:
+    """The entry point's activation (one of ACTIVATIONS): "self" if it starts itself
+    (timer/loop/boot/signal/queue consumer), else "external" (route/CLI/callback/webhook — something
+    outside asks). Heuristic over the free-text `kind`; the authored `activation` column is the
+    accurate path and this is the fallback when it's absent. Unrecognised → "external" (the common
+    case, and the safe default)."""
+    k = (kind or "").lower()
+    return "self" if any(s in k for s in _SELF_START_SIGNATURES) else "external"
+
+
 def strip_fences(text: str) -> str:
     """Blank out fenced code blocks (``` or ~~~), keeping the line COUNT so reported line numbers
     stay accurate. A verbatim example inside a code fence (a Mermaid diagram, a shell snippet) is

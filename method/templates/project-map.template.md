@@ -133,11 +133,19 @@ why: needs the result of HP1
 
 ## T4 — Entry points
 
-<!-- Every way the system is entered: HTTP route, CLI, cron, queue consumer, exported fn, boot. -->
+<!-- Every way the system is entered, in TWO passes — do BOTH:
+     (1) externally triggered — HTTP route, CLI, exported fn, callback, webhook (someone outside asks);
+     (2) SELF-STARTING (activation=self, no user) — cron/scheduled job, while-True/interval loop,
+         asyncio.create_task / background worker / thread, queue or stream consumer (.consume/.subscribe/
+         poll), boot/startup hook (on_event('startup'), lifespan, atexit), OS signal handler.
+     Do pass (2) EXPLICITLY: a long-running service with zero self-starting entry points is a red flag —
+     assert why none exist rather than leaving the list front-doors-only. Set `activation` on each row
+     (self|external); if you leave it blank the viewer infers it from `kind`, so use a kind label like
+     "Background loop" / "Boot task" / "Signal" that reads as self-starting. -->
 
-| Kind | Trigger | Code entity | Component |
-|---|---|---|---|
-| <kind> | <trigger> | [entity](path:1) | C1 |
+| Kind | Trigger | Code entity | Component | Activation |
+|---|---|---|---|---|
+| <kind> | <trigger> | [entity](path:1) | C1 | self / external |
 
 ---
 

@@ -412,11 +412,18 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     eps_by_comp: dict[str, list[dict[str, str]]] = {}
     flat_entry_points: list[dict[str, object]] = []
     for ep in m.entry_points:
+        # Activation ("self" = runs with no caller, "external" = something asks): the authored value
+        # wins; when absent, derive it from the free-text `kind` — mirrors classify_dep, so old maps
+        # (and any untagged entry) still classify without a rebuild.
+        activation = (ep.activation if ep.activation in grammar.ACTIVATIONS
+                      else grammar.classify_activation(ep.kind))
         ep_dict: dict[str, object] = asdict(ep)
+        ep_dict["activation"] = activation
         if ep.component:
             ep_dict["index"] = len(eps_by_comp.setdefault(ep.component, []))
             eps_by_comp[ep.component].append(
-                {"kind": ep.kind, "trigger": ep.trigger, "source": ep.source})
+                {"kind": ep.kind, "trigger": ep.trigger, "source": ep.source,
+                 "activation": activation})
         flat_entry_points.append(ep_dict)
     for c in m.components:
         subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""

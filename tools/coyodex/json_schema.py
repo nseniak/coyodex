@@ -87,6 +87,10 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Dep", "extra"): {"description": _EXTRA_DESC},
     ("EntryPoint", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EntryPoint", "component"): {"pattern": r"^C\d+$", "description": "the owning component's id."},
+    ("EntryPoint", "activation"): {"enum": [*grammar.ACTIVATIONS, ""], "description": "who starts it: "
+                                    "'self' (timer/loop/boot/signal/queue consumer — runs with no "
+                                    "caller) or 'external' (route/CLI/callback/webhook); '' → inferred "
+                                    "from `kind`."},
     ("EntityField", "markers"): {"description": "annotation tokens, not free text: PK / FK→En / "
                                   "unique / ? / []."},
     ("EntityRelation", "verb"): {"description": "contains / has / isA (structural, canonical) or "

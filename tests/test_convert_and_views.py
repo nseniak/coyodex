@@ -22,11 +22,12 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex import audit_model
+from coyodex import audit_model, grammar
 from coyodex.model import (
     Component,
     Entity,
     EntityField,
+    EntryPoint,
     GlossaryRow,
     ProjectModel,
     all_elements,
@@ -123,7 +124,8 @@ def test_golden_graph_attaches_entry_points_and_resolves_coverage():
         eps = g["nodes"][nid]["entry_points"]
         assert isinstance(eps, list)
         for ep in eps:
-            assert set(ep) == {"kind", "trigger", "source"}
+            assert set(ep) == {"kind", "trigger", "source", "activation"}
+            assert ep["activation"] in ("self", "external")
     # each flat entry point that names a component carries its 0-based position within that component's
     # list (the viewer uses it to select the exact entry point from a search hit / System link)
     counts: dict[str, int] = {}
@@ -137,6 +139,40 @@ def test_golden_graph_attaches_entry_points_and_resolves_coverage():
     for nid, state in g["coverage"].items():
         assert nid in g["nodes"]
         assert state in {"tested", "partial", "untested", "untested-critical"}
+
+
+def test_classify_activation_reads_kind_signatures():
+    """Self-starting kinds (timer/loop/boot/signal/queue consumer) -> 'self'; caller-driven kinds
+    (route/CLI/callback/webhook) -> 'external'; unknown -> 'external' (safe default)."""
+    for kind in ("Background loop", "Cron job", "Boot task", "Signal", "Queue consumer",
+                 "Startup hook", "Scheduled sweep", "SIGTERM handler"):
+        assert grammar.classify_activation(kind) == "self", kind
+    for kind in ("HTTP route", "CLI command", "OAuth callback", "Webhook", "Exported fn", ""):
+        assert grammar.classify_activation(kind) == "external", kind
+
+
+def test_entry_point_activation_authored_wins_else_derived():
+    """The authored `activation` overrides the heuristic; a blank value falls back to classify_activation
+    over `kind` — so old maps (no field) still classify without a rebuild."""
+    m = ProjectModel(title="Acts", goal="demo")
+    m.components = [Component(id="C1", name="Svc", subsystem=None, purpose="p",
+                             entry_point="src/s.py:1", depends_on="", source=None, confidence="")]
+    m.entry_points = [
+        EntryPoint(kind="Background loop", trigger="every 60s", source="src/s.py:1", component="C1"),
+        EntryPoint(kind="HTTP route", trigger="GET /x", source="src/s.py:2", component="C1"),
+        # authored value overrides what the kind text would imply (both directions):
+        EntryPoint(kind="Reconcile pass", trigger="on boot", source="src/s.py:3", component="C1",
+                   activation="self"),
+        EntryPoint(kind="Background sync", trigger="manual", source="src/s.py:4", component="C1",
+                   activation="external"),
+    ]
+    g = model_to_graph(m)
+    acts = [e["activation"] for e in g["entry_points"]]
+    assert acts == ["self", "external", "self", "external"]
+    # the per-component "Triggered by" list carries the same resolved value
+    comp_eps = g["nodes"]["C1"]["entry_points"]
+    assert isinstance(comp_eps, list)
+    assert [e["activation"] for e in comp_eps] == acts
 
 
 def test_coverage_resolves_id_token_and_escalates_critical():

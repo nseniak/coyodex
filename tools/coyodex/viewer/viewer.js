@@ -90,12 +90,6 @@ try {
 const SVGNS = 'http://www.w3.org/2000/svg';
 const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'modified'],
                 deleted: ['#cf222e', '×', 'deleted'], rippled: ['#d97706', '≈', 'ripples to'] };
-// Test-coverage overlay states (derived from the tests[] table, resolved to node ids server-side in
-// GRAPH.coverage). Distinct glyphs+colours from the diff BADGE map; makeBadge falls back to this map,
-// and the overlay anchors these to the box's BOTTOM-right so they never collide with a diff badge.
-const COVERAGE_BADGE = { tested: ['#1a7f37', '✓', 'tested'], partial: ['#9a6700', '~', 'partly tested'],
-                         untested: ['#6b7280', '·', 'untested'],
-                         'untested-critical': ['#b91c1c', '!', 'untested — critical'] };
 const HILITE = 'drop-shadow(0 0 4px #2563eb) drop-shadow(0 0 2px #2563eb)';  // selection glow (nodes + edge labels)
 const HOVER = 'drop-shadow(0 0 3px #60a5fa)';  // softer hover glow: signals "clickable" without competing with HILITE
 const HP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Happy-Path selection: just a touch stronger than HOVER (not the heavy HILITE)
@@ -692,10 +686,11 @@ function triggeredByHtml(id) {
   const eps = (n && n.entry_points) || [];
   if (!eps.length) return '';
   const rows = eps.map((e, i) => {
-    const kind = e.kind ? `<span class="tb-kind">${esc(e.kind)}</span>` : '';
+    const self = e.activation === 'self';
+    const kind = e.kind ? `<span class="tb-kind${self ? ' tb-kind--self' : ''}">${esc(e.kind)}</span>` : '';
     const trig = e.trigger ? `<span class="tb-trig">${mdInline(e.trigger)}</span>` : '<span class="muted">(entry point)</span>';
     const where = (e.source && localRef(e.source)) ? ` data-where="${esc(e.source)}"` : '';
-    return `<li class="tb-ep" data-ep-idx="${i}"${where}>${kind}${trig}</li>`;
+    return `<li class="tb-ep${self ? ' tb-ep--self' : ''}" data-ep-idx="${i}"${where}>${kind}${trig}</li>`;
   }).join('');
   return `<dt>Triggered by</dt><dd><ul class="tb-list" data-comp="${esc(id)}">${rows}</ul></dd>`;
 }
@@ -1481,7 +1476,7 @@ const BADGE_R = 13;   // disc radius — matches the action icon's circle (addAc
 function makeBadge(state) {
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'diff-badge');
-  const spec = BADGE[state] || COVERAGE_BADGE[state];
+  const spec = BADGE[state];
   if (!spec) return g;
   const [color, glyph] = spec;
   const halo = document.createElementNS(SVGNS, 'circle');
@@ -1559,7 +1554,6 @@ function setLegendMode(kind) {
   if (legend.dataset.kind === kind) return;
   legend.dataset.kind = kind;
   if (kind === 'diff') fillLegend(['added', 'modified', 'deleted', 'rippled'], BADGE, 'no badge = unchanged');
-  else if (kind === 'coverage') fillLegend(['tested', 'partial', 'untested', 'untested-critical'], COVERAGE_BADGE, 'test coverage');
 }
 
 // --- diff overlay on the Subsystems views ---------------------------------------
@@ -1589,18 +1583,6 @@ function applyDiffOverlay(s) {
     for (const id in mainScene.nodeEls) {
       if (DIFF_STATE[id]) addBadge(mainScene.nodeEls[id], DIFF_STATE[id]);
     }
-  }
-}
-// Test-coverage overlay (non-diff views): badge every drawn use-case / component box with its coverage
-// state from GRAPH.coverage (resolved server-side from the tests[] table). Bottom-right corner keeps it
-// clear of the top-left drill icon. Shares the DIFF_BADGES registry, so rescaleDiffBadges re-holds it on
-// zoom. No-op when the map has no tests table (coverage is empty).
-function applyCoverageOverlay() {
-  const cov = GRAPH.coverage || {};
-  if (!mainScene || !Object.keys(cov).length) return;
-  DIFF_BADGES.length = 0;                            // re-added each render; drop the old detached refs
-  for (const id in mainScene.nodeEls) {
-    if (cov[id]) addBadge(mainScene.nodeEls[id], cov[id], 'br');
   }
 }
 // A use case "contains changes" when any element its T6 flow touches is changed (FLOWS_NARR × DIFF_STATE)
@@ -2928,12 +2910,8 @@ function renderChrome(s) {
   // not the removed flat Components map: the overview badges each subsystem with its subtree's change,
   // and the cards badge their member components (via bindNodes).
   const diffHost = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge';
-  // The legend shows diff states in diff mode; otherwise coverage states on the views that draw
-  // component/use-case boxes (where applyCoverageOverlay places badges) when the map has a tests table.
-  const hasCoverage = GRAPH.coverage && Object.keys(GRAPH.coverage).length > 0;
-  const coverageHost = s.kind === 'subsystem' || s.kind === 'component';
+  // The legend shows diff states in diff mode only.
   if (mode === 'diff' && diffHost) { setLegendMode('diff'); legend.classList.add('on'); }
-  else if (hasCoverage && coverageHost) { setLegendMode('coverage'); legend.classList.add('on'); }
   else legend.classList.remove('on');
   toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
@@ -3052,16 +3030,6 @@ function wireSrcLinks(root) {
     btn.addEventListener('click', () => openInCodeViewer(wn.file, wn.line));
   });
 }
-// A small test-coverage pill for a use case in the catalog. Use cases aren't diagram boxes, so the
-// coverage badge overlay can't reach them — their coverage shows here instead. '' when the use case has
-// no test row. Reuses the Tests-tab pill colours; `untested-critical` shows as an emphasised "untested!".
-function coveragePill(id) {
-  const st = GRAPH.coverage && GRAPH.coverage[id];
-  if (!st) return '';
-  const cls = st === 'untested-critical' ? 'untested' : st;
-  const label = st === 'untested-critical' ? 'untested!' : st;
-  return `<span class="tst-pill tst-${cls}" title="test coverage — see the Tests tab">${esc(label)}</span>`;
-}
 function renderGlossary() {
   const rows = (GRAPH.glossary || []).map((g) =>
     `<tr data-term="${esc(g.term)}"><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${srcCell(g.source || '')}</td></tr>`
@@ -3111,7 +3079,7 @@ function renderUseCases() {
       // In diff mode, flag a use case whose flow touches changed code (derived from the element diff).
       const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(n.id)) ? '<span class="badge modified">changed</span>' : '';
       return `<li class="uc-row${changed ? ' uc-changed' : ''}" data-uc="${esc(n.id)}" tabindex="0">`
-        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${changed}${coveragePill(n.id)}${pill(n.id)}</span>`
+        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${changed}${pill(n.id)}</span>`
         + (to ? `<span class="uc-to">${mdInline(to)}</span>` : '')
         + '</li>';
     }).join('');
@@ -3167,7 +3135,9 @@ function renderSystem() {
     return `<section class="uc-group" id="${id}"><h3 class="uc-actor">${esc(title)}</h3>${inner}</section>`;
   };
   const parts = [];
-  // Entry points — grouped by kind; each row links to its owning component.
+  // Entry points — grouped by kind; each kind heading carries a small self/external tag, and the
+  // self-starting kinds are listed first so "what runs with no user?" clusters at the top without a
+  // separate section. Each row links to its owning component.
   const eps = G.entry_points || [];
   if (eps.length) {
     const byKind = {};
@@ -3177,15 +3147,21 @@ function renderSystem() {
       if (!byKind[k]) { byKind[k] = []; order.push(k); }
       byKind[k].push(e);
     }
+    // a kind is self-starting if any of its rows is; self kinds sort first (stable → first-seen order
+    // preserved within each activation).
+    const kindAct = (k) => (byKind[k].some((e) => e.activation === 'self') ? 'self' : 'external');
+    order.sort((a, b) => (kindAct(a) === 'self' ? 0 : 1) - (kindAct(b) === 'self' ? 0 : 1));
     let inner = '';
     for (const k of order) {
+      const act = kindAct(k);
       const rows = byKind[k].map((e) => {
         const comp = (e.component && G.nodes && G.nodes[e.component])
           ? `<button type="button" class="src sys-node" data-id="${esc(e.component)}" data-idx="${e.index || 0}">${esc(nodeName(e.component))}</button>`
           : '<span class="gloss-none">—</span>';
         return `<tr><td>${mdInline(e.trigger || '')}</td><td>${comp}</td><td>${srcCell(e.source || '')}</td></tr>`;
       }).join('');
-      inner += `<h4 class="sys-subhead">${esc(k)}</h4>`
+      const tag = act === 'self' ? '<span class="sys-kind-tag sys-kind-tag--self">auto-run</span>' : '';
+      inner += `<h4 class="sys-subhead">${esc(k)}${tag}</h4>`
         + '<table class="glossary"><thead><tr><th>Trigger</th><th>Component</th><th>Source</th></tr></thead>'
         + `<tbody>${rows}</tbody></table>`;
     }
@@ -3261,8 +3237,7 @@ function bindSysIndex() {
 }
 
 // The Tests tab: the test-completeness gap table (tests[]) led by the honesty note (tests_note — was the
-// suite actually run, or is every row inferred?). Each row's coverage also badges its target node on the
-// diagram (see applyCoverageOverlay). Rendered like the System/Glossary tabs.
+// suite actually run, or is every row inferred?). Rendered like the System/Glossary tabs.
 function renderTests() {
   const note = (GRAPH.tests_note || '').trim();
   const noteHtml = note ? `<div class="tests-note">${mdInline(note)}</div>` : '';
@@ -3343,7 +3318,6 @@ async function render(sArg, transient) {
   // selection (pendingSelect below) instead runs through updateFolderPeek, which browses only for a folder.
   if (!transient && !pendingSelect && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setBrowsing(true); }
   if (mode === 'diff' && hasDiff()) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
-  else applyCoverageOverlay();  // test-coverage badges (non-diff views); no-op when the map has no tests
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
   // pendingMatchTextId: a node reached this way ALWAYS gets the zoom-to-match-sidebar-text-size move
@@ -5321,7 +5295,7 @@ if (lsGet(LS.searchOpen) === '1') setSearchOpen(true);  // collapsed by default;
 buildFileTree();
 initServerMode();  // probe for `coyodex serve`; on success reveal + wire the file browser and code viewer
 
-setLegendMode('diff');  // seed the legend (renderChrome swaps it to coverage on non-diff views when apt)
+setLegendMode('diff');  // seed the legend (shown only on diff views)
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }

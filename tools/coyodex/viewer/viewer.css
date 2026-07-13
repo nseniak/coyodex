@@ -146,6 +146,12 @@ body.vresizing #stage { pointer-events: none; }
 .sys-subhead { margin: 14px 0 2px; font-size: 11px; font-weight: 700; text-transform: uppercase;
                letter-spacing: .04em; color: #64748b; }
 .sys-subhead:first-of-type { margin-top: 4px; }
+/* Self-starting entry-point kinds (timer/loop/boot/signal/queue consumer — run with no user) get a
+   small amber "auto-run" tag on their heading and sort first; externally-triggered kinds
+   (route/CLI/callback) are the default and stay untagged. */
+.sys-kind-tag { display: inline-block; margin-left: 8px; font-size: 10px; font-weight: 600;
+                letter-spacing: .02em; text-transform: none; border-radius: 8px; padding: 0 6px;
+                color: #b45309; background: #fff7ed; vertical-align: 1px; }
 .sys-extra { font-size: 13px; color: #374151; line-height: 1.55; }
 .system-wrap .sys-node { font-family: inherit; font-size: 13px; color: #2563eb; background: none;
                          border: 0; padding: 0; cursor: pointer; text-align: left; }
@@ -389,6 +395,11 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 #panel .tb-kind { display: inline-block; font-size: 10px; font-weight: 600; text-transform: uppercase;
                   letter-spacing: .03em; color: #0e7490; background: #ecfeff; border-radius: 8px;
                   padding: 0 6px; margin-right: 5px; vertical-align: 1px; }
+/* Self-starting entry points (timer/loop/boot/signal/queue consumer) read in a warm amber, distinct from
+   the cyan of externally-triggered ones; the left accent persists even when the row is unselected. */
+#panel .tb-kind--self { color: #b45309; background: #fff7ed; }
+#panel .tb-ep--self { box-shadow: inset 3px 0 0 #f59e0b; }
+#panel .tb-ep--self.sel { box-shadow: inset 3px 0 0 #b45309; }
 #panel .xwhy { padding-left: 14px; margin-top: 2px; }
 /* A crossing row that carries a call site is selectable: click reveals its location in the code viewer.
    A hover tint + pointer signal the affordance; the selected row keeps an indigo tint + left accent.

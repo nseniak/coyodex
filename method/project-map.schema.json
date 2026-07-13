@@ -503,6 +503,15 @@
           "type": "string",
           "pattern": "^C\\d+$",
           "description": "the owning component's id."
+        },
+        "activation": {
+          "type": "string",
+          "enum": [
+            "self",
+            "external",
+            ""
+          ],
+          "description": "who starts it: 'self' (timer/loop/boot/signal/queue consumer \u2014 runs with no caller) or 'external' (route/CLI/callback/webhook); '' \u2192 inferred from `kind`."
         }
       },
       "required": [

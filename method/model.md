@@ -63,7 +63,8 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "alternative": "<fallback used instead, and when>",
                      "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "run_commands":  [ { "action", "command", "source" } ],                       // T3
-  "entry_points":  [ { "kind", "trigger", "source": "<path:line>", "component": "Cn" } ],  // T4
+  "entry_points":  [ { "kind", "trigger", "source": "<path:line>", "component": "Cn",
+                       "activation": "<self|external|'' → inferred from kind>" } ],           // T4
 
   "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "source", "confidence" } ],
   "entities":    [ { "id": "En",  "name", "store", "meaning", "subdomain": "SDn|null",

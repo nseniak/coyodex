@@ -119,7 +119,7 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   where the command is defined (the script / Makefile target / config line), not a doc pointer.
 
 ### Level 1 (one Level-0 row expanded)
-- **T4 Entry points**: `Kind | Trigger | Code entity | Component`.
+- **T4 Entry points**: `Kind | Trigger | Code entity | Component | Activation` (activation = self|external, blank → inferred from kind).
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
   like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).
@@ -164,8 +164,7 @@ prose level, the model has no field for it, and builders rightly skipped it — 
 
 ### Test completeness — measure against the MAP, not line %
 **This table is shown in the viewer**: the `coyodex serve` Tests tab renders the honesty note + the
-gap table, and each row's `Tested?` also badges its `target` element (use case / component) on the
-diagram (tested / partial / untested-critical) — so an empty table is a visible gap, not an invisible one.
+gap table (`Target · Tested? · Test(s) · Gap/risk · Confidence`) — so an empty table is a visible gap.
 **Be honest about whether you ran it.** A gap table built by *reading* tests is **inferred**; only
 running the suite with coverage makes it **verified**. If you don't run it (the suite is slow or
 costs money — e.g. paid integration tests), state that above the table and mark every row inferred;
@@ -268,7 +267,13 @@ app, not just code.
 
 **Build order (internal) ≠ present order.** Build bottom-up so each table's inputs exist
 first: T3 → harvest T4, T2, T5 (a full sweep — also the completeness checklist that
-catches side doors) → synthesize T1 → **cluster components into Subsystems** (large maps: by
+catches side doors: after the front-door routes/CLI/callbacks, do a **second pass for
+self-starting entry points** — anything that runs with no caller: scheduled/cron jobs,
+`while True`/interval loops, `asyncio.create_task`/background workers/threads, queue & stream
+**consumers** (`.consume`/`.subscribe`/poll), boot/**startup** hooks (`on_event('startup')`,
+lifespan, `atexit`), and OS **signal** handlers. Tag each entry point `activation` (self|external);
+a long-running service with **zero** self-starting entry points is a red flag — assert why, don't
+leave the list front-doors-only) → synthesize T1 → **cluster components into Subsystems** (large maps: by
 directory first, then dependency/behavioral cohesion; minimize inter-group edges; mark
 directory-derived = verified, cohesion-derived = inferred) → **cluster entities into Subdomains**
 (large domain models: the same recipe on the entity graph — by `SOURCE` directory first, then
@@ -498,7 +503,9 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 **Completeness check before the barrier (lead, not delegated).** Before the Phase 2 synthesis, the
 lead confirms **every prescribed slice came back with its sections** — in particular that the T5 owner
 returned per-entity cards *with* RELATIONS, and that each agent that wrote `(none found)` is genuinely
-empty rather than under-delivered. Re-ping any agent that dropped or thinned its sections; a missing
+empty rather than under-delivered. For T4, confirm the **self-starting second pass ran**: a
+long-running service whose entry points are all routes/mounts/CLI has likely skipped its background
+loops — re-ping with the self-starting checklist stated. Re-ping any agent that dropped or thinned its sections; a missing
 section caught here is cheap, one discovered after synthesis is a re-trace. The same "every prescribed
 table came back" rule reaches past the barrier to the **test-completeness table**: after the Phase 3
 trace's test-completeness step, confirm `tests[]` came back non-empty before finalizing (an empty

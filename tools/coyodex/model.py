@@ -135,6 +135,7 @@ class EntryPoint:                    # T4
     trigger: str = ""
     source: str = ""                 # md link to the code entity — where the entry point LIVES
     component: str = ""              # the owning C id
+    activation: str = ""             # "self" | "external" (grammar.ACTIVATIONS); "" → inferred from kind
 
 
 @dataclass
