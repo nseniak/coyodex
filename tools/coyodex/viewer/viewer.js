@@ -740,9 +740,8 @@ function showNodeDetailSynced(id) {
 
 function showEdge(e) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  // domain relations carry a kind (composition/…) + cardinality; component edges carry why/where.
-  // The single title pill is always the verb; a relation's kind rides in the body, next to cardinality.
-  const kindRow = e.kind ? '<dt>Kind</dt><dd>' + esc(e.kind) + '</dd>' : '';
+  // domain relations carry a kind (composition/…) + cardinality; component edges carry why/where. The
+  // verb + kind ride in the row's why line (or the Verb fact row); cardinality/impl/keyed sit below.
   const card = (e.src_card || e.dst_card)
     ? '<dt>Cardinality</dt><dd>' + esc((e.src_card || '') + ' → ' + (e.dst_card || '')) + '</dd>' : '';
   // How the relation is implemented: the backing field (resolved in build_graph; `↩`-named when it
@@ -761,19 +760,29 @@ function showEdge(e) {
     ? '<dt>Keyed by</dt><dd>«key» ' + esc(keyed.join(', '))
       + ' <span class="muted">(storage key, not a row field)</span></dd>'
     : '';
-  // No source ref in the panel: selecting the edge already mirrors its `where` location into the file
-  // browser + code viewer below, which carry the path and the sole "open externally" control.
+  // Present the arrow like a SELECTED crossings-list row (the from→to pair + a why/verb line), then the
+  // structured relation facts beneath — so selecting an arrow directly reads the same as picking it from
+  // an arrow list. The why line mirrors each list's convention: an explanation when there is one, else
+  // the verb (+ kind). The verb goes to a `dl` row when the explanation already fills the why line, so
+  // it is never lost. The row itself is a hover/click-wired arrow row (bindArrowRows below).
+  // The why line mirrors each list's convention exactly: a component arrow shows its explanation and NO
+  // verb (like the connections list); a domain relation shows `verb (kind)` (like the relations list).
+  // The verb is not repeated as a fact — only cardinality / implemented-by / keyed-by hang below (the
+  // richer relation detail a bare list row doesn't carry).
+  const kindTag = e.kind ? ' <span class="muted">(' + esc(e.kind) + ')</span>' : '';
+  const whyLine = e.why ? mdInline(e.why) : (e.verb ? esc(e.verb) + kindTag : '');
+  const facts = card + implRow + keyedRow;
   const wn = e.where ? whereNode(e.where) : null;
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(e.src)) + ' → ' + esc(nm(e.dst)) + '</h2>'
-    + '<span class="badge edge">' + esc(e.verb) + '</span></div>'
-    + (e.why ? '<p class="explain">' + mdInline(e.why) + '</p>' : '')
-    + '<dl>' + kindRow + card + implRow + keyedRow + '</dl>';
+  panel.innerHTML = '<ul class="xlist">'
+    + arrowRow(e.src, e.dst, nm(e.src), nm(e.dst), whyLine, e.where, true)
+    + '</ul>' + (facts ? '<dl>' + facts + '</dl>' : '');
   // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
   // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
   cvElement = null;  // an edge has no single owning element -> no header pill
   setTreeSelection(null);  // clear pill emphasis + selection pills
   highlightTreePath(refTreePath(wn && wn.file, wn && wn.line));
   if (wn) syncCodeView(wn.file, wn.line, []);  // and into the code viewer (FULL mode); no switcher for an edge
+  bindArrowRows(panel);  // the selected row hover-highlights its own arrow + click re-opens the call site
 }
 
 // Context-edge panel: actor→system shows the role's wants; system→dep shows what it's used for
@@ -815,20 +824,6 @@ function subsystemBlock(id) {
   return '<h3>' + esc(n.name) + '</h3>'
     + (purpose ? '<p class="explain">' + mdInline(purpose) + '</p>' : '');
 }
-function showTwoSubsystems(a, b) {
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
-    + '<span class="badge edge">connection</span></div>'
-    + subsystemBlock(a) + '<hr>' + subsystemBlock(b);
-}
-// The domedge default panel — the two subdomains being framed. subsystemBlock reads only id/name/Purpose,
-// which an SD node carries too, so it doubles as the subdomain block.
-function showTwoSubdomains(a, b) {
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' → ' + esc(nm(b)) + '</h2>'
-    + '<span class="badge edge">relations</span></div>'
-    + subsystemBlock(a) + '<hr>' + subsystemBlock(b);
-}
 // The bridge-card default panel — the subsystem and subdomain being framed (the structure↔domain pair).
 function showBridge(sid, sd) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
@@ -843,16 +838,52 @@ function showBridge(sid, sd) {
 function whereAttr(where) {
   return (where && localRef(where)) ? ' data-where="' + esc(where) + '"' : '';
 }
-// Wire every selectable arrow row in a just-rendered panel: a click selects it (one at a time) and
-// shows its call site in the code viewer — the same reveal a real edge selection does.
+// One crossings-list row: the from→to pair + a why line, tagged with its endpoint ids (so hovering it
+// highlights the arrow in the diagram) and its call site (so clicking it opens the code). `sel` renders
+// it in the selected state — used for the single-arrow view (showEdge), which reuses this exact row.
+function arrowRow(srcId, dstId, srcName, dstName, whyHtml, where, sel) {
+  return '<li class="xrow' + (sel ? ' sel' : '') + '"' + whereAttr(where)
+    + (srcId ? ' data-src="' + esc(srcId) + '"' : '') + (dstId ? ' data-dst="' + esc(dstId) + '"' : '')
+    + '><div class="xpair">' + esc(srcName) + ' → ' + esc(dstName) + ':</div>'
+    + (whyHtml ? '<div class="xwhy">' + whyHtml + '</div>' : '') + '</li>';
+}
+// Glow (or un-glow) the drawn arrow that represents the `src`→`dst` crossing in the current diagram.
+// Prefer the exact concrete arrow; else the arrow that COVERS the crossing — a component→collapsed-box
+// arrow that bundles it, or (on an overview) the group→group bundle — since a concrete crossing isn't
+// always drawn 1:1. A no-op when nothing covers it, or when the arrow is SELECTED (leave its HILITE).
+function hoverArrow(src, dst, on) {
+  if (!mainScene) return;
+  const covers = (drawnEnd, id) => drawnEnd === id || isAncestorOf(drawnEnd, id);
+  const x = mainScene.edgeEls.find((el) => el.e && el.e.src === src && el.e.dst === dst)
+    || mainScene.edgeEls.find((el) => el.e && covers(el.e.src, src) && covers(el.e.dst, dst));
+  if (!x) return;
+  // Store/restore the element's OWN prior filter — the browser reformats style.filter on read, so a
+  // string `=== HOVER` compare can't tell "we set it"; the stash restores whatever it was (rest, a
+  // synthetic base, or a selected arrow's HILITE) exactly.
+  const set = (el) => {
+    if (!el) return;
+    if (on) { if (el._preHover === undefined) el._preHover = el.style.filter; el.style.filter = HOVER; }
+    else if (el._preHover !== undefined) { el.style.filter = el._preHover; el._preHover = undefined; }
+  };
+  set(x.path); set(x.label);
+}
+// Wire every arrow row in a just-rendered panel: HOVER highlights its diagram arrow (every row, even a
+// non-clickable one); CLICK (only a row with a call site) selects it + reveals its source in the code.
 function bindArrowRows(root) {
-  const rows = root.querySelectorAll('li.xrow[data-where]');
-  rows.forEach((li) => li.addEventListener('click', () => {
-    rows.forEach((o) => o.classList.remove('sel'));
-    li.classList.add('sel');
-    const wn = whereNode(li.getAttribute('data-where'));
-    openInCodeViewer(wn.file, wn.line);
-  }));
+  const rows = [...root.querySelectorAll('li.xrow')];
+  rows.forEach((li) => {
+    const src = li.getAttribute('data-src'), dst = li.getAttribute('data-dst');
+    if (src && dst) {
+      li.addEventListener('mouseenter', () => hoverArrow(src, dst, true));
+      li.addEventListener('mouseleave', () => hoverArrow(src, dst, false));
+    }
+    if (li.hasAttribute('data-where')) li.addEventListener('click', () => {
+      rows.forEach((o) => o.classList.remove('sel'));
+      li.classList.add('sel');
+      const wn = whereNode(li.getAttribute('data-where'));
+      openInCodeViewer(wn.file, wn.line);
+    });
+  });
 }
 // Selecting (not drilling) a Subsystems arrow: list every component→component crossing it bundles as
 // `from → to:` with its explanation (and a link to its call site) indented below — one uniform font, no
@@ -870,9 +901,7 @@ function showContainerEdge(a, b, drawn) {
   const dstC = drawn && isComp(drawn.dst) ? drawn.dst : null;
   if (srcC) list = list.filter((r) => r.src === srcC);
   if (dstC) list = list.filter((r) => r.dst === dstC);
-  const items = list.map((r) =>
-    '<li class="xrow"' + whereAttr(r.where) + '><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
-    + (r.why ? '<div class="xwhy">' + mdInline(r.why) + '</div>' : '') + '</li>').join('');
+  const items = list.map((r) => arrowRow(r.src, r.dst, r.srcName, r.dstName, r.why ? mdInline(r.why) : '', r.where)).join('');
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
     + '<span class="badge edge">connections</span></div>'
@@ -894,9 +923,8 @@ function showDomainContainerEdge(a, b, drawn) {
   const dstE = drawn && isEnt(drawn.dst) ? drawn.dst : null;
   if (srcE) list = list.filter((r) => r.src === srcE);
   if (dstE) list = list.filter((r) => r.dst === dstE);
-  const items = list.map((r) =>
-    '<li class="xrow"' + whereAttr(r.where) + '><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
-    + '<div class="xwhy">' + esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : '') + '</div></li>').join('');
+  const items = list.map((r) => arrowRow(r.src, r.dst, r.srcName, r.dstName,
+    esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''), r.where)).join('');
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
     + '<span class="badge edge">relations</span></div>'
@@ -926,9 +954,8 @@ function showBridgeEdge(drawn) {
           : k === 'subdomain' ? isAncestorOf(id, r.dst)
             : true;
   }));
-  const items = list.map((r) =>
-    '<li class="xrow"' + whereAttr(r.where) + '><div class="xpair">' + esc(r.srcName) + ' → ' + esc(r.dstName) + ':</div>'
-    + '<div class="xwhy">' + esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : '') + '</div></li>').join('');
+  const items = list.map((r) => arrowRow(r.src, r.dst, r.srcName, r.dstName,
+    esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : ''), r.where)).join('');
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(drawn.src)) + ' → ' + esc(nm(drawn.dst)) + '</h2>'
     + '<span class="badge edge">bridge</span></div>'
     + '<div class="xcount">' + list.length + ' link' + (list.length === 1 ? '' : 's') + '</div>'
@@ -1940,13 +1967,15 @@ function bindContainerEdge(scene, p, label, a, b, focusE) {
   // Subsystems overview) has no component end, so it opens the pair unfocused, as before. If the picked
   // component isn't drawn in the edge card, render falls back to the plain two-subsystem panel.
   const focusComp = isComp(drawn.src) ? drawn.src : (isComp(drawn.dst) ? drawn.dst : null);
-  const edge = focusComp ? { kind: 'edge', a, b, sel: 'node:' + focusComp } : { kind: 'edge', a, b };
+  // Drill lands on the crossings LIST. For a member's cross-arrow, carry the drawn endpoints as `efocus`
+  // so the list is narrowed to just that member's crossings; a box↔box arrow lists the whole pair.
+  const edge = focusComp ? { kind: 'edge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'edge', a, b };
   // Key the selection by the DRAWN endpoints, not the collapsed pair: a card can draw several arrows to
   // the same neighbour (one per member component), and each is its own selectable arrow with its own
   // filtered panel.
   bindSelectEdge(scene, p, label, drawn, 'sedge:' + drawn.src + '>' + drawn.dst,
     () => showContainerEdge(a, b, drawn),
-    { onDrill: () => { if (focusComp) pendingCenter = focusComp; go(edge); }, actionFn: () => actionTipEdge(a, b, drawn) });
+    { onDrill: () => go(edge), actionFn: () => actionTipEdge(a, b, drawn) });
 }
 // A bridge arrow across the structural↔domain groupings (component↔subdomain in a subsystem card,
 // subsystem↔entity in a subdomain card, labelled owns/reads). Registered as an edge with its DRAWN
@@ -2278,10 +2307,12 @@ function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
   // card with THAT entity selected (its relations lit, the rest of the pair dimmed); a box↔box arrow
   // (the Domain overview) opens the pair unfocused, as before.
   const focusEnt = isEnt(drawn.src) ? drawn.src : (isEnt(drawn.dst) ? drawn.dst : null);
-  const dom = focusEnt ? { kind: 'domedge', a, b, sel: 'node:' + focusEnt } : { kind: 'domedge', a, b };
+  // Drill lands on the relations LIST — narrowed to the focal entity's relations for a member arrow,
+  // the whole pair for a box↔box arrow (see bindContainerEdge for the same shape).
+  const dom = focusEnt ? { kind: 'domedge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'domedge', a, b };
   bindSelectEdge(scene, p, label, drawn, 'dctxedge:' + drawn.src + '>' + drawn.dst,
     () => showDomainContainerEdge(a, b, drawn),
-    { onDrill: () => { if (focusEnt) pendingCenter = focusEnt; go(dom); }, actionFn: () => actionTipEdge(a, b, drawn) });
+    { onDrill: () => go(dom), actionFn: () => actionTipEdge(a, b, drawn) });
 }
 // Subdomain neighbourhood (a classDiagram): the focal subdomain's entities (framed in a namespace)
 // SELECT / open-source like the flat Domain view; each collapsed neighbour-subdomain box ⌘-drills
@@ -2705,8 +2736,8 @@ function applyDefaultPanel(s) {
   setTreeSelection(null);  // a default panel / canvas deselect drops pill emphasis + selection pills
   if (s.kind === 'subsystem') showNode(s.sid);
   else if (s.kind === 'domsub') showNode(s.sd);
-  else if (s.kind === 'edge') showTwoSubsystems(s.a, s.b);
-  else if (s.kind === 'domedge') showTwoSubdomains(s.a, s.b);
+  else if (s.kind === 'edge') showContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b });
+  else if (s.kind === 'domedge') showDomainContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b });
   else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
   else if (s.kind === 'usecase') showUseCase(s.uc);
   else if (s.kind === 'libs') showLibsFold();
