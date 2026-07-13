@@ -21,7 +21,9 @@ be scored **down**, not guessed.
    number is a Drill-accuracy hit, never a grounding refutation of the relationship it anchors.
 
 4. **Altitude discipline** — is each element at the right zoom (a component is a component, not a whole
-   subsystem folded into one box; the domain model is not under-harvested)?
+   subsystem folded into one box; the domain model is not under-harvested)? And do the diagrams read at
+   that zoom: is the tree balanced (each screen near the 5±2 fan-out target), is the top level grouped by
+   capability rather than tech tier, and is no level a single-child wrapper?
 
 5. **Happy-Path coherence** — does the ordered spine read as a real end-to-end walk, with each step's
    `why:` precondition satisfied by an earlier step?
