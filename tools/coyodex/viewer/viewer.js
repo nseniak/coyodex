@@ -3016,6 +3016,12 @@ function updateFolderPeek(id) {
   if (!SERVED || treePinned) { return; }
   const consumed = suppressBrowse; suppressBrowse = false;
   const n = GRAPH.nodes[id];
+  const fileCount = (n && Array.isArray(n.files)) ? n.files.length : 0;
+  // An element that spans SEVERAL files opens the file BROWSER (the reader picks which one) — its files
+  // are already filtered into the tree by the selection footprint. A single-file element opens that one
+  // file directly. `consumed` means the reader just clicked a file IN the browser, so keep that file
+  // shown instead of re-opening the browser over it.
+  if (fileCount > 1 && !consumed) { setBrowsing(true); return; }
   const showsFile = !!(n && n.file && localRef(n.file) && !isDirRef(n.file, n.line));
   if (showsFile || consumed) { setBrowsing(false); return; }
   const path = pathByNode[id] || (n ? refTreePath(n.file, n.line) : null);
@@ -3116,6 +3122,7 @@ function onRowClick(key) {
     // explicit load matters when the reader was already viewing ANOTHER of this same node's files (an owned
     // file): without it, selecting the node hits the syncCodeView "belongs" guard, which keeps that other
     // file shown and never jumps to the anchor the reader just clicked.
+    if (wasPeeking) suppressBrowse = true;  // picked in the browser -> keep it shown (a multi-file element would else re-peek the browser)
     const an = GRAPH.nodes[e.node];
     cvElement = e.node;  // owning-element pill correct from the first header render (before selection)
     loadCode(e.path, an ? an.line : null);
