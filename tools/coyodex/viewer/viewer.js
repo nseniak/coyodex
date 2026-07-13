@@ -1963,6 +1963,11 @@ function applyPendingScroll(path) {
     cvPendingTop = null;
   }
 }
+// Drop a pending scroll for `path` without applying it — for an exit that renders no table (a failed /
+// empty / binary / too-large load), so a stale offset can't fire on a later successful load.
+function clearPendingScroll(path) {
+  if (cvPendingTop && path && cvPendingTop.file === path) cvPendingTop = null;
+}
 function captureViewState() {  // stash the leaving entry's pan/zoom + selection + right-pane content
   if (hi < 0 || !history[hi]) { pendingLeaveContent = undefined; return; }
   if (mainPz) {
@@ -2078,7 +2083,7 @@ function driveTransition(from) {
   // untouched and just restore the right pane (+ any selection change) and refresh the chrome.
   if (from && to && mainScene && stateKey(from) === stateKey(to)) {
     if (to.sel && mainScene.selectors[to.sel]) mainScene.selectors[to.sel]();
-    else if (!to.sel) resetScene(mainScene);
+    else resetScene(mainScene);   // no sel, OR a sel whose selector is gone -> clear (never leave a stale one)
     applyContent(to.content);
     renderChrome(to);
     return;
@@ -4033,10 +4038,13 @@ function syncTreeDiff() {
 // cross-line context); +/- rows are coloured, `@@` hunks separate. Reuses the .cvcode table shell.
 function renderCodeDiff(data, token) {
   if (token !== cvReq) return;
-  if (data && data.binary) { cvscroll.innerHTML = '<p class="cvempty">Binary file — no text diff.</p>'; cvTable = null; return; }
-  if (data && data.tooLarge) { cvscroll.innerHTML = '<p class="cvempty">Diff too large to show.</p>'; cvTable = null; return; }
+  // Any exit that renders no table must also drop a pending scroll for this file, so a failed restore
+  // can't leave the offset armed to fire on some later successful load of the same path.
+  const noTable = (msg) => { cvscroll.innerHTML = '<p class="cvempty">' + msg + '</p>'; cvTable = null; clearPendingScroll(cvPath); };
+  if (data && data.binary) { noTable('Binary file — no text diff.'); return; }
+  if (data && data.tooLarge) { noTable('Diff too large to show.'); return; }
   const rows = data && Array.isArray(data.rows) ? data.rows : [];
-  if (!rows.length) { cvscroll.innerHTML = '<p class="cvempty">No changes in this file for the selected range.</p>'; cvTable = null; return; }
+  if (!rows.length) { noTable('No changes in this file for the selected range.'); return; }
   const sign = { add: '+', del: '-', ctx: ' ' };
   const body = rows.map((r) => {
     if (r.op === 'hunk') return '<tr class="cvhunk"><td class="ln"></td><td class="code">' + esc(r.text) + '</td><td class="cvtag"></td></tr>';
@@ -4050,7 +4058,8 @@ function renderCodeDiff(data, token) {
   cvTable = cvscroll.querySelector('table.cvcode');
   cvLineCount = rows.length;
   cvminimap.textContent = '';   // no overview ruler in diff mode
-  applyPendingScroll(data && data.path);  // honor a history restore's saved scroll offset for this file
+  applyPendingScroll(cvPath);   // honor a history restore's saved scroll (keyed to the REQUESTED path,
+  //                               not the server's data.path — they differ for a renamed file in diff mode)
 }
 // Re-run the search when a new file finishes rendering, but only while the sidebar is showing a "@"
 // file-scoped outline — so the outline follows whatever file the code viewer now shows.
@@ -4085,10 +4094,10 @@ async function loadCode(path, line) {
     if (token !== cvReq) return;
     if (!r.ok) {
       cvscroll.innerHTML = '<p class="cverr">' + (r.status === 404 ? 'Not tracked in this commit.' : 'Could not load this file.') + '</p>';
-      cvPath = null; cvPinned = null; return;  // nothing shown -> drop any pin so it can't suppress a later view
+      cvPath = null; cvPinned = null; clearPendingScroll(path); return;  // nothing shown -> drop any pin + pending scroll
     }
   } catch (_) {
-    if (token === cvReq) { cvscroll.innerHTML = '<p class="cverr">Could not load this file.</p>'; cvPath = null; cvPinned = null; }
+    if (token === cvReq) { cvscroll.innerHTML = '<p class="cverr">Could not load this file.</p>'; cvPath = null; cvPinned = null; clearPendingScroll(path); }
     return;
   }
   if (asDiff) {
