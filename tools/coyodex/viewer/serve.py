@@ -32,6 +32,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+from coyodex.impact_git import compute_impact, load_extents
+from coyodex.impact_ripple import RippleOptions, build_impact_result
 from coyodex.model import ModelError, load_model
 from coyodex.viewer.diffmap import (
     WORKTREE,
@@ -389,6 +391,40 @@ def project_commits(proj: Project, limit: int = 25) -> dict[str, object]:
     return {"commits": commits, "pin": pin_sha}
 
 
+def project_impact(proj: Project, query: dict[str, list[str]]) -> dict:
+    """The impact-engine payload (design: internal/docs/impact-and-update-design.md): project an
+    arbitrary B→T diff (any refs; target may be WORKTREE) onto the map's anchors and ripple once.
+    Loads the model fresh (cheap; always current) and the preindex symbol extents when present —
+    an extent-less pre-index just resolves every anchor at file rung, honestly."""
+    def q(name: str, default: str | None = None) -> str | None:
+        vals = query.get(name) or []
+        return vals[0] if vals else default
+
+    base = q("base") or proj.commit
+    target = q("target") or WORKTREE
+    file_scope = q("file")
+    try:
+        depth = max(1, min(4, int(q("depth") or "2")))
+    except ValueError:
+        depth = 2
+    opts = RippleOptions(
+        reads=q("reads") in ("1", "true"),
+        entity_graph=q("entity_graph") in ("1", "true"),
+        callgraph=q("callgraph") in ("1", "true"),
+        callgraph_depth=depth,
+    )
+    model = load_model(proj.map_json.read_text(encoding="utf-8"))
+    extents = {}
+    pre_path = proj.map_json.parent / "preindex.json"
+    if pre_path.is_file():
+        try:
+            extents = load_extents(json.loads(pre_path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            extents = {}
+    core = compute_impact(proj.repo_root, model, extents, base, target)
+    return build_impact_result(model, core, opts, file_scope)
+
+
 def project_tree(proj: Project) -> FileTreeNode:
     """The file-browser tree for a project — git file set at the commit, overlaid with map coverage.
 
@@ -674,6 +710,17 @@ class Handler(BaseHTTPRequestHandler):
         if rest == ["commits"]:
             # Recent commits from the pin — the diff picker's list of things to compare the map against.
             return self._json(project_commits(proj))
+        if rest == ["impact"]:
+            # The impact engine (M2): ?base=&target=&file=&reads=&entity_graph=&callgraph=&depth=.
+            # Any base/target pair (the pin need NOT be an endpoint); bad refs/specs are the user's
+            # input → 400 (ImpactError is a ValueError); model/git faults → 500.
+            try:
+                return self._json(project_impact(proj, query))
+            except ValueError as e:
+                return self._send(400, "text/plain; charset=utf-8", str(e).encode("utf-8"))
+            except (ModelError, OSError, KeyError, IndexError, TypeError) as e:
+                return self._send(500, "text/plain; charset=utf-8",
+                                  f"could not build the impact: {e}".encode("utf-8"))
         if rest == ["srcdiff"]:
             # One file's inline diff across the active range, for the code view's diff mode.
             path = (query.get("path") or [""])[0]

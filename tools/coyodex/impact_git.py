@@ -280,6 +280,7 @@ def compute_impact(repo: Path, model: ProjectModel, extents: Extents,
             if terr:
                 deepest = [a for a in terr if len(a.path) == len(terr[0].path)]
                 change = {"A": "added", "D": "deleted"}.get(ch.status, "modified")
-                rec.hits = [DirectHit(a.eid, a.kind, a.path, change, "file", a.field, a.owner)
+                rec.hits = [DirectHit(a.eid, a.kind, a.path, change, "file", a.field, a.owner,
+                                      territory=True)
                             for a in deepest]
     return core

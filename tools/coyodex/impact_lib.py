@@ -273,6 +273,7 @@ class DirectHit:
     field: str
     owner: str | None = None
     drift_to: int | None = None  # for change=="drifted": the anchor's new start line at T
+    territory: bool = False   # a dir-anchor claim (no finer anchor matched) — ranked below ripples
 
 
 def enclosing_extent(extents: list[Extent], line: int) -> Extent | None:
