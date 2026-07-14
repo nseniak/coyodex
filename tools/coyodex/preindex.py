@@ -117,6 +117,10 @@ def _finalize_weight(node: dict) -> dict:
 def build_symbols(files: list[Path], root: Path) -> tuple[dict, dict]:
     root = root.resolve()
     by_name: dict[str, list[dict]] = {}
+    # Per-file symbol EXTENTS — `{file: [[start, end, name, kind], ...]}` sorted by start line.
+    # The impact engine's symbol-resolution rung reads these (an anchor's enclosing definition
+    # interval); by_name keeps its shape so existing consumers (serve's symbol search) are untouched.
+    extents: dict[str, list[list[object]]] = {}
     parsed = 0
     failures: list[dict] = []
     langs_with: set[str] = set()
@@ -139,6 +143,10 @@ def build_symbols(files: list[Path], root: Path) -> tuple[dict, dict]:
         langs_with.add(lang)
         for s in syms:
             by_name.setdefault(s.name, []).append({"file": s.file, "line": s.line, "kind": s.kind})
+            if s.end is not None:
+                extents.setdefault(s.file, []).append([s.line, s.end, s.name, s.kind])
+    for rows in extents.values():
+        rows.sort(key=lambda r: (r[0], -(r[1] if isinstance(r[1], int) else 0)))
 
     ambiguous = sorted(n for n, defs in by_name.items() if len(defs) > 1)
     meta = {
@@ -147,7 +155,7 @@ def build_symbols(files: list[Path], root: Path) -> tuple[dict, dict]:
         "languages_with_symbols": sorted(langs_with),
         "languages_seen_without_extractor": dict(sorted(langs_without.items())),
     }
-    return {"by_name": by_name, "ambiguous": ambiguous}, meta
+    return {"by_name": by_name, "ambiguous": ambiguous, "extents": extents}, meta
 
 
 def _matches_target(module: str, target_prefixes: list[str]) -> bool:

@@ -240,6 +240,7 @@ class Symbol:
     kind: str
     file: str   # repo-relative
     line: int
+    end: int | None = None  # last line of the definition (extent), when the parser provides it
 
 
 @dataclass
@@ -258,9 +259,9 @@ def py_symbols(path: Path, rel: str) -> list[Symbol]:
     out: list[Symbol] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
-            out.append(Symbol(node.name, "class", rel, node.lineno))
+            out.append(Symbol(node.name, "class", rel, node.lineno, node.end_lineno))
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            out.append(Symbol(node.name, "function", rel, node.lineno))
+            out.append(Symbol(node.name, "function", rel, node.lineno, node.end_lineno))
     return out
 
 
@@ -353,7 +354,8 @@ def ts_symbols(path: Path, rel: str, lang: str) -> list[Symbol]:
         if kind is not None:
             name = _node_name(src, node)
             if name:
-                out.append(Symbol(name, kind, rel, node.start_point[0] + 1))
+                out.append(Symbol(name, kind, rel, node.start_point[0] + 1,
+                                  node.end_point[0] + 1))
         stack.extend(node.children)
     return out
 
