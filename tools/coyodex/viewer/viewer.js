@@ -3677,10 +3677,14 @@ function selectFromTree(nodeId) {
   // navigate to a view that draws it.
   const el = mainScene && mainScene.nodeEls[t.selectId];
   if (el || (cur && stateKey(cur) === stateKey(t.state))) {  // drawn here, or already in the home view
+    // Read BEFORE selectNode overwrites it: re-selecting the ALREADY-selected element (e.g. picking
+    // another file of the same element in the tree) must hold the camera perfectly still — the reader
+    // is browsing files, not asking to be re-framed on a box they already see.
+    const alreadySelected = mainScene && mainScene.selectedKey === 'node:' + t.selectId;
     if (el) selectNode(mainScene, el, t.selectId); else showNodeDetailSynced(t.selectId);
-    // A node reached via the file tree ALWAYS gets the zoom-to-match-sidebar-text-size move — there's
+    // A node NEWLY reached via the file tree gets the zoom-to-match-sidebar-text-size move — there's
     // no modifier key on a tree row to gate it on, unlike a canvas click (see selectNodeFromCanvas).
-    if (el) matchTextSize(el);
+    if (el && !alreadySelected) matchTextSize(el);
   } else {                                                // navigate, then render() consumes pendingSelect
     pendingSelect = t.selectId;
     go(t.state);
