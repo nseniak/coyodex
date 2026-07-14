@@ -150,12 +150,6 @@ let LIVE_DIFF = null;  // {base,target,mapSide,direction,elements,changes,counts
 let IMPACT = null;     // the api/impact payload, or null
 let impactTh = 6;      // strength threshold: 0 direct-only · 4 +structural · 6 +behavioral/data · 7 +call-graph
 function hasDiff() { return !!(LIVE_DIFF || HAS_DIFF); }  // any diff overlay available for this render
-// The endpoint speaks created/modified/deleted; the viewer's badge vocabulary is added/modified/deleted.
-function diffStateFromElements(elements) {
-  const out = {};
-  for (const id in elements) out[id] = elements[id] === 'created' ? 'added' : elements[id];
-  return out;
-}
 let mainPz = null;     // svg-pan-zoom for the current diagram
 let rc = 0;
 let renderSeq = 0;     // bumped each render(); an in-flight render bails if it's no longer current
@@ -4428,7 +4422,7 @@ function applyDiffFilterAll() {
   for (const k in rowByPath) applyDiffFilterToRow(rowByPath[k]);
 }
 // Reflect the current live diff into the file browser: badge rows, (re)apply the filter, show/hide the
-// "Changed only" control. Called from loadLiveDiff (a diff armed) and clearLiveDiff (diff dropped).
+// "Changed only" control. Called from loadImpact (impact armed) and clearLiveDiff (dropped).
 function syncTreeDiff() {
   recomputeDiffPaths();
   const btn = document.getElementById('treediffonly');
@@ -5355,94 +5349,20 @@ flownext.addEventListener('click', () => flowStepBy(1));
 // unconditionally: renderChrome hides #toggle unless a diff (baked or live) is active.
 toggle.addEventListener('click', () => { captureViewState(); mode = mode === 'diff' ? 'base' : 'diff'; render(); });
 
-// --- mechanical diff picker ------------------------------------------------------
-// Load a live diff for a range and arm the overlay. base/target are refs (or the WORKTREE sentinel);
-// empty base/target let the server default to "the map's commit → the working tree" (direction A).
-async function loadLiveDiff(base, target) {
-  const msg = document.getElementById('diffpopmsg');
-  if (msg) msg.textContent = '';
-  const qs = new URLSearchParams();
-  if (base) qs.set('base', base);
-  if (target) qs.set('target', target);
-  let data;
-  try {
-    const res = await fetch(API_BASE + 'diff?' + qs.toString(), { cache: 'no-store' });
-    const body = await res.text();
-    if (!res.ok) { if (msg) msg.textContent = body || ('diff failed (' + res.status + ')'); return; }
-    data = JSON.parse(body);
-  } catch (_) { if (msg) msg.textContent = 'Could not reach the server for the diff.'; return; }
-  IMPACT = null;                                 // mutex: one overlay at a time
-  document.getElementById('impactbtn').classList.remove('armed');
-  LIVE_DIFF = data;
-  DIFF_STATE = diffStateFromElements(data.elements || {});
-  mode = 'diff';
-  document.getElementById('diffbtn').classList.add('armed');
-  closeDiffPop();
-  syncTreeDiff();                                // badge the file browser + reveal the "Changed only" filter
-  if (cvPath) loadCode(cvPath, cvLine);          // flip an already-open file into diff mode
-  if (HAS_GROUPING) go({ kind: 'container' });   // land on the Subsystems overview so the badges show
-  else { captureViewState(); render(); }
-}
+// Drop the active impact overlay and restore the baked baseline (if any). This is the ONLY
+// interactive overlay teardown left — the old mechanical diff picker was removed in favor of the
+// impact explorer (a strict superset: any range, resolution rungs, typed ripple, provenance).
 function clearLiveDiff() {
   IMPACT = null;
   document.getElementById('impactbtn').classList.remove('armed');
   LIVE_DIFF = null;
   DIFF_STATE = BAKED_DIFF_STATE || {};
   mode = HAS_DIFF ? 'diff' : 'base';
-  document.getElementById('diffbtn').classList.remove('armed');
-  closeDiffPop();
   syncTreeDiff();                                       // clear the file-browser badges + hide the filter
   if (cvPath && cvDiffMode) loadCode(cvPath, cvLine);   // revert an open diff back to the plain file
   captureViewState();
   render();
 }
-const diffctl = document.getElementById('diffctl');
-const diffbtn = document.getElementById('diffbtn');
-const diffpop = document.getElementById('diffpop');
-function closeDiffPop() { if (diffpop) diffpop.hidden = true; }
-function openDiffPop() {
-  if (!diffpop) return;
-  diffpop.hidden = false;
-  document.getElementById('diffRef').value = '';
-  document.getElementById('diffpopmsg').textContent = '';
-  loadDiffCommits();
-}
-// Recent commits (from the pin) as one-click compare targets for direction B — so you needn't know a
-// SHA. The list drops its first entry (the pin itself, which can't be a base) and each row compares
-// that commit → the map. Fetched lazily each time the picker opens.
-let diffCommitsLoaded = false;
-async function loadDiffCommits() {
-  const host = document.getElementById('diffcommits');
-  if (!host || diffCommitsLoaded) return;
-  host.innerHTML = '<div class="diffpop-loading">Loading recent commits…</div>';
-  let data;
-  try {
-    const r = await fetch(API_BASE + 'commits', { cache: 'no-store' });
-    if (!r.ok) throw new Error('commits ' + r.status);
-    data = await r.json();
-  } catch (_) { host.innerHTML = ''; return; }
-  const commits = (data.commits || []).slice(1);   // drop the pin itself (base must differ from it)
-  diffCommitsLoaded = true;
-  if (!commits.length) { host.innerHTML = ''; return; }
-  host.innerHTML = commits.map((c) =>
-    '<button type="button" class="diffcommit" data-sha="' + esc(c.sha) + '" title="' + esc(c.subject) + '">'
-    + '<span class="dc-sha">' + esc(c.sha) + '</span>'
-    + '<span class="dc-subj">' + esc(c.subject) + '</span></button>').join('');
-  host.querySelectorAll('.diffcommit').forEach((b) =>
-    b.addEventListener('click', () => loadLiveDiff(b.getAttribute('data-sha'), ghRef())));
-}
-diffbtn.addEventListener('click', (e) => { e.stopPropagation(); diffpop.hidden ? openDiffPop() : closeDiffPop(); });
-document.addEventListener('click', (e) => { if (!diffpop.hidden && !diffctl.contains(e.target)) closeDiffPop(); });
-document.getElementById('diffSinceMap').addEventListener('click', () => loadLiveDiff('', DIFF_WORKTREE));
-function compareFromRef() {
-  const ref = document.getElementById('diffRef').value.trim();
-  if (!ref) { document.getElementById('diffpopmsg').textContent = 'Enter a commit, branch, or tag.'; return; }
-  loadLiveDiff(ref, ghRef());   // base = the earlier ref, target = the map's commit (direction B).
-  //                               ghRef() (not raw GH_COMMIT) so a `-dirty`/`git describe` pin still resolves.
-}
-document.getElementById('diffRefGo').addEventListener('click', compareFromRef);
-document.getElementById('diffRef').addEventListener('keydown', (e) => { if (e.key === 'Enter') compareFromRef(); });
-document.getElementById('diffClear').addEventListener('click', clearLiveDiff);
 const treeDiffOnlyBtn = document.getElementById('treediffonly');
 if (treeDiffOnlyBtn) treeDiffOnlyBtn.addEventListener('click', () => {
   diffOnly = !diffOnly;
@@ -5567,7 +5487,6 @@ async function loadImpact(base, target) {
     data = JSON.parse(body);
   } catch (_) { if (msg) msg.textContent = 'Could not reach the server for the impact.'; return; }
   IMPACT = data;
-  document.getElementById('diffbtn').classList.remove('armed');   // mutex with the plain diff picker
   LIVE_DIFF = { impact: true, base: data.spec.base, target: data.spec.target,
                 changes: (data.files || []).map((f) => ({ status: f.status, path: f.path,
                   oldPath: (f.p_path && f.p_path !== f.path) ? f.p_path : null })),

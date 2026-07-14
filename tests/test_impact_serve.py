@@ -23,6 +23,7 @@ from coyodex.viewer.serve import (
     build_projects,
     impact_commits,
     impact_file_diff,
+    resolve_ref,
     worktree_read,
 )
 
@@ -154,3 +155,14 @@ def test_impact_file_diff_arbitrary_range() -> None:
             assert st == 400
         finally:
             httpd.shutdown()
+
+
+# --- serve's resolve_ref (survives the old-diff removal; impact_commits depends on it) -------------
+
+def test_serve_resolve_ref_worktree_and_injection() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        commit(root, {"a.txt": "1\n"}, msg="one")
+        assert resolve_ref(root, "WORKTREE") == "WORKTREE"
+        assert resolve_ref(root, "--upload-pack=/x") is None    # a ref must never become a git flag
+        assert resolve_ref(root, "HEAD") is not None

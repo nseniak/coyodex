@@ -40,15 +40,7 @@ from coyodex.impact_git import compute_impact, load_extents
 from coyodex.impact_git import resolve_ref as impact_resolve_ref
 from coyodex.impact_ripple import RippleOptions, build_impact_result
 from coyodex.model import ModelError, load_model
-from coyodex.viewer.diffmap import (
-    WORKTREE,
-    DiffRow,
-    FileChange,
-    parse_name_status,
-    parse_unified_diff,
-    project_changes,
-    untracked_changes,
-)
+from coyodex.viewer.diffmap import DiffRow, parse_unified_diff
 from coyodex.viewer.filetree import FileTreeNode, build_tree, node_path_index, resolved_path_index
 from coyodex.viewer.gen_viewer import ViewBundle, build_view_bundle
 from coyodex.viewer.recents import RecentsStore
@@ -239,10 +231,9 @@ def _safe_rel(path: str) -> bool:
     return ".." not in Path(path).parts
 
 
-# --- git diff producers (the git layer of the mechanical diff viewer) ---------------------------
-# resolve_ref/diff_changes turn a user-supplied ref pair into a normalized FileChange list; diffmap
-# (pure) then projects it onto the map. The map's commit must be exactly one end of the range, so the
-# anchors line up with that side (see coyodex.viewer.diffmap for the direction rules).
+# --- git ref resolution (shared by the impact endpoints) ----------------------------------------
+# resolve_ref turns a user-supplied ref into a SHA the pinned-read helpers accept; the WORKTREE
+# sentinel passes through (the dirty tree isn't a committed object).
 
 _REF_RE = re.compile(r"[0-9A-Za-z_./~^@{}+-]{1,200}")
 
@@ -258,8 +249,8 @@ def resolve_ref(repo_root: Path, ref: str) -> str | None:
     """A user-supplied ref → the SHA it points at, or None if unsafe/unresolvable. The `WORKTREE`
     sentinel passes through verbatim (the dirty tree isn't a committed object). `--end-of-options`
     plus `_safe_ref` keep a hostile ref from becoming a git flag."""
-    if ref == WORKTREE:
-        return WORKTREE
+    if ref == IMPACT_WORKTREE:
+        return IMPACT_WORKTREE
     if not _safe_ref(ref):
         return None
     code, out = _git(repo_root, ["rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}"])
@@ -267,133 +258,6 @@ def resolve_ref(repo_root: Path, ref: str) -> str | None:
         return None
     sha = out.decode("utf-8", "replace").strip()
     return sha if _valid_commit(sha) else None
-
-
-def diff_changes(repo_root: Path, base_sha: str, target: str) -> list[FileChange] | None:
-    """The normalized changed-file list for `base_sha`..`target`. `target` is a committed SHA or the
-    `WORKTREE` sentinel (base → the current working tree, plus untracked files as adds). Both SHAs are
-    already hex-validated by the caller, so they cannot be git flags. None on a git failure."""
-    if not _valid_commit(base_sha):
-        return None
-    if target == WORKTREE:
-        code, out = _git(repo_root, ["diff", "--name-status", "-M", base_sha])
-    else:
-        if not _valid_commit(target):
-            return None
-        code, out = _git(repo_root, ["diff", "--name-status", "-M", base_sha, target])
-    if code != 0:
-        return None
-    changes = parse_name_status(out.decode("utf-8", "replace"))
-    if target == WORKTREE:  # `git diff` omits untracked files — add them as target-side adds
-        code2, out2 = _git(repo_root, ["ls-files", "--others", "--exclude-standard"])
-        if code2 == 0:
-            changes = changes + untracked_changes(out2.decode("utf-8", "replace").splitlines())
-    return changes
-
-
-def project_diff(proj: Project, base_ref: str, target_ref: str) -> dict[str, object]:
-    """The `/api/diff` payload: resolve the range, enforce that the map's pin is exactly one end
-    (which fixes the direction and the anchor side), run the git diff, and project it onto the map.
-
-    Raises ValueError for a range the viewer can't make sense of (no pin, unresolvable ref, or the pin
-    not at an end) — the handler turns that into a 400."""
-    pin = proj.commit
-    if not pin or not _valid_commit(pin):
-        raise ValueError("this map has no pinned commit to diff against")
-    # The map usually stores a SHORT sha; resolve it (and the range) to full shas so the
-    # pin-at-one-end check compares like for like.
-    pin_sha = resolve_ref(proj.repo_root, pin)
-    if pin_sha is None:
-        raise ValueError("the map's pinned commit is not in this repo")
-    base_sha = resolve_ref(proj.repo_root, base_ref)
-    target_sha = resolve_ref(proj.repo_root, target_ref)
-    if base_sha is None or target_sha is None:
-        raise ValueError("could not resolve the base or target commit")
-    if base_sha == pin_sha and target_sha != pin_sha:      # pin is the OLDER end: changes since the map
-        map_side, direction = "base", "A"
-    elif target_sha == pin_sha and base_sha != pin_sha:    # pin is the NEWER end: retrospective to the map
-        map_side, direction = "target", "B"
-    else:
-        raise ValueError("the diff range must have the map's commit at exactly one end")
-    changes = diff_changes(proj.repo_root, base_sha, target_sha)
-    if changes is None:
-        raise ValueError("git diff failed for that range")
-    model = load_model(proj.map_json.read_text(encoding="utf-8"))
-    elements = project_changes(model, changes, map_side)
-    kinds = list(elements.values())
-    return {
-        "base": base_sha,
-        "target": target_sha,
-        "mapSide": map_side,
-        "direction": direction,
-        "changes": [{"status": c.status, "path": c.path, "oldPath": c.old_path} for c in changes],
-        "elements": elements,
-        "counts": {
-            "files": len(changes),
-            "created": kinds.count("created"),
-            "modified": kinds.count("modified"),
-            "deleted": kinds.count("deleted"),
-        },
-    }
-
-
-def file_diff(proj: Project, path: str, base_ref: str, target_ref: str) -> dict[str, object]:
-    """The `/api/srcdiff` payload for one file: the inline unified diff across the range, as rows the
-    code view renders. Same range rules as `project_diff` (the pin at one end). A binary or too-large
-    diff is flagged instead of returned as rows. Raises ValueError for a bad range/path (→ 400)."""
-    if not _safe_rel(path):
-        raise ValueError("bad path")
-    pin = proj.commit
-    if not pin or not _valid_commit(pin):
-        raise ValueError("this map has no pinned commit to diff against")
-    pin_sha = resolve_ref(proj.repo_root, pin)
-    base_sha = resolve_ref(proj.repo_root, base_ref)
-    target_sha = resolve_ref(proj.repo_root, target_ref)
-    if pin_sha is None or base_sha is None or target_sha is None:
-        raise ValueError("could not resolve the diff range")
-    if not (base_sha == pin_sha) != (target_sha == pin_sha):   # exactly one end is the pin
-        raise ValueError("the diff range must have the map's commit at exactly one end")
-    args = ["diff", "--no-color", f"-U{_DIFF_CONTEXT}", base_sha]
-    if target_sha != WORKTREE and target_ref != WORKTREE:
-        if not _valid_commit(target_sha):
-            raise ValueError("could not resolve the diff range")
-        args.append(target_sha)
-    args += ["--", path]
-    code, out = _git(proj.repo_root, args)
-    if code != 0:
-        raise ValueError("git diff failed for that file")
-    text = out.decode("utf-8", "replace")
-    if "\nBinary files " in ("\n" + text) or text.startswith("Binary files "):
-        return {"path": path, "base": base_sha, "target": target_sha, "binary": True, "rows": []}
-    rows: list[DiffRow] = parse_unified_diff(text)
-    if len(rows) > _DIFF_MAX_ROWS:  # guard a pathological diff from ballooning the response
-        return {"path": path, "base": base_sha, "target": target_sha, "tooLarge": True, "rows": []}
-    return {
-        "path": path, "base": base_sha, "target": target_sha,
-        "rows": [{"op": r.op, "oldLn": r.old_ln, "newLn": r.new_ln, "text": r.text} for r in rows],
-    }
-
-
-def project_commits(proj: Project, limit: int = 25) -> dict[str, object]:
-    """Recent commits reachable from the map's pin — the picker's list of things to compare the map
-    against (direction B: an older commit → the pin). The first entry IS the pin; the frontend offers
-    the rest as base candidates. Empty list if the pin is missing/unresolvable."""
-    pin = proj.commit
-    if not pin or not _valid_commit(pin):
-        return {"commits": [], "pin": None}
-    pin_sha = resolve_ref(proj.repo_root, pin)
-    if pin_sha is None:
-        return {"commits": [], "pin": None}
-    code, out = _git(proj.repo_root, ["log", f"-n{max(1, min(limit, 100))}",
-                                      "--format=%h%x1f%ad%x1f%s", "--date=short", pin_sha])
-    if code != 0:
-        return {"commits": [], "pin": pin_sha}
-    commits: list[dict[str, str]] = []
-    for line in out.decode("utf-8", "replace").splitlines():
-        parts = line.split("\x1f")
-        if len(parts) == 3:
-            commits.append({"sha": parts[0], "date": parts[1], "subject": parts[2]})
-    return {"commits": commits, "pin": pin_sha}
 
 
 def worktree_read(root: Path, path: str) -> bytes | None:
@@ -483,7 +347,7 @@ def project_impact(proj: Project, query: dict[str, list[str]]) -> dict:
         return vals[0] if vals else default
 
     base = q("base") or proj.commit
-    target = q("target") or WORKTREE
+    target = q("target") or IMPACT_WORKTREE
     file_scope = q("file")
     try:
         depth = max(1, min(4, int(q("depth") or "2")))
@@ -788,22 +652,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(404, "text/plain; charset=utf-8", b"file not in commit")
             # Served as plain text; the viewer highlights it client-side. charset best-effort utf-8.
             return self._send(200, "text/plain; charset=utf-8", blob)
-        if rest == ["diff"]:
-            # The mechanical diff overlay. base/target default to "since the map's commit, incl. the
-            # dirty tree" (direction A). A range the viewer can't place (no pin, unresolvable ref, pin
-            # not at an end) is the user's input problem -> 400; a model/git fault is a 500.
-            base = (query.get("base") or [proj.commit])[0]
-            target = (query.get("target") or [WORKTREE])[0]
-            try:
-                return self._json(project_diff(proj, base, target))
-            except ValueError as e:
-                return self._send(400, "text/plain; charset=utf-8", str(e).encode("utf-8"))
-            except (ModelError, OSError, KeyError, IndexError, TypeError) as e:
-                return self._send(500, "text/plain; charset=utf-8",
-                                  f"could not build the diff: {e}".encode("utf-8"))
-        if rest == ["commits"]:
-            # Recent commits from the pin — the diff picker's list of things to compare the map against.
-            return self._json(project_commits(proj))
         if rest == ["impact"]:
             # The impact engine (M2): ?base=&target=&file=&reads=&entity_graph=&callgraph=&depth=.
             # Any base/target pair (the pin need NOT be an endpoint); bad refs/specs are the user's
@@ -825,18 +673,6 @@ class Handler(BaseHTTPRequestHandler):
             target = (query.get("target") or [IMPACT_WORKTREE])[0]
             try:
                 return self._json(impact_file_diff(proj, path, base, target))
-            except ValueError as e:
-                return self._send(400, "text/plain; charset=utf-8", str(e).encode("utf-8"))
-            except (OSError, KeyError, IndexError, TypeError) as e:
-                return self._send(500, "text/plain; charset=utf-8",
-                                  f"could not build the file diff: {e}".encode("utf-8"))
-        if rest == ["srcdiff"]:
-            # One file's inline diff across the active range, for the code view's diff mode.
-            path = (query.get("path") or [""])[0]
-            base = (query.get("base") or [proj.commit])[0]
-            target = (query.get("target") or [WORKTREE])[0]
-            try:
-                return self._json(file_diff(proj, path, base, target))
             except ValueError as e:
                 return self._send(400, "text/plain; charset=utf-8", str(e).encode("utf-8"))
             except (OSError, KeyError, IndexError, TypeError) as e:
