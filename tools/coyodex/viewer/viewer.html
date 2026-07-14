@@ -51,6 +51,31 @@
       <div id="diffpopmsg"></div>
     </div>
   </span>
+  <!-- Impact explorer (design: impact-and-update-design.md): project ANY diff — any base/target,
+       including ranges that don't touch the map's commit — onto the map, with typed ripple. -->
+  <span id="impactctl">
+    <button id="impactbtn" title="Project a diff onto the map: what does it impact?">Impact…</button>
+    <div id="impactpop" hidden>
+      <div class="diffpop-title">Impact of a diff</div>
+      <button id="impSinceMap" type="button" class="diffpop-opt">Map's commit → working tree<span>including uncommitted edits</span></button>
+      <div class="diffpop-sep">or any range — base → target (empty target = working tree)</div>
+      <div class="diffpop-row">
+        <input id="impBase" type="text" placeholder="base commit / branch" spellcheck="false" autocomplete="off">
+        <input id="impTarget" type="text" placeholder="target (optional)" spellcheck="false" autocomplete="off">
+        <button id="impGo" type="button">Analyze</button>
+      </div>
+      <div id="impcommits" class="diffpop-commits"></div>
+      <div class="diffpop-sep">ripple depth</div>
+      <div class="diffpop-row imp-depths">
+        <button type="button" class="imp-depth" data-th="0">Direct</button>
+        <button type="button" class="imp-depth" data-th="4">+Structure</button>
+        <button type="button" class="imp-depth on" data-th="6">+Behavior</button>
+        <button type="button" class="imp-depth" data-th="7">+Calls</button>
+      </div>
+      <button id="impClear" type="button" class="diffpop-opt">Clear impact</button>
+      <div id="impactpopmsg"></div>
+    </div>
+  </span>
   <button id="toggle" style="display:none"></button>
 </header>
 <main>

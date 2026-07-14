@@ -672,26 +672,26 @@ table.cvcode td.cvtag { position: sticky; right: 0; width: 1%; white-space: nowr
 /* --- mechanical diff picker (header) ------------------------------------------------------------ */
 /* A small dropdown anchored under the "Diff…" button: pick a range and the changed map elements badge.
    Positioned relative to #diffctl so it floats under the button as the header stays fixed. */
-#diffctl { position: relative; display: inline-block; }
-#diffpop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 260px;
+#diffctl, #impactctl { position: relative; display: inline-block; }
+#diffpop, #impactpop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 260px;
            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px;
            box-shadow: 0 8px 28px rgba(0,0,0,.16); font-size: 12px; color: #111827; }
-#diffpop .diffpop-title { font-weight: 700; font-size: 11px; text-transform: uppercase;
+#diffpop .diffpop-title, #impactpop .diffpop-title { font-weight: 700; font-size: 11px; text-transform: uppercase;
            letter-spacing: .05em; color: #6b7280; margin-bottom: 8px; }
-#diffpop .diffpop-sep { margin: 10px 0 6px; color: #9ca3af; font-size: 11px; }
-#diffpop button.diffpop-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+#diffpop .diffpop-sep, #impactpop .diffpop-sep { margin: 10px 0 6px; color: #9ca3af; font-size: 11px; }
+#diffpop button.diffpop-opt, #impactpop button.diffpop-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
            width: 100%; text-align: left; background: #f3f4f6; color: #111827; border: 1px solid #e5e7eb;
            padding: 7px 9px; border-radius: 7px; }
-#diffpop button.diffpop-opt:hover { background: #eef2ff; border-color: #c7d2fe; }
-#diffpop button.diffpop-opt span { font-size: 10.5px; color: #6b7280; font-weight: 400; }
-#diffpop .diffpop-row { display: flex; gap: 6px; }
-#diffpop .diffpop-row input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 12px;
+#diffpop button.diffpop-opt:hover, #impactpop button.diffpop-opt:hover { background: #eef2ff; border-color: #c7d2fe; }
+#diffpop button.diffpop-opt span, #impactpop button.diffpop-opt span { font-size: 10.5px; color: #6b7280; font-weight: 400; }
+#diffpop .diffpop-row, #impactpop .diffpop-row { display: flex; gap: 6px; }
+#diffpop .diffpop-row input, #impactpop .diffpop-row input { flex: 1 1 auto; min-width: 0; font: inherit; font-size: 12px;
            padding: 5px 8px; border: 1px solid #d1d5db; border-radius: 6px; background: #fff; color: #111827; }
-#diffpop .diffpop-row button { flex: 0 0 auto; }
-#diffpop #diffClear { margin-top: 10px; background: #fff; color: #374151; border: 1px solid #e5e7eb; }
-#diffpop #diffClear:hover { background: #f9fafb; }
-#diffpopmsg { margin-top: 8px; color: #b91c1c; font-size: 11px; min-height: 0; }
-#diffpopmsg:empty { display: none; }
+#diffpop .diffpop-row button, #impactpop .diffpop-row button { flex: 0 0 auto; }
+#diffpop #diffClear, #impactpop #impClear { margin-top: 10px; background: #fff; color: #374151; border: 1px solid #e5e7eb; }
+#diffpop #diffClear:hover, #impactpop #impClear:hover { background: #f9fafb; }
+#diffpopmsg, #impactpopmsg { margin-top: 8px; color: #b91c1c; font-size: 11px; min-height: 0; }
+#diffpopmsg:empty, #impactpopmsg:empty { display: none; }
 #diffbtn.armed { background: #9a6700; }
 
 /* --- code-view inline diff ---------------------------------------------------------------------- */
@@ -732,3 +732,22 @@ button.diffcommit .dc-sha { flex: 0 0 auto; font-family: ui-monospace, SFMono-Re
            font-size: 11px; color: #6366f1; }
 button.diffcommit .dc-subj { flex: 1 1 auto; min-width: 0; font-size: 11.5px; color: #374151;
            overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- impact explorer ----------------------------------------------------------------------------
+   The picker mirrors the diff popover (selectors widened above); below are the impact-only bits:
+   the armed button, the ripple-depth segmented control, commit tags, the panel's impact section. */
+#impactbtn.armed { background: #8250df; color: #fff; }
+#impactpop { width: 300px; }
+#impactpop .imp-depths { flex-wrap: wrap; }
+#impactpop .imp-depth { flex: 1 1 auto; background: #f3f4f6; border: 1px solid #e5e7eb;
+           border-radius: 6px; padding: 4px 6px; font-size: 11px; color: #374151; }
+#impactpop .imp-depth.on { background: #6366f1; border-color: #6366f1; color: #fff; }
+button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: uppercase;
+           letter-spacing: .04em; color: #1a7f37; background: #e6ffec; border-radius: 4px; padding: 0 4px; }
+#panel .impsec { margin-top: 14px; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+#panel .impsec h3 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase;
+           letter-spacing: .05em; color: #6b7280; }
+#panel .impsec a { color: #4f46e5; text-decoration: none; }
+#panel .impsec a:hover { text-decoration: underline; }
+#panel .impwarn { margin: 6px 0; padding: 6px 8px; background: #fffbeb; border: 1px solid #fde68a;
+           border-radius: 6px; color: #92400e; font-size: 11px; }

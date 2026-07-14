@@ -89,7 +89,8 @@ try {
 
 const SVGNS = 'http://www.w3.org/2000/svg';
 const BADGE = { added: ['#1a7f37', '+', 'new'], modified: ['#9a6700', '✎', 'modified'],
-                deleted: ['#cf222e', '×', 'deleted'], rippled: ['#d97706', '≈', 'ripples to'] };
+                deleted: ['#cf222e', '×', 'deleted'], rippled: ['#d97706', '≈', 'ripples to'],
+                drifted: ['#8250df', '↷', 'anchor drifted (code moved, not changed)'] };
 const HILITE = 'drop-shadow(0 0 4px #2563eb) drop-shadow(0 0 2px #2563eb)';  // selection glow (nodes + edge labels)
 const HOVER = 'drop-shadow(0 0 3px #60a5fa)';  // softer hover glow: signals "clickable" without competing with HILITE
 const HP_SEL = 'drop-shadow(0 0 4px #3b82f6)';  // Happy-Path selection: just a touch stronger than HOVER (not the heavy HILITE)
@@ -143,6 +144,11 @@ let mode = HAS_DIFF ? 'diff' : 'base';  // a diff render arms the change-impact 
 const DIFF_WORKTREE = 'WORKTREE';  // sentinel target = the current working tree (mirrors diffmap.WORKTREE)
 const BAKED_DIFF_STATE = DIFF_STATE || null;
 let LIVE_DIFF = null;  // {base,target,mapSide,direction,elements,changes,counts} or null
+// Impact explorer (design: impact-and-update-design.md). When armed it OWNS the diff overlay rails:
+// LIVE_DIFF gets a synthesized {impact:true,...} range (tree badges + code-diff mode ride along) and
+// DIFF_STATE is projected from the ImpactResult, filtered by the ripple-depth threshold.
+let IMPACT = null;     // the api/impact payload, or null
+let impactTh = 6;      // strength threshold: 0 direct-only · 4 +structural · 6 +behavioral/data · 7 +call-graph
 function hasDiff() { return !!(LIVE_DIFF || HAS_DIFF); }  // any diff overlay available for this render
 // The endpoint speaks created/modified/deleted; the viewer's badge vocabulary is added/modified/deleted.
 function diffStateFromElements(elements) {
@@ -776,7 +782,8 @@ function nodeDetailHtml(id) {
   // code viewer, which carry the path and the sole "open externally" control.
   return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`
     + explain
-    + `<dl>${rows}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`;
+    + `<dl>${rows}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
+    + impactSectionHtml(id);
 }
 // Wire the interactive bits inside the just-written detail panel: the use-case-flow refs and the
 // selectable "Triggered by" entry-point rows.
@@ -785,6 +792,7 @@ function bindNodeDetailHandlers(root) {
     ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
   }));
   bindTriggeredBy(root);
+  bindImpactSection(root);
   applyPendingEpSelect();  // a search hit / System link asked to select one of this component's entry points
 }
 function showNode(id) {
@@ -1554,6 +1562,7 @@ function setLegendMode(kind) {
   if (legend.dataset.kind === kind) return;
   legend.dataset.kind = kind;
   if (kind === 'diff') fillLegend(['added', 'modified', 'deleted', 'rippled'], BADGE, 'no badge = unchanged');
+  if (kind === 'impact') fillLegend(['added', 'modified', 'deleted', 'drifted', 'rippled'], BADGE, 'no badge = not impacted');
 }
 
 // --- diff overlay on the Subsystems views ---------------------------------------
@@ -1580,6 +1589,10 @@ function applyDiffOverlay(s) {
       if (st) addBadge(mainScene.nodeEls[id], st);
     }
   } else if (s.kind === 'subsystem' || s.kind === 'edge' || s.kind === 'component') {  // cards: per-node badge
+    for (const id in mainScene.nodeEls) {
+      if (DIFF_STATE[id]) addBadge(mainScene.nodeEls[id], DIFF_STATE[id]);
+    }
+  } else if (IMPACT) {  // impact spans every view: badge whatever impacted elements this diagram draws
     for (const id in mainScene.nodeEls) {
       if (DIFF_STATE[id]) addBadge(mainScene.nodeEls[id], DIFF_STATE[id]);
     }
@@ -2826,7 +2839,7 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'hp' && GRAPH.nodes['SYS']) showNode('SYS');
   // The Subsystems overview in diff mode leads with the change-impact summary (which subsystems/elements
   // changed), since that is the whole point of opening a diff render.
-  else if (s.kind === 'container' && mode === 'diff' && hasDiff()) showDiffSummary();
+  else if (s.kind === 'container' && mode === 'diff' && hasDiff()) (IMPACT ? showImpactSummary() : showDiffSummary());
   // Every overview without a more specific default (Context, Subsystems, Domain) opens on the System's
   // overview — its overall functionality — instead of a blank panel.
   else if (GRAPH.nodes['SYS']) showNode('SYS');
@@ -2909,9 +2922,10 @@ function renderChrome(s) {
   // The baseline⇄diff change-impact overlay lives on the Subsystems views now (overview + cards),
   // not the removed flat Components map: the overview badges each subsystem with its subtree's change,
   // and the cards badge their member components (via bindNodes).
-  const diffHost = s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge';
-  // The legend shows diff states in diff mode only.
-  if (mode === 'diff' && diffHost) { setLegendMode('diff'); legend.classList.add('on'); }
+  const diffHost = IMPACT ? true
+    : (s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge');
+  // The legend shows diff states in diff mode only (the impact overlay spans every view).
+  if (mode === 'diff' && diffHost) { setLegendMode(IMPACT ? 'impact' : 'diff'); legend.classList.add('on'); }
   else legend.classList.remove('on');
   toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
@@ -4475,7 +4489,8 @@ async function loadCode(path, line) {
   renderCvHeader();  // set the header (dropdown marks the new file) AFTER cvPath is updated
   cvscroll.innerHTML = '<p class="cvempty">Loading…</p>';
   const url = asDiff
-    ? (API_BASE + 'srcdiff?path=' + encodeURIComponent(path) + diffRangeQS())
+    ? (API_BASE + (LIVE_DIFF && LIVE_DIFF.impact ? 'impactsrcdiff' : 'srcdiff')
+       + '?path=' + encodeURIComponent(path) + diffRangeQS())
     : (API_BASE + 'src?path=' + encodeURIComponent(path));
   let r = null;
   try {
@@ -5356,6 +5371,8 @@ async function loadLiveDiff(base, target) {
     if (!res.ok) { if (msg) msg.textContent = body || ('diff failed (' + res.status + ')'); return; }
     data = JSON.parse(body);
   } catch (_) { if (msg) msg.textContent = 'Could not reach the server for the diff.'; return; }
+  IMPACT = null;                                 // mutex: one overlay at a time
+  document.getElementById('impactbtn').classList.remove('armed');
   LIVE_DIFF = data;
   DIFF_STATE = diffStateFromElements(data.elements || {});
   mode = 'diff';
@@ -5367,6 +5384,8 @@ async function loadLiveDiff(base, target) {
   else { captureViewState(); render(); }
 }
 function clearLiveDiff() {
+  IMPACT = null;
+  document.getElementById('impactbtn').classList.remove('armed');
   LIVE_DIFF = null;
   DIFF_STATE = BAKED_DIFF_STATE || {};
   mode = HAS_DIFF ? 'diff' : 'base';
@@ -5430,6 +5449,202 @@ if (treeDiffOnlyBtn) treeDiffOnlyBtn.addEventListener('click', () => {
   treeDiffOnlyBtn.classList.toggle('on', diffOnly);
   applyDiffFilterAll();
 });
+
+// --- impact explorer ---------------------------------------------------------------
+// Projects an ARBITRARY diff (any base/target, incl. ranges that don't touch the map's commit) onto
+// the map: direct hits carry their change + resolution rung; typed ripple carries provenance. Rides
+// the live-diff overlay rails (badges, tree, code diff) via a synthesized LIVE_DIFF — the mutex with
+// the plain diff picker is therefore structural: arming either one disarms the other.
+function impactShown(imp) { return imp.cause === 'direct' || imp.strength <= impactTh; }
+function impactProjection() {
+  const out = {};
+  if (!IMPACT) return out;
+  for (const id in IMPACT.impacts) {
+    const imp = IMPACT.impacts[id];
+    if (!impactShown(imp)) continue;
+    out[id] = imp.cause === 'direct' ? (BADGE[imp.change] ? imp.change : 'modified') : 'rippled';
+  }
+  return out;
+}
+const IMP_TYPE_LABEL = { subsystems: 'Subsystems', components: 'Components', deps: 'Dependencies',
+  entities: 'Entities', subdomains: 'Subdomains', use_cases: 'Use cases', happy_path: 'Happy Path',
+  edges: 'Call sites (edges)', entry_points: 'Entry points', glossary: 'Glossary',
+  security: 'Security surfaces', run_commands: 'Run commands', non_entity_types: 'Other types',
+  other: 'Other' };
+function impName(id) {
+  if (GRAPH.nodes[id]) return GRAPH.nodes[id].name;
+  const i = id.indexOf(':');
+  return i > 0 ? id.slice(i + 1) : id;   // synthetic ids (edge:…, ep:…) show their payload
+}
+function impResLabel(imp) {
+  if (imp.cause === 'direct') return imp.resolution || 'file';
+  return 'ripple' + (imp.distance > 1 ? ' ·' + imp.distance : '');
+}
+function gotoImpactEid(id) {
+  if (id.startsWith('UC')) { go({ kind: 'usecase', uc: id }); return; }
+  if (id.startsWith('HP')) { go({ kind: 'hp' }); return; }
+  if (id.startsWith('edge:')) { selectFromTree(id.slice(5).split('>')[0]); return; }
+  if (GRAPH.nodes[id]) selectFromTree(id);
+}
+// The forward panel: "what does this diff impact?" — grouped by element type, strongest first,
+// every row clickable. Takes over the Subsystems-overview default panel while impact is armed.
+function showImpactSummary() {
+  if (!IMPACT) return;
+  const short = (r) => (r === DIFF_WORKTREE ? 'working tree' : (r || '').slice(0, 8));
+  const c = IMPACT.counts || {};
+  let html = '<h2>Impact</h2>'
+    + '<p class="muted" style="margin:0 0 8px">' + esc(short(IMPACT.spec.base)) + ' → '
+    + esc(short(IMPACT.spec.target)) + ' · ' + (IMPACT.files || []).length + ' file'
+    + ((IMPACT.files || []).length === 1 ? '' : 's') + ' changed</p>'
+    + '<div class="badges"><span class="badge kind">' + (c.direct || 0) + ' direct</span>'
+    + '<span class="badge kind">' + (c.ripple || 0) + ' rippled</span></div>';
+  for (const w of (IMPACT.warnings || []))
+    html += '<p class="impwarn">' + esc(w) + '</p>';
+  const byType = IMPACT.byType || {};
+  for (const t in IMP_TYPE_LABEL) {
+    const ids = (byType[t] || []).filter((id) => impactShown(IMPACT.impacts[id]));
+    if (!ids.length) continue;
+    html += '<dl><dt>' + esc(IMP_TYPE_LABEL[t]) + ' <span class="muted">' + ids.length + '</span></dt>'
+      + ids.map((id) => {
+          const imp = IMPACT.impacts[id];
+          const st = imp.cause === 'direct' ? (BADGE[imp.change] ? imp.change : 'modified') : 'rippled';
+          const click = (GRAPH.nodes[id] || id.startsWith('UC') || id.startsWith('HP') || id.startsWith('edge:'));
+          const name = click
+            ? '<a href="#" class="impref" data-id="' + esc(id) + '">' + esc(impName(id)) + '</a>'
+            : esc(impName(id));
+          return '<dd>' + name + ' <span class="badge ' + st + '">' + esc(impResLabel(imp)) + '</span></dd>';
+        }).join('') + '</dl>';
+  }
+  panel.innerHTML = html;
+  panel.querySelectorAll('a.impref').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); gotoImpactEid(a.getAttribute('data-id'));
+  }));
+}
+// The backward panel section on a selected element: "why is THIS impacted?" — the change + rung for
+// a direct hit, the provenance chain for a ripple, and the changed files (each opens its diff).
+function impactSectionHtml(id) {
+  if (!IMPACT) return '';
+  const imp = IMPACT.impacts && IMPACT.impacts[id];
+  if (!imp || !impactShown(imp)) return '';
+  let html = '<div class="impsec"><h3>Impact of the active diff</h3>';
+  if (imp.cause === 'direct') {
+    const st = BADGE[imp.change] ? imp.change : 'modified';
+    html += '<p><span class="badge ' + st + '">' + esc(imp.change) + '</span> '
+      + '<span class="muted">directly hit at ' + esc(imp.resolution || 'file') + ' resolution</span></p>';
+  } else {
+    const hops = (imp.via || []).map((h) =>
+      '<a href="#" class="impvia" data-id="' + esc(h.from) + '">' + esc(impName(h.from)) + '</a>'
+      + ' <span class="muted">(' + esc(h.relation) + ')</span>').join(' → ');
+    html += '<p><span class="badge rippled">affected</span> <span class="muted">via</span> ' + hops + '</p>';
+  }
+  const files = imp.files || [];
+  if (files.length) {
+    html += '<dl><dt>Changed files</dt>' + files.map((f) =>
+      '<dd><a href="#" class="impfile" data-path="' + esc(f) + '">' + esc(f) + '</a></dd>').join('') + '</dl>';
+  }
+  return html + '</div>';
+}
+function bindImpactSection(root) {
+  root.querySelectorAll('a.impfile').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); loadCode(a.getAttribute('data-path'), null);
+  }));
+  root.querySelectorAll('a.impvia').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); gotoImpactEid(a.getAttribute('data-id'));
+  }));
+}
+async function loadImpact(base, target) {
+  const msg = document.getElementById('impactpopmsg');
+  if (msg) msg.textContent = '';
+  const qs = new URLSearchParams();
+  if (base) qs.set('base', base);
+  if (target) qs.set('target', target);
+  if (impactTh >= 7) qs.set('callgraph', '1');
+  let data;
+  try {
+    const res = await fetch(API_BASE + 'impact?' + qs.toString(), { cache: 'no-store' });
+    const body = await res.text();
+    if (!res.ok) { if (msg) msg.textContent = body || ('impact failed (' + res.status + ')'); return; }
+    data = JSON.parse(body);
+  } catch (_) { if (msg) msg.textContent = 'Could not reach the server for the impact.'; return; }
+  IMPACT = data;
+  document.getElementById('diffbtn').classList.remove('armed');   // mutex with the plain diff picker
+  LIVE_DIFF = { impact: true, base: data.spec.base, target: data.spec.target,
+                changes: (data.files || []).map((f) => ({ status: f.status, path: f.path,
+                  oldPath: (f.p_path && f.p_path !== f.path) ? f.p_path : null })),
+                counts: { files: (data.files || []).length }, elements: {} };
+  DIFF_STATE = impactProjection();
+  mode = 'diff';
+  document.getElementById('impactbtn').classList.add('armed');
+  closeImpactPop();
+  syncTreeDiff();
+  if (cvPath) loadCode(cvPath, cvLine);
+  if (HAS_GROUPING) go({ kind: 'container' });
+  else { captureViewState(); render(); }
+}
+const impactctl = document.getElementById('impactctl');
+const impactbtn = document.getElementById('impactbtn');
+const impactpop = document.getElementById('impactpop');
+function closeImpactPop() { if (impactpop) impactpop.hidden = true; }
+function openImpactPop() {
+  if (!impactpop) return;
+  impactpop.hidden = false;
+  document.getElementById('impactpopmsg').textContent = '';
+  loadImpactCommits();
+}
+// The impact picker's commit list: DESCENDANTS of the pin first (code newer than the map — the common
+// case after a fetch), then ancestors. Clicking a row fills the BASE input.
+let impactCommitsLoaded = false;
+async function loadImpactCommits() {
+  const host = document.getElementById('impcommits');
+  if (!host || impactCommitsLoaded) return;
+  host.innerHTML = '<div class="diffpop-loading">Loading commits…</div>';
+  let data;
+  try {
+    const r = await fetch(API_BASE + 'impactcommits', { cache: 'no-store' });
+    if (!r.ok) throw new Error('impactcommits ' + r.status);
+    data = await r.json();
+  } catch (_) { host.innerHTML = ''; return; }
+  impactCommitsLoaded = true;
+  const row = (c, tag) =>
+    '<button type="button" class="diffcommit" data-sha="' + esc(c.sha) + '" title="' + esc(c.subject) + '">'
+    + '<span class="dc-sha">' + esc(c.sha) + '</span>'
+    + (tag ? '<span class="dc-tag">' + tag + '</span>' : '')
+    + '<span class="dc-subj">' + esc(c.subject) + '</span></button>';
+  const desc = (data.descendants || []).map((c) => row(c, 'newer'));
+  const anc = (data.ancestors || []).map((c) => row(c, ''));
+  host.innerHTML = desc.join('') + anc.join('');
+  host.querySelectorAll('.diffcommit').forEach((b) =>
+    b.addEventListener('click', () => { document.getElementById('impBase').value = b.getAttribute('data-sha'); }));
+}
+if (impactbtn) {
+  impactbtn.addEventListener('click', (e) => { e.stopPropagation(); impactpop.hidden ? openImpactPop() : closeImpactPop(); });
+  document.addEventListener('click', (e) => { if (!impactpop.hidden && !impactctl.contains(e.target)) closeImpactPop(); });
+  document.getElementById('impSinceMap').addEventListener('click', () => loadImpact('', DIFF_WORKTREE));
+  function impGoNow() {
+    const base = document.getElementById('impBase').value.trim();
+    const target = document.getElementById('impTarget').value.trim();
+    if (!base && !target) { document.getElementById('impactpopmsg').textContent = 'Pick a base commit (or use the one-click option above).'; return; }
+    loadImpact(base, target || DIFF_WORKTREE);
+  }
+  document.getElementById('impGo').addEventListener('click', impGoNow);
+  ['impBase', 'impTarget'].forEach((iid) =>
+    document.getElementById(iid).addEventListener('keydown', (e) => { if (e.key === 'Enter') impGoNow(); }));
+  document.getElementById('impClear').addEventListener('click', clearLiveDiff);
+  impactpop.querySelectorAll('.imp-depth').forEach((b) => b.addEventListener('click', () => {
+    impactpop.querySelectorAll('.imp-depth').forEach((x) => x.classList.toggle('on', x === b));
+    impactTh = Number(b.getAttribute('data-th'));
+    if (!IMPACT) return;
+    // +Calls needs call-graph data the default fetch skips — refetch once with it on.
+    if (impactTh >= 7 && !(IMPACT.spec.options && IMPACT.spec.options.callgraph)) {
+      loadImpact(IMPACT.spec.base, IMPACT.spec.target);
+      return;
+    }
+    DIFF_STATE = impactProjection();
+    captureViewState(); render();
+    if (mainScene && !mainScene.selectedKey) showImpactSummary();
+  }));
+}
+
 // Land on the Subsystems view for a diff render (the change-impact overlay lives there); otherwise the
 // Happy Path — the behavioural spine, lead-with-behaviour — falling back to Subsystems, then the
 // Dependencies (context) view, when a map has no Happy Path.

@@ -8,7 +8,10 @@ The interactive viewer is served, not baked into a file. For each project this s
   * the map's own data at ``/p/<project>/api/view`` — the graph + every pre-rendered diagram, flow,
     and config flag (``gen_viewer.build_view_bundle``), which the frontend fetches and renders;
   * the file browser + code viewer, both read from git AT THE MAP'S COMMIT (``/api/tree`` /
-    ``/api/src``, never the dirty working tree), so what you see always matches the map.
+    ``/api/src``) by default, so what you see always matches the map. ONE scoped exception:
+    ``/api/src?at=<sha>|WORKTREE`` serves a file at another commit or from the working tree — the
+    impact explorer needs to show both ends of an arbitrary diff. Worktree reads are guarded
+    (realpath containment, ``.git/`` excluded, tracked-or-untracked-not-ignored only).
 
 The server does NOT scan the disk. You pick a project folder (one holding ``.coyodex/project-map.json``)
 through the landing page's built-in folder browser; the choice is remembered in a small recents file
@@ -32,7 +35,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+from coyodex.impact_git import WORKTREE as IMPACT_WORKTREE
 from coyodex.impact_git import compute_impact, load_extents
+from coyodex.impact_git import resolve_ref as impact_resolve_ref
 from coyodex.impact_ripple import RippleOptions, build_impact_result
 from coyodex.model import ModelError, load_model
 from coyodex.viewer.diffmap import (
@@ -391,6 +396,83 @@ def project_commits(proj: Project, limit: int = 25) -> dict[str, object]:
     return {"commits": commits, "pin": pin_sha}
 
 
+def worktree_read(root: Path, path: str) -> bytes | None:
+    """A guarded read of a WORKING-TREE file for `api/src?at=WORKTREE`. `_safe_rel` alone is not a
+    disk-I/O guard, so: realpath containment inside the repo (a tracked symlink must not escape),
+    `.git/` excluded, and only files git accounts for — tracked or untracked-not-ignored — are
+    served (a gitignored `.env` never leaks through the viewer)."""
+    if not _safe_rel(path) or path.split("/", 1)[0] == ".git":
+        return None
+    try:
+        real = (root / path).resolve(strict=True)
+        real_root = root.resolve(strict=True)
+    except OSError:
+        return None
+    if not real.is_relative_to(real_root) or ".git" in real.relative_to(real_root).parts:
+        return None
+    if not real.is_file():
+        return None
+    code, _out = _git(root, ["ls-files", "--error-unmatch", "--", path])
+    if code != 0:  # not tracked — allow only untracked-not-ignored
+        code2, out2 = _git(root, ["ls-files", "--others", "--exclude-standard", "--", path])
+        if code2 != 0 or path not in out2.decode("utf-8", "replace").splitlines():
+            return None
+    try:
+        return real.read_bytes()
+    except OSError:
+        return None
+
+
+def impact_commits(proj: Project, limit: int = 25) -> dict[str, object]:
+    """The impact picker's commit list: the pin's ancestors AND descendants (the map may be older
+    than the code being compared), newest-first within each list."""
+    pin_sha = resolve_ref(proj.repo_root, proj.commit) if proj.commit else None
+    if pin_sha is None:
+        return {"pin": None, "ancestors": [], "descendants": []}
+
+    def _log(args: list[str]) -> list[dict[str, str]]:
+        code, out = _git(proj.repo_root, ["log", f"-n{limit}", "--format=%h%x09%cs%x09%s", *args])
+        rows: list[dict[str, str]] = []
+        if code == 0:
+            for line in out.decode("utf-8", "replace").splitlines():
+                parts = line.split("\t", 2)
+                if len(parts) == 3:
+                    rows.append({"sha": parts[0], "date": parts[1], "subject": parts[2]})
+        return rows
+
+    return {"pin": pin_sha,
+            "ancestors": _log([pin_sha]),
+            "descendants": _log(["--all", "--ancestry-path", f"{pin_sha}.."])}
+
+
+def impact_file_diff(proj: Project, path: str, base_ref: str, target_ref: str) -> dict[str, object]:
+    """One file's inline diff across an ARBITRARY range (the impact explorer's code view) — same
+    payload shape as `file_diff`, without the pin-at-one-end constraint. Raises ValueError → 400."""
+    if not _safe_rel(path):
+        raise ValueError("bad path")
+    base_sha = impact_resolve_ref(proj.repo_root, base_ref)
+    if base_sha == IMPACT_WORKTREE:
+        raise ValueError("base must be a commit")
+    target_sha = impact_resolve_ref(proj.repo_root, target_ref)
+    args = ["diff", "--no-color", f"-U{_DIFF_CONTEXT}", base_sha]
+    if target_sha != IMPACT_WORKTREE:
+        args.append(target_sha)
+    args += ["--", path]
+    code, out = _git(proj.repo_root, args)
+    if code != 0:
+        raise ValueError("git diff failed for that file")
+    text = out.decode("utf-8", "replace")
+    if "\nBinary files " in ("\n" + text) or text.startswith("Binary files "):
+        return {"path": path, "base": base_sha, "target": target_sha, "binary": True, "rows": []}
+    rows: list[DiffRow] = parse_unified_diff(text)
+    if len(rows) > _DIFF_MAX_ROWS:
+        return {"path": path, "base": base_sha, "target": target_sha, "tooLarge": True, "rows": []}
+    return {
+        "path": path, "base": base_sha, "target": target_sha,
+        "rows": [{"op": r.op, "oldLn": r.old_ln, "newLn": r.new_ln, "text": r.text} for r in rows],
+    }
+
+
 def project_impact(proj: Project, query: dict[str, list[str]]) -> dict:
     """The impact-engine payload (design: internal/docs/impact-and-update-design.md): project an
     arbitrary B→T diff (any refs; target may be WORKTREE) onto the map's anchors and ripple once.
@@ -684,12 +766,24 @@ class Handler(BaseHTTPRequestHandler):
             path = (query.get("path") or [""])[0]
             if not _safe_rel(path):
                 return self._send(400, "text/plain; charset=utf-8", b"bad path")
-            size = git_blob_size(proj.repo_root, proj.commit, path)  # size + is-it-a-file check first
+            # `at=` (impact explorer): read the file at another commit, or from the working tree.
+            # Default stays the map's pin — the frozen-snapshot behavior is unchanged without it.
+            at = (query.get("at") or [proj.commit])[0]
+            if at == IMPACT_WORKTREE:
+                data = worktree_read(proj.repo_root, path)
+                if data is None:
+                    return self._send(404, "text/plain; charset=utf-8", b"file not in working tree")
+                if len(data) > _TEXT_MAX:
+                    return self._send(413, "text/plain; charset=utf-8", b"file too large")
+                return self._send(200, "text/plain; charset=utf-8", data)
+            if not _valid_commit(at):
+                return self._send(400, "text/plain; charset=utf-8", b"bad at= commit")
+            size = git_blob_size(proj.repo_root, at, path)  # size + is-it-a-file check first
             if size is None:
                 return self._send(404, "text/plain; charset=utf-8", b"file not in commit")
             if size > _TEXT_MAX:  # reject BEFORE git_show buffers a huge blob into memory
                 return self._send(413, "text/plain; charset=utf-8", b"file too large")
-            blob = git_show(proj.repo_root, proj.commit, path)
+            blob = git_show(proj.repo_root, at, path)
             if blob is None:
                 return self._send(404, "text/plain; charset=utf-8", b"file not in commit")
             # Served as plain text; the viewer highlights it client-side. charset best-effort utf-8.
@@ -721,6 +815,21 @@ class Handler(BaseHTTPRequestHandler):
             except (ModelError, OSError, KeyError, IndexError, TypeError) as e:
                 return self._send(500, "text/plain; charset=utf-8",
                                   f"could not build the impact: {e}".encode("utf-8"))
+        if rest == ["impactcommits"]:
+            # The impact picker's list: the pin's ancestors AND descendants (M3).
+            return self._json(impact_commits(proj))
+        if rest == ["impactsrcdiff"]:
+            # One file's inline diff across an ARBITRARY range, for the impact code view (M3).
+            path = (query.get("path") or [""])[0]
+            base = (query.get("base") or [proj.commit])[0]
+            target = (query.get("target") or [IMPACT_WORKTREE])[0]
+            try:
+                return self._json(impact_file_diff(proj, path, base, target))
+            except ValueError as e:
+                return self._send(400, "text/plain; charset=utf-8", str(e).encode("utf-8"))
+            except (OSError, KeyError, IndexError, TypeError) as e:
+                return self._send(500, "text/plain; charset=utf-8",
+                                  f"could not build the file diff: {e}".encode("utf-8"))
         if rest == ["srcdiff"]:
             # One file's inline diff across the active range, for the code view's diff mode.
             path = (query.get("path") or [""])[0]
