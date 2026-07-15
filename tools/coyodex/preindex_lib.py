@@ -332,6 +332,24 @@ def _node_name(src: bytes, node) -> str | None:
         if child.type in ("identifier", "type_identifier", "field_identifier",
                            "constant", "name"):
             return _node_text(src, child)
+    # C/C++: a function_definition's name is nested inside its declarator chain
+    # (function_declarator -> identifier / qualified_identifier / field_identifier). Follow the
+    # `declarator` field down; a qualified name (`Guild::rename`) is kept whole — the out-of-line
+    # method body then gets its own symbol extent, distinct from the class declaration's.
+    decl = node.child_by_field_name("declarator")
+    seen = 0
+    while decl is not None and seen < 8:
+        if decl.type in ("identifier", "qualified_identifier", "field_identifier",
+                         "operator_name", "destructor_name"):
+            return _node_text(src, decl)
+        nxt = decl.child_by_field_name("declarator")
+        if nxt is None:
+            for child in decl.children:
+                if child.type in ("identifier", "qualified_identifier", "field_identifier"):
+                    return _node_text(src, child)
+            return None
+        decl = nxt
+        seen += 1
     return None
 
 
@@ -352,6 +370,13 @@ def ts_symbols(path: Path, rel: str, lang: str) -> list[Symbol]:
         node = stack.pop()
         kind = def_types.get(node.type)
         if kind is not None:
+            # C/C++ `struct_specifier`/`class_specifier`/`enum_specifier` nodes also appear at
+            # type-REFERENCE sites (`struct point p`); only the defining occurrence has a body.
+            # Without this, a reference site mints a bogus 1-line extent that innermost-extent
+            # resolution can pick over the real enclosing function.
+            if node.type.endswith("_specifier") and node.child_by_field_name("body") is None:
+                stack.extend(node.children)
+                continue
             name = _node_name(src, node)
             if name:
                 out.append(Symbol(name, kind, rel, node.start_point[0] + 1,
