@@ -111,7 +111,11 @@ def test_score_cli_accepts_model_map():
         proc = subprocess.run(EVAL + ["score", str(p), "--json"], capture_output=True, text=True)
         assert proc.returncode == 0, proc.stderr
         profile = json.loads(proc.stdout)
-        assert profile["components"] == 111 and profile["validate_ok"] is True
+        # The golden fixture predates per-step `where` anchors, so validate now (correctly) reports
+        # the missing-anchor problems — the CLI must still score it (validate_ok rides the profile,
+        # it doesn't gate scoring). The eval's own gate is baseline-RELATIVE ("no NEW problems").
+        assert profile["components"] == 111 and profile["validate_ok"] is False
+        assert profile["validate_problems"] > 0
 
 
 def test_claims_cli_accepts_model_map_with_v2_details():

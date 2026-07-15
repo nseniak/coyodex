@@ -71,6 +71,12 @@ class MapProfile:
     max_fanout: int | None = None
     fanout_in_band_pct: float | None = None    # share of diagrams inside [3,9], exemptions included
     nesting_depth: int | None = None
+    # ── use-case granularity (the flow analog of the fan-out fields — report-only, same opt-in
+    #    gating pattern; None when the profile predates the fields). Counts are AUTHORED steps: a
+    #    sub-flow reference counts as 1, so extraction is rewarded, not punished. ──
+    subflows: int | None = None
+    max_flow_len: int | None = None
+    flows_over_band_pct: float | None = None   # share of flows over FLOW_STEPS_HI (15)
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
     use_case_names: list[str] = field(default_factory=list)
@@ -124,6 +130,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     n_components = len({c.id for c in m.components})
     n_edges = len(m.edges)
     root_fanout, max_fanout, in_band_pct, depth = balance_lib.fanout_summary(m)
+    flow_lens = [len(f.steps) for f in m.flows]  # authored counts: a sub-flow reference counts as 1
+    over_band = sum(1 for n in flow_lens if n > validate_model.FLOW_STEPS_HI)
 
     return MapProfile(
         use_cases=len({u.id for u in m.use_cases}),
@@ -150,6 +158,9 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         max_fanout=max_fanout,
         fanout_in_band_pct=in_band_pct,
         nesting_depth=depth,
+        subflows=len({sf.id for sf in m.subflows}),
+        max_flow_len=max(flow_lens) if flow_lens else None,
+        flows_over_band_pct=round(100 * over_band / len(flow_lens), 1) if flow_lens else None,
         auth_surfaces=surfaces,
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],

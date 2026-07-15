@@ -16,7 +16,17 @@ import sys
 import tempfile
 
 from coyodex import audit_model
-from coyodex.model import load_model
+from coyodex.model import (
+    Component,
+    Edge,
+    Entity,
+    Flow,
+    FlowStep,
+    ProjectModel,
+    SubFlow,
+    UseCase,
+    load_model,
+)
 
 AUDIT = [sys.executable, "-m", "coyodex.audit_model"]
 
@@ -1534,6 +1544,22 @@ def test_l2_worklist_risk_prose_collapsed_by_default() -> None:
     assert worklist
     assert "risk:" not in audit_model._format([], worklist, verbose=False)
     assert "risk:" in audit_model._format([], worklist, verbose=True)
+
+
+def test_touch_sets_see_subflow_content() -> None:
+    # C1 (the writer) appears ONLY inside SF1's steps; the referencing flow's use case must still
+    # be attributed the write — sub-flow content is never audit-invisible.
+    m = ProjectModel(title="t")
+    m.use_cases = [UseCase(id="UC1", name="Do")]
+    m.components = [Component(id="C1", name="Writer"), Component(id="C2", name="Front")]
+    m.entities = [Entity(id="E1", name="Thing")]
+    m.edges = [Edge(src="C1", verb="persists", dst="E1", where="a.py:1")]
+    m.subflows = [SubFlow(id="SF1", name="Persist",
+                          steps=[FlowStep(n=1, src="C1", dst="E1", phrase="writes", where="a.py:1")])]
+    m.flows = [Flow(uc="UC1", title="Do",
+                    steps=[FlowStep(n=1, src="C2", dst="E1", subflow="SF1")])]
+    writes, _reads = audit_model._touch_sets(m)
+    assert "E1" in writes["UC1"]
 
 
 # --- built-in runner ------------------------------------------------------------

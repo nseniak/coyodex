@@ -26,7 +26,7 @@ from pathlib import Path
 
 from coyodex import grammar
 from coyodex.anchors import FILEREF as _FILEREF
-from coyodex.model import ProjectModel, load_model
+from coyodex.model import ProjectModel, expanded_flow_steps, load_model
 
 # ── the audit vocabulary (shared with the eval, which imports it from here) ──────────────────────
 
@@ -110,9 +110,9 @@ def happy_path_steps(m: ProjectModel) -> list[HPStep]:
     return steps
 
 
-def _flow_component_ids(f) -> set[str]:
+def _flow_component_ids(m: ProjectModel, f) -> set[str]:
     comps: set[str] = set()
-    for st in f.steps:
+    for st in expanded_flow_steps(m, f):  # sub-flow content counts as the referencing flow's own
         for end in (st.src, st.dst):
             if grammar.is_step_id(end) and end.startswith("C"):
                 comps.add(end)
@@ -146,7 +146,7 @@ def _touch_sets(m: ProjectModel) -> tuple[dict[str, set[str]], dict[str, set[str
     for f in m.flows:
         w = writes.setdefault(f.uc, set())
         r = reads.setdefault(f.uc, set())
-        for comp in _flow_component_ids(f):
+        for comp in _flow_component_ids(m, f):
             w |= comp_writes.get(comp, set())
             r |= comp_reads.get(comp, set())
     return writes, reads
@@ -266,11 +266,13 @@ def check_dependency_phrasing(m: ProjectModel) -> list[Finding]:
     """Flow-step and edge descriptions should read as actions, not dependency remarks. Advisory: it
     catches the "the page needs the client to POST" shape and asks for "POSTs … through the client"."""
     findings: list[Finding] = []
-    for f in m.flows:
-        for st in f.steps:
+    # sub-flow steps get the same phrasing audit, located by their OWN container (each fires once)
+    for label, steps in ([(f"{f.uc} flow step", f.steps) for f in m.flows]
+                         + [(f"{sf.id} step", sf.steps) for sf in m.subflows]):
+        for st in steps:
             if st.phrase and _DEPENDENCY_PHRASING.search(st.phrase):
                 findings.append(Finding(
-                    "dependency-phrasing", ADVISORY, f"{f.uc} flow step {st.n}",
+                    "dependency-phrasing", ADVISORY, f"{label} {st.n}",
                     f"step text reads as a dependency, not an action: \"{st.phrase}\". "
                     "Reword as what the source does (e.g. \"POSTs … through …\")."))
     for e in m.edges:

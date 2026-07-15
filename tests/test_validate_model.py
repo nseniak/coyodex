@@ -26,10 +26,12 @@ from coyodex.model import (
     GlossaryRow,
     HappyStep,
     Group,
+    ExtraSection,
     NonEntityType,
     ProjectModel,
     Role,
     SecurityRow,
+    SubFlow,
     UseCase,
     to_canonical_json,
 )
@@ -287,6 +289,146 @@ def test_duplicate_step_n_is_a_blocking_problem():
     assert any("duplicate step number 1" in p for p in problems_of(m))
 
 
+# --- sub-flows (named shared step sequences) ----------------------------------------
+
+
+def make_subflow(sid: str = "SF1") -> SubFlow:
+    return SubFlow(id=sid, name="Persist the order",
+                   steps=[FlowStep(n=1, src="C1", dst="E1", phrase="writes", where="src/v.py:5"),
+                          FlowStep(n=2, src="C1", dst="D1", phrase="notifies", where="src/v.py:7")])
+
+
+def make_ref_step(n: int = 2) -> FlowStep:
+    return FlowStep(n=n, src="C1", dst="D1", subflow="SF1")
+
+
+def make_model_with_subflow() -> ProjectModel:
+    # two flows referencing SF1, so the <2-references advisory stays quiet
+    m = make_valid_model()
+    m.use_cases.append(UseCase(id="UC2", name="Audit order", actors=["R1"]))
+    m.subflows = [make_subflow()]
+    m.flows = [Flow(uc="UC1", title="View order",
+                    steps=[FlowStep(n=1, src="R1", dst="C1", phrase="opens"), make_ref_step()]),
+               Flow(uc="UC2", title="Audit order",
+                    steps=[FlowStep(n=1, src="R1", dst="C1", phrase="asks"), make_ref_step()])]
+    return m
+
+
+def test_subflow_model_is_clean():
+    assert problems_of(make_model_with_subflow()) == []
+
+
+def test_unresolved_subflow_reference_is_flagged():
+    m = make_model_with_subflow()
+    m.flows[0].steps[1].subflow = "SF9"
+    assert any("undefined sub-flow 'SF9'" in p for p in problems_of(m))
+
+
+def test_nested_subflow_reference_is_flagged():
+    m = make_model_with_subflow()
+    m.subflows[0].steps[0].subflow = "SF1"
+    assert any("may not reference a sub-flow" in p for p in problems_of(m))
+
+
+def test_reference_step_with_own_where_is_flagged():
+    m = make_model_with_subflow()
+    m.flows[0].steps[1].where = "src/v.py:9"
+    assert any("carries no location of its own" in p for p in problems_of(m))
+
+
+def test_reference_step_phrase_is_optional():
+    # already empty in make_ref_step — the phrase-required rule must not fire on a reference
+    assert not any("no action text" in p for p in problems_of(make_model_with_subflow()))
+
+
+def test_subflow_steps_obey_step_rules():
+    # a sub-flow's element↔element step without `where` blocks, exactly like a flow's step
+    m = make_model_with_subflow()
+    m.subflows[0].steps[0].where = None
+    assert any("SF1 step 1" in p and "no `where` call-site anchor" in p for p in problems_of(m))
+    m2 = make_model_with_subflow()
+    m2.subflows[0].steps[0].where = "prose, not an anchor"
+    assert any("SF1 step 1 where" in p and "not a valid" in p for p in problems_of(m2))
+
+
+def test_subflow_step_dangling_endpoint_is_flagged():
+    # sub-flow steps are ordinary steps — a dangling element endpoint must resolve like a flow's
+    m = make_model_with_subflow()
+    m.subflows[0].steps[0].dst = "C99"
+    assert any("undefined IDs" in p and "C99" in p for p in problems_of(m))
+
+
+def test_dangling_subflow_prose_ref_is_never_suppressed():
+    # `[[SF9]]` in prose dangles even when the map has no grouping (the S-family additivity
+    # suppression must not swallow SF refs)
+    m = make_valid_model()
+    m.components[0].purpose = "Runs the shared sequence [[SF9]] on every write."
+    assert any("undefined IDs" in p and "SF9" in p for p in problems_of(m))
+
+
+def test_empty_flow_warns_under_band():
+    m = make_valid_model()
+    m.flows[0].steps = []
+    assert any("only 0 step(s)" in w for w in warnings_of(m))
+
+
+def test_subflow_referenced_once_is_an_advisory():
+    m = make_model_with_subflow()
+    m.flows[1].steps = [FlowStep(n=1, src="R1", dst="C1", phrase="asks")]  # drop UC2's reference
+    assert any("referenced by 1 flow(s)" in w for w in warnings_of(m))
+    assert not any("referenced by" in w for w in warnings_of(make_model_with_subflow()))
+
+
+# --- granularity advisories (band, fused names, literal duplication) ----------------
+
+
+def make_long_flow(n_steps: int, uc: str = "UC1") -> Flow:
+    return Flow(uc=uc, title="View order",
+                steps=[FlowStep(n=i, src="C1", dst="E1", phrase=f"does thing {i}",
+                                where=f"src/v.py:{i}") for i in range(1, n_steps + 1)])
+
+
+def test_flow_over_band_warns_and_exception_silences():
+    m = make_valid_model()
+    m.flows = [make_long_flow(16)]
+    assert any("16 steps" in w and "band" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="UC1: OAuth is protocol-imposed; one goal, wire grain kept.")]
+    assert not any("16 steps" in w for w in warnings_of(m))
+
+
+def test_under_band_flow_warns():
+    m = make_valid_model()  # its only flow has 1 step
+    assert any("only 1 step(s)" in w for w in warnings_of(m))
+
+
+def test_fused_use_case_name_warns():
+    m = make_valid_model()
+    m.use_cases[0].name = "Sign in and create an organization"
+    assert any("joins two clauses with 'and'" in w for w in warnings_of(m))
+
+
+def test_shared_run_detector_finds_literal_duplication():
+    m = make_valid_model()
+    m.use_cases.append(UseCase(id="UC2", name="Audit order", actors=["R1"]))
+    shared = [FlowStep(n=i, src="C1", dst=("E1" if i % 2 else "D1"), phrase=f"s{i}",
+                       where=f"src/v.py:{i}") for i in range(1, 5)]  # 4 identical hops
+    m.flows = [Flow(uc="UC1", title="a", steps=shared),
+               Flow(uc="UC2", title="b",
+                    steps=[FlowStep(n=0, src="R1", dst="C1", phrase="opens"), *shared])]
+    assert any("share a run of 4 identical steps" in w for w in warnings_of(m))
+
+
+def test_short_shared_run_is_quiet():
+    m = make_valid_model()
+    m.use_cases.append(UseCase(id="UC2", name="Audit order", actors=["R1"]))
+    shared = [FlowStep(n=i, src="C1", dst=("E1" if i % 2 else "D1"), phrase=f"s{i}",
+                       where=f"src/v.py:{i}") for i in range(1, 4)]  # only 3 hops
+    m.flows = [Flow(uc="UC1", title="a", steps=shared),
+               Flow(uc="UC2", title="b", steps=list(shared))]
+    assert not any("identical steps" in w for w in warnings_of(m))
+
+
 def test_edge_no_call_site_with_where_warns():
     # Claiming no call site while also giving one is contradictory — advisory.
     m = make_valid_model()
@@ -449,7 +591,8 @@ def test_stale_view_warns_and_fresh_view_does_not():
         assert any("view missing" in w for w in warnings)
         (Path(td) / "project-map.md").write_text(model_to_markdown(m), encoding="utf-8")
         _, warnings = validate_model(m, model_path)
-        assert not any("view" in w.lower() for w in warnings)
+        # specifically the STALENESS warnings — other advisories may mention "View order" (a title)
+        assert not any("view missing" in w or "GENERATED file" in w for w in warnings)
         (Path(td) / "project-map.md").write_text("# hand-edited\n", encoding="utf-8")
         _, warnings = validate_model(m, model_path)
         assert any("GENERATED file" in w for w in warnings)

@@ -181,11 +181,19 @@ const ROLE_BY_NAME = {};
 for (const r of GRAPH.roles || []) ROLE_BY_NAME[(r.name || '').trim().toLowerCase()] = r;
 // Reverse traceability ("Used in UC"): element id -> Set of use-case ids whose T6 flow steps through
 // it. The backward view of the flows (derived here, never authored), shown as links on a node's panel.
+// Sub-flow references are EXPANDED: an element touched only inside a shared sub-flow is used by every
+// referencing use case (the same treatment impact ripple and the audit give sub-flow content).
 const USES_BY_NODE = {};
-for (const f of GRAPH.flows || []) {
-  for (const st of (f.steps || [])) {
-    for (const end of [st.src, st.dst]) {
-      if (GRAPH.nodes[end]) (USES_BY_NODE[end] ||= new Set()).add(f.uc);
+{
+  const sfSteps = {};
+  for (const sf of GRAPH.subflows || []) sfSteps[sf.id] = sf.steps || [];
+  for (const f of GRAPH.flows || []) {
+    for (const st of (f.steps || [])) {
+      for (const s of (st.subflow && sfSteps[st.subflow] ? sfSteps[st.subflow] : [st])) {
+        for (const end of [s.src, s.dst]) {
+          if (GRAPH.nodes[end]) (USES_BY_NODE[end] ||= new Set()).add(f.uc);
+        }
+      }
     }
   }
 }
@@ -1339,6 +1347,8 @@ function showFlowStep(uc, i) {
   // endpoints move to the body, keeping their links to each element.
   panel.innerHTML = '<div class="pane-title"><h2>' + (st.verb ? mdInline(st.verb) : 'Step') + '</h2></div>'
     + '<p class="endpoints">' + end(st.src, st.srcId) + ' &rarr; ' + end(st.dst, st.dstId) + '</p>'
+    + (st.sf ? '<dl><dt>Part of sub-flow</dt><dd>&#10216;' + esc(st.sfName || st.sf)
+       + '&#10217; <span class="muted">(' + esc(st.sf) + ' — a shared sequence this flow includes)</span></dd></dl>' : '')
     + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
     + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '')
     + srcRow + ridesRows;
@@ -5442,9 +5452,11 @@ function parseStepEid(id) {
 function impName(id) {
   if (GRAPH.nodes[id]) return GRAPH.nodes[id].name;
   const st = parseStepEid(id);
-  if (st) {  // a hit flow step reads as "<use case> · step n", not the raw synthetic id
+  if (st) {  // a hit flow step reads as "<use case / sub-flow> · step n", not the raw synthetic id
     const uc = GRAPH.nodes[st.uc];
-    return (uc ? uc.name : st.uc) + ' · step ' + st.n;
+    if (uc) return uc.name + ' · step ' + st.n;
+    const sf = (GRAPH.subflows || []).find((s) => s.id === st.uc);  // step:SF…: no node — the SF list
+    return (sf ? sf.name : st.uc) + ' · step ' + st.n;
   }
   const i = id.indexOf(':');
   return i > 0 ? id.slice(i + 1) : id;   // synthetic ids (edge:…, ep:…) show their payload
@@ -5459,9 +5471,17 @@ function gotoImpactEid(id) {
   if (id.startsWith('edge:')) { selectFromTree(id.slice(5).split('>')[0]); return; }
   const st = parseStepEid(id);
   if (st) {
-    // The synthetic id carries the authored 1-based `n`; the flow view's selectors use the 0-based
-    // ok-filtered narrative index — map via FLOWS_NARR by matching `n`.
-    const i = (FLOWS_NARR[st.uc] || []).findIndex((s) => String(s.n) === st.n);
+    // The synthetic id carries the authored `n` WITHIN its container (a flow, or a sub-flow whose
+    // steps are expanded inline into every referencing flow). Host `n`s and sub-flow `n`s can
+    // collide in one expanded narrative, so the mapping matches on the (sf, n) PAIR, never n alone.
+    if (st.uc.startsWith('SF')) {  // step:SF…: land on the FIRST referencing flow's expanded run
+      for (const uc in FLOWS_NARR) {
+        const i = FLOWS_NARR[uc].findIndex((s) => s.sf === st.uc && String(s.n) === st.n);
+        if (i >= 0) { selectFlowStep(uc, i); return; }
+      }
+      return;  // referenced by no flow (validate warns) — nowhere to land
+    }
+    const i = (FLOWS_NARR[st.uc] || []).findIndex((s) => !s.sf && String(s.n) === st.n);
     if (i >= 0) selectFlowStep(st.uc, i);
     else go({ kind: 'usecase', uc: st.uc });  // step missing from the narrative — open its flow
     return;

@@ -108,6 +108,12 @@ leaves the code viewer alone).
 | Note | text | |
 | Source (the step's own `where`) | text link — opens the code viewer at the call site | |
 | Rides arrow | list — one link per backbone edge of the pair (opens that arrow's pane) | |
+| Part of sub-flow | text (only on a step expanded from a named sub-flow: ⟨name⟩ + its SF id) | |
+
+A **sub-flow** (a shared step sequence referenced by several flows) renders **inline**: its steps
+appear expanded inside each referencing flow's diagram, wrapped in a tinted block with the
+sub-flow's name in a note. Each expanded step selects like any other step; its pane carries the
+"Part of sub-flow" row above.
 
 ---
 

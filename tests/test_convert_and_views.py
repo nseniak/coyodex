@@ -33,11 +33,13 @@ from coyodex.model import (
     FlowStep,
     GlossaryRow,
     ProjectModel,
+    SubFlow,
     UseCase,
     all_elements,
     load_model,
     to_canonical_json,
 )
+from coyodex.viewer.gen_viewer import flow_actors, flow_narrative, gen_flow_mermaid
 from coyodex.views import model_to_graph, model_to_markdown
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mcpolis-project-map.json"
@@ -233,6 +235,60 @@ def test_step_where_renders_in_md_and_reaches_graph():
     g = model_to_graph(m)
     steps = cast("list[dict[str, object]]", g["flows"][0]["steps"])
     assert steps[0]["where"] == "src/v.py:5"
+
+
+def make_subflow_model() -> ProjectModel:
+    """Two flows sharing one sub-flow: UC1 = actor step + reference; UC2 = reference only."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.use_cases = [UseCase(id="UC1", name="View"), UseCase(id="UC2", name="Audit")]
+    m.components = [Component(id="C1", name="Viewer", purpose="shows"),
+                    Component(id="C2", name="Store", purpose="keeps")]
+    m.subflows = [SubFlow(id="SF1", name="Persist the thing",
+                          steps=[FlowStep(n=1, src="C1", dst="C2", phrase="hands off",
+                                          where="src/a.py:3"),
+                                 FlowStep(n=2, src="C2", dst="C1", phrase="confirms",
+                                          where="src/b.py:7")])]
+    m.flows = [Flow(uc="UC1", title="View",
+                    steps=[FlowStep(n=1, src="Andy", dst="C1", phrase="opens"),
+                           FlowStep(n=2, src="C1", dst="C2", subflow="SF1"),
+                           FlowStep(n=3, src="C1", dst="C2", phrase="renders the result",
+                                    where="src/c.py:9")]),
+               Flow(uc="UC2", title="Audit",
+                    steps=[FlowStep(n=1, src="C1", dst="C2", subflow="SF1")])]
+    return m
+
+
+def test_subflow_renders_in_md_and_reaches_graph():
+    m = make_subflow_model()
+    md = model_to_markdown(m)
+    assert "## T6b — Sub-flows" in md and "**SF1 — Persist the thing**" in md
+    assert "2. C1 → C2 : ⟨runs SF1 — Persist the thing⟩" in md  # the reference step, named inline
+    g = model_to_graph(m)
+    sf = cast("list[dict[str, object]]", g["subflows"])[0]
+    assert sf["id"] == "SF1"
+    assert cast("list[dict[str, object]]", sf["steps"])[0]["where"] == "src/a.py:3"
+
+
+def test_flow_narrative_expands_subflow_in_place():
+    """The reference step is REPLACED inline by the sub-flow's steps, carrying sf/sfName/sfFirst —
+    no header entries, so narrative indexes stay 1:1 with mermaid messages."""
+    g = model_to_graph(make_subflow_model())
+    narr = flow_narrative(g, cast("dict", g["flows"][0]))
+    assert [(s["sf"], s["n"]) for s in narr] == [(None, 1), ("SF1", 1), ("SF1", 2), (None, 3)]
+    assert narr[1]["sfFirst"] is True and narr[2]["sfFirst"] is False
+    assert narr[1]["sfName"] == "Persist the thing" and narr[1]["where"] == "src/a.py:3"
+    mm = gen_flow_mermaid(g, cast("dict", g["flows"][0]))
+    msgs = [ln for ln in mm.splitlines() if "->>" in ln]
+    assert len(msgs) == len(narr)                       # message[i] <-> narrative[i], notes excluded
+    assert "rect rgb" in mm and "Note over" in mm and "Persist the thing" in mm
+    assert mm.count("  end") == 1                       # one run -> one closed rect
+
+
+def test_flow_actors_index_the_expanded_list():
+    g = model_to_graph(make_subflow_model())
+    actors = flow_actors(g, cast("dict", g["flows"][0]))
+    assert len(actors) == 1 and actors[0]["name"] == "Andy"
+    assert actors[0]["stepIdx"] == [0]                  # indexes the same 4-entry expanded list
 
 
 def test_graph_line_parses_colon_range_and_legacy_hash_anchors():

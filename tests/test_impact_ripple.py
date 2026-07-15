@@ -38,6 +38,7 @@ from coyodex.model import (
     Group,
     HappyStep,
     ProjectModel,
+    SubFlow,
     UseCase,
 )
 from coyodex.viewer.recents import RecentsStore
@@ -143,6 +144,37 @@ def test_step_hit_ripples_endpoints_and_its_use_case_only() -> None:
     assert "UC2" not in r["impacts"]                    # other flows untouched
     assert type_of("step:UC1:2") == "flow_steps"
     assert "step:UC1:2" in r["byType"]["flow_steps"]
+
+
+def make_subflow_ripple_model() -> ProjectModel:
+    """make_ripple_model + one sub-flow (touching C2, which no flow names directly) referenced by
+    BOTH use cases."""
+    m = make_ripple_model()
+    m.subflows = [SubFlow(id="SF1", name="Persist",
+                          steps=[FlowStep(n=1, src="C2", dst="E1", phrase="writes",
+                                          where="sf.py:5")])]
+    m.flows[0].steps.append(FlowStep(n=4, src="C1", dst="E1", subflow="SF1"))
+    m.flows[1].steps.append(FlowStep(n=2, src="C3", dst="E1", subflow="SF1"))
+    return m
+
+
+def test_subflow_step_hit_ripples_every_referencing_use_case() -> None:
+    r = build_impact_result(make_subflow_ripple_model(),
+                            make_core([make_hit("step:SF1:1", "flow_step", "line")]))
+    assert impact_of(r, "C2")["via"] == [{"from": "step:SF1:1", "relation": "step-endpoint"}]
+    assert impact_of(r, "UC1")["via"][0]["relation"] == "flow-step"
+    assert impact_of(r, "UC2")["via"][0]["relation"] == "flow-step"   # both referencing UCs reached
+    assert impact_of(r, "HP1")["via"][-1] == {"from": "UC1", "relation": "happy-path"}
+    assert type_of("step:SF1:1") == "flow_steps"
+
+
+def test_component_touched_only_inside_subflow_ripples_behaviorally() -> None:
+    # C2 appears in NO flow directly — only in SF1's steps. Hitting C2 must still reach both
+    # referencing use cases (the _Maps expansion), or sub-flow content would be impact-invisible.
+    r = build_impact_result(make_subflow_ripple_model(),
+                            make_core([make_hit("C2", "component")]))
+    assert impact_of(r, "UC1")["strength"] == R_BEHAVIORAL
+    assert impact_of(r, "UC2")["strength"] == R_BEHAVIORAL
 
 
 def test_step_hit_with_actor_endpoint_skips_the_role() -> None:

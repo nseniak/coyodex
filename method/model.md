@@ -77,7 +77,10 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "flows":       [ { "uc": "UCn", "title",
                      "steps": [ { "n", "src", "dst", "phrase", "note",
                                   "where": "<the step's own call-site path:line|null>",
-                                  "no_call_site": false } ] } ],  // T6
+                                  "no_call_site": false,
+                                  "subflow": "SFn|null" } ] } ],  // T6
+  "subflows":    [ { "id": "SFn", "name",
+                     "steps": [ /* same step shape and rules as flows[].steps */ ] } ],  // T6b
   "edges":       [ { "src", "verb", "dst", "why", "where": "<call-site path:line|null>",
                      "no_call_site": false } ],
 
@@ -136,6 +139,17 @@ Semantics, stated on the fields:
   on element↔element steps unless the step sets `no_call_site: true` (same escape as edges); actor
   steps (a Role endpoint) need none. The "used in" backward view
   (element → the use cases whose flow steps touch it) is derived from these, never authored.
+- **`subflows` — named shared step sequences (T6b).** A `SubFlow {id: SFn, name, steps}` defines
+  machinery shared by ≥2 flows ONCE; its steps are ordinary steps under all the ordinary rules
+  (phrase, `where` anchors, unique `n`). A flow includes it with a **reference step**: `subflow:
+  "SFn"` on a step whose `src`/`dst` are the run's entry/exit endpoints; the reference's `phrase`
+  may be empty (defaults to the sub-flow's name) and it carries NO `where`/`no_call_site` of its
+  own (`validate` blocks the contradiction). **One level only** — a sub-flow's step may not
+  reference a sub-flow (blocking). Referenced by <2 flows → advisory (pointless indirection).
+  Consumers that reason about what a flow touches (the viewer's expansion, impact ripple, the
+  audit's touch sets) treat sub-flow content as the referencing flow's own. The 'Balance
+  exceptions' extras heading accepts `UCn`/`SFn` ids to exempt a flow from the step-count band,
+  alongside the diagram ids it already accepts.
 - **`entities[].relations`** are authored on the source card only (see the schema for `verb`'s
   vocabulary); cardinality is a pair (`src_card`/`dst_card`, both or neither); `how` is the
   plain-text note for field-less relations.

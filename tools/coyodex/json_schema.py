@@ -115,7 +115,15 @@ FIELD_META: dict[tuple[str, str], dict] = {
                              "on element↔element steps unless `no_call_site`."},
     ("FlowStep", "no_call_site"): {"description": "explicit opt-out (mirrors Edge.no_call_site): this "
                                     "step has no single call site — `where` may be null."},
+    ("FlowStep", "subflow"): {"pattern": r"^SF\d+$", "description": "a REFERENCE step: 'runs SFn "
+                               "here'. src/dst stay authored (the run's entry/exit endpoints); "
+                               "`phrase` may be empty (defaults to the sub-flow's name); the step "
+                               "carries no `where`/`no_call_site` of its own. One level only — a "
+                               "sub-flow's step may not itself reference a sub-flow."},
     ("Flow", "uc"): {"pattern": r"^UC\d+$"},
+    ("SubFlow", "id"): {"pattern": r"^SF\d+$"},
+    ("SubFlow", "name"): {"description": "what the shared sequence does — a single verb phrase, "
+                           "like a use-case name."},
     ("Edge", "where"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC + " A verified "
                          "EXAMPLE call site — one line in `src`'s code where it invokes `dst`, possibly "
                          "one of many (a witness grounding the edge, not a catalog of its traffic)."},

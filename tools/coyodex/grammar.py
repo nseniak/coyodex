@@ -10,9 +10,9 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-# IDs by prefix. Multi-letter prefixes (UC, HP, SD) must precede the single-letter ones (so `SD1`
+# IDs by prefix. Multi-letter prefixes (UC, HP, SD, SF) must precede the single-letter ones (so `SD1`
 # never reads as `S` + stray text).
-ID_TOKEN = re.compile(r"\b(?:UC\d+|HP\d+|SD\d+|C\d+|D\d+|E\d+|S\d+)\b")
+ID_TOKEN = re.compile(r"\b(?:UC\d+|HP\d+|SD\d+|SF\d+|C\d+|D\d+|E\d+|S\d+)\b")
 
 # Grouping: membership is ONE parent pointer carried on the child.
 # Nesting depth is ADVISORY, not capped: the viewer renders arbitrary depth, and the cycle check (not a
@@ -238,6 +238,7 @@ class FlowStep:
     phrase: str = ""     # authored inline phrase (after ": ") — e.g. the actor's action
     note: str = ""       # flow-specific note (after "· ")
     where: str | None = None  # THE location: the step's own call site (`path:line`), if authored
+    subflow: str | None = None  # a reference step: "runs SFn here" (see model.FlowStep.subflow)
     ok: bool = True      # False -> the line could not be split into `from → to`
 
 

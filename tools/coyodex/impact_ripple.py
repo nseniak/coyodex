@@ -23,17 +23,17 @@ from dataclasses import dataclass, field
 
 from coyodex.impact_git import ImpactCore
 from coyodex.impact_lib import DirectHit
-from coyodex.model import ProjectModel
+from coyodex.model import FlowStep, ProjectModel
 
 # ── the lattice ───────────────────────────────────────────────────────────────────────────────────
 
 RANK_DIRECT = {"line": 1, "symbol": 2, "file": 3}
 R_STRUCTURAL, R_BEHAVIORAL, R_DATA, R_CALLGRAPH, R_TERRITORY = 4, 5, 6, 7, 8
 
-_ID_RE = re.compile(r"^(SD|UC|HP|C|D|E|S)(\d+)$")
+_ID_RE = re.compile(r"^(SD|SF|UC|HP|C|D|E|S)(\d+)$")
 
 _KIND_BY_PREFIX = {"C": "components", "D": "deps", "E": "entities", "S": "subsystems",
-                   "SD": "subdomains", "UC": "use_cases", "HP": "happy_path"}
+                   "SD": "subdomains", "SF": "subflows", "UC": "use_cases", "HP": "happy_path"}
 _KIND_BY_SYNTH = {"edge": "edges", "ep": "entry_points", "step": "flow_steps",
                   "glossary": "glossary", "security": "security", "run": "run_commands",
                   "net": "non_entity_types"}
@@ -89,22 +89,39 @@ class _Maps:
 
         ids: set[str] = ({c.id for c in model.components} | {d.id for d in model.deps}
                          | {e.id for e in model.entities})
-        # behavioral: element → the use cases whose flow steps touch it; plus edge-pair → use cases
+        # behavioral: element → the use cases whose flow steps touch it; plus edge-pair → use cases.
+        # Flows are EXPANDED (sub-flow references replaced by the sub-flow's steps), so a component
+        # touched only inside a shared sub-flow still ripples to every referencing use case.
         self.ucs_of: dict[str, set[str]] = {}
         self.pair_ucs: dict[frozenset, set[str]] = {}
+        self.sf_ucs: dict[str, set[str]] = {}   # sub-flow id → the use cases whose flows reference it
         self.unmatched_steps: list[str] = []
+        seen_unmatched: set[tuple[str, int]] = set()  # a shared sub-flow step warns ONCE, as itself
         edge_pairs = {frozenset((ed.src, ed.dst)) for ed in model.edges}
+        sfs = {sf.id: sf for sf in model.subflows}
         for f in model.flows:
+            # expand inline, keeping each step's ORIGIN (the flow's uc, or the sub-flow's id) so an
+            # unmatched-step warning names the container the step is actually authored in
+            steps_with_origin: list[tuple[str, FlowStep]] = []
             for st in f.steps:
+                sf = sfs.get(st.subflow or "")
+                if st.subflow:
+                    self.sf_ucs.setdefault(st.subflow, set()).add(f.uc)
+                if sf is None or not sf.steps:
+                    steps_with_origin.append((f.uc, st))
+                else:
+                    steps_with_origin.extend((sf.id, s) for s in sf.steps)
+            for origin, st in steps_with_origin:
                 ends = [x for x in (st.src, st.dst) if x in ids]
                 for x in ends:
                     self.ucs_of.setdefault(x, set()).add(f.uc)
                 if len(ends) == 2:
                     pair = frozenset(ends)
                     self.pair_ucs.setdefault(pair, set()).add(f.uc)
-                    if pair not in edge_pairs:
+                    if pair not in edge_pairs and (origin, st.n) not in seen_unmatched:
+                        seen_unmatched.add((origin, st.n))
                         self.unmatched_steps.append(
-                            f"{f.uc} step {st.n}: {st.src} → {st.dst} matches no backbone edge")
+                            f"{origin} step {st.n}: {st.src} → {st.dst} matches no backbone edge")
         self.hp_of: dict[str, list[str]] = {}
         for hp in model.happy_path:
             if hp.uc:
@@ -225,22 +242,30 @@ def build_impact_result(model: ProjectModel, core: ImpactCore,
             continue
         if eid.startswith("step:"):
             # A hit flow step (its own `where` changed) ripples to its two element endpoints and —
-            # the precise behavioral rung — to exactly ITS use case + that use case's HP steps.
-            # Unlike the edge branch above (pair → EVERY use case walking the pair), a step names
-            # its use case directly, so no pair-level over-approximation is involved.
-            uc, n_str = eid.removeprefix("step:").split(":", 1)
-            step = next((st for fl in model.flows if fl.uc == uc
-                         for st in fl.steps if str(st.n) == n_str), None)
+            # the precise behavioral rung — to its use case(s) + their HP steps. A flow's step
+            # names ONE use case directly (no pair-level over-approximation, unlike the edge branch
+            # above); a SUB-FLOW's step reaches every use case whose flow references the sub-flow —
+            # still precise, via explicit references.
+            owner, n_str = eid.removeprefix("step:").split(":", 1)
+            if owner.startswith("SF"):
+                step = next((st for sf in model.subflows if sf.id == owner
+                             for st in sf.steps if str(st.n) == n_str), None)
+                ucs = sorted(maps.sf_ucs.get(owner, ()))
+            else:
+                step = next((st for fl in model.flows if fl.uc == owner
+                             for st in fl.steps if str(st.n) == n_str), None)
+                ucs = [owner]
             if step is not None:
                 for endpoint in (step.src, step.dst):
                     if _ID_RE.match(endpoint):  # element endpoints only — a Role has no node
                         register_ripple(endpoint, R_STRUCTURAL, 1,
                                         [{"from": eid, "relation": "step-endpoint"}], files)
             via = [{"from": eid, "relation": "flow-step"}]
-            register_ripple(uc, R_BEHAVIORAL, 1, via, files)
-            for hp in maps.hp_of.get(uc, ()):
-                register_ripple(hp, R_BEHAVIORAL, 1,
-                                via + [{"from": uc, "relation": "happy-path"}], files)
+            for uc in ucs:
+                register_ripple(uc, R_BEHAVIORAL, 1, via, files)
+                for hp in maps.hp_of.get(uc, ()):
+                    register_ripple(hp, R_BEHAVIORAL, 1,
+                                    via + [{"from": uc, "relation": "happy-path"}], files)
             continue
         kind = type_of(eid)
         if kind == "components":

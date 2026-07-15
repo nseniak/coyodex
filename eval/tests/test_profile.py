@@ -10,6 +10,7 @@ Stdlib-only — no pytest required. Run either way (needs an editable install: `
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -691,6 +692,23 @@ def test_structure_counts_are_exact() -> None:
     p = build_profile(make_counts_map())
     assert (p.use_cases, p.subsystems, p.subdomains, p.components, p.deps, p.entities) == (2, 1, 1, 3, 1, 2), p
     assert (p.edges, p.hp_steps, p.flows, p.security_surfaces) == (3, 3, 2, 2), p
+
+
+def test_flow_granularity_fields() -> None:
+    # authored step counts — a sub-flow reference counts as 1; band = FLOW_STEPS_HI (15)
+    p = build_profile(make_counts_map())
+    assert p.subflows == 0
+    assert p.max_flow_len == 1 and p.flows_over_band_pct == 0.0, p
+
+
+def test_old_baseline_without_granularity_fields_loads() -> None:
+    # a profile written before the fields existed loads with None defaults (from_json filters)
+    p = build_profile(make_counts_map())
+    d = json.loads(p.to_json())
+    for k in ("subflows", "max_flow_len", "flows_over_band_pct"):
+        d.pop(k)
+    old = MapProfile.from_json(json.dumps(d))
+    assert old.subflows is None and old.max_flow_len is None and old.flows_over_band_pct is None
 
 
 def test_concept_name_sets_are_captured() -> None:

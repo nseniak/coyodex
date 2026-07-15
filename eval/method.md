@@ -240,7 +240,9 @@ For a map M:
 2. Report to the user, **judge/quality deltas first** (grounding pass-rate with its denominator and
    failure count, rubric scores), then the verdict (PASS / DRIFT / REGRESSED) with the gates/bands
    that moved — for the component count, lead with the **granularity line** (both maps' distance to
-   the code-derived expectation E; only the candidate gates) — then the raw structural counts last,
+   the code-derived expectation E; only the candidate gates); mention the use-case-granularity
+   fields (max_flow_len / flows_over_band_pct / subflows) when they moved notably — then the raw
+   structural counts last,
    and the path to the run's `delta.md` and `project-map.view.json`. On REGRESSED, name the gate that
    tripped. Any post-freeze validate/audit
    finding from Step 2 is part of this report — a finding about the method, not something to have

@@ -19,6 +19,7 @@ from coyodex.validate_model import (
     _check_edges,
     _check_extra_conventions,
     _check_flows,
+    _granularity_warnings,
     check_anchor_existence_model,
     check_domain_relations,
     check_entity_sources_model,
@@ -53,13 +54,14 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
 
 
 def lint_fragment_warnings(m: ProjectModel) -> list[str]:
-    """Advisory (non-blocking) findings for one fragment — the domain-relation *warnings*: the
-    field-less-association nudge and the heuristic "this field-less relation looks like a by-name FK,
-    mark `FK→…`" hint. These are HEURISTIC (they read prose), so unlike `lint_fragment_problems` they
-    must NOT fail the lint — the authoring agent sees them and decides. Kept separate from the blocking
-    problems so the fatal/advisory split is explicit."""
+    """Advisory (non-blocking) findings for one fragment — the domain-relation *warnings* (the
+    field-less-association nudge, the by-name-FK hint) and the use-case *granularity* signals
+    (flow-length band, fused-goal name smell, shared-run duplication). These are HEURISTIC /
+    judgment-shaped, so unlike `lint_fragment_problems` they must NOT fail the lint — the authoring
+    agent sees them and decides (a long flow may be the lead's call, not the fragment's bug). Kept
+    separate from the blocking problems so the fatal/advisory split is explicit."""
     _problems, warnings = check_domain_relations(m.entities)
-    return warnings
+    return warnings + _granularity_warnings(m)
 
 
 def main(argv: list[str] | None = None) -> int:

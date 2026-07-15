@@ -7,9 +7,10 @@ from pathlib import Path
 
 from coyodex import lint_fragment
 from coyodex.assemble import load_fragment
+from coyodex.model import ProjectModel
 
 
-def make_fragment(obj: dict) -> object:
+def make_fragment(obj: dict) -> ProjectModel:
     """A partial model built from a fragment dict, exactly as `assemble`/`lint-fragment` load it."""
     return load_fragment(json.dumps(obj), "frag")
 
@@ -66,6 +67,18 @@ def test_lint_surfaces_fk_heuristic_as_nonfatal_warning():
          "fields": [{"name": "id", "type": "str", "markers": ["PK"]}]}]})
     assert any("FK→E2" in w for w in lint_fragment.lint_fragment_warnings(m))
     assert not any("FK→E2" in p for p in lint_fragment.lint_fragment_problems(m, None))
+
+
+def test_lint_granularity_warnings_are_nonfatal():
+    # A 16-step flow is a granularity ADVISORY — it must ride the non-failing warnings path, never
+    # fail the fragment (a long flow may be the lead's call, not the authoring agent's bug).
+    steps = [{"n": i, "src": "C1", "dst": "C1", "phrase": f"s{i}", "no_call_site": True}
+             for i in range(1, 17)]
+    m = make_fragment({"use_cases": [{"id": "UC1", "name": "Do the thing"}],
+                       "components": [{"id": "C1", "name": "X"}],
+                       "flows": [{"uc": "UC1", "title": "Do", "steps": steps}]})
+    assert not any("band" in p for p in lint_fragment.lint_fragment_problems(m, None))
+    assert any("over the ≤15 band" in w for w in lint_fragment.lint_fragment_warnings(m))
 
 
 def test_lint_extensionless_anchor_is_accepted():

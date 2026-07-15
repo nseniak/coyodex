@@ -216,9 +216,23 @@ SOURCE: [file](path/sub:1)
 **UC1 — <flow title>**
 1. <Role> → C1 : <what the actor does>
 2. C1 → C2 : <what this call does> @ path/to/caller.py:42
-3. C2 → E1 : <what is read/written> @ path/to/repo.py:88 · <optional note>
-4. C2 → D1 : <what is sent> @ path/to/client.py:17
-5. C1 → <Role> : <the response the actor sees — a backward step, drawn right-to-left>
+3. C2 → E1 ⟨runs SF1 — <shared sequence name>⟩
+4. C1 → <Role> : <the response the actor sees — a backward step, drawn right-to-left>
+
+<!-- SUB-FLOWS (T6b): machinery shared by ≥2 flows is defined ONCE and referenced (step 3 above and
+     step 2 below both run SF1). A reference step names the sub-flow (`⟨runs SFn — name⟩`); its
+     endpoints are the run's entry/exit; it carries NO @ anchor of its own (the sub-flow's steps
+     carry theirs). One level only — a sub-flow never references a sub-flow. The step band is
+     3–15 AUTHORED steps per flow (a reference counts as 1); a justified long flow records its UC id
+     under a "Balance exceptions" extras heading. -->
+
+**UC2 — <another flow that shares machinery with UC1>**
+1. <Role> → C1 : <what the actor does>
+2. C2 → E1 ⟨runs SF1 — <shared sequence name>⟩
+
+**SF1 — <shared sequence name>**
+1. C2 → E1 : <what is read/written> @ path/to/repo.py:88 · <optional note>
+2. C2 → D1 : <what is sent> @ path/to/client.py:17
 
 ---
 

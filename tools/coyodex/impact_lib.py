@@ -235,6 +235,10 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
         for st in fl.steps:
             if st.where:  # `validate` guarantees `n` is unique within a flow, so the id is stable
                 add(_ref(f"step:{fl.uc}:{st.n}", "flow_step", st.where, "where", owner=fl.uc))
+    for sf in model.subflows:
+        for st in sf.steps:
+            if st.where:  # a sub-flow step's hit ripples to EVERY referencing use case (impact_ripple)
+                add(_ref(f"step:{sf.id}:{st.n}", "flow_step", st.where, "where", owner=sf.id))
     for s in model.security:
         add(_ref(f"security:{s.surface}", "security", s.source, "source"))
     for r in model.run_commands:

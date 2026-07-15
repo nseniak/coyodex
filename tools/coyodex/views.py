@@ -17,7 +17,18 @@ from collections.abc import Mapping
 from dataclasses import asdict
 
 from coyodex import grammar
-from coyodex.model import Component, Dep, Entity, EvidenceItem, Group, ProjectModel, TestRow, UseCase, all_elements
+from coyodex.model import (
+    Component,
+    Dep,
+    Entity,
+    EvidenceItem,
+    FlowStep,
+    Group,
+    ProjectModel,
+    TestRow,
+    UseCase,
+    all_elements,
+)
 from coyodex.validate_analysis import strip_anchor
 from coyodex.viewer.build_graph import (
     LINK,
@@ -307,25 +318,40 @@ def model_to_markdown(m: ProjectModel) -> str:
         section("Non-entity types (plumbing, deliberately unmodelled)",
                 _table(["Type", "Source", "Why"],
                        [[t.name, t.source or "", t.why] for t in m.non_entity_types]))
-    if m.flows:
+    if m.flows or m.subflows:
         rn = {r.id: r.name for r in m.roles}  # an actor step carries a role id → show the role NAME
+        sfn = {sf.id: sf.name for sf in m.subflows}
 
         def _ep(x: str) -> str:
             return rn.get(x, x) if grammar.is_role_id(x) else x
+
+        def _step_line(st: FlowStep) -> str:  # ONE step-line writer, shared by flows and sub-flows
+            line = f"{st.n}. {_ep(st.src)} → {_ep(st.dst)}"
+            if st.phrase:
+                line += f" : {st.phrase}"
+            if st.subflow:  # a reference step: the included run, named inline
+                line += f" {'⟨' if st.phrase else ': ⟨'}runs {st.subflow} — {sfn.get(st.subflow, st.subflow)}⟩"
+            if st.where:  # the step's own call site (THE location) — rendered as a code link
+                line += f" @ {_anchor_link(st.where)}"
+            if st.note:
+                line += f" · {st.note}"
+            return line
+
         body = []
         for f in m.flows:
             body.append(f"**{f.uc} — {f.title}**")
-            for st in f.steps:
-                line = f"{st.n}. {_ep(st.src)} → {_ep(st.dst)}"
-                if st.phrase:
-                    line += f" : {st.phrase}"
-                if st.where:  # the step's own call site (THE location) — rendered as a code link
-                    line += f" @ {_anchor_link(st.where)}"
-                if st.note:
-                    line += f" · {st.note}"
-                body.append(line)
+            body.extend(_step_line(st) for st in f.steps)
             body.append("")
-        section("T6 — Use-case flows", body[:-1] if body else body)
+        if m.flows:
+            section("T6 — Use-case flows", body[:-1] if body else body)
+        if m.subflows:
+            body = []
+            for sf in m.subflows:
+                body.append(f"**{sf.id} — {sf.name}**")
+                body.extend(_step_line(st) for st in sf.steps)
+                body.append("")
+            section("T6b — Sub-flows (shared step sequences, referenced by the flows above)",
+                    body[:-1] if body else body)
     if m.deployment or m.observability or m.security or m.config:
         body = []
         if m.deployment:
@@ -486,13 +512,18 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
 
     def _endpoint(x: str) -> str:  # an actor step carries a role id → show the role NAME
         return role_names.get(x, x) if grammar.is_role_id(x) else x
-    flows = [grammar.Flow(
-        uc=f.uc, title=f.title, line_no=0,
-        steps=[grammar.FlowStep(n=st.n, src=_endpoint(st.src), dst=_endpoint(st.dst),
-                                  src_is_id=grammar.is_step_id(st.src),
-                                  dst_is_id=grammar.is_step_id(st.dst),
-                                  phrase=st.phrase, note=st.note, where=st.where, ok=True)
-               for st in f.steps]) for f in m.flows]
+
+    def _graph_steps(steps: list[FlowStep]) -> list[grammar.FlowStep]:  # shared: flows + sub-flows
+        return [grammar.FlowStep(n=st.n, src=_endpoint(st.src), dst=_endpoint(st.dst),
+                                 src_is_id=grammar.is_step_id(st.src),
+                                 dst_is_id=grammar.is_step_id(st.dst),
+                                 phrase=st.phrase, note=st.note, where=st.where,
+                                 subflow=st.subflow, ok=True)
+                for st in steps]
+    flows = [grammar.Flow(uc=f.uc, title=f.title, line_no=0, steps=_graph_steps(f.steps))
+             for f in m.flows]
+    subflows = [{"id": sf.id, "name": sf.name, "steps": [asdict(s) for s in _graph_steps(sf.steps)]}
+                for sf in m.subflows]
 
     _ensure_default_subsystem(nodes, m.title or None)
 
@@ -534,6 +565,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         "happy_path": [asdict(GraphHappyStep(id=g.id, title=g.title, uc=g.uc, why=g.why or ""))
                for g in m.happy_path],
         "flows": [asdict(f) for f in flows],
+        "subflows": subflows,
         "roles": [{"name": r.name, "wants": r.wants, "kind": _role_kind(r.name, r.kind)}
                   for r in m.roles],
         "glossary": [{"term": g.term, "meaning": g.meaning, "source": g.source or ""}

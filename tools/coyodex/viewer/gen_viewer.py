@@ -1248,6 +1248,8 @@ def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, 
     phrase = str(st.get("phrase") or "").strip()
     if phrase:
         return phrase
+    if st.get("subflow"):  # a DEGRADED reference step (unresolved/empty sub-flow — validate blocks
+        return f"runs {st['subflow']}"  # it, but serve renders drafts): name the run, never 'uses'
     if st.get("src_is_id") and st.get("dst_is_id"):
         verb, why = idx.get((str(st["src"]), str(st["dst"])), ("", ""))
         if why:
@@ -1257,12 +1259,41 @@ def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, 
     return "uses"
 
 
+def expanded_steps(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
+    """The flow's ok-filtered steps with every sub-flow REFERENCE step replaced inline by the
+    referenced sub-flow's own ok steps — the ONE expansion all three per-flow views (mermaid,
+    narrative, actors) consume, so `message[i] ↔ FLOWS_NARR[uc][i] ↔ actor stepIdx` stays a single
+    index space. Expanded steps carry `sf`/`sfName` (+ `sfFirst` on the run's first step) so the
+    frontend renders the grouping FROM the entries — no header rows, every entry is message-backed.
+    An unresolved reference or an empty sub-flow (validate blocks both, but serve renders drafts)
+    degrades to the bare reference step, so nothing disappears silently."""
+    sfs = {str(sf.get("id")): sf for sf in cast("list[dict[str, Any]]", graph.get("subflows") or [])}
+    out: list[dict[str, Any]] = []
+    for st in cast("list[dict[str, Any]]", flow.get("steps") or []):
+        if not st.get("ok"):
+            continue
+        sf = sfs.get(str(st.get("subflow") or ""))
+        inner = [s for s in cast("list[dict[str, Any]]", (sf or {}).get("steps") or []) if s.get("ok")]
+        if sf is None or not inner:
+            out.append(st)
+            continue
+        for k, s in enumerate(inner):
+            e = dict(s)
+            e["sf"] = str(sf["id"])
+            e["sfName"] = str(sf.get("name") or sf["id"])
+            e["sfFirst"] = k == 0
+            out.append(e)
+    return out
+
+
 def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     """One use case's flow as a Mermaid sequenceDiagram: the actor + the touched components/deps/
     entities as lifelines (first-appearance order), each step an ordered message. An element lifeline's
-    participant id IS its node id, so the viewer's id→node bridge resolves a click to its panel."""
+    participant id IS its node id, so the viewer's id→node bridge resolves a click to its panel.
+    A sub-flow's expanded run is wrapped in a tinted `rect` named by a `Note` — notes render as
+    `.noteText`, never `.messageText`, so the positional message↔narrative pairing is untouched."""
     idx = _edge_index(graph)
-    steps = [s for s in cast("list[dict[str, Any]]", flow.get("steps") or []) if s.get("ok")]
+    steps = expanded_steps(graph, flow)
     pid: dict[str, str] = {}     # raw endpoint token -> Mermaid participant id
     decls: list[str] = []
     n_actor = 0
@@ -1289,9 +1320,21 @@ def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
     lines = ["sequenceDiagram"] + decls
     # Prefix each arrow with its 1-based position so the diagram is self-numbered — the same number the
     # side-panel narrative shows (a plain <ol>) and the step player's "Step n / N" counter uses. The index
-    # is over this same ok-filtered list, so message n <-> FLOWS_NARR[uc][n-1] <-> panel item n line up.
+    # is over this same expanded, ok-filtered list, so message n <-> FLOWS_NARR[uc][n-1] <-> panel item n
+    # line up. A sub-flow run opens a rect (+ its naming Note) and closes it when the run ends.
+    open_sf: str | None = None
     for i, st in enumerate(steps):
+        sf = cast("str | None", st.get("sf"))
+        if sf != open_sf or (sf is not None and st.get("sfFirst") and i > 0 and steps[i - 1].get("sf") == sf):
+            if open_sf is not None:
+                lines.append("  end")
+            if sf is not None:
+                lines.append("  rect rgb(238, 242, 255)")
+                lines.append(f"  Note over {pid[str(st['src'])]}: ⟨{_safe_msg(str(st.get('sfName') or sf))}⟩")
+            open_sf = sf
         lines.append(f"  {pid[str(st['src'])]}->>{pid[str(st['dst'])]}: {i + 1}. {_safe_msg(_flow_step_label(idx, st))}")
+    if open_sf is not None:
+        lines.append("  end")
     return "\n".join(lines)
 
 
@@ -1303,16 +1346,16 @@ def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any
     for a normal step; the edge lookup is only a safety net for a legacy step with no authored text."""
     idx = _edge_index(graph)
     out: list[dict[str, Any]] = []
-    for st in cast("list[dict[str, Any]]", flow.get("steps") or []):
-        if not st.get("ok"):
-            continue
+    for st in expanded_steps(graph, flow):
         src, dst = str(st["src"]), str(st["dst"])
         src_id = src if (st.get("src_is_id") and src in graph["nodes"]) else None
         dst_id = dst if (st.get("dst_is_id") and dst in graph["nodes"]) else None
         phrase = str(st.get("phrase") or "").strip()
         verb, why = phrase, ""
         if not phrase:                             # safety net: a legacy step that left its text empty
-            if st.get("src_is_id") and st.get("dst_is_id"):
+            if st.get("subflow"):                  # a degraded reference step — name the run
+                verb = f"runs {st['subflow']}"
+            elif st.get("src_is_id") and st.get("dst_is_id"):
                 v, w = idx.get((src, dst), ("", ""))
                 verb, why = (v or "uses"), w
             else:
@@ -1323,6 +1366,9 @@ def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any
             "dstId": dst_id, "dst": str(graph["nodes"][dst]["name"]) if dst_id else dst,
             "verb": verb, "why": why, "note": str(st.get("note") or "").strip(),
             "where": str(st.get("where") or "") or None,  # the step's own call site (THE location)
+            # sub-flow grouping metadata (None/False for a plain step): the frontend renders the
+            # group header/indent from these — entries stay 1:1 with mermaid messages
+            "sf": st.get("sf"), "sfName": st.get("sfName"), "sfFirst": bool(st.get("sfFirst")),
         })
     return out
 
@@ -1347,7 +1393,7 @@ def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
     lockstep. A role can drive more than one step (e.g. it also receives the final reply).
     `is_role` mirrors flow_narrative's srcId/dstId predicate exactly (an id absent from the current
     graph reads as a role, not a dangling element) so the two functions never disagree on a step."""
-    steps = [st for st in cast("list[dict[str, Any]]", flow.get("steps") or []) if st.get("ok")]
+    steps = expanded_steps(graph, flow)  # the SAME index space as flow_narrative / gen_flow_mermaid
 
     def is_role(tok: str, is_id: bool) -> bool:
         return not (is_id and tok in graph["nodes"])

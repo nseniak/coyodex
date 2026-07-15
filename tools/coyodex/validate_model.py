@@ -113,7 +113,7 @@ def _first_link_of(el: object, cells: list[str | None]) -> str | None:
 
 
 def _is_subsystem_id(i: str) -> bool:
-    return i.startswith("S") and not i.startswith("SD")
+    return i.startswith("S") and not i.startswith("SD") and not i.startswith("SF")
 
 
 # ── semantic checks ──────────────────────────────────────────────────────────────────────────────
@@ -139,6 +139,8 @@ def _check_ids(m: ProjectModel) -> list[str]:
         + [(e.id, "subdomain", e.subdomain) for e in m.entities]
         + [(g.id, "uc", g.uc) for g in m.happy_path]
         + [(e.id, "relation target", r.target) for e in m.entities for r in e.relations]
+        + [(f"{f.uc} step {st.n}", "subflow", st.subflow) for f in m.flows for st in f.steps]
+        + [(f"{sf.id} step {st.n}", "subflow", st.subflow) for sf in m.subflows for st in sf.steps]
     )
     for owner, field_name, val in pointers:
         if val is not None and not ID_SHAPE.match(val):
@@ -179,10 +181,13 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     for f in m.flows:
         if f.uc:
             refs.add(f.uc)
-        for st in f.steps:
+    for steps in ([f.steps for f in m.flows] + [sf.steps for sf in m.subflows]):
+        for st in steps:  # sub-flow steps are ordinary steps — their endpoints must resolve too
             for end in (st.src, st.dst):              # backbone-element OR role-id (actor step) endpoints
                 if end and (grammar.is_step_id(end) or grammar.is_role_id(end)):
                     refs.add(end)
+            if st.subflow:
+                refs.add(st.subflow)
     for e in m.edges:
         refs.add(e.src)
         refs.add(e.dst)
@@ -223,6 +228,8 @@ def _check_references(m: ProjectModel) -> list[str]:
     def suppress(r: str) -> bool:
         if r.startswith("SD"):
             return not subdomains_present
+        if r.startswith("SF"):
+            return False  # a dangling sub-flow ref is never additivity — always flag it
         if r.startswith("S"):
             return not grouping_present
         return False
@@ -248,24 +255,40 @@ def _check_flows(m: ProjectModel) -> tuple[list[str], list[str]]:
         problems.append("Use cases with more than one T6 flow block (each use case has exactly one "
                         f"flow): {', '.join(dups)}")
     role_ids = {r.id for r in m.roles}
-    for f in m.flows:
+    sf_ids = {sf.id for sf in m.subflows}
+    # flows and sub-flows share ONE per-step rulebook — a sub-flow's steps are ordinary steps
+    containers: list[tuple[str, bool, list]] = (
+        [(f"{f.uc} flow step", False, f.steps) for f in m.flows]
+        + [(f"{sf.id} step", True, sf.steps) for sf in m.subflows])
+    for prefix, in_subflow, steps in containers:
         seen_n: set[int] = set()
-        for st in f.steps:
-            tag = f"{f.uc} flow step {st.n}"
-            if st.n in seen_n:  # `step:<uc>:<n>` is the impact engine's synthetic id — `n` must be unique
-                problems.append(f"{tag}: duplicate step number {st.n} in this flow — step numbers "
-                                "identify a step (impact, navigation), so each appears once")
+        for st in steps:
+            tag = f"{prefix} {st.n}"
+            if st.n in seen_n:  # `step:<uc|sf>:<n>` is the impact engine's synthetic id — unique `n`
+                problems.append(f"{tag}: duplicate step number {st.n} — step numbers identify a "
+                                "step (impact, navigation), so each appears once")
             seen_n.add(st.n)
             if not st.src or not st.dst:
                 problems.append(f"{tag} is missing an endpoint (`from → to` needs both)")
                 continue
-            if not st.phrase.strip():
+            if st.subflow:  # a REFERENCE step: "runs SFn here"
+                if in_subflow:
+                    problems.append(f"{tag}: a sub-flow's step may not reference a sub-flow "
+                                    "(one level only — inline the steps instead)")
+                elif st.subflow not in sf_ids:
+                    problems.append(f"{tag}: references undefined sub-flow '{st.subflow}'")
+                if st.where or st.no_call_site:
+                    problems.append(f"{tag}: a reference step carries no location of its own — its "
+                                    "location IS the sub-flow's steps' anchors; drop "
+                                    "`where`/`no_call_site`")
+            elif not st.phrase.strip():  # reference steps may leave phrase empty (defaults to SF name)
                 problems.append(f"{tag} has no action text (`phrase`) — every step describes what "
                                 "happens at that point; it is not derived from the backbone edge")
             # An element↔element step is one concrete interaction — it carries ITS OWN call site
             # (`where` is THE location, unlike an edge's example `where`). Actor steps (a Role
-            # endpoint fails `is_step_id`) are human actions — no call site to demand.
-            if grammar.is_step_id(st.src) and grammar.is_step_id(st.dst) \
+            # endpoint fails `is_step_id`) are human actions — no call site to demand; reference
+            # steps ground through the sub-flow's own anchors.
+            if not st.subflow and grammar.is_step_id(st.src) and grammar.is_step_id(st.dst) \
                     and not st.where and not st.no_call_site:
                 problems.append(
                     f"{tag}: no `where` call-site anchor — add the bare `path:line` of this step's own "
@@ -278,7 +301,86 @@ def _check_flows(m: ProjectModel) -> tuple[list[str], list[str]]:
                 for end in (st.src, st.dst):
                     if not grammar.is_step_id(end) and end not in role_ids:
                         problems.append(f"{tag}: actor '{end}' is not a defined Role id")
+    # A sub-flow's reason to exist is REUSE: referenced once (or never), it's indirection for free
+    ref_counts: dict[str, int] = {}
+    for f in m.flows:
+        for st in f.steps:
+            if st.subflow:
+                ref_counts[st.subflow] = ref_counts.get(st.subflow, 0) + 1
+    for sf in m.subflows:
+        n_refs = ref_counts.get(sf.id, 0)
+        if n_refs < 2:
+            warnings.append(f"{sf.id} ({sf.name}) is referenced by {n_refs} flow(s) — a sub-flow "
+                            "earns its keep at ≥2; consider inlining it")
     return problems, warnings
+
+
+# ── use-case granularity (advisory) — the flow analog of the diagram fan-out band ────────────────
+# The RULE (one use case = one actor goal) lives in method.md; these are its teeth. Kept apart from
+# `_check_flows` so `lint-fragment` can surface them WITHOUT failing a fragment (an authoring agent
+# may legitimately return a long flow pending the lead's judgment).
+
+FLOW_STEPS_LO = 3     # under this, the flow is likely under-traced (advisory)
+FLOW_STEPS_HI = 15    # over this: a fused goal, wire-grain step altitude, or inline shared machinery
+_SHARED_RUN_MIN = 4   # contiguous identical (src, dst) hops that count as literal duplication
+
+
+def _shared_runs(hops: list[tuple[str, list[tuple[str, str]]]]) -> list[tuple[str, str, int, tuple[str, str]]]:
+    """Longest contiguous run of identical (src, dst) hops for each container pair, reported when
+    ≥ `_SHARED_RUN_MIN`: (id_a, id_b, run_length, first_hop). Maps are small (tens of flows × tens
+    of steps), so the per-pair DP is plenty. NOTE this finds LITERAL duplication only — the same
+    machinery retold at different depths has non-identical sequences by definition; that case is a
+    judgment check on the Phase-4 grounding checklist, not a mechanical one."""
+    out: list[tuple[str, str, int, tuple[str, str]]] = []
+    for i in range(len(hops)):
+        for j in range(i + 1, len(hops)):
+            (ida, a), (idb, b) = hops[i], hops[j]
+            best, best_end = 0, 0
+            prev = [0] * (len(b) + 1)
+            for x in range(1, len(a) + 1):
+                cur = [0] * (len(b) + 1)
+                for y in range(1, len(b) + 1):
+                    if a[x - 1] == b[y - 1]:
+                        cur[y] = prev[y - 1] + 1
+                        if cur[y] > best:
+                            best, best_end = cur[y], x
+                prev = cur
+            if best >= _SHARED_RUN_MIN:
+                out.append((ida, idb, best, a[best_end - best]))
+    return out
+
+
+def _granularity_warnings(m: ProjectModel) -> list[str]:
+    """Advisory use-case-granularity signals: the flow-length band (authored steps — a sub-flow
+    reference counts as 1, the reward for extracting), the fused-goal name smell, and the
+    literal-duplication detector. A flow/sub-flow id recorded under the 'Balance exceptions'
+    extras heading is exempt from the band (same escape valve the fan-out rule uses)."""
+    warnings: list[str] = []
+    excepted = balance_lib._exceptions(m)
+    for fid, name, steps in ([(f.uc, f.title, f.steps) for f in m.flows]
+                             + [(sf.id, sf.name, sf.steps) for sf in m.subflows]):
+        n = len(steps)
+        if fid in excepted:
+            continue
+        if n > FLOW_STEPS_HI:
+            warnings.append(
+                f"{fid} ({name}): {n} steps — over the ≤{FLOW_STEPS_HI} band. Split a fused goal, "
+                "compress step altitude, extract shared machinery into a sub-flow, or record the "
+                "exception under a 'Balance exceptions' extras heading")
+        elif n < FLOW_STEPS_LO:  # includes n == 0: an empty flow/sub-flow is a silent no-op everywhere
+            warnings.append(f"{fid} ({name}): only {n} step(s) — under the ≥{FLOW_STEPS_LO} band; "
+                            "is the flow traced to its outcome?")
+    for eid, name in ([(u.id, u.name) for u in m.use_cases]
+                      + [(sf.id, sf.name) for sf in m.subflows]):
+        if " and " in name.lower():
+            warnings.append(f"{eid} name '{name}' joins two clauses with 'and' — two goals in one? "
+                            "Split it, rename it, or ignore knowingly")
+    hops = ([(f.uc, [(st.src, st.dst) for st in f.steps]) for f in m.flows]
+            + [(sf.id, [(st.src, st.dst) for st in sf.steps]) for sf in m.subflows])
+    for ida, idb, run, first in _shared_runs(hops):
+        warnings.append(f"{ida} and {idb} share a run of {run} identical steps (starting "
+                        f"{first[0]} → {first[1]}) — literal duplication; extract a sub-flow")
+    return warnings
 
 
 def _check_roles(m: ProjectModel) -> list[str]:
@@ -469,6 +571,9 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
     for f in m.flows:
         for st in f.steps:
             bad_file(f"{f.uc} flow step {st.n} where", st.where)
+    for sf in m.subflows:
+        for st in sf.steps:
+            bad_file(f"{sf.id} step {st.n} where", st.where)
     for ep in m.entry_points:
         bad_file(f"entry_points[{ep.component} {ep.kind}].source", ep.source)
     for e in m.entities:
@@ -569,6 +674,11 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
             href = _where_href(st.where or "")
             if href:
                 out.append((f"{f.uc} flow step {st.n} `where`", href))
+    for sf in m.subflows:
+        for st in sf.steps:
+            href = _where_href(st.where or "")
+            if href:
+                out.append((f"{sf.id} step {st.n} `where`", href))
     for u in m.use_cases:
         href = _first_link_of(u, [u.name, u.trigger_outcome])  # actors are role ids now, not a link cell
         if href and not url.match(href):
@@ -756,6 +866,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     flow_problems, flow_warnings = _check_flows(m)
     problems.extend(flow_problems)
     warnings.extend(flow_warnings)
+    warnings.extend(_granularity_warnings(m))
     problems.extend(_check_roles(m))
     problems.extend(_check_actors(m))
     problems.extend(_check_dep_kinds(m))

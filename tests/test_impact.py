@@ -35,6 +35,7 @@ from coyodex.model import (
     FlowStep,
     NonEntityType,
     ProjectModel,
+    SubFlow,
     UseCase,
 )
 
@@ -194,6 +195,16 @@ def test_step_anchor_seeds_and_call_site_window() -> None:
     near_line = {h.eid: h for h in resolve_hits(
         file_refs, FileFrame(affected=[(9, 9)]), EXTENTS["svc/guild.py"], "M")}
     assert near_line["step:UC1:2"].resolution == "symbol"   # inside the ±3 window, not on the line
+
+
+def test_subflow_step_anchor_seeds() -> None:
+    # A sub-flow step's `where` joins the seed set as `step:SF<k>:<n>`, owner = the SF id.
+    m = make_model("abc1234")
+    m.subflows = [SubFlow(id="SF1", name="Persist", steps=[
+        FlowStep(n=2, src="C1", dst="D1", phrase="stores", where="svc/guild.py:8")])]
+    refs = anchor_index(m)
+    assert ("step:SF1:2", "flow_step", "where") in {(a.eid, a.kind, a.field) for a in refs}
+    assert next(a for a in refs if a.eid == "step:SF1:2").owner == "SF1"
 
 
 def test_dir_anchor_longest_prefix() -> None:

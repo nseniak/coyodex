@@ -114,6 +114,12 @@
         "$ref": "#/$defs/Flow"
       }
     },
+    "subflows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/SubFlow"
+      }
+    },
     "edges": {
       "type": "array",
       "items": {
@@ -278,7 +284,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(UC|HP|SD|C|D|E|S|R)\\d+$",
+          "pattern": "^(UC|HP|SD|SF|C|D|E|S|R)\\d+$",
           "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[] \u2014 same dataclass, two id forests."
         },
         "name": {
@@ -292,7 +298,7 @@
             "string",
             "null"
           ],
-          "pattern": "^(UC|HP|SD|C|D|E|S|R)\\d+$",
+          "pattern": "^(UC|HP|SD|SF|C|D|E|S|R)\\d+$",
           "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD parents an SD), or null for top-level."
         },
         "source": {
@@ -713,12 +719,44 @@
         "no_call_site": {
           "type": "boolean",
           "description": "explicit opt-out (mirrors Edge.no_call_site): this step has no single call site \u2014 `where` may be null."
+        },
+        "subflow": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^SF\\d+$",
+          "description": "a REFERENCE step: 'runs SFn here'. src/dst stay authored (the run's entry/exit endpoints); `phrase` may be empty (defaults to the sub-flow's name); the step carries no `where`/`no_call_site` of its own. One level only \u2014 a sub-flow's step may not itself reference a sub-flow."
         }
       },
       "required": [
         "n",
         "src",
         "dst"
+      ],
+      "additionalProperties": false
+    },
+    "SubFlow": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^SF\\d+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "what the shared sequence does \u2014 a single verb phrase, like a use-case name."
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FlowStep"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "name"
       ],
       "additionalProperties": false
     },

@@ -101,6 +101,8 @@ class GraphDict(TypedDict):
     edges: list[dict[str, object]]
     happy_path: list[dict[str, object]]
     flows: list[dict[str, object]]  # T6 use-case flows (one per use case): the ordered inside view
+    subflows: list[dict[str, object]]  # T6b named sub-flows: {id, name, steps} — shared step
+                                       # sequences a flow step references via its `subflow` field
     roles: list[dict[str, str]]
     glossary: list[dict[str, str]]  # ubiquitous-language terms: {term, meaning, where} (where = bare
                                     # `path:line`/`path/` anchor, or "" when the term has no code home)

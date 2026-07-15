@@ -23,7 +23,7 @@ FORMAT = "coyodex-map"
 
 # Each element array's required id prefix — structural (a `Cn` in `deps` is a shape error, caught at
 # load), while uniqueness/resolution stay semantic (validate_model).
-ID_SHAPE = re.compile(r"^(UC|HP|SD|C|D|E|S|R)\d+$")
+ID_SHAPE = re.compile(r"^(UC|HP|SD|SF|C|D|E|S|R)\d+$")
 
 
 class ModelError(ValueError):
@@ -188,7 +188,9 @@ class FlowStep:
     n: int
     src: str                         # an element ID or a Role display name (actor step)
     dst: str
-    phrase: str = ""                 # authored inline action text (required on every step — `validate`)
+    phrase: str = ""                 # authored inline action text (required on every step — `validate`;
+                                     # EXEMPT on a sub-flow reference step, where it defaults to the
+                                     # sub-flow's name)
     note: str = ""                   # flow-specific note
     where: str | None = None         # THE location: bare `path:line` of this step's own call site —
                                      # unlike an edge's `where` (an example among possibly many), a step
@@ -197,12 +199,31 @@ class FlowStep:
                                      # optional on actor steps (a human action has no call site).
     no_call_site: bool = False       # opt-out, mirroring Edge.no_call_site: this step has no single
                                      # call site (event-driven / config-wired) — `where` may be null.
+    subflow: str | None = None       # a REFERENCE step: "runs SFn here". src/dst stay authored (the
+                                     # run's entry/exit endpoints — every unexpanded consumer keeps
+                                     # working); the step carries NO where/no_call_site of its own
+                                     # (its location IS the sub-flow's steps' anchors — `validate`
+                                     # blocks a contradiction). One level only: a sub-flow's step may
+                                     # not itself reference a sub-flow.
 
 
 @dataclass
 class Flow:                          # T6 — the inside view of one use case
     uc: str
     title: str
+    steps: list[FlowStep] = field(default_factory=list)
+
+
+@dataclass
+class SubFlow:
+    """A named, reusable step sequence (an "include" fragment): machinery shared by ≥2 use-case
+    flows — an OAuth dance, an event fan-out — defined ONCE and referenced by a FlowStep whose
+    `subflow` names it. Steps are ordinary FlowSteps under all the ordinary rules (phrase, anchors,
+    unique `n`); nesting is forbidden (one level). Extracting a shared run keeps every flow that
+    rides it at the same depth — the alternative is each flow retelling it at whatever grain its
+    author happened to pick."""
+    id: str                          # SFn
+    name: str
     steps: list[FlowStep] = field(default_factory=list)
 
 
@@ -293,6 +314,7 @@ class ProjectModel:
     entities: list[Entity] = field(default_factory=list)
     non_entity_types: list[NonEntityType] = field(default_factory=list)
     flows: list[Flow] = field(default_factory=list)
+    subflows: list[SubFlow] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
     deployment: list[DeploymentRow] = field(default_factory=list)
     observability: list[ObservabilityRow] = field(default_factory=list)
@@ -307,8 +329,25 @@ class ProjectModel:
 # start with "S"), so validation matches the WHOLE id against ID_SHAPE and then the exact prefix.
 ID_ARRAYS: dict[str, str] = {
     "use_cases": "UC", "happy_path": "HP", "subsystems": "S", "components": "C",
-    "deps": "D", "subdomains": "SD", "entities": "E", "roles": "R",
+    "deps": "D", "subdomains": "SD", "entities": "E", "roles": "R", "subflows": "SF",
 }
+
+
+def expanded_flow_steps(m: ProjectModel, f: Flow) -> list[FlowStep]:
+    """The flow's steps with each sub-flow REFERENCE step replaced inline by the referenced
+    sub-flow's steps — the model-level analog of the viewer's graph-level expansion
+    (gen_viewer.expanded_steps). Consumers that reason about "what this flow touches" (impact
+    ripple, the model audit) walk THIS, so content inside a sub-flow is never invisible.
+    An unresolved or empty reference degrades to the bare reference step."""
+    sfs = {sf.id: sf for sf in m.subflows}
+    out: list[FlowStep] = []
+    for st in f.steps:
+        sf = sfs.get(st.subflow or "")
+        if sf is None or not sf.steps:
+            out.append(st)
+        else:
+            out.extend(sf.steps)
+    return out
 
 
 def all_elements(m: ProjectModel) -> dict[str, object]:

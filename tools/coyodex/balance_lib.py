@@ -154,13 +154,15 @@ def is_homogeneous(m: ProjectModel, children: list[str]) -> bool:
 # ── the always-on advisory (validate hook) ───────────────────────────────────────────────────────
 
 def _exceptions(m: ProjectModel) -> set[str]:
-    """Diagram ids the operator has durably justified ('root', 'S7', …) in an extras block
-    headed 'Balance exceptions'."""
+    """Ids the operator has durably justified ('root', 'S7', 'UC5', …) in an extras block headed
+    'Balance exceptions'. Diagram ids silence fan-out warnings here; UC/SF ids silence the
+    flow-length band in validate's granularity warnings (consumed only as skip-sets, so the two
+    families can't cross-silence anything)."""
     out: set[str] = set()
     for x in m.extras:
         if x.heading.strip().lower() == _EXCEPTIONS_HEADING:
             out.update(t.lower() if t.lower() == "root" else t
-                       for t in re.findall(r"\b(?:root|SD\d+|S\d+)\b", x.body))
+                       for t in re.findall(r"\b(?:root|SD\d+|SF\d+|UC\d+|S\d+)\b", x.body))
     return out
 
 
