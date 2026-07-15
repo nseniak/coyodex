@@ -18,6 +18,7 @@ from coyodex.validate_model import (
     _check_anchor_format,
     _check_edges,
     _check_extra_conventions,
+    _check_flows,
     check_anchor_existence_model,
     check_domain_relations,
     check_entity_sources_model,
@@ -39,6 +40,11 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
     problems += rel_problems
     edge_problems, edge_warnings = _check_edges(m)
     problems += edge_problems + edge_warnings
+    # Flow rules (missing step `where`, duplicate step n, missing phrase/endpoint) fail in the trace
+    # agent's own turn, not a phase later at the lead's `validate`. Safe on a partial fragment: the
+    # actor-id check self-disables when the fragment defines no roles. Warnings promoted, like edges'.
+    flow_problems, flow_warnings = _check_flows(m)
+    problems += flow_problems + flow_warnings
     if repo_root is not None:
         roots = [repo_root.resolve()]
         problems += check_anchor_existence_model(m, roots)

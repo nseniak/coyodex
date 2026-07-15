@@ -26,7 +26,17 @@ from coyodex.impact_lib import (
     parse_u0,
     resolve_hits,
 )
-from coyodex.model import Component, Dep, Edge, Entity, NonEntityType, ProjectModel
+from coyodex.model import (
+    Component,
+    Dep,
+    Edge,
+    Entity,
+    Flow,
+    FlowStep,
+    NonEntityType,
+    ProjectModel,
+    UseCase,
+)
 
 _ENV = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t",
         "GIT_COMMITTER_EMAIL": "t@t", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
@@ -165,6 +175,25 @@ def test_anchor_index_covers_seed_set() -> None:
     assert ("E1", "entity", "source") in kinds
     assert ("net:helper", "non_entity_type", "source") in kinds
     assert ("edge:C1>uses>D1", "edge", "where") in kinds
+
+
+def test_step_anchor_seeds_and_call_site_window() -> None:
+    # A flow step's `where` joins the direct-hit seed set as `step:<uc>:<n>` and resolves with the
+    # same tight call-site window as an edge anchor (never the whole enclosing function's extent).
+    m = make_model("abc1234")
+    m.use_cases = [UseCase(id="UC1", name="Do")]
+    m.flows = [Flow(uc="UC1", title="Do", steps=[
+        FlowStep(n=2, src="C1", dst="D1", phrase="stores", where="svc/guild.py:8")])]
+    refs = anchor_index(m)
+    assert ("step:UC1:2", "flow_step", "where") in {(a.eid, a.kind, a.field) for a in refs}
+    assert next(a for a in refs if a.eid == "step:UC1:2").owner == "UC1"
+    file_refs = [a for a in refs if not a.is_dir]
+    on_line = {h.eid: h for h in resolve_hits(
+        file_refs, FileFrame(affected=[(8, 8)]), EXTENTS["svc/guild.py"], "M")}
+    assert on_line["step:UC1:2"].resolution == "line"
+    near_line = {h.eid: h for h in resolve_hits(
+        file_refs, FileFrame(affected=[(9, 9)]), EXTENTS["svc/guild.py"], "M")}
+    assert near_line["step:UC1:2"].resolution == "symbol"   # inside the ±3 window, not on the line
 
 
 def test_dir_anchor_longest_prefix() -> None:

@@ -237,8 +237,9 @@ def _check_hp(m: ProjectModel) -> list[str]:
             if missing else [])
 
 
-def _check_flows(m: ProjectModel) -> list[str]:
+def _check_flows(m: ProjectModel) -> tuple[list[str], list[str]]:
     problems: list[str] = []
+    warnings: list[str] = []
     counts: dict[str, int] = {}
     for f in m.flows:
         counts[f.uc] = counts.get(f.uc, 0) + 1
@@ -248,19 +249,36 @@ def _check_flows(m: ProjectModel) -> list[str]:
                         f"flow): {', '.join(dups)}")
     role_ids = {r.id for r in m.roles}
     for f in m.flows:
+        seen_n: set[int] = set()
         for st in f.steps:
             tag = f"{f.uc} flow step {st.n}"
+            if st.n in seen_n:  # `step:<uc>:<n>` is the impact engine's synthetic id — `n` must be unique
+                problems.append(f"{tag}: duplicate step number {st.n} in this flow — step numbers "
+                                "identify a step (impact, navigation), so each appears once")
+            seen_n.add(st.n)
             if not st.src or not st.dst:
                 problems.append(f"{tag} is missing an endpoint (`from → to` needs both)")
                 continue
             if not st.phrase.strip():
                 problems.append(f"{tag} has no action text (`phrase`) — every step describes what "
                                 "happens at that point; it is not derived from the backbone edge")
+            # An element↔element step is one concrete interaction — it carries ITS OWN call site
+            # (`where` is THE location, unlike an edge's example `where`). Actor steps (a Role
+            # endpoint fails `is_step_id`) are human actions — no call site to demand.
+            if grammar.is_step_id(st.src) and grammar.is_step_id(st.dst) \
+                    and not st.where and not st.no_call_site:
+                problems.append(
+                    f"{tag}: no `where` call-site anchor — add the bare `path:line` of this step's own "
+                    "interaction, or set `no_call_site` if it truly has no single site "
+                    "(event-driven / shared-state / config-wired)")
+            elif st.where and st.no_call_site:
+                warnings.append(f"{tag}: `no_call_site` is set but a `where` is present — "
+                                "drop one so the intent is unambiguous")
             if role_ids:  # a non-backbone endpoint is an actor step — it must be a defined Role id
                 for end in (st.src, st.dst):
                     if not grammar.is_step_id(end) and end not in role_ids:
                         problems.append(f"{tag}: actor '{end}' is not a defined Role id")
-    return problems
+    return problems, warnings
 
 
 def _check_roles(m: ProjectModel) -> list[str]:
@@ -297,9 +315,9 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
         if not has_where and not e.no_call_site:           # whitespace-only one) is owned by the anchor-
                                                            # format gate; here we own only the ABSENT case
             problems.append(
-                f"{e.src} → {e.dst}: no `Where` call-site anchor — add the bare `path:line` where {e.src} "
-                f"invokes {e.dst} (a flow arrow opens it to drill to code), or set `no_call_site` if this "
-                "relationship has no single call site (event-driven / shared-state / config-wired coupling)")
+                f"{e.src} → {e.dst}: no `Where` anchor — add a bare `path:line` EXAMPLE call site where "
+                f"{e.src} invokes {e.dst} (the witness grounding this edge), or set `no_call_site` if this "
+                "relationship has no code call site (event-driven / shared-state / config-wired coupling)")
         elif has_where and e.no_call_site:
             warnings.append(f"{e.src} → {e.dst}: `no_call_site` is set but a `Where` is present — "
                             "drop one so the intent is unambiguous")
@@ -448,6 +466,9 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
             bad_file(f"{el.id} evidence[{i}].file", ev.file)
     for e in m.edges:
         bad_file(f"{e.src} → {e.dst} where", e.where)
+    for f in m.flows:
+        for st in f.steps:
+            bad_file(f"{f.uc} flow step {st.n} where", st.where)
     for ep in m.entry_points:
         bad_file(f"entry_points[{ep.component} {ep.kind}].source", ep.source)
     for e in m.entities:
@@ -543,6 +564,11 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         href = _where_href(e.where or "")
         if href:
             out.append((f"{e.src} → {e.dst} `Where`", href))
+    for f in m.flows:
+        for st in f.steps:
+            href = _where_href(st.where or "")
+            if href:
+                out.append((f"{f.uc} flow step {st.n} `where`", href))
     for u in m.use_cases:
         href = _first_link_of(u, [u.name, u.trigger_outcome])  # actors are role ids now, not a link cell
         if href and not url.match(href):
@@ -727,7 +753,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_ids(m))
     problems.extend(_check_references(m))
     problems.extend(_check_hp(m))
-    problems.extend(_check_flows(m))
+    flow_problems, flow_warnings = _check_flows(m)
+    problems.extend(flow_problems)
+    warnings.extend(flow_warnings)
     problems.extend(_check_roles(m))
     problems.extend(_check_actors(m))
     problems.extend(_check_dep_kinds(m))

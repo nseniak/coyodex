@@ -34,8 +34,9 @@ _ID_RE = re.compile(r"^(SD|UC|HP|C|D|E|S)(\d+)$")
 
 _KIND_BY_PREFIX = {"C": "components", "D": "deps", "E": "entities", "S": "subsystems",
                    "SD": "subdomains", "UC": "use_cases", "HP": "happy_path"}
-_KIND_BY_SYNTH = {"edge": "edges", "ep": "entry_points", "glossary": "glossary",
-                  "security": "security", "run": "run_commands", "net": "non_entity_types"}
+_KIND_BY_SYNTH = {"edge": "edges", "ep": "entry_points", "step": "flow_steps",
+                  "glossary": "glossary", "security": "security", "run": "run_commands",
+                  "net": "non_entity_types"}
 
 # `changes` severity when one element is hit several ways (a real change outranks a drift)
 _CHANGE_ORDER = ["deleted", "added", "modified", "drifted"]
@@ -221,6 +222,25 @@ def build_impact_result(model: ProjectModel, core: ImpactCore,
                 register_ripple(owner, R_STRUCTURAL, 1,
                                 [{"from": eid, "relation": "entry-point"}], files)
                 behavioral(owner, [{"from": eid, "relation": "entry-point"}])
+            continue
+        if eid.startswith("step:"):
+            # A hit flow step (its own `where` changed) ripples to its two element endpoints and —
+            # the precise behavioral rung — to exactly ITS use case + that use case's HP steps.
+            # Unlike the edge branch above (pair → EVERY use case walking the pair), a step names
+            # its use case directly, so no pair-level over-approximation is involved.
+            uc, n_str = eid.removeprefix("step:").split(":", 1)
+            step = next((st for fl in model.flows if fl.uc == uc
+                         for st in fl.steps if str(st.n) == n_str), None)
+            if step is not None:
+                for endpoint in (step.src, step.dst):
+                    if _ID_RE.match(endpoint):  # element endpoints only — a Role has no node
+                        register_ripple(endpoint, R_STRUCTURAL, 1,
+                                        [{"from": eid, "relation": "step-endpoint"}], files)
+            via = [{"from": eid, "relation": "flow-step"}]
+            register_ripple(uc, R_BEHAVIORAL, 1, via, files)
+            for hp in maps.hp_of.get(uc, ()):
+                register_ripple(hp, R_BEHAVIORAL, 1,
+                                via + [{"from": uc, "relation": "happy-path"}], files)
             continue
         kind = type_of(eid)
         if kind == "components":

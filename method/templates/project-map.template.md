@@ -100,13 +100,15 @@ why: needs the result of HP1
 
 ### T1 backbone — component dependency edges (the diagram source)
 
-<!-- `Why` = why From needs To (terse; carries what the verb omits). `Where` = the CALL SITE: the
-     `file:line` in FROM's code where it invokes To (the main one if several), NOT To's definition —
-     it's the line a flow arrow opens. -->
+<!-- `Why` = why From needs To (a SUMMARY of the whole relationship, never one call's story — terse;
+     carries what the verb omits). `Where` = a verified EXAMPLE call site: one `file:line` in FROM's
+     code where it invokes To (the most representative if several), NOT To's definition. It is a
+     witness grounding the edge (validation / drift / impact), not the interaction's location — the
+     viewer never opens it; per-step `where` in T6 owns drill-to-code. -->
 
-| From | Verb | To | Why | Where |
+| From | Verb | To | Why | Where (example) |
 |---|---|---|---|---|
-| C1 | uses | C2 | <why C1 needs C2 — terse> | [file](path:1) |
+| C1 | uses | C2 | <why C1 needs C2 — terse summary> | [file](path:1) |
 
 ---
 
@@ -199,10 +201,12 @@ SOURCE: [file](path/sub:1)
 
 <!-- The INSIDE view of each use case (its outside view is the use case's Trigger → Outcome). ONE BLOCK PER USE CASE:
      a `**UCn — title**` heading + numbered step lines. A step is `from → to`, where each endpoint is
-     an element ID (C/D/E) or a Role name. When BOTH ends are elements it is a pure reference to the
-     backbone edge — its Verb + Why render the step (sequence message AND readable line), so DON'T
-     restate the why. An ACTOR step (`<Role> → C…`) carries a short authored phrase after `: ` (the
-     backbone has no actor edges). Add flow-specific context after `· `. Renders as a Mermaid
+     an element ID (C/D/E) or a Role name. EVERY step carries a short authored phrase after `: ` —
+     never lean on the backbone edge's label (one pair appears in several steps meaning different
+     things). Each element↔element step also carries ITS OWN call site after ` @ ` — the `path:line`
+     of the operative statement in the step's `from` code (THE location; you just read it to write
+     the phrase). Steps with genuinely no single site set `no_call_site` instead; actor steps
+     (`<Role> → C…`) need no anchor. Add flow-specific context after `· `. Renders as a Mermaid
      sequenceDiagram + a numbered narrative, and is the drill-down of the matching Happy Path step.
      Separators inside a line are `·`, never raw `|`.
      A step may go BACKWARD too: a `to` that is an earlier participant renders right-to-left. Record
@@ -211,9 +215,9 @@ SOURCE: [file](path/sub:1)
 
 **UC1 — <flow title>**
 1. <Role> → C1 : <what the actor does>
-2. C1 → C2
-3. C2 → E1 · <optional note>
-4. C2 → D1
+2. C1 → C2 : <what this call does> @ path/to/caller.py:42
+3. C2 → E1 : <what is read/written> @ path/to/repo.py:88 · <optional note>
+4. C2 → D1 : <what is sent> @ path/to/client.py:17
 5. C1 → <Role> : <the response the actor sees — a backward step, drawn right-to-left>
 
 ---

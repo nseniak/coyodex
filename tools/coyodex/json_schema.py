@@ -109,9 +109,16 @@ FIELD_META: dict[tuple[str, str], dict] = {
                             "type DEFINITION (the `class X`/`@dataclass` line), never a use site."},
     ("FlowStep", "src"): {"description": "an element id, or a Role display name (an actor step)."},
     ("FlowStep", "dst"): {"description": "same shape as `src`."},
+    ("FlowStep", "where"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC + " THE "
+                             "location: this step's own call site — a step is exactly one interaction, "
+                             "so its anchor is precise (unlike an edge's `where`, an example). Required "
+                             "on element↔element steps unless `no_call_site`."},
+    ("FlowStep", "no_call_site"): {"description": "explicit opt-out (mirrors Edge.no_call_site): this "
+                                    "step has no single call site — `where` may be null."},
     ("Flow", "uc"): {"pattern": r"^UC\d+$"},
-    ("Edge", "where"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC + " The call "
-                         "site: the line in `src`'s code where it invokes `dst`."},
+    ("Edge", "where"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC + " A verified "
+                         "EXAMPLE call site — one line in `src`'s code where it invokes `dst`, possibly "
+                         "one of many (a witness grounding the edge, not a catalog of its traffic)."},
     ("Edge", "why"): {"description": "the relationship's rationale — distinct from either "
                        "endpoint's own `purpose`."},
     ("RunRow", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC

@@ -130,6 +130,30 @@ def test_edge_hit_endpoints_and_pair_flows() -> None:
     assert impact_of(r, "UC1")["via"][0]["relation"] == "flow-pair"  # step 2 matches the pair
 
 
+def test_step_hit_ripples_endpoints_and_its_use_case_only() -> None:
+    # A directly-hit flow step (its own `where` changed) ripples to its two element endpoints and
+    # to exactly ITS use case + HP steps — no pair-level over-approximation like the edge branch.
+    r = build_impact_result(make_ripple_model(),
+                            make_core([make_hit("step:UC1:2", "flow_step", "line")]))
+    assert impact_of(r, "C1")["via"] == [{"from": "step:UC1:2", "relation": "step-endpoint"}]
+    assert impact_of(r, "E1")["cause"] == "ripple"
+    assert impact_of(r, "UC1")["strength"] == R_BEHAVIORAL
+    assert impact_of(r, "UC1")["via"][0]["relation"] == "flow-step"
+    assert impact_of(r, "HP1")["via"][-1] == {"from": "UC1", "relation": "happy-path"}
+    assert "UC2" not in r["impacts"]                    # other flows untouched
+    assert type_of("step:UC1:2") == "flow_steps"
+    assert "step:UC1:2" in r["byType"]["flow_steps"]
+
+
+def test_step_hit_with_actor_endpoint_skips_the_role() -> None:
+    # An actor step ("Member" → C1): the Role has no graph node, so only the element endpoint ripples.
+    r = build_impact_result(make_ripple_model(),
+                            make_core([make_hit("step:UC1:1", "flow_step", "line")]))
+    assert impact_of(r, "C1")["via"] == [{"from": "step:UC1:1", "relation": "step-endpoint"}]
+    assert "Member" not in r["impacts"]
+    assert impact_of(r, "UC1")["via"][0]["relation"] == "flow-step"
+
+
 def test_entry_point_hit_routes_via_component() -> None:
     r = build_impact_result(make_ripple_model(),
                             make_core([make_hit("ep:a.py:3", "entry_point", owner="C1")]))
@@ -182,6 +206,10 @@ def test_api_impact_endpoint_end_to_end() -> None:
         root = Path(td)
         pin = commit(root, {"svc/guild.py": GUILD_V1, "README.md": "hi\n"}, msg="pin")
         model = make_model(pin)
+        # a flow step anchored in the edit's call-site window — the API must surface the step hit
+        model.use_cases = [UseCase(id="UC1", name="Do")]
+        model.flows = [Flow(uc="UC1", title="Do", steps=[
+            FlowStep(n=2, src="C1", dst="D1", phrase="stores", where="svc/guild.py:8")])]
         from coyodex.model import to_canonical_json
         (root / ".coyodex").mkdir()
         (root / ".coyodex" / "project-map.json").write_text(to_canonical_json(model),
@@ -207,6 +235,8 @@ def test_api_impact_endpoint_end_to_end() -> None:
             payload = json.loads(resp.read())
             assert payload["impacts"]["E1"]["resolution"] == "symbol"
             assert payload["impacts"]["E1"]["cause"] == "direct"
+            assert payload["impacts"]["step:UC1:2"]["cause"] == "direct"   # step hit over the API
+            assert "step:UC1:2" in payload["byType"]["flow_steps"]
             assert payload["spec"]["target"] == "WORKTREE"
             # bad ref → 400, not a 500/crash
             conn.request("GET", f"/p/{slug}/api/impact?base=--upload-pack=x")

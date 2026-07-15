@@ -143,6 +143,18 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   `· <note>` adds flow-specific context. Renders as a Mermaid `sequenceDiagram` — the actor plus the
   touched components/deps/entities as lifelines, the steps as ordered messages — **and** as a numbered
   narrative below it. Drilling a Happy Path step opens its use case's flow here.
+  - **Every element↔element step carries its own `where` — THE location.** A step is exactly ONE
+    interaction, so it anchors its own call site: the `path:line` in the step's `from` code where this
+    step's action fires (the same "anchor the operative statement" rule as an edge `Where`). Unlike an
+    edge's `Where` (an *example* among possibly many sites — see the edge rules below), a step's
+    `where` is precise: the viewer drills the step to exactly this line, and the diff-impact engine
+    hits the step (→ its use case → the Happy Path) directly when the line changes. You already read
+    this call site to write the step's phrase — record it. **Required** on element↔element steps
+    (`validate` blocks; `lint-fragment` catches it in the authoring agent's own turn); a step with
+    genuinely no single site (event-driven / config-wired) sets **`no_call_site: true`** instead.
+    Actor steps (a Role endpoint — a human action) need none, though a `where` is welcome when the
+    handler line is clear. Step numbers `n` must be unique within a flow (`validate` blocks) — they
+    identify the step for impact and navigation.
   - **Steps can go *backward*, not just forward.** A flow isn't only the request chain — record the
     return-direction interactions where they carry meaning: the **response the actor sees** (the use
     case's outcome), an **error / fallback** path, a **callback or event** the callee fires back. A step
@@ -231,19 +243,24 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   let `Why` say what the verb omits. Keep it a terse phrase, not a sentence, so it stays cheap to
   re-verify. This `Why` powers the **component/architecture diagram** arrows; T6 flow steps carry their
   **own** action text (above) and do not reuse it.
-- **`Where` = the call site: the `file:line` in `From`'s code where it invokes `To`** — not `To`'s
-  definition. An edge `A — verb → B` is *evidenced* by the line in **A** where A uses B, so `Where`
-  points there. **Anchor the exact operative statement** — the write / call / enforce line itself —
-  **not the enclosing `def` or the surrounding assignment**; anchoring at the function header instead
-  of the operative line is the common drift the Phase-4 anchor-drift check flags. This is also the
-  line a flow arrow opens (the drill-to-code link), so it should land on the action. When the
-  relationship fires at several sites, pick the **primary / most representative** one (the edge is an
-  aggregate — one `Where` per edge; do NOT emit the same `(From, verb, To)` from several trace slices
-  with different anchors — `assemble` collapses same-call-site duplicates and `validate` flags
+- **`Where` = a verified EXAMPLE call site: one `file:line` in `From`'s code where it invokes `To`**
+  — not `To`'s definition. An edge `A — verb → B` is *evidenced* by a line in **A** where A uses B, so
+  `Where` points there. The edge is an **aggregate** of possibly many interaction sites, so its
+  `Where` is a **witness grounding the claim, not a catalog of the traffic** — and it is therefore
+  A location, never THE location: the viewer deliberately does not show or open it (per-step `where`
+  in T6 owns drill-to-code), while validation, anchor drift, and diff impact still use it. Write the
+  edge's `Why` the same way: a **summary of the whole relationship** ("writes org, membership and
+  settings documents"), never one call's story — one example's rationale on a shared arrow reads as
+  wrong for every other step riding it. **Anchor the exact operative statement** — the write / call /
+  enforce line itself — **not the enclosing `def` or the surrounding assignment**; anchoring at the
+  function header instead of the operative line is the common drift the Phase-4 anchor-drift check
+  flags. When the relationship fires at several sites, pick the **primary / most representative** one
+  (one `Where` per edge; do NOT emit the same `(From, verb, To)` from several trace slices with
+  different anchors — `assemble` collapses same-call-site duplicates and `validate` flags
   conflicting-anchor ones). Format it as a bare `path:line` anchor (never a markdown link — see
   [the map model](method/model.md)'s Anchor formats).
-  **`Where` is required** — a missing one is a blocking `validate` error, because a call-site-less edge
-  gives a flow arrow nothing to open. The one exception: a relationship with **no single call site**
+  **`Where` is required** — a missing one is a blocking `validate` error, because an unwitnessed edge
+  is an ungrounded claim. The one exception: a relationship with **no single call site**
   (event-driven, shared-state, or config/DI-wired coupling, where `From` never directly calls `To`) —
   set **`no_call_site: true`** on the edge to make the absence a conscious choice, not a silent gap.
 - Convenience = inline "Uses" column on T6 (the most-used slice of the edge list).

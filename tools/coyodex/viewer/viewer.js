@@ -807,7 +807,10 @@ function showNodeDetailSynced(id) {
   updateFolderPeek(id);  // auto-opens browsing for a folder element (see updateFolderPeek)
 }
 
-function showEdge(e) {
+// One arrow's full panel row: the from→to pair + a why line, with the structured relation facts
+// (cardinality / implemented-by / keyed-by) beneath. Shared by showEdge (a single selected row) and
+// showPairEdges (every parallel edge of a drawn pair) so the two read as one idiom.
+function edgeRowHtml(e, sel) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   // domain relations carry a kind (composition/…) + cardinality; component edges carry why/where. The
   // verb + kind ride in the row's why line (or the Verb fact row); cardinality/impl/keyed sit below.
@@ -833,7 +836,7 @@ function showEdge(e) {
   // structured relation facts beneath — so selecting an arrow directly reads the same as picking it from
   // an arrow list. The why line mirrors each list's convention: an explanation when there is one, else
   // the verb (+ kind). The verb goes to a `dl` row when the explanation already fills the why line, so
-  // it is never lost. The row itself is a hover/click-wired arrow row (bindArrowRows below).
+  // it is never lost. The row itself is an inert arrow row (see arrowRow — no code link by design).
   // The why line mirrors each list's convention exactly: a component arrow shows its explanation and NO
   // verb (like the connections list); a domain relation shows `verb (kind)` (like the relations list).
   // The verb is not repeated as a fact — only cardinality / implemented-by / keyed-by hang below (the
@@ -841,18 +844,32 @@ function showEdge(e) {
   const kindTag = e.kind ? ' <span class="muted">(' + esc(e.kind) + ')</span>' : '';
   const whyLine = e.why ? mdInline(e.why) : (e.verb ? esc(e.verb) + kindTag : '');
   const facts = card + implRow + keyedRow;
-  const wn = e.where ? whereNode(e.where) : null;
-  panel.innerHTML = '<ul class="xlist">'
-    + arrowRow(e.src, e.dst, nm(e.src), nm(e.dst), whyLine, e.where, true,
-              facts ? '<dl class="xfacts">' + facts + '</dl>' : '')
-    + '</ul>';
-  // Mirror this edge's own anchor into the file browser too, same as a node selection — clearing
-  // whatever was highlighted before when this edge has none of its own (an off-repo `where`, or none).
+  return arrowRow(nm(e.src), nm(e.dst), whyLine, sel,
+                  facts ? '<dl class="xfacts">' + facts + '</dl>' : '');
+}
+// Selecting an arrow shows its relationship facts ONLY. An arrow deliberately does NOT point at code:
+// its `where` is an example call site (a witness kept for validation/impact/drift), never THE location
+// of the interaction — so there is no source link, the code viewer is left untouched, and the tree
+// highlight is cleared so a previous selection's path can't read as this arrow's location.
+function showEdge(e) {
+  panel.innerHTML = '<ul class="xlist">' + edgeRowHtml(e, true) + '</ul>';
   cvElement = null;  // an edge has no single owning element -> no header pill
   setTreeSelection(null);  // clear pill emphasis + selection pills
-  highlightTreePath(refTreePath(wn && wn.file, wn && wn.line));
-  if (wn) syncCodeView(wn.file, wn.line, []);  // and into the code viewer (FULL mode); no switcher for an edge
-  bindArrowRows(panel);  // the selected row hover-highlights its own arrow + click re-opens the call site
+  highlightTreePath(null);
+}
+// A drawn arrow names only its endpoint PAIR; with parallel edges (same pair, different verbs) the
+// SVG carries no index to pick one, so selecting the arrow lists EVERY edge of the pair instead of
+// silently showing the first. A single-edge pair reads exactly like a plain showEdge.
+function showPairEdges(arr) {
+  if (arr.length === 1) { showEdge(arr[0]); return; }
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const e0 = arr[0];
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(e0.src)) + ' → ' + esc(nm(e0.dst)) + '</h2>'
+    + '<span class="badge edge">' + arr.length + ' relations</span></div>'
+    + '<ul class="xlist">' + arr.map((e) => edgeRowHtml(e, false)).join('') + '</ul>';
+  cvElement = null;
+  setTreeSelection(null);
+  highlightTreePath(null);
 }
 
 // Context-edge panel: actor→system shows the role's wants; system→dep shows what it's used for
@@ -901,59 +918,15 @@ function showBridge(sid, sd) {
     + '<span class="badge edge">bridge</span></div>'
     + subsystemBlock(sid) + '<hr>' + subsystemBlock(sd);
 }
-// Each synthetic-arrow row (a listed sub-arrow) is SELECTABLE when it carries a LOCAL call site: this
-// attribute stamps the row's `where` onto its <li> (off-repo/absent rows stay plain, non-selectable).
-// bindArrowRows then wires a click to reveal that location in the code viewer. Shared by the
-// container/domain/bridge arrow panels.
-function whereAttr(where) {
-  return (where && localRef(where)) ? ' data-where="' + esc(where) + '"' : '';
-}
-// One crossings-list row: the from→to pair + a why line, tagged with its endpoint ids (so hovering it
-// highlights the arrow in the diagram) and its call site (so clicking it opens the code). `sel` renders
-// it in the selected state — used for the single-arrow view (showEdge), which reuses this exact row.
-function arrowRow(srcId, dstId, srcName, dstName, whyHtml, where, sel, extra) {
-  return '<li class="xrow' + (sel ? ' sel' : '') + '"' + whereAttr(where)
-    + (srcId ? ' data-src="' + esc(srcId) + '"' : '') + (dstId ? ' data-dst="' + esc(dstId) + '"' : '')
-    + '><div class="xpair">' + esc(srcName) + ' → ' + esc(dstName) + ':</div>'
+// One crossings-list row: the from→to pair + a why line. INERT text by design: an arrow's `where` is
+// only an EXAMPLE call site (a witness among possibly many), so rows deliberately do NOT link to code —
+// no click, no hover glow — to never present the example as "the" location of the interaction. Precise
+// anchors (element sources, flow-step `where`) keep their code links elsewhere. `sel` renders the
+// single-arrow view's own row (showEdge) in the selected state.
+function arrowRow(srcName, dstName, whyHtml, sel, extra) {
+  return '<li class="xrow' + (sel ? ' sel' : '')
+    + '"><div class="xpair">' + esc(srcName) + ' → ' + esc(dstName) + ':</div>'
     + (whyHtml ? '<div class="xwhy">' + whyHtml + '</div>' : '') + (extra || '') + '</li>';
-}
-// Glow (or un-glow) the drawn arrow that represents the `src`→`dst` crossing in the current diagram.
-// Prefer the exact concrete arrow; else the arrow that COVERS the crossing — a component→collapsed-box
-// arrow that bundles it, or (on an overview) the group→group bundle — since a concrete crossing isn't
-// always drawn 1:1. A no-op when nothing covers it, or when the arrow is SELECTED (leave its HILITE).
-function hoverArrow(src, dst, on) {
-  if (!mainScene) return;
-  const covers = (drawnEnd, id) => drawnEnd === id || isAncestorOf(drawnEnd, id);
-  const x = mainScene.edgeEls.find((el) => el.e && el.e.src === src && el.e.dst === dst)
-    || mainScene.edgeEls.find((el) => el.e && covers(el.e.src, src) && covers(el.e.dst, dst));
-  if (!x) return;
-  // Store/restore the element's OWN prior filter — the browser reformats style.filter on read, so a
-  // string `=== HOVER` compare can't tell "we set it"; the stash restores whatever it was (rest, a
-  // synthetic base, or a selected arrow's HILITE) exactly.
-  const set = (el) => {
-    if (!el) return;
-    if (on) { if (el._preHover === undefined) el._preHover = el.style.filter; el.style.filter = HOVER; }
-    else if (el._preHover !== undefined) { el.style.filter = el._preHover; el._preHover = undefined; }
-  };
-  set(x.path); set(x.label);
-}
-// Wire every arrow row in a just-rendered panel: HOVER highlights its diagram arrow (every row, even a
-// non-clickable one); CLICK (only a row with a call site) selects it + reveals its source in the code.
-function bindArrowRows(root) {
-  const rows = [...root.querySelectorAll('li.xrow')];
-  rows.forEach((li) => {
-    const src = li.getAttribute('data-src'), dst = li.getAttribute('data-dst');
-    if (src && dst) {
-      li.addEventListener('mouseenter', () => hoverArrow(src, dst, true));
-      li.addEventListener('mouseleave', () => hoverArrow(src, dst, false));
-    }
-    if (li.hasAttribute('data-where')) li.addEventListener('click', () => {
-      rows.forEach((o) => o.classList.remove('sel'));
-      li.classList.add('sel');
-      const wn = whereNode(li.getAttribute('data-where'));
-      openInCodeViewer(wn.file, wn.line);
-    });
-  });
 }
 // Selecting (not drilling) a Subsystems arrow: list every component→component crossing it bundles as
 // `from → to:` with its explanation (and a link to its call site) indented below — one uniform font, no
@@ -971,13 +944,12 @@ function showContainerEdge(a, b, drawn) {
   const dstC = drawn && isComp(drawn.dst) ? drawn.dst : null;
   if (srcC) list = list.filter((r) => r.src === srcC);
   if (dstC) list = list.filter((r) => r.dst === dstC);
-  const items = list.map((r) => arrowRow(r.src, r.dst, r.srcName, r.dstName, r.why ? mdInline(r.why) : '', r.where)).join('');
+  const items = list.map((r) => arrowRow(r.srcName, r.dstName, r.why ? mdInline(r.why) : '')).join('');
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
     + '<span class="badge edge">connections</span></div>'
     + '<div class="xcount">' + list.length + ' connection' + (list.length === 1 ? '' : 's') + '</div>'
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no connections recorded</p>');
-  bindArrowRows(panel);
 }
 // Selecting an inter-subdomain arrow (Domain overview): list every entity→entity relation it bundles as
 // `from → to:` with its verb (+ kind) below — the domain analog of showContainerEdge.
@@ -993,14 +965,13 @@ function showDomainContainerEdge(a, b, drawn) {
   const dstE = drawn && isEnt(drawn.dst) ? drawn.dst : null;
   if (srcE) list = list.filter((r) => r.src === srcE);
   if (dstE) list = list.filter((r) => r.dst === dstE);
-  const items = list.map((r) => arrowRow(r.src, r.dst, r.srcName, r.dstName,
-    esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''), r.where)).join('');
+  const items = list.map((r) => arrowRow(r.srcName, r.dstName,
+    esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''))).join('');
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
     + '<span class="badge edge">relations</span></div>'
     + '<div class="xcount">' + list.length + ' relation' + (list.length === 1 ? '' : 's') + '</div>'
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no relations recorded</p>');
-  bindArrowRows(panel);
 }
 // Selecting a BRIDGE arrow (structure↔domain): the component↔subdomain arrow in a subsystem card, or the
 // subsystem↔entity arrow in a subdomain/domain view. It bundles component→entity edges; list each as
@@ -1024,13 +995,12 @@ function showBridgeEdge(drawn) {
           : k === 'subdomain' ? isAncestorOf(id, r.dst)
             : true;
   }));
-  const items = list.map((r) => arrowRow(r.src, r.dst, r.srcName, r.dstName,
-    esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : ''), r.where)).join('');
+  const items = list.map((r) => arrowRow(r.srcName, r.dstName,
+    esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : ''))).join('');
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(drawn.src)) + ' → ' + esc(nm(drawn.dst)) + '</h2>'
     + '<span class="badge edge">bridge</span></div>'
     + '<div class="xcount">' + list.length + ' link' + (list.length === 1 ? '' : 's') + '</div>'
     + (items ? '<ul class="xlist">' + items + '</ul>' : '<p class="empty">no links recorded</p>');
-  bindArrowRows(panel);
 }
 
 // --- Happy Path + use-case panels -----------------------------------------------
@@ -1201,18 +1171,18 @@ function bindFlow(uc) {
     if (life) attachEdgeHandlers(life, null, click, on, off, null);
   }
 
-  // messages: select (the backbone edge for an element↔element step, else the step's own panel) / focus /
-  // tooltip (the why). A step's arrow + label glow together; focus keeps them + both endpoints' columns.
+  // messages: select (the step's OWN panel — showFlowStep grounds it via the step's `where`; the
+  // backbone edge is behind the panel's "rides" link) / focus / tooltip (the why). A step's arrow +
+  // label glow together; focus keeps them + both endpoints' columns.
   steps.forEach((st, i) => {
     const els = msgEls[i];
     if (!els.length) return;
     const text = texts[i] || null, line = lineByIdx[i] || null;
-    const edge = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || [])[0] : null;
     const selKey = 'flowstep:' + uc + ':' + i;
     const doSelect = () => {
       scene.selectedKey = selKey;
       flowSyncCur(i);  // clicking a step's arrow directly moves the player's counter to it
-      if (edge) showEdge(edge); else showFlowStep(uc, i);
+      showFlowStep(uc, i);
       const keep = new Set(els);
       for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
       for (const el of (actorPartsByStep[i] || [])) keep.add(el);  // Role endpoints have no node id
@@ -1344,19 +1314,47 @@ function flowInit() {
   flowPlay.cur = m ? +m[1] : -1;
   flowCounter();
 }
-// A flow message's side panel for an ACTOR step (an element↔element step shows its backbone edge instead).
-// `Why` is this step's one explanation field — plain prose, no label, like every other panel now.
+// A flow step's side panel — EVERY step shows ITSELF (its phrase, endpoints, note, and its own call
+// site), never the backbone arrow's text: one element pair appears in several steps meaning different
+// things, so the shared arrow description can't be right for each — and the arrow's `where` is only an
+// example site, while the step's `where` is THE location. The backbone arrow(s) stay reachable via the
+// "rides" link(s); every parallel edge of the pair is listed, never silently the first.
 function showFlowStep(uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
   const end = (label, id) => id ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
+  const wn = st.where ? whereNode(st.where) : null;
+  const local = !!(wn && localRef(wn.file));
+  const srcRow = st.where
+    ? '<dl><dt>Source</dt><dd>' + (local
+        ? '<a href="#" class="stepwhere">' + esc(st.where) + '</a>' : esc(st.where)) + '</dd></dl>'
+    : '';
+  const rides = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || []) : [];
+  const ridesRows = rides.length
+    ? '<dl><dt>Rides arrow</dt>' + rides.map((e, k) =>
+        '<dd><a href="#" class="ridesref" data-k="' + k + '">' + esc(st.src) + ' —' + esc(e.verb || 'uses')
+        + '&rarr; ' + esc(st.dst) + '</a></dd>').join('') + '</dl>'
+    : '';
   // The step's action is the title (a full sentence for actor steps — too long for a pill). The src → dst
-  // endpoints move to the body, keeping their links to each element; the why (backbone edge) follows.
+  // endpoints move to the body, keeping their links to each element.
   panel.innerHTML = '<div class="pane-title"><h2>' + (st.verb ? mdInline(st.verb) : 'Step') + '</h2></div>'
     + '<p class="endpoints">' + end(st.src, st.srcId) + ' &rarr; ' + end(st.dst, st.dstId) + '</p>'
     + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
-    + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '');
+    + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '')
+    + srcRow + ridesRows;
   bindFlowRefs();
+  const sw = panel.querySelector('a.stepwhere');
+  if (sw) sw.addEventListener('click', (ev) => { ev.preventDefault(); openInCodeViewer(wn.file, wn.line); });
+  panel.querySelectorAll('a.ridesref').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); showEdge(rides[+a.getAttribute('data-k')]);
+  }));
+  // Mirror the step's own anchor into the tree + code viewer — and degrade gracefully when the step
+  // has none (`no_call_site`, or a map from before step anchors): clear the stale tree highlight so a
+  // previous selection's path can't read as this step's location, and leave the code viewer alone.
+  cvElement = null;  // a step has no single owning element -> no header pill
+  setTreeSelection(null);
+  highlightTreePath(local ? refTreePath(wn.file, wn.line) : null);
+  if (local) syncCodeView(wn.file, wn.line, []);
 }
 // One actor's card: its kind, what its role wants (the explanation), and the Happy Path steps it drives.
 function showHPActor(a) {
@@ -2441,7 +2439,8 @@ function bindDomainSub(sd) {
       const arr = COMP_LOOKUP[x + '>' + y];
       if (!arr) return;
       const e = arr[0];
-      bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showEdge(e));
+      // parallel relations of one pair share the drawn arrow — the panel lists them ALL (showPairEdges)
+      bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showPairEdges(arr));
     } else if (kx === 'subsystem' || ky === 'subsystem') {  // a bridge arrow: subsystem -> entity (owns/reads)
       const sub = kx === 'subsystem' ? x : y;
       bindBridgeEdge(mainScene, p, label, x, y, { kind: 'bridge', sid: sub, sd: sd });  // ⌘ -> the S×SD bridge card
@@ -2626,7 +2625,8 @@ function bindDomain() {
     const arr = COMP_LOOKUP[src + '>' + dst];
     if (!arr) return;
     const e = arr[0];
-    bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showEdge(e));
+    // parallel relations of one pair share the drawn arrow — the panel lists them ALL (showPairEdges)
+    bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showPairEdges(arr));
   });
 }
 
@@ -3059,7 +3059,7 @@ function renderUseCases() {
   // falls into an "Other" bucket rather than an invented header — the single-actor invariant made safe.
   const groups = [];               // [{actor, role, ucs:[node]}]
   const byActor = {};
-  const OTHER = ' other';
+  const OTHER = '\x00other';
   for (const n of UC_NODES) {
     const actor = ((n.fields && n.fields.Actor) || '').trim();
     const role = ROLE_BY_NAME[actor.toLowerCase()];
@@ -4188,20 +4188,19 @@ function nodeTypeLabel(n) {
   if (n.kind === 'dep') return (n.fields && n.fields.Kind) || 'dependency';
   return n.kind;
 }
-// file path -> the use-case flow steps whose backing edge is anchored there. A step carries no source ref
-// of its own; its location is the edge between its two element endpoints (COMP_LOOKUP, same derivation
-// bindFlow uses). A step touching a Role (no srcId/dstId) has no edge and no line, so it's skipped. Built
-// once, lazily — FLOWS_NARR / COMP_LOOKUP are set at boot, well before any file is shown.
+// file path -> the use-case flow steps anchored there, via each step's OWN `where` (THE location).
+// Steps without one (`no_call_site`, or a map from before step anchors) simply don't decorate — an
+// arrow's `where` is only an example call site and must never stamp a "use case" pill on a line the
+// flow doesn't actually walk. Built once, lazily — FLOWS_NARR is set at boot, well before any file
+// is shown.
 let stepsByPathCache = null;
 function stepsByPath() {
   if (stepsByPathCache) return stepsByPathCache;
   stepsByPathCache = {};
   for (const uc in (FLOWS_NARR || {})) {
     (FLOWS_NARR[uc] || []).forEach((st, i) => {
-      if (!st.srcId || !st.dstId) return;
-      const edge = (COMP_LOOKUP[st.srcId + '>' + st.dstId] || [])[0];
-      if (!edge || !edge.where) return;
-      const wn = whereNode(edge.where);
+      if (!st.where) return;
+      const wn = whereNode(st.where);
       if (!wn.line || !localRef(wn.file)) return;
       const key = treeKey(cleanPath(wn.file, wn.line));
       (stepsByPathCache[key] ||= []).push({ uc, i, line: wn.line, verb: st.verb, src: st.src, dst: st.dst });
@@ -4232,16 +4231,23 @@ function codeItemsForPath(path) {
       select: () => { suppressCodeScroll = true; selectFromTree(id); } });
   }
   // One use-case tag per LINE, not per step: a single line (one edge) is often walked by several use
-  // cases — four identical "use case" pills would just eat the width. Collapse them; the tooltip names
-  // them all, and clicking selects the first (a specific one is still pickable from the use-case view).
+  // cases — four identical "use case" pills would just eat the width. Collapse them: the pill's hover
+  // card names them all, a plain click selects a lone use case directly, and a pill covering 2+ opens
+  // a small picker (see showUcPick) so every use case on the line stays reachable from the code.
   const byLine = {};
   for (const s of (stepsByPath()[key] || [])) (byLine[s.line] ||= []).push(s);
   for (const ln in byLine) {
-    const arr = byLine[ln], first = arr[0];
-    const names = [...new Set(arr.map((s) => (GRAPH.nodes[s.uc] && GRAPH.nodes[s.uc].name) || s.uc))];
-    const name = names.length === 1 ? names[0] : names.length + ' use cases: ' + names.join(', ');
+    const seen = new Set(), choices = [];
+    for (const s of byLine[ln]) {
+      if (seen.has(s.uc)) continue;  // several steps of ONE use case on the line -> one entry (its first step)
+      seen.add(s.uc);
+      choices.push({ name: (GRAPH.nodes[s.uc] && GRAPH.nodes[s.uc].name) || s.uc,
+        select: () => { suppressCodeScroll = true; selectFlowStep(s.uc, s.i); } });
+    }
+    const name = choices.length === 1 ? choices[0].name
+      : choices.length + ' use cases: ' + choices.map((c) => c.name).join(', ');
     items.push({ line: +ln, kind: 'usecase', name: name, label: 'use case',
-      select: () => { suppressCodeScroll = true; selectFlowStep(first.uc, first.i); } });
+      choices: choices, select: choices[0].select });
   }
   return items;
 }
@@ -4251,6 +4257,7 @@ function codeItemsForPath(path) {
 // one line get two pills; an item with no line can't be tagged (it isn't shown in the code at all).
 function paintCodeTags() {
   if (!cvTable || !cvPath) return;
+  hideUcPick();  // a repaint replaces the pill the picker was anchored to
   cvTable.querySelectorAll('td.cvtag').forEach((td) => { td.textContent = ''; });  // clear a previous paint
   for (const it of codeItemsForPath(cvPath)) {
     const row = cvTable.querySelector('tr[data-ln="' + it.line + '"]');
@@ -4259,7 +4266,12 @@ function paintCodeTags() {
     const pill = document.createElement('span');
     pill.className = 'cvtag-pill ' + it.kind + (it.kind === 'element' && it.line === cvLine ? ' cur' : '');
     pill.textContent = it.label;                    // textContent, not innerHTML — labels are plain text
-    pill.addEventListener('click', it.select);
+    attachMarkPop(pill, it.name, it.label, it.kind);  // hover card: the item's name (all names on a shared line)
+    // A pill covering several use cases opens the picker instead of selecting blindly. stopPropagation
+    // keeps the document-level click-away handler from closing the picker it just opened.
+    pill.addEventListener('click', (it.choices && it.choices.length > 1)
+      ? (ev) => { ev.stopPropagation(); showUcPick(pill, it.choices); }
+      : it.select);
     cell.appendChild(pill);
   }
 }
@@ -4283,6 +4295,37 @@ function attachMarkPop(el, name, label, kind) {
   el.addEventListener('mouseenter', () => showMarkPop(el, name, label, kind));
   el.addEventListener('mouseleave', () => { cvpop.hidden = true; });
 }
+// The picker for a use-case pill covering SEVERAL use cases (they share the line's edge): a small
+// floating card listing each one; picking runs the same selection a plain click performs when the pill
+// covers only one. A singleton like #cvpop, but interactive. Closed by picking, clicking the pill again,
+// clicking away, Escape, or scrolling the code (the anchor pill moves with the code, the card would not).
+const cvpick = document.createElement('div');
+cvpick.id = 'cvpick'; cvpick.hidden = true; document.body.appendChild(cvpick);
+let cvpickAnchor = null;   // the pill the open picker belongs to (null when hidden)
+function hideUcPick() { cvpick.hidden = true; cvpickAnchor = null; }
+function showUcPick(anchor, choices) {
+  if (cvpickAnchor === anchor) { hideUcPick(); return; }  // a second click on the pill toggles it closed
+  cvpick.textContent = '';
+  for (const c of choices) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = c.name;                       // textContent, not innerHTML — names are plain text
+    b.addEventListener('click', () => { hideUcPick(); c.select(); });
+    cvpick.appendChild(b);
+  }
+  cvpick.hidden = false;
+  cvpickAnchor = anchor;
+  // Right-align under the pill (it sits at the code view's right edge); flip above when there's no room.
+  const r = anchor.getBoundingClientRect(), pw = cvpick.offsetWidth, ph = cvpick.offsetHeight, gap = 4;
+  const left = Math.max(6, Math.min(r.right - pw, window.innerWidth - pw - 6));
+  let top = r.bottom + gap;
+  if (top + ph > window.innerHeight - 6) top = Math.max(6, r.top - gap - ph);
+  cvpick.style.left = left + 'px';
+  cvpick.style.top = top + 'px';
+}
+document.addEventListener('click', (ev) => { if (!cvpick.hidden && !cvpick.contains(ev.target)) hideUcPick(); });
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') hideUcPick(); });
+if (cvscroll) cvscroll.addEventListener('scroll', hideUcPick);
 // The overview ruler: one clickable mark per item, placed at its line's relative depth in the whole file
 // (like a diff view's marker gutter). Clicking a mark jumps the source to that line — it does NOT select
 // (that's what the pill is for), so scanning the file's shape stays cheap. A viewport band (updated on
@@ -4366,7 +4409,7 @@ let cvDiffKey = null;   // the range (base+target) the current inline diff was r
 // A file is shown as a diff when a live diff is armed and it changed in that range. The changed-path
 // set is DIFF_FILE_STATUS (built once per (un)load by recomputeDiffPaths) — no per-call rebuild.
 function wantDiffFor(path) { return !!LIVE_DIFF && DIFF_FILE_STATUS[path] != null; }
-function diffKeyFor(asDiff) { return asDiff && LIVE_DIFF ? (LIVE_DIFF.base + ' ' + LIVE_DIFF.target) : null; }
+function diffKeyFor(asDiff) { return asDiff && LIVE_DIFF ? (LIVE_DIFF.base + '\x00' + LIVE_DIFF.target) : null; }
 function diffRangeQS() {  // the active range as query params for api/srcdiff (mirrors the loaded diff)
   if (!LIVE_DIFF) return '';
   return '&base=' + encodeURIComponent(LIVE_DIFF.base || '') + '&target=' + encodeURIComponent(LIVE_DIFF.target || '');
@@ -5388,11 +5431,21 @@ function impactProjection() {
 }
 const IMP_TYPE_LABEL = { subsystems: 'Subsystems', components: 'Components', deps: 'Dependencies',
   entities: 'Entities', subdomains: 'Subdomains', use_cases: 'Use cases', happy_path: 'Happy Path',
-  edges: 'Call sites (edges)', entry_points: 'Entry points', glossary: 'Glossary',
-  security: 'Security surfaces', run_commands: 'Run commands', non_entity_types: 'Other types',
-  other: 'Other' };
+  flow_steps: 'Flow steps', edges: 'Call sites (edges)', entry_points: 'Entry points',
+  glossary: 'Glossary', security: 'Security surfaces', run_commands: 'Run commands',
+  non_entity_types: 'Other types', other: 'Other' };
+// A flow-step synthetic id 'step:<uc>:<n>' → its parts, or null. Shared by impName / gotoImpactEid.
+function parseStepEid(id) {
+  const m = id.match(/^step:([^:]+):(.+)$/);
+  return m ? { uc: m[1], n: m[2] } : null;
+}
 function impName(id) {
   if (GRAPH.nodes[id]) return GRAPH.nodes[id].name;
+  const st = parseStepEid(id);
+  if (st) {  // a hit flow step reads as "<use case> · step n", not the raw synthetic id
+    const uc = GRAPH.nodes[st.uc];
+    return (uc ? uc.name : st.uc) + ' · step ' + st.n;
+  }
   const i = id.indexOf(':');
   return i > 0 ? id.slice(i + 1) : id;   // synthetic ids (edge:…, ep:…) show their payload
 }
@@ -5404,6 +5457,15 @@ function gotoImpactEid(id) {
   if (id.startsWith('UC')) { go({ kind: 'usecase', uc: id }); return; }
   if (id.startsWith('HP')) { go({ kind: 'hp' }); return; }
   if (id.startsWith('edge:')) { selectFromTree(id.slice(5).split('>')[0]); return; }
+  const st = parseStepEid(id);
+  if (st) {
+    // The synthetic id carries the authored 1-based `n`; the flow view's selectors use the 0-based
+    // ok-filtered narrative index — map via FLOWS_NARR by matching `n`.
+    const i = (FLOWS_NARR[st.uc] || []).findIndex((s) => String(s.n) === st.n);
+    if (i >= 0) selectFlowStep(st.uc, i);
+    else go({ kind: 'usecase', uc: st.uc });  // step missing from the narrative — open its flow
+    return;
+  }
   if (GRAPH.nodes[id]) selectFromTree(id);
 }
 // The forward panel: "what does this diff impact?" — grouped by element type, strongest first,
@@ -5428,7 +5490,8 @@ function showImpactSummary() {
       + ids.map((id) => {
           const imp = IMPACT.impacts[id];
           const st = imp.cause === 'direct' ? (BADGE[imp.change] ? imp.change : 'modified') : 'rippled';
-          const click = (GRAPH.nodes[id] || id.startsWith('UC') || id.startsWith('HP') || id.startsWith('edge:'));
+          const click = (GRAPH.nodes[id] || id.startsWith('UC') || id.startsWith('HP')
+            || id.startsWith('edge:') || id.startsWith('step:'));
           const name = click
             ? '<a href="#" class="impref" data-id="' + esc(id) + '">' + esc(impName(id)) + '</a>'
             : esc(impName(id));

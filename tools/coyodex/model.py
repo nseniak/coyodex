@@ -190,6 +190,13 @@ class FlowStep:
     dst: str
     phrase: str = ""                 # authored inline action text (required on every step — `validate`)
     note: str = ""                   # flow-specific note
+    where: str | None = None         # THE location: bare `path:line` of this step's own call site —
+                                     # unlike an edge's `where` (an example among possibly many), a step
+                                     # is exactly one interaction, so its anchor is precise. Required on
+                                     # element↔element steps (`validate` blocks) unless `no_call_site`;
+                                     # optional on actor steps (a human action has no call site).
+    no_call_site: bool = False       # opt-out, mirroring Edge.no_call_site: this step has no single
+                                     # call site (event-driven / config-wired) — `where` may be null.
 
 
 @dataclass

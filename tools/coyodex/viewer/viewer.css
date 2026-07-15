@@ -406,11 +406,10 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
    Rows with no local source have no [data-where] and stay plain, non-interactive text — BUT the padded,
    rounded box also applies to any SELECTED row (.sel), so a selected arrow with no call site (e.g. an
    entity relation) gets the same tidy accent bar as a component arrow, not a cramped one. */
-#panel .xlist li.xrow[data-where],
-#panel .xlist li.xrow.sel { border-radius: 4px; padding: 3px 6px; margin-left: -6px; }
-#panel .xlist li.xrow[data-where] { cursor: pointer; transition: background .1s; }
-#panel .xlist li.xrow[data-where]:hover { background: #f3f4f6; }
-#panel .xlist li.xrow.sel { background: #e0e7ff; box-shadow: inset 3px 0 0 #4f46e5; }
+/* crossings rows are inert text (an arrow's `where` is only an example call site — no code link,
+   no hover affordance); only the single-arrow view's own row keeps the selected state. */
+#panel .xlist li.xrow.sel { border-radius: 4px; padding: 3px 6px; margin-left: -6px;
+          background: #e0e7ff; box-shadow: inset 3px 0 0 #4f46e5; }
 /* The relation facts (cardinality / implemented-by / keyed-by) live INSIDE the selected arrow row —
    part of the item, aligned under its why line — not as a separate block below. */
 #panel .xlist .xfacts { padding-left: 14px; }
@@ -668,6 +667,17 @@ table.cvcode td.cvtag { position: sticky; right: 0; width: 1%; white-space: nowr
          text-transform: uppercase; letter-spacing: .04em; padding: 1px 7px; border-radius: 999px; }
 #cvpop .cvpop-pill.element { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; }
 #cvpop .cvpop-pill.usecase { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+/* the use-case picker for a pill covering several use cases: the same light card as #cvpop, but
+   interactive — one button per use case walking the line (placed by showUcPick, fixed like #cvpop).
+   Amber hover, matching the use-case pill palette. */
+#cvpick { position: fixed; z-index: 60; display: flex; flex-direction: column; min-width: 180px;
+         max-width: 340px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 4px;
+         box-shadow: 0 6px 20px rgba(30, 27, 75, .16); }
+#cvpick[hidden] { display: none; }
+#cvpick button { display: block; width: 100%; text-align: left; border: 0; background: none; cursor: pointer;
+         font-size: 12.5px; color: #1f2937; padding: 6px 10px; border-radius: 6px;
+         white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#cvpick button:hover { background: #fff7ed; color: #9a3412; }
 
 /* --- mechanical diff picker (header) ------------------------------------------------------------ */
 /* A small dropdown anchored under the "Diff…" button: pick a range and the changed map elements badge.

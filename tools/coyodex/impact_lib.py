@@ -169,8 +169,8 @@ def frame_from_two_diffs(side_b: ParsedDiff, side_t: ParsedDiff,
 @dataclass(frozen=True)
 class AnchorRef:
     """One code anchor carried by a map element (the direct-hit seed set)."""
-    eid: str                  # element id, or a synthetic id for id-less rows (edge:…, ep:…)
-    kind: str                 # component|entity|dep|edge|entry_point|glossary|security|
+    eid: str                  # element id, or a synthetic id for id-less rows (edge:…, ep:…, step:…)
+    kind: str                 # component|entity|dep|edge|flow_step|entry_point|glossary|security|
                               # run_command|non_entity_type|group
     path: str                 # repo-relative (dir anchors keep NO trailing slash; see is_dir)
     lo: int | None
@@ -198,9 +198,11 @@ def _ref(eid: str, kind: str, raw: str | None, fld: str, owner: str | None = Non
 
 def anchor_index(model: ProjectModel) -> list[AnchorRef]:
     """Every code anchor in the map, by element — components (source/files/evidence/entry_point),
-    entities, deps (where_configured + evidence), backbone edges (`where`), entry points, glossary,
-    security rows, run_commands, non_entity_types, and groups (subsystems/subdomains — the territory
-    seeds). Flow steps / HP / use cases / roles carry no anchors (ripple-only, by design)."""
+    entities, deps (where_configured + evidence), backbone edges (`where`), flow steps (`where` —
+    a step's own precise call site, so a changed line hits the step directly and ripples to its use
+    case), entry points, glossary, security rows, run_commands, non_entity_types, and groups
+    (subsystems/subdomains — the territory seeds). HP / use cases / roles carry no anchors
+    (ripple-only, by design — they inherit precision from their steps)."""
     out: list[AnchorRef] = []
 
     def add(r: AnchorRef | None) -> None:
@@ -229,6 +231,10 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
     for ed in model.edges:
         if ed.where:
             add(_ref(f"edge:{ed.src}>{ed.verb}>{ed.dst}", "edge", ed.where, "where"))
+    for fl in model.flows:
+        for st in fl.steps:
+            if st.where:  # `validate` guarantees `n` is unique within a flow, so the id is stable
+                add(_ref(f"step:{fl.uc}:{st.n}", "flow_step", st.where, "where", owner=fl.uc))
     for s in model.security:
         add(_ref(f"security:{s.surface}", "security", s.source, "source"))
     for r in model.run_commands:
@@ -256,8 +262,9 @@ def dir_anchors_for(anchors: list[AnchorRef], path: str) -> list[AnchorRef]:
 
 # ── hit resolution (the ladder) ───────────────────────────────────────────────────────────────────
 
-# An edge's `where` is one call-site line; its enclosing function may be long, so the symbol rung
-# for edges is a tight window around the anchor, never the whole enclosing extent.
+# An edge's (or flow step's) `where` is one call-site line; its enclosing function may be long, so
+# the symbol rung for call-site anchors is a tight window around the anchor, never the whole
+# enclosing extent.
 EDGE_SYMBOL_WINDOW = 3
 
 Extent = tuple[int, int, str, str]  # (start, end, name, kind) — preindex `symbols.extents` rows
@@ -320,7 +327,7 @@ def resolve_hits(refs: list[AnchorRef], frame: FileFrame, extents: list[Extent],
         if a.lo is not None:
             lo, hi = a.lo, a.hi if a.hi is not None else a.lo
             ext = None if frame.binary else enclosing_extent(extents, lo)
-            if a.kind == "edge":
+            if a.kind in ("edge", "flow_step"):  # call-site-shaped anchors share the tight window
                 w_lo, w_hi = max(1, lo - EDGE_SYMBOL_WINDOW), hi + EDGE_SYMBOL_WINDOW
                 sym_span: tuple[int, int] | None = (w_lo, w_hi)
             else:

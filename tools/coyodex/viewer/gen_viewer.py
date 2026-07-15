@@ -1322,6 +1322,7 @@ def flow_narrative(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any
             "srcId": src_id, "src": str(graph["nodes"][src]["name"]) if src_id else src,
             "dstId": dst_id, "dst": str(graph["nodes"][dst]["name"]) if dst_id else dst,
             "verb": verb, "why": why, "note": str(st.get("note") or "").strip(),
+            "where": str(st.get("where") or "") or None,  # the step's own call site (THE location)
         })
     return out
 

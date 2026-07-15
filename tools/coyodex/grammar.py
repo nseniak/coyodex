@@ -237,6 +237,7 @@ class FlowStep:
     dst_is_id: bool
     phrase: str = ""     # authored inline phrase (after ": ") — e.g. the actor's action
     note: str = ""       # flow-specific note (after "· ")
+    where: str | None = None  # THE location: the step's own call site (`path:line`), if authored
     ok: bool = True      # False -> the line could not be split into `from → to`
 
 

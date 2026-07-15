@@ -319,6 +319,8 @@ def model_to_markdown(m: ProjectModel) -> str:
                 line = f"{st.n}. {_ep(st.src)} → {_ep(st.dst)}"
                 if st.phrase:
                     line += f" : {st.phrase}"
+                if st.where:  # the step's own call site (THE location) — rendered as a code link
+                    line += f" @ {_anchor_link(st.where)}"
                 if st.note:
                     line += f" · {st.note}"
                 body.append(line)
@@ -345,7 +347,7 @@ def model_to_markdown(m: ProjectModel) -> str:
         section("Operational dimensions — the standard core four", body[:-1])
     if m.edges:
         section("Relationships — backbone edge list",
-                _table(["From", "Verb", "To", "Why", "Where"],
+                _table(["From", "Verb", "To", "Why", "Where (example)"],
                        [[e.src, e.verb, e.dst, e.why or "", _anchor_link(e.where)] for e in m.edges]))
     if m.tests or m.tests_note:
         body = []
@@ -489,7 +491,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         steps=[grammar.FlowStep(n=st.n, src=_endpoint(st.src), dst=_endpoint(st.dst),
                                   src_is_id=grammar.is_step_id(st.src),
                                   dst_is_id=grammar.is_step_id(st.dst),
-                                  phrase=st.phrase, note=st.note, ok=True)
+                                  phrase=st.phrase, note=st.note, where=st.where, ok=True)
                for st in f.steps]) for f in m.flows]
 
     _ensure_default_subsystem(nodes, m.title or None)

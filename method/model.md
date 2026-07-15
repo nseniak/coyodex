@@ -75,7 +75,9 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "non_entity_types": [ { "name", "source", "why" } ],
 
   "flows":       [ { "uc": "UCn", "title",
-                     "steps": [ { "n", "src", "dst", "phrase", "note" } ] } ],  // T6
+                     "steps": [ { "n", "src", "dst", "phrase", "note",
+                                  "where": "<the step's own call-site path:line|null>",
+                                  "no_call_site": false } ] } ],  // T6
   "edges":       [ { "src", "verb", "dst", "why", "where": "<call-site path:line|null>",
                      "no_call_site": false } ],
 
@@ -111,18 +113,28 @@ Semantics, stated on the fields:
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).
   Duplicated authored rows are preserved as authored (the graph views de-duplicate by
   `(src, verb, dst)`). An edge's `why` is the canonical relationship rationale — distinct from a
-  node's `purpose` (about the node itself) — and its `where` is the call site: the line in `src`'s
-  code where it invokes `dst`, so a flow arrow's drill-to-code lands on the action. `where` is
-  **required** — `coyodex validate` blocks on a missing one (the flow arrow would have nothing to open)
-  — unless the edge sets **`no_call_site: true`**, the explicit marker for a relationship with no single
-  call site (event-driven / shared-state / config-wired coupling, where `src` never directly calls
-  `dst`). This mirrors `deps[].deployment_linked`: an honest, conscious "no code call site here", never a
-  silent null. Setting both `no_call_site` and a `where` is contradictory (an advisory warning).
+  node's `purpose` (about the node itself) — written as a **summary of the whole relationship**, never
+  one call's story (many flow steps ride one edge). Its `where` is a verified **EXAMPLE call site** —
+  one line in `src`'s code where it invokes `dst`, possibly one of many: **A location, not THE
+  location.** It is a witness grounding the edge (validation, anchor drift, diff impact); the viewer
+  deliberately does not show or open it — drill-to-code belongs to the per-step `where` below.
+  `where` is **required** — `coyodex validate` blocks on a missing one (an unwitnessed edge is an
+  ungrounded claim) — unless the edge sets **`no_call_site: true`**, the explicit marker for a
+  relationship with no single call site (event-driven / shared-state / config-wired coupling, where
+  `src` never directly calls `dst`). This mirrors `deps[].deployment_linked`: an honest, conscious
+  "no code call site here", never a silent null. Setting both `no_call_site` and a `where` is
+  contradictory (an advisory warning).
 - **`flows[].steps`**: an endpoint is an element ID or a **Role id `Rn`** (an actor step). Every step
   carries its own `phrase` — a short action describing what happens at that point — which the flow arrow
   and narrative render from. A step does NOT reuse the backbone edge's label: one element pair can appear
   in several steps meaning different things, so a shared edge label can't describe each; the step
-  describes itself (`coyodex validate` requires a non-empty `phrase`). The "used in" backward view
+  describes itself (`coyodex validate` requires a non-empty `phrase`). For the same reason each
+  element↔element step carries its own **`where` — THE location**: a step is exactly ONE interaction,
+  so its `path:line` (the operative statement in the step's `src` code) is precise, unlike the edge's
+  example `where`. The viewer drills the step there and the diff-impact engine hits the step directly
+  (`step:<uc>:<n>` — so `n` must be unique within a flow; `validate` blocks on duplicates). Required
+  on element↔element steps unless the step sets `no_call_site: true` (same escape as edges); actor
+  steps (a Role endpoint) need none. The "used in" backward view
   (element → the use cases whose flow steps touch it) is derived from these, never authored.
 - **`entities[].relations`** are authored on the source card only (see the schema for `verb`'s
   vocabulary); cardinality is a pair (`src_card`/`dst_card`, both or neither); `how` is the
@@ -149,7 +161,8 @@ Semantics, stated on the fields:
 - **Anchor formats.** Every source-location string in the map uses ONE canonical, bare `path:line`
   syntax (see the schema for the exact shape) — never a markdown link, never prose, never two refs
   joined by a separator. `components[].source`, `entities[].source`, `glossary[].source`,
-  `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `entry_points[].source`,
+  `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `flows[].steps[].where`,
+  `entry_points[].source`,
   `evidence[].file`, **`run_commands[].source`**, **`security[].source`**, and
   **`non_entity_types[].source`** all use it — `glossary[].source` and the file OR directory fields
   (`components[].source`, `entities[].source`, `non_entity_types[].source`) may also be a bare

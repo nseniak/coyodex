@@ -130,7 +130,8 @@ def test_empty_actors_allowed_when_no_roles():
     m = make_valid_model()
     m.roles = []
     m.use_cases[0].actors = []
-    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="E1", phrase="reads")]  # no actor step / role ref
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="E1", phrase="reads",
+                                 where="src/v.py:5")]  # no actor step / role ref
     assert not any("no actor" in p for p in problems_of(m))
 
 
@@ -217,10 +218,10 @@ def test_extensionless_file_anchor_is_valid():
 
 
 def test_edge_missing_where_is_a_blocking_problem():
-    # A call-site-less edge gives a flow arrow nothing to open — blocking, not a warning.
+    # An edge's `where` is its witness (an EXAMPLE call site grounding the claim) — still required.
     m = make_valid_model()
     m.edges[0].where = None
-    assert any("no `Where` call-site anchor" in p for p in problems_of(m))
+    assert any("no `Where` anchor" in p and "EXAMPLE call site" in p for p in problems_of(m))
 
 
 def test_edge_no_call_site_opt_out_allows_missing_where():
@@ -228,7 +229,62 @@ def test_edge_no_call_site_opt_out_allows_missing_where():
     m = make_valid_model()
     m.edges[0].where = None
     m.edges[0].no_call_site = True
-    assert not any("call-site anchor" in p for p in problems_of(m))
+    assert not any("no `Where` anchor" in p for p in problems_of(m))
+
+
+# --- flow-step anchors (`where` is THE location — one step, one call site) ---------
+
+
+def make_element_step_flow() -> Flow:
+    # An element↔element step with its own precise call site — the shape the anchor rules target.
+    return Flow(uc="UC1", title="View order",
+                steps=[FlowStep(n=1, src="C1", dst="E1", phrase="reads", where="src/v.py:5")])
+
+
+def test_element_step_missing_where_is_a_blocking_problem():
+    m = make_valid_model()
+    m.flows = [make_element_step_flow()]
+    m.flows[0].steps[0].where = None
+    assert any("UC1 flow step 1" in p and "no `where` call-site anchor" in p for p in problems_of(m))
+
+
+def test_element_step_no_call_site_opt_out_allows_missing_where():
+    m = make_valid_model()
+    m.flows = [make_element_step_flow()]
+    m.flows[0].steps[0].where = None
+    m.flows[0].steps[0].no_call_site = True
+    assert not any("no `where` call-site anchor" in p for p in problems_of(m))
+
+
+def test_actor_step_needs_no_where():
+    # An actor step (a Role endpoint) is a human action — no call site is demanded.
+    m = make_valid_model()  # its only step is R1 → C1 with no `where`
+    assert not any("no `where` call-site anchor" in p for p in problems_of(m))
+
+
+def test_step_where_prose_is_a_blocking_problem():
+    # A present-but-malformed step `where` is blocked by the anchor-format gate, like every anchor.
+    m = make_valid_model()
+    m.flows = [make_element_step_flow()]
+    m.flows[0].steps[0].where = "somewhere in the code"
+    assert any("flow step 1 where" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_step_where_with_no_call_site_is_a_warning():
+    # Contradictory intent (`where` + `no_call_site`) is advisory, mirroring the edge rule.
+    m = make_valid_model()
+    m.flows = [make_element_step_flow()]
+    m.flows[0].steps[0].no_call_site = True
+    assert any("`no_call_site` is set but a `where` is present" in w for w in warnings_of(m))
+
+
+def test_duplicate_step_n_is_a_blocking_problem():
+    # `step:<uc>:<n>` is the impact engine's synthetic id — `n` must be unique within a flow.
+    m = make_valid_model()
+    m.flows = [Flow(uc="UC1", title="View order",
+                    steps=[FlowStep(n=1, src="C1", dst="E1", phrase="reads", where="src/v.py:5"),
+                           FlowStep(n=1, src="C1", dst="D1", phrase="queries", where="src/v.py:7")])]
+    assert any("duplicate step number 1" in p for p in problems_of(m))
 
 
 def test_edge_no_call_site_with_where_warns():

@@ -7,9 +7,14 @@ Happy Path), and **arrows** (the edges between boxes).
 
 Every value below is text in the map source. The **display** column says how the pane renders
 it: *heading*, *pill* (a small coloured tag), *prose* (the one free description line),
-*text* (a label → value row), or *list* (several links/items). The element's source location
+*text* (a label → value row), or *list* (several links/items). A box element's source location
 is **not** shown here — selecting it syncs the file browser + code viewer, which carry the path
 and the "open externally" control.
+
+**THE location vs A location**: element sources and a flow step's `where` are precise (one thing,
+one place) — they sync/link to code. An **arrow's** `where` is only an EXAMPLE call site (a witness
+among possibly many), so arrows deliberately never show or open a code location — no source row,
+no code-view sync, and the crossings-list rows are inert text.
 
 **Pill convention**: every pane's title carries a **type pill first** (the element type, or — for
 an arrow — the relationship). A few elements add **one** secondary pill (a dependency's sub-type,
@@ -90,12 +95,19 @@ The **steps themselves are not listed** in the panel — the sequence diagram al
 arrow. Clicking one arrow in the diagram opens that single step's pane:
 
 ### Flow step (one arrow of a use case's flow)
+Every step shows ITSELF — never the backbone arrow's text (a pair shared by several steps has one
+arrow description that can't be right for each). The step's own `where` is THE location: selecting
+the step syncs the file browser + code viewer to it (a step without one clears the highlights and
+leaves the code viewer alone).
+
 | Property | Display | Action |
 |---|---|---|
 | The step's action | heading (the step's own authored text — a phrase on every step) | |
 | source → destination | text (each endpoint is a link to that element) | |
 | Why (legacy backstop only — empty for a normal step; the backbone edge's why for a phrase-less step) | prose | |
 | Note | text | |
+| Source (the step's own `where`) | text link — opens the code viewer at the call site | |
+| Rides arrow | list — one link per backbone edge of the pair (opens that arrow's pane) | |
 
 ---
 
@@ -119,6 +131,10 @@ The title is `A → B`; the single type pill is the relationship (its verb, or `
 / `bridge`).
 
 ### Backbone edge (A → B)
+An arrow never points at code (see "THE location vs A location" above) — its `where` stays in the
+map as a validation/impact witness but is not rendered. A drawn arrow bundling parallel edges
+(same pair, different verbs) lists every edge of the pair.
+
 | Property | Display | Action |
 |---|---|---|
 | verb | pill (the type pill) | |

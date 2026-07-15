@@ -21,6 +21,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 from coyodex import audit_model, grammar
 from coyodex.model import (
@@ -28,8 +29,11 @@ from coyodex.model import (
     Entity,
     EntityField,
     EntryPoint,
+    Flow,
+    FlowStep,
     GlossaryRow,
     ProjectModel,
+    UseCase,
     all_elements,
     load_model,
     to_canonical_json,
@@ -211,6 +215,24 @@ def test_glossary_where_renders_as_link_and_reaches_graph():
     g = model_to_graph(m)
     assert g["glossary"] == [{"term": "Order", "meaning": "a customer order", "source": "src/order.py:12"},
                              {"term": "Brand", "meaning": "the product itself", "source": ""}]
+
+
+def test_step_where_renders_in_md_and_reaches_graph():
+    """A flow step's own `where` (THE location) renders as an inline ` @ ` code link in the T6 md
+    view — between the phrase and the note — and rides into the graph's flow steps for the viewer."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.use_cases = [UseCase(id="UC1", name="View")]
+    m.components = [Component(id="C1", name="Viewer", purpose="shows")]
+    m.entities = [Entity(id="E1", name="Order", source="src/e.py:1",
+                         fields=[EntityField(name="id", type="str")])]
+    m.flows = [Flow(uc="UC1", title="View",
+                    steps=[FlowStep(n=1, src="C1", dst="E1", phrase="reads the order",
+                                    where="src/v.py:5", note="cached")])]
+    md = model_to_markdown(m)
+    assert "1. C1 → E1 : reads the order @ [v.py](src/v.py:5) · cached" in md
+    g = model_to_graph(m)
+    steps = cast("list[dict[str, object]]", g["flows"][0]["steps"])
+    assert steps[0]["where"] == "src/v.py:5"
 
 
 def test_graph_line_parses_colon_range_and_legacy_hash_anchors():

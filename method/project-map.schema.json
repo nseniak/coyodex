@@ -701,6 +701,18 @@
         },
         "note": {
           "type": "string"
+        },
+        "where": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). THE location: this step's own call site \u2014 a step is exactly one interaction, so its anchor is precise (unlike an edge's `where`, an example). Required on element\u2194element steps unless `no_call_site`."
+        },
+        "no_call_site": {
+          "type": "boolean",
+          "description": "explicit opt-out (mirrors Edge.no_call_site): this step has no single call site \u2014 `where` may be null."
         }
       },
       "required": [
@@ -735,7 +747,7 @@
             "null"
           ],
           "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
-          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). The call site: the line in `src`'s code where it invokes `dst`."
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). A verified EXAMPLE call site \u2014 one line in `src`'s code where it invokes `dst`, possibly one of many (a witness grounding the edge, not a catalog of its traffic)."
         },
         "no_call_site": {
           "type": "boolean"
