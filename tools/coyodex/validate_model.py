@@ -30,6 +30,7 @@ from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
     Entity,
+    FlowStep,
     ModelError,
     ProjectModel,
     all_elements,
@@ -325,13 +326,25 @@ FLOW_STEPS_HI = 15    # over this: a fused goal, wire-grain step altitude, or in
 _SHARED_RUN_MIN = 4   # contiguous identical (src, dst) hops that count as literal duplication
 
 
-def _shared_runs(hops: list[tuple[str, list[tuple[str, str]]]]) -> list[tuple[str, str, int, tuple[str, str]]]:
-    """Longest contiguous run of identical (src, dst) hops for each container pair, reported when
-    ≥ `_SHARED_RUN_MIN`: (id_a, id_b, run_length, first_hop). Maps are small (tens of flows × tens
-    of steps), so the per-pair DP is plenty. NOTE this finds LITERAL duplication only — the same
-    machinery retold at different depths has non-identical sequences by definition; that case is a
-    judgment check on the Phase-4 grounding checklist, not a mechanical one."""
-    out: list[tuple[str, str, int, tuple[str, str]]] = []
+def _step_hop(st: FlowStep, k: int) -> tuple[object, ...]:
+    """One step's identity token for the duplication detector. Two steps are 'identical' only when
+    src, dst AND their code grounding (`where` / the referenced sub-flow) all match — endpoint-only
+    matching counted "stores the snapshot" and "loads both snapshots" as duplicates (a false positive
+    by construction, seen on a live map). An ACTOR step gets a per-step unique token: a sub-flow may
+    not contain actor endpoints, so a run through an actor step is unextractable by rule and must
+    never be reported (`k` provides the uniqueness)."""
+    if not (grammar.is_step_id(st.src) and grammar.is_step_id(st.dst)):
+        return ("actor", k)
+    return (st.src, st.dst, st.subflow or st.where)
+
+
+def _shared_runs(hops: list[tuple[str, list[tuple[object, ...]]]]) -> list[tuple[str, str, int, tuple[object, ...]]]:
+    """Longest contiguous run of identical hops (see `_step_hop`) for each container pair, reported
+    when ≥ `_SHARED_RUN_MIN`: (id_a, id_b, run_length, first_hop). Maps are small (tens of flows ×
+    tens of steps), so the per-pair DP is plenty. NOTE this finds LITERAL duplication only — the
+    same machinery retold at different depths has non-identical sequences by definition; that case
+    is a judgment check on the Phase-4 grounding checklist, not a mechanical one."""
+    out: list[tuple[str, str, int, tuple[object, ...]]] = []
     for i in range(len(hops)):
         for j in range(i + 1, len(hops)):
             (ida, a), (idb, b) = hops[i], hops[j]
@@ -340,13 +353,29 @@ def _shared_runs(hops: list[tuple[str, list[tuple[str, str]]]]) -> list[tuple[st
             for x in range(1, len(a) + 1):
                 cur = [0] * (len(b) + 1)
                 for y in range(1, len(b) + 1):
-                    if a[x - 1] == b[y - 1]:
+                    if a[x - 1] == b[y - 1] and a[x - 1][0] != "actor":
                         cur[y] = prev[y - 1] + 1
                         if cur[y] > best:
                             best, best_end = cur[y], x
                 prev = cur
             if best >= _SHARED_RUN_MIN:
                 out.append((ida, idb, best, a[best_end - best]))
+    return out
+
+
+_DUP_PAIR = re.compile(r"\b(UC\d+|SF\d+)\s*(?:&|\+|/|and)\s*(UC\d+|SF\d+)\b")
+
+
+def _accepted_duplications(m: ProjectModel) -> set[frozenset[str]]:
+    """Pairs the operator has durably adjudicated under an 'Accepted duplications' extras heading
+    (e.g. "UC4 & UC9: the 4-step UI-kickoff prefix is deliberate, not shared machinery"). The
+    machine-readable escape for the duplication advisory — without it, a justified warning re-fires
+    at every future validate and no later session can tell 'accepted' from 'never seen'."""
+    out: set[frozenset[str]] = set()
+    for x in m.extras:
+        if x.heading.strip().lower() == "accepted duplications":
+            for a, b in _DUP_PAIR.findall(x.body):
+                out.add(frozenset((a, b)))
     return out
 
 
@@ -375,11 +404,15 @@ def _granularity_warnings(m: ProjectModel) -> list[str]:
         if " and " in name.lower():
             warnings.append(f"{eid} name '{name}' joins two clauses with 'and' — two goals in one? "
                             "Split it, rename it, or ignore knowingly")
-    hops = ([(f.uc, [(st.src, st.dst) for st in f.steps]) for f in m.flows]
-            + [(sf.id, [(st.src, st.dst) for st in sf.steps]) for sf in m.subflows])
+    accepted = _accepted_duplications(m)
+    hops = ([(f.uc, [_step_hop(st, k) for k, st in enumerate(f.steps)]) for f in m.flows]
+            + [(sf.id, [_step_hop(st, k) for k, st in enumerate(sf.steps)]) for sf in m.subflows])
     for ida, idb, run, first in _shared_runs(hops):
+        if frozenset((ida, idb)) in accepted:
+            continue  # adjudicated by the operator — recorded in the map, so it stays quiet
         warnings.append(f"{ida} and {idb} share a run of {run} identical steps (starting "
-                        f"{first[0]} → {first[1]}) — literal duplication; extract a sub-flow")
+                        f"{first[0]} → {first[1]}) — literal duplication; extract a sub-flow, or "
+                        f"record '{ida} & {idb}: <why>' under an 'Accepted duplications' extras heading")
     return warnings
 
 
@@ -649,12 +682,16 @@ def _check_evidence(m: ProjectModel) -> list[str]:
 
 def _check_altitude(m: ProjectModel) -> list[str]:
     out: list[str] = []
+    excepted = balance_lib._exceptions(m)  # a C id recorded under 'Balance exceptions' is adjudicated
     for c in m.components:
+        if c.id in excepted:  # the honest escape — rewording the Purpose to dodge the heuristic isn't
+            continue
         n = sum(1 for s in (seg.strip() for seg in c.purpose.split(",")) if _LIST_ITEM.match(s))
         if n >= _ALTITUDE_MIN:
             out.append(f"Component {c.id} lists {n} sub-units in its Purpose — if these are real "
                        f"units, consider promoting {c.id} to a subsystem (its members then get "
-                       f"their own drill level)")
+                       f"their own drill level), or record '{c.id}: <why>' under a "
+                       "'Balance exceptions' extras heading")
     return out
 
 
@@ -904,7 +941,10 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
                 referenced_paths(m, walk_root.resolve()), walk_root))
             # The granularity anchor: component (leaf) count vs the code-derived expectation E —
             # re-computed from the tree here (GR4), advisory-only, silent inside the ±40% band.
-            warnings.extend(granularity_advisory(len(m.components), walk_root))
+            # The literal `granularity` under 'Balance exceptions' records the operator's conscious
+            # altitude decision and silences this (else a justified overshoot nags every validate).
+            if "granularity" not in balance_lib._exceptions(m):
+                warnings.extend(granularity_advisory(len(m.components), walk_root))
         warnings.extend(check_domain_coverage_model(m, roots))
 
     # Redundant nesting (a group whose only child is a group of the same kind).

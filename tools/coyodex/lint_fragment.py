@@ -9,21 +9,52 @@ lead's `validate`). Reports every finding it can in one pass. Stdlib-only (the c
 """
 from __future__ import annotations
 
+import re
 import sys
 from pathlib import Path
 
 from coyodex.assemble import load_fragment
-from coyodex.model import ModelError, ProjectModel
+from coyodex.model import ID_SHAPE, ModelError, ProjectModel, all_elements
 from coyodex.validate_model import (
     _check_anchor_format,
     _check_edges,
     _check_extra_conventions,
     _check_flows,
     _granularity_warnings,
+    _referenced_ids,
     check_anchor_existence_model,
     check_domain_relations,
     check_entity_sources_model,
 )
+
+# id-SHAPED but unknown-prefix tokens ('SEC1') can never resolve — catchable per-fragment, unlike a
+# full undefined-reference check (which needs the whole map, or the --ids universe below).
+_ID_LIKE = re.compile(r"^[A-Z]+\d+$")
+
+
+def _check_reference_shapes(m: ProjectModel) -> list[str]:
+    """Reference tokens that LOOK like ids but use a prefix outside the id vocabulary — the
+    'tests target SEC1' class: fragment lint used to pass them, and they died only at the lead's
+    final validate. A prefix that isn't in the vocabulary can never resolve, so it's a fragment bug."""
+    problems: list[str] = []
+    for i, tr in enumerate(m.tests):
+        for t in tr.targets:
+            if _ID_LIKE.match(t) and not ID_SHAPE.match(t):
+                problems.append(f"tests[{i}] target '{t}': unknown id prefix — a target must be a "
+                                "defined element id (UC/HP/S/SD/SF/C/D/E/R + digits)")
+    return problems
+
+
+def lint_unknown_references(m: ProjectModel, known_ids: set[str]) -> list[str]:
+    """With `--ids` (the lead's legend or the assembled map), every cross-reference in the fragment
+    must resolve to the fragment's own definitions or the known universe — so an INVENTED id (the
+    'tests target C112' class: plausible-looking, defined nowhere) dies in the authoring agent's
+    turn instead of at the lead's final validate."""
+    defined = set(all_elements(m)) | {g.id for g in m.happy_path} | known_ids
+    unresolved = sorted(r for r in _referenced_ids(m) - defined)
+    if unresolved:
+        return [f"references ids defined neither in this fragment nor in --ids: {', '.join(unresolved)}"]
+    return []
 
 
 def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]:
@@ -46,6 +77,7 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
     # actor-id check self-disables when the fragment defines no roles. Warnings promoted, like edges'.
     flow_problems, flow_warnings = _check_flows(m)
     problems += flow_problems + flow_warnings
+    problems += _check_reference_shapes(m)
     if repo_root is not None:
         roots = [repo_root.resolve()]
         problems += check_anchor_existence_model(m, roots)
@@ -67,13 +99,17 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv or not argv:
-        print("usage: coyodex lint-fragment [--repo <root>] <fragment.json>...\n\n"
+        print("usage: coyodex lint-fragment [--repo <root>] [--ids <legend-or-map>] <fragment.json>...\n\n"
               "Self-check a build fragment BEFORE returning it: schema, anchor format, `extra`-key\n"
-              "conventions, and (with --repo) that every anchor's file exists. Reports all findings and\n"
-              "exits non-zero on any, so an agent fixes its own rows in context instead of the lead\n"
-              "hand-patching them after assembly.")
+              "conventions, (with --repo) that every anchor's file exists, and (with --ids) that every\n"
+              "cross-referenced id is defined in the fragment or the given id universe — pass the\n"
+              "lead's legend (_legend.md) or the assembled project-map.json, so an INVENTED id dies\n"
+              "here instead of at the lead's final validate. Reports all findings and exits non-zero\n"
+              "on any, so an agent fixes its own rows in context instead of the lead hand-patching\n"
+              "them after assembly.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
     repo_root: Path | None = None
+    known_ids: set[str] | None = None
     frags: list[Path] = []
     i = 0
     while i < len(argv):
@@ -84,6 +120,16 @@ def main(argv: list[str] | None = None) -> int:
                 print("ERROR: --repo needs a directory", file=sys.stderr)
                 return 2
             repo_root = Path(argv[i])
+        elif a == "--ids":
+            i += 1
+            if i >= len(argv) or not Path(argv[i]).exists():
+                print("ERROR: --ids needs an existing legend/map file", file=sys.stderr)
+                return 2
+            # any format works: the universe is every id-shaped token in the file (a markdown legend,
+            # the assembled map, or a plain id list all read the same way)
+            known_ids = {t for t in re.findall(r"\b[A-Z]+\d+\b",
+                                               Path(argv[i]).read_text(encoding="utf-8"))
+                         if ID_SHAPE.match(t)}
         elif a.startswith("-"):
             print(f"ERROR: unknown option '{a}'", file=sys.stderr)
             return 2
@@ -106,6 +152,8 @@ def main(argv: list[str] | None = None) -> int:
             clean = False
             continue
         problems = lint_fragment_problems(m, repo_root)
+        if known_ids is not None:
+            problems += lint_unknown_references(m, known_ids)
         if problems:
             clean = False
             for pr in problems:

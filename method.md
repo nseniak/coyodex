@@ -73,6 +73,12 @@ the spine; built after harvest + at least one full trace.
   MCP"). **Never a post-condition**: "Admin signs in; the organization exists" reads as a
   precondition and can contradict its use case's name — the outcome belongs to the use case's
   `Trigger → Outcome`, and state chaining belongs to dependent steps' `why:` lines.
+- **Preconditions: implicit vs explicit.** *Implicit* = environment state no walk actor produces by
+  using the product (the service is running, the database exists) — never a step, never mentioned.
+  *Explicit* = something a walk actor actually does with the product's surfaces (a first-run
+  sign-in) — it must live somewhere findable: an on-spine step, an off-spine use case, or the
+  depending use case's trigger; when the walk's FIRST step depends on it, say so in that step's
+  `why:` so the spine-as-a-list reading isn't left assuming state nobody established.
 - **Actor = the use case's actor.** Because a step is exactly one use case, its driving role is that
   use case's `Actor` — there is no separate `Actor:` line. A cross-actor handoff is simply the next
   step being a use case with a different actor.
@@ -150,8 +156,16 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   saying what happens at that point (an action, present tense: "POSTs the new upstream", "returns the
   verified email"), which is what the arrow shows. Don't lean on the backbone edge for it: the same
   element pair can appear in several steps that do different things, and one shared edge label can't
-  describe each; the step describes itself. An optional
-  `· <note>` adds flow-specific context. Renders as a Mermaid `sequenceDiagram` — the actor plus the
+  describe each; the step describes itself. A phrase is **pure action** — a condition or qualifier
+  ("when the baseline needs a paid read…") goes in the `· note`, not the phrase (the
+  dependency-phrasing audit trips on condition-shaped phrases). An optional
+  `· <note>` adds flow-specific context.
+  - **Where auth (or any shared ceremony) belongs**: include it as STEPS only where it is the
+    MECHANISM of this use case's outcome (a member joins *by* completing the invite-link OAuth
+    callback — remove those steps and the story breaks); where it is merely a prerequisite state
+    (an admin must be signed in before creating the org), it is the use case's **trigger**, not
+    steps. One machinery, two roles — mechanism in one flow, precondition in another — is correct,
+    not an inconsistency. Renders as a Mermaid `sequenceDiagram` — the actor plus the
   touched components/deps/entities as lifelines, the steps as ordered messages — **and** as a numbered
   narrative below it. Drilling a Happy Path step opens its use case's flow here.
   - **Every element↔element step carries its own `where` — THE location.** A step is exactly ONE
@@ -192,9 +206,14 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     **extract a sub-flow** (shared machinery inlined), or — when the length is genuinely earned
     (a chatty auth handshake that IS the story) — **record the exception**: the flow's UC/SF id
     under a `Balance exceptions` extras heading, with one line of why. Under 3: check the flow is
-    traced to its outcome. `validate` also flags **literal duplication** (a run of ≥4 identical
-    steps appearing in ≥2 flows — extract a sub-flow); the *same machinery retold at different
-    depths* can't be caught mechanically — that is a Phase-4 grounding item (below).
+    traced to its outcome. `validate` also flags **literal duplication** (a run of ≥4 steps
+    identical in endpoints AND grounding appearing in ≥2 flows; runs through an actor step are
+    exempt — a sub-flow can't contain them) — extract a sub-flow, or, when investigation shows the
+    overlap is deliberate, **record the adjudication**: `UCa & UCb: <why>` under an
+    **"Accepted duplications"** extras heading, which silences that pair (a justification that
+    lives only in the build transcript re-fires at every future validate). The *same machinery
+    retold at different depths* can't be caught mechanically — that is a Phase-4 grounding item
+    (below).
 
 ### Operational dimensions — standard core four
 - **Deployment & topology**: `Unit | Runs on | Exposed as | Config source`.
@@ -406,8 +425,12 @@ reads fine as a list up to ~15. `coyodex validate` warns (always-on, advisory) o
 inter-subsystem edge matrix, and deterministic split proposals for over-dense screens — proposals
 are **starting points for judgment, not ready-to-apply** (on list-shaped or star-shaped screens it
 says so instead of proposing noise). A durably justified exception is recorded in the model's
-`extras` under the heading **"Balance exceptions"** (name the diagrams: `root`, `S7`, …) and
-silences those warnings. The contract that keeps balance safe: **balance never gates and only ever
+`extras` under the heading **"Balance exceptions"** and silences the matching advisory — the
+heading accepts four id families, each scoping one advisory: a diagram id (`root`, `S7`, …)
+silences its fan-out warning; a `UCn`/`SFn` id silences that flow's step-count band; a `Cn` id
+silences its promote-to-subsystem altitude nudge; the literal **`granularity`** silences the
+component-count-vs-E advisory (record it with the why when the altitude decision is conscious).
+Never reword prose to dodge a heuristic — record the exception instead. The contract that keeps balance safe: **balance never gates and only ever
 re-groups** — grouping is a free, view-only choice (membership on the child, member lists derived),
 while the **leaf decision is grounded by E and out of bounds for balance tooling**: no balance
 finding may merge or split components to hit a number.
@@ -444,6 +467,14 @@ synthesis → parallel trace.**
   harvest as one concurrent batch** (all agents in a single fan-out), not in waves — the slices are
   disjoint and use pre-allocated ID ranges, so no agent needs another's output first, and they
   return compact rows (not file dumps) so reading them together is cheap.
+  - **Reconcile your slice expectations with E BEFORE launching.** Hand each agent its slice's E
+    from the pre-index `granularity.per_dir` — never your own gut numbers. If you deliberately
+    deviate (a file-per-class repo where per-dir E under-counts), SUM your slice expectations first:
+    when the total sits outside the whole-repo band, record the decision NOW — one line under a
+    `Balance exceptions` extras heading containing the literal `granularity` plus the why — not as a
+    post-hoc shrug when validate warns. (That recorded token also silences the E advisory; an
+    overridden-but-unrecorded expectation was how a live build drifted to 2× E with the warning
+    waved through at every validate.)
   - **Waiting for the batch (every fan-out phase):** after launching, **wait on the agents' completion
     notifications** — do NOT poll the filesystem with `ls` (a not-ready file reads as an error and
     burns turns). If you must block on a condition, use the **`Monitor` tool with an until-condition**
@@ -473,6 +504,9 @@ synthesis → parallel trace.**
   `entity.subdomain`, and the `E↔E` `relation.target` / `FK→En` markers. Because collisions are resolved
   before any edge is traced, a range overlap between two harvest agents can never reach the backbone;
   `assemble`'s duplicate-id error remains the loud backstop if a stray collision slips through.
+  **Right after synthesis, run `coyodex validate --check-coverage`** — its unreferenced-files list is
+  the mechanical harvest-completeness sweep (a source file no component claims = a slice-seam gap);
+  an improvised spot-script covering one directory is how a live build nearly missed a component.
 - Phase 3 Trace (fan out, one agent per use case; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
   Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps) and also
@@ -480,6 +514,19 @@ synthesis → parallel trace.**
   **direct** use — so structural entity-usage is captured at component granularity, not only
   behaviorally via the flow steps. This is *additional*: the `C↔C`/`C↔D` edges
   remain the primary output and must stay complete (every dep wired, the component graph not sparse).
+  Trace-prompt discipline (all proven on live builds):
+  - **Prescribe likely sub-flows in the prompts.** The lead can usually see from the use-case list
+    which machinery is shared ("UC10 and UC13 walk the same tool-call path — EXTRACT it as a
+    sub-flow") — say so explicitly; the duplication detector is the safety net, not the plan.
+  - **Assign each trace agent an `SFn` id range** (SF1–9, SF10–19, …), exactly like the per-agent
+    component id ranges, so parallel extractions never collide.
+  - **A `C→E` `reads` edge requires the entity TYPE at the site** — a function operating on a
+    string/field extracted from an entity is not reading the entity (the false-reads class the
+    grounding pass keeps refuting).
+  - When the lead has assembled a legend or an earlier map, pass `--ids «legend»` to each agent's
+    `lint-fragment` self-check, so a plausible-but-invented element id dies in the agent's own turn.
+  - A **return-direction step** usually has no invoking line of its own: set `no_call_site: true`
+    (or anchor the callee's `return` statement when that aids drilling) — either is fine; silence is not.
 - Phase 3.5 Re-balance reconcile (lead, not delegated — runs ONCE, after the trace). The grouping was
   cut at Phase 2 **before any edge existed**, so re-check it now against the real graph: run
   `coyodex balance` and reconcile each finding — apply a Drilling-deeper operation (nest / promote /
@@ -499,7 +546,9 @@ synthesis → parallel trace.**
   unknown suite by default. The table is always produced; it must never ship empty.
 - Phase 4 Adversarial verify (fan out, **fresh context**). After the map validates and `coyodex audit`
   runs (fix any blocking `why:`-ref contradiction; reconcile the read-before-create / actor advisories),
-  take the audit's **L2 grounding worklist** and disprove it against the code. **Batch by theme/risk,
+  take the audit's **L2 grounding worklist** and disprove it against the code (read it with
+  `coyodex audit --json` — the machine-readable `{findings, worklist}` payload built for this
+  batching step; never regex-parse the human report). **Batch by theme/risk,
   don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group the claims into a
   handful of themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage), one
   fresh-context skeptic per batch, and for the riskiest claims (auth, scoping, encryption) run **N
@@ -586,6 +635,12 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > `«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «repo» «your-fragment».json` and fix every row
 > it reports until it exits clean — this catches schema / anchor-format / extra-key / missing-file
 > errors in YOUR context (in parallel), so nothing bounces back from the lead's `assemble`.
+> If the lint prints `warning:` lines (advisory), either FIX them or **repeat them verbatim in your
+> reply with one line of justification each** — never silently shrug an advisory off; the lead must
+> not rediscover a warning your own lint already showed you.
+> **Anchor the operative statement** — the call / write / enforce line itself — **never the enclosing
+> `def`/class header** (the most common anchor-drift the adversarial pass finds).
+> Your AGENT_ID is your fragment's **filename stem only** — never a field inside the JSON.
 > **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
 > also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
 > `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
@@ -651,14 +706,18 @@ git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is c
 - **Code committed** (empty output) → record the pin from HEAD:
   `git -C <repo> rev-parse --short HEAD` (the sha) and
   `git -C <repo> show -s --format=%cs HEAD` (its commit date, `YYYY-MM-DD`).
-- **Uncommitted code** → STOP and give the user a choice, then **loop**:
+- **Uncommitted code** → first LOOK at the diff. When it is **trivial** — comments and/or
+  whitespace only, no code lines (`git -C <repo> diff -w --ignore-blank-lines -- . ':(exclude).coyodex'`
+  empty, and any untracked files are non-source) — do NOT block: proceed automatically as **B**
+  below and note the pin choice + the trivial diff in your report (a build once lost ~2 hours
+  blocked on a single stray scratch comment). Otherwise STOP and give the user a choice, then **loop**:
   - **A (recommended)** — commit (or stash) the code first, so the baseline corresponds to a
     real commit; then re-check and record the pin as above.
   - **B** — proceed without committing, but record that the code was dirty: pin the sha with a
     `-dirty` suffix (`<short-sha>-dirty`), date = HEAD's commit date.
 
-  Re-run the check after each round; only continue when the code is committed (A) **or** the user
-  explicitly chose B.
+  Re-run the check after each round; only continue when the code is committed (A), the user
+  explicitly chose B, **or** the auto-B trivial-diff rule above applied.
 
 Write the pin into the model's **`commit`** / **`committed`** / **`built`** fields (sha · commit
 date · build time — the header fragment carries them; the generated views render them as the map's

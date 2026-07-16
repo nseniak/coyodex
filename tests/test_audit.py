@@ -11,6 +11,7 @@ Stdlib-only — no pytest required. Run either way (needs an editable install: `
 """
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 import tempfile
@@ -1351,6 +1352,20 @@ def test_clean_map_passes_the_cli() -> None:
     code, out = run_audit(make_precedence_map(bad=False))
     assert code == 0, out
     assert "AUDIT PASSED" in out, out
+
+
+def test_audit_json_output_is_machine_readable() -> None:
+    # --json emits {findings, worklist} — the Phase-4 skeptic-batching payload (no regex-parsing
+    # the human report). Same exit-code semantics as the text mode.
+    with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as f:
+        f.write(make_precedence_map(bad=False))
+        path = f.name
+    r = subprocess.run([*AUDIT, path, "--json"], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    payload = json.loads(r.stdout)
+    assert set(payload) == {"findings", "worklist"}
+    assert all({"claim", "anchor", "detail", "why_risky"} <= set(w) for w in payload["worklist"])
+    assert all({"check", "severity", "location", "message"} <= set(fi) for fi in payload["findings"])
 
 
 def test_cc_routed_read_is_a_known_gap() -> None:

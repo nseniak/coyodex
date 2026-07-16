@@ -112,7 +112,11 @@ Semantics, stated on the fields:
   validator only warns past a handful of levels, as an "is each level pulling its weight?" nudge,
   and (advisory, never blocking) when a diagram's immediate-children count leaves the fan-out band —
   the balance guidance in [method.md](../method.md) ("Diagram balance — the fan-out rule"); a
-  justified exception is recorded in `extras` under a **"Balance exceptions"** heading.
+  justified exception is recorded in `extras` under a **"Balance exceptions"** heading — which
+  accepts diagram ids (fan-out), `UCn`/`SFn` (flow step band), `Cn` (altitude nudge), and the
+  literal `granularity` (component-count-vs-E advisory). A deliberately-kept flow duplication is
+  recorded under an **"Accepted duplications"** heading as `UCa & UCb: <why>` — both headings are
+  machine-read by `validate`, so an adjudicated advisory goes quiet instead of re-firing forever.
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).
   Duplicated authored rows are preserved as authored (the graph views de-duplicate by
   `(src, verb, dst)`). An edge's `why` is the canonical relationship rationale — distinct from a

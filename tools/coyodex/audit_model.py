@@ -19,6 +19,7 @@ audit vocabulary — severities, verb sets, Finding/WorkItem, the report formatt
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from dataclasses import dataclass, field
@@ -451,12 +452,15 @@ def _format(findings: list[Finding], worklist: list[WorkItem], verbose: bool = F
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex audit [.coyodex/project-map.json] [--verbose]\n\n"
+        print("usage: coyodex audit [.coyodex/project-map.json] [--verbose] [--json]\n\n"
               "The adversarial pass over a model map: L1 deterministic self-contradiction\n"
               "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.\n"
-              "--verbose adds each worklist claim's `risk:` rationale (collapsed by default).")
+              "--verbose adds each worklist claim's `risk:` rationale (collapsed by default).\n"
+              "--json emits {findings, worklist} as machine-readable JSON — the shape the Phase-4\n"
+              "skeptic-batching workflow consumes (no more regex-parsing the human report).")
         return 0
     verbose = "--verbose" in argv
+    as_json = "--json" in argv
     args = [a for a in argv if not a.startswith("-")]
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():
@@ -469,7 +473,15 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     findings = audit_model(m)
     worklist = l2_worklist_model(m)
-    print(_format(findings, worklist, verbose=verbose))
+    if as_json:
+        print(json.dumps({
+            "findings": [{"check": f.check, "severity": f.severity, "location": f.location,
+                          "message": f.message} for f in findings],
+            "worklist": [{"claim": w.claim, "anchor": w.anchor, "detail": w.detail,
+                          "why_risky": w.why_risky} for w in worklist],
+        }, indent=1, ensure_ascii=False))
+    else:
+        print(_format(findings, worklist, verbose=verbose))
     return 1 if any(f.severity == CONTRADICTION for f in findings) else 0
 
 

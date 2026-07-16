@@ -69,6 +69,32 @@ def test_lint_surfaces_fk_heuristic_as_nonfatal_warning():
     assert not any("FK→E2" in p for p in lint_fragment.lint_fragment_problems(m, None))
 
 
+def test_fragment_rejects_malformed_ids_at_load():
+    # 'S1a' used to pass fragment lint and die at the LEAD's validate — the exact shift-left failure
+    # this module exists to prevent; the id-shape rule now runs at load_fragment too
+    try:
+        make_fragment({"subsystems": [{"id": "S1a", "name": "Nested"}]})
+        raise AssertionError("expected ModelError")
+    except lint_fragment.ModelError as e:
+        assert "S1a" in str(e) and "valid S-id" in str(e)
+
+
+def test_lint_flags_unknown_prefix_target():
+    # 'SEC1' is id-shaped but its prefix is outside the vocabulary — it can never resolve, so it is
+    # a fragment bug, catchable without the whole map
+    m = make_fragment({"tests": [{"targets": ["SEC1"], "label": "auth", "tested": "no"}]})
+    assert any("SEC1" in p and "unknown id prefix" in p
+               for p in lint_fragment.lint_fragment_problems(m, None))
+
+
+def test_lint_unknown_references_against_ids_universe():
+    # with --ids (the lead's legend), an INVENTED id dies in the authoring agent's own turn
+    m = make_fragment({"tests": [{"targets": ["C112", "C111"], "label": "x", "tested": "no"}]})
+    problems = lint_fragment.lint_unknown_references(m, {"C111"})
+    assert len(problems) == 1 and "C112" in problems[0] and "C111" not in problems[0]
+    assert lint_fragment.lint_unknown_references(m, {"C111", "C112"}) == []
+
+
 def test_lint_granularity_warnings_are_nonfatal():
     # A 16-step flow is a granularity ADVISORY — it must ride the non-failing warnings path, never
     # fail the fragment (a long flow may be the lead's call, not the authoring agent's bug).

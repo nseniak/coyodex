@@ -419,6 +419,54 @@ def test_shared_run_detector_finds_literal_duplication():
     assert any("share a run of 4 identical steps" in w for w in warnings_of(m))
 
 
+def test_shared_run_with_different_wheres_is_quiet():
+    # endpoint-only matching called "stores X" and "loads Y" duplicates (seen on a live map) —
+    # steps are identical only when src, dst AND grounding match
+    m = make_valid_model()
+    m.use_cases.append(UseCase(id="UC2", name="Audit order", actors=["R1"]))
+    mk = lambda base: [FlowStep(n=i, src="C1", dst=("E1" if i % 2 else "D1"), phrase=f"s{i}",
+                                where=f"src/{base}.py:{i}") for i in range(1, 5)]
+    m.flows = [Flow(uc="UC1", title="a", steps=mk("a")),
+               Flow(uc="UC2", title="b", steps=mk("b"))]  # same endpoints, different call sites
+    assert not any("identical steps" in w for w in warnings_of(m))
+
+
+def test_shared_run_through_actor_step_is_quiet():
+    # a run containing an actor step is unextractable by rule (sub-flows can't hold actor
+    # endpoints) — "extract a sub-flow" would be impossible advice, so the run must not report
+    m = make_valid_model()
+    m.use_cases.append(UseCase(id="UC2", name="Audit order", actors=["R1"]))
+    shared = [FlowStep(n=1, src="R1", dst="C1", phrase="asks"),
+              FlowStep(n=2, src="C1", dst="E1", phrase="reads", where="src/v.py:2"),
+              FlowStep(n=3, src="R1", dst="C1", phrase="asks again"),
+              FlowStep(n=4, src="C1", dst="D1", phrase="queries", where="src/v.py:4")]
+    m.flows = [Flow(uc="UC1", title="a", steps=list(shared)),
+               Flow(uc="UC2", title="b", steps=list(shared))]  # identical, but actor-interleaved
+    assert not any("identical steps" in w for w in warnings_of(m))
+
+
+def test_accepted_duplication_heading_silences_the_pair():
+    m = make_valid_model()
+    m.use_cases.append(UseCase(id="UC2", name="Audit order", actors=["R1"]))
+    shared = [FlowStep(n=i, src="C1", dst=("E1" if i % 2 else "D1"), phrase=f"s{i}",
+                       where=f"src/v.py:{i}") for i in range(1, 5)]
+    m.flows = [Flow(uc="UC1", title="a", steps=shared),
+               Flow(uc="UC2", title="b", steps=list(shared))]
+    assert any("identical steps" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Accepted duplications",
+                             body="UC1 & UC2: the UI-kickoff prefix is deliberate, not machinery.")]
+    assert not any("identical steps" in w for w in warnings_of(m))
+
+
+def test_altitude_nudge_silenced_by_component_exception():
+    m = make_valid_model()
+    m.components[0].purpose = "ports, adapters, stores, loaders, mappers, codecs"  # 6 bare sub-units
+    assert any("consider promoting C1" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="C1: a legitimate family roster, not hidden subsystems.")]
+    assert not any("consider promoting C1" in w for w in warnings_of(m))
+
+
 def test_short_shared_run_is_quiet():
     m = make_valid_model()
     m.use_cases.append(UseCase(id="UC2", name="Audit order", actors=["R1"]))

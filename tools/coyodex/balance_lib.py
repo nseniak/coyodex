@@ -154,15 +154,16 @@ def is_homogeneous(m: ProjectModel, children: list[str]) -> bool:
 # ── the always-on advisory (validate hook) ───────────────────────────────────────────────────────
 
 def _exceptions(m: ProjectModel) -> set[str]:
-    """Ids the operator has durably justified ('root', 'S7', 'UC5', …) in an extras block headed
-    'Balance exceptions'. Diagram ids silence fan-out warnings here; UC/SF ids silence the
-    flow-length band in validate's granularity warnings (consumed only as skip-sets, so the two
-    families can't cross-silence anything)."""
+    """Ids the operator has durably justified ('root', 'S7', 'UC5', 'C18', 'granularity', …) in an
+    extras block headed 'Balance exceptions'. Diagram ids silence fan-out warnings here; UC/SF ids
+    silence the flow-length band; C ids silence the promote-to-subsystem altitude nudge; the
+    literal `granularity` silences the component-count-vs-E advisory (all consumed only as
+    skip-sets, so the families can't cross-silence anything). Without a machine-readable escape a
+    justified advisory re-fires forever — and worse, invites rewording prose to dodge a heuristic."""
     out: set[str] = set()
     for x in m.extras:
         if x.heading.strip().lower() == _EXCEPTIONS_HEADING:
-            out.update(t.lower() if t.lower() == "root" else t
-                       for t in re.findall(r"\b(?:root|SD\d+|SF\d+|UC\d+|S\d+)\b", x.body))
+            out.update(re.findall(r"\b(?:root|granularity|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b", x.body))
     return out
 
 

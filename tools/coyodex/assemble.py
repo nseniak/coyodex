@@ -27,6 +27,7 @@ from pathlib import Path
 from coyodex.model import (
     FORMAT,
     ID_ARRAYS,
+    ID_SHAPE,
     ModelError,
     ProjectModel,
     _build,
@@ -38,7 +39,10 @@ _SINGLETONS = ("title", "goal", "commit", "committed", "built", "tests_note")
 
 def load_fragment(text: str, label: str) -> ProjectModel:
     """A fragment parsed + structurally validated as a partial model. `format` defaults to the
-    current one so agents don't have to state it; everything else validates exactly like the map."""
+    current one so agents don't have to state it; everything else validates exactly like the map —
+    INCLUDING the id-shape/prefix rule (`S1a` in a fragment must die at the authoring agent's own
+    `lint-fragment`, not a phase later at the lead's validate — the shift-left this module exists
+    for; the rule was previously run only by `load_model`)."""
     try:
         data = json.loads(text)
     except json.JSONDecodeError as e:
@@ -48,7 +52,15 @@ def load_fragment(text: str, label: str) -> ProjectModel:
     data.setdefault("format", FORMAT)
     if data["format"] != FORMAT:
         raise ModelError(f"{label}: format: expected '{FORMAT}', got {data['format']!r}")
-    return _build(data, ProjectModel, label)
+    m = _build(data, ProjectModel, label)
+    for attr, prefix in ID_ARRAYS.items():
+        for i, el in enumerate(getattr(m, attr)):
+            eid = el.id
+            good = bool(ID_SHAPE.match(eid)) and re.match(r"[A-Z]+", eid).group(0) == prefix  # type: ignore[union-attr]
+            if not good:
+                raise ModelError(f"{label}: $.{attr}[{i}].id: '{eid}' is not a valid {prefix}-id "
+                                 f"(a schema id is the prefix + digits only, e.g. {prefix}3)")
+    return m
 
 
 def merge_fragments(parts: list[tuple[str, ProjectModel]]) -> tuple[ProjectModel, list[str]]:
@@ -266,7 +278,9 @@ def _unconsumed_fragment_notes(out_dir: Path, consumed: list[Path]) -> list[str]
     consumed_resolved = {p.resolve() for p in consumed}
     strays = [f for f in sorted(frag_dir.glob("*.json")) if f.resolve() not in consumed_resolved]
     return [f"note: {frag_dir / f.name} is in build-fragments/ but was NOT assembled — a sub-agent may "
-            "have written to the wrong path, or it is stale; pass it or delete it." for f in strays]
+            "have written to the wrong path, or it is stale; pass it, delete it, or move a "
+            "superseded raw fragment into build-fragments/raw/ (subdirectories are not scanned)."
+            for f in strays]
 
 
 if __name__ == "__main__":
