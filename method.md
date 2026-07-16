@@ -115,7 +115,13 @@ the spine; built after harvest + at least one full trace.
 Connect each use case to the T1/T2/T5 elements its **flow** touches, **and** the converse, so the
 reader can drill down (use case → elements) and step back (element → use cases). ONE source — the
 **T6 flow steps** — both views derived; don't store links twice (they drift). A flow step's
-endpoints (a component, dep, or entity) ARE the touches. Every step carries its **own** short action
+endpoints (a component, dep, or entity) ARE the touches — **entities included, so a flow AUTHORS
+its central entity touches as steps** (the entity-steps rule under T6): an entity's `Used in UC`
+view exists only because flow steps name it. Deriving it **transitively** instead (flow touches a
+component → tag every entity that component's edges touch) is rejected: an edge is an *aggregate*
+of the component's whole behavior while a step is one scenario's interaction, so transitive tags
+smear — measured on a live map, a third of the reachable entities would be tagged into more than
+half of all use cases. Every step carries its **own** short action
 text describing what happens at that point in the scenario — the same pair of elements can be used by
 several steps that mean different things, so a shared pair-level edge label can't describe each one;
 the step describes itself.
@@ -202,6 +208,23 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     Actor steps (a Role endpoint — a human action) need none, though a `where` is welcome when the
     handler line is clear. Step numbers `n` must be unique within a flow (`validate` blocks) — they
     identify the step for impact and navigation.
+  - **Entity steps — author the flow's CENTRAL entity touches (1–2 per flow).** The entities whose
+    read/write IS the scenario's outcome or decision appear as their own steps — `C5 → E2 : upserts
+    the Membership document @ repo.py:155` — not only as backbone edges: the entity `Used in UC`
+    view and line-level diff impact derive from steps, so a flow that narrates only components
+    leaves the whole domain model untraceable (a live rebuild shipped exactly that, all gates
+    green — `validate` now warns when NO flow touches any entity; a map whose flows legitimately
+    touch none records the literal `entity-flows` under `Balance exceptions`). *Central* means the
+    join flow's Membership upsert or the tool-call flow's RoleSettings decision + AuditEntry append
+    — NOT every config read along the way (those stay edges; tagging them all is the transitive
+    smear again, hand-authored). Each entity step **rides an existing `C→E` backbone edge** (the
+    edge is the aggregate claim, the step this scenario's instance — `validate` warns on an entity
+    step no edge backs), carries the ordinary element↔element `where` (the operative read/write
+    line in the `from` side's code), and obeys the same false-reads rule as `C→E` edges (the
+    entity TYPE at the site, not a string extracted from it). A shared sub-flow is the leverage
+    point: one entity step there serves every referencing flow. Entity steps are ordinary authored
+    steps — they count toward the 3–15 band; a flow already at the band edge extracts a sub-flow
+    or records its exception rather than dropping the entity touch.
   - **Steps can go *backward*, not just forward.** A flow isn't only the request chain — record the
     return-direction interactions where they carry meaning: the **response the actor sees** (the use
     case's outcome), an **error / fallback** path, a **callback or event** the callee fires back. A step
@@ -539,20 +562,30 @@ synthesis → parallel trace.**
   defect. Only what survives the full trace is a finding.)
 - Phase 3 Trace (fan out, one agent per use case; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
-  Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps) and also
-  records the **`C→E` edges** for the components in its slice — the entities they persist/write/read by
-  **direct** use — so structural entity-usage is captured at component granularity, not only
-  behaviorally via the flow steps. This is *additional*: the `C↔C`/`C↔D` edges
+  Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps —
+  **including the flow's central entity touches as `C→E` steps**, the entity-steps rule under T6)
+  and also records the **`C→E` edges** for the components in its slice — the entities they
+  persist/write/read by **direct** use. Steps and edges carry different halves of entity usage:
+  the edges are the structural aggregate (every entity a component touches, in any scenario); the
+  steps are the behavioral instance (THE entity this scenario is about, at its exact line) — the
+  `Used in UC` view and line-level diff impact derive from the steps, so edges alone leave the
+  domain model untraceable. This is *additional*: the `C↔C`/`C↔D` edges
   remain the primary output and must stay complete (every dep wired, the component graph not sparse).
   Trace-prompt discipline (all proven on live builds):
   - **Prescribe likely sub-flows in the prompts.** The lead can usually see from the use-case list
     which machinery is shared ("UC10 and UC13 walk the same tool-call path — EXTRACT it as a
     sub-flow") — say so explicitly; the duplication detector is the safety net, not the plan.
+  - **Name `En` as a valid step endpoint in the prompts, with a worked example step** — e.g.
+    `6a. C5 → E2 : upserts the Membership document @ repo.py:155` — and require each flow's 1–2
+    central entity touches (a live rebuild whose prompts channeled ALL entity mentions into the
+    edges array shipped a domain model with zero flow traceability, every gate green). The
+    callee's operative read/write line is one hop from the call site the agent already read for
+    the calling step's `where`.
   - **Assign each trace agent an `SFn` id range** (SF1–9, SF10–19, …), exactly like the per-agent
     component id ranges, so parallel extractions never collide.
-  - **A `C→E` `reads` edge requires the entity TYPE at the site** — a function operating on a
-    string/field extracted from an entity is not reading the entity (the false-reads class the
-    grounding pass keeps refuting).
+  - **A `C→E` `reads` edge — or entity step — requires the entity TYPE at the site** — a function
+    operating on a string/field extracted from an entity is not reading the entity (the
+    false-reads class the grounding pass keeps refuting).
   - When the lead has assembled a legend or an earlier map, pass `--ids «legend»` to each agent's
     `lint-fragment` self-check, so a plausible-but-invented element id dies in the agent's own turn.
   - A **return-direction step** usually has no invoking line of its own: set `no_call_site: true`

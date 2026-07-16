@@ -228,7 +228,13 @@ SOURCE: [file](path/sub:1)
      Separators inside a line are `·`, never raw `|`.
      A step may go BACKWARD too: a `to` that is an earlier participant renders right-to-left. Record
      the meaningful returns — the response the actor sees, an error/fallback, a callback/event — as
-     authored steps (step 5 below). Don't echo every call with a return. -->
+     authored steps (step 5 below). Don't echo every call with a return.
+     ENTITY STEPS (required): author each flow's 1-2 CENTRAL entity touches as C→E steps — the
+     read/write that IS the scenario's outcome or decision (SF1 step 1 below is the shape:
+     `C2 → E1 : upserts the <Entity> row @ repo.py:88`). The entity "Used in UC" view and diff
+     impact derive from steps only; `validate` warns when no flow touches any entity. Every
+     entity step rides an existing C→E backbone edge (validate warns otherwise). Fine-grain
+     config reads stay edges — don't tag every entity a component ever touches. -->
 
 **UC1 — <flow title>**
 1. <Role> → C1 : <what the actor does>

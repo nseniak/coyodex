@@ -447,7 +447,7 @@ def external_entry_points(m: ProjectModel) -> list[EntryPoint]:
             if grammar.effective_activation(ep.activation, ep.kind) == "external"]
 
 
-def flow_endpoint_components(m: ProjectModel) -> set[str]:
+def flow_endpoint_ids(m: ProjectModel) -> set[str]:
     """Every element id appearing as a step endpoint in any flow, sub-flow references expanded
     (`model.expanded_flow_steps`) — what the traced use cases actually touch."""
     out: set[str] = set()
@@ -459,6 +459,13 @@ def flow_endpoint_components(m: ProjectModel) -> set[str]:
     return out
 
 
+def flow_touched_entities(m: ProjectModel) -> set[str]:
+    """Entity ids appearing as a step endpoint in any flow (sub-flows expanded) — the entities
+    with real flow-derived 'Used in UC' traceability. Shared by the no-entity-in-any-flow canary
+    and the eval profile, so the two can never diverge."""
+    return {end for end in flow_endpoint_ids(m) if end.startswith("E")}
+
+
 def unclaimed_external_entry_points(m: ProjectModel) -> list[EntryPoint]:
     """Externally-activated entry points whose owning component appears as an endpoint in NO
     flow — each is a missing use case or a dead surface. Empty when the map has no flows yet
@@ -467,7 +474,7 @@ def unclaimed_external_entry_points(m: ProjectModel) -> list[EntryPoint]:
     skipped. Shared by the validate advisory and the eval profile — one implementation."""
     if not m.flows:
         return []
-    claimed = flow_endpoint_components(m)
+    claimed = flow_endpoint_ids(m)
     comp_ids = {c.id for c in m.components}
     return [ep for ep in external_entry_points(m)
             if (comp := ep.component.strip()) and comp in comp_ids and comp not in claimed]
@@ -508,6 +515,12 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
         escape = the C id recorded under an **'Unclaimed surfaces'** extras heading;
       * an external entry point owned by no component at all (unclaimable by construction);
       * a use case with no T6 flow — a phantom capability (stale docs) or a missing trace;
+      * NO entity in any flow step (map-wide canary): the domain model then has zero flow-derived
+        'Used in UC' traceability — the method prescribes authoring each flow's CENTRAL entity
+        touches as C→E steps; escape = the literal `entity-flows` under 'Balance exceptions';
+      * an entity step no backbone edge backs (a C+E step pair, matched undirected, with no C→E
+        edge): the step claims entity use the aggregate layer doesn't — add the edge or fix the
+        step (no escape: both remedies are cheap and unambiguous);
       * a role that drives no use case and appears in no flow — a dead role;
       * a role with no ON-SPINE use case, and an off-spine use case left unrecorded — both
         adjudicated under a **'Happy Path coverage'** extras heading (the escape IS the record the
@@ -544,6 +557,36 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
             if u.id not in with_flow:
                 warnings.append(f"{u.id} ({u.name}) has no T6 flow — a phantom capability "
                                 "(stale docs?) or a missing trace; trace it or drop it")
+    # The no-entity canary: a whole deliverable (the domain model's flow-derived 'Used in UC'
+    # view) can otherwise go missing with every gate green — a live rebuild shipped exactly that.
+    if (m.flows and m.entities and not flow_touched_entities(m)
+            and "entity-flows" not in balance_lib._exceptions(m)):
+        warnings.append(
+            "No flow step touches any entity — the domain model has no flow-derived 'Used in UC' "
+            "traceability, and an entity-code change can't reach a use case in impact. Author "
+            "each flow's central entity touches as C→E steps (method.md, T6 entity steps), or "
+            "record the literal `entity-flows` under a 'Balance exceptions' extras heading")
+    # An entity step must ride a C→E backbone edge (the edge = the aggregate claim, the step =
+    # this scenario's instance). Matched UNDIRECTED so a return-direction `E → C` step rides the
+    # same edge; C↔C pairs stay unchecked (return steps legitimately match no edge there).
+    # Guarded on m.edges: pre-edge-trace partials are not "unbacked", they are not yet traced.
+    if m.edges:
+        edge_pairs = {frozenset((e.src, e.dst)) for e in m.edges}
+        containers = ([(f"{f.uc} flow step", f.steps) for f in m.flows]
+                      + [(f"{sf.id} step", sf.steps) for sf in m.subflows])
+        for prefix, steps in containers:
+            for st in steps:
+                if st.subflow:
+                    continue  # a reference step grounds through the sub-flow's own steps
+                if not (grammar.is_step_id(st.src) and grammar.is_step_id(st.dst)):
+                    continue  # an actor step — a Role DISPLAY NAME ("End user") may start with
+                    # E/C, so kinds are only read off endpoints known to be element ids
+                kinds = {"E" if end.startswith("E") else
+                         "C" if end.startswith("C") else "?" for end in (st.src, st.dst)}
+                if kinds == {"C", "E"} and frozenset((st.src, st.dst)) not in edge_pairs:
+                    warnings.append(
+                        f"{prefix} {st.n}: {st.src} → {st.dst} claims entity use the backbone "
+                        "doesn't — add the C→E edge (direct use only), or fix the step")
     if m.use_cases and m.roles and m.flows:  # flows gate the dead-role call too: a mid-flow-only
         # role (an approver, a notified party) is only visible once tracing has begun — judging it
         # "dead" before any flow exists would be a guaranteed pre-trace false positive

@@ -746,14 +746,48 @@ def test_off_spine_ucs_is_none_without_a_happy_path() -> None:
     assert p.off_spine_ucs is None, p
 
 
+def test_entities_in_flows_zero_when_flows_never_touch_them() -> None:
+    # the fixture has entities + flows but no E-endpoint step: traced-and-zero, NOT None
+    # (the canary deliberately adds one validate warning on this shape — report-only here)
+    p = build_profile(make_counts_map())
+    assert p.entities_in_flows == 0 and p.entities_in_flows_pct == 0.0, p
+
+
+def test_entities_in_flows_counts_expanded_step_endpoints() -> None:
+    # one direct entity step + one reachable ONLY through a sub-flow reference — the count walks
+    # expanded steps, so both entities register (2 of 2)
+    d = json.loads(make_counts_map())
+    d["flows"][0]["steps"].append({"n": 2, "src": "C1", "dst": "E1",
+                                   "phrase": "persists the order", "where": "src/a.py:9"})
+    d["subflows"] = [{"id": "SF1", "name": "Line persist",
+                      "steps": [{"n": 1, "src": "C2", "dst": "E2",
+                                 "phrase": "writes the line", "where": "src/b.py:3"}]}]
+    d["flows"][1]["steps"].append({"n": 2, "src": "C2", "dst": "C2", "subflow": "SF1"})
+    p = build_profile(json.dumps(d))
+    assert p.entities_in_flows == 2 and p.entities_in_flows_pct == 100.0, p
+
+
+def test_entities_in_flows_is_none_without_entities_or_flows() -> None:
+    d = json.loads(make_counts_map())
+    d["flows"] = []
+    p = build_profile(json.dumps(d))
+    assert p.entities_in_flows is None and p.entities_in_flows_pct is None, p
+    d = json.loads(make_counts_map())
+    d["entities"] = []
+    p = build_profile(json.dumps(d))
+    assert p.entities_in_flows is None and p.entities_in_flows_pct is None, p
+
+
 def test_old_baseline_without_completeness_fields_loads() -> None:
     p = build_profile(make_counts_map())
     d = json.loads(p.to_json())
-    for k in ("entry_points", "external_entry_points", "unclaimed_entry_points", "off_spine_ucs"):
+    for k in ("entry_points", "external_entry_points", "unclaimed_entry_points", "off_spine_ucs",
+              "entities_in_flows", "entities_in_flows_pct"):
         d.pop(k)
     old = MapProfile.from_json(json.dumps(d))
     assert old.entry_points is None and old.unclaimed_entry_points is None
     assert old.external_entry_points is None and old.off_spine_ucs is None
+    assert old.entities_in_flows is None and old.entities_in_flows_pct is None
 
 
 def test_concept_name_sets_are_captured() -> None:

@@ -88,6 +88,12 @@ class MapProfile:
     unclaimed_entry_points: int | None = None  # external EPs whose component no flow reaches;
     #                                            None when the map has no entry points or no flows
     off_spine_ucs: int | None = None           # use cases with no HP position; None when HP empty
+    entities_in_flows: int | None = None       # distinct entities appearing as a flow-step
+    #                                            endpoint (sub-flows expanded) — the flow-derived
+    #                                            'Used in UC' coverage of the domain model
+    entities_in_flows_pct: float | None = None  # share of all entities; both fields None when the
+    #                                            map has no entities or no flows (an untraced map
+    #                                            is "not yet traced", not "traced and zero")
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
     use_case_names: list[str] = field(default_factory=list)
@@ -150,6 +156,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
                  if m.entry_points and m.flows else None)
     off_spine = (sum(1 for u in m.use_cases if u.id not in {g.uc for g in m.happy_path})
                  if m.happy_path else None)
+    e_in_flows = (len(validate_model.flow_touched_entities(m))
+                  if m.entities and m.flows else None)
 
     return MapProfile(
         use_cases=len({u.id for u in m.use_cases}),
@@ -183,6 +191,9 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         external_entry_points=n_external,
         unclaimed_entry_points=unclaimed,
         off_spine_ucs=off_spine,
+        entities_in_flows=e_in_flows,
+        entities_in_flows_pct=(round(100 * e_in_flows / len(m.entities), 1)
+                               if e_in_flows is not None else None),
         auth_surfaces=surfaces,
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],
@@ -216,7 +227,10 @@ def _format(p: MapProfile) -> str:
          if p.entry_points is None else
          f"  completeness: entry points {p.entry_points} ({p.external_entry_points} external, "
          f"{'n/a' if p.unclaimed_entry_points is None else p.unclaimed_entry_points} unclaimed) "
-         f"· off-spine UCs {'n/a' if p.off_spine_ucs is None else p.off_spine_ucs} (report-only)"),
+         f"· off-spine UCs {'n/a' if p.off_spine_ucs is None else p.off_spine_ucs} "
+         f"· entities in flows "
+         f"{'n/a' if p.entities_in_flows is None else f'{p.entities_in_flows} ({p.entities_in_flows_pct}%)'} "
+         f"(report-only)"),
     ])
 
 

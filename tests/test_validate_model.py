@@ -629,6 +629,88 @@ def test_hp_coverage_checks_are_silent_without_a_happy_path():
     assert not any("on-spine use case" in w for w in warns)
 
 
+# --- entity-in-flows completeness (the canary + the unbacked-entity-step advisory) ---
+
+
+def test_entity_flow_canary_fires_and_escape_silences():
+    m = make_valid_model()  # has entities + a flow, but no entity step
+    assert any("No flow step touches any entity" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="entity-flows: pure orchestration layer, no domain reads/writes.")]
+    assert not any("No flow step touches any entity" in w for w in warnings_of(m))
+
+
+def test_entity_step_silences_the_canary():
+    m = make_valid_model()
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="E1", phrase="reads the order",
+                                     where="src/v.py:5"))  # rides the C1 reads E1 edge
+    warns = warnings_of(m)
+    assert not any("No flow step touches any entity" in w for w in warns)
+    assert not any("claims entity use" in w for w in warns)  # edge-backed → quiet
+
+
+def test_entity_step_only_in_subflow_silences_the_canary():
+    m = make_valid_model()
+    m.subflows = [SubFlow(id="SF1", name="Persist pipeline",
+                          steps=[FlowStep(n=1, src="C1", dst="E1", phrase="writes",
+                                          where="src/v.py:5")])]
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="C1", subflow="SF1"))
+    assert not any("No flow step touches any entity" in w for w in warnings_of(m))
+
+
+def test_canary_is_silent_without_entities_or_without_flows():
+    m = make_valid_model()
+    m.entities = []
+    m.edges = [e for e in m.edges if not e.dst.startswith("E")]
+    assert not any("No flow step touches any entity" in w for w in warnings_of(m))
+    m = make_valid_model()
+    m.flows = []
+    assert not any("No flow step touches any entity" in w for w in warnings_of(m))
+
+
+def test_unbacked_entity_step_warns():
+    m = make_valid_model()
+    m.edges = [Edge(src="C1", verb="uses", dst="D1", why="query", where="src/v.py:7")]
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="E1", phrase="reads the order",
+                                     where="src/v.py:5"))  # no C1↔E1 edge backs it now
+    assert any("UC1 flow step 2" in w and "claims entity use the backbone doesn't" in w
+               for w in warnings_of(m))
+
+
+def test_return_direction_entity_step_matches_the_edge_undirected():
+    m = make_valid_model()  # C1 reads E1 edge present
+    m.flows[0].steps.append(FlowStep(n=2, src="E1", dst="C1", phrase="returns the loaded order",
+                                     no_call_site=True))
+    assert not any("claims entity use" in w for w in warnings_of(m))
+
+
+def test_display_name_actor_step_is_not_flagged_as_unbacked():
+    # A roles-less map may use Role DISPLAY NAMES as actor endpoints ("End user → C1") — an actor
+    # name starting with E (End user, Engineer) must not read as an entity endpoint.
+    m = make_valid_model()
+    m.roles = []
+    m.use_cases[0].actors = []
+    m.flows[0].steps = [FlowStep(n=1, src="End user", dst="C1", phrase="opens the order")]
+    assert not any("claims entity use" in w for w in warnings_of(m))
+
+
+def test_cc_step_without_edge_is_not_flagged_as_unbacked():
+    # C↔C return-direction steps legitimately match no backbone edge — only C+E pairs are checked.
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Helper", purpose="helps"))
+    m.flows[0].steps.append(FlowStep(n=2, src="C2", dst="C1", phrase="returns the result",
+                                     no_call_site=True))
+    assert not any("claims entity use" in w for w in warnings_of(m))
+
+
+def test_entity_step_still_demands_a_where():
+    # guard: the element↔element `where` rule applies to C→E steps unchanged
+    m = make_valid_model()
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="E1", phrase="reads the order"))
+    assert any("UC1 flow step 2" in p and "no `where` call-site anchor" in p
+               for p in problems_of(m))
+
+
 # --- entry-point row validity (activation vocabulary + owning-component reference) ---
 
 

@@ -118,8 +118,9 @@ Semantics, stated on the fields:
   and (advisory, never blocking) when a diagram's immediate-children count leaves the fan-out band —
   the balance guidance in [method.md](../method.md) ("Diagram balance — the fan-out rule"); a
   justified exception is recorded in `extras` under a **"Balance exceptions"** heading — which
-  accepts diagram ids (fan-out), `UCn`/`SFn` (flow step band), `Cn` (altitude nudge), and the
-  literal `granularity` (component-count-vs-E advisory). A deliberately-kept flow duplication is
+  accepts diagram ids (fan-out), `UCn`/`SFn` (flow step band), `Cn` (altitude nudge), the
+  literal `granularity` (component-count-vs-E advisory), and the literal `entity-flows` (the
+  no-entity-in-any-flow canary — for a map whose flows legitimately touch no entity). A deliberately-kept flow duplication is
   recorded under an **"Accepted duplications"** heading as `UCa & UCb: <why>`. Two more machine-read
   headings serve the **use-case & Happy-Path completeness** advisories: **"Unclaimed surfaces"**
   (`Cn: <why>` lines — this component's externally-activated entry points are a deliberate
@@ -144,7 +145,14 @@ Semantics, stated on the fields:
   `src` never directly calls `dst`). This mirrors `deps[].deployment_linked`: an honest, conscious
   "no code call site here", never a silent null. Setting both `no_call_site` and a `where` is
   contradictory (an advisory warning).
-- **`flows[].steps`**: an endpoint is an element ID or a **Role id `Rn`** (an actor step). Every step
+- **`flows[].steps`**: an endpoint is an element ID or a **Role id `Rn`** (an actor step). **Entity
+  endpoints are expected, not just allowed**: each flow authors its 1–2 CENTRAL entity touches as
+  `C→E` steps (method.md, T6 entity steps) — the entity `Used in UC` view and line-level diff
+  impact derive from steps only, and `validate` warns when no flow touches any entity (escape:
+  the literal `entity-flows` under 'Balance exceptions'). An entity step rides an existing `C→E`
+  backbone edge — the edge is the aggregate claim, the step this scenario's instance; `validate`
+  warns on an entity step no edge backs (matched undirected, so a return-direction `E → C` step
+  rides the same edge). Every step
   carries its own `phrase` — a short action describing what happens at that point — which the flow arrow
   and narrative render from. A step does NOT reuse the backbone edge's label: one element pair can appear
   in several steps meaning different things, so a shared edge label can't describe each; the step

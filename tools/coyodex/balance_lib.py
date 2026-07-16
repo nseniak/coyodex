@@ -166,12 +166,15 @@ def _exceptions(m: ProjectModel) -> set[str]:
     """Ids the operator has durably justified ('root', 'S7', 'UC5', 'C18', 'granularity', …) in an
     extras block headed 'Balance exceptions'. Diagram ids silence fan-out warnings here; UC/SF ids
     silence the flow-length band; C ids silence the promote-to-subsystem altitude nudge; the
-    literal `granularity` silences the component-count-vs-E advisory (all consumed only as
-    skip-sets, so the families can't cross-silence anything). Without a machine-readable escape a
-    justified advisory re-fires forever — and worse, invites rewording prose to dodge a heuristic."""
+    literal `granularity` silences the component-count-vs-E advisory; the literal `entity-flows`
+    silences the no-entity-in-any-flow canary (a map whose flows legitimately touch no entity —
+    a pure proxy with no domain layer traced). All consumed only as skip-sets, so the families
+    can't cross-silence anything. Without a machine-readable escape a justified advisory re-fires
+    forever — and worse, invites rewording prose to dodge a heuristic."""
     out: set[str] = set()
     for body in extras_bodies(m, _EXCEPTIONS_HEADING):
-        out.update(re.findall(r"\b(?:root|granularity|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b", body))
+        out.update(re.findall(r"\b(?:root|granularity|entity-flows|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b",
+                              body))
     return out
 
 
