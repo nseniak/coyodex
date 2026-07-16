@@ -5116,6 +5116,14 @@ function sbFileScopedItems() {
   if (!path) return null;
   const items = [];
   for (const it of codeItemsForPath(path)) {
+    // A line walked by several use cases is ONE codeItem (its name lists them all, select opens the
+    // first) so the code-tag pill can collapse them behind a picker. Search has no picker, so expand
+    // it back into one row per use case — each opens exactly its own, none left unreachable.
+    if (it.choices && it.choices.length > 1) {
+      for (const c of it.choices) items.push({ text: c.name, sub: 'line ' + it.line, line: it.line,
+        cls: 'usecase', badge: it.label, run: c.select });
+      continue;
+    }
     items.push({ text: it.name, sub: 'line ' + it.line, line: it.line,
       cls: it.kind === 'usecase' ? 'usecase' : 'component', badge: it.label, run: it.select });
   }
