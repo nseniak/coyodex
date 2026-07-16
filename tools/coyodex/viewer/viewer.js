@@ -1058,9 +1058,11 @@ function showUseCase(uc) {
 // left-align it instead: pin the label's left edge just past the arrow's leftmost point, with a small
 // padding, so a top-to-bottom read of the steps starts every label at the same x instead of one that
 // drifts with each arrow's length. getBBox() (not x1/x2) works whether the arrow is a <line> or a <path>.
-function leftAlignMessageLabels(texts, lineByIdx) {
+// `texts` and `lines` are both in document order — the i-th label pairs with the i-th arrow (see the
+// callers on why positional, not id-keyed).
+function leftAlignMessageLabels(texts, lines) {
   texts.forEach((text, i) => {
-    const line = lineByIdx[i];
+    const line = lines[i];
     if (!text || !line) return;
     let bb; try { bb = line.getBBox(); } catch (_) { return; }
     const em = parseFloat(getComputedStyle(text).fontSize) || 16;  // 1em gap, in the label's own units
@@ -1093,15 +1095,16 @@ function bindFlow(uc) {
     for (const el of parts) if (el.tagName === 'rect') applyTint(el, GRAPH.nodes[id].kind);
   }
 
-  // messages: text[i] + arrow line[i] (data-id "i<idx>") pair with steps[i] — same pairing as bindHP.
+  // messages: the i-th label (text[i]) + the i-th arrow (line[i]) pair with steps[i] — same pairing as
+  // bindHP. Pair POSITIONALLY (document order), NOT by Mermaid's `data-id="i<n>"`: that <n> is a global
+  // element counter that also advances for every sub-flow `rect` and its naming `Note`, so once the first
+  // sub-box appears the arrow ids develop gaps (…i4, i7, i8…) and an id-keyed lookup would slide every
+  // later label onto the wrong arrow's column. Notes/rects emit no `.messageText`/`.messageLine`, so the
+  // DOM order of these two selectors is exactly the message order.
   const texts = [...root.querySelectorAll('text.messageText')];
-  const lineByIdx = {};
-  root.querySelectorAll('.messageLine0, .messageLine1').forEach((ln) => {
-    const m = (ln.getAttribute('data-id') || '').match(/^i(\d+)$/);
-    if (m) lineByIdx[+m[1]] = ln;
-  });
-  leftAlignMessageLabels(texts, lineByIdx);
-  const msgEls = steps.map((_, i) => [texts[i], lineByIdx[i]].filter(Boolean));
+  const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
+  leftAlignMessageLabels(texts, lines);
+  const msgEls = steps.map((_, i) => [texts[i], lines[i]].filter(Boolean));
   for (const els of msgEls) for (const el of els) scene.dimEls.push(el);
 
   // element participants: select (focus to its messages + their other ends) / ⌘-drill to home / tooltip.
@@ -1185,7 +1188,7 @@ function bindFlow(uc) {
   steps.forEach((st, i) => {
     const els = msgEls[i];
     if (!els.length) return;
-    const text = texts[i] || null, line = lineByIdx[i] || null;
+    const text = texts[i] || null, line = lines[i] || null;
     const selKey = 'flowstep:' + uc + ':' + i;
     const doSelect = () => {
       scene.selectedKey = selKey;
@@ -2715,18 +2718,17 @@ function selectHPUseCase(scene, uc) {
 // figure/lifeline are found by participant id (data-id="GPAn") and its driven steps come from HP_ACTORS.
 function bindHP() {
   const scene = mainScene, root = scene.root;
-  // message text[i] <-> GRAPH.happy_path[i]; its arrow is the .messageLine with data-id "i<idx>".
+  // message text[i] <-> GRAPH.happy_path[i]; its arrow is the i-th .messageLine in document order. Pair
+  // POSITIONALLY, not by Mermaid's `data-id="i<n>"` — see bindFlow: <n> is a global element counter that
+  // sub-flow rects/notes advance, so an id-keyed lookup mis-pairs once a sub-box exists. The HP overlay
+  // has none today, but keeping both paths positional makes it robust to that and matches bindFlow.
   const texts = [...root.querySelectorAll('text.messageText')];
-  const lineByIdx = {};
-  root.querySelectorAll('.messageLine0, .messageLine1').forEach((ln) => {
-    const m = (ln.getAttribute('data-id') || '').match(/^i(\d+)$/);
-    if (m) lineByIdx[+m[1]] = ln;
-  });
-  leftAlignMessageLabels(texts, lineByIdx);
+  const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
+  leftAlignMessageLabels(texts, lines);
   scene.hpMsg = {};  // step index -> { text, line }
   for (let i = 0; i < (GRAPH.happy_path || []).length; i++) {
     const text = texts[i] || null;
-    const line = lineByIdx[i] || null;
+    const line = lines[i] || null;
     if (text) scene.dimEls.push(text);
     if (line) scene.dimEls.push(line);
     scene.hpMsg[i] = { text, line };
