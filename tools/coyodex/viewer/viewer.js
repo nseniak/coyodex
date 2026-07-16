@@ -5038,8 +5038,9 @@ function sbSnippet(body, pos) {
 
 // Code symbols (real class/function definitions) from the build-time pre-index, fetched lazily from the
 // server the first time search is opened. They round out the index beyond the map's curated elements —
-// so a class the map doesn't call out (e.g. a UI badge component) is still findable. One row per NAME:
-// a name at a single site opens it; a name at many sites shows the count and opens the first. A symbol
+// so a class the map doesn't call out (e.g. a UI badge component) is still findable. One row per SITE:
+// a name that lives at several sites gets one row per site, each labelled with its own file:line and
+// opening exactly that location (no collapsed "N places" row that could only reach the first). A symbol
 // whose name is already a map element is dropped (the element row represents it). By-file index kept for
 // the code outline (Phase 2b). No server -> no fetch; missing pre-index -> an empty, harmless result.
 function sbEnsureSymbols() {
@@ -5054,25 +5055,18 @@ function sbBuildSymbols(list) {
   const elemNames = new Set();
   const nodes = GRAPH.nodes || {};
   for (const id in nodes) { if (nodes[id] && nodes[id].name) elemNames.add(nodes[id].name.toLowerCase()); }
-  const byName = new Map();     // name -> [{file,line,kind}]
   const byFile = {};            // treeKey(file) -> [{name,line,kind}]
+  const items = [];
   for (const s of list) {
     if (!s || !s.name || !s.file) continue;
-    let arr = byName.get(s.name); if (!arr) { arr = []; byName.set(s.name, arr); }
-    arr.push(s);
     const key = treeKey(s.file);
     (byFile[key] || (byFile[key] = [])).push({ name: s.name, line: s.line, kind: s.kind });
+    if (elemNames.has(s.name.toLowerCase())) continue;   // the map element already represents this name
+    const isClass = s.kind === 'class';
+    const sub = s.file.split('/').pop() + (s.line ? ':' + s.line : '');
+    items.push({ text: s.name, sub, cls: 'symbol', badge: isClass ? 'class' : 'function',
+      bonus: isClass ? 8 : -10, run: ((f, l) => () => openInCodeViewer(f, l))(s.file, s.line) });
   }
-  const items = [];
-  byName.forEach((locs, name) => {
-    if (elemNames.has(name.toLowerCase())) return;   // the map element already represents this name
-    const first = locs[0];
-    const isClass = locs.some((l) => l.kind === 'class');
-    const sub = locs.length > 1 ? locs.length + ' places'
-      : (first.file.split('/').pop() + (first.line ? ':' + first.line : ''));
-    items.push({ text: name, sub, cls: 'symbol', badge: isClass ? 'class' : 'function',
-      bonus: isClass ? 8 : -10, run: ((f, l) => () => openInCodeViewer(f, l))(first.file, first.line) });
-  });
   SEARCH_SYMBOLS = items;
   SYMBOLS_BY_FILE = byFile;
 }
