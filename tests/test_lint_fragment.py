@@ -107,6 +107,29 @@ def test_lint_granularity_warnings_are_nonfatal():
     assert any("over the ≤15 band" in w for w in lint_fragment.lint_fragment_warnings(m))
 
 
+def test_lint_invalid_activation_is_a_fragment_problem():
+    # Row-local vocabulary check: a truthy near-miss would silently reroute the row through the
+    # kind heuristic in every consumer — it dies in the authoring agent's own turn.
+    m = make_fragment({"entry_points": [{"kind": "http", "trigger": "GET /x",
+                                         "source": "src/a.py:1", "component": "C1",
+                                         "activation": "External"}]})
+    assert any("invalid activation 'External'" in p
+               for p in lint_fragment.lint_fragment_problems(m, None))
+
+
+def test_lint_completeness_family_never_fires_per_fragment():
+    # The use-case/HP completeness advisories are WHOLE-MAP signals (T4 ↔ flows ↔ HP) — a T4
+    # harvest fragment has entry points but no flows, so neither the warnings nor the problems
+    # path may say anything about unclaimed surfaces.
+    m = make_fragment({"entry_points": [{"kind": "http", "trigger": "GET /x",
+                                         "source": "src/a.py:1", "component": "C1",
+                                         "activation": "external"}]})
+    # asserted EMPTY, not substring-matched: any leak of the whole-map family into the fragment
+    # paths must fail this test regardless of the warnings' wording
+    assert lint_fragment.lint_fragment_problems(m, None) == []
+    assert lint_fragment.lint_fragment_warnings(m) == []
+
+
 def test_lint_extensionless_anchor_is_accepted():
     # A2: an extensionless ops file with a line is a valid anchor, so lint must not reject it.
     m = make_fragment({"deps": [{"id": "D1", "name": "img", "where_configured": "Dockerfile:1"}]})

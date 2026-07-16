@@ -95,6 +95,15 @@ def classify_activation(kind: str) -> str:
     return "self" if any(s in k for s in _SELF_START_SIGNATURES) else "external"
 
 
+def effective_activation(activation: str, kind: str) -> str:
+    """The activation a consumer should act on: the authored value when it is a member of the closed
+    vocabulary (EXACT match — `validate` blocks anything else, because a near-miss like "External" or
+    "mounted" is truthy and would otherwise silently reroute the entry point through the kind
+    heuristic), else `classify_activation(kind)`. The one rule shared by the viewer, the entry-surface
+    coverage advisory, and the eval profile — so they can never classify the same row differently."""
+    return activation if activation in ACTIVATIONS else classify_activation(kind)
+
+
 def strip_fences(text: str) -> str:
     """Blank out fenced code blocks (``` or ~~~), keeping the line COUNT so reported line numbers
     stay accurate. A verbatim example inside a code fence (a Mermaid diagram, a shell snippet) is

@@ -38,6 +38,15 @@
 
 ## Use cases
 
+<!-- One use case = ONE actor goal (one trigger, one outcome; single-verb-phrase name). Drafted
+     from the docs, then FRONT-DOOR-VERIFIED against the real entry surface (the registered
+     routes / MCP tools / CLI commands — the T4 harvest), BOTH directions: a use case whose trigger
+     has no entry point behind it is stale docs; an externally-triggered entry point no use case
+     claims is a missing use case or a dead surface. `validate` backstops the second direction
+     (advisory): an external T4 row whose component appears in no T6 flow warns until a use case
+     claims it or the component is recorded as a deliberate ops/debug/infra surface under an
+     "Unclaimed surfaces" extras heading (`Cn: <why>`, line-leading). -->
+
 | ID | Use case | Actor | Trigger → Outcome |
 |---|---|---|---|
 | **UC1** | <use case> | <actor> | <trigger → outcome> |
@@ -54,6 +63,10 @@ STORY / mechanics / Touches: those live once in the use case's T6 flow below, an
 opens it. An optional `why:` line records the prerequisite that fixes this step's position. The
 driving actor is the use case's own Actor (no separate `Actor:` line). Refer to actors by their
 Roles-table names, never invented nicknames.
+Coverage: the walk hits all main functionality + all actors. What one linear walk can't reach is
+RECORDED, not forced in: each off-spine use case (`UCn: <why>`) and each role deliberately without
+a spine position (`Rn: <why>`) gets a line-leading entry under a "Happy Path coverage" extras
+heading — `validate` warns on the unrecorded ones.
 
 **HP1 — <title>** *(UC1)*
 **HP2 — <title>** *(UC2)*
@@ -142,8 +155,12 @@ why: needs the result of HP1
          poll), boot/startup hook (on_event('startup'), lifespan, atexit), OS signal handler.
      Do pass (2) EXPLICITLY: a long-running service with zero self-starting entry points is a red flag —
      assert why none exist rather than leaving the list front-doors-only. Set `activation` on each row
-     (self|external); if you leave it blank the viewer infers it from `kind`, so use a kind label like
-     "Background loop" / "Boot task" / "Signal" that reads as self-starting. -->
+     (self|external — EXACTLY those words, `validate` blocks anything else); if you leave it blank the
+     viewer infers it from `kind`, so use a kind label like "Background loop" / "Boot task" / "Signal"
+     that reads as self-starting.
+     This table is the front-door verification input: every EXTERNAL row must end up claimed by a use
+     case (its component in some T6 flow) or recorded as a deliberate ops/debug/infra surface under an
+     "Unclaimed surfaces" extras heading (`Cn: <why>`) — `validate` warns on the rest once flows exist. -->
 
 | Kind | Trigger | Code entity | Component | Activation |
 |---|---|---|---|---|

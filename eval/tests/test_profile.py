@@ -711,6 +711,51 @@ def test_old_baseline_without_granularity_fields_loads() -> None:
     assert old.subflows is None and old.max_flow_len is None and old.flows_over_band_pct is None
 
 
+def test_completeness_fields_on_the_counts_map() -> None:
+    p = build_profile(make_counts_map())
+    assert p.entry_points == 0 and p.external_entry_points == 0, p
+    assert p.unclaimed_entry_points is None  # no entry points → the signal is not computable
+    assert p.off_spine_ucs == 0, p  # UC1 and UC2 both hold HP positions
+
+
+def test_unclaimed_entry_points_counts_raw_pre_escape() -> None:
+    # An external EP owned by C3 (in no flow) counts as unclaimed even when the map records the
+    # 'Unclaimed surfaces' escape — the escape silences the validate WARNING, but the profile
+    # keeps the raw drift signal (same convention as flows_over_band_pct vs 'Balance exceptions').
+    d = json.loads(make_counts_map())
+    d["entry_points"] = [
+        {"kind": "http", "trigger": "GET /orders", "source": "src/x.py:1",
+         "component": "C1", "activation": "external"},          # C1 is in a flow → claimed
+        {"kind": "http", "trigger": "GET /debug", "source": "src/x.py:2",
+         "component": "C3", "activation": "external"},          # C3 is in no flow → unclaimed
+        {"kind": "cron", "trigger": "nightly sweep", "source": "src/x.py:3",
+         "component": "C3", "activation": "self"},              # self-activated → exempt
+        {"kind": "http", "trigger": "GET /mount", "source": "src/x.py:4",
+         "component": "C3", "activation": "mounted"},           # invalid → kind says external
+    ]
+    d["extras"] = [{"heading": "Unclaimed surfaces", "body": "C3: ops surface, deliberate."}]
+    p = build_profile(json.dumps(d))
+    assert p.entry_points == 4 and p.external_entry_points == 3, p
+    assert p.unclaimed_entry_points == 2, p
+
+
+def test_off_spine_ucs_is_none_without_a_happy_path() -> None:
+    d = json.loads(make_counts_map())
+    d["happy_path"] = []
+    p = build_profile(json.dumps(d))
+    assert p.off_spine_ucs is None, p
+
+
+def test_old_baseline_without_completeness_fields_loads() -> None:
+    p = build_profile(make_counts_map())
+    d = json.loads(p.to_json())
+    for k in ("entry_points", "external_entry_points", "unclaimed_entry_points", "off_spine_ucs"):
+        d.pop(k)
+    old = MapProfile.from_json(json.dumps(d))
+    assert old.entry_points is None and old.unclaimed_entry_points is None
+    assert old.external_entry_points is None and old.off_spine_ucs is None
+
+
 def test_concept_name_sets_are_captured() -> None:
     p = build_profile(make_counts_map())
     assert p.auth_surfaces == ["/api/orders", "/api/lines"], p.auth_surfaces

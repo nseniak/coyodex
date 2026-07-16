@@ -477,6 +477,205 @@ def test_short_shared_run_is_quiet():
     assert not any("identical steps" in w for w in warnings_of(m))
 
 
+# --- use-case & Happy-Path completeness (front-door verification's teeth) -----------
+
+
+def make_entry_point(component: str = "C1", activation: str = "external",
+                     kind: str = "http", trigger: str = "GET /orders") -> EntryPoint:
+    return EntryPoint(kind=kind, trigger=trigger, source="src/v.py:1",
+                      component=component, activation=activation)
+
+
+def test_claimed_external_entry_point_is_quiet():
+    m = make_valid_model()  # its flow's step R1 → C1 claims C1
+    m.entry_points = [make_entry_point("C1")]
+    assert not any("unclaimed" in w for w in warnings_of(m))
+
+
+def test_unclaimed_external_entry_point_warns_grouped_per_component():
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Debug routes", purpose="ops"))
+    m.entry_points = [make_entry_point("C2", trigger="GET /debug/a"),
+                      make_entry_point("C2", trigger="GET /debug/b")]
+    hits = [w for w in warnings_of(m) if "unclaimed by any use case" in w]
+    assert len(hits) == 1  # grouped per component, not per entry point
+    assert "C2" in hits[0] and "2 externally-activated" in hits[0]
+    assert "/debug/a" in hits[0] and "/debug/b" in hits[0]
+
+
+def test_self_activated_entry_point_is_exempt():
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Worker", purpose="background"))
+    m.entry_points = [make_entry_point("C2", activation="self", kind="background loop",
+                                       trigger="interval tick")]
+    assert not any("unclaimed" in w for w in warnings_of(m))
+
+
+def test_invalid_activation_falls_back_to_kind_inference():
+    # A truthy near-miss ('mounted' on an http-ish kind) must not silently exempt the row — the
+    # effective activation comes from the kind heuristic, so the coverage check still sees it.
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Demo mount", purpose="demo"))
+    m.entry_points = [make_entry_point("C2", activation="mounted", kind="http")]
+    assert any("unclaimed" in w and "C2" in w for w in warnings_of(m))
+    assert any("invalid activation 'mounted'" in p for p in problems_of(m))  # and it BLOCKS
+
+
+def test_component_claimed_only_via_subflow_is_quiet():
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="OAuth dance", purpose="auth"))
+    m.subflows = [SubFlow(id="SF1", name="OAuth dance",
+                          steps=[FlowStep(n=1, src="C1", dst="C2", phrase="redirects",
+                                          where="src/v.py:9")])]
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="C1", subflow="SF1"))
+    m.entry_points = [make_entry_point("C2", trigger="GET /oauth/callback")]
+    assert not any("unclaimed" in w for w in warnings_of(m))
+
+
+def test_unclaimed_surfaces_heading_silences_the_component():
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Debug routes", purpose="ops"))
+    m.entry_points = [make_entry_point("C2", trigger="GET /debug")]
+    assert any("unclaimed" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Unclaimed surfaces",
+                             body="C2: superadmin debug surface — deliberate, no use case.")]
+    assert not any("unclaimed" in w for w in warnings_of(m))
+
+
+def test_unclaimed_surfaces_record_is_read_from_line_starts_only():
+    # Prose that merely MENTIONS a component id mid-sentence, or a sentence that STARTS with the
+    # id but runs on with no separator, must not silence it — only a line-leading `Cn: <why>`
+    # record counts (live 'Happy Path coverage' bodies carry such prose).
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Debug routes", purpose="ops"))
+    m.entry_points = [make_entry_point("C2", trigger="GET /debug")]
+    for prose in ("The debug router (see C2) is under review.",
+                  "C2 is under review.",           # line-leading but separator-less prose
+                  "* C2 mentioned in passing"):
+        m.extras = [ExtraSection(heading="Unclaimed surfaces", body=prose)]
+        assert any("unclaimed" in w and "C2" in w for w in warnings_of(m)), prose
+
+
+def test_hp_coverage_record_paren_form_is_read():
+    # The tolerated record shape a live map already uses: "UCn (its name) — why", no colon.
+    m = make_valid_model()
+    m.use_cases.append(UseCase(id="UC2", name="Side flow", actors=["R1"]))
+    m.flows.append(Flow(uc="UC2", title="Side",
+                        steps=[FlowStep(n=1, src="R1", dst="C1", phrase="opens")]))
+    m.extras = [ExtraSection(heading="Happy Path coverage",
+                             body="UC2 (Side flow) is intentionally off the spine — demo ops.")]
+    assert not any("off the Happy-Path spine" in w for w in warnings_of(m))
+
+
+def test_external_entry_point_with_no_component_warns():
+    m = make_valid_model()
+    m.entry_points = [make_entry_point(component="  ", trigger="GET /orphan")]
+    assert any("owned by no component" in w for w in warnings_of(m))
+
+
+def test_entry_surface_check_is_silent_without_flows():
+    # Additivity: an untraced map is "not yet traced", not "all unclaimed".
+    m = make_valid_model()
+    m.flows = []
+    m.components.append(Component(id="C2", name="Debug routes", purpose="ops"))
+    m.entry_points = [make_entry_point("C2", trigger="GET /debug")]
+    assert not any("unclaimed" in w for w in warnings_of(m))
+
+
+def test_use_case_without_flow_warns_once_tracing_began():
+    m = make_valid_model()
+    m.use_cases.append(UseCase(id="UC2", name="Ghost feature", actors=["R1"]))
+    m.happy_path.append(HappyStep(id="HP2", title="Ghost", uc="UC2"))  # on-spine, still untraced
+    assert any("UC2" in w and "has no T6 flow" in w for w in warnings_of(m))
+    m.flows = []  # no tracing yet → the phantom signal stays quiet for every use case
+    assert not any("has no T6 flow" in w for w in warnings_of(m))
+
+
+def test_role_driving_nothing_warns_unless_it_lives_in_a_flow():
+    m = make_valid_model()
+    m.roles.append(Role(id="R2", name="Approver", kind="human", wants="", drives=""))
+    assert any("R2" in w and "drives no use case and appears in no flow" in w
+               for w in warnings_of(m))
+    # a role can legitimately live mid-flow only (an approver) without driving any use case
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="R2", phrase="notifies"))
+    assert not any("drives no use case and appears in no flow" in w for w in warnings_of(m))
+
+
+def test_role_with_no_on_spine_use_case_warns_and_record_silences():
+    m = make_valid_model()
+    m.roles.append(Role(id="R2", name="Operator", kind="human", wants="", drives="UC2"))
+    m.use_cases.append(UseCase(id="UC2", name="Step into an org", actors=["R2"]))
+    m.flows.append(Flow(uc="UC2", title="Step in",
+                        steps=[FlowStep(n=1, src="R2", dst="C1", phrase="enters")]))
+    warns = warnings_of(m)
+    assert any("R2" in w and "drives no on-spine use case" in w for w in warns)
+    assert any("UC2" in w and "off the Happy-Path spine and unrecorded" in w for w in warns)
+    m.extras = [ExtraSection(heading="Happy Path coverage",
+                             body="R2: ops-only role, off the walk by design.\n"
+                                  "UC2: demo-operations side flow, not the product walk.")]
+    warns = warnings_of(m)
+    assert not any("drives no on-spine use case" in w for w in warns)
+    assert not any("off the Happy-Path spine" in w for w in warns)
+
+
+def test_hp_coverage_checks_are_silent_without_a_happy_path():
+    m = make_valid_model()
+    m.happy_path = []
+    m.use_cases.append(UseCase(id="UC2", name="Side flow", actors=["R1"]))
+    m.flows.append(Flow(uc="UC2", title="Side",
+                        steps=[FlowStep(n=1, src="R1", dst="C1", phrase="opens")]))
+    warns = warnings_of(m)
+    assert not any("off the Happy-Path spine" in w for w in warns)
+    assert not any("on-spine use case" in w for w in warns)
+
+
+# --- entry-point row validity (activation vocabulary + owning-component reference) ---
+
+
+def test_valid_and_empty_activations_are_clean():
+    m = make_valid_model()
+    m.entry_points = [make_entry_point("C1", activation="external"),
+                      make_entry_point("C1", activation="self", kind="cron"),
+                      make_entry_point("C1", activation="")]
+    assert not any("activation" in p for p in problems_of(m))
+
+
+def test_near_miss_activation_is_a_blocking_problem():
+    # 'External' would silently reroute through the kind heuristic in every consumer — blocked,
+    # EXACT match (unlike the case-folded dep-Kind check).
+    m = make_valid_model()
+    m.entry_points = [make_entry_point("C1", activation="External")]
+    assert any("invalid activation 'External'" in p for p in problems_of(m))
+
+
+def test_dangling_entry_point_component_is_flagged():
+    m = make_valid_model()
+    m.entry_points = [make_entry_point("C9")]
+    assert any("undefined IDs" in p and "C9" in p for p in problems_of(m))
+
+
+def test_entry_point_component_must_be_a_c_id():
+    m = make_valid_model()
+    m.subsystems = [Group(id="S1", name="Core", purpose="all")]
+    m.components[0].subsystem = "S1"
+    m.entry_points = [make_entry_point("S1")]
+    assert any("component 'S1' is not a C id" in p for p in problems_of(m))
+
+
+def test_empty_entry_point_component_is_not_a_shape_problem():
+    m = make_valid_model()
+    m.entry_points = [make_entry_point(component="")]
+    assert not any("is not a C id" in p or "undefined IDs" in p for p in problems_of(m))
+
+
+def test_padded_entry_point_component_is_a_shape_problem():
+    # ' C1' resolves under the strip-tolerant semantic checks but detaches in the viewer (exact
+    # string keying) and violates the published `^C\d+$` schema — the padding itself is the error.
+    m = make_valid_model()
+    m.entry_points = [make_entry_point(component="C1 ")]
+    assert any("component 'C1 ' is not a C id" in p for p in problems_of(m))
+
+
 def test_edge_no_call_site_with_where_warns():
     # Claiming no call site while also giving one is contradictory — advisory.
     m = make_valid_model()

@@ -16,6 +16,7 @@ from pathlib import Path
 from coyodex.assemble import load_fragment
 from coyodex.model import ID_SHAPE, ModelError, ProjectModel, all_elements
 from coyodex.validate_model import (
+    _check_activations,
     _check_anchor_format,
     _check_edges,
     _check_extra_conventions,
@@ -66,6 +67,8 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
     later at `validate`. Edge-level *warnings* (e.g. `no_call_site` + `where` together) are surfaced as
     lint problems here — at authoring time they are worth fixing before returning the fragment."""
     problems: list[str] = list(_check_anchor_format(m))
+    problems += _check_activations(m)  # row-local vocabulary check — an invalid `activation` is a
+    # fragment bug (a truthy near-miss would silently reroute the row through the kind heuristic)
     extra_problems, _extra_warnings = _check_extra_conventions(m)
     problems += extra_problems
     rel_problems, _rel_warnings = check_domain_relations(m.entities)
@@ -91,7 +94,11 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     (flow-length band, fused-goal name smell, shared-run duplication). These are HEURISTIC /
     judgment-shaped, so unlike `lint_fragment_problems` they must NOT fail the lint — the authoring
     agent sees them and decides (a long flow may be the lead's call, not the fragment's bug). Kept
-    separate from the blocking problems so the fatal/advisory split is explicit."""
+    separate from the blocking problems so the fatal/advisory split is explicit.
+    The use-case/Happy-Path COMPLETENESS family (`_completeness_warnings`) is deliberately NOT
+    here: it relates T4 ↔ flows ↔ HP across the whole map, and a fragment holds only one slice
+    (a T4 harvest fragment has no flows; a trace fragment has no entry points) — per-fragment the
+    signal is vacuous or a guaranteed false positive, so it runs in `validate` only."""
     _problems, warnings = check_domain_relations(m.entities)
     return warnings + _granularity_warnings(m)
 

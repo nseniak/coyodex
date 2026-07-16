@@ -439,8 +439,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         # Activation ("self" = runs with no caller, "external" = something asks): the authored value
         # wins; when absent, derive it from the free-text `kind` — mirrors classify_dep, so old maps
         # (and any untagged entry) still classify without a rebuild.
-        activation = (ep.activation if ep.activation in grammar.ACTIVATIONS
-                      else grammar.classify_activation(ep.kind))
+        activation = grammar.effective_activation(ep.activation, ep.kind)
         ep_dict: dict[str, object] = asdict(ep)
         ep_dict["activation"] = activation
         if ep.component:

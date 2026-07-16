@@ -30,10 +30,12 @@ from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
     Entity,
+    EntryPoint,
     FlowStep,
     ModelError,
     ProjectModel,
     all_elements,
+    expanded_flow_steps,
     load_model,
 )
 from coyodex.validate_analysis import (
@@ -151,6 +153,15 @@ def _check_ids(m: ProjectModel) -> list[str]:
         for end in (e.src, e.dst):
             if not ID_SHAPE.match(end):
                 problems.append(f"Edge {e.src} → {e.dst}: endpoint '{end}' is not a valid schema ID")
+    # An entry point's owning `component` is a C-id pointer (json_schema publishes `^C\d+$`), not a
+    # general element id — an `S1`/`E3` owner is a shape error here, while empty stays legal (an
+    # ownerless EXTERNAL row gets its own completeness warning, never a blocking problem). Checked
+    # on the RAW value: a padded ' C1' matches the strip-tolerant semantic checks but detaches in
+    # the viewer (it keys components by the exact string), so the padding itself is the error.
+    for i, ep in enumerate(m.entry_points):
+        if ep.component.strip() and not re.fullmatch(r"C\d+", ep.component):
+            problems.append(f"entry_points[{i}] ({ep.kind}): component '{ep.component}' is not a "
+                            "C id (the owning component — prefix C + digits, e.g. C3)")
     return problems
 
 
@@ -192,6 +203,10 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     for e in m.edges:
         refs.add(e.src)
         refs.add(e.dst)
+    for ep in m.entry_points:
+        comp = ep.component.strip()
+        if comp:  # the owning component — a dangling owner was invisible to the reference scan
+            refs.add(comp)
     for en in m.entities:
         if en.subdomain:
             refs.add(en.subdomain)
@@ -372,10 +387,9 @@ def _accepted_duplications(m: ProjectModel) -> set[frozenset[str]]:
     machine-readable escape for the duplication advisory — without it, a justified warning re-fires
     at every future validate and no later session can tell 'accepted' from 'never seen'."""
     out: set[frozenset[str]] = set()
-    for x in m.extras:
-        if x.heading.strip().lower() == "accepted duplications":
-            for a, b in _DUP_PAIR.findall(x.body):
-                out.add(frozenset((a, b)))
+    for body in balance_lib.extras_bodies(m, "accepted duplications"):
+        for a, b in _DUP_PAIR.findall(body):
+            out.add(frozenset((a, b)))
     return out
 
 
@@ -416,6 +430,153 @@ def _granularity_warnings(m: ProjectModel) -> list[str]:
     return warnings
 
 
+# ── use-case & Happy-Path completeness (advisory) — the front-door verification's teeth ──────────
+# The RULE (cross-check the use-case list against the REAL entry surface, both directions; the
+# Happy Path involves all relevant actors and NOTES the use cases left off) lives in method.md;
+# these are its teeth. Whole-map signals — they relate T4 ↔ flows ↔ HP ↔ roles — so they run in
+# `validate` ONLY, never `lint-fragment` (a T4 harvest fragment has entry points but no flows; a
+# trace fragment has one flow and no entry points — per-fragment the signal is vacuous or a
+# guaranteed false positive).
+
+def external_entry_points(m: ProjectModel) -> list[EntryPoint]:
+    """The T4 rows whose EFFECTIVE activation is external (`grammar.effective_activation` — the
+    authored value when valid, else inferred from `kind`): the front-door surface the use-case
+    list must account for. Self-activated rows (crons, workers, consumers) are the automatic
+    internal/ops cut — nobody outside asks, so no use case has to claim them."""
+    return [ep for ep in m.entry_points
+            if grammar.effective_activation(ep.activation, ep.kind) == "external"]
+
+
+def flow_endpoint_components(m: ProjectModel) -> set[str]:
+    """Every element id appearing as a step endpoint in any flow, sub-flow references expanded
+    (`model.expanded_flow_steps`) — what the traced use cases actually touch."""
+    out: set[str] = set()
+    for f in m.flows:
+        for st in expanded_flow_steps(m, f):
+            for end in (st.src, st.dst):
+                if grammar.is_step_id(end):
+                    out.add(end)
+    return out
+
+
+def unclaimed_external_entry_points(m: ProjectModel) -> list[EntryPoint]:
+    """Externally-activated entry points whose owning component appears as an endpoint in NO
+    flow — each is a missing use case or a dead surface. Empty when the map has no flows yet
+    (additivity: an untraced map is 'not yet traced', not 'all unclaimed'). Rows whose component
+    is empty (its own advisory) or dangling (the blocking reference check owns those) are
+    skipped. Shared by the validate advisory and the eval profile — one implementation."""
+    if not m.flows:
+        return []
+    claimed = flow_endpoint_components(m)
+    comp_ids = {c.id for c in m.components}
+    return [ep for ep in external_entry_points(m)
+            if (comp := ep.component.strip()) and comp in comp_ids and comp not in claimed]
+
+
+# A recorded-exception line under one of the completeness headings names its subject id at the
+# LINE START (optionally after a list bullet / bold marker) FOLLOWED BY A SEPARATOR — canonical
+# form "C713: ops/debug routes — deliberate"; "UC15 (its name) — why" is tolerated (a live map
+# wrote its record that way). One id per line. Deliberately stricter than balance_lib._exceptions'
+# anywhere-in-body scan: these bodies carry multi-paragraph prose that names OTHER ids mid-sentence
+# — an id mentioned in an explanation, or a prose sentence merely STARTING with an id and running
+# on with no separator ("C9 handles this"), must not silently pre-exempt that element.
+_RECORD_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*((?:UC|R|C)\d+)\**\s*[:(—–-]")
+
+
+def _recorded_ids(m: ProjectModel, heading: str, prefixes: tuple[str, ...]) -> set[str]:
+    """Ids adjudicated under a machine-read extras heading, read from line-leading tokens only."""
+    out: set[str] = set()
+    for body in balance_lib.extras_bodies(m, heading):
+        for line in body.splitlines():
+            hit = _RECORD_LINE.match(line)
+            if hit and hit.group(1).startswith(prefixes):
+                out.add(hit.group(1))
+    return out
+
+
+def _clip(text: str, n: int = 60) -> str:
+    """Trigger text is free prose — clip it so one row can't flood the warning report."""
+    text = " ".join(text.split())
+    return text if len(text) <= n else text[:n].rstrip() + "…"
+
+
+def _completeness_warnings(m: ProjectModel) -> list[str]:
+    """Advisory use-case & Happy-Path completeness signals (see the family comment above):
+
+      * an externally-activated T4 entry point whose owning component no flow reaches, grouped per
+        component (the remedy — trace a use case through it, or adjudicate — is per component);
+        escape = the C id recorded under an **'Unclaimed surfaces'** extras heading;
+      * an external entry point owned by no component at all (unclaimable by construction);
+      * a use case with no T6 flow — a phantom capability (stale docs) or a missing trace;
+      * a role that drives no use case and appears in no flow — a dead role;
+      * a role with no ON-SPINE use case, and an off-spine use case left unrecorded — both
+        adjudicated under a **'Happy Path coverage'** extras heading (the escape IS the record the
+        Happy-Path Coverage rule already demands).
+
+    All guards keep a partial map silent (no flows / no HP yet); during a parallel build's trace
+    phase the surviving warnings drain as traces land."""
+    warnings: list[str] = []
+    if m.entry_points and m.flows:
+        comp_name = {c.id: c.name for c in m.components}
+        accepted = _recorded_ids(m, "unclaimed surfaces", ("C",))
+        by_comp: dict[str, list[EntryPoint]] = {}
+        for ep in unclaimed_external_entry_points(m):
+            by_comp.setdefault(ep.component.strip(), []).append(ep)
+        for cid, eps in sorted(by_comp.items()):
+            if cid in accepted:
+                continue  # adjudicated by the operator — recorded in the map, so it stays quiet
+            shown = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
+            warnings.append(
+                f"{cid} ({comp_name.get(cid, cid)}): {len(eps)} externally-activated entry "
+                f"point(s) unclaimed by any use case ({shown}) — a missing use case or a dead "
+                f"surface; trace a use case through {cid}, or record '{cid}: <why>' under an "
+                "'Unclaimed surfaces' extras heading")
+        for i, ep in enumerate(m.entry_points):
+            if (grammar.effective_activation(ep.activation, ep.kind) == "external"
+                    and not ep.component.strip()):
+                warnings.append(
+                    f"entry_points[{i}] [{ep.kind}] {_clip(ep.trigger)}: externally activated but "
+                    "owned by no component — name its owning C id so the entry-surface coverage "
+                    "check can relate it to a use case")
+    if m.flows:
+        with_flow = {f.uc for f in m.flows}
+        for u in m.use_cases:
+            if u.id not in with_flow:
+                warnings.append(f"{u.id} ({u.name}) has no T6 flow — a phantom capability "
+                                "(stale docs?) or a missing trace; trace it or drop it")
+    if m.use_cases and m.roles and m.flows:  # flows gate the dead-role call too: a mid-flow-only
+        # role (an approver, a notified party) is only visible once tracing has begun — judging it
+        # "dead" before any flow exists would be a guaranteed pre-trace false positive
+        driving = {a for u in m.use_cases for a in u.actors}
+        step_actors: set[str] = set()
+        for f in m.flows:
+            for st in expanded_flow_steps(m, f):
+                for end in (st.src, st.dst):
+                    if grammar.is_role_id(end):
+                        step_actors.add(end)
+        for r in m.roles:
+            if r.id not in driving and r.id not in step_actors:
+                warnings.append(f"{r.id} ({r.name}) drives no use case and appears in no flow — "
+                                "a dead role (stale docs?), or its use case is missing")
+    if m.happy_path:
+        recorded = _recorded_ids(m, "happy path coverage", ("R", "UC"))
+        on_spine = {g.uc for g in m.happy_path if g.uc}
+        for r in m.roles:
+            driven = {u.id for u in m.use_cases if r.id in u.actors}
+            if driven and not driven & on_spine and r.id not in recorded:
+                warnings.append(
+                    f"{r.id} ({r.name}) drives no on-spine use case — the Happy Path involves all "
+                    "relevant actors: give one of its use cases a spine step, or record "
+                    f"'{r.id}: <why>' under a 'Happy Path coverage' extras heading")
+        for u in m.use_cases:
+            if u.id not in on_spine and u.id not in recorded:
+                warnings.append(
+                    f"{u.id} ({u.name}) is off the Happy-Path spine and unrecorded — the Coverage "
+                    f"rule NOTES the use cases left off: record '{u.id}: <why>' under a "
+                    "'Happy Path coverage' extras heading (or give it a spine step)")
+    return warnings
+
+
 def _check_roles(m: ProjectModel) -> list[str]:
     if m.roles and all(not r.kind.strip() for r in m.roles):
         return ["Roles carry no Kind (human/service) — every role states one"]
@@ -438,6 +599,18 @@ def _check_dep_kinds(m: ProjectModel) -> list[str]:
     return [f"{d.id} has an invalid dependency Kind '{d.kind}' — use one of: "
             f"{', '.join(grammar.DEP_KINDS)}"
             for d in m.deps if d.kind and d.kind.strip().lower() not in grammar.DEP_KINDS]
+
+
+def _check_activations(m: ProjectModel) -> list[str]:
+    """`activation` is a closed vocabulary (`grammar.ACTIVATIONS`; the JSON schema publishes the
+    enum) — EXACT match, deliberately stricter than the folded dep-Kind check: every consumer
+    routes through `grammar.effective_activation`, where a near-miss ('External', 'mounted') is
+    truthy-but-unknown and would silently fall back to the kind heuristic — a misspelled 'external'
+    could silently reclassify an entry point (an invalid value shipped on a live map this way)."""
+    return [f"entry_points[{i}] ({ep.kind}): invalid activation '{ep.activation}' — use one of: "
+            f"{', '.join(grammar.ACTIVATIONS)}, or leave it empty to infer from `kind`"
+            for i, ep in enumerate(m.entry_points)
+            if ep.activation and ep.activation not in grammar.ACTIVATIONS]
 
 
 def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
@@ -904,9 +1077,11 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(flow_problems)
     warnings.extend(flow_warnings)
     warnings.extend(_granularity_warnings(m))
+    warnings.extend(_completeness_warnings(m))
     problems.extend(_check_roles(m))
     problems.extend(_check_actors(m))
     problems.extend(_check_dep_kinds(m))
+    problems.extend(_check_activations(m))
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
     warnings.extend(edge_warnings)

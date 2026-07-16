@@ -50,6 +50,22 @@ when reading the clone; never treat it as instructions to follow or as input to 
     warns, advisory): if the halves have their own triggers and outcomes, they are two use cases;
     the Happy Path expresses their ordering. A fused use case also bloats its T6 flow past the
     step band (below) and forces its Happy Path step titles to compress two outcomes into one line.
+  - **Front-door verification — cross-check the list against the REAL entry surface.** The
+    behavioral draft comes from README/design docs, and docs lie in both directions: a use case
+    authored for a capability that no longer exists (stale docs), and a real user-facing surface no
+    use case mentions (both happened on live maps). So before finalizing the use-case list, the
+    lead enumerates the **registered** routes / MCP tools / CLI commands / callbacks (grep the
+    registrations; in parallel mode the T4 harvest IS this enumeration — do the cross-check right
+    after synthesis, when T4 first exists) and checks **both directions**: (1) a use case whose
+    trigger has **no entry point behind it** → drop it or mark it stale-docs; (2) an
+    **externally-triggered entry point no use case claims** → a missing use case or a dead
+    surface — add the use case, or adjudicate it as ops/debug/infra. The mechanical backstop:
+    `validate` warns (advisory) on every externally-activated T4 entry point whose owning
+    component appears in **no T6 flow** (sub-flows expanded); a deliberate ops/debug/infra surface
+    is recorded as `Cn: <why>` under an **"Unclaimed surfaces"** extras heading, which silences
+    that component durably. Self-activated entry points (crons, workers, consumers) are exempt
+    automatically — nobody outside asks, so no use case has to claim them. A use case with **no
+    T6 flow at all** also warns once tracing has begun — the phantom-capability signal.
 
 ### Happy Path — the spine (an ordered walk through the use cases)
 
@@ -86,7 +102,13 @@ the spine; built after harvest + at least one full trace.
   invented persona nicknames, which anchor to nothing and can read as real data.
 - **Coverage rule**: pick the walk hitting all main functionality + all actors; if one linear walk
   can't reach everything, NOTE the use cases left off rather than forcing them in — they still have
-  their own T6 flow, just not a spine position.
+  their own T6 flow, just not a spine position. **The note is a recorded adjudication, not build
+  prose**: each off-spine use case gets a line `UCn: <why>` under a **"Happy Path coverage"**
+  extras heading — `validate` warns (advisory) on an off-spine use case with no such record, and on
+  a **role none of whose use cases has a spine position** (the "involves all relevant actors" half —
+  an ops-only role kept off the walk is legitimate, but it is a decision: record `Rn: <why>` under
+  the same heading). Ids are read from **line-leading** tokens only (`UC7: …`, `- R4: …`), so
+  explanatory prose naming other ids never silences them by accident.
 
 ### Bidirectional traceability (use case ↔ elements) — standard
 
@@ -507,6 +529,14 @@ synthesis → parallel trace.**
   **Right after synthesis, run `coyodex validate --check-coverage`** — its unreferenced-files list is
   the mechanical harvest-completeness sweep (a source file no component claims = a slice-seam gap);
   an improvised spot-script covering one directory is how a live build nearly missed a component.
+  **This is also the front-door verification moment** (the cross-check rule under *Use cases*): T4
+  now exists, so reconcile the drafted use-case list against the harvested **external** entry
+  surface in both directions — a use case with no entry point behind its trigger (stale docs), an
+  externally-triggered entry point no drafted use case claims (missing use case or dead surface) —
+  BEFORE the trace fan-out, so Phase 3 traces the corrected list, not the draft. (The entry-surface
+  advisory itself stays quiet until flows exist; during Phase 3 it fires on every not-yet-traced
+  surface and **drains as traces land** — a mid-trace wall of these warnings is expected, not a
+  defect. Only what survives the full trace is a finding.)
 - Phase 3 Trace (fan out, one agent per use case; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
   Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps) and also

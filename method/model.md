@@ -104,8 +104,13 @@ can't match.
 Semantics, stated on the fields:
 
 - **ID references** (a `subsystem`/`parent` pointer, an edge endpoint, a flow-step endpoint, an HP
-  step's `uc`, a relation `target`, an ID mentioned in any text) must resolve to a defined element —
-  `coyodex validate` checks it.
+  step's `uc`, a relation `target`, an entry point's owning `component`, an ID mentioned in any
+  text) must resolve to a defined element — `coyodex validate` checks it.
+- **`entry_points[].activation`** is a closed vocabulary (`self` / `external`; empty → inferred
+  from `kind`) — `validate` blocks any other value, EXACT match: consumers (the viewer, the
+  entry-surface coverage advisory, the eval profile) share one rule that falls back to the kind
+  heuristic for anything not in the vocabulary, so a truthy near-miss (`"External"`, `"mounted"`)
+  would otherwise silently reclassify the row instead of being heard.
 - **Membership is single-source on the child**: `components[].subsystem`, `subsystems[].parent`,
   `entities[].subdomain`, `subdomains[].parent`. Member lists, inter-group edges, and the
   subsystem→subdomain bridge stay **derived, never stored**. Nesting depth isn't capped — the
@@ -115,8 +120,16 @@ Semantics, stated on the fields:
   justified exception is recorded in `extras` under a **"Balance exceptions"** heading — which
   accepts diagram ids (fan-out), `UCn`/`SFn` (flow step band), `Cn` (altitude nudge), and the
   literal `granularity` (component-count-vs-E advisory). A deliberately-kept flow duplication is
-  recorded under an **"Accepted duplications"** heading as `UCa & UCb: <why>` — both headings are
-  machine-read by `validate`, so an adjudicated advisory goes quiet instead of re-firing forever.
+  recorded under an **"Accepted duplications"** heading as `UCa & UCb: <why>`. Two more machine-read
+  headings serve the **use-case & Happy-Path completeness** advisories: **"Unclaimed surfaces"**
+  (`Cn: <why>` lines — this component's externally-activated entry points are a deliberate
+  ops/debug/infra surface, not a missing use case) and **"Happy Path coverage"** (`UCn: <why>` — a
+  use case deliberately off the spine; `Rn: <why>` — a role deliberately without a spine position).
+  These two read ids from **line-leading tokens only, one id per line, followed by a separator**
+  — write `C713: <why>` / `- R4: <why>` (an `UC15 (name) — why` form also reads) — so prose that
+  merely mentions another id, or a sentence that starts with one, never silences it. A pair form
+  (`C713 & C714: <why>`) records only the first id — give each its own line. All four headings are machine-read by `validate`,
+  so an adjudicated advisory goes quiet instead of re-firing forever.
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).
   Duplicated authored rows are preserved as authored (the graph views de-duplicate by
   `(src, verb, dst)`). An edge's `why` is the canonical relationship rationale — distinct from a

@@ -153,6 +153,15 @@ def is_homogeneous(m: ProjectModel, children: list[str]) -> bool:
 
 # ── the always-on advisory (validate hook) ───────────────────────────────────────────────────────
 
+def extras_bodies(m: ProjectModel, heading: str) -> list[str]:
+    """The bodies of every extras section under the given machine-read heading (case-insensitive,
+    whitespace-tolerant) — the one reader all recorded-exception headings share ('Balance
+    exceptions', 'Accepted duplications', 'Unclaimed surfaces', 'Happy Path coverage'), so heading
+    matching can never drift between the escape families."""
+    want = heading.strip().lower()
+    return [x.body for x in m.extras if x.heading.strip().lower() == want]
+
+
 def _exceptions(m: ProjectModel) -> set[str]:
     """Ids the operator has durably justified ('root', 'S7', 'UC5', 'C18', 'granularity', …) in an
     extras block headed 'Balance exceptions'. Diagram ids silence fan-out warnings here; UC/SF ids
@@ -161,9 +170,8 @@ def _exceptions(m: ProjectModel) -> set[str]:
     skip-sets, so the families can't cross-silence anything). Without a machine-readable escape a
     justified advisory re-fires forever — and worse, invites rewording prose to dodge a heuristic."""
     out: set[str] = set()
-    for x in m.extras:
-        if x.heading.strip().lower() == _EXCEPTIONS_HEADING:
-            out.update(re.findall(r"\b(?:root|granularity|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b", x.body))
+    for body in extras_bodies(m, _EXCEPTIONS_HEADING):
+        out.update(re.findall(r"\b(?:root|granularity|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b", body))
     return out
 
 

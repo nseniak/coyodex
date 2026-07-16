@@ -77,6 +77,17 @@ class MapProfile:
     subflows: int | None = None
     max_flow_len: int | None = None
     flows_over_band_pct: float | None = None   # share of flows over FLOW_STEPS_HI (15)
+    # ── use-case & Happy-Path completeness (report-only; band-able per project via a thresholds
+    #    entry, like every numeric field — nothing compares them by default; None when the profile
+    #    predates the fields or the signal is not computable). Counts are RAW (pre-escape): a
+    #    recorded 'Unclaimed surfaces' / 'Happy Path coverage' adjudication silences the validate
+    #    warning but not these — the same convention as flows_over_band_pct vs 'Balance exceptions',
+    #    so the drift signal survives the adjudication. ──
+    entry_points: int | None = None
+    external_entry_points: int | None = None   # effective activation (authored-if-valid, else kind)
+    unclaimed_entry_points: int | None = None  # external EPs whose component no flow reaches;
+    #                                            None when the map has no entry points or no flows
+    off_spine_ucs: int | None = None           # use cases with no HP position; None when HP empty
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
     use_case_names: list[str] = field(default_factory=list)
@@ -132,6 +143,13 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     root_fanout, max_fanout, in_band_pct, depth = balance_lib.fanout_summary(m)
     flow_lens = [len(f.steps) for f in m.flows]  # authored counts: a sub-flow reference counts as 1
     over_band = sum(1 for n in flow_lens if n > validate_model.FLOW_STEPS_HI)
+    # Completeness — computed by the SAME helpers the validate advisory runs (never a second
+    # implementation). Raw signal, pre-escape (see the field comments above).
+    n_external = len(validate_model.external_entry_points(m))
+    unclaimed = (len(validate_model.unclaimed_external_entry_points(m))
+                 if m.entry_points and m.flows else None)
+    off_spine = (sum(1 for u in m.use_cases if u.id not in {g.uc for g in m.happy_path})
+                 if m.happy_path else None)
 
     return MapProfile(
         use_cases=len({u.id for u in m.use_cases}),
@@ -161,6 +179,10 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         subflows=len({sf.id for sf in m.subflows}),
         max_flow_len=max(flow_lens) if flow_lens else None,
         flows_over_band_pct=round(100 * over_band / len(flow_lens), 1) if flow_lens else None,
+        entry_points=len(m.entry_points),
+        external_entry_points=n_external,
+        unclaimed_entry_points=unclaimed,
+        off_spine_ucs=off_spine,
         auth_surfaces=surfaces,
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],
@@ -190,6 +212,11 @@ def _format(p: MapProfile) -> str:
          f"  balance     : root fan-out {p.root_fanout} · max {p.max_fanout} · "
          f"{p.fanout_in_band_pct:.0%} of diagrams in the 3–9 band · depth {p.nesting_depth} "
          f"(report-only)"),
+        ("  completeness: n/a (profile predates the completeness fields)"
+         if p.entry_points is None else
+         f"  completeness: entry points {p.entry_points} ({p.external_entry_points} external, "
+         f"{'n/a' if p.unclaimed_entry_points is None else p.unclaimed_entry_points} unclaimed) "
+         f"· off-spine UCs {'n/a' if p.off_spine_ucs is None else p.off_spine_ucs} (report-only)"),
     ])
 
 
