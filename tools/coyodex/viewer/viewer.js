@@ -1772,6 +1772,32 @@ function applyZoomAndCenter(el, scale) {
   mainPz.panBy({ x: dx, y: dy });
 }
 
+// Map/Figma-style wheel handling on the diagram: a plain wheel / two-finger trackpad scroll PANS the
+// canvas (natural direction, like a scrollable document); Ctrl/Cmd + wheel, or a trackpad PINCH (which
+// the browser reports as a wheel event with ctrlKey=true), zooms — anchored on the cursor so the point
+// under the pointer stays put. The library's own wheel-zoom is disabled (mouseWheelZoomEnabled:false).
+function wheelNavigate(e) {
+  if (!mainPz) return;
+  e.preventDefault();  // stop the page from scrolling, and Ctrl+wheel from triggering browser zoom
+  let dx = e.deltaX, dy = e.deltaY;
+  if (e.deltaMode === 1) { dx *= 16; dy *= 16; }  // line units (some mice) -> approx pixels
+  if (e.ctrlKey || e.metaKey) {
+    // Zoom, anchored on the cursor. f is the zoom multiplier for this event; the pan formula keeps the
+    // content point under the pointer fixed on screen (mx,my measured from the svg/#diagram top-left).
+    const f = Math.min(Math.max(Math.exp(-dy * 0.0025), 0.5), 2);
+    const rect = diagram.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const pan = mainPz.getPan();
+    mainPz.zoom(mainPz.getZoom() * f);                                    // zoom() re-pans to hold the center...
+    mainPz.pan({ x: mx * (1 - f) + f * pan.x, y: my * (1 - f) + f * pan.y });  // ...override it to hold the cursor
+    updateZoomLevel();
+    return;
+  }
+  // Pan. Shift with a vertical-only wheel (typical mouse) scrolls horizontally instead.
+  if (e.shiftKey && dx === 0) { dx = dy; dy = 0; }
+  mainPz.panBy({ x: -dx, y: -dy });  // negative: content moves opposite the scroll, like a document
+}
+
 // Every node's (or container's) zoom-to-match-sidebar-text-size move: reads the panel's normal text
 // size and the box's OWN name label's current on-screen size, then zooms so the two match exactly
 // (even if that then runs the box past the visible edges — matching the text size wins over fitting on
@@ -3390,6 +3416,7 @@ async function render(sArg, transient) {
     mainPz = svgPanZoom(svgEl, {
       controlIcons: false, fit: true, center: true, minZoom: 0.01, maxZoom: 1000,
       dblClickZoomEnabled: false,  // double-click is for selecting/reading nodes, not zooming
+      mouseWheelZoomEnabled: false,  // wheel/trackpad-scroll pans; only Ctrl/Cmd/pinch zooms — see wheelNavigate
       onZoom: updateZoomLevel,
     });
     // Restore the pan/zoom this diagram was last left at (zoom first, then absolute pan). `s.vp` is the
@@ -5405,6 +5432,7 @@ navfwd.addEventListener('click', fwd);
 zoomin.addEventListener('click', () => { if (mainPz) { mainPz.zoomIn(); updateZoomLevel(); } });
 zoomout.addEventListener('click', () => { if (mainPz) { mainPz.zoomOut(); updateZoomLevel(); } });
 zoomlevel.addEventListener('click', () => { if (mainPz) { mainPz.reset(); updateZoomLevel(); } });  // fit to screen
+diagram.addEventListener('wheel', wheelNavigate, { passive: false });  // scroll=pan, Ctrl/Cmd/pinch=zoom
 flowprev.addEventListener('click', () => flowStepBy(-1));  // step player: previous / next flow action
 flownext.addEventListener('click', () => flowStepBy(1));
 // Same view, different overlay — capture the live pan/zoom + selection first so the toggle keeps them
