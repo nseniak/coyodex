@@ -28,6 +28,8 @@ let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level a
 let ELEMENT_TINT;       // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
 let MERMAID_LIBS;       // Context "Libraries" drill: System + the folded in-process deps
 let FOLDED_LIBS;        // [{id,name,type}] folded out of Context into the Libraries box
+let MERMAID_BY_BUCKETFOLD;  // Context big-bucket drill: BKF-id -> that bucket's members diagram
+let FOLDED_BUCKETS;         // [{id,name,count,members:[{id,name}]}] big external buckets collapsed to a count box
 const LIBS_ID = 'LIBS';                           // synthetic id of that collapsed box (matches gen_viewer.LIBS_ID)
 let HAS_GROUPING, HAS_DOMAIN;
 let HAS_SUBDOMAINS;  // domain model grouped into subdomains -> Domain view leads with the overview
@@ -61,6 +63,7 @@ function applyBundle(b) {
   MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
   HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
+  MERMAID_BY_BUCKETFOLD = b.mermaidByBucketFold || {}; FOLDED_BUCKETS = b.foldedBuckets || [];
   HAS_GROUPING = b.hasGrouping; HAS_DOMAIN = b.hasDomain; HAS_SUBDOMAINS = b.hasSubdomains;
   HAS_HP = b.hasHp; HAS_DIFF = b.hasDiff; META = b.meta; DIFF_STATE = b.diffState;
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
@@ -391,6 +394,7 @@ function primaryActionFor(id) {
   if (id === LIBS_ID) return { kind: 'drill', run: () => go({ kind: 'libs' }) };
   const n = GRAPH.nodes[id];
   if (!n) return null;
+  if (n.kind === 'bucketfold') return { kind: 'drill', run: () => go({ kind: 'bucketfold', bkid: id }) };
   if (n.kind === 'subsystem') return { kind: 'drill', run: () => go({ kind: 'subsystem', sid: id }) };
   if (n.kind === 'subdomain') return { kind: 'drill', run: () => go({ kind: 'domsub', sd: id }) };
   const src = srcNode(id);
@@ -894,6 +898,7 @@ function showPairEdges(arr) {
 // and the component edges (with their Why) that realize the dependency.
 function showContextEdge(ce) {
   if (ce.type === 'libs') { showLibsFold(); return; }  // SYS→Libraries arrow: same roster panel as the box
+  if (ce.type === 'bucketfold') { showBucketFold(ce.dst); return; }  // SYS→bucket arrow: same roster panel as the box
   let explain = '', rows = '';
   if (ce.type === 'actor') {
     explain = ce.wants ? '<p class="explain">' + mdInline(ce.wants) + '</p>' : '';
@@ -918,6 +923,42 @@ function showLibsFold() {
   panel.innerHTML = '<div class="pane-title"><h2>Libraries</h2><span class="badge kind">libraries</span></div>'
     + '<p class="empty">Frameworks &amp; libraries linked into the process — folded out of the Context view. ⌘-click to drill in.</p>'
     + (items ? '<dl><dt>Bundled (' + FOLDED_LIBS.length + ' in-process)</dt>' + items + '</dl>' : '');
+}
+
+// A folded big-bucket count box (external systems sharing one purpose, collapsed at the Context
+// altitude so an integration-heavy map stays legible). Same at-a-glance roster as the Libraries fold;
+// drilling the box (⌘-click) is where each member selects to its own details.
+function bucketFoldOf(bkid) { return (FOLDED_BUCKETS || []).find((b) => b.id === bkid) || null; }
+function bucketFoldName(bkid) { const b = bucketFoldOf(bkid); return b ? b.name : bkid; }
+// Which view a bucket fold drills OUT of: a library bucket sits inside the Libraries drill, an external
+// one directly under Context — so back / breadcrumbs land one extra level up for library buckets.
+function bucketFoldParent(bkid) { const b = bucketFoldOf(bkid); return b && b.parent ? b.parent : 'context'; }
+function showBucketFold(bkid) {
+  const b = bucketFoldOf(bkid);
+  if (!b) { panel.innerHTML = EMPTY_PANEL; return; }
+  const items = b.members.map((m) => '<dd>• ' + esc(m.name) + '</dd>').join('');
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(b.name) + '</h2><span class="badge kind">bucket</span></div>'
+    + '<p class="empty">External systems grouped by purpose — folded out of the Context view. ⌘-click to drill in.</p>'
+    + (items ? '<dl><dt>' + b.count + ' dependencies</dt>' + items + '</dl>' : '');
+}
+// Select a folded-bucket count box: roster panel + dim to its neighbourhood (SYS + the arrow), exactly
+// like selecting the Libraries fold. Reuses the node selKey so the hover guard matches.
+function selectBucketFold(scene, el, bkid) {
+  const selKey = 'node:' + bkid;
+  scene.selectedKey = selKey;
+  showBucketFold(bkid);
+  sceneSelect(scene, () => glowNode(el));
+  if (scene.nodeEls[bkid]) focusNode(scene, bkid); else clearFocus(scene);
+}
+// Tag every folded-bucket box with the drill cursor (⌘-drills into its members), like subsystem boxes.
+function markBucketFoldDrill() {
+  (FOLDED_BUCKETS || []).forEach((b) => { const el = mainScene.nodeEls[b.id]; if (el) el.classList.add('drill'); });
+}
+// The bucket drill-down: the System + that one bucket's members, same shape as Context — each simply
+// selects to its panel (no further drill); arrows resolve via the context-edge bridge.
+function bindBucketFold() {
+  bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
+  bindEdges(mainScene, resolveContextEdge);
 }
 
 // Subsystems edge: the panel shows both subsystems (name + Purpose); the concrete A→B wiring is the
@@ -1472,6 +1513,8 @@ function actionTipNode(id) {
     return '<div class="tt">Open subdomain</div><div class="tm">' + esc(n.name) + '</div>';
   if (id === LIBS_ID)
     return '<div class="tt">Open Libraries</div><div class="tm">' + FOLDED_LIBS.length + ' bundled</div>';
+  if (n && n.kind === 'bucketfold') { const b = bucketFoldOf(id);
+    return '<div class="tt">Open ' + esc(n.name) + '</div><div class="tm">' + (b ? b.count : 0) + ' dependencies</div>'; }
   return null;
 }
 function actionTipEdge(a, b, drawn) {
@@ -2171,7 +2214,8 @@ const vpByView = {};
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
-    + (s.unit ? ':' + s.unit : '');  // deploymentUnit cards are keyed by unit name (else they collide)
+    + (s.unit ? ':' + s.unit : '')  // deploymentUnit cards are keyed by unit name (else they collide)
+    + (s.bkid ? ':' + s.bkid : '');  // bucketfold drills are keyed by their BKF id
 }
 // The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
 // scroll offset, or the file browser showing. Restored on back/forward so returning to a point reopens
@@ -2230,7 +2274,7 @@ function pushContentPoint(content) {
   captureViewState();
   const c = history[hi];
   history = history.slice(0, hi + 1);
-  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd, unit: c.unit, sel: c.sel, content });
+  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd, unit: c.unit, bkid: c.bkid, sel: c.sel, content });
   hi = history.length - 1;
   renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
@@ -2381,21 +2425,43 @@ function bindContext() {
       selectLibsFold(mainScene, el);
       return;
     }
+    if (tryFoldNodeClick(id, el, e)) return;
     selectNodeFromCanvas(el, id, e);
   });
   bindEdges(mainScene, resolveContextEdge);
   markSysDrill();
   markLibsDrill();
+  registerFoldSelectors();
   // The Libraries fold selects to its own roster panel (not a plain node panel), so pre-register its
   // re-select — the generic node loop in render() then skips it, keeping back/forward faithful.
   const libsEl = mainScene.nodeEls[LIBS_ID];
   if (libsEl) mainScene.selectors['node:' + LIBS_ID] = () => selectLibsFold(mainScene, libsEl);
 }
-// The Libraries drill-down: the System + every folded in-process dep, same shape as Context. SYS and
-// each dep simply select to their panel (no further drill); arrows resolve via the context-edge bridge.
+// A folded-bucket count box click (shared by the Context view and the Libraries drill, which both draw
+// them): ⌘-click drills to its members, a plain click previews its roster. Returns true when handled.
+function tryFoldNodeClick(id, el, e) {
+  const n = GRAPH.nodes[id];
+  if (!n || n.kind !== 'bucketfold') return false;
+  if (isDrillClick(e)) { go({ kind: 'bucketfold', bkid: id }); return true; }
+  selectBucketFold(mainScene, el, id);
+  return true;
+}
+// Tag every present count box with the drill cursor + pre-register its roster re-select (the generic
+// node loop then skips it, keeping back/forward faithful). Only boxes drawn in THIS scene get wired.
+function registerFoldSelectors() {
+  markBucketFoldDrill();
+  (FOLDED_BUCKETS || []).forEach((b) => {
+    const bel = mainScene.nodeEls[b.id];
+    if (bel) mainScene.selectors['node:' + b.id] = () => selectBucketFold(mainScene, bel, b.id);
+  });
+}
+// The Libraries drill-down: the System + every folded in-process dep (grouped by purpose bucket — big
+// buckets themselves fold into drillable count boxes here too). A count box drills; SYS and each leaf
+// dep select to their panel; arrows resolve via the context-edge bridge.
 function bindLibs() {
-  bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
+  bindNodes(mainScene, (id, el, e) => { if (tryFoldNodeClick(id, el, e)) return; selectNodeFromCanvas(el, id, e); });
   bindEdges(mainScene, resolveContextEdge);
+  registerFoldSelectors();
 }
 function bindComponent() {
   bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
@@ -2919,6 +2985,7 @@ function mermaidFor(s) {
   if (s.kind === 'hp') return MERMAID_HP;
   if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
   if (s.kind === 'libs') return MERMAID_LIBS;
+  if (s.kind === 'bucketfold') return MERMAID_BY_BUCKETFOLD[s.bkid];
   // component: the baked report ships a diff-styled diagram (MERMAID_DIFF); a live diff has none, so it
   // renders the base diagram and lets applyDiffOverlay badge it.
   return (mode === 'diff' && MERMAID_DIFF && !LIVE_DIFF) ? MERMAID_DIFF : MERMAID_BASE;  // component
@@ -2934,6 +3001,7 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'deployment') { showDeployment(); return; }        // overview: surfaces unplaced threads
   else if (s.kind === 'deploymentUnit') { showDeploymentUnit(s.unit); return; }  // card: process detail + its threads
   else if (s.kind === 'libs') showLibsFold();
+  else if (s.kind === 'bucketfold') showBucketFold(s.bkid);
   // The Happy Path overview (nothing selected) opens on the project goal — the SYS node carries the
   // title + T0 goal (fields.Overview). Selecting a step/actor then replaces it with that detail.
   else if (s.kind === 'hp' && GRAPH.nodes['SYS']) showNode('SYS');
@@ -2959,6 +3027,7 @@ function bindFor(s) {
   else if (s.kind === 'deployment') bindDeployment();
   else if (s.kind === 'deploymentUnit') bindDeployment();  // same binder: process/subsystem boxes drill/cross-nav
   else if (s.kind === 'libs') bindLibs();
+  else if (s.kind === 'bucketfold') bindBucketFold();
   else bindComponent();
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
@@ -2968,7 +3037,7 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog (incl. a Happy Path drill)
   if (kind === 'deployment' || kind === 'deploymentUnit') return 'deployment';  // a process card lives under the Deployment tab
   if (kind === 'hp') return 'hp';
-  if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
+  if (kind === 'libs' || kind === 'bucketfold') return 'context';  // the Context folds drill out of Context
   return 'container';
 }
 function stateTitle(s) {
@@ -2988,6 +3057,7 @@ function stateTitle(s) {
   if (s.kind === 'hp') return 'Happy Path';
   if (s.kind === 'usecase') return (GRAPH.nodes[s.uc] ? GRAPH.nodes[s.uc].name : s.uc);
   if (s.kind === 'libs') return 'Libraries';
+  if (s.kind === 'bucketfold') return bucketFoldName(s.bkid);
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   if (s.kind === 'subsystem') return nm(s.sid);
   return nm(s.a) + ' → ' + nm(s.b);  // edge
@@ -3015,6 +3085,9 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'deployment') return [{ kind: 'deployment' }];
   if (s.kind === 'deploymentUnit') return [{ kind: 'deployment' }, { kind: 'deploymentUnit', unit: s.unit }];  // process card under Deployment
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
+  if (s.kind === 'bucketfold') return bucketFoldParent(s.bkid) === 'libs'   // library bucket: Context › Libraries › <bucket>
+    ? [{ kind: 'context' }, { kind: 'libs' }, { kind: 'bucketfold', bkid: s.bkid }]
+    : [{ kind: 'context' }, { kind: 'bucketfold', bkid: s.bkid }];          // external bucket: Context › <bucket>
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
   if (s.kind === 'glossary') return [{ kind: 'glossary' }];
@@ -3769,6 +3842,8 @@ function selectTargetFor(id) {
       // box on the Context diagram, while an in-process framework/library is folded into the "Libraries"
       // box and drawn individually only in its drill (kind:'libs'). Route to whichever holds a
       // selectable box for this dep.
+      const inBucket = (FOLDED_BUCKETS || []).find((b) => b.members.some((m) => m.id === id));
+      if (inBucket) return { state: { kind: 'bucketfold', bkid: inBucket.id }, selectId: id };
       const folded = FOLDED_LIBS.some((d) => d.id === id);
       return { state: folded ? { kind: 'libs' } : { kind: 'context' }, selectId: id };
     }

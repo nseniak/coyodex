@@ -95,6 +95,11 @@ DEP_BUCKET_CAP = 8
 # (that guards against too-many buckets; this against one bucket swallowing everything). A large
 # catch-all means real sub-purposes (Payments, Social, …) are hiding and should be split out.
 DEP_BUCKET_CATCHALL_SPLIT_AT = 6
+# A Context (external) bucket with THIS MANY OR MORE members collapses into a single drillable count
+# box instead of an inline cluster — so an integration-heavy product doesn't render every name at the
+# top altitude. Set just above the largest bucket a small map produces (mcpolis peaks at 4), so small
+# maps stay fully expanded and only genuinely large buckets fold.
+DEP_BUCKET_FOLD_AT = 5
 
 # The external catch-all is already a seed; the LIBRARY catch-all is not, so add it explicitly —
 # otherwise a mis-cased "other" would escape folding and render a duplicate look-alike catch-all cluster.

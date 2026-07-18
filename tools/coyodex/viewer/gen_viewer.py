@@ -39,7 +39,7 @@ from typing import Any, TypedDict, cast
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
 from coyodex.grammar import (  # external-dep Kind fold rule + the purpose-bucket grouping axis
-    DEP_KINDS_FOLDED, canonical_bucket, order_buckets, resolve_bucket,
+    DEP_BUCKET_FOLD_AT, DEP_KINDS_FOLDED, canonical_bucket, order_buckets, resolve_bucket,
 )
 
 # Synthetic node id for the collapsed "Libraries" box in the Context view (folds framework + library
@@ -381,6 +381,10 @@ SUBSYSTEM_STYLE = f"fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b,{_CONTAINER_BORDER
 ENTITY_STYLE    = "fill:#fdf4ff,stroke:#86198f,color:#581c87"  # fuchsia-50  — entity (E), light member
 SUBDOMAIN_STYLE = f"fill:#f5d0fe,stroke:#86198f,color:#581c87,{_CONTAINER_BORDER}"  # fuchsia-200 — subdomain (SD), deep container
 DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     — external dependency (D)
+# A dependency/library GROUP container (the Libraries bundle box + folded bucket count boxes): the SAME
+# emerald as the deps/libraries it holds, distinguished as a drillable group only by the shared dashed
+# container border (the convention subsystems/subdomains already use), never by a foreign hue.
+CONTAINER_STYLE = f"fill:#ecfdf5,stroke:#065f46,color:#064e3b,{_CONTAINER_BORDER}"
 PROCESS_STYLE   = f"fill:#fef3c7,stroke:#b45309,color:#78350f,{_CONTAINER_BORDER}"  # amber-100 — a deployable process/thread (Deployment view), a runtime container
 INFRA_STYLE     = "fill:#f1f5f9,stroke:#475569,color:#1e293b"  # slate       — infrastructure node (broker/store) in the Deployment view
 DOMAIN_SUBDOMAIN_CLASSDEF = f"  classDef subdomain {SUBDOMAIN_STYLE};"
@@ -416,9 +420,11 @@ ELEMENT_TINT = {
     "subdomain": _fill_stroke(SUBDOMAIN_STYLE),
     "process": _fill_stroke(PROCESS_STYLE),
     "infra": _fill_stroke(INFRA_STYLE),
-    # A neutral frame for the Context/Libraries PURPOSE-bucket clusters (`CYBK<i>`): they are grouping
-    # affordances, not typed elements, so they read as a quiet slate frame around the emerald dep boxes.
-    "bucket": {"fill": "#f8fafc", "stroke": "#94a3b8"},
+    # The Context/Libraries PURPOSE-bucket group frames (`CYBK<i>` clusters) and the folded count boxes:
+    # the SAME emerald as the deps/libraries they hold + the dashed container border, so a group reads as
+    # "a drillable box of these" rather than a foreign-coloured panel. Matches CONTAINER_STYLE.
+    "bucket": {"fill": "#ecfdf5", "stroke": "#065f46", "strokeWidth": "2.5px", "strokeDasharray": "6 3"},
+    "bucketfold": {"fill": "#ecfdf5", "stroke": "#065f46", "strokeWidth": "2.5px", "strokeDasharray": "6 3"},
 }
 
 def gen_domain_container_mermaid(graph: GraphDict) -> str:
@@ -1111,40 +1117,132 @@ CONTEXT_CLASSDEFS = [
     "  classDef human fill:#fff7ed,stroke:#c2410c,color:#7c2d12;",
     "  classDef svc fill:#eef2ff,stroke:#4338ca,color:#312e81;",
     f"  classDef dep {DEP_STYLE};",
-    "  classDef libs fill:#f1f5f9,stroke:#475569,color:#1e293b;",
+    # Group CONTAINERS (the Libraries bundle box + folded bucket count boxes) share one look: the same
+    # emerald hue as the individual deps/libraries they hold, but a paler fill and a DASHED border — the
+    # convention that says "this is a drillable group", not a leaf.
+    f"  classDef libs {CONTAINER_STYLE};",
+    f"  classDef bucketfold {CONTAINER_STYLE};",
 ]
+
+
+def _external_buckets(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """Shown external deps (kinds NOT folded into Libraries) grouped by canonical purpose bucket."""
+    by: dict[str, list[dict[str, str]]] = {}
+    for nid, node in graph["nodes"].items():
+        if str(node["kind"]) == "dep" and _dep_kind(node) not in DEP_KINDS_FOLDED:
+            d = _dep_view(nid, node)
+            by.setdefault(canonical_bucket(d["bucket"]), []).append(d)
+    return by
+
+
+def _library_buckets(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """Folded in-process deps (the Libraries drill's contents) grouped by canonical purpose bucket."""
+    by: dict[str, list[dict[str, str]]] = {}
+    for d in folded_libs(graph):
+        by.setdefault(canonical_bucket(d["bucket"]), []).append(d)
+    return by
+
+
+def _folds(by: dict[str, list[dict[str, str]]], is_library: bool, prefix: str) -> list[dict[str, Any]]:
+    """All-or-nothing per diagram: if ANY bucket reaches DEP_BUCKET_FOLD_AT members, EVERY bucket in the
+    diagram collapses into a drillable count box (so the folded diagram reads uniformly — no mix of
+    inline clusters and count boxes); otherwise none do and all stay inline. In diagram order (seed-first);
+    each fold is {id: '<prefix><i>', name, members, is_library}. The ONE source every consumer (count
+    box, drill diagram, synthetic node, context edge, roster) derives from, so the ids stay consistent."""
+    ordered = order_buckets(by.keys(), is_library)
+    if not any(len(by[b]) >= DEP_BUCKET_FOLD_AT for b in ordered):
+        return []
+    return [{"id": f"{prefix}{i}", "name": b, "members": by[b], "is_library": is_library}
+            for i, b in enumerate(ordered)]
+
+
+def folded_context_buckets(graph: GraphDict) -> list[dict[str, Any]]:
+    """The external-system buckets folded into count boxes in the Context view (`BKF<i>`), or []."""
+    return _folds(_external_buckets(graph), is_library=False, prefix="BKF")
+
+
+def folded_library_buckets(graph: GraphDict) -> list[dict[str, Any]]:
+    """The in-process buckets folded into count boxes in the Libraries drill (`LBKF<i>`), or []."""
+    return _folds(_library_buckets(graph), is_library=True, prefix="LBKF")
+
+
+def all_folded_buckets(graph: GraphDict) -> list[dict[str, Any]]:
+    """Every folded bucket across both diagrams (external Context buckets + library-drill buckets) — the
+    synthetic nodes / drill diagrams / context edges / roster all range over this."""
+    return folded_context_buckets(graph) + folded_library_buckets(graph)
+
+
+def _fold_box_lines(fb: dict[str, Any]) -> list[str]:
+    """The count box for a folded bucket: `<id>["<name> (N)"]` classed as a container, arrowed from SYS.
+    No icon — the dashed container border already signals a drillable group."""
+    return [f'  {fb["id"]}["{_safe_label(fb["name"])} ({len(fb["members"])})"]:::cy-{fb["id"]}',
+            f'  class {fb["id"]} bucketfold',
+            f'  SYS --> {fb["id"]}']
 
 
 def gen_context_mermaid(graph: GraphDict) -> str:
     """C4 Context: the system as one node, actors (Roles) using it, and the EXTERNAL SYSTEMS it relies
-    on drawn by name — GROUPED into one labelled cluster per purpose bucket (Data & storage /
-    Observability / …) so a wide star of dependencies reads as a handful of clusters. In-process deps
-    (framework / library) are collapsed into one `📚 Libraries (N)` box — drillable in the viewer — so
-    the highest altitude stays a clean C4 picture instead of a star of every imported library."""
+    on — GROUPED by purpose bucket. On a small map every bucket is an inline labelled cluster; once ANY
+    bucket is big enough to fold (>= DEP_BUCKET_FOLD_AT), ALL of them collapse into uniform drillable
+    count boxes so an integration-heavy map stays legible. In-process deps (framework / library) still
+    fold into one `Libraries (N)` box."""
     lines = _context_head(graph)
-    shown = [_dep_view(nid, node) for nid, node in graph["nodes"].items()
-             if str(node["kind"]) == "dep" and _dep_kind(node) not in DEP_KINDS_FOLDED]
-    lines += _context_dep_groups(shown, is_library=False)
+    by = _external_buckets(graph)
+    folded = folded_context_buckets(graph)
+    if folded:
+        for fb in folded:
+            lines += _fold_box_lines(fb)
+    else:
+        lines += _context_dep_groups([d for b in order_buckets(by.keys(), is_library=False) for d in by[b]],
+                                     is_library=False)
     n_folded = len(folded_libs(graph))
     if n_folded:
-        lines.append(f'  {LIBS_ID}["📚 Libraries ({n_folded})"]:::cy-{LIBS_ID}')
+        lines.append(f'  {LIBS_ID}["Libraries ({n_folded})"]:::cy-{LIBS_ID}')
         lines.append(f"  class {LIBS_ID} libs")
         lines.append(f"  SYS -->|bundles| {LIBS_ID}")
     lines += CONTEXT_CLASSDEFS
     return "\n".join(lines)
 
 
+def mermaid_by_bucketfold(graph: GraphDict) -> dict[str, str]:
+    """The drill diagram for each folded bucket — external (`BKF<i>`) AND library (`LBKF<i>`): the System
+    + that ONE bucket's members drawn by name, same shape as its parent view. Reached by drilling the
+    count box."""
+    out: dict[str, str] = {}
+    for fb in all_folded_buckets(graph):
+        lines = _context_head(graph)
+        lines += _context_dep_groups(fb["members"], is_library=fb["is_library"])
+        lines += CONTEXT_CLASSDEFS
+        out[fb["id"]] = "\n".join(lines)
+    return out
+
+
+def folded_buckets_roster(graph: GraphDict) -> list[dict[str, Any]]:
+    """The folded-bucket roster the viewer carries (count-box preview panel + member routing + which
+    parent view a bucket drills out of): [{id, name, count, parent, members: [{id, name}]}]. `parent` is
+    'libs' for a library bucket (it drills out of the Libraries view), else 'context'."""
+    return [{"id": fb["id"], "name": fb["name"], "count": len(fb["members"]),
+             "parent": "libs" if fb["is_library"] else "context",
+             "members": [{"id": m["id"], "name": m["name"]} for m in fb["members"]]}
+            for fb in all_folded_buckets(graph)]
+
+
 def gen_libs_mermaid(graph: GraphDict) -> str:
-    """The Libraries drill-down (reached by drilling the Context 'Libraries' box): the System with
-    every folded in-process dep drawn by name — GROUPED by purpose bucket (Web framework / Frontend /
-    Data drivers / …) the same way the Context view groups external systems, so the drill is a set of
-    clusters instead of a flat star. Empty string when nothing is folded (the box — hence this view —
-    never appears)."""
+    """The Libraries drill-down (reached by drilling the Context 'Libraries' box): the System + every
+    folded in-process dep, GROUPED by purpose bucket. Like the Context view: small → inline clusters;
+    once any library bucket is big enough, ALL fold into drillable count boxes (each drills to its
+    members). Empty string when nothing is folded into Libraries (the box — hence this view — never
+    appears)."""
     libs = folded_libs(graph)
     if not libs:
         return ""
     lines = _context_head(graph)
-    lines += _context_dep_groups(libs, is_library=True)
+    folded = folded_library_buckets(graph)
+    if folded:
+        for fb in folded:
+            lines += _fold_box_lines(fb)
+    else:
+        lines += _context_dep_groups(libs, is_library=True)
     lines += CONTEXT_CLASSDEFS
     return "\n".join(lines)
 
@@ -1163,6 +1261,11 @@ def add_context_nodes(g: dict[str, Any], graph: GraphDict) -> None:
     if folded_libs(graph):
         g["nodes"][LIBS_ID] = {"id": LIBS_ID, "kind": "libs", "name": "Libraries",
                                "file": None, "line": None, "fields": {}}
+    # Each folded bucket (external AND library) is a synthetic node too (same reason as LIBS): so
+    # bindNodes binds its count box and the click bridge resolves it; panel/tooltip come from the roster.
+    for fb in all_folded_buckets(graph):
+        g["nodes"][fb["id"]] = {"id": fb["id"], "kind": "bucketfold", "name": fb["name"],
+                                "file": None, "line": None, "fields": {}}
 
 
 # ── Deployment view (processes/threads ↔ subsystems) ──────────────────────────────────────────────
@@ -1384,6 +1487,12 @@ def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
     if folded_libs(graph):
         ce["SYS>" + LIBS_ID] = {"src": "SYS", "dst": LIBS_ID, "type": "libs",
                                 "from": title, "to": "Libraries"}
+    # Same for each folded bucket's `SYS --> <id>` arrow (external Context buckets + library-drill
+    # buckets) — so the viewer binds it and clicking the arrow opens the bucket's roster (its `type`
+    # routes to showBucketFold, not a 'why').
+    for fb in all_folded_buckets(graph):
+        ce["SYS>" + fb["id"]] = {"src": "SYS", "dst": fb["id"], "type": "bucketfold",
+                                 "from": title, "to": fb["name"]}
     return ce
 
 
@@ -1728,6 +1837,8 @@ class ViewBundle(TypedDict):
     elementTint: dict[str, dict[str, str]]
     mermaidLibs: str
     foldedLibs: list[dict[str, str]]
+    mermaidByBucketFold: dict[str, str]
+    foldedBuckets: list[dict[str, Any]]
     contextEdges: dict[str, dict[str, Any]]
     hasDiff: bool
     hasGrouping: bool
@@ -1811,6 +1922,8 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         elementTint=ELEMENT_TINT,
         mermaidLibs=gen_libs_mermaid(graph),
         foldedLibs=folded_libs(graph),
+        mermaidByBucketFold=mermaid_by_bucketfold(graph),
+        foldedBuckets=folded_buckets_roster(graph),
         contextEdges=context_edges,
         hasDiff=diff is not None,
         hasGrouping=grouping, hasDomain=domain, hasSubdomains=subdomains, hasHp=hp,

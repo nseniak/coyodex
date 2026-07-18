@@ -3746,6 +3746,84 @@ def test_libs_drill_groups_libraries_into_bucket_clusters() -> None:
     assert "Postgres" not in mm                              # external systems are not in the Libraries drill
 
 
+def _fold_model() -> ProjectModel:
+    """A map with one BIG external bucket (Observability, 5 deps → folds) and one small one
+    (Data & storage, 2 deps → stays inline)."""
+    m = ProjectModel(title="Big", format="coyodex-map")
+    obs = [Dep(id=f"D{i}", name=f"Mon{i}", kind="service", type="monitoring",
+               used_for=f"metric {i}", bucket="Observability") for i in range(1, 6)]
+    data = [Dep(id="D6", name="Postgres", kind="datastore", type="SQL", used_for="store",
+                bucket="Data & storage"),
+            Dep(id="D7", name="Redis", kind="datastore", type="cache", used_for="cache",
+                bucket="Data & storage")]
+    m.deps = obs + data
+    return m
+
+
+def test_context_folds_all_buckets_when_any_is_large() -> None:
+    # All-or-nothing: because Observability reaches the threshold, EVERY external bucket collapses into a
+    # count box (uniform look) — even the small Data & storage one — and none stay inline.
+    mm = gen_viewer.gen_context_mermaid(model_to_graph(_fold_model()))
+    assert "Observability (5)" in mm and "Data & storage (2)" in mm  # both are count boxes
+    assert "class BKF0 bucketfold" in mm and "class BKF1 bucketfold" in mm
+    assert "subgraph CYBK" not in mm                        # ...no inline clusters at all
+    assert "📂" not in mm and "📚" not in mm                # no folder / book icons on the containers
+    assert "Mon1" not in mm and "Postgres" not in mm        # folded members are not drawn at the top altitude
+
+
+def test_folded_bucket_drill_lists_only_its_members() -> None:
+    g = model_to_graph(_fold_model())
+    drills = gen_viewer.mermaid_by_bucketfold(g)
+    assert set(drills) == {"BKF0", "BKF1"}                   # both external buckets fold, each with a drill
+    obs = next(fb["id"] for fb in gen_viewer.folded_context_buckets(g) if fb["name"] == "Observability")
+    d = drills[obs]
+    assert "Mon1" in d and "Mon5" in d and '["Observability"]' in d
+    assert "Postgres" not in d                               # only this bucket's members
+
+
+def test_small_map_has_no_folds() -> None:
+    g = model_to_graph(_bucket_model())                      # largest bucket = 2, under DEP_BUCKET_FOLD_AT
+    assert gen_viewer.folded_context_buckets(g) == []
+    mm = gen_viewer.gen_context_mermaid(g)
+    assert "class BKF" not in mm and "subgraph CYBK" in mm   # nothing folds → inline clusters, no count boxes
+
+
+def _library_fold_model() -> ProjectModel:
+    """A map whose FOLDED libraries include a big purpose bucket (Data drivers, 5) → the Libraries drill
+    folds all its buckets into drillable count boxes too."""
+    m = ProjectModel(title="Libs", format="coyodex-map")
+    drivers = [Dep(id=f"D{i}", name=f"drv{i}", kind="library", type="db driver",
+                   used_for="io", bucket="Data drivers") for i in range(1, 6)]
+    ui = [Dep(id="D6", name="React", kind="framework", type="ui", used_for="ui", bucket="Frontend / UI"),
+          Dep(id="D7", name="Vite", kind="framework", type="build", used_for="build", bucket="Frontend / UI")]
+    m.deps = drivers + ui
+    return m
+
+
+def test_library_buckets_fold_in_libraries_drill() -> None:
+    g = model_to_graph(_library_fold_model())
+    libs_mm = gen_viewer.gen_libs_mermaid(g)
+    assert "Data drivers (5)" in libs_mm and "Frontend / UI (2)" in libs_mm  # all-or-nothing folds both
+    assert "subgraph CYBK" not in libs_mm                    # ...as count boxes, no inline clusters
+    lib_folds = gen_viewer.folded_library_buckets(g)
+    assert {fb["id"] for fb in lib_folds} == {"LBKF0", "LBKF1"}
+    assert all(r["parent"] == "libs" for r in gen_viewer.folded_buckets_roster(g))  # all drill out of Libraries
+    drills = gen_viewer.mermaid_by_bucketfold(g)
+    drivers_id = next(fb["id"] for fb in lib_folds if fb["name"] == "Data drivers")
+    assert drivers_id in drills and "drv1" in drills[drivers_id]  # the library-bucket drill lists its members
+
+
+def test_folded_bucket_roster_synthetic_node_and_edge() -> None:
+    g = model_to_graph(_fold_model())
+    roster = {r["name"]: r for r in gen_viewer.folded_buckets_roster(g)}
+    assert roster["Observability"]["count"] == 5 and roster["Observability"]["parent"] == "context"
+    assert {m["id"] for m in roster["Observability"]["members"]} == {"D1", "D2", "D3", "D4", "D5"}
+    pg: dict = {"nodes": {}}
+    gen_viewer.add_context_nodes(pg, g)
+    assert pg["nodes"]["BKF0"]["kind"] == "bucketfold"       # synthetic panel node so the click bridge resolves it
+    assert "SYS>BKF0" in gen_viewer.gen_context_edges(g)     # the SYS→box arrow is a registered context edge
+
+
 def test_bundle_meta_carries_built_schema_and_tests() -> None:
     # The header meta line states the build date + schema tag, and the graph ships each tests[] row
     # with its targets resolved server-side (the Tests tab renders names + locate-links, no parsing).
