@@ -54,6 +54,67 @@ def test_merge_concatenates_arrays_and_takes_singletons():
     assert len(model.edges) == 1 and model.edges[0].dst == "D1"
 
 
+def test_strip_actor_edges_removes_role_endpoints_and_reports():
+    # A trace agent wrongly emits an actor→component edge (R1 → C1). Edges connect
+    # components/deps/entities ONLY — assemble strips it and reports the count.
+    roles = json.dumps({"roles": [{"id": "R1", "name": "Admin", "kind": "human"}]})
+    edges = json.dumps({"edges": [
+        {"src": "R1", "verb": "uses", "dst": "C1", "why": "drives", "where": "src/a.py:1"},
+        {"src": "C1", "verb": "uses", "dst": "D1", "why": "query", "where": "src/a.py:3"}]})
+    parts = [("r.json", load_fragment(roles, "r.json")),
+             ("e.json", load_fragment(edges, "e.json"))]
+    stats: dict[str, int] = {}
+    model, problems = merge_fragments(parts, stats)
+    assert problems == []
+    assert [(e.src, e.dst) for e in model.edges] == [("C1", "D1")]
+    assert stats["actor_edges_stripped"] == 1
+
+
+def make_component_fragment(cid: str, name: str, source: str, extra: dict | None = None) -> str:
+    comp = {"id": cid, "name": name, "purpose": "does things", "source": source}
+    return json.dumps({"components": [comp], **(extra or {})})
+
+
+def test_component_dedup_merges_same_file_and_repoints_test_targets():
+    # The same module harvested by two overlapping slices (same file + name). assemble collapses
+    # them to one and RE-POINTS every reference — here a tests[].targets id (the review blocker-1
+    # regression: a missed ref would become a dangling-reference validate failure).
+    a = make_component_fragment("C1", "RolesManager", "mee6/roles_manager/__init__.py:1")
+    b = json.dumps({
+        "components": [{"id": "C2", "name": "RolesManager",
+                        "purpose": "does things", "source": "mee6/roles_manager/__init__.py:1"}],
+        "edges": [{"src": "C2", "verb": "uses", "dst": "D1", "why": "q", "where": "x.py:2"}],
+        "tests": [{"targets": ["C2"], "tested": "no", "gap": "untested"}],
+        "entry_points": [{"kind": "route", "trigger": "GET /x", "source": "x.py:1", "component": "C2"}],
+    })
+    parts = [("a.json", load_fragment(a, "a.json")), ("b.json", load_fragment(b, "b.json"))]
+    stats: dict[str, int] = {}
+    model, problems = merge_fragments(parts, stats)
+    assert problems == []
+    assert [c.id for c in model.components] == ["C1"]           # C2 merged away
+    assert stats["components_merged"] == 1
+    assert model.edges[0].src == "C1"                            # edge re-pointed
+    assert model.tests[0].targets == ["C1"]                     # tests target re-pointed (blocker 1)
+    assert model.entry_points[0].component == "C1"              # owner re-pointed
+    # the round-trips through validate with no dangling reference
+    assert load_model(to_canonical_json(model)) is not None
+
+
+def test_component_dedup_skips_directory_anchor_and_empty_source():
+    # A shared DIRECTORY anchor is NOT identity (two different components legitimately live under one
+    # dir), and an empty source is not identity either (review blocker 2) — neither pair merges.
+    dir_a = make_component_fragment("C1", "PluginA", "mee6/plugins/")
+    dir_b = make_component_fragment("C2", "PluginB", "mee6/plugins/")
+    none_a = json.dumps({"components": [{"id": "C3", "name": "X", "purpose": "p"}]})
+    none_b = json.dumps({"components": [{"id": "C4", "name": "X", "purpose": "p"}]})
+    parts = [(n, load_fragment(f, n)) for n, f in
+             [("a", dir_a), ("b", dir_b), ("c", none_a), ("d", none_b)]]
+    stats: dict[str, int] = {}
+    model, _problems = merge_fragments(parts, stats)
+    assert [c.id for c in model.components] == ["C1", "C2", "C3", "C4"]  # nothing merged
+    assert stats["components_merged"] == 0
+
+
 def test_duplicate_id_across_fragments_is_a_conflict():
     parts = [("a.json", load_fragment(make_harvest_fragment("C1"), "a.json")),
              ("b.json", load_fragment(make_harvest_fragment("C1"), "b.json"))]

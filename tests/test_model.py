@@ -17,17 +17,51 @@ from coyodex.model import (
     Entity,
     EntityField,
     EntityRelation,
+    EntryPoint,
+    ExtraSection,
     Flow,
     FlowStep,
     HappyStep,
     Group,
     ModelError,
     ProjectModel,
+    TestRow as _TestRow,  # aliased: a bare `TestRow` name makes pytest try to collect it as a test class
     UseCase,
     all_elements,
     load_model,
+    remap_element_ids,
     to_canonical_json,
 )
+
+
+# --- id remap (the mutable twin of validate_model._referenced_ids) --------------
+
+def make_component_ref_model(cid: str) -> ProjectModel:
+    """A model that references component `cid` in EVERY reference site _referenced_ids reads —
+    edge, flow step, entry-point owner, test target, and `[[cid]]` prose."""
+    m = ProjectModel(title="t", goal="g")
+    m.use_cases = [UseCase(id="UC1", name="Do")]
+    m.components = [Component(id="C1", name="A", source="a.py:1"),
+                    Component(id=cid, name="B", source="b.py:1")]
+    m.entities = [Entity(id="E1", name="Thing")]
+    m.edges = [Edge(src="C1", verb="uses", dst=cid, where="a.py:2")]
+    m.entry_points = [EntryPoint(kind="route", trigger="GET /x", source="x.py:1", component=cid)]
+    m.flows = [Flow(uc="UC1", title="Do",
+                    steps=[FlowStep(n=1, src="C1", dst=cid, phrase="calls", where="a.py:2")])]
+    m.tests = [_TestRow(targets=["C1", cid], tested="no")]
+    m.extras = [ExtraSection(heading="Notes", body=f"see [[{cid}]] for details")]
+    return m
+
+
+def test_remap_covers_every_referenced_id_site():
+    # DRIFT GUARD: remap must rewrite every place _referenced_ids READS, or a merged-away id would
+    # survive as a dangling reference. Remap the id everywhere, then assert it is referenced nowhere.
+    from coyodex.validate_model import _referenced_ids
+    m = make_component_ref_model("C9")
+    assert "C9" in _referenced_ids(m)                 # sanity: the fixture really references it
+    remap_element_ids(m, {"C9": "C1"})
+    assert "C9" not in _referenced_ids(m)             # no reference site was missed
+    assert m.extras[0].body == "see [[C1]] for details"
 
 
 # --- builders -------------------------------------------------------------------

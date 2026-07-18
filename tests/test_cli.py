@@ -115,6 +115,15 @@ def test_balance_help_exits_zero() -> None:
     assert "fan-out" in buf.getvalue()
 
 
+def test_fix_dispatch_routes_to_the_module() -> None:
+    """`coyodex fix` routes to the fix module's second-level (verb) dispatch."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        assert cli.main(["fix", "--help"]) == 0        # help routes and exits 0
+    assert "apply-drift" in buf.getvalue() and "drop-edge" in buf.getvalue()
+    assert cli.main(["fix", "bogus-verb"]) == 2        # unknown verb → usage error from the module
+
+
 def test_render_dispatch_propagates_usage_error() -> None:
     """`coyodex render` with too few args routes to the renderer, which returns 2 (usage)."""
     assert cli.main(["render"]) == 2

@@ -31,6 +31,7 @@ from coyodex.model import (
     ModelError,
     ProjectModel,
     _build,
+    remap_element_ids,
     to_canonical_json,
 )
 
@@ -63,10 +64,15 @@ def load_fragment(text: str, label: str) -> ProjectModel:
     return m
 
 
-def merge_fragments(parts: list[tuple[str, ProjectModel]]) -> tuple[ProjectModel, list[str]]:
+def merge_fragments(parts: list[tuple[str, ProjectModel]],
+                    stats: dict[str, int] | None = None) -> tuple[ProjectModel, list[str]]:
     """Merge validated fragments into one model. Returns (model, problems); problems are merge
     conflicts (duplicate IDs across fragments, a singleton stated twice with different values) —
-    each names both fragments, so the lead re-pings the right agent instead of hand-fixing JSON."""
+    each names both fragments, so the lead re-pings the right agent instead of hand-fixing JSON.
+
+    Pass a `stats` dict to receive the auto-clean pass counts (actor-endpoint edges stripped,
+    duplicate components merged, duplicate edges collapsed) — `main` reports them; test callers that
+    omit it are unaffected."""
     out = ProjectModel()
     problems: list[str] = []
     id_owner: dict[str, str] = {}
@@ -97,7 +103,14 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]]) -> tuple[ProjectModel
                                     f"and {label} — agents must keep to their pre-allocated ID ranges")
                 id_owner.setdefault(el.id, label)
     _merge_duplicate_deps(out)
-    _merge_duplicate_edges(out)  # AFTER dep-merge: re-pointing src/dst can create new exact dups
+    actor_stripped = _strip_actor_edges(out)          # actors are never backbone endpoints
+    comp_merged = _merge_duplicate_components(out)     # same module harvested by two slices → one
+    edges_before_dup = len(out.edges)
+    _merge_duplicate_edges(out)  # LAST: dep-merge / actor-strip / component re-point can create exact dups
+    if stats is not None:
+        stats["actor_edges_stripped"] = actor_stripped
+        stats["components_merged"] = comp_merged
+        stats["duplicate_edges_collapsed"] = edges_before_dup - len(out.edges)
     return out, problems
 
 
@@ -162,6 +175,63 @@ def _merge_duplicate_edges(m: ProjectModel) -> None:
         seen.add(key)
         kept.append(e)
     m.edges = kept
+
+
+def _strip_actor_edges(m: ProjectModel) -> int:
+    """Drop backbone edges whose endpoint is an actor (a Role id). The edge list connects
+    components / deps / entities ONLY — an actor's participation lives in a T6 flow STEP, never the
+    backbone (method.md). A trace agent that emits `R3 → C5` is a PROMPT DEFECT, not correct input
+    (unlike the same dep found by two harvest agents), so `main` reports a non-zero count as a
+    WARNING for the lead to fix the trace prompt at the source. Returns the number stripped."""
+    role_ids = {role.id for role in m.roles}
+    if not role_ids:
+        return 0
+    kept = [e for e in m.edges if e.src not in role_ids and e.dst not in role_ids]
+    n = len(m.edges) - len(kept)
+    m.edges = kept
+    return n
+
+
+def _component_identity(c) -> tuple[str, str] | None:
+    """A component's merge identity: `(normalized FILE source anchor, normalized name)`, or None when
+    it can't be safely deduped — no source, a DIRECTORY-anchor source (a shared directory is not
+    identity: two different components legitimately live under one dir), or no name. Only a real file
+    anchor + matching name means "the same module harvested by two overlapping slices" (the transcript
+    case). Deliberately stricter than `_dep_identity`: a component key is far more consequential."""
+    src = (c.source or "").strip()
+    if not src or src.endswith("/"):        # missing, or a directory anchor → not a safe identity
+        return None
+    name = (c.name or "").strip().lower()
+    if not name:
+        return None
+    return (src.lower(), name)
+
+
+def _merge_duplicate_components(m: ProjectModel) -> int:
+    """Collapse components that are the SAME module harvested twice by overlapping slices — identical
+    normalized `(file source, name)` — into ONE, keeping the first (deterministic), and RE-POINT every
+    reference to the merged-away id via `remap_element_ids` (the COMPLETE inbound set — edges, flow/
+    sub-flow steps, entry-point owners, test targets, and `[[Cn]]` prose — so nothing is left dangling
+    for `validate` to block on). Mirrors `_merge_duplicate_deps`; only an unambiguous file+name
+    identity merges (a directory-anchored or nameless component is never merged). Returns the count."""
+    survivor_of: dict[tuple[str, str], str] = {}
+    remap: dict[str, str] = {}
+    kept = []
+    for c in m.components:
+        ident = _component_identity(c)
+        if ident is None:
+            kept.append(c)
+            continue
+        if ident in survivor_of:
+            remap[c.id] = survivor_of[ident]
+        else:
+            survivor_of[ident] = c.id
+            kept.append(c)
+    if not remap:
+        return 0
+    m.components = kept
+    remap_element_ids(m, remap)
+    return len(remap)
 
 
 _GITIGNORE_KEEP = "build-fragments/"       # the agents' scratch dir — never committed
@@ -239,16 +309,24 @@ def main(argv: list[str] | None = None) -> int:
         print("ASSEMBLY FAILED: fix (or re-request) the fragments above; nothing was written.",
               file=sys.stderr)
         return 1
-    raw_edges = sum(len(fr.edges) for _, fr in parts)  # before merge, to report the dedup
-    model, problems = merge_fragments(parts)
+    stats: dict[str, int] = {}
+    model, problems = merge_fragments(parts, stats)
     if problems:
         for pr in problems:
             print(f"ERROR: {pr}", file=sys.stderr)
         print("ASSEMBLY FAILED: merge conflicts above; nothing was written.", file=sys.stderr)
         return 1
-    collapsed = raw_edges - len(model.edges)  # only _merge_duplicate_edges removes edges (deps re-point)
-    if collapsed > 0:
-        print(f"note: collapsed {collapsed} duplicate backbone edge(s) (same call site)")
+    if stats.get("actor_edges_stripped"):
+        print(f"WARNING: stripped {stats['actor_edges_stripped']} actor-endpoint edge(s) — edges "
+              f"connect components/deps/entities only, never actors. This is a trace-prompt defect: "
+              f"fix the prompt so agents put actor participation in flow STEPS, not the backbone.",
+              file=sys.stderr)
+    if stats.get("components_merged"):
+        print(f"note: merged {stats['components_merged']} duplicate component(s) "
+              f"(same file harvested by overlapping slices)")
+    if stats.get("duplicate_edges_collapsed"):
+        print(f"note: collapsed {stats['duplicate_edges_collapsed']} duplicate backbone edge(s) "
+              f"(same call site)")
     from coyodex.views import model_to_markdown
 
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -1164,6 +1164,65 @@ def test_granularity_advisory_silent_within_band():
     assert not any(w.startswith("Granularity:") for w in warnings), warnings
 
 
+# --- Coverage exceptions (per-directory suppression of the --check-coverage wall) ---
+
+def test_recorded_coverage_dirs_reads_line_leading_dirs():
+    from coyodex.validate_model import _recorded_coverage_dirs
+    m = make_valid_model()
+    m.extras = [ExtraSection(heading="Coverage exceptions",
+                             body="plugins/: coarse altitude\n  foo/bar/: generated\nprose plugins/x mid-line")]
+    assert _recorded_coverage_dirs(m) == {"plugins", "foo/bar"}   # trailing slash normalized; prose ignored
+
+
+def test_compression_coverage_exception_is_boundary_aware():
+    from coyodex.validate_analysis import compression_coverage_from_refs
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        for base in ("plugins", "plugins_legacy"):   # a NAME-PREFIX sibling, not a path child
+            for i in range(10):                       # ≥ _COMPRESSION_MIN (8) sibling subdirs
+                sub = root / base / f"p{i}"
+                sub.mkdir(parents=True)
+                (sub / "a.py").write_text("x\n", encoding="utf-8")
+        refs = {"plugins/p0", "plugins_legacy/p0"}    # the map references one subdir under each
+        base = compression_coverage_from_refs(refs, root)
+        assert any(w.startswith("Compression: plugins/") for w in base)
+        assert any(w.startswith("Compression: plugins_legacy/") for w in base)
+        skipped = compression_coverage_from_refs(refs, root, frozenset({"plugins"}))
+        assert not any(w.startswith("Compression: plugins/") for w in skipped)     # recorded → silent
+        assert any(w.startswith("Compression: plugins_legacy/") for w in skipped)  # sibling still warns
+
+
+def test_coverage_exception_drops_recorded_domain_dir_from_denominator():
+    with tempfile.TemporaryDirectory() as td:
+        for d, cover, extra in (("folded", "Order", "T"), ("kept", "Member", "K")):
+            p = Path(td) / d
+            p.mkdir()
+            (p / f"{cover.lower()}.py").write_text(f"class {cover}:\n    pass\n", encoding="utf-8")
+            (p / "more.py").write_text("\n\n".join(f"class {extra}{i}:\n    pass" for i in range(12)),
+                                       encoding="utf-8")
+        m = make_valid_model()
+        m.entities = [make_entity(eid="E1", name="Order", source="folded/order.py:1"),
+                      make_entity(eid="E2", name="Member", source="kept/member.py:1")]
+        roots = [Path(td)]
+        assert any("Under-harvested" in w for w in check_domain_coverage_model(m, roots))
+        skipped = check_domain_coverage_model(m, roots, frozenset({"folded"}))
+        msg = [w for w in skipped if "Under-harvested" in w]
+        assert msg                                      # 'kept' still warns
+        assert not any("T0" in w for w in msg)          # folded types dropped from denominator + list
+
+
+def test_coverage_exception_silences_unclaimed_surface_by_dir():
+    from coyodex.validate_model import _completeness_warnings
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Plugin", purpose="a plugin",
+                                  source="plugins/achievements/plugin.py:1"))
+    m.entry_points = [EntryPoint(kind="command", trigger="!achieve", source="plugins/achievements/plugin.py:5",
+                                 component="C2", activation="external")]  # C2 is in no flow → unclaimed
+    assert any(w.startswith("C2 ") and "unclaimed" in w for w in _completeness_warnings(m))
+    m.extras = [ExtraSection(heading="Coverage exceptions", body="plugins/: representative at coarse altitude")]
+    assert not any(w.startswith("C2 ") for w in _completeness_warnings(m))
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

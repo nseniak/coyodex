@@ -19,6 +19,8 @@ import types
 from dataclasses import dataclass, field, fields
 from typing import Union, get_args, get_origin, get_type_hints
 
+from coyodex import grammar
+
 FORMAT = "coyodex-map"
 
 # Each element array's required id prefix — structural (a `Cn` in `deps` is a shape error, caught at
@@ -358,6 +360,97 @@ def all_elements(m: ProjectModel) -> dict[str, object]:
         for el in getattr(m, attr):
             out.setdefault(el.id, el)
     return out
+
+
+# ── element-id remap (the mutable twin of validate_model._referenced_ids) ─────────────────────────
+
+_BRACKET_REF = re.compile(r"\[\[([^\]]+)\]\]")
+
+
+def _map_strings(value: object, fn) -> None:
+    """Apply `fn` to every `str` in a dataclass / list / dict tree, in place."""
+    if hasattr(value, "__dataclass_fields__"):
+        for f in fields(value):  # type: ignore[arg-type]
+            v = getattr(value, f.name)
+            if isinstance(v, str):
+                setattr(value, f.name, fn(v))
+            else:
+                _map_strings(v, fn)
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            if isinstance(v, str):
+                value[i] = fn(v)
+            else:
+                _map_strings(v, fn)
+    elif isinstance(value, dict):
+        for k in list(value.keys()):
+            v = value[k]
+            if isinstance(v, str):
+                value[k] = fn(v)
+            else:
+                _map_strings(v, fn)
+
+
+def _remap_str_ids(text: str, remap: dict[str, str]) -> str:
+    """Rewrite whole id TOKENS in a dedicated id-bearing string field (an FK marker `FK→E7`, an
+    entity-typed field `auth:E7`, a role's `drives` cell) — never arbitrary prose."""
+    if not text:
+        return text
+    return grammar.ID_TOKEN.sub(lambda mo: remap.get(mo.group(0), mo.group(0)), text)
+
+
+def remap_element_ids(m: ProjectModel, remap: dict[str, str]) -> None:
+    """Rewrite every REFERENCE to a remapped element id, in place — the mutable twin of
+    `validate_model._referenced_ids`. When a merge collapses one element id into another (assemble's
+    cross-slice component dedup, or a `fix` verb), the merged-away id must not survive anywhere it was
+    referenced, or `validate` blocks on a dangling reference. This rewrites references ONLY; it never
+    touches an element's own defining `id` (the caller drops the merged-away definition). Kept
+    field-for-field in step with `_referenced_ids` so the read and the write can't drift — a regression
+    test (`test_remap_covers_referenced_ids`) fails if a new reference site is added to one and not the
+    other."""
+    if not remap:
+        return
+
+    def r(x: str) -> str:
+        return remap.get(x, x)
+
+    for g in m.happy_path:
+        if g.uc:
+            g.uc = r(g.uc)
+    for steps in [f.steps for f in m.flows] + [sf.steps for sf in m.subflows]:
+        for st in steps:
+            st.src = r(st.src)
+            st.dst = r(st.dst)
+            if st.subflow:
+                st.subflow = r(st.subflow)
+    for e in m.edges:
+        e.src = r(e.src)
+        e.dst = r(e.dst)
+    for ep in m.entry_points:
+        comp = ep.component.strip()
+        if comp in remap:
+            ep.component = remap[comp]
+    for en in m.entities:
+        if en.subdomain:
+            en.subdomain = r(en.subdomain)
+        for rel in en.relations:
+            if rel.target:
+                rel.target = r(rel.target)
+        for fld in en.fields:
+            fld.type = _remap_str_ids(fld.type, remap)
+            fld.markers = [_remap_str_ids(mk, remap) for mk in fld.markers]
+    for role in m.roles:
+        role.drives = _remap_str_ids(role.drives, remap)
+    for tr in m.tests:
+        tr.targets = [r(t) for t in tr.targets]
+
+    def _brackets(s: str) -> str:
+        return _BRACKET_REF.sub(
+            lambda mo: f"[[{remap[mo.group(1).strip()]}]]" if mo.group(1).strip() in remap else mo.group(0),
+            s,
+        )
+
+    _map_strings(m, _brackets)
 
 
 # ── deterministic serializer ─────────────────────────────────────────────────────────────────────

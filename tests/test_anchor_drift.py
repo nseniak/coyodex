@@ -34,6 +34,25 @@ def test_drift_skips_unconfirmed_claim():
     assert ad.drift_findings(wl, grounding, tolerance=0) == []
 
 
+def test_drift_records_carry_the_corrected_where():
+    # drift_records (feeds --json and `fix apply-drift`) computes the corrected `path:line` — the
+    # consensus (median) grounded evidence — so the two consumers can never disagree.
+    wl = [make_item("C1 reads E1", "org_service.py:245")]
+    grounding = [make_vote("C1 reads E1", True, "org_service.py:243"),
+                 make_vote("C1 reads E1", True, "org_service.py:243")]
+    recs = ad.drift_records(wl, grounding, tolerance=0)
+    assert len(recs) == 1
+    assert recs[0]["claim"] == "C1 reads E1"
+    assert recs[0]["corrected"] == "org_service.py:243"
+    assert recs[0]["same_file"] is True
+
+
+def test_consensus_evidence_prefers_the_same_file_group():
+    # a stray different-file vote must not pull the consensus off the stored file.
+    got = ad.consensus_evidence("a.py:10", ["a.py:12", "a.py:12", "z.py:99"])
+    assert got == "a.py:12"
+
+
 def test_drift_cli_end_to_end():
     # A tiny map with one edge whose `where` is line 245; skeptics confirm the claim but report 243.
     from coyodex.audit_model import l2_worklist_model

@@ -31,6 +31,9 @@ Commands:
              format + extra-key conventions, and with --repo that anchors exist).
   anchor-drift  Deterministic Layer-2 check: for each grounding-confirmed claim, flag
              when the stored `where` line drifts from the line the skeptics found.
+  fix        Apply a reconcile edit to the model in place (apply-drift / drop-edge /
+             dedup-relation) — the mechanical fixes the method's Phase-3/4 reconcile
+             needs, so they are never hand-scripted. Re-run validate → audit → render after.
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
   balance    Report per-diagram fan-out (target 5±2), the inter-subsystem edge
@@ -100,6 +103,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "anchor-drift":
         from coyodex import anchor_drift  # stdlib-only
         return anchor_drift.main(rest)
+    if cmd == "fix":
+        from coyodex import fix  # stdlib-only; owns its own second-level (verb) dispatch
+        return fix.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)

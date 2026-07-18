@@ -94,7 +94,8 @@ def _fold_depth_ok(dpath: str) -> bool:
     return dpath.count("/") <= (2 if first in _MONOREPO_ROOTS else 1)
 
 
-def compression_coverage_from_refs(refs: set[str], root: Path) -> list[str]:
+def compression_coverage_from_refs(refs: set[str], root: Path,
+                                   skip_dirs: frozenset[str] = frozenset()) -> list[str]:
     """Advisory (non-blocking, opt-in via --check-coverage): the map-fidelity counterpart to the
     referential checks, from an already-extracted set of repo-relative referenced paths. Flags two
     *lost-signal* shapes by RE-MEASURING the repo tree (never reading the pre-index's JSON — GR4):
@@ -125,11 +126,17 @@ def compression_coverage_from_refs(refs: set[str], root: Path) -> list[str]:
     def covered_under(prefix: str) -> bool:
         return any(r == prefix or r.startswith(prefix + "/") for r in refs)
 
+    def recorded(dpath: str) -> bool:
+        # a 'Coverage exceptions' dir silences this dpath if it is AT OR UNDER the recorded dir
+        # (boundary-aware, same rule as covered_under): the operator's conscious coarse-altitude fold.
+        return any(dpath == d or dpath.startswith(d + "/") for d in skip_dirs)
+
     out: list[str] = []
     flagged: set[str] = set()
     for dpath, subs in sorted(dir_children.items()):
         n = len(subs)
-        if dpath == "." or not _fold_depth_ok(dpath) or n < _COMPRESSION_MIN or not covered_under(dpath):
+        if (dpath == "." or not _fold_depth_ok(dpath) or n < _COMPRESSION_MIN
+                or not covered_under(dpath) or recorded(dpath)):
             continue
         covered_subs = sum(1 for s in subs if covered_under(s))
         if covered_subs * 4 < n:  # the map individually represents fewer than ~a quarter of the peers
@@ -146,6 +153,7 @@ def compression_coverage_from_refs(refs: set[str], root: Path) -> list[str]:
     absent: list[tuple[int, str]] = []
     for dpath, fc in dir_filecount.items():
         if (dpath == "." or not _fold_depth_ok(dpath) or dpath in flagged or covered_under(dpath)
+                or recorded(dpath)
                 or dpath.rsplit("/", 1)[-1] in NON_PRODUCT_DIRS):  # skip test / internal / docs trees
             continue
         n_subs = len(dir_children.get(dpath, ()))

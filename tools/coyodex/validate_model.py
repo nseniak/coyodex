@@ -501,6 +501,34 @@ def _recorded_ids(m: ProjectModel, heading: str, prefixes: tuple[str, ...]) -> s
     return out
 
 
+# A recorded coverage-exception line names a repo-relative DIRECTORY at the line start followed by a
+# separator — "mee6/plugins/: coarse whole-monorepo altitude". Line-leading + separator, one per line
+# (the same discipline as `_RECORD_LINE`), so prose naming another path mid-sentence can't pre-exempt it.
+_COVERAGE_DIR_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*([\w./\-]+?)/?\**\s*[:(—–-]")
+
+
+def _recorded_coverage_dirs(m: ProjectModel) -> set[str]:
+    """Repo-relative directory prefixes recorded under a **'Coverage exceptions'** extras heading — the
+    operator's conscious "this area is folded at a coarse altitude" decision. Silences the
+    `--check-coverage` compression / absent-dir / no-entity-card warnings AND the unclaimed-surface
+    completeness warning for anything AT OR UNDER the path (boundary-aware — `plugins` never silences
+    `plugins-legacy`). Scoped by directory, so a real gap in an UNLISTED dir still warns; the trailing
+    slash is normalized off so it matches the slash-less repo-relative dir keys the coverage walk uses."""
+    out: set[str] = set()
+    for body in balance_lib.extras_bodies(m, "coverage exceptions"):
+        for line in body.splitlines():
+            hit = _COVERAGE_DIR_LINE.match(line)
+            if hit and (p := hit.group(1).strip().rstrip("/")):
+                out.add(p)
+    return out
+
+
+def _under_recorded(path: str, dirs: frozenset[str] | set[str]) -> bool:
+    """`path` (repo-relative, no trailing slash) is at or under one of the recorded dirs, on a path
+    BOUNDARY (`covered_under`'s rule) — `plugins` matches `plugins` and `plugins/x`, never `plugins-legacy`."""
+    return any(path == d or path.startswith(d + "/") for d in dirs)
+
+
 def _clip(text: str, n: int = 60) -> str:
     """Trigger text is free prose — clip it so one row can't flood the warning report."""
     text = " ".join(text.split())
@@ -532,12 +560,20 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
     if m.entry_points and m.flows:
         comp_name = {c.id: c.name for c in m.components}
         accepted = _recorded_ids(m, "unclaimed surfaces", ("C",))
+        cov_dirs = _recorded_coverage_dirs(m)   # a 'Coverage exceptions' dir also silences its components'
+        comp_dir = {}                           # unclaimed surfaces — one line collapses a whole plugin tree
+        for c in m.components:
+            if c.source:
+                rel = strip_anchor(c.source).rstrip("/")
+                comp_dir[c.id] = rel.rsplit("/", 1)[0] if "/" in rel else rel
         by_comp: dict[str, list[EntryPoint]] = {}
         for ep in unclaimed_external_entry_points(m):
             by_comp.setdefault(ep.component.strip(), []).append(ep)
         for cid, eps in sorted(by_comp.items()):
             if cid in accepted:
                 continue  # adjudicated by the operator — recorded in the map, so it stays quiet
+            if cov_dirs and cid in comp_dir and _under_recorded(comp_dir[cid], cov_dirs):
+                continue  # the owning component sits under a recorded 'Coverage exceptions' dir
             shown = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
             warnings.append(
                 f"{cid} ({comp_name.get(cid, cid)}): {len(eps)} externally-activated entry "
@@ -1028,7 +1064,8 @@ def referenced_paths(m: ProjectModel, root: Path) -> set[str]:
     return refs
 
 
-def check_domain_coverage_model(m: ProjectModel, roots: list[Path]) -> list[str]:
+def check_domain_coverage_model(m: ProjectModel, roots: list[Path],
+                                skip_dirs: frozenset[str] = frozenset()) -> list[str]:
     """The under-harvest advisory, ported: (a) relation-isolated entities (model-only), (b) named
     Python types in the entities' source dirs with no entity card (stdlib `ast` re-measurement).
     v2 refinement: a type explicitly listed in `non_entity_types` is excluded by NAME — the model's
@@ -1053,15 +1090,19 @@ def check_domain_coverage_model(m: ProjectModel, roots: list[Path]) -> list[str]
             f"per-entity RELATIONS?): {', '.join(isolated[:_COVERAGE_SAMPLE])}"
             + (f", +{len(isolated) - _COVERAGE_SAMPLE} more" if len(isolated) > _COVERAGE_SAMPLE else "")
         )
-    domain_dirs: set[Path] = set()
+    domain_dirs: dict[Path, str] = {}       # absolute source dir → its repo-relative path
     for e in m.entities:
         if e.source:
             src = _resolve_source_file(e.source, roots)
             if src is not None:
-                domain_dirs.add(src.parent)
+                rel_file = strip_anchor(e.source)
+                domain_dirs[src.parent] = rel_file.rsplit("/", 1)[0] if "/" in rel_file else ""
     marked = {t.name for t in m.non_entity_types}
     types: dict[str, Path] = {}
-    for d in sorted(domain_dirs):
+    for d, rel_dir in sorted(domain_dirs.items()):
+        if skip_dirs and _under_recorded(rel_dir, skip_dirs):
+            continue  # a recorded 'Coverage exceptions' dir: drop its types from BOTH uncovered AND
+            # the `N of M` denominator, so a fully-recorded dir can't mask an un-recorded one
         for f in sorted(d.glob("*.py")):
             try:
                 tree = ast.parse(f.read_text(encoding="utf-8", errors="ignore"))
@@ -1152,18 +1193,19 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(hier_warnings)
     warnings.extend(_check_altitude(m))
     if check_coverage:
+        cov_dirs = frozenset(_recorded_coverage_dirs(m))  # 'Coverage exceptions': conscious coarse-fold
         walk_root = repo_root if repo_root is not None else (
             model_path.resolve().parent.parent if model_path is not None else None)
         if walk_root is not None:
             warnings.extend(compression_coverage_from_refs(
-                referenced_paths(m, walk_root.resolve()), walk_root))
+                referenced_paths(m, walk_root.resolve()), walk_root, cov_dirs))
             # The granularity anchor: component (leaf) count vs the code-derived expectation E —
             # re-computed from the tree here (GR4), advisory-only, silent inside the ±40% band.
             # The literal `granularity` under 'Balance exceptions' records the operator's conscious
             # altitude decision and silences this (else a justified overshoot nags every validate).
             if "granularity" not in balance_lib._exceptions(m):
                 warnings.extend(granularity_advisory(len(m.components), walk_root))
-        warnings.extend(check_domain_coverage_model(m, roots))
+        warnings.extend(check_domain_coverage_model(m, roots, cov_dirs))
 
     # Redundant nesting (a group whose only child is a group of the same kind).
     child_count: dict[str, int] = {}

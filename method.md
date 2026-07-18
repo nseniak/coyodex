@@ -315,12 +315,16 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   it reads like any asserted edge — if it matters, ground the underlying edge (L2), don't trust the
   verb. (The subsystem→subdomain bridge is **not** verb-derived — it shows a count of underlying C→E
   edges, like the container arrows.)
-- **The edge list spans C↔C, C↔D, *and* C→E.** It is not only component↔component: a component's
+- **The edge list spans C↔C, C↔D, *and* C→E — components / deps / entities ONLY, never an actor.**
+  It is not only component↔component: a component's
   link to the domain model is a backbone edge `C — persists/writes/reads → E` (its repository
   `persists` the entity; a service/controller `reads` it — **direct** use only, never a transitive
   edge). Author these alongside the component edges — they power the component↔class cross-links and
   the subsystem→subdomain bridge. (Only E↔E relations stay off the backbone — those live on the
-  domain cards.)
+  domain cards.) **An actor (`Rn`) is NEVER a backbone endpoint** — a person/service driving the
+  system is expressed as a T6 flow **step** (`R1 → C5`), not an edge; a trace agent that emits an
+  `Rn → C` edge is a prompt defect, and `assemble` strips it and warns (fix the trace prompt, don't
+  rely on the strip).
 - **C→E is additive — it must NOT thin the component graph.** Trace `C↔C` and `C↔D` **first**; add
   `C→E` after, never instead. Completeness: **every external dep (T2) needs ≥1 incoming component
   edge** — a dep with no edge is an *un-traced* `C→D`, not an unused dependency — and a component
@@ -575,6 +579,10 @@ synthesis → parallel trace.**
   - **Prescribe likely sub-flows in the prompts.** The lead can usually see from the use-case list
     which machinery is shared ("UC10 and UC13 walk the same tool-call path — EXTRACT it as a
     sub-flow") — say so explicitly; the duplication detector is the safety net, not the plan.
+    **Do NOT blanket-ban sub-flows** ("no subflows" in every trace prompt) — that contradicts this
+    rule and forgoes the cross-flow consistency sub-flows buy (a live coarse-altitude build shipped
+    zero sub-flows that way). Ban them for a genuinely independent flow, never as a global default;
+    where machinery repeats across ≥2 flows, prescribe the `SFn`.
   - **Name `En` as a valid step endpoint in the prompts, with a worked example step** — e.g.
     `6a. C5 → E2 : upserts the Membership document @ repo.py:155` — and require each flow's 1–2
     central entity touches (a live rebuild whose prompts channeled ALL entity mentions into the
@@ -626,7 +634,12 @@ synthesis → parallel trace.**
   it, `evidence` the true call site. **Then run
   `coyodex anchor-drift --map … --verdicts …`** — a deterministic check that flags any CONFIRMED claim
   whose stored `where` drifts from the line the skeptics found; reconcile each by **fixing the map's
-  `where`** (the check flags, you apply — the LLM only observed the line). Reconcile every refutation and
+  `where`** (the check flags, you apply — the LLM only observed the line). **Apply the drift fixes with
+  the tool, never a hand script:** `coyodex anchor-drift … --json` emits the corrected anchors and
+  `coyodex fix apply-drift --map … --verdicts …` writes them, matching each on the full `(src, verb,
+  dst)` triple — a hand script that keyed on endpoints-only once swapped a paired `persists`/`reads`
+  edge. To drop a **refuted** edge, `coyodex fix drop-edge` removes it and reports (or, with
+  `--repoint`/`--drop-steps`, heals) the flow steps that rode it. Reconcile every refutation and
   every drift (fix the map, or justify and record why); this reconcile is **not delegated**.
   Two **behavioral-consistency items** ride the same fresh-context pass (judgment calls no
   mechanical gate can make): (1) for each Happy Path step, does its **title contradict its use
@@ -653,7 +666,10 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 
 > You are harvesting «structural / operational / build» facts for a coyodex codebase map.
 > Read these files completely, then produce ONLY the rows below — the only file you may write is
-> your own fragment file (see the output rule below).
+> your own fragment file (see the output rule below). **Do this work yourself — do NOT spawn your
+> own sub-agents / delegate.** A sub-agent's output is silently dropped: on a live build a harvest
+> agent that delegated returned prose instead of writing its fragment, and the whole slice had to be
+> re-harvested. You read the files and write the one fragment; no delegation.
 >
 > **Files:** «absolute paths this agent owns; list a directory first, then read each file».
 > **Background:** «what the main agent already learned about this slice, handed down so you
@@ -724,7 +740,10 @@ returned per-entity cards *with* RELATIONS, and that each agent that wrote `(non
 empty rather than under-delivered. For T4, confirm the **self-starting second pass ran**: a
 long-running service whose entry points are all routes/mounts/CLI has likely skipped its background
 loops — re-ping with the self-starting checklist stated. Re-ping any agent that dropped or thinned its sections; a missing
-section caught here is cheap, one discovered after synthesis is a re-trace. The same "every prescribed
+section caught here is cheap, one discovered after synthesis is a re-trace. **An agent that returns
+prose instead of a written fragment file (it delegated, or answered in its reply) has produced
+NOTHING usable — re-launch that slice immediately, do not wait on it or try to salvage the reply;
+the written fragment is the only output that counts.** The same "every prescribed
 table came back" rule reaches past the barrier to the **test-completeness table**: after the Phase 3
 trace's test-completeness step, confirm `tests[]` came back non-empty before finalizing (an empty
 `tests[]` is a dropped section — the step always produces a gap table — not a project with zero
@@ -828,6 +847,15 @@ until it passes (`--check-sources` reads each entity's `source` to reject synthe
 names with no real named type; `--check-coverage`
 re-walks the repo and WARNS — non-blocking — when many sibling source subdirs are folded into one
 box or a significant directory is never referenced, the map-fidelity gaps the ID checks can't see).
+**At a deliberately coarse (whole-repo overview) altitude these coverage warnings are expected, and
+a recorded exception silences them per-directory:** list the consciously-folded repo-relative dirs,
+one per line, under a **"Coverage exceptions"** extras heading (`plugins/: representative at coarse
+altitude`). A recorded dir silences the folded-subdir / unreferenced-dir / no-entity-card warnings
+**and** the per-component "unclaimed surface" warning for anything at or under it — one `plugins/`
+line replaces the 63 per-plugin records a live build hand-wrote. It is **boundary-scoped**: a real
+gap in an *unlisted* dir still warns, and `plugins/` never silences a `plugins-legacy/` sibling. (The
+component-count-vs-E advisory has its own token — the literal `granularity` under "Balance
+exceptions".)
 **Then run the adversarial pass** — `.venv/bin/coyodex audit .coyodex/project-map.json`
 ([tools/coyodex/audit_model.py](tools/coyodex/audit_model.py)). Where validate asks *is the map
 well-formed*, audit asks *is it self-contradictory*: it makes the map's two layers — the narrative
