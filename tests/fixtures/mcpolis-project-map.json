@@ -2090,6 +2090,7 @@
       "kind": "datastore",
       "type": "document DB (motor)",
       "used_for": "Cloud persistence for all repos + distributed lock",
+      "bucket": "Data & storage",
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:89",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2104,6 +2105,7 @@
       "kind": "messaging",
       "type": "in-memory store (coredis)",
       "used_for": "Pub/sub event stream, rate limiting, session revocation",
+      "bucket": "Data & storage",
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:91",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2118,6 +2120,7 @@
       "kind": "platform",
       "type": "hosted sandbox",
       "used_for": "Isolated execution of stdio MCP servers",
+      "bucket": "Infrastructure & runtime",
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:207",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2132,6 +2135,7 @@
       "kind": "service",
       "type": "identity provider",
       "used_for": "Gateway client + dashboard admin sign-in",
+      "bucket": "Identity & access",
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:28",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2146,6 +2150,7 @@
       "kind": "service",
       "type": "proxied MCPs",
       "used_for": "The servers whose tools the gateway aggregates",
+      "bucket": "Integrations",
       "where_configured": "backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2160,6 +2165,7 @@
       "kind": "service",
       "type": "mail submission",
       "used_for": "Re-auth + transactional email",
+      "bucket": "Messaging & delivery",
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:148",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2174,6 +2180,7 @@
       "kind": "service",
       "type": "error monitoring",
       "used_for": "Backend + frontend exception capture",
+      "bucket": "Observability",
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:117",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2188,6 +2195,7 @@
       "kind": "service",
       "type": "product analytics",
       "used_for": "Fire-and-forget event tracking",
+      "bucket": "Observability",
       "where_configured": "backend/src/mcpolis/entrypoints/config.py:123",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2202,6 +2210,7 @@
       "kind": "platform",
       "type": "log store",
       "used_for": "Log storage + Kibana dashboards",
+      "bucket": "Observability",
       "where_configured": "compose/vector/vector.toml:248",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2216,6 +2225,7 @@
       "kind": "platform",
       "type": "log forwarder",
       "used_for": "Sidecar shipping structlog JSON to Elastic",
+      "bucket": "Observability",
       "where_configured": "docker-compose.yml:192",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2230,6 +2240,7 @@
       "kind": "platform",
       "type": "container runtime",
       "used_for": "Build + orchestrate the stack (dev/standalone/cloud/test)",
+      "bucket": "Infrastructure & runtime",
       "where_configured": "docker-compose.yml:1",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2244,6 +2255,7 @@
       "kind": "platform",
       "type": "reverse proxy",
       "used_for": "SPA serving + sticky API/MCP routing",
+      "bucket": "Infrastructure & runtime",
       "where_configured": "docker/nginx.conf:1",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2258,6 +2270,7 @@
       "kind": "framework",
       "type": "web framework",
       "used_for": "Backend HTTP/ASGI server",
+      "bucket": "Web framework / server",
       "where_configured": "backend/pyproject.toml:14",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2272,6 +2285,7 @@
       "kind": "library",
       "type": "protocol SDK",
       "used_for": "MCP client (upstreams) + server (gateway)",
+      "bucket": "Service SDKs",
       "where_configured": "backend/pyproject.toml:21",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2286,6 +2300,7 @@
       "kind": "library",
       "type": "models + settings",
       "used_for": "Domain models + env-var Settings",
+      "bucket": "Validation / models",
       "where_configured": "backend/pyproject.toml:12",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2300,6 +2315,7 @@
       "kind": "library",
       "type": "crypto primitives",
       "used_for": "AES-256-GCM token encryption",
+      "bucket": "Crypto / security",
       "where_configured": "backend/pyproject.toml:22",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2314,6 +2330,7 @@
       "kind": "library",
       "type": "async Mongo driver",
       "used_for": "Cloud storage driver",
+      "bucket": "Data drivers",
       "where_configured": "backend/pyproject.toml:36",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2328,6 +2345,7 @@
       "kind": "library",
       "type": "async Redis client",
       "used_for": "Pub/sub + rate-limit + revocation",
+      "bucket": "Data drivers",
       "where_configured": "backend/pyproject.toml:44",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2342,6 +2360,7 @@
       "kind": "library",
       "type": "sandbox client",
       "used_for": "Lazy-imported E2B API client",
+      "bucket": "Service SDKs",
       "where_configured": "backend/pyproject.toml:51",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2356,6 +2375,7 @@
       "kind": "library",
       "type": "structured logging",
       "used_for": "Event-keyed JSON log records",
+      "bucket": "Logging",
       "where_configured": "backend/pyproject.toml:27",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2370,6 +2390,7 @@
       "kind": "library",
       "type": "async SMTP",
       "used_for": "Email adapter transport",
+      "bucket": "Service SDKs",
       "where_configured": "backend/pyproject.toml:55",
       "confidence": "verified",
       "deployment_linked": false,
@@ -2384,6 +2405,7 @@
       "kind": "framework",
       "type": "SPA stack",
       "used_for": "The dashboard frontend",
+      "bucket": "Frontend / UI",
       "where_configured": "frontend/package.json:16",
       "confidence": "verified",
       "deployment_linked": false,
@@ -4411,77 +4433,110 @@
           "src": "R1",
           "dst": "C15",
           "phrase": "signs in with Google in the browser",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C15",
           "dst": "C101",
           "phrase": "steps to C101 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C101",
           "dst": "D4",
           "phrase": "steps to D4 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C15",
           "dst": "C73",
           "phrase": "redirects the signed-in creator to the app",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "R1",
           "dst": "C17",
           "phrase": "posts the new org name and slug",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C17",
           "dst": "C22",
           "phrase": "steps to C22 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C22",
           "dst": "C33",
           "phrase": "checks seat/org plan limits",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C22",
           "dst": "C55",
           "phrase": "steps to C55 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C55",
           "dst": "C49",
           "phrase": "steps to C49 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 10,
           "src": "C22",
           "dst": "C54",
           "phrase": "steps to C54 (fixture backfill)",
-          "note": "seeds default admin + user roles and the creator as admin"
+          "note": "seeds default admin + user roles and the creator as admin",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 11,
           "src": "C17",
           "dst": "R1",
           "phrase": "returns the created org, lands on Upstream MCPs",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -4494,56 +4549,80 @@
           "src": "R2",
           "dst": "C77",
           "phrase": "pastes the upstream URL and picks an auth mode",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C77",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C26",
           "phrase": "steps to C26 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C26",
           "dst": "C40",
           "phrase": "steps to C40 (fixture backfill)",
-          "note": "scans the config for raw secrets"
+          "note": "scans the config for raw secrets",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C26",
           "dst": "C53",
           "phrase": "steps to C53 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C53",
           "dst": "C49",
           "phrase": "steps to C49 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C14",
           "dst": "R2",
           "phrase": "shows the upstream added, ready to connect",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -4556,63 +4635,90 @@
           "src": "R2",
           "dst": "C77",
           "phrase": "pastes command JSON, fills variables, sizes the sandbox",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C77",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C33",
           "phrase": "checks the stdio-upstream plan limit",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C14",
           "dst": "C26",
           "phrase": "steps to C26 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C26",
           "dst": "C53",
           "phrase": "steps to C53 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C14",
           "dst": "C84",
           "phrase": "steps to C84 (fixture backfill)",
-          "note": "admin saves the `${NAME}` variables and passwords"
+          "note": "admin saves the `${NAME}` variables and passwords",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C84",
           "dst": "C58",
           "phrase": "steps to C58 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C58",
           "dst": "C49",
           "phrase": "steps to C49 (fixture backfill)",
-          "note": "encrypts secret values at rest"
+          "note": "encrypts secret values at rest",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -4625,84 +4731,120 @@
           "src": "R2",
           "dst": "C98",
           "phrase": "clicks Connect / Start",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C98",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C26",
           "phrase": "steps to C26 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C26",
           "dst": "C64",
           "phrase": "steps to C64 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C64",
           "dst": "C65",
           "phrase": "steps to C65 (fixture backfill)",
-          "note": "HTTP upstream opens a streamable-http session"
+          "note": "HTTP upstream opens a streamable-http session",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C64",
           "dst": "C66",
           "phrase": "steps to C66 (fixture backfill)",
-          "note": "stdio upstream launches in a sandbox"
+          "note": "stdio upstream launches in a sandbox",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C66",
           "dst": "C68",
           "phrase": "steps to C68 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C68",
           "dst": "D3",
           "phrase": "steps to D3 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 10,
           "src": "C26",
           "dst": "C24",
           "phrase": "steps to C24 (fixture backfill)",
-          "note": "refresh and cache the discovered tools"
+          "note": "refresh and cache the discovered tools",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 11,
           "src": "C24",
           "dst": "C61",
           "phrase": "steps to C61 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 12,
           "src": "C14",
           "dst": "R2",
           "phrase": "tools light up, live status via SSE",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -4715,63 +4857,90 @@
           "src": "R2",
           "dst": "C79",
           "phrase": "creates a role and toggles which MCPs it can use",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C79",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C33",
           "phrase": "checks the custom-role plan limit",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C14",
           "dst": "C54",
           "phrase": "steps to C54 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C54",
           "dst": "C49",
           "phrase": "steps to C49 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C14",
           "dst": "C108",
           "phrase": "steps to C108 (fixture backfill)",
-          "note": "publishes a policy_changed event"
+          "note": "publishes a policy_changed event",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C108",
           "dst": "C35",
           "phrase": "steps to C35 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C35",
           "dst": "C111",
           "phrase": "pushes tools/list_changed to affected sessions",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -4784,56 +4953,80 @@
           "src": "R2",
           "dst": "C79",
           "phrase": "sets 3-state tool toggles and regex allow/forbid rules",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C79",
           "dst": "C80",
           "phrase": "steps to C80 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C80",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C14",
           "dst": "C54",
           "phrase": "steps to C54 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C14",
           "dst": "C108",
           "phrase": "steps to C108 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C108",
           "dst": "C35",
           "phrase": "steps to C35 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C35",
           "dst": "C24",
           "phrase": "steps to C24 (fixture backfill)",
-          "note": "refreshes the changed upstream before notifying"
+          "note": "refreshes the changed upstream before notifying",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -4846,49 +5039,70 @@
           "src": "R2",
           "dst": "C81",
           "phrase": "adds a Google email and picks a role",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C81",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C33",
           "phrase": "checks seat capacity",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C14",
           "dst": "C22",
           "phrase": "steps to C22 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C22",
           "dst": "C55",
           "phrase": "steps to C55 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C14",
           "dst": "R2",
           "phrase": "returns a shareable invite link",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -4901,56 +5115,80 @@
           "src": "R3",
           "dst": "C2",
           "phrase": "points their MCP client at the gateway URL",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C2",
           "dst": "C11",
           "phrase": "steps to C11 (fixture backfill)",
-          "note": "resolves the org slug from the path"
+          "note": "resolves the org slug from the path",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C2",
           "dst": "C72",
           "phrase": "steps to C72 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C72",
           "dst": "D4",
           "phrase": "steps to D4 (fixture backfill)",
-          "note": "completes the Google sign-in"
+          "note": "completes the Google sign-in",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C16",
           "dst": "C72",
           "phrase": "steps to C72 (fixture backfill)",
-          "note": "the Google callback finishes the bearer issue"
+          "note": "the Google callback finishes the bearer issue",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C72",
           "dst": "C56",
           "phrase": "steps to C56 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C2",
           "dst": "C111",
           "phrase": "steps to C111 (fixture backfill)",
-          "note": "registers the session under (org, user)"
+          "note": "registers the session under (org, user)",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C2",
           "dst": "R3",
           "phrase": "the role's tools are now available in the client",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -4963,77 +5201,110 @@
           "src": "R3",
           "dst": "C91",
           "phrase": "clicks Authenticate on a per-user-OAuth upstream",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C91",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C27",
           "phrase": "steps to C27 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C27",
           "dst": "C100",
           "phrase": "steps to C100 (fixture backfill)",
-          "note": "starts a signed pending-auth flow"
+          "note": "starts a signed pending-auth flow",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C27",
           "dst": "C64",
           "phrase": "steps to C64 (fixture backfill)",
-          "note": "opens the upstream OAuth authorize URL"
+          "note": "opens the upstream OAuth authorize URL",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C18",
           "dst": "C100",
           "phrase": "steps to C100 (fixture backfill)",
-          "note": "the upstream callback completes the flow"
+          "note": "the upstream callback completes the flow",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C100",
           "dst": "C27",
           "phrase": "steps to C27 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C27",
           "dst": "C47",
           "phrase": "steps to C47 (fixture backfill)",
-          "note": "stores the per-user token (encrypted in cloud)"
+          "note": "stores the per-user token (encrypted in cloud)",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 10,
           "src": "C47",
           "dst": "C49",
           "phrase": "steps to C49 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 11,
           "src": "C27",
           "dst": "R3",
           "phrase": "the upstream's tools become callable as themselves",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -5046,70 +5317,100 @@
           "src": "R3",
           "dst": "C5",
           "phrase": "asks the client to list and call a tool",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C5",
           "dst": "C21",
           "phrase": "steps to C21 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C5",
           "dst": "C23",
           "phrase": "steps to C23 (fixture backfill)",
-          "note": "filters tools to the member's role"
+          "note": "filters tools to the member's role",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C5",
           "dst": "C24",
           "phrase": "steps to C24 (fixture backfill)",
-          "note": "returns the prefixed wire tools"
+          "note": "returns the prefixed wire tools",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C5",
           "dst": "C25",
           "phrase": "forwards the chosen tool call",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C25",
           "dst": "C23",
           "phrase": "steps to C23 (fixture backfill)",
-          "note": "re-checks the call against tool + argument policy"
+          "note": "re-checks the call against tool + argument policy",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C25",
           "dst": "C64",
           "phrase": "steps to C64 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C64",
           "dst": "C65",
           "phrase": "steps to C65 (fixture backfill)",
-          "note": "dispatches to the upstream session"
+          "note": "dispatches to the upstream session",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C25",
           "dst": "C62",
           "phrase": "steps to C62 (fixture backfill)",
-          "note": "audits the call decision and outcome"
+          "note": "audits the call decision and outcome",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 10,
           "src": "C25",
           "dst": "R3",
           "phrase": "returns the tool result",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -5122,49 +5423,70 @@
           "src": "R2",
           "dst": "C82",
           "phrase": "names a token and picks a least-privilege role",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C82",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C41",
           "phrase": "steps to C41 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C41",
           "dst": "C57",
           "phrase": "steps to C57 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C57",
           "dst": "C49",
           "phrase": "steps to C49 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C14",
           "dst": "R2",
           "phrase": "returns the raw `svct_` value once, with a config snippet",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -5177,70 +5499,100 @@
           "src": "R4",
           "dst": "C2",
           "phrase": "sends `Authorization: Bearer svct_…` to the org gateway URL",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C2",
           "dst": "C72",
           "phrase": "steps to C72 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C72",
           "dst": "C41",
           "phrase": "steps to C41 (fixture backfill)",
-          "note": "verifies the token and resolves its org + role scopes"
+          "note": "verifies the token and resolves its org + role scopes",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C2",
           "dst": "C12",
           "phrase": "steps to C12 (fixture backfill)",
-          "note": "pins the request to the token's org"
+          "note": "pins the request to the token's org",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C2",
           "dst": "C5",
           "phrase": "steps to C5 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C5",
           "dst": "C23",
           "phrase": "steps to C23 (fixture backfill)",
-          "note": "authorizes tools at the token's boundary role"
+          "note": "authorizes tools at the token's boundary role",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C5",
           "dst": "C25",
           "phrase": "steps to C25 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C25",
           "dst": "C64",
           "phrase": "steps to C64 (fixture backfill)",
-          "note": "dispatches to the upstream"
+          "note": "dispatches to the upstream",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C25",
           "dst": "C62",
           "phrase": "steps to C62 (fixture backfill)",
-          "note": "audits under the `svc:` identity"
+          "note": "audits under the `svc:` identity",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 10,
           "src": "C25",
           "dst": "R4",
           "phrase": "returns the tool result, no sign-in needed",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -5253,63 +5605,90 @@
           "src": "R2",
           "dst": "C83",
           "phrase": "opens Audit and sets user/MCP/tool filters",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C83",
           "dst": "C74",
           "phrase": "steps to C74 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C74",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C14",
           "dst": "C62",
           "phrase": "steps to C62 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C62",
           "dst": "C49",
           "phrase": "steps to C49 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C83",
           "dst": "C97",
           "phrase": "steps to C97 (fixture backfill)",
-          "note": "subscribes to the live audit tail"
+          "note": "subscribes to the live audit tail",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C97",
           "dst": "C14",
           "phrase": "steps to C14 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C14",
           "dst": "C108",
           "phrase": "steps to C108 (fixture backfill)",
-          "note": "streams new entries over SSE"
+          "note": "streams new entries over SSE",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C14",
           "dst": "R2",
           "phrase": "returns matching entries plus the live tail",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -5322,49 +5701,70 @@
           "src": "R2",
           "dst": "C3",
           "phrase": "connects their AI client to `/admin-mcp/{slug}`",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C3",
           "dst": "C72",
           "phrase": "steps to C72 (fixture backfill)",
-          "note": "Google bearer auth (service tokens rejected here)"
+          "note": "Google bearer auth (service tokens rejected here)",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C3",
           "dst": "C23",
           "phrase": "steps to C23 (fixture backfill)",
-          "note": "checks the user is an admin in this org"
+          "note": "checks the user is an admin in this org",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C3",
           "dst": "C6",
           "phrase": "steps to C6 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C6",
           "dst": "C26",
           "phrase": "steps to C26 (fixture backfill)",
-          "note": "runs an upstream/user/role management tool"
+          "note": "runs an upstream/user/role management tool",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C6",
           "dst": "C22",
           "phrase": "steps to C22 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C6",
           "dst": "R2",
           "phrase": "returns the management result conversationally",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     },
@@ -5377,67 +5777,95 @@
           "src": "R2",
           "dst": "C17",
           "phrase": "confirms deleting the org",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 2,
           "src": "C17",
           "dst": "C22",
           "phrase": "steps to C22 (fixture backfill)",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 3,
           "src": "C22",
           "dst": "C55",
           "phrase": "steps to C55 (fixture backfill)",
-          "note": "removes the org and memberships"
+          "note": "removes the org and memberships",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 4,
           "src": "C22",
           "dst": "C54",
           "phrase": "steps to C54 (fixture backfill)",
-          "note": "purges policy config"
+          "note": "purges policy config",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 5,
           "src": "C22",
           "dst": "C53",
           "phrase": "steps to C53 (fixture backfill)",
-          "note": "purges upstream definitions"
+          "note": "purges upstream definitions",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 6,
           "src": "C22",
           "dst": "C47",
           "phrase": "steps to C47 (fixture backfill)",
-          "note": "purges stored tokens"
+          "note": "purges stored tokens",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 7,
           "src": "C22",
           "dst": "C57",
           "phrase": "steps to C57 (fixture backfill)",
-          "note": "purges service tokens"
+          "note": "purges service tokens",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 8,
           "src": "C22",
           "dst": "C62",
           "phrase": "steps to C62 (fixture backfill)",
-          "note": "purges the audit log"
+          "note": "purges the audit log",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         },
         {
           "n": 9,
           "src": "C22",
           "dst": "R2",
           "phrase": "confirms the org and all scoped data are gone",
-          "note": ""
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
         }
       ]
     }
   ],
+  "subflows": [],
   "edges": [
     {
       "src": "C1",

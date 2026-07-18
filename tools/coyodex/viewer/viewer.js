@@ -331,6 +331,9 @@ function elementPill(id) {
 function tintClusters(root) {
   root.querySelectorAll('g.cluster').forEach((g) => {
     const m = (g.id || '').match(/-([A-Za-z]+\d+)$/);
+    // A `CYBK<i>` frame is a Context/Libraries purpose-bucket group — presentational, backed by no
+    // graph node — so it takes the neutral 'bucket' tint; every other frame tints to its element kind.
+    if (m && /^CYBK\d+$/.test(m[1])) { applyTint(g.querySelector('rect'), 'bucket'); return; }
     const node = m && GRAPH.nodes[m[1]];
     applyTint(g.querySelector('rect'), node && node.kind);
   });
@@ -755,16 +758,19 @@ function explanationKey(fields) {
 // unconditionally below — no need to list it here too.
 const REDUNDANT_FIELD_BY_KIND = {
   subsystem: ['parent'], subdomain: ['parent'],
-  component: ['subsystem'], dep: ['kind'],
+  component: ['subsystem'], dep: ['kind', 'bucket'],
 };
 // The type pill(s) after a box's title. Every box leads with its element type; a dependency adds a
-// SECOND pill for its authored Context sub-type (datastore/service/…) — the same thing the diagram
-// encodes by shape/colour — since the generic "dependency" alone is less informative.
+// pill for its structural Context sub-type (datastore/service/…, the shape/colour the diagram encodes)
+// AND its purpose bucket (Observability/…, the group it clusters into) — the two axes at a glance, so
+// the generic "dependency" alone isn't the whole story. Both drop from the field rows below (shown here).
 function kindPills(n) {
   const type = n.kind === 'dep' ? 'dependency' : n.kind;
   const sub = n.kind === 'dep' && n.fields ? n.fields.Kind : '';
+  const bucket = n.kind === 'dep' && n.fields ? n.fields.Bucket : '';
   return `<span class="badge kind">${esc(type)}</span>`
-    + (sub ? `<span class="badge kind">${esc(sub)}</span>` : '');
+    + (sub ? `<span class="badge kind">${esc(sub)}</span>` : '')
+    + (bucket ? `<span class="badge kind">${esc(bucket)}</span>` : '');
 }
 // A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
 // writes, no handler wiring. Used by showNode to fill the panel with a single element's detail.

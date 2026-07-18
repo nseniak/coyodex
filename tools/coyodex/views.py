@@ -182,7 +182,7 @@ def _component_headers(m: ProjectModel) -> tuple[list[str], bool, list[str]]:
 def _dep_headers(m: ProjectModel) -> tuple[list[str], bool, list[str]]:
     linked = any(d.deployment_linked for d in m.deps)
     extra = sorted({k for d in m.deps for k in d.extra})
-    headers = ["ID", "Name", "Kind", "Type", "Used for", "Where configured", "Conf."]
+    headers = ["ID", "Name", "Kind", "Bucket", "Type", "Used for", "Where configured", "Conf."]
     if linked:
         headers.append("Deployment-linked")
     if any(d.package for d in m.deps):
@@ -269,7 +269,7 @@ def model_to_markdown(m: ProjectModel) -> str:
         headers, linked, extra = _dep_headers(m)
         rows = []
         for d in m.deps:
-            row = [f"**{d.id}**", d.name, d.kind or "", d.type, d.used_for,
+            row = [f"**{d.id}**", d.name, d.kind or "", d.bucket, d.type, d.used_for,
                    _anchor_link(d.where_configured), d.confidence]
             if linked:
                 row.append("yes" if d.deployment_linked else "")
@@ -461,11 +461,13 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         node.entry_points = eps_by_comp.get(c.id, [])
         nodes[c.id] = node
     for d in m.deps:
-        fields = {"Name": d.name, "Kind": d.kind or "", "Type": d.type, "Used for": d.used_for,
-                  "Package": d.package,
+        dep_kind = grammar.classify_dep(d.kind or "", d.type)
+        bucket = grammar.resolve_bucket(dep_kind in grammar.DEP_KINDS_FOLDED, d.bucket, d.type, d.used_for)
+        fields = {"Name": d.name, "Kind": d.kind or "", "Bucket": bucket, "Type": d.type,
+                  "Used for": d.used_for, "Package": d.package,
                   **{k: _extra_str(v) for k, v in d.extra.items()}}
         node = _node(d, "dep", d.name, d.where_configured or _first_href(d.used_for), fields, None)
-        node.dep_kind = grammar.classify_dep(d.kind or "", d.type)
+        node.dep_kind = dep_kind
         nodes[d.id] = node
     for sd in m.subdomains:
         parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""

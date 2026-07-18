@@ -80,6 +80,12 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Dep", "id"): {"pattern": r"^D\d+$"},
     ("Dep", "kind"): {"enum": [*grammar.DEP_KINDS, None], "description": "closed Context "
                        "vocabulary; null → inferred from `type`."},
+    ("Dep", "bucket"): {"description": "PURPOSE bucket (seeded-open) grouping the dep within its "
+                        "diagram — external systems in Context, in-process code in the Libraries "
+                        f"drill. Prefer a seed ({', '.join(grammar.DEP_BUCKET_SEEDS_EXTERNAL)} for "
+                        f"external systems; {', '.join(grammar.DEP_BUCKET_SEEDS_LIBRARY)} for "
+                        "libraries); mint a new one only when none fits. Empty → inferred from "
+                        "`type` + `used_for`."},
     ("Dep", "where_configured"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("Dep", "package"): {"description": 'one string: "<name> <version> (<where declared>)".'},
     ("Dep", "alternative"): {"description": "the fallback used instead of this dep, and under "

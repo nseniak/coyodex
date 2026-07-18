@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import cast
 
 from coyodex import grammar
-from coyodex.model import EntityRelation, ProjectModel, UseCase, load_model
+from coyodex.model import Dep, EntityRelation, ProjectModel, UseCase, load_model
 from coyodex.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
 from coyodex.viewer import build_graph, gen_viewer
 from coyodex.views import _relation_item, model_to_graph
@@ -3685,6 +3685,65 @@ def test_bundle_carries_libs_fold_data() -> None:
     folded_names = [x.get("name", "") for x in b["foldedLibs"]]
     assert "pydantic" in b["mermaidLibs"] or "pydantic" in folded_names
     assert "Libraries (2)" in b["mermaidContext"]   # the fold box label in the Context diagram
+
+
+# ── dependency PURPOSE buckets (seeded-open grouping axis) ────────────────────────────────────────
+
+def test_canonical_bucket_folds_case_to_seed_spelling() -> None:
+    assert grammar.canonical_bucket("  observability ") == "Observability"   # case + whitespace drift
+    assert grammar.canonical_bucket("DATA & STORAGE") == "Data & storage"
+    assert grammar.canonical_bucket("other") == "Other"                      # library catch-all folds too
+    assert grammar.canonical_bucket("Custom Thing") == "Custom Thing"        # minted stays as authored
+
+
+def test_classify_bucket_heuristic_external_vs_library() -> None:
+    assert grammar.classify_bucket(False, "error monitoring", "exception capture") == "Observability"
+    assert grammar.classify_bucket(False, "identity provider", "sign-in") == "Identity & access"
+    assert grammar.classify_bucket(False, "unknown widget", "does a thing") == "Integrations"  # catch-all
+    assert grammar.classify_bucket(True, "async Mongo driver", "storage") == "Data drivers"
+    assert grammar.classify_bucket(True, "UI framework", "dashboard") == "Frontend / UI"
+    assert grammar.classify_bucket(True, "misc helper", "utility") == "Other"                  # catch-all
+
+
+def test_order_buckets_seeds_first_then_minted_then_catchall() -> None:
+    # Seeds in seed order, minted alphabetically, the catch-all last — deterministic diagram order.
+    got = grammar.order_buckets(["Integrations", "Zeta custom", "Observability", "Alpha custom",
+                                 "Data & storage"], is_library=False)
+    assert got == ["Data & storage", "Observability", "Alpha custom", "Zeta custom", "Integrations"]
+
+
+def _bucket_model() -> ProjectModel:
+    m = ProjectModel(title="Shop", format="coyodex-map")
+    m.deps = [
+        Dep(id="D1", name="Postgres", kind="datastore", type="Relational DB",
+            used_for="Primary store, orders", bucket="Data & storage"),
+        Dep(id="D2", name="Sentry", kind="service", type="error monitoring",
+            used_for="Exception capture", bucket="Observability"),
+        Dep(id="D3", name="Datadog", kind="service", type="metrics",
+            used_for="Metrics", bucket="observability"),          # case drift -> folds into Observability
+        Dep(id="D4", name="pydantic", kind="library", type="Validation library",
+            used_for="Models", bucket="Validation / models"),
+        Dep(id="D5", name="React", kind="framework", type="UI framework",
+            used_for="Dashboard UI", bucket="Frontend / UI"),
+    ]
+    return m
+
+
+def test_context_groups_externals_into_bucket_clusters() -> None:
+    mm = gen_viewer.gen_context_mermaid(model_to_graph(_bucket_model()))
+    assert 'subgraph CYBK0["Data & storage"]' in mm         # first seed present -> first cluster
+    assert '["Observability"]' in mm and mm.count('["Observability"]') == 1  # D3 case-drift folds in, not a 2nd cluster
+    assert "-->|uses|" not in mm                             # the repeated 'uses' label is gone
+    assert "SYS --> D1" in mm                                # System still points at each dep (unlabelled)
+    assert "Postgres<br/>Primary store" in mm               # name + caption from the 'Used for' lead
+    assert "pydantic" not in mm and "React" not in mm       # in-process libs fold, not shown at Context
+
+
+def test_libs_drill_groups_libraries_into_bucket_clusters() -> None:
+    mm = gen_viewer.gen_libs_mermaid(model_to_graph(_bucket_model()))
+    assert '["Validation / models"]' in mm and '["Frontend / UI"]' in mm
+    assert "D4" in mm and "D5" in mm
+    assert "Postgres" not in mm                              # external systems are not in the Libraries drill
 
 
 def test_bundle_meta_carries_built_schema_and_tests() -> None:

@@ -156,12 +156,24 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   the **5±2 target** — see *Diagram balance — the fan-out rule* under Cross-cutting rules.
 - **T1 Components**: `Component | Subsystem | Purpose | Entry point | Depends on` (the `Subsystem`
   cell is the component's one parent `S`, or empty = ungrouped).
-- **T2 External dependencies**: `Name | Kind | Type | Used for | Where configured`. `Kind` (optional,
-  closed vocabulary) drives the Context view: external **systems** the project talks to across a
-  boundary — `datastore` / `messaging` / `service` (incl. IdP/auth, payments, observability SaaS) /
-  `platform` — are drawn at Context by name; in-process code — `framework` / `library` — folds into
-  one collapsed "Libraries" box. `Type` stays the free-text human label; when `Kind` is omitted it is
-  inferred from `Type`.
+- **T2 External dependencies**: `Name | Kind | Bucket | Type | Used for | Where configured`. Two
+  independent axes describe each dep:
+  - **Kind** (optional, CLOSED vocabulary) = *where it lives* — decides shown-vs-folded. External
+    **systems** the project talks to across a boundary (`datastore` / `messaging` / `service`, incl.
+    IdP/auth, payments, observability SaaS / `platform`) are drawn at Context by name; in-process code
+    (`framework` / `library`) folds into one collapsed "Libraries" box. Omitted → inferred from `Type`.
+  - **Bucket** (SEEDED-OPEN) = *what it's for* — the PURPOSE that GROUPS the dep into a labelled
+    cluster. Externals cluster in the Context view; folded libraries cluster inside the Libraries
+    drill (two separate diagrams — the cap of ~8 buckets is checked per-diagram). Prefer a seed and
+    reuse the exact spelling; mint a new bucket ONLY when none fits, and on a rebuild reuse the
+    bucket names already in the committed map (don't coin a synonym). Seeds — external:
+    `Data & storage` · `Identity & access` · `Observability` · `Messaging & delivery` · `AI & ML` ·
+    `Infrastructure & runtime` · `Integrations` (catch-all); libraries: `Web framework / server` ·
+    `Frontend / UI` · `Data drivers` · `Service SDKs` · `Validation / models` · `Logging` ·
+    `Crypto / security`. Omitted → inferred from `Type` + `Used for`. Name a purpose, not a vendor
+    ("Payments", not "Stripe").
+  - `Type` stays the free-text human label; `Used for` doubles as the short caption drawn under each
+    box in the diagram (its first clause), so keep its opening words tight.
 - **T3 How to run/build/test**: `Action | Command | Source` — `Source` is a bare `path:line` anchor to
   where the command is defined (the script / Makefile target / config line), not a doc pointer.
 

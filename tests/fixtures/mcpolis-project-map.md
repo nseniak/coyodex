@@ -288,30 +288,30 @@ why: terminal — purges everything created above
 
 ## T2 — External dependencies
 
-| ID | Name | Kind | Type | Used for | Where configured | Conf. |
-|---|---|---|---|---|---|---|
-| **D1** | MongoDB | datastore | document DB (motor) | Cloud persistence for all repos + distributed lock | [config.py](backend/src/mcpolis/entrypoints/config.py:89) | verified |
-| **D2** | Redis | messaging | in-memory store (coredis) | Pub/sub event stream, rate limiting, session revocation | [config.py](backend/src/mcpolis/entrypoints/config.py:91) | verified |
-| **D3** | E2B sandboxes | platform | hosted sandbox | Isolated execution of stdio MCP servers | [config.py](backend/src/mcpolis/entrypoints/config.py:207) | verified |
-| **D4** | Google OAuth IdP | service | identity provider | Gateway client + dashboard admin sign-in | [config.py](backend/src/mcpolis/entrypoints/config.py:28) | verified |
-| **D5** | Upstream MCP servers | service | proxied MCPs | The servers whose tools the gateway aggregates | [client_manager.py](backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103) | verified |
-| **D6** | SMTP / Google Workspace | service | mail submission | Re-auth + transactional email | [config.py](backend/src/mcpolis/entrypoints/config.py:148) | verified |
-| **D7** | Sentry | service | error monitoring | Backend + frontend exception capture | [config.py](backend/src/mcpolis/entrypoints/config.py:117) | verified |
-| **D8** | Mixpanel | service | product analytics | Fire-and-forget event tracking | [config.py](backend/src/mcpolis/entrypoints/config.py:123) | verified |
-| **D9** | Elastic Cloud Serverless | platform | log store | Log storage + Kibana dashboards | [vector.toml](compose/vector/vector.toml:248) | verified |
-| **D10** | Vector | platform | log forwarder | Sidecar shipping structlog JSON to Elastic | [docker-compose.yml](docker-compose.yml:192) | verified |
-| **D11** | Docker / docker-compose | platform | container runtime | Build + orchestrate the stack (dev/standalone/cloud/test) | [docker-compose.yml](docker-compose.yml:1) | verified |
-| **D12** | nginx | platform | reverse proxy | SPA serving + sticky API/MCP routing | [nginx.conf](docker/nginx.conf:1) | verified |
-| **D13** | FastAPI / Starlette / uvicorn | framework | web framework | Backend HTTP/ASGI server | [pyproject.toml](backend/pyproject.toml:14) | verified |
-| **D14** | MCP Python SDK (`mcp`) | library | protocol SDK | MCP client (upstreams) + server (gateway) | [pyproject.toml](backend/pyproject.toml:21) | verified |
-| **D15** | pydantic / pydantic-settings | library | models + settings | Domain models + env-var Settings | [pyproject.toml](backend/pyproject.toml:12) | verified |
-| **D16** | cryptography | library | crypto primitives | AES-256-GCM token encryption | [pyproject.toml](backend/pyproject.toml:22) | verified |
-| **D17** | motor | library | async Mongo driver | Cloud storage driver | [pyproject.toml](backend/pyproject.toml:36) | verified |
-| **D18** | coredis | library | async Redis client | Pub/sub + rate-limit + revocation | [pyproject.toml](backend/pyproject.toml:44) | verified |
-| **D19** | e2b SDK | library | sandbox client | Lazy-imported E2B API client | [pyproject.toml](backend/pyproject.toml:51) | verified |
-| **D20** | structlog | library | structured logging | Event-keyed JSON log records | [pyproject.toml](backend/pyproject.toml:27) | verified |
-| **D21** | aiosmtplib | library | async SMTP | Email adapter transport | [pyproject.toml](backend/pyproject.toml:55) | verified |
-| **D22** | React / Vite / Tailwind / react-query / react-router | framework | SPA stack | The dashboard frontend | [package.json](frontend/package.json:16) | verified |
+| ID | Name | Kind | Bucket | Type | Used for | Where configured | Conf. |
+|---|---|---|---|---|---|---|---|
+| **D1** | MongoDB | datastore | Data & storage | document DB (motor) | Cloud persistence for all repos + distributed lock | [config.py](backend/src/mcpolis/entrypoints/config.py:89) | verified |
+| **D2** | Redis | messaging | Data & storage | in-memory store (coredis) | Pub/sub event stream, rate limiting, session revocation | [config.py](backend/src/mcpolis/entrypoints/config.py:91) | verified |
+| **D3** | E2B sandboxes | platform | Infrastructure & runtime | hosted sandbox | Isolated execution of stdio MCP servers | [config.py](backend/src/mcpolis/entrypoints/config.py:207) | verified |
+| **D4** | Google OAuth IdP | service | Identity & access | identity provider | Gateway client + dashboard admin sign-in | [config.py](backend/src/mcpolis/entrypoints/config.py:28) | verified |
+| **D5** | Upstream MCP servers | service | Integrations | proxied MCPs | The servers whose tools the gateway aggregates | [client_manager.py](backend/src/mcpolis/adapters/upstream_clients/client_manager.py:103) | verified |
+| **D6** | SMTP / Google Workspace | service | Messaging & delivery | mail submission | Re-auth + transactional email | [config.py](backend/src/mcpolis/entrypoints/config.py:148) | verified |
+| **D7** | Sentry | service | Observability | error monitoring | Backend + frontend exception capture | [config.py](backend/src/mcpolis/entrypoints/config.py:117) | verified |
+| **D8** | Mixpanel | service | Observability | product analytics | Fire-and-forget event tracking | [config.py](backend/src/mcpolis/entrypoints/config.py:123) | verified |
+| **D9** | Elastic Cloud Serverless | platform | Observability | log store | Log storage + Kibana dashboards | [vector.toml](compose/vector/vector.toml:248) | verified |
+| **D10** | Vector | platform | Observability | log forwarder | Sidecar shipping structlog JSON to Elastic | [docker-compose.yml](docker-compose.yml:192) | verified |
+| **D11** | Docker / docker-compose | platform | Infrastructure & runtime | container runtime | Build + orchestrate the stack (dev/standalone/cloud/test) | [docker-compose.yml](docker-compose.yml:1) | verified |
+| **D12** | nginx | platform | Infrastructure & runtime | reverse proxy | SPA serving + sticky API/MCP routing | [nginx.conf](docker/nginx.conf:1) | verified |
+| **D13** | FastAPI / Starlette / uvicorn | framework | Web framework / server | web framework | Backend HTTP/ASGI server | [pyproject.toml](backend/pyproject.toml:14) | verified |
+| **D14** | MCP Python SDK (`mcp`) | library | Service SDKs | protocol SDK | MCP client (upstreams) + server (gateway) | [pyproject.toml](backend/pyproject.toml:21) | verified |
+| **D15** | pydantic / pydantic-settings | library | Validation / models | models + settings | Domain models + env-var Settings | [pyproject.toml](backend/pyproject.toml:12) | verified |
+| **D16** | cryptography | library | Crypto / security | crypto primitives | AES-256-GCM token encryption | [pyproject.toml](backend/pyproject.toml:22) | verified |
+| **D17** | motor | library | Data drivers | async Mongo driver | Cloud storage driver | [pyproject.toml](backend/pyproject.toml:36) | verified |
+| **D18** | coredis | library | Data drivers | async Redis client | Pub/sub + rate-limit + revocation | [pyproject.toml](backend/pyproject.toml:44) | verified |
+| **D19** | e2b SDK | library | Service SDKs | sandbox client | Lazy-imported E2B API client | [pyproject.toml](backend/pyproject.toml:51) | verified |
+| **D20** | structlog | library | Logging | structured logging | Event-keyed JSON log records | [pyproject.toml](backend/pyproject.toml:27) | verified |
+| **D21** | aiosmtplib | library | Service SDKs | async SMTP | Email adapter transport | [pyproject.toml](backend/pyproject.toml:55) | verified |
+| **D22** | React / Vite / Tailwind / react-query / react-router | framework | Frontend / UI | SPA stack | The dashboard frontend | [package.json](frontend/package.json:16) | verified |
 
 ---
 
@@ -328,11 +328,11 @@ why: terminal — purges everything created above
 | E2E (Playwright) | `bash tests/run-e2e-tests.sh` | tests/run-e2e-tests.sh |
 | Integration (E2B real SDK) | `bash backend/run-integration-tests.sh` | backend/run-integration-tests.sh |
 | Pyright type check | `bash backend/run-pyright.sh src/ tests/` | backend/run-pyright.sh |
-| Ruff lint | `cd backend && poetry run ruff check .` | backend/pyproject.toml#L90 |
-| Docker standalone | `docker compose --profile standalone up --build` | docker-compose.yml#L80 |
-| Docker cloud (scalable) | `docker compose --profile cloud up --build` | docker-compose.yml#L113 |
-| Build E2B template grid | `cd runner/e2b-templates && make build` | runner/e2b-templates/build_grid.py#L139 |
-| Run all 3 suites concurrently | `make test-all` | Makefile#L16 |
+| Ruff lint | `cd backend && poetry run ruff check .` | backend/pyproject.toml:90 |
+| Docker standalone | `docker compose --profile standalone up --build` | docker-compose.yml:80 |
+| Docker cloud (scalable) | `docker compose --profile cloud up --build` | docker-compose.yml:113 |
+| Build E2B template grid | `cd runner/e2b-templates && make build` | runner/e2b-templates/build_grid.py:139 |
+| Run all 3 suites concurrently | `make test-all` | Makefile:16 |
 
 ---
 
@@ -612,167 +612,167 @@ SOURCE: [events.py](backend/src/mcpolis/domain/model/events.py:9)
 
 **UC1 — Sign up & create the organization**
 1. Org creator → C15 : signs in with Google in the browser
-2. C15 → C101
-3. C101 → D4
+2. C15 → C101 : steps to C101 (fixture backfill)
+3. C101 → D4 : steps to D4 (fixture backfill)
 4. C15 → C73 : redirects the signed-in creator to the app
 5. Org creator → C17 : posts the new org name and slug
-6. C17 → C22
+6. C17 → C22 : steps to C22 (fixture backfill)
 7. C22 → C33 : checks seat/org plan limits
-8. C22 → C55
-9. C55 → C49
-10. C22 → C54 · seeds default admin + user roles and the creator as admin
+8. C22 → C55 : steps to C55 (fixture backfill)
+9. C55 → C49 : steps to C49 (fixture backfill)
+10. C22 → C54 : steps to C54 (fixture backfill) · seeds default admin + user roles and the creator as admin
 11. C17 → Org creator : returns the created org, lands on Upstream MCPs
 
 **UC2 — Add a remote HTTP upstream MCP**
 1. Org admin → C77 : pastes the upstream URL and picks an auth mode
-2. C77 → C74
-3. C74 → C14
-4. C14 → C26
-5. C26 → C40 · scans the config for raw secrets
-6. C26 → C53
-7. C53 → C49
+2. C77 → C74 : steps to C74 (fixture backfill)
+3. C74 → C14 : steps to C14 (fixture backfill)
+4. C14 → C26 : steps to C26 (fixture backfill)
+5. C26 → C40 : steps to C40 (fixture backfill) · scans the config for raw secrets
+6. C26 → C53 : steps to C53 (fixture backfill)
+7. C53 → C49 : steps to C49 (fixture backfill)
 8. C14 → Org admin : shows the upstream added, ready to connect
 
 **UC3 — Add a hosted stdio upstream MCP**
 1. Org admin → C77 : pastes command JSON, fills variables, sizes the sandbox
-2. C77 → C74
-3. C74 → C14
+2. C77 → C74 : steps to C74 (fixture backfill)
+3. C74 → C14 : steps to C14 (fixture backfill)
 4. C14 → C33 : checks the stdio-upstream plan limit
-5. C14 → C26
-6. C26 → C53
-7. C14 → C84 · admin saves the `${NAME}` variables and passwords
-8. C84 → C58
-9. C58 → C49 · encrypts secret values at rest
+5. C14 → C26 : steps to C26 (fixture backfill)
+6. C26 → C53 : steps to C53 (fixture backfill)
+7. C14 → C84 : steps to C84 (fixture backfill) · admin saves the `${NAME}` variables and passwords
+8. C84 → C58 : steps to C58 (fixture backfill)
+9. C58 → C49 : steps to C49 (fixture backfill) · encrypts secret values at rest
 
 **UC4 — Connect / start the upstreams**
 1. Org admin → C98 : clicks Connect / Start
-2. C98 → C74
-3. C74 → C14
-4. C14 → C26
-5. C26 → C64
-6. C64 → C65 · HTTP upstream opens a streamable-http session
-7. C64 → C66 · stdio upstream launches in a sandbox
-8. C66 → C68
-9. C68 → D3
-10. C26 → C24 · refresh and cache the discovered tools
-11. C24 → C61
+2. C98 → C74 : steps to C74 (fixture backfill)
+3. C74 → C14 : steps to C14 (fixture backfill)
+4. C14 → C26 : steps to C26 (fixture backfill)
+5. C26 → C64 : steps to C64 (fixture backfill)
+6. C64 → C65 : steps to C65 (fixture backfill) · HTTP upstream opens a streamable-http session
+7. C64 → C66 : steps to C66 (fixture backfill) · stdio upstream launches in a sandbox
+8. C66 → C68 : steps to C68 (fixture backfill)
+9. C68 → D3 : steps to D3 (fixture backfill)
+10. C26 → C24 : steps to C24 (fixture backfill) · refresh and cache the discovered tools
+11. C24 → C61 : steps to C61 (fixture backfill)
 12. C14 → Org admin : tools light up, live status via SSE
 
 **UC5 — Configure roles & per-MCP access**
 1. Org admin → C79 : creates a role and toggles which MCPs it can use
-2. C79 → C74
-3. C74 → C14
+2. C79 → C74 : steps to C74 (fixture backfill)
+3. C74 → C14 : steps to C14 (fixture backfill)
 4. C14 → C33 : checks the custom-role plan limit
-5. C14 → C54
-6. C54 → C49
-7. C14 → C108 · publishes a policy_changed event
-8. C108 → C35
+5. C14 → C54 : steps to C54 (fixture backfill)
+6. C54 → C49 : steps to C49 (fixture backfill)
+7. C14 → C108 : steps to C108 (fixture backfill) · publishes a policy_changed event
+8. C108 → C35 : steps to C35 (fixture backfill)
 9. C35 → C111 : pushes tools/list_changed to affected sessions
 
 **UC6 — Configure per-tool access & argument checks**
 1. Org admin → C79 : sets 3-state tool toggles and regex allow/forbid rules
-2. C79 → C80
-3. C80 → C74
-4. C74 → C14
-5. C14 → C54
-6. C14 → C108
-7. C108 → C35
-8. C35 → C24 · refreshes the changed upstream before notifying
+2. C79 → C80 : steps to C80 (fixture backfill)
+3. C80 → C74 : steps to C74 (fixture backfill)
+4. C74 → C14 : steps to C14 (fixture backfill)
+5. C14 → C54 : steps to C54 (fixture backfill)
+6. C14 → C108 : steps to C108 (fixture backfill)
+7. C108 → C35 : steps to C35 (fixture backfill)
+8. C35 → C24 : steps to C24 (fixture backfill) · refreshes the changed upstream before notifying
 
 **UC13 — Invite a team member**
 1. Org admin → C81 : adds a Google email and picks a role
-2. C81 → C74
-3. C74 → C14
+2. C81 → C74 : steps to C74 (fixture backfill)
+3. C74 → C14 : steps to C14 (fixture backfill)
 4. C14 → C33 : checks seat capacity
-5. C14 → C22
-6. C22 → C55
+5. C14 → C22 : steps to C22 (fixture backfill)
+6. C22 → C55 : steps to C55 (fixture backfill)
 7. C14 → Org admin : returns a shareable invite link
 
 **UC7 — Member connects their AI client via Google OAuth**
 1. Team member → C2 : points their MCP client at the gateway URL
-2. C2 → C11 · resolves the org slug from the path
-3. C2 → C72
-4. C72 → D4 · completes the Google sign-in
-5. C16 → C72 · the Google callback finishes the bearer issue
-6. C72 → C56
-7. C2 → C111 · registers the session under (org, user)
+2. C2 → C11 : steps to C11 (fixture backfill) · resolves the org slug from the path
+3. C2 → C72 : steps to C72 (fixture backfill)
+4. C72 → D4 : steps to D4 (fixture backfill) · completes the Google sign-in
+5. C16 → C72 : steps to C72 (fixture backfill) · the Google callback finishes the bearer issue
+6. C72 → C56 : steps to C56 (fixture backfill)
+7. C2 → C111 : steps to C111 (fixture backfill) · registers the session under (org, user)
 8. C2 → Team member : the role's tools are now available in the client
 
 **UC8 — Member authenticates per-user OAuth to an upstream**
 1. Team member → C91 : clicks Authenticate on a per-user-OAuth upstream
-2. C91 → C74
-3. C74 → C14
-4. C14 → C27
-5. C27 → C100 · starts a signed pending-auth flow
-6. C27 → C64 · opens the upstream OAuth authorize URL
-7. C18 → C100 · the upstream callback completes the flow
-8. C100 → C27
-9. C27 → C47 · stores the per-user token (encrypted in cloud)
-10. C47 → C49
+2. C91 → C74 : steps to C74 (fixture backfill)
+3. C74 → C14 : steps to C14 (fixture backfill)
+4. C14 → C27 : steps to C27 (fixture backfill)
+5. C27 → C100 : steps to C100 (fixture backfill) · starts a signed pending-auth flow
+6. C27 → C64 : steps to C64 (fixture backfill) · opens the upstream OAuth authorize URL
+7. C18 → C100 : steps to C100 (fixture backfill) · the upstream callback completes the flow
+8. C100 → C27 : steps to C27 (fixture backfill)
+9. C27 → C47 : steps to C47 (fixture backfill) · stores the per-user token (encrypted in cloud)
+10. C47 → C49 : steps to C49 (fixture backfill)
 11. C27 → Team member : the upstream's tools become callable as themselves
 
 **UC12 — Member lists & calls tools through the gateway**
 1. Team member → C5 : asks the client to list and call a tool
-2. C5 → C21
-3. C5 → C23 · filters tools to the member's role
-4. C5 → C24 · returns the prefixed wire tools
+2. C5 → C21 : steps to C21 (fixture backfill)
+3. C5 → C23 : steps to C23 (fixture backfill) · filters tools to the member's role
+4. C5 → C24 : steps to C24 (fixture backfill) · returns the prefixed wire tools
 5. C5 → C25 : forwards the chosen tool call
-6. C25 → C23 · re-checks the call against tool + argument policy
-7. C25 → C64
-8. C64 → C65 · dispatches to the upstream session
-9. C25 → C62 · audits the call decision and outcome
+6. C25 → C23 : steps to C23 (fixture backfill) · re-checks the call against tool + argument policy
+7. C25 → C64 : steps to C64 (fixture backfill)
+8. C64 → C65 : steps to C65 (fixture backfill) · dispatches to the upstream session
+9. C25 → C62 : steps to C62 (fixture backfill) · audits the call decision and outcome
 10. C25 → Team member : returns the tool result
 
 **UC10 — Admin mints a service token**
 1. Org admin → C82 : names a token and picks a least-privilege role
-2. C82 → C74
-3. C74 → C14
-4. C14 → C41
-5. C41 → C57
-6. C57 → C49
+2. C82 → C74 : steps to C74 (fixture backfill)
+3. C74 → C14 : steps to C14 (fixture backfill)
+4. C14 → C41 : steps to C41 (fixture backfill)
+5. C41 → C57 : steps to C57 (fixture backfill)
+6. C57 → C49 : steps to C49 (fixture backfill)
 7. C14 → Org admin : returns the raw `svct_` value once, with a config snippet
 
 **UC11 — Headless agent calls tools via the service token**
 1. Headless agent → C2 : sends `Authorization: Bearer svct_…` to the org gateway URL
-2. C2 → C72
-3. C72 → C41 · verifies the token and resolves its org + role scopes
-4. C2 → C12 · pins the request to the token's org
-5. C2 → C5
-6. C5 → C23 · authorizes tools at the token's boundary role
-7. C5 → C25
-8. C25 → C64 · dispatches to the upstream
-9. C25 → C62 · audits under the `svc:` identity
+2. C2 → C72 : steps to C72 (fixture backfill)
+3. C72 → C41 : steps to C41 (fixture backfill) · verifies the token and resolves its org + role scopes
+4. C2 → C12 : steps to C12 (fixture backfill) · pins the request to the token's org
+5. C2 → C5 : steps to C5 (fixture backfill)
+6. C5 → C23 : steps to C23 (fixture backfill) · authorizes tools at the token's boundary role
+7. C5 → C25 : steps to C25 (fixture backfill)
+8. C25 → C64 : steps to C64 (fixture backfill) · dispatches to the upstream
+9. C25 → C62 : steps to C62 (fixture backfill) · audits under the `svc:` identity
 10. C25 → Headless agent : returns the tool result, no sign-in needed
 
 **UC17 — Admin reviews the audit log**
 1. Org admin → C83 : opens Audit and sets user/MCP/tool filters
-2. C83 → C74
-3. C74 → C14
-4. C14 → C62
-5. C62 → C49
-6. C83 → C97 · subscribes to the live audit tail
-7. C97 → C14
-8. C14 → C108 · streams new entries over SSE
+2. C83 → C74 : steps to C74 (fixture backfill)
+3. C74 → C14 : steps to C14 (fixture backfill)
+4. C14 → C62 : steps to C62 (fixture backfill)
+5. C62 → C49 : steps to C49 (fixture backfill)
+6. C83 → C97 : steps to C97 (fixture backfill) · subscribes to the live audit tail
+7. C97 → C14 : steps to C14 (fixture backfill)
+8. C14 → C108 : steps to C108 (fixture backfill) · streams new entries over SSE
 9. C14 → Org admin : returns matching entries plus the live tail
 
 **UC22 — Manage MCP Hero via the Admin MCP**
 1. Org admin → C3 : connects their AI client to `/admin-mcp/{slug}`
-2. C3 → C72 · Google bearer auth (service tokens rejected here)
-3. C3 → C23 · checks the user is an admin in this org
-4. C3 → C6
-5. C6 → C26 · runs an upstream/user/role management tool
-6. C6 → C22
+2. C3 → C72 : steps to C72 (fixture backfill) · Google bearer auth (service tokens rejected here)
+3. C3 → C23 : steps to C23 (fixture backfill) · checks the user is an admin in this org
+4. C3 → C6 : steps to C6 (fixture backfill)
+5. C6 → C26 : steps to C26 (fixture backfill) · runs an upstream/user/role management tool
+6. C6 → C22 : steps to C22 (fixture backfill)
 7. C6 → Org admin : returns the management result conversationally
 
 **UC25 — Admin deletes the organization**
 1. Org admin → C17 : confirms deleting the org
-2. C17 → C22
-3. C22 → C55 · removes the org and memberships
-4. C22 → C54 · purges policy config
-5. C22 → C53 · purges upstream definitions
-6. C22 → C47 · purges stored tokens
-7. C22 → C57 · purges service tokens
-8. C22 → C62 · purges the audit log
+2. C17 → C22 : steps to C22 (fixture backfill)
+3. C22 → C55 : steps to C55 (fixture backfill) · removes the org and memberships
+4. C22 → C54 : steps to C54 (fixture backfill) · purges policy config
+5. C22 → C53 : steps to C53 (fixture backfill) · purges upstream definitions
+6. C22 → C47 : steps to C47 (fixture backfill) · purges stored tokens
+7. C22 → C57 : steps to C57 (fixture backfill) · purges service tokens
+8. C22 → C62 : steps to C62 (fixture backfill) · purges the audit log
 9. C22 → Org admin : confirms the org and all scoped data are gone
 
 ---
@@ -806,16 +806,16 @@ SOURCE: [events.py](backend/src/mcpolis/domain/model/events.py:9)
 
 | Surface | Who can reach | Auth check | Risk note |
 |---|---|---|---|
-| `/mcp` gateway | Google bearer OR `svct_` service token | backend/src/mcpolis/entrypoints/app.py#L353 | Composite verifier routes svct_→registry, else→OAuth |
-| `/mcp` org scoping | user/token scoped to one org | backend/src/mcpolis/entrypoints/middleware/org_context.py#L267 | cross-org isolation via the slug→org contextvar |
-| service-token org pin | `svct_` holder, one pinned org | backend/src/mcpolis/entrypoints/middleware/service_token_pin.py#L39 | slug mismatch 401s; fails closed if scope missing |
-| `/admin-mcp/{slug}` | OAuth user who is admin in that org | backend/src/mcpolis/entrypoints/app.py#L521 | per-org gate; service tokens structurally rejected |
-| `/admin-mcp/system` | email in superadmin allowlist | backend/src/mcpolis/entrypoints/app.py#L668 | cloud-only; allowlist is the sole gate |
-| dashboard `/api/*` | signed-in user (cookie); admin via require_admin | backend/src/mcpolis/entrypoints/routes/dashboard_auth.py#L284 | HMAC cookie, 7-day TTL, optional jti revocation |
-| org anti-enumeration | unknown slug → 401 (not 404) | backend/src/mcpolis/entrypoints/routes/org_routes.py#L100 | one exception: `/{slug}/public` invite read |
-| upstream OAuth callback | public, HMAC-signed state | backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py#L107 | integrity rests on the signed state |
-| upstream URL fetch | gateway → upstream | backend/src/mcpolis/domain/services/url_safety.py#L152 | SSRF deny-list (loopback/RFC1918/IMDS) |
-| rate limiting (unwired) | n/a | backend/src/mcpolis/entrypoints/app.py#L1630 | middleware built but not installed today |
+| `/mcp` gateway | Google bearer OR `svct_` service token | backend/src/mcpolis/entrypoints/app.py:353 | Composite verifier routes svct_→registry, else→OAuth |
+| `/mcp` org scoping | user/token scoped to one org | backend/src/mcpolis/entrypoints/middleware/org_context.py:267 | cross-org isolation via the slug→org contextvar |
+| service-token org pin | `svct_` holder, one pinned org | backend/src/mcpolis/entrypoints/middleware/service_token_pin.py:39 | slug mismatch 401s; fails closed if scope missing |
+| `/admin-mcp/{slug}` | OAuth user who is admin in that org | backend/src/mcpolis/entrypoints/app.py:521 | per-org gate; service tokens structurally rejected |
+| `/admin-mcp/system` | email in superadmin allowlist | backend/src/mcpolis/entrypoints/app.py:668 | cloud-only; allowlist is the sole gate |
+| dashboard `/api/*` | signed-in user (cookie); admin via require_admin | backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:284 | HMAC cookie, 7-day TTL, optional jti revocation |
+| org anti-enumeration | unknown slug → 401 (not 404) | backend/src/mcpolis/entrypoints/routes/org_routes.py:100 | one exception: `/{slug}/public` invite read |
+| upstream OAuth callback | public, HMAC-signed state | backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:107 | integrity rests on the signed state |
+| upstream URL fetch | gateway → upstream | backend/src/mcpolis/domain/services/url_safety.py:152 | SSRF deny-list (loopback/RFC1918/IMDS) |
+| rate limiting (unwired) | n/a | backend/src/mcpolis/entrypoints/app.py:1630 | middleware built but not installed today |
 
 ### Config & environments
 
@@ -848,7 +848,7 @@ SOURCE: [events.py](backend/src/mcpolis/domain/model/events.py:9)
 
 ## Relationships — backbone edge list
 
-| From | Verb | To | Why | Where |
+| From | Verb | To | Why | Where (example) |
 |---|---|---|---|---|
 | C1 | uses | C8 | build the per-mode storage bundle | [app.py](backend/src/mcpolis/entrypoints/app.py:934) |
 | C1 | uses | C21 | assemble per-org runtimes | [app.py](backend/src/mcpolis/entrypoints/app.py:957) |
@@ -1027,14 +1027,14 @@ SOURCE: [events.py](backend/src/mcpolis/domain/model/events.py:9)
 
 | Target | Tested? | Test(s) | Gap / risk | Confidence |
 |---|---|---|---|---|
-| UC11 service-token auth + org pin | yes | [tests/unit](backend/tests/unit/) (service_token / pin suites) | role-surface + fail-closed pinning are pinned by unit tests | inferred |
-| UC7/UC12 gateway tool call + policy | yes | [tests/unit](backend/tests/unit/) (policy_engine, tool_router) | per-org `is_admin` isolation gate has a named test | inferred |
-| UC25 org-deletion cascade | yes | [tests/unit](backend/tests/unit/) (org_service) | drift guard asserts every org-scoped repo is purged | inferred |
-| UC3/UC4 stdio sandbox (E2B) | partial | [tests/integration](backend/tests/integration/) (paid, gated) | real-SDK path only runs when `E2B_API_KEY` is set | inferred |
-| UC8 per-user OAuth refresh/liveness | partial | [tests/unit](backend/tests/unit/) (oauth_refresh) | stall/reattach edge cases are flaky per project notes | inferred |
-| Full-stack journeys (UC1, UC2, UC17) | yes | [tests/e2e](tests/e2e/) (Playwright) | covered end-to-end via the dashboard | inferred |
-| C45 SSRF deny-list | yes | [tests/unit](backend/tests/unit/) (url_safety) | DNS-resolved IP checks present | inferred |
-| C48/C49 field encryption at rest | partial | backend/tests/unit/ | key-rotation invalidation path under-exercised | inferred |
+| service-token auth + org pin (Headless agent calls tools via service token) | yes | [backend/tests/unit/](backend/tests/unit/) — service_token / pin suites | role-surface + fail-closed pinning are pinned by unit tests | inferred |
+| gateway tool call + policy (Connect human AI client via Google OAuth, List and call tools through the gateway) | yes | [backend/tests/unit/](backend/tests/unit/) — policy_engine, tool_router | per-org `is_admin` isolation gate has a named test | inferred |
+| org-deletion cascade (Delete an organization) | yes | [backend/tests/unit/](backend/tests/unit/) — org_service | drift guard asserts every org-scoped repo is purged | inferred |
+| stdio sandbox (E2B) (Add a hosted stdio upstream MCP, Connect or start an upstream) | partial | [backend/tests/integration/](backend/tests/integration/) — paid, gated | real-SDK path only runs when `E2B_API_KEY` is set | inferred |
+| per-user OAuth refresh/liveness (Per-user OAuth to an upstream) | partial | [backend/tests/unit/](backend/tests/unit/) — oauth_refresh | stall/reattach edge cases are flaky per project notes | inferred |
+| Full-stack journeys (Sign up and create an organization, Add a remote HTTP upstream MCP, View and filter the audit log) | yes | [tests/e2e/](tests/e2e/) — Playwright | covered end-to-end via the dashboard | inferred |
+| SSRF deny-list (UriWrapping / UrlSafety) | yes | [backend/tests/unit/](backend/tests/unit/) — url_safety | DNS-resolved IP checks present | inferred |
+| field encryption at rest (Field encryption (AES-256-GCM), Mongo client + OrgScopedCollection) | partial | [backend/tests/unit/](backend/tests/unit/) — field-crypto suite | key-rotation invalidation path under-exercised | inferred |
 
 ---
 

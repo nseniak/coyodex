@@ -69,6 +69,108 @@ def classify_dep(kind_cell: str, type_cell: str) -> str:
     return "library"
 
 
+# ── Dependency PURPOSE bucket — the seeded-open grouping axis ─────────────────────────────────────
+# Unlike DEP_KINDS (a CLOSED, structural axis: how you talk to the dep + whether it folds), a bucket
+# is a PURPOSE axis (what the dep does for the product) and is SEEDED-OPEN: the analysis reuses a seed
+# when one fits and may MINT a new bucket when none does. `Kind` still decides shown-vs-folded; the
+# bucket only GROUPS deps WITHIN each of the two diagrams — external systems in the Context view,
+# in-process code in the Libraries drill — so the two seed lists lean external vs. code respectively.
+DEP_BUCKET_SEEDS_EXTERNAL = (
+    "Data & storage", "Identity & access", "Observability", "Messaging & delivery",
+    "AI & ML", "Infrastructure & runtime", "Integrations",
+)
+DEP_BUCKET_SEEDS_LIBRARY = (
+    "Web framework / server", "Frontend / UI", "Data drivers", "Service SDKs",
+    "Validation / models", "Logging", "Crypto / security",
+)
+DEP_BUCKET_SEEDS = DEP_BUCKET_SEEDS_EXTERNAL + DEP_BUCKET_SEEDS_LIBRARY
+# The catch-all each diagram falls back to when no seed fits (external's is itself a seed, drawn last).
+DEP_BUCKET_CATCHALL_EXTERNAL = "Integrations"
+DEP_BUCKET_CATCHALL_LIBRARY = "Other"
+# Per-DIAGRAM cap (checked separately for externals vs libraries — they are two diagrams): a nudge to
+# keep the grouping legible instead of proliferating one-item buckets.
+DEP_BUCKET_CAP = 8
+
+# The external catch-all is already a seed; the LIBRARY catch-all is not, so add it explicitly —
+# otherwise a mis-cased "other" would escape folding and render a duplicate look-alike catch-all cluster.
+_BUCKET_CANON = {b.lower(): b for b in (*DEP_BUCKET_SEEDS, DEP_BUCKET_CATCHALL_LIBRARY)}
+
+
+def canonical_bucket(name: str) -> str:
+    """Fold a bucket to its seed's canonical spelling when it matches one case-insensitively (kills
+    the case / trailing-whitespace drift deterministically); a minted (non-seed) bucket is returned
+    trimmed, exactly as authored. The single normalizer every reader routes through."""
+    s = (name or "").strip()
+    return _BUCKET_CANON.get(s.lower(), s)
+
+
+# Keyword signatures for the heuristic used ONLY when a dep carries no authored bucket — priority
+# order, first hit wins, matched against the `type` + `used_for` text. The authored `Bucket` is the
+# accurate path; this just keeps an un-tagged dep grouped somewhere sane instead of all-catch-all.
+_BUCKET_SIGNATURES_EXTERNAL: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Identity & access", ("oauth", "openid", "sso", "idp", "identity", "auth provider", "auth0",
+                           "okta", "secrets manager", "vault", "keycloak")),
+    ("Observability", ("observability", "monitoring", "telemetry", "metrics", "tracing", "sentry",
+                       "datadog", "analytics", "mixpanel", "apm", "log store", "log forward",
+                       "feature flag", "unleash", "statsd")),
+    ("Messaging & delivery", ("email", "smtp", "sendgrid", "mailgun", "mailchimp", "mailjet", "sms",
+                              "twilio", "push notification", "notification")),
+    ("AI & ML", ("llm", "openai", "anthropic", "claude", "inference", "speech", "text-to-speech",
+                 "tts", "image generation", "embedding", " ml ", "machine learning")),
+    ("Data & storage", ("database", "datastore", "data store", "sql", "postgres", "mysql", "mongo",
+                        "redis", "cache", "object storage", "blob storage", "warehouse",
+                        "elasticsearch", "dynamodb", "s3", "key-value", "vector db")),
+    ("Infrastructure & runtime", ("docker", "container", "kubernetes", "k8s", "nginx",
+                                  "reverse proxy", "cdn", "sandbox", "load balancer", "serverless",
+                                  "cloud runtime")),
+)
+_BUCKET_SIGNATURES_LIBRARY: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("Frontend / UI", ("react", "vue", "angular", "svelte", "vite", "tailwind", "frontend",
+                       " ui ", "spa", "router", "css")),
+    ("Data drivers", ("driver", "motor", "pymongo", "sqlalchemy", "orm", "coredis", "redis client",
+                      "prisma", "database driver", "asyncpg")),
+    ("Web framework / server", ("framework", "fastapi", "flask", "django", "express", "starlette",
+                                "uvicorn", "asgi", "wsgi", "rails", "spring", "gunicorn")),
+    ("Validation / models", ("pydantic", "validation", "serialization", "marshmallow", "schema")),
+    ("Logging", ("structlog", "logging", "logger")),
+    ("Crypto / security", ("crypto", "cryptograph", "encryption", "jwt", "hashing", "security")),
+    ("Service SDKs", ("sdk", "api client", "protocol", "client library")),
+)
+
+
+def classify_bucket(is_library: bool, type_cell: str, used_for: str) -> str:
+    """The dep's purpose bucket when none is authored: infer from `type` + `used_for`, falling back
+    to the diagram's catch-all. `is_library` picks the code seeds vs. the external seeds so a folded
+    dep never lands in an external bucket (and vice-versa)."""
+    hay = f" {type_cell} {used_for} ".lower()
+    sigs = _BUCKET_SIGNATURES_LIBRARY if is_library else _BUCKET_SIGNATURES_EXTERNAL
+    for bucket, needles in sigs:
+        if any(n in hay for n in needles):
+            return bucket
+    return DEP_BUCKET_CATCHALL_LIBRARY if is_library else DEP_BUCKET_CATCHALL_EXTERNAL
+
+
+def resolve_bucket(is_library: bool, authored: str, type_cell: str, used_for: str) -> str:
+    """The dep's FINAL bucket: the authored one (canonicalized) or the heuristic fallback. The single
+    resolver both the markdown/panel view and the diagram grouping call, so a dep's shown bucket and
+    the cluster it groups into never disagree."""
+    if (authored or "").strip():
+        return canonical_bucket(authored)
+    return classify_bucket(is_library, type_cell, used_for)
+
+
+def order_buckets(names: Iterable[str], is_library: bool) -> list[str]:
+    """The buckets present, in the DETERMINISTIC diagram order: seeds first (in seed order), then
+    minted buckets alphabetically, then the catch-all last. Canonicalizes + de-dups on the way in."""
+    seeds = DEP_BUCKET_SEEDS_LIBRARY if is_library else DEP_BUCKET_SEEDS_EXTERNAL
+    catchall = DEP_BUCKET_CATCHALL_LIBRARY if is_library else DEP_BUCKET_CATCHALL_EXTERNAL
+    present = list(dict.fromkeys(canonical_bucket(n) for n in names if (n or "").strip()))
+    seed_order = [b for b in seeds if b in present and b != catchall]
+    minted = sorted(b for b in present if b not in seeds and b != catchall)
+    tail = [catchall] if catchall in present else []
+    return seed_order + minted + tail
+
+
 # An entry point's ACTIVATION — a closed vocabulary describing WHO starts it. "self" = the system
 # starts it with no outside caller (a scheduled/cron job, a while-True or interval loop, a
 # background worker/thread, a queue/stream consumer, a boot/startup hook, an OS signal handler);

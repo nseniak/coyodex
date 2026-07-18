@@ -12,6 +12,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
+from coyodex import grammar
 from coyodex.model import (
     Component,
     Dep,
@@ -78,6 +79,31 @@ def problems_of(m: ProjectModel) -> list[str]:
 def warnings_of(m: ProjectModel) -> list[str]:
     _, warnings = validate_model(m)
     return warnings
+
+
+# --- dependency purpose buckets ---------------------------------------------------
+
+def test_bucket_cap_exceeded_is_advisory_not_gating() -> None:
+    # More than the soft cap of distinct buckets among external systems -> an advisory warning, NOT a
+    # gate (an integration-heavy product legitimately spans many purposes — e.g. mee6 needs 9).
+    m = make_valid_model()
+    m.deps = [Dep(id=f"D{i}", name=f"S{i}", kind="service", type="api", bucket=f"Bucket {i}")
+              for i in range(grammar.DEP_BUCKET_CAP + 2)]
+    assert any("Many purpose buckets among external systems" in w for w in warnings_of(m))
+    assert not any("purpose buckets" in p for p in problems_of(m))
+
+
+def test_bucket_non_seed_is_an_advisory_nudge_not_a_gate() -> None:
+    m = make_valid_model()
+    m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL", bucket="Datastores")]
+    assert not any("Datastores" in p for p in problems_of(m))                      # not gating
+    assert any("Datastores" in w and "not a seed" in w for w in warnings_of(m))    # one nudge, aggregated
+
+
+def test_bucket_seed_spelling_passes_clean() -> None:
+    m = make_valid_model()
+    m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL", bucket="Data & storage")]
+    assert not any("bucket" in w.lower() for w in warnings_of(m))
 
 
 # --- clean baseline ---------------------------------------------------------------

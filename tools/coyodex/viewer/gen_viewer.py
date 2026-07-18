@@ -38,7 +38,9 @@ from pathlib import Path
 from typing import Any, TypedDict, cast
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
-from coyodex.grammar import DEP_KINDS_FOLDED  # external-dep Kind vocabulary (Context fold rule)
+from coyodex.grammar import (  # external-dep Kind fold rule + the purpose-bucket grouping axis
+    DEP_KINDS_FOLDED, canonical_bucket, order_buckets, resolve_bucket,
+)
 
 # Synthetic node id for the collapsed "Libraries" box in the Context view (folds framework + library
 # deps out of the C4 Context altitude). Not a real element id (no prefix+digits), so it never
@@ -410,6 +412,9 @@ ELEMENT_TINT = {
     "entity": _fill_stroke(ENTITY_STYLE),
     "subsystem": _fill_stroke(SUBSYSTEM_STYLE),
     "subdomain": _fill_stroke(SUBDOMAIN_STYLE),
+    # A neutral frame for the Context/Libraries PURPOSE-bucket clusters (`CYBK<i>`): they are grouping
+    # affordances, not typed elements, so they read as a quiet slate frame around the emerald dep boxes.
+    "bucket": {"fill": "#f8fafc", "stroke": "#94a3b8"},
 }
 
 def gen_domain_container_mermaid(graph: GraphDict) -> str:
@@ -1009,31 +1014,81 @@ def _dep_kind(node: dict[str, Any]) -> str:
     return str(node.get("dep_kind") or "library")
 
 
+def _dep_bucket(node: dict[str, Any]) -> str:
+    """A dep node's purpose bucket via the shared resolver: the authored `Bucket` field or the
+    heuristic fallback. `is_library` follows the dep's Kind so the fallback draws from the right seed
+    family and a folded dep never lands in an external bucket (or vice-versa)."""
+    is_lib = _dep_kind(node) in DEP_KINDS_FOLDED
+    return resolve_bucket(is_lib, _field_ci(node, "bucket"),
+                          _field_ci(node, "type"), _field_ci(node, "used for"))
+
+
 def folded_libs(graph: GraphDict) -> list[dict[str, str]]:
-    """(id, name, type) for the deps folded into the Context 'Libraries' box — those whose Kind is an
-    in-process one (framework / library). The C4 Context view shows external SYSTEMS by name and
-    collapses these, since libraries are an implementation concern, not a system the project talks to."""
+    """(id, name, type, used_for, bucket) for the deps folded into the Context 'Libraries' box — those
+    whose Kind is an in-process one (framework / library). The C4 Context view shows external SYSTEMS
+    by name and collapses these, since libraries are an implementation concern, not a system the
+    project talks to; `bucket` groups them once the box is drilled."""
     out: list[dict[str, str]] = []
     for nid, node in graph["nodes"].items():
         if str(node["kind"]) == "dep" and _dep_kind(node) in DEP_KINDS_FOLDED:
-            out.append({"id": nid, "name": str(node["name"]), "type": _field_ci(node, "type")})
+            out.append({"id": nid, "name": str(node["name"]), "type": _field_ci(node, "type"),
+                        "used_for": _field_ci(node, "used for"), "bucket": _dep_bucket(node)})
     return out
 
 
-def _context_dep_lines(deps: list[tuple[str, str]]) -> list[str]:
-    """Mermaid lines drawing each (id, name) dep as a cylinder the System `uses`. Shared by the
-    Context view (external systems only) and the Libraries drill-down (the folded libs)."""
+def _dep_caption(used_for: str) -> str:
+    """A short caption drawn under a dep box's name — the LEAD of its 'Used for', link-stripped, cut at
+    the first clause and capped, so a box reads 'Scrapfly / scraping' instead of a full sentence. Empty
+    'Used for' → no caption (the name stands alone)."""
+    s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", used_for or "")     # md link -> its text
+    s = re.split(r"[.;(]| — |, ", s.strip())[0]                     # first clause only
+    s = s.replace('"', "'").replace("`", "").replace("[", "(").replace("]", ")")
+    s = s.replace("<", "(").replace(">", ")")
+    s = re.sub(r"\s+", " ", s).strip()
+    if len(s) <= 32:
+        return s
+    cut = s[:32].rsplit(" ", 1)[0].strip(" -/·")   # trim back to a word boundary
+    return (cut or s[:32]) + "…"
+
+
+def _dep_view(nid: str, node: dict[str, Any]) -> dict[str, str]:
+    """The fields the grouped Context/Libraries diagrams need per dep: id, name, its short caption
+    source, and its (resolved) purpose bucket."""
+    return {"id": nid, "name": str(node["name"]),
+            "used_for": _field_ci(node, "used for"), "bucket": _dep_bucket(node)}
+
+
+def _context_dep_groups(deps: list[dict[str, str]], is_library: bool) -> list[str]:
+    """Mermaid lines drawing `deps` grouped into one labelled subgraph per PURPOSE bucket (in seed
+    order), each dep a cylinder captioned by the lead of its 'Used for', plus an UNLABELLED `SYS -->
+    dep` arrow (the direction already says 'uses'; the repeated word was pure noise). Shared by the
+    Context view (external systems) and the Libraries drill (folded in-process code) — the ONE grouping
+    implementation, so both diagrams read identically. Cluster ids are `CYBK<i>` (presentational
+    frames, not graph nodes) — the viewer tints them via that prefix."""
+    open_b, close_b = SHAPE["dep"]
+    by_bucket: dict[str, list[dict[str, str]]] = {}
+    for d in deps:
+        by_bucket.setdefault(canonical_bucket(d["bucket"]), []).append(d)
     lines: list[str] = []
-    for nid, name in deps:
-        lines.append(f'  SYS -->|uses| {nid}[("{_safe_label(name)}")]:::cy-{nid}')
-        lines.append(f"  class {nid} dep")
+    for i, bucket in enumerate(order_buckets(by_bucket.keys(), is_library)):
+        lines.append(f'  subgraph CYBK{i}["{_safe_label(bucket)}"]')
+        for d in by_bucket[bucket]:
+            cap = _dep_caption(d["used_for"])
+            label = _safe_label(d["name"]) + (f"<br/>{cap}" if cap else "")
+            lines.append(f'    {d["id"]}{open_b}{label}{close_b}:::cy-{d["id"]}')
+            lines.append(f'    class {d["id"]} dep')
+        lines.append("  end")
+    for d in deps:
+        lines.append(f'  SYS --> {d["id"]}')
     return lines
 
 
 def _context_head(graph: GraphDict) -> list[str]:
     """The System node + actor lifelines — the part of the Context view shared with its drill-downs."""
     title = _safe_label(graph["title"] or "System")
-    lines = ["flowchart TB", f'  SYS["{title}"]:::cy-SYS', "  class SYS system"]
+    # LR (not TB): with every dep hanging off SYS at the same rank, TB spreads them across ONE very wide
+    # row (unreadable at ~45 deps); LR stacks them into a narrow, tall column of bucket clusters instead.
+    lines = ["flowchart LR", f'  SYS["{title}"]:::cy-SYS', "  class SYS system"]
     for i, r in enumerate(graph["roles"]):
         rid = "R" + str(i)
         label = _safe_label(r["name"])
@@ -1043,7 +1098,7 @@ def _context_head(graph: GraphDict) -> list[str]:
         else:
             lines.append(f'  {rid}(["{label}"]):::cy-{rid}')        # stadium = human actor
             lines.append(f"  class {rid} human")
-        lines.append(f"  {rid} -->|uses| SYS")
+        lines.append(f"  {rid} --> SYS")                            # direction says 'uses'; no label noise
     return lines
 
 
@@ -1058,13 +1113,14 @@ CONTEXT_CLASSDEFS = [
 
 def gen_context_mermaid(graph: GraphDict) -> str:
     """C4 Context: the system as one node, actors (Roles) using it, and the EXTERNAL SYSTEMS it relies
-    on drawn by name (datastore / messaging / service / platform). In-process deps (framework /
-    library) are collapsed into one `📚 Libraries (N)` box — drillable in the viewer — so the highest
-    altitude stays a clean C4 picture instead of a star of every imported library."""
+    on drawn by name — GROUPED into one labelled cluster per purpose bucket (Data & storage /
+    Observability / …) so a wide star of dependencies reads as a handful of clusters. In-process deps
+    (framework / library) are collapsed into one `📚 Libraries (N)` box — drillable in the viewer — so
+    the highest altitude stays a clean C4 picture instead of a star of every imported library."""
     lines = _context_head(graph)
-    shown = [(nid, str(node["name"])) for nid, node in graph["nodes"].items()
+    shown = [_dep_view(nid, node) for nid, node in graph["nodes"].items()
              if str(node["kind"]) == "dep" and _dep_kind(node) not in DEP_KINDS_FOLDED]
-    lines += _context_dep_lines(shown)
+    lines += _context_dep_groups(shown, is_library=False)
     n_folded = len(folded_libs(graph))
     if n_folded:
         lines.append(f'  {LIBS_ID}["📚 Libraries ({n_folded})"]:::cy-{LIBS_ID}')
@@ -1076,14 +1132,15 @@ def gen_context_mermaid(graph: GraphDict) -> str:
 
 def gen_libs_mermaid(graph: GraphDict) -> str:
     """The Libraries drill-down (reached by drilling the Context 'Libraries' box): the System with
-    every folded in-process dep drawn by name. Same `SYS -->|uses| <id>` shape as the Context view, so
-    the viewer's context-edge bridge resolves each arrow to its 'Used for' detail and each box to its
-    panel. Empty string when nothing is folded (the box — hence this view — never appears)."""
+    every folded in-process dep drawn by name — GROUPED by purpose bucket (Web framework / Frontend /
+    Data drivers / …) the same way the Context view groups external systems, so the drill is a set of
+    clusters instead of a flat star. Empty string when nothing is folded (the box — hence this view —
+    never appears)."""
     libs = folded_libs(graph)
     if not libs:
         return ""
     lines = _context_head(graph)
-    lines += _context_dep_lines([(d["id"], d["name"]) for d in libs])
+    lines += _context_dep_groups(libs, is_library=True)
     lines += CONTEXT_CLASSDEFS
     return "\n".join(lines)
 

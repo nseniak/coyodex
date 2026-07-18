@@ -680,6 +680,45 @@ def _check_dep_kinds(m: ProjectModel) -> list[str]:
             for d in m.deps if d.kind and d.kind.strip().lower() not in grammar.DEP_KINDS]
 
 
+def _check_dep_buckets(m: ProjectModel) -> tuple[list[str], list[str]]:
+    """Purpose-bucket hygiene — the deterministic half of keeping the seeded-open vocabulary from
+    drifting (the fuzzy half, synonym detection, lives in the method prompt, not here). All findings
+    are ADVISORY: a diagram (external systems OR libraries, counted separately since they render as
+    two diagrams) with more than the cap of distinct buckets — a proliferation nudge, NOT a gate,
+    because an integration-heavy product legitimately spans many purposes; an authored bucket that is
+    neither a seed nor the catch-all (a minted synonym worth a second look); and an over-long label. A
+    missing bucket is silent — the heuristic groups it and the method prompts it."""
+    problems: list[str] = []
+    warnings: list[str] = []
+    ext: set[str] = set()
+    lib: set[str] = set()
+    minted: dict[str, bool] = {}   # distinct minted (non-seed) bucket -> is_library (one nudge each, not per dep)
+    for d in m.deps:
+        is_lib = grammar.classify_dep(d.kind or "", d.type) in grammar.DEP_KINDS_FOLDED
+        seeds = grammar.DEP_BUCKET_SEEDS_LIBRARY if is_lib else grammar.DEP_BUCKET_SEEDS_EXTERNAL
+        catchall = grammar.DEP_BUCKET_CATCHALL_LIBRARY if is_lib else grammar.DEP_BUCKET_CATCHALL_EXTERNAL
+        (lib if is_lib else ext).add(grammar.resolve_bucket(is_lib, d.bucket, d.type, d.used_for))
+        authored = (d.bucket or "").strip()
+        if not authored:
+            continue
+        if len(authored) > 40:
+            warnings.append(f"{d.id} bucket '{authored}' is long (>40 chars) — keep it a short "
+                            "purpose label, not a sentence.")
+        canon = grammar.canonical_bucket(authored)
+        if canon not in seeds and canon != catchall:
+            minted.setdefault(canon, is_lib)
+    for bucket, is_lib in minted.items():
+        seeds = grammar.DEP_BUCKET_SEEDS_LIBRARY if is_lib else grammar.DEP_BUCKET_SEEDS_EXTERNAL
+        warnings.append(f"Bucket '{bucket}' is minted (not a seed) — intended, or does a seed fit? "
+                        f"Reuse the same spelling on every rebuild (seeds: {', '.join(seeds)}).")
+    for label, buckets in (("external systems", ext), ("libraries", lib)):
+        if len(buckets) > grammar.DEP_BUCKET_CAP:
+            warnings.append(f"Many purpose buckets among {label}: {len(buckets)} > soft cap "
+                            f"{grammar.DEP_BUCKET_CAP} ({', '.join(sorted(buckets))}) — check for "
+                            "near-duplicates to merge (fine if the product genuinely spans this many).")
+    return problems, warnings
+
+
 def _check_activations(m: ProjectModel) -> list[str]:
     """`activation` is a closed vocabulary (`grammar.ACTIVATIONS`; the JSON schema publishes the
     enum) — EXACT match, deliberately stricter than the folded dep-Kind check: every consumer
@@ -1165,6 +1204,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_roles(m))
     problems.extend(_check_actors(m))
     problems.extend(_check_dep_kinds(m))
+    dep_bucket_problems, dep_bucket_warnings = _check_dep_buckets(m)
+    problems.extend(dep_bucket_problems)
+    warnings.extend(dep_bucket_warnings)
     problems.extend(_check_activations(m))
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)

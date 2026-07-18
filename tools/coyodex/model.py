@@ -114,6 +114,8 @@ class Dep:
     kind: str | None = None          # closed Context vocabulary; None → inferred from `type`
     type: str = ""
     used_for: str = ""
+    bucket: str = ""                 # PURPOSE bucket (seeded-open) — groups the dep within its diagram
+                                     # (Context externals / Libraries drill); "" → inferred from type+used_for
     where_configured: str = ""
     confidence: str = ""
     deployment_linked: bool = False  # v2: wired at deployment level only — no code call site

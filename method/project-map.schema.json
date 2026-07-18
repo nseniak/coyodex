@@ -435,6 +435,10 @@
         "used_for": {
           "type": "string"
         },
+        "bucket": {
+          "type": "string",
+          "description": "PURPOSE bucket (seeded-open) grouping the dep within its diagram \u2014 external systems in Context, in-process code in the Libraries drill. Prefer a seed (Data & storage, Identity & access, Observability, Messaging & delivery, AI & ML, Infrastructure & runtime, Integrations for external systems; Web framework / server, Frontend / UI, Data drivers, Service SDKs, Validation / models, Logging, Crypto / security for libraries); mint a new one only when none fits. Empty \u2192 inferred from `type` + `used_for`."
+        },
         "where_configured": {
           "type": "string",
           "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
