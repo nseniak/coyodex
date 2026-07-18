@@ -1220,19 +1220,14 @@ def _declare_box(graph: GraphDict, nid: str, default_kind: str) -> list[str]:
     return [f'  {nid}{shape[0]}{_safe_label(name)}{shape[1]}:::cy-{nid}', f"  class {nid} {cls}"]
 
 
-def gen_deployment_mermaid(graph: GraphDict) -> str:
-    """The Deployment overview: each deployable unit a `process` box, the infra it uses (brokers/
-    stores) as `infra` boxes, and derived `runs` edges to the subsystems it executes. Everything drawn
-    is a real (or injected) graph node, so every box binds (the B1 rule)."""
-    units = _deployment_unit_ids(graph)
-    uid_of = {unit: uid for uid, unit in units}
-    lines = ["flowchart TB"]
-    for uid, unit in units:
-        lines.append(f'  {uid}["{_safe_label(unit)}"]:::cy-{uid}')
-        lines.append(f"  class {uid} process")
-    # runs edges: unit -> the subsystem (or ungrouped component) of each component it runs
+def _deployment_edges(graph: GraphDict, uid_of: dict[str, str]
+                      ) -> tuple[set[tuple[str, str]], set[tuple[str, str]], dict[str, set[str]]]:
+    """Derive the Deployment view's edges: `runs` (process → the subsystem/ungrouped-component of each
+    component it runs) and `infra` (process → a broker/store dep a running component touches). Also
+    returns `boxes_by_uid` (the subsystem boxes each process runs) for the core/satellite lane split."""
     runs: set[tuple[str, str]] = set()
-    endpoints: set[str] = set()
+    infra: set[tuple[str, str]] = set()
+    boxes_by_uid: dict[str, set[str]] = {}
     for nid, node in graph["nodes"].items():
         if str(node.get("kind")) != "component":
             continue
@@ -1242,9 +1237,7 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
                 continue
             box = _subsystem_box_of(graph, nid)
             runs.add((uid, box))
-            endpoints.add(box)
-    # infra hops: process -> a broker/store dep a running component touches (C→D edge)
-    infra: set[tuple[str, str]] = set()
+            boxes_by_uid.setdefault(uid, set()).add(box)
     for e in graph["edges"]:
         dn = graph["nodes"].get(str(e["dst"]))
         cn = graph["nodes"].get(str(e["src"]))
@@ -1256,10 +1249,64 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
             uid = uid_of.get(str(unit))
             if uid:
                 infra.add((uid, str(e["dst"])))
-                endpoints.add(str(e["dst"]))
-    for nid in sorted(endpoints):
-        default = "infra" if str(graph["nodes"].get(nid, {}).get("kind")) == "dep" else "subsystem"
-        lines += _declare_box(graph, nid, default)
+    return runs, infra, boxes_by_uid
+
+
+def gen_deployment_mermaid(graph: GraphDict) -> str:
+    """The Deployment overview: each deployable unit a `process` box, the infra it uses (brokers/
+    stores) as `infra` boxes, and derived `runs` edges to the subsystems it executes. Everything drawn
+    is a real (or injected) graph node, so every box binds (the B1 rule).
+
+    LAYERED layout: nodes are banded into subgraph lanes — the shared-runtime processes (a subsystem
+    they run is ALSO run by another process — the monolith signature) apart from standalone services,
+    then the Subsystems band, then Infrastructure — so dagre stacks them into readable rows instead of a
+    flat mesh. The bands are DERIVED (kind + `runs_in` overlap), no authored/model input."""
+    units = _deployment_unit_ids(graph)
+    uid_of = {unit: uid for uid, unit in units}
+    runs, infra, boxes_by_uid = _deployment_edges(graph, uid_of)
+    endpoints = {b for _u, b in runs} | {b for _u, b in infra}
+    # core = a process sharing a subsystem with another process; satellite = owns its subsystems alone.
+    runners_of: dict[str, set[str]] = {}
+    for uid, box in runs:
+        runners_of.setdefault(box, set()).add(uid)
+    def is_core(uid: str) -> bool:
+        return any(len(runners_of.get(b, ())) > 1 for b in boxes_by_uid.get(uid, ()))
+    core = [uid for uid, _n in units if is_core(uid)]
+    sat = [uid for uid, _n in units if uid not in set(core)]
+    infra_boxes = sorted(b for b in endpoints if str(graph["nodes"].get(b, {}).get("kind")) == "dep")
+    sub_boxes = sorted(b for b in endpoints if b not in set(infra_boxes))
+
+    lines = ["flowchart TB"]
+    class_lines: list[str] = []
+    label_of = {uid: unit for uid, unit in units}  # process ids aren't in the clean graph — label from units
+
+    def _decl(nid: str, default_kind: str) -> tuple[str, str]:
+        node = graph["nodes"].get(nid, {})
+        name = label_of.get(nid) or str(node.get("name", nid))
+        kind = str(node.get("kind") or default_kind)
+        shape = SHAPE.get(kind, ('["', '"]'))
+        cls = kind if kind in ("subsystem", "component", "infra", "dep", "process") else "subsystem"
+        return f'{nid}{shape[0]}{_safe_label(name)}{shape[1]}:::cy-{nid}', f"  class {nid} {cls}"
+
+    def lane(lid: str, title: str, ids: list[str], default_kind: str) -> None:
+        if not ids:
+            return
+        lines.append(f'  subgraph {lid}["{title}"]')
+        for nid in ids:
+            decl, cls = _decl(nid, default_kind)
+            lines.append(f"    {decl}")
+            class_lines.append(cls)
+        lines.append("  end")
+
+    if core:                                              # a monolith is present → split the process band
+        lane("L_core", "Shared runtime", core, "process")
+        lane("L_sat", "Standalone services", sat, "process")
+    else:
+        lane("L_proc", "Processes", [u for u, _n in units], "process")
+    lane("L_subs", "Subsystems", sub_boxes, "subsystem")
+    lane("L_infra", "Infrastructure", infra_boxes, "infra")
+
+    lines += class_lines
     for a, b in sorted(runs | infra):
         lines.append(f"  {a} --> {b}")
     lines.append(f"  classDef process {PROCESS_STYLE};")

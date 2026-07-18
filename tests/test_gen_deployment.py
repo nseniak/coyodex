@@ -58,6 +58,23 @@ def test_has_deployment_gates_on_units():
 
 # --- overview -------------------------------------------------------------------
 
+def test_process_box_label_is_the_unit_name_not_the_id():
+    # regression: process ids (U_n) are not in the clean graph, so the box label must come from the
+    # unit name, never fall back to the id.
+    mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
+    assert 'U_0["bot"]' in mm and 'U_1["worker"]' in mm and 'U_2["shard"]' in mm
+
+
+def test_layered_lanes_split_shared_runtime_from_standalone():
+    # bot+worker share Plugins → "Shared runtime"; shard owns its component alone → "Standalone services".
+    mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
+    assert 'subgraph L_core["Shared runtime"]' in mm
+    assert 'subgraph L_sat["Standalone services"]' in mm
+    assert 'subgraph L_subs["Subsystems"]' in mm
+    assert 'subgraph L_infra["Infrastructure"]' in mm
+    assert mm.count("subgraph ") == mm.count("\n  end")   # balanced
+
+
 def test_gen_deployment_emits_processes_runs_infra_and_declared_boxes():
     mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
     # process boxes (bot/worker/shard = U_0/U_1/U_2)
