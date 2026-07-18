@@ -26,6 +26,7 @@ from pathlib import Path
 
 from coyodex import balance_lib, grammar
 from coyodex.anchors import DIR_ANCHOR as _DIR_ANCHOR, FILE_ANCHOR as _ANCHOR_LINE
+from coyodex.pysrc import parse_python
 from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
@@ -480,6 +481,34 @@ def unclaimed_external_entry_points(m: ProjectModel) -> list[EntryPoint]:
             if (comp := ep.component.strip()) and comp in comp_ids and comp not in claimed]
 
 
+def unclaimed_surface_components(m: ProjectModel) -> list[tuple[str, list[EntryPoint]]]:
+    """Components with externally-activated entry points no use-case flow reaches, MINUS the ones
+    already adjudicated (a `Cn` recorded under an 'Unclaimed surfaces' heading) or folded under a
+    recorded 'Coverage exceptions' dir — i.e. the surfaces that would still WARN. Shared by the
+    completeness warning and `validate --emit-unclaimed`, which prints this same set as a ready
+    extras block so the lead adjudicates ~a hundred surfaces at once instead of hand-typing them."""
+    if not (m.entry_points and m.flows):
+        return []
+    accepted = _recorded_ids(m, "unclaimed surfaces", ("C",))
+    cov_dirs = _recorded_coverage_dirs(m)  # a 'Coverage exceptions' dir also silences its components
+    comp_dir: dict[str, str] = {}
+    for c in m.components:
+        if c.source:
+            rel = strip_anchor(c.source).rstrip("/")
+            comp_dir[c.id] = rel.rsplit("/", 1)[0] if "/" in rel else rel
+    by_comp: dict[str, list[EntryPoint]] = {}
+    for ep in unclaimed_external_entry_points(m):
+        by_comp.setdefault(ep.component.strip(), []).append(ep)
+    out: list[tuple[str, list[EntryPoint]]] = []
+    for cid, eps in sorted(by_comp.items()):
+        if cid in accepted:
+            continue  # adjudicated by the operator — recorded in the map, so it stays quiet
+        if cov_dirs and cid in comp_dir and _under_recorded(comp_dir[cid], cov_dirs):
+            continue  # the owning component sits under a recorded 'Coverage exceptions' dir
+        out.append((cid, eps))
+    return out
+
+
 # A recorded-exception line under one of the completeness headings names its subject id at the
 # LINE START (optionally after a list bullet / bold marker) FOLLOWED BY A SEPARATOR — canonical
 # form "C713: ops/debug routes — deliberate"; "UC15 (its name) — why" is tolerated (a live map
@@ -559,21 +588,7 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
     warnings: list[str] = []
     if m.entry_points and m.flows:
         comp_name = {c.id: c.name for c in m.components}
-        accepted = _recorded_ids(m, "unclaimed surfaces", ("C",))
-        cov_dirs = _recorded_coverage_dirs(m)   # a 'Coverage exceptions' dir also silences its components'
-        comp_dir = {}                           # unclaimed surfaces — one line collapses a whole plugin tree
-        for c in m.components:
-            if c.source:
-                rel = strip_anchor(c.source).rstrip("/")
-                comp_dir[c.id] = rel.rsplit("/", 1)[0] if "/" in rel else rel
-        by_comp: dict[str, list[EntryPoint]] = {}
-        for ep in unclaimed_external_entry_points(m):
-            by_comp.setdefault(ep.component.strip(), []).append(ep)
-        for cid, eps in sorted(by_comp.items()):
-            if cid in accepted:
-                continue  # adjudicated by the operator — recorded in the map, so it stays quiet
-            if cov_dirs and cid in comp_dir and _under_recorded(comp_dir[cid], cov_dirs):
-                continue  # the owning component sits under a recorded 'Coverage exceptions' dir
+        for cid, eps in unclaimed_surface_components(m):
             shown = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
             warnings.append(
                 f"{cid} ({comp_name.get(cid, cid)}): {len(eps)} externally-activated entry "
@@ -603,26 +618,13 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
             "each flow's central entity touches as C→E steps (method.md, T6 entity steps), or "
             "record the literal `entity-flows` under a 'Balance exceptions' extras heading")
     # An entity step must ride a C→E backbone edge (the edge = the aggregate claim, the step =
-    # this scenario's instance). Matched UNDIRECTED so a return-direction `E → C` step rides the
-    # same edge; C↔C pairs stay unchecked (return steps legitimately match no edge there).
-    # Guarded on m.edges: pre-edge-trace partials are not "unbacked", they are not yet traced.
-    if m.edges:
-        edge_pairs = {frozenset((e.src, e.dst)) for e in m.edges}
-        containers = ([(f"{f.uc} flow step", f.steps) for f in m.flows]
-                      + [(f"{sf.id} step", sf.steps) for sf in m.subflows])
-        for prefix, steps in containers:
-            for st in steps:
-                if st.subflow:
-                    continue  # a reference step grounds through the sub-flow's own steps
-                if not (grammar.is_step_id(st.src) and grammar.is_step_id(st.dst)):
-                    continue  # an actor step — a Role DISPLAY NAME ("End user") may start with
-                    # E/C, so kinds are only read off endpoints known to be element ids
-                kinds = {"E" if end.startswith("E") else
-                         "C" if end.startswith("C") else "?" for end in (st.src, st.dst)}
-                if kinds == {"C", "E"} and frozenset((st.src, st.dst)) not in edge_pairs:
-                    warnings.append(
-                        f"{prefix} {st.n}: {st.src} → {st.dst} claims entity use the backbone "
-                        "doesn't — add the C→E edge (direct use only), or fix the step")
+    # this scenario's instance). `assemble` now DERIVES these edges from the step, so a surviving
+    # warning here means the step reached validate without being assembled (a partial / hand-built
+    # map), or the derivation was declined — still worth surfacing.
+    for prefix, st, _c, _e in unbacked_entity_steps(m):
+        warnings.append(
+            f"{prefix} {st.n}: {st.src} → {st.dst} claims entity use the backbone "
+            "doesn't — add the C→E edge (direct use only), or fix the step")
     if m.use_cases and m.roles and m.flows:  # flows gate the dead-role call too: a mid-flow-only
         # role (an approver, a notified party) is only visible once tracing has begun — judging it
         # "dead" before any flow exists would be a guaranteed pre-trace false positive
@@ -674,6 +676,31 @@ def _check_actors(m: ProjectModel) -> list[str]:
     return [f"Use cases with no actor (roles are defined, so each names ≥1 role id): {', '.join(missing)}"]
 
 
+def _check_actor_kinds(m: ProjectModel) -> list[str]:
+    """Advisory: a use case that pairs a HUMAN actor with a SERVICE actor. An actor is who the use case
+    is FOR (has the goal); a service listed alongside a human is almost always the internal machinery
+    that merely relays the human's action inward — a gateway, a shard / gateway connection, an event
+    dispatcher, a worker. That belongs in the FLOW as a component, not in the actor list (it clutters
+    every happy-path row the use case drives with a phantom co-actor). One use case, one actor: keep
+    the human, model the delivery in the steps. Genuinely-interchangeable initiators are same-kind, so
+    a human+service mix is the reliable tell — same-kind multi-actor lists (admin OR moderator) pass."""
+    kind = {r.id: (r.kind or "").strip().lower() for r in m.roles}
+    name = {r.id: r.name for r in m.roles}
+    out: list[str] = []
+    for u in m.use_cases:
+        humans = [a for a in u.actors if kind.get(a) == "human"]
+        services = [a for a in u.actors if kind.get(a) == "service"]
+        if humans and services:
+            h = ", ".join(f"{a} ({name.get(a, a)})" for a in humans)
+            s = ", ".join(f"{a} ({name.get(a, a)})" for a in services)
+            out.append(f"{u.id} ({u.name}) mixes a human actor [{h}] with a service actor [{s}] — an "
+                       "actor is who the use case is FOR; a service beside a human is usually the "
+                       "internal delivery mechanism (gateway/shard/dispatcher/worker). Model it as a "
+                       "flow component and keep the one human actor (or, if truly a distinct external "
+                       "initiator, leave it).")
+    return out
+
+
 def _check_dep_kinds(m: ProjectModel) -> list[str]:
     return [f"{d.id} has an invalid dependency Kind '{d.kind}' — use one of: "
             f"{', '.join(grammar.DEP_KINDS)}"
@@ -692,12 +719,15 @@ def _check_dep_buckets(m: ProjectModel) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     ext: set[str] = set()
     lib: set[str] = set()
+    counts: dict[str, int] = {}    # resolved bucket -> dep count (to spot a bloated catch-all)
     minted: dict[str, bool] = {}   # distinct minted (non-seed) bucket -> is_library (one nudge each, not per dep)
     for d in m.deps:
         is_lib = grammar.classify_dep(d.kind or "", d.type) in grammar.DEP_KINDS_FOLDED
         seeds = grammar.DEP_BUCKET_SEEDS_LIBRARY if is_lib else grammar.DEP_BUCKET_SEEDS_EXTERNAL
         catchall = grammar.DEP_BUCKET_CATCHALL_LIBRARY if is_lib else grammar.DEP_BUCKET_CATCHALL_EXTERNAL
-        (lib if is_lib else ext).add(grammar.resolve_bucket(is_lib, d.bucket, d.type, d.used_for))
+        resolved = grammar.resolve_bucket(is_lib, d.bucket, d.type, d.used_for)
+        (lib if is_lib else ext).add(resolved)
+        counts[resolved] = counts.get(resolved, 0) + 1
         authored = (d.bucket or "").strip()
         if not authored:
             continue
@@ -707,10 +737,31 @@ def _check_dep_buckets(m: ProjectModel) -> tuple[list[str], list[str]]:
         canon = grammar.canonical_bucket(authored)
         if canon not in seeds and canon != catchall:
             minted.setdefault(canon, is_lib)
+    # Minting nudge — asymmetric by design. LIBRARY vocabulary is fairly closed, so a minted lib bucket
+    # is likely a synonym of a seed (nudge to fold). EXTERNAL purposes are open-ended and product-
+    # specific (Payments, Social, Blockchain…), so minting one is EXPECTED, not a smell — the only
+    # concern is spelling stability across rebuilds. Treating them the same is what pushed a fresh
+    # build to dump 35 services into the 'Integrations' catch-all rather than split by purpose.
     for bucket, is_lib in minted.items():
-        seeds = grammar.DEP_BUCKET_SEEDS_LIBRARY if is_lib else grammar.DEP_BUCKET_SEEDS_EXTERNAL
-        warnings.append(f"Bucket '{bucket}' is minted (not a seed) — intended, or does a seed fit? "
-                        f"Reuse the same spelling on every rebuild (seeds: {', '.join(seeds)}).")
+        if is_lib:
+            warnings.append(f"Library bucket '{bucket}' is minted (not a seed) — a synonym of a seed? "
+                            f"Reuse the exact spelling on rebuild (seeds: "
+                            f"{', '.join(grammar.DEP_BUCKET_SEEDS_LIBRARY)}).")
+        else:
+            warnings.append(f"External bucket '{bucket}' is minted (not a seed) — fine if it's a real "
+                            f"product purpose (splitting the '{grammar.DEP_BUCKET_CATCHALL_EXTERNAL}' "
+                            f"catch-all this way is encouraged); reuse the exact spelling on rebuild.")
+    # Bloated catch-all — the mirror of the proliferation cap. The catch-all is the "no specific
+    # purpose" bucket, so a large one is guaranteed heterogeneous: real sub-purposes are hiding in it.
+    for label, catchall in (("external systems", grammar.DEP_BUCKET_CATCHALL_EXTERNAL),
+                            ("libraries", grammar.DEP_BUCKET_CATCHALL_LIBRARY)):
+        n = counts.get(catchall, 0)
+        if n > grammar.DEP_BUCKET_CATCHALL_SPLIT_AT:
+            warnings.append(f"The '{catchall}' catch-all among {label} holds {n} deps — it is the "
+                            "'no specific purpose' fallback, so a large one means real purposes are "
+                            "hiding in it. Split by sub-purpose (e.g. Payments, Social, Blockchain, "
+                            "Content) — mint a short purpose name per group (the seed list is a floor, "
+                            "not a ceiling).")
     for label, buckets in (("external systems", ext), ("libraries", lib)):
         if len(buckets) > grammar.DEP_BUCKET_CAP:
             warnings.append(f"Many purpose buckets among {label}: {len(buckets)} > soft cap "
@@ -781,6 +832,56 @@ def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
     shown = ", ".join(unplaced[:8]) + (f", +{len(unplaced) - 8} more" if len(unplaced) > 8 else "")
     return [f"{len(unplaced)} self-started entry point(s) have no deployment unit and will be "
             f"'Unplaced' in the Deployment view — tag `runs_in` on them or their component: {shown}"]
+
+
+def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
+    """Advisory: deployment units were harvested but NOTHING links code to them — every component's
+    and entry point's `runs_in` is empty. The Deployment view then renders with zero code↔process
+    mapping (its whole point). `_deployment_placement_warnings` stays silent on this case ('un-adopted,
+    not a gap'), so without this canary a build ships an empty Deployment view with no signal at all —
+    exactly what happened on both fresh builds this check was added for. Fires only when units exist:
+    no `deployment[]` means the dimension was legitimately not harvested (a different, coarser choice)."""
+    if not m.deployment:
+        return []
+    if any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points):
+        return []
+    if "runs-in" in balance_lib._exceptions(m):
+        return []  # deliberately unmapped (e.g. everything runs in one unit) — recorded, so quiet
+    return [f"{len(m.deployment)} deployment unit(s) enumerated but no component or entry point sets "
+            f"`runs_in` — the Deployment view will have no code↔process mapping. On each component, "
+            f"name the deployment unit(s) whose process runs it (method.md 'Deployment & topology'); "
+            f"`runs` edges are then derived. If the code truly runs as one unit, record the literal "
+            f"`runs-in` under a 'Balance exceptions' extras heading to silence this."]
+
+
+def unbacked_entity_steps(m: ProjectModel) -> list[tuple[str, FlowStep, str, str]]:
+    """C↔E flow steps whose entity touch NO backbone edge carries — returns
+    `(container_label, step, c_id, e_id)`. The edge is C→E regardless of the step's authored
+    direction (a return-direction `E → C` step still means 'this component uses this entity'), so
+    the endpoints are resolved by prefix, not by position. Matched UNDIRECTED so an `E → C` step
+    rides the same edge; C↔C pairs stay unchecked. Empty when no edges exist yet (a pre-edge-trace
+    partial is 'not yet traced', not 'unbacked'). Shared by `validate` (warns — author the edge) and
+    `assemble` (derives it — the step IS the evidence, so at scale a forgotten edge self-heals)."""
+    if not m.edges:
+        return []
+    edge_pairs = {frozenset((e.src, e.dst)) for e in m.edges}
+    containers = ([(f"{f.uc} flow step", f.steps) for f in m.flows]
+                  + [(f"{sf.id} step", sf.steps) for sf in m.subflows])
+    out: list[tuple[str, FlowStep, str, str]] = []
+    for label, steps in containers:
+        for st in steps:
+            if st.subflow:
+                continue  # a reference step grounds through the sub-flow's own steps
+            if not (grammar.is_step_id(st.src) and grammar.is_step_id(st.dst)):
+                continue  # an actor step — a Role DISPLAY NAME ("End user") may start with E/C,
+                # so kinds are only read off endpoints known to be element ids
+            kinds = {"E" if end.startswith("E") else
+                     "C" if end.startswith("C") else "?" for end in (st.src, st.dst)}
+            if kinds == {"C", "E"} and frozenset((st.src, st.dst)) not in edge_pairs:
+                c_id = st.src if st.src.startswith("C") else st.dst
+                e_id = st.dst if st.dst.startswith("E") else st.src
+                out.append((label, st, c_id, e_id))
+    return out
 
 
 def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
@@ -1196,7 +1297,7 @@ def check_domain_coverage_model(m: ProjectModel, roots: list[Path],
             # the `N of M` denominator, so a fully-recorded dir can't mask an un-recorded one
         for f in sorted(d.glob("*.py")):
             try:
-                tree = ast.parse(f.read_text(encoding="utf-8", errors="ignore"))
+                tree = parse_python(f.read_text(encoding="utf-8", errors="ignore"), str(f))
             except (OSError, SyntaxError, ValueError):
                 continue
             for node in tree.body:
@@ -1255,6 +1356,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_completeness_warnings(m))
     problems.extend(_check_roles(m))
     problems.extend(_check_actors(m))
+    warnings.extend(_check_actor_kinds(m))
     problems.extend(_check_dep_kinds(m))
     dep_bucket_problems, dep_bucket_warnings = _check_dep_buckets(m)
     problems.extend(dep_bucket_problems)
@@ -1262,6 +1364,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_activations(m))
     problems.extend(_check_runs_in(m))
     warnings.extend(_deployment_placement_warnings(m))
+    warnings.extend(_deployment_unlinked_warning(m))
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
     warnings.extend(edge_warnings)
@@ -1401,9 +1504,11 @@ def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex validate [--check-sources] [--check-coverage] [--repo <root>] "
-              "[.coyodex/project-map.json]\n\n"
+              "[--emit-unclaimed] [.coyodex/project-map.json]\n\n"
               "Validate a model: structural schema validation, then the semantic\n"
-              "checks (IDs resolve, hierarchy sound, cards complete, view fresh, …).")
+              "checks (IDs resolve, hierarchy sound, cards complete, view fresh, …).\n"
+              "--emit-unclaimed: print a ready-to-paste 'Unclaimed surfaces' extras block for every\n"
+              "  externally-activated entry point no use case reaches (adjudicate the wall at once).")
         return 0
 
     repo_root: Path | None = None
@@ -1419,8 +1524,9 @@ def main(argv: list[str] | None = None) -> int:
             return 2
     check_sources = "--check-sources" in argv
     check_coverage = "--check-coverage" in argv
+    emit_unclaimed = "--emit-unclaimed" in argv
     unknown = [a for a in argv if a.startswith("-")
-               and a not in ("--check-sources", "--check-coverage")]
+               and a not in ("--check-sources", "--check-coverage", "--emit-unclaimed")]
     if unknown:
         print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
         return 2
@@ -1435,6 +1541,19 @@ def main(argv: list[str] | None = None) -> int:
         print("\nVALIDATION FAILED (schema):")
         print(f"  - {e}")
         return 1
+    if emit_unclaimed:
+        rows = unclaimed_surface_components(m)
+        if not rows:
+            print("# No unclaimed external surfaces — nothing to record.")
+            return 0
+        comp_name = {c.id: c.name for c in m.components}
+        print("Unclaimed surfaces")
+        print("<!-- paste under an 'Unclaimed surfaces' extras heading; replace each <why> "
+              "(dead surface / dev-only / missing use case) or trace a use case instead -->")
+        for cid, eps in rows:
+            triggers = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
+            print(f"- {cid} ({comp_name.get(cid, cid)}): <why>   # {triggers}")
+        return 0
     problems, warnings = validate_model(m, path, check_sources=check_sources,
                                         check_coverage=check_coverage, repo_root=repo_root)
     print(f"Inventory — {_inventory(m)}")

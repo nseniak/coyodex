@@ -28,14 +28,89 @@ from coyodex.model import (
     FORMAT,
     ID_ARRAYS,
     ID_SHAPE,
+    Edge,
+    FlowStep,
     ModelError,
     ProjectModel,
     _build,
     remap_element_ids,
     to_canonical_json,
 )
+from coyodex.validate_model import unbacked_entity_steps
 
 _SINGLETONS = ("title", "goal", "commit", "committed", "built", "tests_note")
+
+# Phase-4 verdicts files ({"grounding": [...]}) sometimes land in build-fragments/ and get caught by
+# a `*.json` glob — they are NOT fragments. Recognised so `assemble` skips them with a note instead
+# of failing the whole build (the failure a fresh build hit and had to hand-fix mid-run).
+_FRAGMENT_KEYS = {f.name for f in fields(ProjectModel)}
+
+# C→E edge verb inferred from the step's LEADING verb. Entity-step phrases are action-first ("upserts
+# the membership document", "reads the user record"), so the first verb IS the operation — matching it
+# alone avoids the noun traps a substring scan hits ("reads the asset metadata" must not become a WRITE
+# because "asset" contains "set"). A write-family verb ESTABLISHES ownership (the 'owning component'
+# check reads persists/writes), so anything not clearly a write defaults to `reads` — a derived edge
+# never invents ownership (the honest direction: an ownerless entity stays flagged, not falsely owned).
+_PERSIST_VERBS = frozenset("persist persists store stores stored upsert upserts save saves saved "
+                           "insert inserts inserted".split())
+_WRITE_VERBS = frozenset("write writes wrote update updates updated create creates created delete "
+                         "deletes deleted remove removes removed append appends set sets put puts "
+                         "record records add adds modify modifies increment decrement".split())
+_EMIT_VERBS = frozenset("emit emits emitted publish publishes dispatch dispatches broadcast "
+                        "broadcasts enqueue enqueues".split())
+_ENCRYPT_VERBS = frozenset("encrypt encrypts encrypted decrypt decrypts".split())
+
+
+def _infer_ce_verb(phrase: str) -> str:
+    words = re.findall(r"[a-z]+", (phrase or "").lower())
+    lead = words[0] if words else ""
+    if lead in _PERSIST_VERBS:
+        return "persists"
+    if lead in _WRITE_VERBS:
+        return "writes"
+    if lead in _EMIT_VERBS:
+        return "emits"
+    if lead in _ENCRYPT_VERBS:
+        return "encrypts"
+    return "reads"  # a read verb or anything ambiguous → never over-claims ownership
+
+
+def _is_verdicts_file(text: str) -> bool:
+    """A Phase-4 verdicts file ({"grounding": [...]}), not a build fragment — no fragment field is
+    present. (A real fragment that merely also carried a stray `grounding` key would still be caught,
+    because it WOULD share a fragment key and this returns False.)"""
+    try:
+        obj = json.loads(text)
+    except ValueError:
+        return False
+    return isinstance(obj, dict) and "grounding" in obj and not (set(obj) & _FRAGMENT_KEYS)
+
+
+def _derive_entity_edges(m: ProjectModel, stats: dict[str, int]) -> list[str]:
+    """Create the C→E backbone edge each unbacked entity flow-step implies. The step already carries
+    the evidence (its C and E endpoints + a `where`); at scale a trace agent authors the entity STEP
+    but forgets the paired edge (both fresh builds shipped ~a dozen such, leaving entities with no
+    'owning component' and no impact reachability). Deriving here is IDEMPOTENT (regenerated from the
+    steps on every assemble, so it survives re-assembly — unlike a post-assemble `fix`) and additive
+    (only pairs no edge already carries). Verb inferred from the phrase; ambiguous → `reads`, so a
+    derived edge never invents ownership. Returns a short `C verb E` log for the assemble note."""
+    unbacked = unbacked_entity_steps(m)
+    if not unbacked:
+        return []
+    ownership = {"persists", "writes"}
+    chosen: dict[tuple[str, str], tuple[str, FlowStep]] = {}
+    for _label, st, c_id, e_id in unbacked:
+        verb = _infer_ce_verb(st.phrase)
+        prev = chosen.get((c_id, e_id))
+        # first step wins, but upgrade to an ownership verb if any step for this pair implies one
+        if prev is None or (verb in ownership and prev[0] not in ownership):
+            chosen[(c_id, e_id)] = (verb, st)
+    for (c_id, e_id), (verb, st) in chosen.items():
+        m.edges.append(Edge(src=c_id, verb=verb, dst=e_id,
+                            why="derived from entity flow-step",
+                            where=st.where, no_call_site=not bool(st.where)))
+    stats["entity_edges_derived"] = len(chosen)
+    return [f"{c} {v} {e}" for (c, e), (v, _st) in chosen.items()]
 
 
 def load_fragment(text: str, label: str) -> ProjectModel:
@@ -300,9 +375,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: {p} not found", file=sys.stderr)
             bad = True
             continue
+        text = p.read_text(encoding="utf-8")
         try:
-            parts.append((p.name, load_fragment(p.read_text(encoding="utf-8"), p.name)))
+            parts.append((p.name, load_fragment(text, p.name)))
         except ModelError as e:
+            if _is_verdicts_file(text):
+                print(f"note: skipping {p.name} — a Phase-4 verdicts file, not a build fragment "
+                      f"(keep verdicts out of build-fragments/ or feed them to `anchor-drift` / "
+                      f"`fix apply-drift`, not `assemble`)", file=sys.stderr)
+                continue
             print(f"ERROR: {e}", file=sys.stderr)
             bad = True
     if bad:
@@ -327,6 +408,11 @@ def main(argv: list[str] | None = None) -> int:
     if stats.get("duplicate_edges_collapsed"):
         print(f"note: collapsed {stats['duplicate_edges_collapsed']} duplicate backbone edge(s) "
               f"(same call site)")
+    derived = _derive_entity_edges(model, stats)
+    if derived:
+        shown = ", ".join(derived[:8]) + (f", +{len(derived) - 8} more" if len(derived) > 8 else "")
+        print(f"note: derived {len(derived)} C→E backbone edge(s) from entity flow-steps that had "
+              f"none (verb inferred from the step; ambiguous → reads): {shown}")
     from coyodex.views import model_to_markdown
 
     out_dir.mkdir(parents=True, exist_ok=True)

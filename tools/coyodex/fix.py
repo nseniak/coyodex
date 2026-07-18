@@ -32,6 +32,13 @@ _EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2
 
 def _write(map_path: Path, m: ProjectModel) -> None:
     map_path.write_text(to_canonical_json(m), encoding="utf-8")
+    # `fix` edits the ASSEMBLED map. During a build the source of truth is the fragments, and a later
+    # `assemble` regenerates the map from them — silently discarding this edit. Both fresh builds hit
+    # exactly this (ran `fix drop-edge`, re-assembled, then hand-scripted the same drop into a
+    # fragment). Say so: run `fix` only as the FINAL step, after the last assemble.
+    print("note: this edited the assembled map in place — if you `assemble` again it is rebuilt from "
+          "fragments and THIS edit is lost. Run `fix` as the final step (after the last assemble), or "
+          "make structural changes in a fragment + re-assemble.", file=sys.stderr)
 
 
 def _need(argv: list[str], i: int, flag: str) -> str:

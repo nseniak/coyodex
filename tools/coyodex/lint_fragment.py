@@ -13,6 +13,7 @@ import re
 import sys
 from pathlib import Path
 
+from coyodex import grammar
 from coyodex.assemble import load_fragment
 from coyodex.model import ID_SHAPE, ModelError, ProjectModel, all_elements
 from coyodex.validate_model import (
@@ -52,10 +53,34 @@ def lint_unknown_references(m: ProjectModel, known_ids: set[str]) -> list[str]:
     'tests target C112' class: plausible-looking, defined nowhere) dies in the authoring agent's
     turn instead of at the lead's final validate."""
     defined = set(all_elements(m)) | {g.id for g in m.happy_path} | known_ids
+    out: list[str] = []
     unresolved = sorted(r for r in _referenced_ids(m) - defined)
     if unresolved:
-        return [f"references ids defined neither in this fragment nor in --ids: {', '.join(unresolved)}"]
-    return []
+        out.append(f"references ids defined neither in this fragment nor in --ids: "
+                   f"{', '.join(unresolved)}")
+    # A flow/sub-flow actor endpoint that is neither a backbone element id nor a KNOWN Role id is a
+    # display name used where an Rn id belongs ("Team member" instead of R1). validate's actor check
+    # self-disables in a roles-less trace fragment (roles live in the behavioral fragment), so without
+    # the --ids universe this class survives to the lead's full validate — a whole reconcile phase
+    # later, which both fresh builds hit and hand-patched. Gate on the universe actually HAVING roles:
+    # a genuinely roles-less project may use display-name actors (a documented tolerance), and with no
+    # role ids in --ids we can't tell "should be Rn" from "legit display name" — so only fire when the
+    # legend proves roles exist, where a display-name endpoint is then unambiguously a mistake.
+    if any(grammar.is_role_id(k) for k in known_ids):
+        bad_actors: list[str] = []
+        for label, steps in ([(f.uc, f.steps) for f in m.flows]
+                             + [(sf.id, sf.steps) for sf in m.subflows]):
+            for st in steps:
+                if st.subflow:
+                    continue  # a reference step's endpoints are the bridged backbone ids
+                for end in (st.src, st.dst):
+                    if end and not grammar.is_step_id(end) and not grammar.is_role_id(end) \
+                            and end not in defined:
+                        bad_actors.append(f"{label} step {st.n}: '{end}'")
+        if bad_actors:
+            out.append("actor endpoint(s) not a known Role id — reference the role by its Rn id from "
+                       f"the legend, not a display name: {', '.join(bad_actors)}")
+    return out
 
 
 def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]:

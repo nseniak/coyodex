@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from coyodex.pysrc import parse_python
+
 # --------------------------------------------------------------------------------------
 # Language detection
 # --------------------------------------------------------------------------------------
@@ -253,7 +255,7 @@ class ImportRef:
 def py_symbols(path: Path, rel: str) -> list[Symbol]:
     """Top-level + nested class/function definitions in a Python file, via stdlib ast."""
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        tree = parse_python(path.read_text(encoding="utf-8", errors="replace"), str(path))
     except (OSError, SyntaxError, ValueError):
         raise
     out: list[Symbol] = []
@@ -269,7 +271,7 @@ def py_imports(path: Path, rel: str) -> list[ImportRef]:
     """Import targets in a Python file, via stdlib ast. Dynamic imports are NOT captured
     (they land nowhere) — that is the 'lower-bound' honesty of the advisory."""
     try:
-        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+        tree = parse_python(path.read_text(encoding="utf-8", errors="replace"), str(path))
     except (OSError, SyntaxError, ValueError):
         raise
     out: list[ImportRef] = []

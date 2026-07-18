@@ -90,6 +90,11 @@ DEP_BUCKET_CATCHALL_LIBRARY = "Other"
 # Per-DIAGRAM cap (checked separately for externals vs libraries — they are two diagrams): a nudge to
 # keep the grouping legible instead of proliferating one-item buckets.
 DEP_BUCKET_CAP = 8
+# When the CATCH-ALL bucket ('Integrations' / 'Other') alone holds more than this many deps, it has
+# stopped meaning "no specific purpose" and become a dumping ground — the mirror of DEP_BUCKET_CAP
+# (that guards against too-many buckets; this against one bucket swallowing everything). A large
+# catch-all means real sub-purposes (Payments, Social, …) are hiding and should be split out.
+DEP_BUCKET_CATCHALL_SPLIT_AT = 6
 
 # The external catch-all is already a seed; the LIBRARY catch-all is not, so add it explicitly —
 # otherwise a mis-cased "other" would escape folding and render a duplicate look-alike catch-all cluster.
