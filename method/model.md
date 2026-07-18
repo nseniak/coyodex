@@ -56,6 +56,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "entry_point": "<path:line|null>", "depends_on": "<derived summary text>",
                      "source": "<canonical source anchor|null>", "confidence",
                      "files": [ "<repo-relative path>", … ],
+                     "runs_in": [ "<deployment[].unit name>", … ],   // the process(es) that run this component (Deployment view)
                      "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "deps":        [ { "id": "Dn",  "name", "kind": "<closed vocab|null>", "type", "used_for",
                      "where_configured": "<path:line|null>", "confidence",
@@ -64,7 +65,9 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "run_commands":  [ { "action", "command", "source" } ],                       // T3
   "entry_points":  [ { "kind", "trigger", "source": "<path:line>", "component": "Cn",
-                       "activation": "<self|external|'' → inferred from kind>" } ],           // T4
+                       "activation": "<self|external|'' → inferred from kind>",
+                       "runs_in": [ "<deployment[].unit>", … ] } ],   // optional: a self-started loop's PRECISE host unit(s); else its component's runs_in
+
 
   "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "source", "confidence" } ],
   "entities":    [ { "id": "En",  "name", "store", "meaning", "subdomain": "SDn|null",

@@ -43,6 +43,9 @@ class Node:
     entry_points: list[dict[str, str]] = field(default_factory=list)  # components only: the T4 entry
                                   # points that name this component ({kind, trigger, source}) — the
                                   # "Triggered by" list in the info pane
+    runs_in: list[str] = field(default_factory=list)  # components only: the deployment unit name(s)
+                                  # whose process runs this component — the Deployment view's `runs`
+                                  # edges (process → this component's subsystem) derive from it
 
 
 @dataclass

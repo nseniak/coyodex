@@ -100,6 +100,11 @@ class Component:
     source: str | None = None        # v2: the canonical source anchor — where the component LIVES
     confidence: str = ""
     files: list[str] = field(default_factory=list)       # repo-relative paths this component owns
+    runs_in: list[str] = field(default_factory=list)     # deployment unit name(s) whose PROCESS runs this
+                                     # component's code — a runtime placement (the C4 instance link),
+                                     # powering the Deployment view. Verified for a satellite (own dir/
+                                     # image), inferred for the shared monolith; empty = untraced. Each
+                                     # value must resolve to a `deployment[].unit` (validate).
     evidence: list[EvidenceItem] = field(default_factory=list)
     extra: dict[str, object] = field(default_factory=dict)  # non-standard authored columns, by
     # header; values are any JSON value (agents return lists/numbers/bools naturally — the views
@@ -140,6 +145,10 @@ class EntryPoint:                    # T4
     source: str = ""                 # md link to the code entity — where the entry point LIVES
     component: str = ""              # the owning C id
     activation: str = ""             # "self" | "external" (grammar.ACTIVATIONS); "" → inferred from kind
+    runs_in: list[str] = field(default_factory=list)  # the PRECISE host unit(s) of a self-started thread
+                                     # (a loop's exact process, since its component may run in several);
+                                     # empty → falls back to the owning component's runs_in in the
+                                     # Deployment view. Each value must resolve to a `deployment[].unit`.
 
 
 @dataclass

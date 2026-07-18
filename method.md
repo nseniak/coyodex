@@ -273,7 +273,17 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     (below).
 
 ### Operational dimensions — standard core four
-- **Deployment & topology**: `Unit | Runs on | Exposed as | Config source`.
+- **Deployment & topology**: `Unit | Runs on | Exposed as | Config source`. **Link the code to the
+  runtime with `runs_in`** — on each component, the deployment `Unit` name(s) whose process executes
+  it (a component may run in several: the C4 *instance* relation, one static box → many processes). It
+  powers the **Deployment view** (`coyodex serve` → Deployment tab): processes and infra as nodes,
+  their self-started threads on drill, and derived `runs` edges to the subsystems each process
+  executes. Grounding: **verified** for a satellite that owns its dir/image (obvious from the
+  Dockerfile/dir), **inferred** for a shared monolith (which sub-command/loader pulls the component
+  in); empty = untraced. For a background loop whose component runs in >1 unit, set the loop's own
+  `EntryPoint.runs_in` for a precise host. `validate` blocks a `runs_in` that names no real unit (and a
+  duplicate unit name), and advises on a self-started entry point left with no host (it would be
+  "Unplaced" in the view). `runs` edges are **derived, never authored** in the edge list.
 - **Observability**: `Signal | Where emitted | Where viewed | Alerts`.
 - **Security & auth**: `Surface | Who can reach | Auth check | Risk note` (trust
   boundaries often inferred — flag). The **`Auth check`** anchor must point at the line that

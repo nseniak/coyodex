@@ -381,6 +381,8 @@ SUBSYSTEM_STYLE = f"fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b,{_CONTAINER_BORDER
 ENTITY_STYLE    = "fill:#fdf4ff,stroke:#86198f,color:#581c87"  # fuchsia-50  — entity (E), light member
 SUBDOMAIN_STYLE = f"fill:#f5d0fe,stroke:#86198f,color:#581c87,{_CONTAINER_BORDER}"  # fuchsia-200 — subdomain (SD), deep container
 DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     — external dependency (D)
+PROCESS_STYLE   = f"fill:#fef3c7,stroke:#b45309,color:#78350f,{_CONTAINER_BORDER}"  # amber-100 — a deployable process/thread (Deployment view), a runtime container
+INFRA_STYLE     = "fill:#f1f5f9,stroke:#475569,color:#1e293b"  # slate       — infrastructure node (broker/store) in the Deployment view
 DOMAIN_SUBDOMAIN_CLASSDEF = f"  classDef subdomain {SUBDOMAIN_STYLE};"
 
 
@@ -412,6 +414,8 @@ ELEMENT_TINT = {
     "entity": _fill_stroke(ENTITY_STYLE),
     "subsystem": _fill_stroke(SUBSYSTEM_STYLE),
     "subdomain": _fill_stroke(SUBDOMAIN_STYLE),
+    "process": _fill_stroke(PROCESS_STYLE),
+    "infra": _fill_stroke(INFRA_STYLE),
     # A neutral frame for the Context/Libraries PURPOSE-bucket clusters (`CYBK<i>`): they are grouping
     # affordances, not typed elements, so they read as a quiet slate frame around the emerald dep boxes.
     "bucket": {"fill": "#f8fafc", "stroke": "#94a3b8"},
@@ -1161,6 +1165,140 @@ def add_context_nodes(g: dict[str, Any], graph: GraphDict) -> None:
                                "file": None, "line": None, "fields": {}}
 
 
+# ── Deployment view (processes/threads ↔ subsystems) ──────────────────────────────────────────────
+# A process is NOT a model element (it stays a `deployment[]` table row); it is a VIEW-only graph node,
+# injected like SYS/roles so the viewer's binders (which skip ids absent from GRAPH.nodes) resolve it.
+# Ids are INDEX-based `U_<n>` — never a name slug, which could collide for two units differing only in
+# punctuation (mermaid silently merges same-id nodes). The `runs` edges are DERIVED (process → the
+# subsystem of each component whose `runs_in` names the unit), never authored in `edges[]`.
+_INFRA_DEP_KINDS = ("messaging", "datastore", "service")
+
+
+def _deployment_unit_ids(graph: GraphDict) -> list[tuple[str, str]]:
+    """`[(U_<n>, unit_name)]` for each deployment unit — one shared index→id mapping used by BOTH the
+    node injection and the generators, so their ids always agree."""
+    return [(f"U_{i}", str(r.get("unit", ""))) for i, r in enumerate(graph["deployment"])]
+
+
+def has_deployment(graph: GraphDict) -> bool:
+    return bool(graph["deployment"])
+
+
+def _node_runs_in(node: object) -> list[str]:
+    """A graph node's `runs_in` as a `list[str]` (components only carry it; missing → [])."""
+    v = node.get("runs_in") if isinstance(node, dict) else None
+    return [str(x) for x in v] if isinstance(v, list) else []
+
+
+def add_deployment_nodes(g: dict[str, Any], graph: GraphDict) -> None:
+    """Inject one view-only `process` node per deployment unit into the panel graph, so the Deployment
+    view's process boxes bind + drill + show a panel. `unit` carries the raw name for the drill/reverse
+    lookup; `fields` seeds the info pane from the deployment row."""
+    for uid, unit in _deployment_unit_ids(graph):
+        r = graph["deployment"][int(uid[2:])]
+        fields = {k: str(v) for k, v in (("Runs on", r.get("runs_on")),
+                                         ("Exposed as", r.get("exposed_as")),
+                                         ("Config source", r.get("config_source"))) if v}
+        g["nodes"][uid] = {"id": uid, "kind": "process", "name": unit or uid,
+                           "file": None, "line": None, "fields": fields, "unit": unit}
+
+
+def _subsystem_box_of(graph: GraphDict, cid: str) -> str:
+    """The box a component `runs` edge points at: its top subsystem, or the component itself when it is
+    ungrouped (still a real node, so it binds)."""
+    return _top_subsystem(graph, cid) or cid
+
+
+def _declare_box(graph: GraphDict, nid: str, default_kind: str) -> list[str]:
+    """The two mermaid lines declaring a node box (`id["label"]:::cy-id` + `class id kind`), so an
+    endpoint that would otherwise render as a bare inert node binds with the right colour."""
+    node = graph["nodes"].get(nid, {})
+    name = str(node.get("name", nid))
+    kind = str(node.get("kind") or default_kind)
+    shape = SHAPE.get(kind, ('["', '"]'))
+    cls = kind if kind in ("subsystem", "component", "infra", "dep", "process") else "subsystem"
+    return [f'  {nid}{shape[0]}{_safe_label(name)}{shape[1]}:::cy-{nid}', f"  class {nid} {cls}"]
+
+
+def gen_deployment_mermaid(graph: GraphDict) -> str:
+    """The Deployment overview: each deployable unit a `process` box, the infra it uses (brokers/
+    stores) as `infra` boxes, and derived `runs` edges to the subsystems it executes. Everything drawn
+    is a real (or injected) graph node, so every box binds (the B1 rule)."""
+    units = _deployment_unit_ids(graph)
+    uid_of = {unit: uid for uid, unit in units}
+    lines = ["flowchart TB"]
+    for uid, unit in units:
+        lines.append(f'  {uid}["{_safe_label(unit)}"]:::cy-{uid}')
+        lines.append(f"  class {uid} process")
+    # runs edges: unit -> the subsystem (or ungrouped component) of each component it runs
+    runs: set[tuple[str, str]] = set()
+    endpoints: set[str] = set()
+    for nid, node in graph["nodes"].items():
+        if str(node.get("kind")) != "component":
+            continue
+        for unit in _node_runs_in(node):
+            uid = uid_of.get(str(unit))
+            if not uid:
+                continue
+            box = _subsystem_box_of(graph, nid)
+            runs.add((uid, box))
+            endpoints.add(box)
+    # infra hops: process -> a broker/store dep a running component touches (C→D edge)
+    infra: set[tuple[str, str]] = set()
+    for e in graph["edges"]:
+        dn = graph["nodes"].get(str(e["dst"]))
+        cn = graph["nodes"].get(str(e["src"]))
+        if not dn or str(dn.get("kind")) != "dep" or dn.get("dep_kind") not in _INFRA_DEP_KINDS:
+            continue
+        if not cn or str(cn.get("kind")) != "component":
+            continue
+        for unit in _node_runs_in(cn):
+            uid = uid_of.get(str(unit))
+            if uid:
+                infra.add((uid, str(e["dst"])))
+                endpoints.add(str(e["dst"]))
+    for nid in sorted(endpoints):
+        default = "infra" if str(graph["nodes"].get(nid, {}).get("kind")) == "dep" else "subsystem"
+        lines += _declare_box(graph, nid, default)
+    for a, b in sorted(runs | infra):
+        lines.append(f"  {a} --> {b}")
+    lines.append(f"  classDef process {PROCESS_STYLE};")
+    lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
+    lines.append(f"  classDef component {COMPONENT_STYLE};")
+    lines.append(f"  classDef infra {INFRA_STYLE};")
+    return "\n".join(lines)
+
+
+def gen_deployment_unit_card_mermaid(graph: GraphDict, unit: str) -> str:
+    """One process's card: the unit box + the subsystems/components it runs (its threads are a panel
+    list on the frontend, not diagram nodes)."""
+    units = _deployment_unit_ids(graph)
+    uid = next((u for u, name in units if name == unit), None)
+    lines = ["flowchart TB"]
+    if uid is None:
+        return "\n".join(lines + [f'  MISSING["{_safe_label(unit)} — not a deployment unit"]'])
+    lines.append(f'  {uid}["{_safe_label(unit)}"]:::cy-{uid}')
+    lines.append(f"  class {uid} process")
+    boxes: set[str] = set()
+    for nid, node in graph["nodes"].items():
+        if str(node.get("kind")) == "component" and unit in _node_runs_in(node):
+            boxes.add(_subsystem_box_of(graph, nid))
+    for nid in sorted(boxes):
+        lines += _declare_box(graph, nid, "subsystem")
+        lines.append(f"  {uid} --> {nid}")
+    lines.append(f"  classDef process {PROCESS_STYLE};")
+    lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
+    lines.append(f"  classDef component {COMPONENT_STYLE};")
+    return "\n".join(lines)
+
+
+def deployment_cards(graph: GraphDict) -> dict[str, str]:
+    """`{unit_name: card_mermaid}` — the per-process drill cards, keyed by unit NAME (the frontend
+    drills a process to `{kind:'deploymentUnit', unit:<node.unit>}`)."""
+    return {unit: gen_deployment_unit_card_mermaid(graph, unit)
+            for _uid, unit in _deployment_unit_ids(graph) if unit}
+
+
 def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
     """Explanations for the Context view's synthetic edges, derived from already-parsed map data:
     actor→system = the role's 'wants'; system→dep = the dep's 'Used for' + the component edges
@@ -1532,6 +1670,9 @@ class ViewBundle(TypedDict):
     mermaidBridgeCard: dict[str, str]
     bridgeEdges: list[dict[str, str]]
     domainContainerEdges: dict[str, list[dict[str, str]]]
+    mermaidDeployment: str
+    deploymentCards: dict[str, str]
+    hasDeployment: bool
     mermaidHp: str
     flowsMm: dict[str, str]
     flowsNarr: dict[str, list[dict[str, Any]]]
@@ -1590,8 +1731,11 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
     domain = has_domain(graph)
     subdomains = has_subdomains(graph)
     hp = has_hp(graph)
+    deployment = has_deployment(graph)
     mg = merged_graph(graph, diff)
     add_context_nodes(mg, graph)
+    if deployment:
+        add_deployment_nodes(mg, graph)
     return ViewBundle(
         repoRoot=repo_root, ghRepo=gh_repo, ghCommit=gh_commit,
         graph=mg,
@@ -1607,6 +1751,9 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         mermaidBridgeCard=bridge_card_mermaids(graph) if (grouping and subdomains) else {},
         bridgeEdges=gen_bridge_edges(graph) if (grouping and subdomains) else [],
         domainContainerEdges=gen_domain_container_edges(graph) if subdomains else {},
+        mermaidDeployment=gen_deployment_mermaid(graph) if deployment else "",
+        deploymentCards=deployment_cards(graph) if deployment else {},
+        hasDeployment=deployment,
         mermaidHp=gen_hp_mermaid(graph) if hp else "",
         # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so
         # they come from graph["flows"] directly (empty when the map has no T6 section).

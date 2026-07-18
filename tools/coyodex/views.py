@@ -176,6 +176,8 @@ def _component_headers(m: ProjectModel) -> tuple[list[str], bool, list[str]]:
         headers.append("Files")
     if any(c.evidence for c in m.components):
         headers.append("Evidence")
+    if any(c.runs_in for c in m.components):
+        headers.append("Runs in")
     return headers + extra, with_conf, extra
 
 
@@ -262,6 +264,8 @@ def model_to_markdown(m: ProjectModel) -> str:
                 row.append(_files_str(c.files))
             if "Evidence" in headers:
                 row.append(_evidence_str(c.evidence))
+            if "Runs in" in headers:
+                row.append(", ".join(c.runs_in))
             row += [_extra_str(c.extra.get(k, "")) for k in extra]
             rows.append(row)
         section("T1 — Components", _table(headers, rows))
@@ -452,6 +456,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         subsystem_name = subsystem_names.get(c.subsystem, c.subsystem) if c.subsystem else ""
         fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
                   "Entry point": c.entry_point or "",
+                  **({"Runs in": ", ".join(c.runs_in)} if c.runs_in else {}),
                   **{k: _extra_str(v) for k, v in c.extra.items()}}
         # `source` is the v2 canonical home; `entry_point` (also bare) is the next best single
         # location; only then fall back to hunting a markdown link in the free-text cells.
@@ -459,6 +464,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         node = _node(c, "component", c.name, href, fields, c.subsystem)
         node.files = _component_files(c)
         node.entry_points = eps_by_comp.get(c.id, [])
+        node.runs_in = list(c.runs_in)
         nodes[c.id] = node
     for d in m.deps:
         dep_kind = grammar.classify_dep(d.kind or "", d.type)

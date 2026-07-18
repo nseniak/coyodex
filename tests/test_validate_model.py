@@ -15,6 +15,7 @@ from pathlib import Path
 from coyodex import grammar
 from coyodex.model import (
     Component,
+    DeploymentRow,
     Dep,
     Edge,
     Entity,
@@ -1247,6 +1248,46 @@ def test_coverage_exception_silences_unclaimed_surface_by_dir():
     assert any(w.startswith("C2 ") and "unclaimed" in w for w in _completeness_warnings(m))
     m.extras = [ExtraSection(heading="Coverage exceptions", body="plugins/: representative at coarse altitude")]
     assert not any(w.startswith("C2 ") for w in _completeness_warnings(m))
+
+
+# --- Deployment / runs_in ------------------------------------------------------
+
+def test_runs_in_must_resolve_to_a_deployment_unit():
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="bot"), DeploymentRow(unit="worker")]
+    m.components[0].runs_in = ["worker"]
+    assert problems_of(m) == []                                   # a real unit → clean
+    m.components[0].runs_in = ["ghost"]
+    assert any("C1 runs_in names unknown deployment unit" in p and "ghost" in p for p in problems_of(m))
+
+
+def test_entry_point_runs_in_also_checked():
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="worker")]
+    m.entry_points = [EntryPoint(kind="worker", trigger="loop", source="w.py:1", component="C1",
+                                 activation="self", runs_in=["nope"])]
+    assert any("entry_points[0] runs_in names unknown deployment unit" in p for p in problems_of(m))
+
+
+def test_duplicate_deployment_unit_blocks():
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="bot"), DeploymentRow(unit="bot")]
+    assert any("Duplicate deployment unit name" in p and "bot" in p for p in problems_of(m))
+
+
+def test_unplaced_self_thread_is_advised_only_once_runs_in_is_used():
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="worker")]
+    m.entry_points = [EntryPoint(kind="cron", trigger="orphan loop", source="o.py:1", component="C1",
+                                 activation="self")]  # C1 has no runs_in → this thread is unplaced
+    # runs_in nowhere used yet → silent (un-adopted, not a gap)
+    assert not any("Unplaced" in w for w in warnings_of(m))
+    # once ANY runs_in is set, the un-hosted self thread is surfaced
+    m.deployment.append(DeploymentRow(unit="bot"))
+    m.components[0].runs_in = ["bot"]  # C1 now runs in bot → the C1-owned loop is placed, so add a second unplaced one
+    m.entry_points.append(EntryPoint(kind="cron", trigger="really orphan", source="o2.py:1",
+                                     component="C99", activation="self"))  # C99 undefined-owner → no host
+    assert any("Unplaced" in w and "self-started" in w for w in warnings_of(m))
 
 
 if __name__ == "__main__":

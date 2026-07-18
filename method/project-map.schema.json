@@ -367,6 +367,12 @@
           },
           "description": "repo-relative file paths this component owns, as a plain list \u2014 not a count, not a comma-joined string."
         },
+        "runs_in": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "evidence": {
           "type": "array",
           "items": {
@@ -522,6 +528,12 @@
             ""
           ],
           "description": "who starts it: 'self' (timer/loop/boot/signal/queue consumer \u2014 runs with no caller) or 'external' (route/CLI/callback/webhook); '' \u2192 inferred from `kind`."
+        },
+        "runs_in": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [

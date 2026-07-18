@@ -17,6 +17,9 @@ let MERMAID_DOMAIN_EDGE_CARD;   // subdomain edge pair: 'A>B' -> two-subdomain c
 let MERMAID_BRIDGE_CARD;        // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
 let BRIDGE_EDGES;               // flat list of every component->entity edge (structure<->domain bridge atoms)
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
+let MERMAID_DEPLOYMENT;    // Deployment overview: processes + infra + derived `runs` edges to subsystems
+let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of the subsystems it runs
+let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box sequence
 let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
@@ -54,6 +57,7 @@ function applyBundle(b) {
   MERMAID_DOMAIN = b.mermaidDomain; MERMAID_DOMAIN_CONTAINER = b.mermaidDomainContainer;
   MERMAID_DOMAIN_SUB = b.mermaidDomainSub; MERMAID_DOMAIN_EDGE_CARD = b.mermaidDomainEdgeCard;
   MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; BRIDGE_EDGES = b.bridgeEdges; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
+  MERMAID_DEPLOYMENT = b.mermaidDeployment; DEPLOYMENT_CARDS = b.deploymentCards; HAS_DEPLOYMENT = b.hasDeployment;
   MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
   HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
@@ -2166,7 +2170,8 @@ const vpByView = {};
 
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
-    + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '');
+    + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
+    + (s.unit ? ':' + s.unit : '');  // deploymentUnit cards are keyed by unit name (else they collide)
 }
 // The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
 // scroll offset, or the file browser showing. Restored on back/forward so returning to a point reopens
@@ -2225,7 +2230,7 @@ function pushContentPoint(content) {
   captureViewState();
   const c = history[hi];
   history = history.slice(0, hi + 1);
-  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd, sel: c.sel, content });
+  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd, unit: c.unit, sel: c.sel, content });
   hi = history.length - 1;
   renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
@@ -2423,6 +2428,59 @@ function bindGroupContainer(drillFor, edgeBinder) {
   });
 }
 function bindContainer() { bindGroupContainer((id) => ({ kind: 'subsystem', sid: id }), bindContainerEdge); }
+// The Deployment view (overview + per-process card): a process box ⌘-drills to its unit card, a
+// subsystem box ⌘-drills (cross-navigates) to its subsystem card, and a dep/component box has no drill
+// (its drillFor returns the current overview so `go()` never sees null — go(null) would throw). The
+// `runs`/infra arrows are derived, so they carry no per-edge detail: mark them synthetic, no binder.
+function deploymentDrill(id) {
+  const n = GRAPH.nodes[id];
+  if (n && n.kind === 'process') return { kind: 'deploymentUnit', unit: n.unit };
+  if (n && n.kind === 'subsystem') return { kind: 'subsystem', sid: id };
+  return { kind: 'deployment' };  // dep / ungrouped component: no drill (re-shows the overview)
+}
+function bindDeployment() { bindGroupContainer(deploymentDrill, (scene, p) => markSyntheticEdge(p)); }
+// Resolve which unit(s) actually run a self-started entry point: its own `runs_in` wins (precise),
+// else the owning component's `runs_in` (coarser — a loop whose component runs in >1 unit then shows
+// under each). Empty => unplaced (surfaced by showDeployment).
+function threadHostUnits(ep) {
+  const own = Array.isArray(ep.runs_in) ? ep.runs_in : [];
+  if (own.length) return own;
+  const c = ep.component && GRAPH.nodes[ep.component];
+  return (c && Array.isArray(c.runs_in)) ? c.runs_in : [];
+}
+function unitProcessNodeId(unit) {
+  for (const id in (GRAPH.nodes || {})) if (GRAPH.nodes[id].kind === 'process' && GRAPH.nodes[id].unit === unit) return id;
+  return null;
+}
+function threadRowsHtml(eps) {
+  const rows = eps.map((e) => `<tr><td>${esc(e.kind || '')}</td><td>${mdInline(e.trigger || '')}</td>`
+    + `<td>${e.source ? srcCell(e.source) : ''}</td></tr>`).join('');
+  return `<table class="glossary"><tbody>${rows}</tbody></table>`;
+}
+// Deployment overview default panel: surface the UNPLACED self-started threads (no runs_in) so they
+// are never silently dropped from the view; otherwise the project overview (SYS).
+function showDeployment() {
+  const unplaced = (GRAPH.entry_points || []).filter((e) => e.activation === 'self' && threadHostUnits(e).length === 0);
+  if (unplaced.length) {
+    panel.innerHTML = `<section class="uc-group"><h3 class="uc-actor">Unplaced (${unplaced.length})</h3>`
+      + `<div class="gloss-plain">Self-started, but no <code>runs_in</code> — not shown on any process. `
+      + `Tag <code>runs_in</code> on the entry point or its component.</div>${threadRowsHtml(unplaced)}</section>`;
+    wireSrcLinks(panel);
+    return;
+  }
+  if (GRAPH.nodes['SYS']) showNode('SYS'); else panel.innerHTML = EMPTY_PANEL;
+}
+// A process card's default panel: the process node's own detail + the threads/loops it hosts.
+function showDeploymentUnit(unit) {
+  const uid = unitProcessNodeId(unit);
+  const eps = (GRAPH.entry_points || []).filter((e) => e.activation === 'self' && threadHostUnits(e).includes(unit));
+  let html = uid ? nodeDetailHtml(uid) : `<section class="uc-group"><h3 class="uc-actor">${esc(unit)}</h3></section>`;
+  if (eps.length) html += `<section class="uc-group"><h3 class="uc-actor">Threads / loops (${eps.length})</h3>${threadRowsHtml(eps)}</section>`;
+  panel.innerHTML = html;
+  bindNodeDetailHandlers(panel);
+  wireSrcLinks(panel);
+  if (uid) syncTreeToNode(uid);
+}
 // The Domain Subdomains overview: a subdomain box ⌘-drills to its per-subdomain card; an
 // inter-subdomain arrow selects to the crossing entity→entity relations (no further drill).
 function bindDomainContainer() { bindGroupContainer((id) => ({ kind: 'domsub', sd: id }), bindDomainContainerEdge); }
@@ -2856,6 +2914,8 @@ function mermaidFor(s) {
   if (s.kind === 'domsub') return MERMAID_DOMAIN_SUB[s.sd];
   if (s.kind === 'domedge') return MERMAID_DOMAIN_EDGE_CARD[s.a + '>' + s.b];
   if (s.kind === 'bridge') return MERMAID_BRIDGE_CARD[s.sid + '>' + s.sd];
+  if (s.kind === 'deployment') return MERMAID_DEPLOYMENT;
+  if (s.kind === 'deploymentUnit') return DEPLOYMENT_CARDS[s.unit];
   if (s.kind === 'hp') return MERMAID_HP;
   if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
   if (s.kind === 'libs') return MERMAID_LIBS;
@@ -2871,6 +2931,8 @@ function applyDefaultPanel(s) {
   else if (s.kind === 'domedge') showDomainContainerEdge(s.a, s.b, s.efocus || { src: s.a, dst: s.b });
   else if (s.kind === 'bridge') showBridge(s.sid, s.sd);
   else if (s.kind === 'usecase') showUseCase(s.uc);
+  else if (s.kind === 'deployment') { showDeployment(); return; }        // overview: surfaces unplaced threads
+  else if (s.kind === 'deploymentUnit') { showDeploymentUnit(s.unit); return; }  // card: process detail + its threads
   else if (s.kind === 'libs') showLibsFold();
   // The Happy Path overview (nothing selected) opens on the project goal — the SYS node carries the
   // title + T0 goal (fields.Overview). Selecting a step/actor then replaces it with that detail.
@@ -2894,6 +2956,8 @@ function bindFor(s) {
   else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
   else if (s.kind === 'hp') bindHP();
   else if (s.kind === 'usecase') bindFlow(s.uc);
+  else if (s.kind === 'deployment') bindDeployment();
+  else if (s.kind === 'deploymentUnit') bindDeployment();  // same binder: process/subsystem boxes drill/cross-nav
   else if (s.kind === 'libs') bindLibs();
   else bindComponent();
 }
@@ -2902,6 +2966,7 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
   if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog (incl. a Happy Path drill)
+  if (kind === 'deployment' || kind === 'deploymentUnit') return 'deployment';  // a process card lives under the Deployment tab
   if (kind === 'hp') return 'hp';
   if (kind === 'libs') return 'context';  // the Libraries fold drills out of Context
   return 'container';
@@ -2915,6 +2980,8 @@ function stateTitle(s) {
   if (s.kind === 'system') return 'System';
   if (s.kind === 'tests') return 'Tests';
   if (s.kind === 'usecases') return 'Use Cases';
+  if (s.kind === 'deployment') return 'Deployment';
+  if (s.kind === 'deploymentUnit') return s.unit;
   if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
   if (s.kind === 'bridge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.sid) + ' → ' + nm(s.sd); }
@@ -2945,6 +3012,8 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'hp') return [{ kind: 'hp' }];
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   if (s.kind === 'usecase') return [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];  // a use case's flow, under the Use Cases catalog
+  if (s.kind === 'deployment') return [{ kind: 'deployment' }];
+  if (s.kind === 'deploymentUnit') return [{ kind: 'deployment' }, { kind: 'deploymentUnit', unit: s.unit }];  // process card under Deployment
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
@@ -3713,6 +3782,8 @@ function selectTargetFor(id) {
       return { state: parentKind('subsystem') ? { kind: 'subsystem', sid: n.parent } : { kind: 'container' }, selectId: id };
     case 'subdomain':
       return { state: parentKind('subdomain') ? { kind: 'domsub', sd: n.parent } : { kind: 'domain' }, selectId: id };
+    case 'process':  // a deployment-unit box lives on the Deployment view; open its card
+      return { state: { kind: 'deploymentUnit', unit: n.unit }, selectId: id };
     default:
       return { state: { kind: 'context' }, selectId: id };  // unknown kind -> the always-present root
   }
@@ -4976,11 +5047,11 @@ const sbResults = document.getElementById('sbresults');
 const sbMeta = document.getElementById('sbmeta');
 
 const SB_KIND_LABEL = { usecase: 'use case', subsystem: 'subsystem', component: 'component',
-                        subdomain: 'subdomain', entity: 'entity' };
+                        subdomain: 'subdomain', entity: 'entity', process: 'process' };
 const sbElemLabel = (n) => (n.kind === 'dep' ? ((n.fields && n.fields.Kind) || 'dependency') : (SB_KIND_LABEL[n.kind] || n.kind));
 // A per-kind nudge so a same-quality name match on a behaviour/structure element outranks a raw path hit.
 const SB_TYPE_BONUS = { usecase: 45, subsystem: 40, component: 35, entity: 35, subdomain: 30, dep: 30,
-                        gloss: 25, sys: 12, field: 10, file: 5, dir: -5, symbol: -2 };
+                        process: 28, gloss: 25, sys: 12, field: 10, file: 5, dir: -5, symbol: -2 };
 
 // The fixed half of the index: every named node, each entity's fields, every glossary term. Built once.
 function sbBuildStatic() {
@@ -5018,7 +5089,8 @@ function sbBuildStatic() {
   }
   for (const c of (GRAPH.config || [])) { if (c && c.key) items.push(sysRow(c.key, 'config', 'config')); }
   for (const s of (GRAPH.security || [])) { if (s && s.surface) items.push(sysRow(s.surface, 'security surface', 'security')); }
-  for (const d of (GRAPH.deployment || [])) { if (d && d.unit) items.push(sysRow(d.unit, 'deployment', 'deploy')); }
+  // deployment units are indexed as `process` NODES (they route to the Deployment view via
+  // selectTargetFor); no sysRow here, or a unit would appear twice and one hit would misroute to System.
   for (const o of (GRAPH.observability || [])) { if (o && o.signal) items.push(sysRow(o.signal, 'observability', 'signal')); }
   for (const r of (GRAPH.run_commands || [])) { if (r && r.action) items.push(sysRow(r.action, 'run command', 'run')); }
   for (const t of (GRAPH.non_entity_types || [])) { if (t && t.name) items.push(sysRow(t.name, 'not modelled', 'type')); }
@@ -5422,6 +5494,7 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'hp' && !HAS_HP) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'usecases' && !HAS_USECASES) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'deployment' && !HAS_DEPLOYMENT) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'glossary' && !HAS_GLOSSARY) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'system' && !HAS_SYSTEM) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'tests' && !HAS_TESTS) { b.style.display = 'none'; return; }

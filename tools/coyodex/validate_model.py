@@ -731,6 +731,58 @@ def _check_activations(m: ProjectModel) -> list[str]:
             if ep.activation and ep.activation not in grammar.ACTIVATIONS]
 
 
+def _check_runs_in(m: ProjectModel) -> list[str]:
+    """`runs_in` (on components and self-started entry points) is the Deployment-view link to a
+    deployment unit. It must name a REAL unit, and unit names must be unique so a value resolves
+    unambiguously. Free-text unit names are not element ids, so this can't ride `_check_references`.
+    Blocking: a dangling `runs_in` is a broken view reference; a duplicate unit name is ambiguous."""
+    problems: list[str] = []
+    counts: dict[str, int] = {}
+    for d in m.deployment:
+        counts[d.unit] = counts.get(d.unit, 0) + 1
+    dups = sorted(u for u, n in counts.items() if n > 1)
+    if dups:
+        problems.append(f"Duplicate deployment unit name(s): {', '.join(dups)} — unit names must be "
+                        "unique so a `runs_in` value resolves to exactly one unit")
+    valid = set(counts)
+    for c in m.components:
+        bad = [u for u in c.runs_in if u not in valid]
+        if bad:
+            problems.append(f"{c.id} runs_in names unknown deployment unit(s): {', '.join(bad)} — "
+                            "each must match a `deployment[].unit` name")
+    for i, ep in enumerate(m.entry_points):
+        bad = [u for u in ep.runs_in if u not in valid]
+        if bad:
+            problems.append(f"entry_points[{i}] runs_in names unknown deployment unit(s): "
+                            f"{', '.join(bad)} — each must match a `deployment[].unit` name")
+    return problems
+
+
+def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
+    """Advisory: once the map USES `runs_in` (the Deployment view is in play), a self-activated entry
+    point with no host unit — neither its own `runs_in` nor its component's — is invisible in that view.
+    Surface it (the same no-silent-no-op spirit as the completeness canaries), don't drop it. Silent
+    when the map has no deployment units, or when `runs_in` is nowhere used yet (un-adopted, not a gap)."""
+    if not m.deployment:
+        return []
+    used = any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)
+    if not used:
+        return []
+    comp_units = {c.id: set(c.runs_in) for c in m.components}
+    unplaced: list[str] = []
+    for i, ep in enumerate(m.entry_points):
+        if grammar.effective_activation(ep.activation, ep.kind) != "self":
+            continue
+        if set(ep.runs_in) or comp_units.get(ep.component.strip()):
+            continue
+        unplaced.append(f"entry_points[{i}] [{ep.kind}] {_clip(ep.trigger)}")
+    if not unplaced:
+        return []
+    shown = ", ".join(unplaced[:8]) + (f", +{len(unplaced) - 8} more" if len(unplaced) > 8 else "")
+    return [f"{len(unplaced)} self-started entry point(s) have no deployment unit and will be "
+            f"'Unplaced' in the Deployment view — tag `runs_in` on them or their component: {shown}"]
+
+
 def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
     problems: list[str] = []
     warnings: list[str] = []
@@ -1208,6 +1260,8 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(dep_bucket_problems)
     warnings.extend(dep_bucket_warnings)
     problems.extend(_check_activations(m))
+    problems.extend(_check_runs_in(m))
+    warnings.extend(_deployment_placement_warnings(m))
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
     warnings.extend(edge_warnings)
