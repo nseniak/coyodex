@@ -1404,19 +1404,63 @@ def _deployment_edges(graph: GraphDict, uid_of: dict[str, str]
     return runs, infra, boxes_by_uid
 
 
-def gen_deployment_mermaid(graph: GraphDict) -> str:
-    """The Deployment overview: each deployable unit a `process` box, the infra it uses (brokers/
-    stores) as `infra` boxes, and derived `runs` edges to the subsystems it executes. Everything drawn
-    is a real (or injected) graph node, so every box binds (the B1 rule).
+def _components_run_by_uid(graph: GraphDict, uid_of: dict[str, str]) -> dict[str, set[str]]:
+    """`uid → {component ids that run in that process}`. The packaging fingerprint of each process, used
+    to spot an all-in-one unit (a superset of every other process's set)."""
+    out: dict[str, set[str]] = {}
+    for nid, node in graph["nodes"].items():
+        if str(node.get("kind")) != "component":
+            continue
+        for unit in _node_runs_in(node):
+            uid = uid_of.get(str(unit))
+            if uid:
+                out.setdefault(uid, set()).add(nid)
+    return out
 
-    LAYERED layout: nodes are banded into subgraph lanes — the shared-runtime processes (a subsystem
-    they run is ALSO run by another process — the monolith signature) apart from standalone services,
-    then the Subsystems band, then Infrastructure — so dagre stacks them into readable rows instead of a
-    flat mesh. The bands are DERIVED (kind + `runs_in` overlap), no authored/model input."""
+
+def _allinone_uids(process_uids: list[str], comps_by_uid: dict[str, set[str]]) -> set[str]:
+    """The process units that are ALL-IN-ONE packagings, not peers: a unit whose component set contains
+    the union of every OTHER process unit's components (e.g. a `standalone` that runs everything
+    `backend` and `frontend` run between them). Such a unit re-runs the whole mesh, so fanning its arrows
+    just re-draws every other arrow — the overview folds it to a label instead.
+    Guard: never fold so many that no fanned process remains (the all-equal degenerate case, where every
+    unit runs the same set — fold nothing so the overview still shows the processes)."""
+    if len(process_uids) < 2:
+        return set()
+    fold: set[str] = set()
+    for u in process_uids:
+        mine = comps_by_uid.get(u, set())
+        if not mine:
+            continue
+        others: set[str] = set().union(*(comps_by_uid.get(o, set()) for o in process_uids if o != u))
+        if others and others <= mine:
+            fold.add(u)
+    if len(fold) >= len(process_uids):   # would fold every process → keep them all fanned instead
+        return set()
+    return fold
+
+
+def gen_deployment_mermaid(graph: GraphDict) -> str:
+    """The Deployment overview: each deployable unit a `process` box and derived `runs` edges to the
+    subsystems it executes. Everything drawn is a real (or injected) graph node, so every box binds
+    (the B1 rule).
+
+    Two readability rules keep the overview from hairballing (both DERIVED — kind + `runs_in`, no
+    authored input):
+      * AMBIENT INFRA — the brokers/stores the app talks to are drawn as an Infrastructure band at the
+        bottom, but NOT wired with process→infra arrows (adjacency implies use). Each process's actual
+        brokers/stores live on its drill card. This drops the fan of infra arrows.
+      * ALL-IN-ONE FOLD — a unit that runs everything the other processes run between them (a superset
+        packaging, e.g. `standalone`) is not a peer; fanning it re-draws every arrow. It is folded to a
+        labelled annotation ("… — all-in-one: runs everything below"), no arrows.
+    What remains is the meaningful skeleton: each genuine process → the subsystems it (alone) runs.
+
+    LAYERED layout: nodes band into subgraph lanes — the all-in-one packagings, then the fanned
+    processes (shared-runtime apart from standalone when a monolith is present), then the Subsystems
+    band, then Infrastructure — so dagre stacks them into readable rows instead of a flat mesh."""
     units = _deployment_unit_ids(graph)
     uid_of = {unit: uid for uid, unit in units}
     runs, infra, boxes_by_uid = _deployment_edges(graph, uid_of)
-    endpoints = {b for _u, b in runs} | {b for _u, b in infra}
     # Only units that HOST code are process boxes (B2). A no-host unit is either an infra dep already
     # drawn in the Infrastructure lane (name-match → drawn NOWHERE) or a genuinely-unlinked unit (a real
     # gap → the small "Untraced units" lane, so it is never dropped silently — S2).
@@ -1425,24 +1469,37 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
     process_uids = [uid for uid, name in units if name in process_units]
     untraced = [uid for uid, name in units
                 if name not in process_units and not _unit_matches_system_dep(name, dep_names)]
-    # core = a process sharing a subsystem with another process; satellite = owns its subsystems alone.
+    # ALL-IN-ONE FOLD: superset units are annotated, not fanned. Only the fanned units draw `runs` arrows
+    # and drive the core/satellite split, so a monolith's own arrows don't paint every peer as "shared".
+    comps_by_uid = _components_run_by_uid(graph, uid_of)
+    fold = _allinone_uids(process_uids, comps_by_uid)
+    fanned = [uid for uid in process_uids if uid not in fold]
+    fanned_set = set(fanned)
+    fanned_runs = {(u, b) for (u, b) in runs if u in fanned_set}
+    endpoints = {b for _u, b in fanned_runs}
+    # core = a fanned process sharing a subsystem with another fanned process; satellite = runs its
+    # subsystems alone. (Folded all-in-one units are excluded — they run everything, so counting them
+    # would mark every process as shared.)
     runners_of: dict[str, set[str]] = {}
-    for uid, box in runs:
+    for uid, box in fanned_runs:
         runners_of.setdefault(box, set()).add(uid)
     def is_core(uid: str) -> bool:
         return any(len(runners_of.get(b, ())) > 1 for b in boxes_by_uid.get(uid, ()))
-    core = [uid for uid in process_uids if is_core(uid)]
-    sat = [uid for uid in process_uids if uid not in set(core)]
-    infra_boxes = sorted(b for b in endpoints if str(graph["nodes"].get(b, {}).get("kind")) == "dep")
-    sub_boxes = sorted(b for b in endpoints if b not in set(infra_boxes))
+    core = [uid for uid in fanned if is_core(uid)]
+    sat = [uid for uid in fanned if uid not in set(core)]
+    # AMBIENT INFRA: the Infrastructure band shows every broker/store any running component touches, as an
+    # ambient lane under the processes — NO process→infra arrows on the overview (they live on the cards).
+    infra_boxes = sorted({b for _u, b in infra})
+    sub_boxes = sorted(endpoints)
 
     lines = ["flowchart TB"]
     class_lines: list[str] = []
     label_of = {uid: unit for uid, unit in units}  # process ids aren't in the clean graph — label from units
+    allinone_label = {uid: f"{label_of.get(uid, uid)} — all-in-one: runs everything below" for uid in fold}
 
     def _decl(nid: str, default_kind: str) -> tuple[str, str]:
         node = graph["nodes"].get(nid, {})
-        name = label_of.get(nid) or str(node.get("name", nid))
+        name = allinone_label.get(nid) or label_of.get(nid) or str(node.get("name", nid))
         kind = str(node.get("kind") or default_kind)
         shape = SHAPE.get(kind, ('["', '"]'))
         cls = kind if kind in ("subsystem", "component", "infra", "dep", "process") else "subsystem"
@@ -1458,11 +1515,14 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
             class_lines.append(cls)
         lines.append("  end")
 
-    if core:                                              # a monolith is present → split the process band
+    # Folded all-in-one packagings first — labelled boxes, no arrows (they still bind + drill to a card
+    # showing everything they run).
+    lane("L_allinone", "All-in-one", sorted(fold), "process")
+    if core:                                              # a monolith is present → split the fanned band
         lane("L_core", "Shared runtime", core, "process")
         lane("L_sat", "Standalone services", sat, "process")
     else:
-        lane("L_proc", "Processes", process_uids, "process")
+        lane("L_proc", "Processes", fanned, "process")
     lane("L_subs", "Subsystems", sub_boxes, "subsystem")
     lane("L_infra", "Infrastructure", infra_boxes, "infra")
     # A unit hosting no code and matching no infra dep is a real gap — surface it in its own lane rather
@@ -1471,7 +1531,7 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
     lane("L_untraced", "Untraced units", untraced, "process")
 
     lines += class_lines
-    for a, b in sorted(runs | infra):
+    for a, b in sorted(fanned_runs):                      # only fanned processes draw arrows; infra is ambient
         lines.append(f"  {a} --> {b}")
     lines.append(f"  classDef process {PROCESS_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
@@ -1481,25 +1541,30 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
 
 
 def gen_deployment_unit_card_mermaid(graph: GraphDict, unit: str) -> str:
-    """One process's card: the unit box + the subsystems/components it runs (its threads are a panel
-    list on the frontend, not diagram nodes)."""
+    """One process's card: the unit box + the subsystems/components it runs AND the brokers/stores it
+    uses. The infra arrows are dropped from the OVERVIEW (ambient band there) and shown HERE instead, so
+    a process's actual dependencies are still one click away. Its threads are a panel list on the
+    frontend, not diagram nodes. Reuses `_deployment_edges` so the card's runs/infra match the overview's
+    exactly (one derivation)."""
     units = _deployment_unit_ids(graph)
-    uid = next((u for u, name in units if name == unit), None)
+    uid_of = {name: u for u, name in units}
+    uid = uid_of.get(unit)
     lines = ["flowchart TB"]
     if uid is None:
         return "\n".join(lines + [f'  MISSING["{_safe_label(unit)} — not a deployment unit"]'])
+    runs, infra, _boxes = _deployment_edges(graph, uid_of)
     lines.append(f'  {uid}["{_safe_label(unit)}"]:::cy-{uid}')
     lines.append(f"  class {uid} process")
-    boxes: set[str] = set()
-    for nid, node in graph["nodes"].items():
-        if str(node.get("kind")) == "component" and unit in _node_runs_in(node):
-            boxes.add(_subsystem_box_of(graph, nid))
-    for nid in sorted(boxes):
+    for nid in sorted({b for u, b in runs if u == uid}):        # subsystems/components it runs
         lines += _declare_box(graph, nid, "subsystem")
         lines.append(f"  {uid} --> {nid}")
+    for did in sorted({d for u, d in infra if u == uid}):       # brokers/stores it uses (dropped from overview)
+        lines += _declare_box(graph, did, "infra")
+        lines.append(f"  {uid} --> {did}")
     lines.append(f"  classDef process {PROCESS_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
+    lines.append(f"  classDef infra {INFRA_STYLE};")
     return "\n".join(lines)
 
 
