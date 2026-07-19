@@ -3800,17 +3800,29 @@ def _library_fold_model() -> ProjectModel:
     return m
 
 
-def test_library_buckets_fold_in_libraries_drill() -> None:
+def test_library_buckets_fold_partially_in_libraries_drill() -> None:
+    # Libraries are EXCLUDED from the Context view's all-or-nothing rule: the drill folds ONLY the big
+    # bucket (Data drivers, 5) and leaves the small one (Frontend / UI, 2) inline — a one/two-library
+    # bucket never becomes a pointless count box.
     g = model_to_graph(_library_fold_model())
     libs_mm = gen_viewer.gen_libs_mermaid(g)
-    assert "Data drivers (5)" in libs_mm and "Frontend / UI (2)" in libs_mm  # all-or-nothing folds both
-    assert "subgraph CYBK" not in libs_mm                    # ...as count boxes, no inline clusters
+    assert "Data drivers (5)" in libs_mm                     # big library bucket → drillable count box
+    assert '["Frontend / UI"]' in libs_mm                    # small one STAYS an inline cluster
+    assert "Frontend / UI (2)" not in libs_mm                # ...not a count box
     lib_folds = gen_viewer.folded_library_buckets(g)
-    assert {fb["id"] for fb in lib_folds} == {"LBKF0", "LBKF1"}
-    assert all(r["parent"] == "libs" for r in gen_viewer.folded_buckets_roster(g))  # all drill out of Libraries
+    assert {fb["name"] for fb in lib_folds} == {"Data drivers"}
+    roster = {r["name"]: r for r in gen_viewer.folded_buckets_roster(g)}
+    assert roster["Data drivers"]["parent"] == "libs"        # a library bucket drills out of the Libraries view
     drills = gen_viewer.mermaid_by_bucketfold(g)
-    drivers_id = next(fb["id"] for fb in lib_folds if fb["name"] == "Data drivers")
-    assert drivers_id in drills and "drv1" in drills[drivers_id]  # the library-bucket drill lists its members
+    drivers_id = lib_folds[0]["id"]
+    assert "drv1" in drills[drivers_id]                       # the library-bucket drill lists its members
+
+
+def test_context_stays_all_or_nothing() -> None:
+    # The external Context buckets keep all-or-nothing: the small Data & storage (2) folds too because
+    # Observability (5) crosses the threshold — the exclusion is libraries-only.
+    g = model_to_graph(_fold_model())
+    assert {fb["name"] for fb in gen_viewer.folded_context_buckets(g)} == {"Observability", "Data & storage"}
 
 
 def test_folded_bucket_roster_synthetic_node_and_edge() -> None:

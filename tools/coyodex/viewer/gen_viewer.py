@@ -1143,27 +1143,34 @@ def _library_buckets(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
     return by
 
 
-def _folds(by: dict[str, list[dict[str, str]]], is_library: bool, prefix: str) -> list[dict[str, Any]]:
-    """All-or-nothing per diagram: if ANY bucket reaches DEP_BUCKET_FOLD_AT members, EVERY bucket in the
-    diagram collapses into a drillable count box (so the folded diagram reads uniformly — no mix of
-    inline clusters and count boxes); otherwise none do and all stay inline. In diagram order (seed-first);
-    each fold is {id: '<prefix><i>', name, members, is_library}. The ONE source every consumer (count
-    box, drill diagram, synthetic node, context edge, roster) derives from, so the ids stay consistent."""
+def _folds(by: dict[str, list[dict[str, str]]], is_library: bool, prefix: str,
+           all_or_nothing: bool) -> list[dict[str, Any]]:
+    """The buckets that collapse into a drillable count box, in diagram order (seed-first). A bucket
+    reaching DEP_BUCKET_FOLD_AT members is 'big'. `all_or_nothing` (the Context view): if ANY bucket is
+    big, EVERY bucket folds so the top altitude reads uniformly — no mix of inline clusters and count
+    boxes. Not all-or-nothing (the Libraries drill): fold ONLY the big buckets and leave small ones
+    inline, so a one-library bucket never becomes a pointless count box. Each fold is
+    {id: '<prefix><i>', name, members, is_library} — the ONE source every consumer (count box, drill
+    diagram, synthetic node, context edge, roster) derives from, so the ids stay consistent."""
     ordered = order_buckets(by.keys(), is_library)
     if not any(len(by[b]) >= DEP_BUCKET_FOLD_AT for b in ordered):
         return []
+    chosen = ordered if all_or_nothing else [b for b in ordered if len(by[b]) >= DEP_BUCKET_FOLD_AT]
     return [{"id": f"{prefix}{i}", "name": b, "members": by[b], "is_library": is_library}
-            for i, b in enumerate(ordered)]
+            for i, b in enumerate(chosen)]
 
 
 def folded_context_buckets(graph: GraphDict) -> list[dict[str, Any]]:
-    """The external-system buckets folded into count boxes in the Context view (`BKF<i>`), or []."""
-    return _folds(_external_buckets(graph), is_library=False, prefix="BKF")
+    """The external-system buckets folded into count boxes in the Context view (`BKF<i>`), or []. The
+    top altitude folds ALL-OR-NOTHING for a uniform look."""
+    return _folds(_external_buckets(graph), is_library=False, prefix="BKF", all_or_nothing=True)
 
 
 def folded_library_buckets(graph: GraphDict) -> list[dict[str, Any]]:
-    """The in-process buckets folded into count boxes in the Libraries drill (`LBKF<i>`), or []."""
-    return _folds(_library_buckets(graph), is_library=True, prefix="LBKF")
+    """The in-process buckets folded into count boxes in the Libraries drill (`LBKF<i>`), or []. The
+    drill folds PARTIALLY — only big buckets fold; small ones stay inline (libraries are excluded from
+    the Context view's all-or-nothing consistency rule)."""
+    return _folds(_library_buckets(graph), is_library=True, prefix="LBKF", all_or_nothing=False)
 
 
 def all_folded_buckets(graph: GraphDict) -> list[dict[str, Any]]:
@@ -1237,12 +1244,13 @@ def gen_libs_mermaid(graph: GraphDict) -> str:
     if not libs:
         return ""
     lines = _context_head(graph)
+    by = _library_buckets(graph)
     folded = folded_library_buckets(graph)
-    if folded:
-        for fb in folded:
-            lines += _fold_box_lines(fb)
-    else:
-        lines += _context_dep_groups(libs, is_library=True)
+    folded_names = {fb["name"] for fb in folded}                        # big buckets → count boxes; the rest stay inline
+    inline = [d for b in order_buckets(by.keys(), is_library=True) if b not in folded_names for d in by[b]]
+    lines += _context_dep_groups(inline, is_library=True)
+    for fb in folded:
+        lines += _fold_box_lines(fb)
     lines += CONTEXT_CLASSDEFS
     return "\n".join(lines)
 
