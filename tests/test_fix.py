@@ -65,9 +65,10 @@ def test_apply_drift_does_not_swap_paired_persists_reads_edges():
         assert where["reads"] == "a.py:25"         # NOT swapped
 
 
-def test_apply_drift_skips_security_surface_claim():
-    # The worklist also carries a security claim ("Auth surface '…' is protected by: …") — NOT a
-    # (src verb dst) triple. apply-drift must skip it, never crash trying to parse it as an edge.
+def test_apply_drift_rewrites_drifted_security_source():
+    # The worklist carries a security claim ("Auth surface '…' is protected by: …") whose bare
+    # `source` anchor is an L2 grounding claim. When the skeptics confirm it drifted, apply-drift now
+    # rewrites `security[].source` (WS5) — same treatment as a drifted edge `where`.
     m = make_map([], security=[{"surface": "POST /pay", "who": "admin", "source": "a.py:5"}])
     claim_prefix = "Auth surface 'POST /pay' is protected by:"
     with tempfile.TemporaryDirectory() as td:
@@ -80,7 +81,26 @@ def test_apply_drift_skips_security_surface_claim():
             make_vote(sec_claim, True, "a.py:99"), make_vote(sec_claim, True, "a.py:99")]}),
             encoding="utf-8")
         assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0"]) == 0
-        assert load_model_path(mp).security[0].source == "a.py:5"   # untouched
+        assert load_model_path(mp).security[0].source == "a.py:99"   # rewritten to the skeptics' line
+
+
+def test_apply_drift_rewrites_security_and_leaves_a_paired_edge_untouched():
+    # A drifted security anchor AND a same-file edge whose anchor is NOT in the verdicts: only the
+    # security `source` moves; the edge's `where` stays put (apply-drift touches only drifted claims).
+    m = make_map([{"src": "C1", "verb": "reads", "dst": "E1", "where": "a.py:10"}],
+                 security=[{"surface": "POST /pay", "who": "admin", "source": "a.py:5"}])
+    with tempfile.TemporaryDirectory() as td:
+        mp, vp = write(td, m)
+        from coyodex.audit_model import l2_worklist_model
+        sec_claim = next(w.claim for w in l2_worklist_model(load_model_path(mp))
+                         if w.claim.startswith("Auth surface 'POST /pay'"))
+        Path(vp).write_text(json.dumps({"grounding": [
+            make_vote(sec_claim, True, "a.py:88"), make_vote(sec_claim, True, "a.py:88")]}),
+            encoding="utf-8")
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp, "--tolerance", "0"]) == 0
+        out = load_model_path(mp)
+        assert out.security[0].source == "a.py:88"                  # security anchor rewritten
+        assert out.edges[0].where == "a.py:10"                      # the edge (not in verdicts) untouched
 
 
 def test_apply_drift_skips_ambiguous_multi_where_edge():

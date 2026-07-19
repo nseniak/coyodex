@@ -305,12 +305,23 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   it (a component may run in several: the C4 *instance* relation, one static box → many processes). It
   powers the **Deployment view** (`coyodex serve` → Deployment tab): processes and infra as nodes,
   their self-started threads on drill, and derived `runs` edges to the subsystems each process
-  executes. Grounding: **verified** for a satellite that owns its dir/image (obvious from the
-  Dockerfile/dir), **inferred** for a shared monolith (which sub-command/loader pulls the component
-  in); empty = untraced. For a background loop whose component runs in >1 unit, set the loop's own
-  `EntryPoint.runs_in` for a precise host. `validate` blocks a `runs_in` that names no real unit (and a
-  duplicate unit name), and advises on a self-started entry point left with no host (it would be
-  "Unplaced" in the view). `runs` edges are **derived, never authored** in the edge list.
+  executes. **Derive `runs_in` by READING THE DEPLOY MANIFESTS — never formula-fill by id range.** Open
+  the docker-compose services, the Dockerfiles + their `CMD`/`ENTRYPOINT`, k8s/Helm, the `Procfile`, and
+  the launch entrypoints (`manage.py`, `main`, the worker bootstraps): for each unit, tag the
+  component(s) whose process loads it, and tag each background-loop entry point with its precise host.
+  Grounding: **verified** for a satellite that owns its dir/image (obvious from the Dockerfile/dir),
+  **inferred** for a shared monolith (which sub-command/loader pulls the component in) — mark it inferred
+  where the manifest is ambiguous; empty = untraced. For a background loop whose component runs in >1
+  unit, set the loop's own `EntryPoint.runs_in` for a precise host. A deployment `Unit` is **ONE
+  process**: keep the name atomic (no `mongo / redis` compound rows) and give each its own row. Infra the
+  app merely *talks to* (mongo/redis/nginx) is a **dependency**, not a `deployment[]` process box — the
+  Deployment view draws a unit as a process only when a component or entry point `runs_in` it, so an
+  infra-only unit renders as a dead empty box. `validate` blocks a `runs_in` that names no real unit (and
+  a duplicate unit name), advises on a self-started entry point left with no host (it would be "Unplaced"
+  in the view), and now **flags a formula-filled `runs_in`** (one unit blanketing every component while
+  other units host nothing and no entry point is placed), a **non-atomic unit name**, an **unlinked unit**
+  (hosts nothing, matches no dependency), and an **ambiguous thread host** (a loop whose component runs in
+  >1 unit but which sets no `runs_in`). `runs` edges are **derived, never authored** in the edge list.
 - **Observability**: `Signal | Where emitted | Where viewed | Alerts`.
 - **Security & auth**: `Surface | Who can reach | Auth check | Risk note` (trust
   boundaries often inferred — flag). The **`Auth check`** anchor must point at the line that
@@ -623,12 +634,27 @@ synthesis → parallel trace.**
   advisory itself stays quiet until flows exist; during Phase 3 it fires on every not-yet-traced
   surface and **drains as traces land** — a mid-trace wall of these warnings is expected, not a
   defect. Only what survives the full trace is a finding.)
-  **Also set each component's `runs_in` here** — the deployment `Unit` name(s) whose process runs it
-  (see *Deployment & topology*). Synthesis owns the finalized components and has just seen the
-  harvested `deployment[]` units, so this is where the code↔process link the Deployment view needs
-  gets wired — no later phase does it, so if synthesis skips it the whole view ships empty.
-  `validate` now warns when `deployment[]` units exist but not one component sets `runs_in` (both
-  fresh builds shipped exactly that: 49 and 8 units enumerated, zero links, an empty Deployment tab).
+  **Also assign each component's `subsystem`, each entity's `subdomain`, each component's `runs_in`,
+  and any dep `bucket` fixes here — as a `--reconcile` file, NOT a hand-script.** Synthesis owns the
+  finalized ids and has just seen the harvested `deployment[]` units, so this is where the grouping and
+  the code↔process link the Deployment view needs get wired — no later phase does it, so if synthesis
+  skips it the view ships empty. Author these as a declarative **`.coyodex/reconcile.json`** (kept
+  OUTSIDE `build-fragments/` so the fragment glob does not sweep it) and re-run the assemble with it:
+  ```json
+  { "set": [ {"ids": ["C1","C2"], "subsystem": "S3"},
+             {"ids": ["C40","C41"], "runs_in": ["worker"]},
+             {"ids": ["E7"], "subdomain": "SD2"},
+             {"ids": ["D5"], "bucket": "Data & storage"} ] }
+  ```
+  `coyodex assemble <fragments…> --out .coyodex --reconcile .coyodex/reconcile.json` applies it AFTER
+  the fragment merge, every time — so a re-assemble never loses the assignments (a bespoke Python patch
+  edits the assembled map, which the *next* assemble discards). **`--reconcile` is part of the standard
+  build assemble from here on**; an assemble without it silently reverts every assignment (assemble
+  prints a note if a `reconcile.json` is present but unpassed). Derive `runs_in` by reading the deploy
+  manifests, never a component-id-range formula (see *Deployment & topology*); `validate` warns when
+  `deployment[]` units exist but no component sets `runs_in`, and flags a formula-filled `runs_in`.
+  Keep fragment argument order stable and author the reconcile ids against the assembled ids (dedup
+  survivors are first-occurrence-in-argument-order, so reordering fragments can shift surviving ids).
 - Phase 3 Trace (fan out, one agent per use case; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
   Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps —
@@ -703,8 +729,10 @@ synthesis → parallel trace.**
   the tool, never a hand script:** `coyodex anchor-drift … --json` emits the corrected anchors and
   `coyodex fix apply-drift --map … --verdicts …` writes them, matching each on the full `(src, verb,
   dst)` triple — a hand script that keyed on endpoints-only once swapped a paired `persists`/`reads`
-  edge. To drop a **refuted** edge, `coyodex fix drop-edge` removes it and reports (or, with
-  `--repoint`/`--drop-steps`, heals) the flow steps that rode it. Reconcile every refutation and
+  edge. `apply-drift` rewrites a drifted **security-surface** anchor (`security[].source`) the same way,
+  so a skeptic's corrected auth-check line lands with the tool, not a hand re-serialize. To drop a
+  **refuted** edge as a terminal post-assemble fix, `coyodex fix drop-edge` removes it and reports (or,
+  with `--repoint`/`--drop-steps`, heals) the flow steps that rode it. Reconcile every refutation and
   every drift (fix the map, or justify and record why); this reconcile is **not delegated**.
   Two **behavioral-consistency items** ride the same fresh-context pass (judgment calls no
   mechanical gate can make): (1) for each Happy Path step, does its **title contradict its use
@@ -726,6 +754,15 @@ synthesis → parallel trace.**
     **verdicts file OUT of `build-fragments/`** (e.g. under `.coyodex/verify/`) so a `*.json` glob into
     `assemble` can't pick it up — `assemble` now skips a stray verdicts file with a note, but keeping
     it out of the fragment dir is the clean habit.
+  - **Where each reconcile lives — reconcile file vs `fix` verbs.** Build-time drop/dedup (a
+    cross-agent duplicate edge, a refuted edge you decide during synthesis/trace) belongs in the
+    **`--reconcile` file** (`drop_edges`) or the fragments, so a re-assemble re-applies it — do NOT
+    reach for `fix drop-edge` there, its edit is discarded by the next assemble. The `fix` verbs are the
+    **post-assemble anchor-drift** tool only (`apply-drift` for drifted edge/security anchors,
+    `drop-edge` for a refuted edge found in Phase 4 after the final assemble). One rule: assignment and
+    drop that must survive a rebuild → reconcile file; a terminal anchor fix after the last assemble →
+    `fix`. `--reconcile drop_edges` runs after the entity-edge derivation and heals the riding flow
+    steps exactly like `fix drop-edge`, so a dropped `C→E` edge is not silently re-derived.
 - Guardrails: all agents share the same schema + edge-verb vocabulary; Phase 1 produces
   the canonical node inventory FIRST (nodes before edges, agents reference nodes and
   never invent them); every agent keeps inferred-vs-verified labels + returns `file:line`;

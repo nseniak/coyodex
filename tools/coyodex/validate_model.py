@@ -57,6 +57,7 @@ from coyodex.validate_analysis import (
     _where_href,
     check_hierarchy,
     compression_coverage_from_refs,
+    file_level_coverage,
     granularity_advisory,
     strip_anchor,
 )
@@ -854,6 +855,89 @@ def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
             f"`runs-in` under a 'Balance exceptions' extras heading to silence this."]
 
 
+def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
+    """Advisory: the Deployment view is only trustworthy if `runs_in` was GROUNDED (read off the deploy
+    manifests), not formula-guessed. `validate` used to check only PRESENCE, so a hand-script that
+    blanket-tagged every component to one unit (no manifest read, 0 entry points placed) passed clean.
+    These four canaries catch the low-quality shapes — all in the deployment family, so the one recorded
+    `runs-in` literal silences them together (like `_deployment_unlinked_warning`):
+
+    - non-atomic unit NAME (S5): a `deployment[].unit` holding a separator — one row is one process;
+    - formula-fill (S3): one unit blankets EVERY component AND another unit hosts nothing AND no entry
+      point carries `runs_in` — the exact co-occurrence a per-id-range guess leaves (a real all-in-one
+      app trips none of the other two, so a legit monolith never nags);
+    - unlinked unit: a unit hosting no component/entry point whose name matches no system dep;
+    - ambiguous thread host: a self-started entry point whose component runs in >1 unit but which sets
+      no `runs_in` of its own — the view then picks a host arbitrarily."""
+    if not m.deployment:
+        return []
+    if "runs-in" in balance_lib._exceptions(m):
+        return []                              # deliberately unmapped / justified — silence the family
+    warnings: list[str] = []
+    # a real unit name may contain spaces ('api worker'); only a SEPARATOR (shared with the dep-match
+    # guard) signals two units crammed into one row (S5)
+    non_atomic = [d.unit for d in m.deployment
+                  if d.unit and not grammar.is_atomic_unit_name(d.unit)]
+    if non_atomic:
+        warnings.append(f"Deployment unit name(s) look non-atomic (contain a separator): "
+                        f"{', '.join(non_atomic)} — a unit is ONE process; split each '<a> / <b>' into "
+                        f"separate `deployment[]` rows so a `runs_in` value resolves to exactly one host.")
+    used = any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)
+    if not used:
+        return warnings                        # fully un-adopted → `_deployment_unlinked_warning` owns it
+    comp_units = {c.id: set(c.runs_in) for c in m.components}
+    hosted: set[str] = set()
+    for c in m.components:
+        hosted.update(c.runs_in)
+    for ep in m.entry_points:
+        hosted.update(ep.runs_in)
+    dep_names = [d.name for d in m.deps
+                 if grammar.classify_dep(d.kind or "", d.type) in grammar.DEP_KINDS_SYSTEM]
+    orphan_units = sorted({d.unit for d in m.deployment if d.unit and d.unit not in hosted
+                           and not any(grammar.unit_name_matches_dep(d.unit, dn) for dn in dep_names)})
+    if orphan_units:
+        warnings.append(f"Deployment unit(s) run no traced component or entry point and match no known "
+                        f"system dependency: {', '.join(orphan_units)} — is each infra (add it as a "
+                        f"dependency), or an un-traced `runs_in` (tag the component/entry point that runs "
+                        f"there)?")
+    # Formula-fill smell: every component crammed into ONE unit with NO real spread, while a REAL
+    # (non-infra) process unit sits empty and no entry point is placed. Two guards keep a legitimately
+    # grounded map quiet: (a) an empty INFRA unit (mongo/redis) is EXPECTED — it hosts no code by
+    # nature — so only an empty NON-infra unit counts as the smell (mirrors `orphan_units`); (b) if a
+    # component also runs in another non-infra unit (a real backend/frontend split, or a dual all-in-one
+    # + split deployment), that IS grounding, not a formula — stay silent.
+    infra_units = {d.unit for d in m.deployment
+                   if d.unit and any(grammar.unit_name_matches_dep(d.unit, dn) for dn in dep_names)}
+    comp_unit_sets = [set(c.runs_in) for c in m.components]
+    blanket = next(iter(set.intersection(*comp_unit_sets)), None) if comp_unit_sets else None
+    ep_placed = any(ep.runs_in for ep in m.entry_points)
+    spread = any(u != blanket and u not in infra_units for cs in comp_unit_sets for u in cs)
+    empty_real_unit = any(d.unit and d.unit not in hosted and d.unit not in infra_units
+                          for d in m.deployment)
+    if blanket and not ep_placed and not spread and empty_real_unit:
+        warnings.append(f"`runs_in` looks formula-filled, not grounded: every component is tagged to one "
+                        f"unit ('{blanket}') while another real (non-infra) unit hosts nothing and no "
+                        f"entry point carries `runs_in`. A per-component manifest read (docker-compose / "
+                        f"Dockerfiles / Procfile) would spread components across their real processes and "
+                        f"place the background threads — re-derive `runs_in` from the manifests "
+                        f"(method.md), or record `runs-in` under 'Balance exceptions' if it truly runs as "
+                        f"one unit.")
+    ambiguous: list[str] = []
+    for i, ep in enumerate(m.entry_points):
+        if grammar.effective_activation(ep.activation, ep.kind) != "self":
+            continue
+        if set(ep.runs_in):
+            continue                            # precise host already set → unambiguous
+        if len(comp_units.get(ep.component.strip(), set())) > 1:
+            ambiguous.append(f"entry_points[{i}] [{ep.kind}] {_clip(ep.trigger)}")
+    if ambiguous:
+        shown = ", ".join(ambiguous[:8]) + (f", +{len(ambiguous) - 8} more" if len(ambiguous) > 8 else "")
+        warnings.append(f"{len(ambiguous)} self-started entry point(s) whose owning component runs in >1 "
+                        f"unit but which set no `runs_in` — the host process is ambiguous (the view picks "
+                        f"one). Set `runs_in` on the entry point to pin its exact process: {shown}")
+    return warnings
+
+
 def unbacked_entity_steps(m: ProjectModel) -> list[tuple[str, FlowStep, str, str]]:
     """C↔E flow steps whose entity touch NO backbone edge carries — returns
     `(container_label, step, c_id, e_id)`. The edge is C→E regardless of the step's authored
@@ -1189,9 +1273,10 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         if ep.source and not url.match(ep.source):
             out.append((f"entry_points[{ep.component} {ep.kind}]", ep.source))
     for s in m.security:
-        # the Auth-check anchor is a markdown link (an L2 grounding claim) — extract its href so
-        # `--check-sources` verifies the enforcement site exists (previously unchecked entirely).
-        href = _first_link_of(s, [s.source])
+        # the Auth-check anchor is an L2 grounding claim — verify the enforcement site exists.
+        # The canonical `security[].source` is a bare `path:line` (like Entity.source), so take the
+        # raw source; a legacy markdown-link source is still honored via `_first_link_of`.
+        href = _first_link_of(s, [s.source]) or (s.source or None)
         if href and not url.match(href):
             out.append((f"security '{s.surface}'", href))
     return out
@@ -1365,6 +1450,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_runs_in(m))
     warnings.extend(_deployment_placement_warnings(m))
     warnings.extend(_deployment_unlinked_warning(m))
+    warnings.extend(_deployment_quality_warnings(m))
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
     warnings.extend(edge_warnings)
@@ -1396,8 +1482,11 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         walk_root = repo_root if repo_root is not None else (
             model_path.resolve().parent.parent if model_path is not None else None)
         if walk_root is not None:
-            warnings.extend(compression_coverage_from_refs(
-                referenced_paths(m, walk_root.resolve()), walk_root, cov_dirs))
+            refs = referenced_paths(m, walk_root.resolve())
+            warnings.extend(compression_coverage_from_refs(refs, walk_root, cov_dirs))
+            # File-level coverage: the loose-file slice-seam gap the directory-granular check above
+            # misses (a component-less .py inside an otherwise-covered dir). Same refs + recorded dirs.
+            warnings.extend(file_level_coverage(refs, walk_root.resolve(), cov_dirs))
             # The granularity anchor: component (leaf) count vs the code-derived expectation E —
             # re-computed from the tree here (GR4), advisory-only, silent inside the ±40% band.
             # The literal `granularity` under 'Balance exceptions' records the operator's conscious
@@ -1468,8 +1557,12 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         targets = {e.dst for e in m.edges}
         # v2: a dep marked deployment_linked has no code call site BY DECLARATION — the nudge must
         # not pressure anyone to invent an edge for it (the audit→Elastic false-edge class).
+        # v3: in-process libraries/frameworks (FastAPI/uvicorn/motor/pydantic…) correctly fold into the
+        # Libraries box and per method must NOT get invented edges — skip the folded kinds, so only
+        # system deps (datastore/messaging/service/platform) nudge for a missing call site.
         orphan_deps = sorted(d.id for d in m.deps
-                             if d.id not in targets and not d.deployment_linked)
+                             if d.id not in targets and not d.deployment_linked
+                             and grammar.classify_dep(d.kind or "", d.type) not in grammar.DEP_KINDS_FOLDED)
         if orphan_deps:
             shown = ", ".join(orphan_deps[:12]) + (f", +{len(orphan_deps) - 12} more"
                                                    if len(orphan_deps) > 12 else "")

@@ -36,6 +36,12 @@ from coyodex.model import (
     remap_element_ids,
     to_canonical_json,
 )
+from coyodex.reconcile import (
+    ReconcileError,
+    apply_reconcile,
+    load_reconcile,
+    validate_reconcile,
+)
 from coyodex.validate_model import unbacked_entity_steps
 
 _SINGLETONS = ("title", "goal", "commit", "committed", "built", "tests_note")
@@ -335,17 +341,23 @@ def ensure_fragments_ignored(out_dir: Path) -> bool:
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv or not argv:
-        print("usage: coyodex assemble <fragment.json>... --out <dir>\n\n"
+        print("usage: coyodex assemble <fragment.json>... --out <dir> [--reconcile <file>]\n\n"
               "Merge build agents' structured-row fragments into the canonical project-map.json\n"
               "(+ the generated markdown and HTML views) in <dir>. Each fragment is a PARTIAL\n"
               "model (any subset of the top-level arrays; one header fragment may carry\n"
               "title/goal/commit). A malformed fragment or a duplicate ID fails loudly with the\n"
               "fragment named — nothing is silently fixed up; run `coyodex validate` on the\n"
-              "result to catch anything else wrong.\n"
+              "result to catch anything else wrong.\n\n"
+              "--reconcile <file>: a declarative reconcile input applied AFTER the merge (and after\n"
+              "  entity-edge derivation), BEFORE the write — so a re-assemble always re-applies it.\n"
+              "  `set` bulk-assigns subsystem/subdomain/runs_in/bucket; `drop_edges` removes refuted\n"
+              "  edges and heals the flow steps that rode them. Keep this file OUTSIDE\n"
+              "  build-fragments/ (e.g. .coyodex/reconcile.json) so the fragment glob does not sweep it.\n\n"
               "<dir>/.gitignore gets a 'build-fragments/' entry so the scratch dir never\n"
               "dirties the tree. Then run the usual invariant: validate --check-sources → audit → render.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
     out_dir: Path | None = None
+    reconcile_path: Path | None = None
     frags: list[Path] = []
     i = 0
     while i < len(argv):
@@ -356,6 +368,12 @@ def main(argv: list[str] | None = None) -> int:
                 print("ERROR: --out needs a directory", file=sys.stderr)
                 return 2
             out_dir = Path(argv[i])
+        elif a == "--reconcile":
+            i += 1
+            if i >= len(argv):
+                print("ERROR: --reconcile needs a file", file=sys.stderr)
+                return 2
+            reconcile_path = Path(argv[i])
         elif a.startswith("-"):
             print(f"ERROR: unknown option '{a}'", file=sys.stderr)
             return 2
@@ -413,6 +431,41 @@ def main(argv: list[str] | None = None) -> int:
         shown = ", ".join(derived[:8]) + (f", +{len(derived) - 8} more" if len(derived) > 8 else "")
         print(f"note: derived {len(derived)} C→E backbone edge(s) from entity flow-steps that had "
               f"none (verb inferred from the step; ambiguous → reads): {shown}")
+    # `--reconcile` is applied AFTER `_derive_entity_edges` (B1): a `drop_edges` on a C→E edge must run
+    # after the derive, or the derive re-creates the just-dropped edge from its surviving flow step.
+    rec_stats: dict[str, object] = {}
+    if reconcile_path is not None:
+        if not reconcile_path.exists():
+            print(f"ERROR: --reconcile {reconcile_path} not found", file=sys.stderr)
+            return 1
+        try:
+            rec = load_reconcile(reconcile_path.read_text(encoding="utf-8"), reconcile_path.name)
+        except ReconcileError as e:
+            print(f"ERROR: {e}", file=sys.stderr)
+            print("ASSEMBLY FAILED: bad reconcile file; nothing was written.", file=sys.stderr)
+            return 1
+        rec_problems = validate_reconcile(model, rec)
+        if rec_problems:
+            for pr in rec_problems:
+                print(f"ERROR: {pr}", file=sys.stderr)
+            print("ASSEMBLY FAILED: reconcile directives above are invalid; nothing was written.",
+                  file=sys.stderr)
+            return 1
+        rec_notes = apply_reconcile(model, rec, rec_stats)
+        for note in rec_notes:
+            print(note, file=sys.stderr if note.startswith("WARNING") else sys.stdout)
+        sc = rec_stats.get("reconcile_set", {})
+        set_summary = (", ".join(f"{k}: {v}" for k, v in sc.items() if v)
+                       if isinstance(sc, dict) else "") or "nothing"
+        print(f"note: reconcile applied — set {{{set_summary}}}; "
+              f"drop_edges: {rec_stats.get('reconcile_edges_dropped', 0)} edge(s).")
+    elif out_dir is not None and (out_dir / "reconcile.json").exists():
+        # S8: a reconcile file is present but was NOT passed — an assemble without it silently reverts
+        # every synthesis/trace assignment. Nudge, don't guess (the lead may have meant to omit it).
+        print(f"note: {out_dir / 'reconcile.json'} exists but --reconcile was not passed — this "
+              f"assemble did NOT apply it, so any subsystem/subdomain/runs_in/bucket/drop it holds is "
+              f"absent from the written map. Re-run with `--reconcile {out_dir / 'reconcile.json'}`.",
+              file=sys.stderr)
     from coyodex.views import model_to_markdown
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -427,9 +480,36 @@ def main(argv: list[str] | None = None) -> int:
     for note in _unconsumed_fragment_notes(out_dir, frags):
         print(note, file=sys.stderr)
     print(f"Assembled {len(parts)} fragment(s) -> {out_dir / 'project-map.json'} "
-          f"(+ generated markdown view)\n"
-          f"Next: coyodex validate {out_dir / 'project-map.json'} --check-sources")
+          f"(+ generated markdown view)")
+    # WS-T2: a self-describing one-line digest of WHAT this assemble did, so a transcript audit (builds
+    # alias the CLI) can see the auto-clean + reconcile effects without reverse-engineering a script.
+    print(f"  {_assemble_digest(model, stats, rec_stats)}")
+    print(f"Next: coyodex validate {out_dir / 'project-map.json'} --check-sources")
     return 0
+
+
+def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict[str, object]) -> str:
+    """One-line, self-describing summary of the assemble: the resulting inventory plus every mutation
+    the auto-clean passes and `--reconcile` made (all zero-suppressed) — the WS-T2 transcript trail."""
+    inv = {"C": len(model.components), "D": len(model.deps), "E": len(model.entities),
+           "edges": len(model.edges), "S": len(model.subsystems), "SD": len(model.subdomains)}
+    parts = [f"model: {', '.join(f'{k}:{v}' for k, v in inv.items() if v)}"]
+    ops: list[str] = []
+    if stats.get("actor_edges_stripped"):
+        ops.append(f"actor-edges stripped {stats['actor_edges_stripped']}")
+    if stats.get("components_merged"):
+        ops.append(f"components merged {stats['components_merged']}")
+    if stats.get("duplicate_edges_collapsed"):
+        ops.append(f"dup-edges collapsed {stats['duplicate_edges_collapsed']}")
+    if stats.get("entity_edges_derived"):
+        ops.append(f"C→E edges derived {stats['entity_edges_derived']}")
+    sc = rec_stats.get("reconcile_set", {})
+    if isinstance(sc, dict) and any(sc.values()):
+        ops.append("reconcile set " + "/".join(f"{k}:{v}" for k, v in sc.items() if v))
+    if rec_stats.get("reconcile_edges_dropped"):
+        ops.append(f"reconcile drop_edges {rec_stats['reconcile_edges_dropped']}")
+    parts.append("ops: " + ("; ".join(ops) if ops else "none"))
+    return " | ".join(parts)
 
 
 def _unconsumed_fragment_notes(out_dir: Path, consumed: list[Path]) -> list[str]:

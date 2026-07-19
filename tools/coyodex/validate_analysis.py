@@ -168,6 +168,62 @@ def compression_coverage_from_refs(refs: set[str], root: Path,
     return out
 
 
+_FILE_COVERAGE_CAP = 12  # sample size before eliding — the method sells file-level coverage, not a flood
+
+
+def file_level_coverage(refs: set[str], root: Path,
+                        skip_dirs: frozenset[str] = frozenset()) -> list[str]:
+    """Advisory (opt-in via --check-coverage): a CODE source file that no component references — the
+    true file-level slice-seam gap the directory-granular `compression_coverage_from_refs` misses (loose
+    files inside an otherwise-covered dir slip every harvest slice and validate stays silent). Three
+    exclusions keep it from flooding on a normal repo (S6):
+      1. a file under any referenced DIRECTORY is covered — a dir-anchored `component.source` covers its
+         whole subtree, so we test dir-prefix membership, not only an exact path match;
+      2. code files only — the granularity source filter (`lang_of` present and not a text lang) drops
+         README / yaml / toml / json / markdown, which `iter_source_files` returns but no component owns;
+      3. `NON_PRODUCT_DIRS` (test / docs / internal trees) skipped — `iter_source_files` does not exclude
+         them.
+    Honors the same 'Coverage exceptions' recorded dirs as the compression pass; sampled/capped."""
+    from coyodex.preindex_lib import (
+        GRANULARITY_TEXT_LANGS,
+        NON_PRODUCT_DIRS,
+        iter_source_files,
+        lang_of,
+    )
+
+    root = root.resolve()
+    # `referenced_paths` already dropped non-existent paths, so an existing ref that is a DIRECTORY on
+    # disk is a dir anchor covering its subtree; the rest are exact file refs.
+    ref_dirs = {r for r in refs if (root / r).is_dir()}
+
+    def covered(rel: str) -> bool:
+        return rel in refs or any(rel == d or rel.startswith(d + "/") for d in ref_dirs)
+
+    def recorded(rel: str) -> bool:
+        return any(rel == d or rel.startswith(d + "/") for d in skip_dirs)
+
+    unref: list[str] = []
+    for f in iter_source_files(root).files:
+        rel = f.relative_to(root)
+        lang = lang_of(f)
+        if lang is None or lang in GRANULARITY_TEXT_LANGS:          # exclusion 2 — code files only
+            continue
+        if any(part in NON_PRODUCT_DIRS for part in rel.parts[:-1]):  # exclusion 3 — skip non-product trees
+            continue
+        relstr = "/".join(rel.parts)
+        if covered(relstr) or recorded(relstr):                    # exclusion 1 (+ recorded escape)
+            continue
+        unref.append(relstr)
+    if not unref:
+        return []
+    unref.sort()
+    shown = ", ".join(unref[:_FILE_COVERAGE_CAP]) + (
+        f", +{len(unref) - _FILE_COVERAGE_CAP} more" if len(unref) > _FILE_COVERAGE_CAP else "")
+    return [f"{len(unref)} code source file(s) no component references — a slice-seam gap (loose files "
+            f"inside an otherwise-covered dir escape every harvest slice): {shown}. Add each to a "
+            f"component's `files`/`source`, or record its dir under a 'Coverage exceptions' heading."]
+
+
 def granularity_advisory(n_components: int, root: Path) -> list[str]:
     """Advisory (non-blocking, opt-in via --check-coverage): the map's COMPONENT (leaf) count vs the
     code-derived granularity expectation E — the leaf anchor (one component ≈ one ≤10-file/≤3-kLOC

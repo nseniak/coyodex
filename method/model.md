@@ -56,7 +56,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "entry_point": "<path:line|null>", "depends_on": "<derived summary text>",
                      "source": "<canonical source anchor|null>", "confidence",
                      "files": [ "<repo-relative path>", … ],
-                     "runs_in": [ "<deployment[].unit name>", … ],   // the process(es) that run this component (Deployment view)
+                     "runs_in": [ "<deployment[].unit name>", … ],   // the process(es) that run this component (Deployment view) — DERIVE from the deploy manifests, never an id-range formula (method.md 'Deployment & topology')
                      "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "deps":        [ { "id": "Dn",  "name", "kind": "<closed vocab|null>", "type", "used_for",
                      "where_configured": "<path:line|null>", "confidence",

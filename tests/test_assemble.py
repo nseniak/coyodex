@@ -362,6 +362,132 @@ def test_assemble_cli_fails_on_duplicate_ids_and_writes_nothing():
         assert not out.exists()
 
 
+# --- reconcile (--reconcile: set + drop_edges) ------------------------------------
+
+def make_reconcile_fragment() -> str:
+    """A fragment with everything the reconcile directives touch: two components, a subsystem, a dep, an
+    entity + subdomain, a deployment unit, one C→D edge, and a C→E flow step with NO backing edge (so
+    `_derive_entity_edges` derives one — the target of the drop_edges B1 test)."""
+    return json.dumps({
+        "title": "Demo", "goal": "g",
+        "use_cases": [{"id": "UC1", "name": "Do"}],
+        "subsystems": [{"id": "S1", "name": "Core"}],
+        "subdomains": [{"id": "SD1", "name": "Sales"}],
+        "components": [{"id": "C1", "name": "A", "purpose": "p", "source": "a.py:1"},
+                       {"id": "C2", "name": "B", "purpose": "p", "source": "b.py:1"}],
+        "deps": [{"id": "D1", "name": "Postgres", "kind": "datastore", "type": "SQL"}],
+        "entities": [{"id": "E1", "name": "Order", "source": "order.py:1"}],
+        "deployment": [{"unit": "worker"}],
+        "edges": [{"src": "C1", "verb": "uses", "dst": "D1", "why": "q", "where": "a.py:2"}],
+        "flows": [{"uc": "UC1", "title": "F", "steps": [
+            {"n": 1, "src": "C1", "dst": "E1", "phrase": "reads the order", "where": "a.py:5"}]}],
+    })
+
+
+def _assemble_with_reconcile(td: str, reconcile_obj: dict | None
+                             ) -> tuple[subprocess.CompletedProcess, Path]:
+    frag = Path(td) / "frag.json"
+    frag.write_text(make_reconcile_fragment(), encoding="utf-8")
+    out = Path(td) / "map"
+    args = ASSEMBLE + [str(frag), "--out", str(out)]
+    if reconcile_obj is not None:
+        rp = Path(td) / "reconcile.json"        # OUTSIDE build-fragments/ (S8) — passed via --reconcile
+        rp.write_text(json.dumps(reconcile_obj), encoding="utf-8")
+        args += ["--reconcile", str(rp)]
+    proc = subprocess.run(args, capture_output=True, text=True)
+    return proc, out
+
+
+def test_reconcile_set_assigns_and_survives_reassemble():
+    # The fragment/model-mismatch regression: `set` assignments must re-apply on EVERY assemble (a
+    # bespoke patch of the assembled map is discarded by the next assemble).
+    rec = {"set": [{"ids": ["C1", "C2"], "subsystem": "S1"},
+                   {"ids": ["C1"], "runs_in": ["worker"]},
+                   {"ids": ["E1"], "subdomain": "SD1"},
+                   {"ids": ["D1"], "bucket": "Data & storage"}]}
+    with tempfile.TemporaryDirectory() as td:
+        for _ in range(2):                      # assemble TWICE
+            proc, out = _assemble_with_reconcile(td, rec)
+            assert proc.returncode == 0, proc.stderr
+            m = load_model((out / "project-map.json").read_text(encoding="utf-8"))
+            assert {c.id: c.subsystem for c in m.components} == {"C1": "S1", "C2": "S1"}
+            assert next(c for c in m.components if c.id == "C1").runs_in == ["worker"]
+            assert next(e for e in m.entities if e.id == "E1").subdomain == "SD1"
+            assert next(d for d in m.deps if d.id == "D1").bucket == "Data & storage"
+
+
+def test_reconcile_drop_edges_removes_edge_and_heals_riding_step():
+    # B1: the C→E edge `_derive_entity_edges` creates from the flow step must be dropped AFTER derivation
+    # (not silently re-derived), and its riding step healed so a re-assemble stays stable.
+    rec = {"drop_edges": [{"src": "C1", "verb": "reads", "dst": "E1", "drop_steps": True}]}
+    with tempfile.TemporaryDirectory() as td:
+        for _ in range(2):
+            proc, out = _assemble_with_reconcile(td, rec)
+            assert proc.returncode == 0, proc.stderr
+            m = load_model((out / "project-map.json").read_text(encoding="utf-8"))
+            assert not any(e.src == "C1" and e.dst == "E1" for e in m.edges)   # not re-derived
+            steps = [s for f in m.flows for s in f.steps]
+            assert not any(s.src == "C1" and s.dst == "E1" for s in steps)     # riding step healed
+
+
+def test_reconcile_rejects_unknown_id_and_wrong_kind_and_bad_parent():
+    with tempfile.TemporaryDirectory() as td:
+        proc, out = _assemble_with_reconcile(td, {"set": [{"ids": ["C999"], "subsystem": "S1"}]})
+        assert proc.returncode == 1 and "unknown id 'C999'" in proc.stderr
+        assert not out.exists()                 # nothing written on a bad directive
+        proc2, _ = _assemble_with_reconcile(td, {"set": [{"ids": ["E1"], "subsystem": "S1"}]})
+        assert proc2.returncode == 1 and "can only be set on a component" in proc2.stderr
+        proc3, _ = _assemble_with_reconcile(td, {"set": [{"ids": ["C1"], "subsystem": "SD1"}]})
+        assert proc3.returncode == 1 and "is not a subsystem" in proc3.stderr
+        proc4, _ = _assemble_with_reconcile(td, {"set": [{"ids": ["C1"], "runs_in": ["ghost"]}]})
+        assert proc4.returncode == 1 and "unknown deployment unit" in proc4.stderr
+
+
+def test_reconcile_zero_match_drop_edges_warns_but_does_not_fail():
+    rec = {"drop_edges": [{"src": "C1", "verb": "calls", "dst": "C2"}]}   # no such edge
+    with tempfile.TemporaryDirectory() as td:
+        proc, out = _assemble_with_reconcile(td, rec)
+        assert proc.returncode == 0, proc.stderr        # a stale directive warns, never fails
+        assert "matched 0 edges" in proc.stderr
+        assert (out / "project-map.json").exists()
+
+
+def test_reconcile_reports_counts_in_the_summary():
+    rec = {"set": [{"ids": ["C1", "C2"], "subsystem": "S1"}]}
+    with tempfile.TemporaryDirectory() as td:
+        proc, _ = _assemble_with_reconcile(td, rec)
+        assert proc.returncode == 0, proc.stderr
+        assert "reconcile applied" in proc.stdout and "subsystem: 2" in proc.stdout
+        assert "reconcile set subsystem:2" in proc.stdout        # the self-describing digest (WS-T2)
+
+
+def test_assemble_notes_present_but_unpassed_reconcile_file():
+    # S8: a reconcile file present in the out dir but not passed silently reverts assignments — nudge.
+    with tempfile.TemporaryDirectory() as td:
+        frag = Path(td) / "frag.json"
+        frag.write_text(make_reconcile_fragment(), encoding="utf-8")
+        out = Path(td) / "map"
+        out.mkdir()
+        (out / "reconcile.json").write_text('{"set": []}', encoding="utf-8")
+        proc = subprocess.run(ASSEMBLE + [str(frag), "--out", str(out)], capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        assert "exists but --reconcile was not passed" in proc.stderr
+
+
+def test_load_reconcile_rejects_malformed_directives():
+    from coyodex.reconcile import ReconcileError, load_reconcile
+    for bad, needle in (('{"bogus": []}', "unknown top-level key"),
+                        ('{"set": [{"subsystem": "S1"}]}', "missing 'ids'"),
+                        ('{"set": [{"ids": ["C1"]}]}', "assigns no field"),
+                        ('{"drop_edges": [{"src": "C1", "verb": "x", "dst": "C2", '
+                         '"drop_steps": true, "repoint": "C3"}]}', "mutually exclusive")):
+        try:
+            load_reconcile(bad, "reconcile.json")
+            raise AssertionError(f"expected ReconcileError for {bad}")
+        except ReconcileError as e:
+            assert needle in str(e), str(e)
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

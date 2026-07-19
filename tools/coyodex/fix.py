@@ -24,10 +24,18 @@ import sys
 from pathlib import Path
 
 from coyodex.anchor_drift import drift_records
-from coyodex.audit_model import l2_worklist_model
-from coyodex.model import FlowStep, ProjectModel, load_model_path, to_canonical_json
+from coyodex.audit_model import _claim_text, l2_worklist_model
+from coyodex.model import ProjectModel, load_model_path, to_canonical_json
+from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
 
 _EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2` — excludes security claims
+
+
+def _security_claim(surface: str, source: str) -> str:
+    """Rebuild a security row's L2 grounding claim EXACTLY as `l2_worklist_model` (audit_model.py) —
+    the one string a drift record's `claim` is matched back against. Recomputed (never regex-parsed
+    off the drift record), so a surface containing the claim's delimiters can't corrupt the match."""
+    return f"Auth surface '{surface}' is protected by: {_claim_text(source)}"
 
 
 def _write(map_path: Path, m: ProjectModel) -> None:
@@ -75,52 +83,56 @@ def apply_drift(argv: list[str]) -> int:
     m = load_model_path(map_path)
     grounding = json.loads(Path(verdicts_path).read_text(encoding="utf-8")).get("grounding", [])
     records = drift_records(l2_worklist_model(m), grounding, tolerance)
-    applied = 0
+    edges_applied = 0
+    sec_applied = 0
     for rec in records:
-        mo = _EDGE_CLAIM.match(rec["claim"])
-        if not mo:                                    # a security-surface claim, not an edge — skip
-            continue
-        src, verb, dst = mo.group(1), mo.group(2).lower(), mo.group(3)
         corrected = rec.get("corrected")
+        mo = _EDGE_CLAIM.match(rec["claim"])
+        if mo:                                        # an edge claim — rewrite the edge `where`
+            src, verb, dst = mo.group(1), mo.group(2).lower(), mo.group(3)
+            if not corrected:
+                print(f"note: no consensus line for '{rec['claim']}' — left unchanged", file=sys.stderr)
+                continue
+            matches = [e for e in m.edges
+                       if e.src == src and e.verb.strip().lower() == verb and e.dst == dst]
+            if len(matches) != 1:                     # 0 (gone) or >1 (same triple, different call sites)
+                print(f"WARNING: '{rec['claim']}' matches {len(matches)} edges — skipped (resolve by "
+                      f"hand: an ambiguous multi-site edge must not be blind-rewritten).", file=sys.stderr)
+                continue
+            e = matches[0]
+            if e.where != corrected:
+                print(f"  {rec['claim']}: where {e.where!r} → {corrected!r}")
+                e.where = corrected
+                edges_applied += 1
+            continue
+        # a security-surface claim — rewrite the drifted `security[].source` anchor. Match by
+        # recomputing each row's claim (never regex-parsing the drift record), same multiplicity guard
+        # as the edge path: 0 (gone) or >1 (two rows can share a surface) → skip + warn.
         if not corrected:
             print(f"note: no consensus line for '{rec['claim']}' — left unchanged", file=sys.stderr)
             continue
-        matches = [e for e in m.edges
-                   if e.src == src and e.verb.strip().lower() == verb and e.dst == dst]
-        if len(matches) != 1:                         # 0 (gone) or >1 (same triple, different call sites)
-            print(f"WARNING: '{rec['claim']}' matches {len(matches)} edges — skipped (resolve by hand: "
-                  f"an ambiguous multi-site edge must not be blind-rewritten).", file=sys.stderr)
+        sec_matches = [s for s in m.security if _security_claim(s.surface, s.source) == rec["claim"]]
+        if len(sec_matches) != 1:
+            print(f"WARNING: '{rec['claim']}' matches {len(sec_matches)} security surfaces — skipped "
+                  f"(resolve by hand).", file=sys.stderr)
             continue
-        e = matches[0]
-        if e.where != corrected:
-            print(f"  {rec['claim']}: where {e.where!r} → {corrected!r}")
-            e.where = corrected
-            applied += 1
-    if applied:
+        s = sec_matches[0]
+        if s.source != corrected:
+            print(f"  {rec['claim']}: source {s.source!r} → {corrected!r}")
+            s.source = corrected
+            sec_applied += 1
+    if edges_applied or sec_applied:
         _write(Path(map_path), m)
-        print(f"apply-drift: rewrote {applied} edge `where` anchor(s). "
+        print(f"apply-drift: rewrote {edges_applied} edge `where` and {sec_applied} security anchor(s). "
               f"Re-run: validate --check-sources → audit → render.")
     else:
-        print("apply-drift: no drifted edge anchors to rewrite.")
+        print("apply-drift: no drifted edge or security anchors to rewrite.")
     return 0
 
 
 # ── fix drop-edge ────────────────────────────────────────────────────────────────────────────────
-
-def _riding_steps(m: ProjectModel, src: str, dst: str) -> list[tuple[str, FlowStep]]:
-    """Every flow / sub-flow step whose endpoints are the dropped edge's pair (undirected — a
-    return-direction step rides the same edge), tagged with its flow/sub-flow id for reporting."""
-    out: list[tuple[str, FlowStep]] = []
-    pair = frozenset((src, dst))
-    for f in m.flows:
-        for st in f.steps:
-            if not st.subflow and frozenset((st.src, st.dst)) == pair:
-                out.append((f.uc, st))
-    for sf in m.subflows:
-        for st in sf.steps:
-            if not st.subflow and frozenset((st.src, st.dst)) == pair:
-                out.append((sf.id, st))
-    return out
+# The riding-step query + heal (repoint / drop) is shared with `assemble --reconcile drop_edges`
+# (coyodex.reconcile) so the two drop paths reconcile flow steps identically.
 
 
 def drop_edge(argv: list[str]) -> int:
@@ -159,21 +171,13 @@ def drop_edge(argv: list[str]) -> int:
         print(f"ERROR: no edge '{src} {verb} {dst}' found", file=sys.stderr)
         return 1
     m.edges = kept
-    riding = _riding_steps(m, src, dst)
+    riding = riding_steps(m, src, dst)
     if new_dst:
-        for _owner, st in riding:
-            if st.src == dst:
-                st.src = new_dst
-            if st.dst == dst:
-                st.dst = new_dst
+        repoint_riding(riding, dst, new_dst)
         print(f"drop-edge: removed {removed} edge(s); re-pointed {len(riding)} riding step(s) "
               f"{dst} → {new_dst}.")
     elif drop_steps:
-        drop_ids = {id(st) for _o, st in riding}
-        for f in m.flows:
-            f.steps = [st for st in f.steps if id(st) not in drop_ids]
-        for sf in m.subflows:
-            sf.steps = [st for st in sf.steps if id(st) not in drop_ids]
+        drop_riding(m, riding)
         print(f"drop-edge: removed {removed} edge(s) and {len(riding)} riding step(s).")
     else:
         print(f"drop-edge: removed {removed} edge(s).")

@@ -26,6 +26,39 @@ DEEP_NEST_WARN = 5  # warn (non-blocking) when a membership chain is deeper than
 # Authored in an OPTIONAL T2 `Kind` column; when absent, classify_dep() infers it from `Type`.
 DEP_KINDS = ("datastore", "messaging", "service", "platform", "framework", "library")
 DEP_KINDS_FOLDED = ("framework", "library")                          # in-process — fold into "Libraries"
+# The EXTERNAL (system) dep kinds — everything the project talks to across a boundary. A deployment
+# unit that hosts no code but name-matches one of these is that dep's own box, not a real process.
+DEP_KINDS_SYSTEM = tuple(k for k in DEP_KINDS if k not in DEP_KINDS_FOLDED)  # datastore/messaging/service/platform
+
+
+# A deployment `Unit` is ONE process; these separators signal two+ units crammed into one row (a
+# non-atomic name). Shared by the atomic-name check and the dep-match guard below.
+UNIT_NAME_SEPARATORS = (" / ", ",", " & ")
+
+
+def is_atomic_unit_name(name: str) -> bool:
+    """A unit name denotes exactly one process (no separator crammed two together)."""
+    return not any(sep in name for sep in UNIT_NAME_SEPARATORS)
+
+
+def _norm_alnum(s: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", s.lower())
+
+
+def unit_name_matches_dep(unit_name: str, dep_name: str) -> bool:
+    """True when a deployment-unit name and a dependency name denote the SAME infra: case-insensitive
+    containment of the alphanumeric-normalized names, either direction (`"mongo"`↔`"MongoDB"` matches).
+    A NON-ATOMIC unit name (a `"mongo-test / redis-test"` compound) denotes no single dep and matches
+    NOTHING — it is left to flag as untraced (and as a non-atomic name), never silently treated as
+    infra. This guard is load-bearing: without it the compound normalizes to one blob that DOES contain
+    a short dep token like `"redis"`, wrongly suppressing the real gap the check exists to surface."""
+    if not is_atomic_unit_name(unit_name):
+        return False
+    u = _norm_alnum(unit_name)
+    d = _norm_alnum(dep_name)
+    if not u or not d:
+        return False
+    return u in d or d in u
 
 # Keyword signatures for the heuristic fallback, in PRIORITY order (first hit wins). Distinctive
 # categories precede broad ones so a multi-signal Type lands right: "AWS SQS" -> messaging (not

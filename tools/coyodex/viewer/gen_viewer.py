@@ -39,7 +39,8 @@ from typing import Any, TypedDict, cast
 
 from coyodex.viewer.build_graph import DiffDict, GraphDict, build_diff
 from coyodex.grammar import (  # external-dep Kind fold rule + the purpose-bucket grouping axis
-    DEP_BUCKET_FOLD_AT, DEP_KINDS_FOLDED, canonical_bucket, order_buckets, resolve_bucket,
+    DEP_BUCKET_FOLD_AT, DEP_KINDS_FOLDED, DEP_KINDS_SYSTEM, canonical_bucket, order_buckets,
+    resolve_bucket, unit_name_matches_dep,
 )
 
 # Synthetic node id for the collapsed "Libraries" box in the Context view (folds framework + library
@@ -1301,11 +1302,51 @@ def _node_runs_in(node: object) -> list[str]:
     return [str(x) for x in v] if isinstance(v, list) else []
 
 
+def _entry_point_runs_in(ep: object) -> list[str]:
+    """An entry point's `runs_in` — the precise host unit(s) of a self-started thread (its component may
+    run in several). Carried in the graph's flat `entry_points` list (from EntryPoint.runs_in)."""
+    v = ep.get("runs_in") if isinstance(ep, dict) else None
+    return [str(x) for x in v] if isinstance(v, list) else []
+
+
+def _process_unit_names(graph: GraphDict) -> set[str]:
+    """The deployment units that are real PROCESSES: a unit hosting ≥1 component OR ≥1 entry point via
+    `runs_in` (B2 — a worker whose component runs in several units is tagged only at the entry-point
+    level; counting components alone would drop that real process). A unit hosting neither is
+    infrastructure the app talks to (mongo/redis/nginx), not a code-running process."""
+    hosts: set[str] = set()
+    for node in graph["nodes"].values():
+        if isinstance(node, dict) and str(node.get("kind")) == "component":
+            hosts.update(_node_runs_in(node))
+    for ep in graph.get("entry_points", []):
+        hosts.update(_entry_point_runs_in(ep))
+    return {u for u in hosts if u}
+
+
+def _system_dep_names(graph: GraphDict) -> list[str]:
+    """The names of every EXTERNAL (system) dependency box — datastore/messaging/service/platform. A
+    no-host deployment unit whose name matches one of these IS that dep's box, not a real process."""
+    return [str(node.get("name", "")) for node in graph["nodes"].values()
+            if isinstance(node, dict) and str(node.get("kind")) == "dep"
+            and node.get("dep_kind") in DEP_KINDS_SYSTEM]
+
+
+def _unit_matches_system_dep(unit: str, dep_names: list[str]) -> bool:
+    """The no-host unit `unit` name-matches a drawn system-dep box (so it needs no process/untraced box)."""
+    return any(unit_name_matches_dep(unit, dn) for dn in dep_names)
+
+
 def add_deployment_nodes(g: dict[str, Any], graph: GraphDict) -> None:
-    """Inject one view-only `process` node per deployment unit into the panel graph, so the Deployment
-    view's process boxes bind + drill + show a panel. `unit` carries the raw name for the drill/reverse
-    lookup; `fields` seeds the info pane from the deployment row."""
+    """Inject one view-only `process` node per deployment unit that HOSTS code (a component or entry
+    point runs in it — `_process_unit_names`), so the Deployment view's process boxes bind + drill +
+    show a panel. Infrastructure units (mongo/redis/nginx — no `runs_in` points at them) get NO process
+    node: they are already the dep box the running components point at, so a process box would be a dead,
+    arrow-less duplicate. `_deployment_unit_ids` stays complete (the shared index→id map); the skip is
+    HERE, at the usage site (S1). `unit` carries the raw name for the drill/reverse lookup."""
+    process_units = _process_unit_names(graph)
     for uid, unit in _deployment_unit_ids(graph):
+        if unit not in process_units:
+            continue
         r = graph["deployment"][int(uid[2:])]
         fields = {k: str(v) for k, v in (("Runs on", r.get("runs_on")),
                                          ("Exposed as", r.get("exposed_as")),
@@ -1376,14 +1417,22 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
     uid_of = {unit: uid for uid, unit in units}
     runs, infra, boxes_by_uid = _deployment_edges(graph, uid_of)
     endpoints = {b for _u, b in runs} | {b for _u, b in infra}
+    # Only units that HOST code are process boxes (B2). A no-host unit is either an infra dep already
+    # drawn in the Infrastructure lane (name-match → drawn NOWHERE) or a genuinely-unlinked unit (a real
+    # gap → the small "Untraced units" lane, so it is never dropped silently — S2).
+    process_units = _process_unit_names(graph)
+    dep_names = _system_dep_names(graph)
+    process_uids = [uid for uid, name in units if name in process_units]
+    untraced = [uid for uid, name in units
+                if name not in process_units and not _unit_matches_system_dep(name, dep_names)]
     # core = a process sharing a subsystem with another process; satellite = owns its subsystems alone.
     runners_of: dict[str, set[str]] = {}
     for uid, box in runs:
         runners_of.setdefault(box, set()).add(uid)
     def is_core(uid: str) -> bool:
         return any(len(runners_of.get(b, ())) > 1 for b in boxes_by_uid.get(uid, ()))
-    core = [uid for uid, _n in units if is_core(uid)]
-    sat = [uid for uid, _n in units if uid not in set(core)]
+    core = [uid for uid in process_uids if is_core(uid)]
+    sat = [uid for uid in process_uids if uid not in set(core)]
     infra_boxes = sorted(b for b in endpoints if str(graph["nodes"].get(b, {}).get("kind")) == "dep")
     sub_boxes = sorted(b for b in endpoints if b not in set(infra_boxes))
 
@@ -1413,9 +1462,13 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
         lane("L_core", "Shared runtime", core, "process")
         lane("L_sat", "Standalone services", sat, "process")
     else:
-        lane("L_proc", "Processes", [u for u, _n in units], "process")
+        lane("L_proc", "Processes", process_uids, "process")
     lane("L_subs", "Subsystems", sub_boxes, "subsystem")
     lane("L_infra", "Infrastructure", infra_boxes, "infra")
+    # A unit hosting no code and matching no infra dep is a real gap — surface it in its own lane rather
+    # than dropping it silently (S2). It has no injected graph node (so it stays inert), and the viewer
+    # keeps it searchable via a non-process fallback row.
+    lane("L_untraced", "Untraced units", untraced, "process")
 
     lines += class_lines
     for a, b in sorted(runs | infra):

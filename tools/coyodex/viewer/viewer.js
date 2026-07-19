@@ -5164,8 +5164,14 @@ function sbBuildStatic() {
   }
   for (const c of (GRAPH.config || [])) { if (c && c.key) items.push(sysRow(c.key, 'config', 'config')); }
   for (const s of (GRAPH.security || [])) { if (s && s.surface) items.push(sysRow(s.surface, 'security surface', 'security')); }
-  // deployment units are indexed as `process` NODES (they route to the Deployment view via
-  // selectTargetFor); no sysRow here, or a unit would appear twice and one hit would misroute to System.
+  // A HOSTING deployment unit is indexed as a `process` NODE (it routes to the Deployment view via
+  // selectTargetFor); no sysRow for those, or a unit would appear twice and one hit would misroute to
+  // System. A NON-process unit (infra the app talks to, or an untraced unit) has no process node — it
+  // would vanish from search entirely, so give it a System-tab fallback row (the System tab lists every
+  // deployment row). Keeps every unit findable after WS1 stopped drawing infra units as process boxes.
+  for (const d of (GRAPH.deployment || [])) {
+    if (d && d.unit && !unitProcessNodeId(d.unit)) items.push(sysRow(d.unit, 'deployment unit', 'deployment'));
+  }
   for (const o of (GRAPH.observability || [])) { if (o && o.signal) items.push(sysRow(o.signal, 'observability', 'signal')); }
   for (const r of (GRAPH.run_commands || [])) { if (r && r.action) items.push(sysRow(r.action, 'run command', 'run')); }
   for (const t of (GRAPH.non_entity_types || [])) { if (t && t.name) items.push(sysRow(t.name, 'not modelled', 'type')); }

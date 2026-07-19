@@ -1290,6 +1290,104 @@ def test_unplaced_self_thread_is_advised_only_once_runs_in_is_used():
     assert any("Unplaced" in w and "self-started" in w for w in warnings_of(m))
 
 
+# --- Deployment quality warnings (WS2) -----------------------------------------
+
+def test_formula_filled_runs_in_is_flagged_but_a_true_monolith_is_not():
+    m = make_valid_model()
+    # one unit blankets EVERY component while another unit hosts nothing + no entry point placed
+    m.deployment = [DeploymentRow(unit="standalone"), DeploymentRow(unit="worker")]
+    m.components[0].runs_in = ["standalone"]
+    assert any("formula-filled" in w for w in warnings_of(m))
+    # a legit all-in-one app (single unit hosting everything, no empty peer) must NOT nag
+    m.deployment = [DeploymentRow(unit="standalone")]
+    assert not any("formula-filled" in w for w in warnings_of(m))
+    # the recorded `runs-in` exception silences the family even with the empty peer back
+    m.deployment = [DeploymentRow(unit="standalone"), DeploymentRow(unit="worker")]
+    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in")]
+    assert not any("formula-filled" in w for w in warnings_of(m))
+
+
+def test_formula_fill_silent_on_grounded_dual_deployment():
+    # F1 regression: a legitimately grounded map where every component runs in an all-in-one unit PLUS
+    # a real split unit (standalone + backend/frontend), and the only EMPTY units are infra, must NOT
+    # be called formula-filled — the spread across real units and the infra-only emptiness are grounding.
+    m = make_valid_model()
+    m.components = [Component(id="C1", name="A", purpose="p", entry_point="a.py:1"),
+                   Component(id="C2", name="B", purpose="p", entry_point="b.py:1")]
+    m.edges = []
+    m.flows = []
+    m.deps = [Dep(id="D1", name="MongoDB", kind="datastore", type="db")]
+    m.deployment = [DeploymentRow(unit="standalone"), DeploymentRow(unit="backend"),
+                    DeploymentRow(unit="frontend"), DeploymentRow(unit="mongo")]  # mongo = empty INFRA
+    m.components[0].runs_in = ["standalone", "backend"]
+    m.components[1].runs_in = ["standalone", "frontend"]
+    assert not any("formula-filled" in w for w in warnings_of(m))   # spread → grounded, stays quiet
+
+
+def test_unlinked_deployment_unit_is_flagged_unless_it_matches_a_dep():
+    m = make_valid_model()                                    # dep D1 = "Postgres" (datastore)
+    m.deployment = [DeploymentRow(unit="worker"), DeploymentRow(unit="ghosttown")]
+    m.components[0].runs_in = ["worker"]                      # adoption present; ghosttown hosts nothing
+    assert any("ghosttown" in w and "run no traced component" in w for w in warnings_of(m))
+    # a no-host unit whose NAME matches a system dep is that dep's box, not a gap → not flagged
+    m.deployment = [DeploymentRow(unit="worker"), DeploymentRow(unit="postgres")]
+    assert not any("postgres" in w and "run no traced component" in w for w in warnings_of(m))
+
+
+def test_ambiguous_thread_host_is_flagged():
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="bot"), DeploymentRow(unit="worker")]
+    m.components[0].runs_in = ["bot", "worker"]               # C1 runs in TWO units
+    m.entry_points = [EntryPoint(kind="cron", trigger="loop", source="o.py:1", component="C1",
+                                 activation="self")]          # no own runs_in → host is ambiguous
+    assert any("ambiguous" in w for w in warnings_of(m))
+    m.entry_points[0].runs_in = ["bot"]                       # pinning its own host resolves it
+    assert not any("ambiguous" in w for w in warnings_of(m))
+
+
+def test_non_atomic_unit_name_is_flagged_but_a_spaced_name_is_not():
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="mongo-test / redis-test")]  # a separator → two units in one row
+    assert any("non-atomic" in w for w in warnings_of(m))
+    m.deployment = [DeploymentRow(unit="api worker")]              # spaces, no separator → legit
+    assert not any("non-atomic" in w for w in warnings_of(m))
+
+
+# --- Orphan-dep nudge scoped to system deps (WS6) ------------------------------
+
+def test_orphan_dep_nudge_skips_folded_library_kinds():
+    m = make_valid_model()
+    # a library dep with no incoming edge folds into Libraries → must NOT nudge for a missing call site
+    m.deps.append(Dep(id="D2", name="pydantic", kind="library", type="validation"))
+    assert not any("no incoming edge" in w and "D2" in w for w in warnings_of(m))
+    # a SYSTEM dep (datastore) with no incoming edge still nudges — it needs a real call site
+    m.deps.append(Dep(id="D3", name="Redis", kind="datastore", type="cache"))
+    assert any("no incoming edge" in w and "D3" in w for w in warnings_of(m))
+
+
+# --- File-level harvest coverage (WS4) -----------------------------------------
+
+def test_file_level_coverage_flags_loose_py_with_the_three_exclusions():
+    from coyodex.validate_analysis import file_level_coverage
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "adapters").mkdir()
+        (root / "adapters" / "a.py").write_text("x\n", encoding="utf-8")        # referenced
+        (root / "adapters" / "loose.py").write_text("x\n", encoding="utf-8")    # the loose gap
+        (root / "adapters" / "README.md").write_text("d\n", encoding="utf-8")   # not code → excluded (2)
+        (root / "tests").mkdir()
+        (root / "tests" / "t.py").write_text("x\n", encoding="utf-8")           # non-product → excluded (3)
+        refs = {"adapters/a.py"}
+        out = file_level_coverage(refs, root)
+        assert any("loose.py" in w for w in out)
+        assert not any("README" in w for w in out)
+        assert not any("tests/t.py" in w for w in out)
+        # exclusion 1: a referenced DIRECTORY covers its whole subtree
+        assert not file_level_coverage({"adapters"}, root)
+        # a 'Coverage exceptions' recorded dir suppresses it too
+        assert not file_level_coverage(refs, root, frozenset({"adapters"}))
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
