@@ -120,6 +120,15 @@ body.vresizing #stage { pointer-events: none; }
                  color: #4338ca; border-radius: 0; cursor: pointer; }
 #viewsw button:hover { background: #eef2ff; }
 #viewsw button.active { background: #6366f1; color: #fff; }
+/* Deployment environment picker (variants) — sits atop the deployment info panel. */
+.env-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0 0 14px;
+              padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+.env-picker-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280;
+                    margin-right: 3px; }
+.env-opt { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid #c7d2fe;
+           background: #fff; color: #4338ca; border-radius: 6px; cursor: pointer; }
+.env-opt:hover { background: #eef2ff; }
+.env-opt.active { background: #6366f1; border-color: #6366f1; color: #fff; }
 #stagehead .hint { border-bottom: 1px solid #e5e7eb; }
 #diagram svg { width: 100%; height: 100%; }
 /* Glossary tab: the ubiquitous-language terms as a table rendered straight into #diagram (not a

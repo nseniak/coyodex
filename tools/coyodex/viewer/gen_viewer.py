@@ -1440,10 +1440,31 @@ def _allinone_uids(process_uids: list[str], comps_by_uid: dict[str, set[str]]) -
     return fold
 
 
-def gen_deployment_mermaid(graph: GraphDict) -> str:
+def _unit_variants(graph: GraphDict) -> dict[str, set[str]]:
+    """`{unit_name: {environment…}}` from the deployment rows — a unit's declared variants. An empty
+    set means UNGATED (the unit appears in every environment)."""
+    out: dict[str, set[str]] = {}
+    for r in graph["deployment"]:
+        out[str(r.get("unit", ""))] = {str(v) for v in (r.get("variants") or [])}  # type: ignore[union-attr]
+    return out
+
+
+def deployment_environments(graph: GraphDict) -> list[str]:
+    """The declared deployment-variant names, in order — or [] when the project has no environment axis."""
+    return [str(e) for e in graph.get("environments", [])]
+
+
+def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
     """The Deployment overview: each deployable unit a `process` box and derived `runs` edges to the
     subsystems it executes. Everything drawn is a real (or injected) graph node, so every box binds
     (the B1 rule).
+
+    `env` (an entry of `graph["environments"]`) filters the overview to one deployment variant: a unit
+    is shown iff its `variants` include `env` OR its `variants` are empty (ungated / shared). `env=None`
+    is the "All" view (every unit — today's behavior, unchanged when a map declares no environments).
+    NB the infra/`runs` derivation is from AGGREGATE component→dep/subsystem edges, so a component that
+    runs in units of several environments contributes its infra to each of them (env-specific infra
+    needs env-specific components — stated in method.md).
 
     Two readability rules keep the overview from hairballing (both DERIVED — kind + `runs_in`, no
     authored input):
@@ -1460,15 +1481,25 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
     band, then Infrastructure — so dagre stacks them into readable rows instead of a flat mesh."""
     units = _deployment_unit_ids(graph)
     uid_of = {unit: uid for uid, unit in units}
+    # Per-environment filter: a unit is IN `env` when its variants include it or are empty (ungated).
+    # `env=None` (All) admits every unit, so the `_deployment_unit_ids` index map stays complete (S1) —
+    # only which uids are DRAWN is filtered, never the U_n numbering.
+    variants_of = _unit_variants(graph)
+    env_uids = {uid for uid, name in units
+                if env is None or env in variants_of.get(name, set()) or not variants_of.get(name, set())}
     runs, infra, boxes_by_uid = _deployment_edges(graph, uid_of)
+    runs = {(u, b) for (u, b) in runs if u in env_uids}
+    infra = {(u, b) for (u, b) in infra if u in env_uids}
+    boxes_by_uid = {u: bs for u, bs in boxes_by_uid.items() if u in env_uids}
     # Only units that HOST code are process boxes (B2). A no-host unit is either an infra dep already
     # drawn in the Infrastructure lane (name-match → drawn NOWHERE) or a genuinely-unlinked unit (a real
     # gap → the small "Untraced units" lane, so it is never dropped silently — S2).
     process_units = _process_unit_names(graph)
     dep_names = _system_dep_names(graph)
-    process_uids = [uid for uid, name in units if name in process_units]
+    process_uids = [uid for uid, name in units if name in process_units and uid in env_uids]
     untraced = [uid for uid, name in units
-                if name not in process_units and not _unit_matches_system_dep(name, dep_names)]
+                if name not in process_units and not _unit_matches_system_dep(name, dep_names)
+                and uid in env_uids]
     # ALL-IN-ONE FOLD: superset units are annotated, not fanned. Only the fanned units draw `runs` arrows
     # and drive the core/satellite split, so a monolith's own arrows don't paint every peer as "shared".
     comps_by_uid = _components_run_by_uid(graph, uid_of)
@@ -1570,9 +1601,17 @@ def gen_deployment_unit_card_mermaid(graph: GraphDict, unit: str) -> str:
 
 def deployment_cards(graph: GraphDict) -> dict[str, str]:
     """`{unit_name: card_mermaid}` — the per-process drill cards, keyed by unit NAME (the frontend
-    drills a process to `{kind:'deploymentUnit', unit:<node.unit>}`)."""
+    drills a process to `{kind:'deploymentUnit', unit:<node.unit>}`). Cards are env-independent (a
+    unit's card lists everything it runs); the environment picker only filters the OVERVIEW."""
     return {unit: gen_deployment_unit_card_mermaid(graph, unit)
             for _uid, unit in _deployment_unit_ids(graph) if unit}
+
+
+def deployment_mermaid_by_env(graph: GraphDict) -> dict[str, str]:
+    """`{environment_name: overview_mermaid}` — one filtered Deployment overview per declared
+    environment (the "All" view stays `mermaidDeployment`). Empty `{}` when the map declares no
+    environments, so the frontend shows no picker and renders the single overview as before."""
+    return {e: gen_deployment_mermaid(graph, e) for e in deployment_environments(graph)}
 
 
 def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
@@ -1954,6 +1993,8 @@ class ViewBundle(TypedDict):
     domainContainerEdges: dict[str, list[dict[str, str]]]
     mermaidDeployment: str
     deploymentCards: dict[str, str]
+    deploymentEnvironments: list[str]
+    mermaidDeploymentByEnv: dict[str, str]
     hasDeployment: bool
     mermaidHp: str
     flowsMm: dict[str, str]
@@ -2037,6 +2078,8 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         domainContainerEdges=gen_domain_container_edges(graph) if subdomains else {},
         mermaidDeployment=gen_deployment_mermaid(graph) if deployment else "",
         deploymentCards=deployment_cards(graph) if deployment else {},
+        deploymentEnvironments=deployment_environments(graph) if deployment else [],
+        mermaidDeploymentByEnv=deployment_mermaid_by_env(graph) if deployment else {},
         hasDeployment=deployment,
         mermaidHp=gen_hp_mermaid(graph) if hp else "",
         # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so

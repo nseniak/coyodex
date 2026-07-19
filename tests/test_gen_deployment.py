@@ -130,6 +130,47 @@ def test_ungrouped_component_runs_edge_targets_the_component():
     assert "U_2 --> C3" in mm and "class C3 component" in mm
 
 
+# --- environments (C2) ----------------------------------------------------------
+
+def _env_model() -> ProjectModel:
+    m = ProjectModel(title="D", goal="g")
+    m.subsystems = [Group(id="S1", name="Core")]
+    m.components = [
+        Component(id="C1", name="Api", subsystem="S1", source="a.py:1", runs_in=["api"]),      # prod-only
+        Component(id="C2", name="Dev", subsystem="S1", source="b.py:1", runs_in=["devbox"]),    # dev-only
+        Component(id="C3", name="Shr", subsystem="S1", source="c.py:1", runs_in=["shared"]),    # ungated
+    ]
+    m.deps = [Dep(id="D1", name="PG", kind="datastore", type="db")]
+    m.edges = [Edge(src="C1", verb="reads", dst="D1", why="x", where="a.py:2")]
+    m.environments = ["dev", "prod"]
+    m.deployment = [DeploymentRow(unit="api", variants=["prod"]),
+                    DeploymentRow(unit="devbox", variants=["dev"]),
+                    DeploymentRow(unit="shared")]                  # empty variants → ungated (every env)
+    return m
+
+
+def test_deployment_mermaid_by_env_filters_units_by_variant():
+    by_env = G.deployment_mermaid_by_env(model_to_graph(_env_model()))
+    assert set(by_env) == {"dev", "prod"}
+    assert 'U_0["api"]' in by_env["prod"] and 'U_0["api"]' not in by_env["dev"]     # prod-only unit
+    assert 'U_1["devbox"]' in by_env["dev"] and 'U_1["devbox"]' not in by_env["prod"]  # dev-only unit
+    assert 'U_2["shared"]' in by_env["dev"] and 'U_2["shared"]' in by_env["prod"]   # ungated → both
+
+
+def test_deployment_all_view_shows_every_unit():
+    mm_all = G.gen_deployment_mermaid(model_to_graph(_env_model()))   # env=None → All
+    assert all(f'U_{i}["' in mm_all for i in (0, 1, 2))              # every unit present
+
+
+def test_no_environments_degrades_to_single_overview():
+    m = _env_model()
+    m.environments = []                                             # feature un-adopted
+    g = model_to_graph(m)
+    assert G.deployment_environments(g) == []
+    assert G.deployment_mermaid_by_env(g) == {}                    # no per-env dict → frontend shows no picker
+    assert all(f'U_{i}["' in G.gen_deployment_mermaid(g) for i in (0, 1, 2))  # overview unchanged
+
+
 # --- cards ----------------------------------------------------------------------
 
 def test_deployment_cards_keyed_by_unit_name():

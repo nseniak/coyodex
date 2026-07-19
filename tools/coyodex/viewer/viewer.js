@@ -17,8 +17,11 @@ let MERMAID_DOMAIN_EDGE_CARD;   // subdomain edge pair: 'A>B' -> two-subdomain c
 let MERMAID_BRIDGE_CARD;        // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
 let BRIDGE_EDGES;               // flat list of every component->entity edge (structure<->domain bridge atoms)
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
-let MERMAID_DEPLOYMENT;    // Deployment overview: processes + infra + derived `runs` edges to subsystems
+let MERMAID_DEPLOYMENT;    // Deployment overview (the "All" view): processes + infra + derived `runs` edges
 let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of the subsystems it runs
+let DEPLOY_ENVS;           // declared deployment environments (variant names), or [] — gates the env picker
+let MERMAID_DEPLOYMENT_BY_ENV;  // {environment -> overview mermaid filtered to that variant}
+let DEPLOY_ENV = null;     // the selected environment (null = All); persists across the session
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box sequence
 let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
@@ -60,6 +63,7 @@ function applyBundle(b) {
   MERMAID_DOMAIN_SUB = b.mermaidDomainSub; MERMAID_DOMAIN_EDGE_CARD = b.mermaidDomainEdgeCard;
   MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; BRIDGE_EDGES = b.bridgeEdges; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
   MERMAID_DEPLOYMENT = b.mermaidDeployment; DEPLOYMENT_CARDS = b.deploymentCards; HAS_DEPLOYMENT = b.hasDeployment;
+  DEPLOY_ENVS = b.deploymentEnvironments || []; MERMAID_DEPLOYMENT_BY_ENV = b.mermaidDeploymentByEnv || {};
   MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
   HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
@@ -2570,9 +2574,26 @@ function showDeployment() {
       + `<div class="gloss-plain">Self-started, but no <code>runs_in</code> — not shown on any process. `
       + `Tag <code>runs_in</code> on the entry point or its component.</div>${threadRowsHtml(unplaced)}</section>`;
     wireSrcLinks(panel);
-    return;
-  }
-  if (GRAPH.nodes['SYS']) showNode('SYS'); else panel.innerHTML = EMPTY_PANEL;
+  } else if (GRAPH.nodes['SYS']) { showNode('SYS'); } else { panel.innerHTML = EMPTY_PANEL; }
+  injectEnvPicker();
+}
+// The environment picker (deployment variants). Present only when the map declares `environments`;
+// selecting one filters the overview to that variant (empty variants = shared, shown in every env).
+// The selection is module state (DEPLOY_ENV) and re-renders the current deployment scene.
+function injectEnvPicker() {
+  if (!DEPLOY_ENVS || !DEPLOY_ENVS.length) return;
+  const opts = ['All'].concat(DEPLOY_ENVS);
+  const html = `<div class="env-picker"><span class="env-picker-label">Environment</span>`
+    + opts.map((o) => {
+      const val = o === 'All' ? '' : o;
+      const active = (DEPLOY_ENV || '') === val;
+      return `<button class="env-opt${active ? ' active' : ''}" data-env="${esc(val)}">${esc(o)}</button>`;
+    }).join('') + `</div>`;
+  panel.insertAdjacentHTML('afterbegin', html);
+  panel.querySelectorAll('.env-opt').forEach((btn) => btn.addEventListener('click', () => {
+    DEPLOY_ENV = btn.dataset.env || null;
+    render();  // re-draw the current (deployment) scene through mermaidFor's env branch
+  }));
 }
 // A process card's default panel: the process node's own detail + the threads/loops it hosts.
 function showDeploymentUnit(unit) {
@@ -3020,7 +3041,7 @@ function mermaidFor(s) {
   if (s.kind === 'domsub') return MERMAID_DOMAIN_SUB[s.sd];
   if (s.kind === 'domedge') return MERMAID_DOMAIN_EDGE_CARD[s.a + '>' + s.b];
   if (s.kind === 'bridge') return MERMAID_BRIDGE_CARD[s.sid + '>' + s.sd];
-  if (s.kind === 'deployment') return MERMAID_DEPLOYMENT;
+  if (s.kind === 'deployment') return (DEPLOY_ENV && MERMAID_DEPLOYMENT_BY_ENV[DEPLOY_ENV]) || MERMAID_DEPLOYMENT;
   if (s.kind === 'deploymentUnit') return DEPLOYMENT_CARDS[s.unit];
   if (s.kind === 'hp') return MERMAID_HP;
   if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;

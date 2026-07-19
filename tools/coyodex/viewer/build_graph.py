@@ -114,7 +114,8 @@ class GraphDict(TypedDict):
     entry_points: list[dict[str, object]]   # T4: {kind, trigger, source, component, index} (component = owning
                                             # C id; index = position within that component's list, for pane select)
     non_entity_types: list[dict[str, str]]  # deliberately-unmodelled types: {name, source, why}
-    deployment: list[dict[str, str]]        # {unit, runs_on, exposed_as, config_source}
+    deployment: list[dict[str, object]]     # {unit, runs_on, exposed_as, config_source, variants: [env…]}
+    environments: list[str]                 # declared deployment-variant names (compose profiles / stages); [] = none
     observability: list[dict[str, str]]     # {signal, where_emitted, where_viewed, alerts}
     security: list[dict[str, str]]          # {surface, who, source, risk}
     config: list[dict[str, str]]            # {key, purpose, default, per_env}

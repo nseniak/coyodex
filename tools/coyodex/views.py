@@ -582,6 +582,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         "entry_points": flat_entry_points,
         "non_entity_types": [asdict(t) for t in m.non_entity_types],
         "deployment": [asdict(r) for r in m.deployment],
+        "environments": list(m.environments),
         "observability": [asdict(r) for r in m.observability],
         "security": [asdict(r) for r in m.security],
         "config": [asdict(r) for r in m.config],
