@@ -103,7 +103,7 @@ DEFAULT_EXCLUDE_DIRS: set[str] = {
     ".git", ".hg", ".svn", "node_modules", "bower_components", "vendor", "third_party",
     "dist", "build", "out", "target", ".next", ".nuxt", ".svelte-kit",
     "__pycache__", ".venv", "venv", "env", ".tox", ".mypy_cache", ".pytest_cache",
-    ".gradle", ".idea", ".vscode", "coverage", ".coyodex",
+    ".gradle", ".idea", ".vscode", "coverage", ".coyodex", ".coyodex-eval",
 }
 DEFAULT_EXCLUDE_SUFFIXES: tuple[str, ...] = (
     ".min.js", ".min.css", ".map", ".lock", ".lock.json",

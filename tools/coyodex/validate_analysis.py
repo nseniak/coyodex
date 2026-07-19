@@ -168,22 +168,26 @@ def compression_coverage_from_refs(refs: set[str], root: Path,
     return out
 
 
-_FILE_COVERAGE_CAP = 12  # sample size before eliding — the method sells file-level coverage, not a flood
+_FILE_COVERAGE_DIR_CAP = 12  # directories to list before eliding — grouped, so the reader sees the shape
 
 
 def file_level_coverage(refs: set[str], root: Path,
                         skip_dirs: frozenset[str] = frozenset()) -> list[str]:
     """Advisory (opt-in via --check-coverage): a CODE source file that no component references — the
     true file-level slice-seam gap the directory-granular `compression_coverage_from_refs` misses (loose
-    files inside an otherwise-covered dir slip every harvest slice and validate stays silent). Three
-    exclusions keep it from flooding on a normal repo (S6):
+    files inside an otherwise-covered dir slip every harvest slice and validate stays silent).
+    Exclusions keep it from flooding on a normal repo (S6):
       1. a file under any referenced DIRECTORY is covered — a dir-anchored `component.source` covers its
          whole subtree, so we test dir-prefix membership, not only an exact path match;
       2. code files only — the granularity source filter (`lang_of` present and not a text lang) drops
          README / yaml / toml / json / markdown, which `iter_source_files` returns but no component owns;
-      3. `NON_PRODUCT_DIRS` (test / docs / internal trees) skipped — `iter_source_files` does not exclude
-         them.
-    Honors the same 'Coverage exceptions' recorded dirs as the compression pass; sampled/capped."""
+      3. `NON_PRODUCT_DIRS` (test / docs / internal trees) and coyodex's own `.coyodex` / `.coyodex-eval`
+         artifacts skipped — both live in `iter_source_files`'s exclude sets;
+      4. `__init__.py` package markers skipped — they are (near-always) empty and never a standalone
+         component; they only bury the real signal (a non-empty one is a rare, accepted miss).
+    The finding is GROUPED BY DIRECTORY (the by-dir shape a lead otherwise re-walks the tree to build —
+    a live build did exactly that), capped by directory count. Honors the same 'Coverage exceptions'
+    recorded dirs as the compression pass."""
     from coyodex.preindex_lib import (
         GRANULARITY_TEXT_LANGS,
         NON_PRODUCT_DIRS,
@@ -202,9 +206,12 @@ def file_level_coverage(refs: set[str], root: Path,
     def recorded(rel: str) -> bool:
         return any(rel == d or rel.startswith(d + "/") for d in skip_dirs)
 
-    unref: list[str] = []
+    by_dir: dict[str, list[str]] = {}
+    total = 0
     for f in iter_source_files(root).files:
         rel = f.relative_to(root)
+        if rel.name == "__init__.py":                              # exclusion 4 — empty package markers
+            continue
         lang = lang_of(f)
         if lang is None or lang in GRANULARITY_TEXT_LANGS:          # exclusion 2 — code files only
             continue
@@ -213,15 +220,21 @@ def file_level_coverage(refs: set[str], root: Path,
         relstr = "/".join(rel.parts)
         if covered(relstr) or recorded(relstr):                    # exclusion 1 (+ recorded escape)
             continue
-        unref.append(relstr)
-    if not unref:
+        dpath = "/".join(rel.parts[:-1]) or "(root)"               # loose root-level files group under (root)
+        by_dir.setdefault(dpath, []).append(rel.name)
+        total += 1
+    if not by_dir:
         return []
-    unref.sort()
-    shown = ", ".join(unref[:_FILE_COVERAGE_CAP]) + (
-        f", +{len(unref) - _FILE_COVERAGE_CAP} more" if len(unref) > _FILE_COVERAGE_CAP else "")
-    return [f"{len(unref)} code source file(s) no component references — a slice-seam gap (loose files "
-            f"inside an otherwise-covered dir escape every harvest slice): {shown}. Add each to a "
-            f"component's `files`/`source`, or record its dir under a 'Coverage exceptions' heading."]
+    dirs = sorted(by_dir)
+    lines = [f"{dpath}/ ({len(by_dir[dpath])}): {', '.join(sorted(by_dir[dpath]))}"
+             for dpath in dirs[:_FILE_COVERAGE_DIR_CAP]]
+    if len(dirs) > _FILE_COVERAGE_DIR_CAP:
+        lines.append(f"+{len(dirs) - _FILE_COVERAGE_DIR_CAP} more dir(s)")
+    return [f"{total} code source file(s) no component references — a slice-seam gap (loose files inside "
+            f"an otherwise-covered dir escape every harvest slice), by directory:\n    "
+            + "\n    ".join(lines)
+            + "\n  Add each to a component's `files`/`source`, or record its dir under a "
+            "'Coverage exceptions' heading."]
 
 
 def granularity_advisory(n_components: int, root: Path) -> list[str]:

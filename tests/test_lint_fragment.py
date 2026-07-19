@@ -95,6 +95,25 @@ def test_lint_unknown_references_against_ids_universe():
     assert lint_fragment.lint_unknown_references(m, {"C111", "C112"}) == []
 
 
+def test_lint_does_not_flag_uc_ref_when_legend_omits_the_uc_namespace():
+    # A trace fragment authors flows whose `uc` points at a use case defined in the BEHAVIORAL fragment.
+    # A reduced trace legend lists only element ids (C/E/D), so the `uc` value must NOT false-positive:
+    # a namespace the legend doesn't cover can't be adjudicated (mirrors the actor/roles gate).
+    m = make_fragment({"components": [{"id": "C1", "name": "X"}],
+                       "flows": [{"uc": "UC13", "title": "Do", "steps": [
+                           {"n": 1, "src": "C1", "dst": "C1", "phrase": "s", "no_call_site": True}]}]})
+    assert lint_fragment.lint_unknown_references(m, {"C1", "D1", "E1"}) == []   # UC absent → not flagged
+
+
+def test_lint_flags_invented_uc_when_legend_covers_the_uc_namespace():
+    # When the legend DOES contain UC ids (e.g. the full assembled map), an INVENTED UC is still caught.
+    m = make_fragment({"components": [{"id": "C1", "name": "X"}],
+                       "flows": [{"uc": "UC99", "title": "Do", "steps": [
+                           {"n": 1, "src": "C1", "dst": "C1", "phrase": "s", "no_call_site": True}]}]})
+    problems = lint_fragment.lint_unknown_references(m, {"C1", "UC1", "UC2"})   # UC namespace present
+    assert len(problems) == 1 and "UC99" in problems[0]
+
+
 def test_lint_granularity_warnings_are_nonfatal():
     # A 16-step flow is a granularity ADVISORY — it must ride the non-failing warnings path, never
     # fail the fragment (a long flow may be the lead's call, not the authoring agent's bug).

@@ -1367,7 +1367,7 @@ def test_orphan_dep_nudge_skips_folded_library_kinds():
 
 # --- File-level harvest coverage (WS4) -----------------------------------------
 
-def test_file_level_coverage_flags_loose_py_with_the_three_exclusions():
+def test_file_level_coverage_flags_loose_py_with_the_exclusions():
     from coyodex.validate_analysis import file_level_coverage
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -1375,17 +1375,33 @@ def test_file_level_coverage_flags_loose_py_with_the_three_exclusions():
         (root / "adapters" / "a.py").write_text("x\n", encoding="utf-8")        # referenced
         (root / "adapters" / "loose.py").write_text("x\n", encoding="utf-8")    # the loose gap
         (root / "adapters" / "README.md").write_text("d\n", encoding="utf-8")   # not code → excluded (2)
+        (root / "adapters" / "__init__.py").write_text("\n", encoding="utf-8")  # package marker → excluded (4)
         (root / "tests").mkdir()
         (root / "tests" / "t.py").write_text("x\n", encoding="utf-8")           # non-product → excluded (3)
+        (root / ".coyodex-eval").mkdir()
+        (root / ".coyodex-eval" / "e.py").write_text("x\n", encoding="utf-8")   # coyodex artifact → excluded (3)
         refs = {"adapters/a.py"}
         out = file_level_coverage(refs, root)
         assert any("loose.py" in w for w in out)
         assert not any("README" in w for w in out)
+        assert not any("__init__.py" in w for w in out)        # package marker not flagged
         assert not any("tests/t.py" in w for w in out)
+        assert not any(".coyodex-eval" in w for w in out)      # coyodex's own output not flagged
+        assert any("adapters/ (1)" in w for w in out)          # GROUPED by directory with a count
         # exclusion 1: a referenced DIRECTORY covers its whole subtree
         assert not file_level_coverage({"adapters"}, root)
         # a 'Coverage exceptions' recorded dir suppresses it too
         assert not file_level_coverage(refs, root, frozenset({"adapters"}))
+
+
+def test_file_level_coverage_groups_root_files_under_root_label():
+    from coyodex.validate_analysis import file_level_coverage
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "loose1.py").write_text("x\n", encoding="utf-8")
+        (root / "loose2.py").write_text("x\n", encoding="utf-8")
+        out = file_level_coverage(set(), root)
+        assert any("(root)/ (2): loose1.py, loose2.py" in w for w in out)   # both root files on one line
 
 
 if __name__ == "__main__":

@@ -687,6 +687,12 @@ synthesis → parallel trace.**
     false-reads class the grounding pass keeps refuting).
   - When the lead has assembled a legend or an earlier map, pass `--ids «legend»` to each agent's
     `lint-fragment` self-check, so a plausible-but-invented element id dies in the agent's own turn.
+    **Pass the legend as a FILE PATH** (`--ids path/to/legend`), never inline as `--ids "$(cat …)"` —
+    a whole-map legend overflows the shell arg limit (a live build hit this on macOS). The legend
+    should list the full id universe **including `UC`/`SF`/`HP` ids** (or just pass the assembled
+    `project-map.json`), so a trace fragment's flow `uc` values resolve; `lint-fragment` now tolerates a
+    legend that omits a whole namespace (it can't adjudicate one it doesn't cover), so a reduced
+    element-only legend no longer false-flags `uc` — but a complete legend still catches an invented one.
   - A **return-direction step** usually has no invoking line of its own: set `no_call_site: true`
     (or anchor the callee's `return` statement when that aids drilling) — either is fine; silence is not.
 - Phase 3.5 Re-balance reconcile (lead, not delegated — runs ONCE, after the trace). The grouping was

@@ -47,6 +47,12 @@ def _check_reference_shapes(m: ProjectModel) -> list[str]:
     return problems
 
 
+def _id_prefix(tok: str) -> str:
+    """The id's leading letters (its namespace): `UC19`→`UC`, `SD2`→`SD`, `C5`→`C`."""
+    mo = re.match(r"[A-Z]+", tok)
+    return mo.group(0) if mo else ""
+
+
 def lint_unknown_references(m: ProjectModel, known_ids: set[str]) -> list[str]:
     """With `--ids` (the lead's legend or the assembled map), every cross-reference in the fragment
     must resolve to the fragment's own definitions or the known universe — so an INVENTED id (the
@@ -54,7 +60,16 @@ def lint_unknown_references(m: ProjectModel, known_ids: set[str]) -> list[str]:
     turn instead of at the lead's final validate."""
     defined = set(all_elements(m)) | {g.id for g in m.happy_path} | known_ids
     out: list[str] = []
-    unresolved = sorted(r for r in _referenced_ids(m) - defined)
+    # Gate the flag by NAMESPACE presence in the known universe (mirrors the actor/roles gate below):
+    # a trace fragment's flow `uc` (`UC13`) is a real reference to a use case defined in the BEHAVIORAL
+    # fragment, but a reduced trace legend lists only element ids (`C/E/D/R/S`), so without this gate
+    # every trace fragment false-positives on its own `uc` values (the mcpolis build hand-worked around
+    # this on ~7 agents). A namespace the universe doesn't cover at all can't be adjudicated — invented
+    # vs. legit-but-omitted is indistinguishable. Element namespaces are always present, so
+    # `tests target C112` still fails; a full-map legend contains `UC` ids, so an invented `UC99` inside
+    # a behavioral fragment that defines `UC1..20` is still caught.
+    known_prefixes = {_id_prefix(k) for k in defined}
+    unresolved = sorted(r for r in _referenced_ids(m) - defined if _id_prefix(r) in known_prefixes)
     if unresolved:
         out.append(f"references ids defined neither in this fragment nor in --ids: "
                    f"{', '.join(unresolved)}")
