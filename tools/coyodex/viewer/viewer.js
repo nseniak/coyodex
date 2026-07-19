@@ -247,7 +247,9 @@ function makeScene(root, defaultPanel) {
   // message text/lines) that the standard node/edge focus model doesn't cover — dimmed/restored together.
   // selectors: selectedKey -> a zero-arg closure that re-applies that selection (panel + glow + focus),
   //   registered at bind time so back/forward can restore the element that was selected in this view.
-  return { root, nodeEls: {}, edgeEls: [], dimEls: [], hpLit: new Set(), selectedKey: null, selectors: {}, clearHighlight: null, defaultPanel };
+  // noAction: node ids that must NOT get a corner action icon or a ⌘-drill in this view — the box you
+  //   are already zoomed INTO (e.g. a process on its own card), which has nothing further to drill to.
+  return { root, nodeEls: {}, edgeEls: [], dimEls: [], hpLit: new Set(), noAction: new Set(), selectedKey: null, selectors: {}, clearHighlight: null, defaultPanel };
 }
 function sceneSelect(scene, applyFn) {  // one highlight at a time within a scene
   if (scene.clearHighlight) scene.clearHighlight();
@@ -658,6 +660,7 @@ function hideIcon(icon) { if (icon) { icon.style.removeProperty('opacity'); icon
 // here (resetting here would wipe the cluster icons bindFrameDrill just registered).
 function decorateActionIcons(scene) {
   for (const id in scene.nodeEls) {
+    if (scene.noAction.has(id)) continue;  // the box you're already zoomed into — no self-drill icon
     const action = primaryActionFor(id);
     if (action) addActionIcon(scene.nodeEls[id], id, action);
   }
@@ -2487,19 +2490,22 @@ function bindComponent() {
 // SELECT on a plain click (box + its linked neighbours) and DRILL on a ⌘-click, plus derived
 // inter-group arrows. `drillFor(id)` is the drill-in state; `edgeBinder` wires each arrow. Shared so
 // the component-subsystem and entity-subdomain overviews behave identically (the bridge is symmetry).
-function bindGroupContainer(drillFor, edgeBinder) {
+// `noDrillId` (optional) is a box drawn here that you are already zoomed INTO — it keeps plain-click
+// select but gets no drill class, no ⌘-drill and (via scene.noAction) no corner icon.
+function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id]) return;
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
-    el.classList.add('drill');
+    const drillable = id !== noDrillId;
+    if (drillable) el.classList.add('drill'); else mainScene.noAction.add(id);
     bindHoverGlow(mainScene, el, id);
     attachTip(el, () => actionTipNode(id));
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;
       e.stopPropagation();
-      if (isDrillClick(e)) { go(drillFor(id)); return; }  // ⌘-click drills in
+      if (drillable && isDrillClick(e)) { go(drillFor(id)); return; }  // ⌘-click drills in
       selectNodeFromCanvas(el, id, e);
     });
   });
@@ -2527,7 +2533,11 @@ function markDeploymentEdge(scene, p, label, a, b) {
   markSyntheticEdge(p);
   scene.edgeEls.push({ e: { src: a, dst: b }, path: p, label });
 }
-function bindDeployment() { bindGroupContainer(deploymentDrill, markDeploymentEdge); }
+// `focalUnit` (set on a process card) is the process you're already zoomed into: it drills nowhere
+// further, so it gets no drill affordance/icon — only the OTHER boxes (subsystems it runs) drill.
+function bindDeployment(focalUnit) {
+  bindGroupContainer(deploymentDrill, markDeploymentEdge, focalUnit ? unitProcessNodeId(focalUnit) : null);
+}
 // Resolve which unit(s) actually run a self-started entry point: its own `runs_in` wins (precise),
 // else the owning component's `runs_in` (coarser — a loop whose component runs in >1 unit then shows
 // under each). Empty => unplaced (surfaced by showDeployment).
@@ -3050,7 +3060,7 @@ function bindFor(s) {
   else if (s.kind === 'hp') bindHP();
   else if (s.kind === 'usecase') bindFlow(s.uc);
   else if (s.kind === 'deployment') bindDeployment();
-  else if (s.kind === 'deploymentUnit') bindDeployment();  // same binder: process/subsystem boxes drill/cross-nav
+  else if (s.kind === 'deploymentUnit') bindDeployment(s.unit);  // same binder; the focal process (s.unit) drills nowhere further
   else if (s.kind === 'libs') bindLibs();
   else if (s.kind === 'bucketfold') bindBucketFold();
   else bindComponent();
