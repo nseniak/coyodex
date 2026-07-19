@@ -2323,6 +2323,7 @@ function focusOf(s) {  // the container a view sits "inside" (null = an overview
   if (!s) return null;
   if (s.kind === 'subsystem') return s.sid;
   if (s.kind === 'domsub') return s.sd;
+  if (s.kind === 'deploymentUnit') return unitProcessNodeId(s.unit);  // a process card sits "inside" its process box
   return null;
 }
 function cardStateFor(fid) {  // the view that shows container `fid` as its own card
@@ -2330,13 +2331,16 @@ function cardStateFor(fid) {  // the view that shows container `fid` as its own 
   if (!n) return null;
   if (n.kind === 'subsystem') return { kind: 'subsystem', sid: fid };
   if (n.kind === 'subdomain') return { kind: 'domsub', sd: fid };
+  if (n.kind === 'process') return { kind: 'deploymentUnit', unit: n.unit };
   return null;
 }
 // The focus nodes to descend through from container `from` (null = an overview) down to `to`, inclusive of
-// `to`. null when `to` isn't nested under `from` (i.e. not a drill-in at all).
+// `to`. null when `to` isn't nested under `from` (i.e. not a drill-in at all). A node with no parent
+// (undefined) is normalized to null so it reads as top-level (reaches an overview `from` of null) — a
+// process box has no parent pointer but drills straight out of the Deployment overview.
 function drillChain(from, to) {
   const chain = []; let cur = to; const seen = new Set();
-  while (cur && cur !== from && !seen.has(cur)) { seen.add(cur); chain.unshift(cur); cur = GRAPH.nodes[cur] && GRAPH.nodes[cur].parent; }
+  while (cur && cur !== from && !seen.has(cur)) { seen.add(cur); chain.unshift(cur); cur = (GRAPH.nodes[cur] && GRAPH.nodes[cur].parent) || null; }
   return cur === from ? chain : null;
 }
 function diagramBoxCenter(id) {  // on-screen centre of a drawn box in the current diagram (null if absent)
@@ -2402,7 +2406,8 @@ function driveTransition(from) {
   // (NOT a lateral tab switch — going from a card to Dependencies/Domain/Happy Path stays instant).
   const fromKind = fromF && GRAPH.nodes[fromF] && GRAPH.nodes[fromF].kind;
   const isOut = !!fromF && ((toF && drillChain(toF, fromF))
-    || (toF == null && ((fromKind === 'subsystem' && to.kind === 'container') || (fromKind === 'subdomain' && to.kind === 'domain'))));
+    || (toF == null && ((fromKind === 'subsystem' && to.kind === 'container') || (fromKind === 'subdomain' && to.kind === 'domain')
+      || (fromKind === 'process' && to.kind === 'deployment'))));
   if (REDUCE_MOTION || !from) {  // no animation — still select the left-behind container on a zoom-out
     render().then(() => { if (my === navSeq && isOut) selectLeftContainer(fromF); });
     return;
