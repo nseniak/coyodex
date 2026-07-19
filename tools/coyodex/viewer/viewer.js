@@ -345,6 +345,30 @@ function tintClusters(root) {
     applyTint(g.querySelector('rect'), node && node.kind);
   });
 }
+// Bold a cluster's title and open a gap BELOW it: Mermaid sizes the label band for the ORIGINAL font +
+// position, so a bolded/enlarged title otherwise crowds the first child. Fix: grow the frame UPWARD by
+// `pad` (empty space at the top) and lift the title into it — the content stays put, so a real gap opens
+// below the title. `fontSize` (optional) enlarges the title too. Shared by the drilled-frame emphasis
+// and the Deployment lane styling, so a container title reads the same wherever it's drawn.
+function padClusterTitle(g, pad, fontSize) {
+  const rect = g.querySelector('rect');
+  const label = g.querySelector('.cluster-label') || g.querySelector('text');
+  if (rect) {
+    const y = parseFloat(rect.getAttribute('y')), h = parseFloat(rect.getAttribute('height'));
+    if (!Number.isNaN(y) && !Number.isNaN(h)) { rect.setAttribute('y', y - pad); rect.setAttribute('height', h + pad); }
+  }
+  if (label) {
+    label.style.fontWeight = '700';
+    if (fontSize) label.style.fontSize = fontSize;
+    const t = label.getAttribute('transform') || '';
+    const m = t.match(/translate\(\s*([-\d.]+)[ ,]+([-\d.]+)\s*\)/);
+    if (m) label.setAttribute('transform', 'translate(' + m[1] + ', ' + (parseFloat(m[2]) - pad) + ')');
+    // let a slightly wider title overflow its layout-fixed box rather than clip
+    const fo = label.querySelector ? label.querySelector('foreignObject') : null;
+    if (fo) fo.style.overflow = 'visible';
+  }
+  return rect;
+}
 // Emphasise the frame of the group you have zoomed INTO (a drilled subsystem or subdomain): a thicker
 // border + a larger, bolder title, so the currently-open container reads as distinct from the child
 // boxes drawn inside it. Runs AFTER tintClusters so its stroke-width wins over the tint's `!important`
@@ -356,29 +380,16 @@ function emphasizeZoomedFrame(root, s) {
   for (const g of root.querySelectorAll('g.cluster')) {
     const m = (g.id || '').match(/-([A-Za-z]+\d+)$/);
     if (!m || m[1] !== gid) continue;
-    const rect = g.querySelector('rect');
-    const label = g.querySelector('.cluster-label') || g.querySelector('text');
-    // Mermaid sizes the label band for the ORIGINAL font, so an enlarged title grows down into the first
-    // child. Fix: grow the frame UPWARD by PAD (empty space at the top) and lift the title into it — the
-    // content stays put, so a real gap opens BELOW the bigger title instead of overlap.
-    const PAD = 20;
-    if (rect) {
-      rect.style.setProperty('stroke-width', '4px', 'important');  // beats the tint's dashed width
-      const y = parseFloat(rect.getAttribute('y')), h = parseFloat(rect.getAttribute('height'));
-      if (!Number.isNaN(y) && !Number.isNaN(h)) { rect.setAttribute('y', y - PAD); rect.setAttribute('height', h + PAD); }
-    }
-    if (label) {
-      label.style.fontSize = '1.35em';
-      label.style.fontWeight = '700';
-      const t = label.getAttribute('transform') || '';
-      const m = t.match(/translate\(\s*([-\d.]+)[ ,]+([-\d.]+)\s*\)/);
-      if (m) label.setAttribute('transform', 'translate(' + m[1] + ', ' + (parseFloat(m[2]) - PAD) + ')');
-      // let a slightly wider title overflow its layout-fixed box rather than clip
-      const fo = label.querySelector ? label.querySelector('foreignObject') : null;
-      if (fo) fo.style.overflow = 'visible';
-    }
+    const rect = padClusterTitle(g, 20, '1.35em');
+    if (rect) rect.style.setProperty('stroke-width', '4px', 'important');  // beats the tint's dashed width
     break;  // exactly one frame is the zoomed-in group
   }
+}
+// The Deployment view's lanes are Mermaid subgraphs; give their titles the SAME bold weight + breathing
+// room a drilled container frame gets, so a lane reads as a labelled band (like a subsystem container),
+// not a hairline box with cramped 400-weight text. Every cluster in these views is a lane.
+function styleDeploymentLanes(root) {
+  for (const g of root.querySelectorAll('g.cluster')) padClusterTitle(g, 10);
 }
 
 // --- corner action icon -----------------------------------------------------------
@@ -397,6 +408,7 @@ function primaryActionFor(id) {
   if (n.kind === 'bucketfold') return { kind: 'drill', run: () => go({ kind: 'bucketfold', bkid: id }) };
   if (n.kind === 'subsystem') return { kind: 'drill', run: () => go({ kind: 'subsystem', sid: id }) };
   if (n.kind === 'subdomain') return { kind: 'drill', run: () => go({ kind: 'domsub', sd: id }) };
+  if (n.kind === 'process') return { kind: 'drill', run: () => go(deploymentDrill(id)) };  // a process box drills to its unit card
   const src = srcNode(id);
   return src ? { kind: 'open', run: () => openSource(src) } : null;
 }
@@ -2061,7 +2073,11 @@ function eachEdge(root, fn) {
   const paths = [...root.querySelectorAll('.edgePaths path.flowchart-link')];
   const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
   paths.forEach((p, i) => {
-    const m = p.id.match(/L_([^_]+)_([^_]+)_(\d+)$/);
+    // Mermaid edge id: `L_<src>_<dst>_<index>`. The SOURCE group is greedy (`.+`) so it tolerates an
+    // underscore in the src id — the Deployment view's process ids are `U_<n>` (the only ids with an
+    // underscore, and always a source). The dst id never has one (`[^_]+`), and the index is digits, so
+    // backtracking splits `L_U_0_S1_0` into src=`U_0`, dst=`S1`, index=`0` unambiguously.
+    const m = p.id.match(/L_(.+)_([^_]+)_(\d+)$/);
     if (m) fn(p, labels[i] || null, m);
   });
 }
@@ -2504,7 +2520,14 @@ function deploymentDrill(id) {
   if (n && n.kind === 'subsystem') return { kind: 'subsystem', sid: id };
   return { kind: 'deployment' };  // dep / ungrouped component: no drill (re-shows the overview)
 }
-function bindDeployment() { bindGroupContainer(deploymentDrill, (scene, p) => markSyntheticEdge(p)); }
+// A derived `runs`/infra arrow: style it as a synthetic bundle AND register it in the scene (src→dst),
+// so selecting a process dims to its neighbourhood — its target subsystems/infra stay lit while the
+// rest fades. It carries no per-edge detail, so it gets no click handler (not selectable), just focus.
+function markDeploymentEdge(scene, p, label, a, b) {
+  markSyntheticEdge(p);
+  scene.edgeEls.push({ e: { src: a, dst: b }, path: p, label });
+}
+function bindDeployment() { bindGroupContainer(deploymentDrill, markDeploymentEdge); }
 // Resolve which unit(s) actually run a self-started entry point: its own `runs_in` wins (precise),
 // else the owning component's `runs_in` (coarser — a loop whose component runs in >1 unit then shows
 // under each). Empty => unplaced (surfaced by showDeployment).
@@ -2541,7 +2564,9 @@ function showDeploymentUnit(unit) {
   const uid = unitProcessNodeId(unit);
   const eps = (GRAPH.entry_points || []).filter((e) => e.activation === 'self' && threadHostUnits(e).includes(unit));
   let html = uid ? nodeDetailHtml(uid) : `<section class="uc-group"><h3 class="uc-actor">${esc(unit)}</h3></section>`;
-  if (eps.length) html += `<section class="uc-group"><h3 class="uc-actor">Threads / loops (${eps.length})</h3>${threadRowsHtml(eps)}</section>`;
+  // A clear gap between the process's own detail (dl + impact) and the threads it hosts — the node
+  // detail ends with no bottom margin, so without this the box reads as glued to the fields above it.
+  if (eps.length) html += `<section class="uc-group" style="margin-top:20px"><h3 class="uc-actor">Threads / loops (${eps.length})</h3>${threadRowsHtml(eps)}</section>`;
   panel.innerHTML = html;
   bindNodeDetailHandlers(panel);
   wireSrcLinks(panel);
@@ -3507,6 +3532,7 @@ async function render(sArg, transient) {
   diagram.innerHTML = svg;
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
   emphasizeZoomedFrame(diagram, s);  // thicker border + bigger title on the group you drilled into
+  if (s.kind === 'deployment' || s.kind === 'deploymentUnit') styleDeploymentLanes(diagram);  // bold lane titles + gap
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
   iconOverlay = ensureIconOverlay(diagram);  // front layer for corner icons + badges — must exist before bindFor/decorate add any
   for (const id in ACTION_ICONS) delete ACTION_ICONS[id];  // reset before bindFor's bindFrameDrill re-populates it
