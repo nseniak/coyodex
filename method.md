@@ -322,6 +322,21 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   other units host nothing and no entry point is placed), a **non-atomic unit name**, an **unlinked unit**
   (hosts nothing, matches no dependency), and an **ambiguous thread host** (a loop whose component runs in
   >1 unit but which sets no `runs_in`). `runs` edges are **derived, never authored** in the edge list.
+  - **Environments (deployment variants).** Many projects deploy the same code in several **variants** —
+    dev / staging / prod, or genuinely different shapes (a single-container `standalone` vs a
+    multi-service `cloud` split). This axis is usually declared in the source: docker-compose
+    `profiles:`, k8s/Kustomize overlays, Helm values files, Terraform envs/workspaces, `.env.<name>`
+    suffixes, serverless/Procfile stages. **Capture it, don't flatten it** (a build once dropped the
+    dev/prod/standalone split as "over-modeling" and lost real information). List the variant names in
+    the top-level **`environments`** array, and tag each `deployment[].unit` with the **`variants`** it
+    belongs to (empty = **ungated / shared**, appears in every environment). Keep the unit name the
+    process identity (`backend`), not the env (`backend (cloud/prod)`) — the env lives in `variants`. A
+    component's environment is **derived** from the variants of the units it `runs_in`. `validate`
+    blocks a `variants` value that names no declared `environments` entry, and advises when
+    `environments` are declared but no unit is tagged. **If the project has no meaningful variant axis
+    (a single deploy), leave both empty** — the Deployment view then behaves exactly as before.
+    *(Deferred, not modelled yet: per-environment config/secret differences, env-specific
+    scaling/replicas, and a cross-environment comparison view.)*
 - **Observability**: `Signal | Where emitted | Where viewed | Alerts`.
 - **Security & auth**: `Surface | Who can reach | Auth check | Risk note` (trust
   boundaries often inferred — flag). The **`Auth check`** anchor must point at the line that

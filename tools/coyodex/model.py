@@ -258,6 +258,11 @@ class DeploymentRow:
     runs_on: str = ""
     exposed_as: str = ""
     config_source: str = ""
+    variants: list[str] = field(default_factory=list)  # the environment(s) this unit belongs to — each
+                                     # must name a `ProjectModel.environments` entry. Empty = UNGATED:
+                                     # the unit appears in every environment (shared infra / no variant
+                                     # axis). Harvested from the deploy manifests (compose `profiles:`,
+                                     # k8s overlays, Helm values, env-file suffixes, Terraform envs).
 
 
 @dataclass
@@ -330,6 +335,12 @@ class ProjectModel:
     subflows: list[SubFlow] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
     deployment: list[DeploymentRow] = field(default_factory=list)
+    environments: list[str] = field(default_factory=list)  # the declared deployment-variant names
+                                     # (compose profiles / k8s overlays / stages …), in display order —
+                                     # an OPEN, project-specific vocabulary. Each `deployment[].variants`
+                                     # value must name one of these. Empty = the project has no
+                                     # environment axis (single-deploy); the Deployment view then behaves
+                                     # exactly as if the field were absent (graceful degradation).
     observability: list[ObservabilityRow] = field(default_factory=list)
     security: list[SecurityRow] = field(default_factory=list)
     config: list[ConfigRow] = field(default_factory=list)

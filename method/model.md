@@ -87,7 +87,9 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "edges":       [ { "src", "verb", "dst", "why", "where": "<call-site path:line|null>",
                      "no_call_site": false } ],
 
-  "deployment":     [ { "unit", "runs_on", "exposed_as", "config_source" } ],
+  "deployment":     [ { "unit", "runs_on", "exposed_as", "config_source",
+                        "variants": [ "<environments[] name>", … ] } ],  // env(s) this unit runs in; empty = ungated (all envs)
+  "environments":   [ "<deployment-variant name>", … ],                  // declared variants (compose profiles / overlays / stages); empty = single-deploy
   "observability":  [ { "signal", "where_emitted", "where_viewed", "alerts" } ],
   "security":       [ { "surface", "who", "source": "<bare path:line anchor to the auth check>", "risk" } ],
   "config":         [ { "key", "purpose", "default", "per_env" } ],

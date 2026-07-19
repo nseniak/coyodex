@@ -14,6 +14,7 @@ from coyodex.model import (
     Component,
     Dep,
     Edge,
+    DeploymentRow,
     Entity,
     EntityField,
     EntityRelation,
@@ -108,6 +109,18 @@ def test_round_trip_identity():
 
 def test_serializer_deterministic_across_builds():
     assert to_canonical_json(make_model()) == to_canonical_json(make_model())
+
+
+def test_environments_and_variants_round_trip():
+    m = make_model()
+    m.environments = ["standalone", "cloud"]
+    m.deployment = [DeploymentRow(unit="backend", variants=["cloud"]),
+                    DeploymentRow(unit="db", variants=["dev", "cloud"]),
+                    DeploymentRow(unit="shared")]                 # ungated: empty variants
+    m2 = load_model(to_canonical_json(m))
+    assert m2.environments == ["standalone", "cloud"]
+    assert [(d.unit, d.variants) for d in m2.deployment] == [
+        ("backend", ["cloud"]), ("db", ["dev", "cloud"]), ("shared", [])]
 
 
 def test_serializer_sorts_extra_dicts():

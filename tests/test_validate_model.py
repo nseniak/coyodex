@@ -1353,6 +1353,28 @@ def test_non_atomic_unit_name_is_flagged_but_a_spaced_name_is_not():
     assert not any("non-atomic" in w for w in warnings_of(m))
 
 
+# --- deployment environments (C1) ----------------------------------------------
+
+def test_deployment_variant_must_name_a_declared_environment():
+    m = make_valid_model()
+    m.environments = ["standalone", "cloud"]
+    m.deployment = [DeploymentRow(unit="backend", variants=["cloud"])]
+    assert problems_of(m) == []                                   # a declared env → clean
+    m.deployment = [DeploymentRow(unit="backend", variants=["ghost"])]
+    assert any("undeclared environment" in p and "ghost" in p for p in problems_of(m))
+    # a variant with NO environments declared at all is also flagged (can't gate to an unnamed env)
+    m.environments = []
+    assert any("no `environments` are declared" in p for p in problems_of(m))
+
+
+def test_environments_absent_is_silent_but_declared_untagged_advises():
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="app")]                    # no environments, no variants
+    assert not any("environment" in w.lower() for w in warnings_of(m))   # un-adopted → silent
+    m.environments = ["dev", "prod"]                             # declared but nothing tagged
+    assert any("environment(s) declared but no deployment unit is tagged" in w for w in warnings_of(m))
+
+
 # --- Orphan-dep nudge scoped to system deps (WS6) ------------------------------
 
 def test_orphan_dep_nudge_skips_folded_library_kinds():

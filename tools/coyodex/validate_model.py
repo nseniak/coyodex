@@ -810,6 +810,23 @@ def _check_runs_in(m: ProjectModel) -> list[str]:
     return problems
 
 
+def _check_environments(m: ProjectModel) -> list[str]:
+    """Each `deployment[].variants` value must name a declared `environments` entry (the same
+    resolve-or-die rule `_check_runs_in` applies to `runs_in`→unit). Blocking: a variant that names no
+    declared environment is a broken view reference (and a variant set with NO `environments` declared
+    at all is an inconsistency — you cannot gate a unit to an environment you never named). Silent when
+    the project uses no environments AND no unit tags a variant (the axis is un-adopted, not a gap)."""
+    valid = set(m.environments)
+    problems: list[str] = []
+    for i, d in enumerate(m.deployment):
+        bad = [v for v in d.variants if v not in valid]
+        if bad:
+            problems.append(f"deployment[{i}] ('{d.unit}') variants name undeclared environment(s): "
+                            f"{', '.join(bad)} — each must match a `environments` entry"
+                            + ("" if valid else " (and no `environments` are declared)"))
+    return problems
+
+
 def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
     """Advisory: once the map USES `runs_in` (the Deployment view is in play), a self-activated entry
     point with no host unit — neither its own `runs_in` nor its component's — is invisible in that view.
@@ -874,6 +891,10 @@ def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
     if "runs-in" in balance_lib._exceptions(m):
         return []                              # deliberately unmapped / justified — silence the family
     warnings: list[str] = []
+    if m.environments and not any(d.variants for d in m.deployment):
+        warnings.append(f"{len(m.environments)} environment(s) declared but no deployment unit is tagged "
+                        f"with a `variants` value — the Deployment view can't split by environment "
+                        f"(every unit shows in all). Tag each unit with the environment(s) it runs in.")
     # a real unit name may contain spaces ('api worker'); only a SEPARATOR (shared with the dep-match
     # guard) signals two units crammed into one row (S5)
     non_atomic = [d.unit for d in m.deployment
@@ -1448,6 +1469,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(dep_bucket_warnings)
     problems.extend(_check_activations(m))
     problems.extend(_check_runs_in(m))
+    problems.extend(_check_environments(m))
     warnings.extend(_deployment_placement_warnings(m))
     warnings.extend(_deployment_unlinked_warning(m))
     warnings.extend(_deployment_quality_warnings(m))

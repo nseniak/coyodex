@@ -132,6 +132,12 @@
         "$ref": "#/$defs/DeploymentRow"
       }
     },
+    "environments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
     "observability": {
       "type": "array",
       "items": {
@@ -828,6 +834,12 @@
         },
         "config_source": {
           "type": "string"
+        },
+        "variants": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
