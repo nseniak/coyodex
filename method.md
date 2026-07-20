@@ -331,8 +331,22 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     the top-level **`environments`** array, and tag each `deployment[].unit` with the **`variants`** it
     belongs to (empty = **ungated / shared**, appears in every environment). Keep the unit name the
     process identity (`backend`), not the env (`backend (cloud/prod)`) — the env lives in `variants`. A
-    component's environment is **derived** from the variants of the units it `runs_in`. `validate`
-    blocks a `variants` value that names no declared `environments` entry, and advises when
+    component's environment is **derived** from the variants of the units it `runs_in`. Two grounding
+    rules keep the tags honest (both from a real mis-tag — a Vite dev server tagged into `standalone` +
+    `cloud` where it does not run):
+    1. **Ground each `variants` tag in the explicit profile axis; never invent one.** The compose
+       `profiles:` (or overlays / values files / stages) ARE the authoritative "what runs where" list.
+       A process that appears in **no** profile is an ad-hoc / local-dev launcher (started by a
+       `start.sh`, a Makefile target, a `README` step) — tag it **`dev`** (or leave it untagged), never
+       a real deploy variant it has no manifest basis for.
+    2. **A built / static asset served by another process is NOT its own deployment process there.** A
+       Dockerfile that does `npm run build` (or any `build`) then `COPY …/dist …` bakes an artifact
+       INTO an existing unit — the artifact is *served by* that unit, not *run as* a separate process.
+       So do not give it its own unit/variant in that environment; place it only where it actually runs
+       as a live process (e.g. the frontend is a Vite dev server in `dev`, but a static bundle baked
+       into `standalone` and `nginx` for `cloud` — so it is a separate unit in `dev` alone).
+
+    `validate` blocks a `variants` value that names no declared `environments` entry, and advises when
     `environments` are declared but no unit is tagged. **If the project has no meaningful variant axis
     (a single deploy), leave both empty** — the Deployment view then behaves exactly as before.
     *(Deferred, not modelled yet: per-environment config/secret differences, env-specific
