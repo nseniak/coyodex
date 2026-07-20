@@ -24,6 +24,7 @@ import sys
 from dataclasses import fields
 from pathlib import Path
 
+from coyodex import grammar
 from coyodex.model import (
     FORMAT,
     ID_ARRAYS,
@@ -57,26 +58,20 @@ _FRAGMENT_KEYS = {f.name for f in fields(ProjectModel)}
 # because "asset" contains "set"). A write-family verb ESTABLISHES ownership (the 'owning component'
 # check reads persists/writes), so anything not clearly a write defaults to `reads` — a derived edge
 # never invents ownership (the honest direction: an ownerless entity stays flagged, not falsely owned).
-_PERSIST_VERBS = frozenset("persist persists store stores stored upsert upserts save saves saved "
-                           "insert inserts inserted".split())
-_WRITE_VERBS = frozenset("write writes wrote update updates updated create creates created delete "
-                         "deletes deleted remove removes removed append appends set sets put puts "
-                         "record records add adds modify modifies increment decrement".split())
-_EMIT_VERBS = frozenset("emit emits emitted publish publishes dispatch dispatches broadcast "
-                        "broadcasts enqueue enqueues".split())
-_ENCRYPT_VERBS = frozenset("encrypt encrypts encrypted decrypt decrypts".split())
+# The verb families live in `grammar` (the one place backbone-verb meaning is decided — DRY); this
+# derivation and `grammar.edge_role` read the SAME vocabulary, so a new verb is added once.
 
 
 def _infer_ce_verb(phrase: str) -> str:
     words = re.findall(r"[a-z]+", (phrase or "").lower())
     lead = words[0] if words else ""
-    if lead in _PERSIST_VERBS:
+    if lead in grammar.PERSIST_VERBS:
         return "persists"
-    if lead in _WRITE_VERBS:
+    if lead in grammar.WRITE_VERBS:
         return "writes"
-    if lead in _EMIT_VERBS:
+    if lead in grammar.EMIT_VERBS:
         return "emits"
-    if lead in _ENCRYPT_VERBS:
+    if lead in grammar.ENCRYPT_VERBS:
         return "encrypts"
     return "reads"  # a read verb or anything ambiguous → never over-claims ownership
 

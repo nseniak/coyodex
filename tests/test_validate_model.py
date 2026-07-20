@@ -1424,6 +1424,30 @@ def test_orphan_dep_nudge_skips_folded_library_kinds():
     assert any("no incoming edge" in w and "D3" in w for w in warnings_of(m))
 
 
+# --- Roleless C→D verb nudge (WS2) — advisory, non-blocking, C→D only ----------
+
+def test_roleless_cd_verb_warns_but_never_blocks():
+    m = make_valid_model()                                        # already has `C1 uses D1` (roleless C→D)
+    assert any("name no role" in w and "C1 uses D1" in w for w in warnings_of(m))
+    assert not any("name no role" in p for p in problems_of(m))   # advisory, never a blocking problem
+
+
+def test_role_revealing_cd_verb_is_not_flagged():
+    m = make_valid_model()
+    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show", where="src/v.py:5"),
+               Edge(src="C1", verb="queries", dst="D1", why="query", where="src/v.py:7")]  # queries → datastore
+    assert not any("name no role" in w for w in warnings_of(m))
+
+
+def test_roleless_verb_off_the_dep_boundary_is_not_flagged():
+    # C→C and C→E generic `uses` are legitimate — the nudge is C→D ONLY (T4), else it floods.
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Other", purpose="p", entry_point="src/o.py:1"))
+    m.edges = [Edge(src="C1", verb="uses", dst="C2", why="x", where="src/v.py:3"),   # C→C uses
+               Edge(src="C1", verb="uses", dst="E1", why="y", where="src/v.py:5")]   # C→E uses
+    assert not any("name no role" in w for w in warnings_of(m))
+
+
 # --- File-level harvest coverage (WS4) -----------------------------------------
 
 def test_file_level_coverage_flags_loose_py_with_the_exclusions():

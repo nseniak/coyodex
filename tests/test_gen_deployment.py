@@ -34,6 +34,24 @@ def make_deploy_model() -> ProjectModel:
     return m
 
 
+# --- derived dep roles (WS2) — role = union of incoming C→D edge verbs, no stored field -----------
+
+def test_dep_node_roles_derived_from_incoming_cd_verbs():
+    m = make_deploy_model()
+    # Redis (D1) is used as a bus (emits) AND a store (writes) → dual role, from its two real verbs.
+    m.edges.append(Edge(src="C2", verb="writes", dst="D1", why="rate-limit", where="z.py:3"))
+    nodes = model_to_graph(m)["nodes"]
+    assert nodes["D1"]["roles"] == ["datastore", "messaging"]     # sorted union of {messaging, datastore}
+    assert nodes["D2"]["roles"] == ["datastore"]                  # writes → store only
+
+
+def test_dep_with_no_cd_edge_has_no_roles():
+    m = make_deploy_model()
+    m.deps.append(Dep(id="D3", name="Grafana", kind="service", type="observability",
+                      deployment_linked=True))                    # infra, no code call site → no C→D edge
+    assert model_to_graph(m)["nodes"]["D3"]["roles"] == []        # empty role set → renders no role tag
+
+
 # --- injection ------------------------------------------------------------------
 
 def test_process_nodes_injected_with_distinct_index_ids():

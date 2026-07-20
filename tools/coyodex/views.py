@@ -466,6 +466,12 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         node.entry_points = eps_by_comp.get(c.id, [])
         node.runs_in = list(c.runs_in)
         nodes[c.id] = node
+    # A dep's ROLE set is derived from the verbs of its incoming C→D edges (grammar.dep_roles), so a
+    # dual-role dep (Redis as bus + store) reads from its two real verbs, never a stored field.
+    dep_verbs: dict[str, list[str]] = {}
+    for e in m.edges:
+        if e.dst.startswith("D"):
+            dep_verbs.setdefault(e.dst, []).append(e.verb)
     for d in m.deps:
         dep_kind = grammar.classify_dep(d.kind or "", d.type)
         bucket = grammar.resolve_bucket(dep_kind in grammar.DEP_KINDS_FOLDED, d.bucket, d.type, d.used_for)
@@ -474,6 +480,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                   **{k: _extra_str(v) for k, v in d.extra.items()}}
         node = _node(d, "dep", d.name, d.where_configured or _first_href(d.used_for), fields, None)
         node.dep_kind = dep_kind
+        node.roles = sorted(grammar.dep_roles(dep_verbs.get(d.id, [])))
         nodes[d.id] = node
     for sd in m.subdomains:
         parent_name = subdomain_names.get(sd.parent, sd.parent) if sd.parent else ""

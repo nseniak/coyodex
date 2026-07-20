@@ -369,6 +369,7 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 .badge.modified { background: #fff8c5; color: #9a6700; }
 .badge.deleted { background: #ffebe9; color: #cf222e; }
 .badge.rippled { background: #ffedd5; color: #b45309; }  /* the change-impact summary's "ripples to" group */
+.badge.role { background: #dcfce7; color: #166534; }     /* a dep's DERIVED role (bus/store/…), read off its incoming edge verbs */
 #panel dl { margin: 0; }
 #panel dt { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; margin-top: 10px; }
 #panel dd { margin: 2px 0 0; }

@@ -13,10 +13,23 @@ import sys
 import tempfile
 from pathlib import Path
 
-from coyodex.assemble import ensure_fragments_ignored, load_fragment, merge_fragments
+from coyodex.assemble import _infer_ce_verb, ensure_fragments_ignored, load_fragment, merge_fragments
 from coyodex.model import ModelError, load_model, to_canonical_json
 
 ASSEMBLE = [sys.executable, "-m", "coyodex.assemble"]
+
+
+# --- C→E verb inference (regression after the verb families moved to grammar — DRY refactor) -------
+
+def test_infer_ce_verb_unchanged_after_grammar_move():
+    # The four families now live in grammar; _infer_ce_verb must classify EXACTLY as before.
+    assert _infer_ce_verb("upserts the membership document") == "persists"
+    assert _infer_ce_verb("updates the counter") == "writes"
+    assert _infer_ce_verb("publishes the event") == "emits"
+    assert _infer_ce_verb("encrypts the token") == "encrypts"
+    assert _infer_ce_verb("reads the user record") == "reads"
+    assert _infer_ce_verb("reads the asset metadata") == "reads"   # 'asset' contains 'set' — not a WRITE
+    assert _infer_ce_verb("") == "reads"                            # ambiguous → never over-claims ownership
 
 
 # --- builders -------------------------------------------------------------------

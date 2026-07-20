@@ -422,6 +422,14 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   system is expressed as a T6 flow **step** (`R1 → C5`), not an edge; a trace agent that emits an
   `Rn → C` edge is a prompt defect, and `assemble` strips it and warns (fix the trace prompt, don't
   rely on the strip).
+- **A C→D edge names the ROLE with a role-revealing verb — never a bare `uses`.** State HOW the
+  component uses the dependency: `publishes`/`emits` for a **message bus**, `reads`/`writes`/`persists`/
+  `queries` for a **data store** (a query IS a read), `calls` for a **service**. The dep's role is then
+  **derived** from the union of its incoming C→D verbs (a witnessed fact — each verb has a `Where` — not
+  a stored field), so a dependency used two ways (Redis as **bus + store**) is captured by having
+  **both** edges with their real verbs, and its role reads "bus · store". `validate`/`lint-fragment`
+  raise a **non-blocking advisory** on a roleless C→D verb (`uses`/`connects`/…) so you pick a real one;
+  it never blocks and never fires off the dep boundary (a C↔C / C→E `uses` is fine).
 - **C→E is additive — it must NOT thin the component graph.** Trace `C↔C` and `C↔D` **first**; add
   `C→E` after, never instead. Completeness: **every external dep (T2) needs ≥1 incoming component
   edge** — a dep with no edge is an *un-traced* `C→D`, not an unused dependency — and a component

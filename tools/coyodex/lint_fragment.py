@@ -27,6 +27,7 @@ from coyodex.validate_model import (
     check_anchor_existence_model,
     check_domain_relations,
     check_entity_sources_model,
+    roleless_cd_verb_warnings,
 )
 
 # id-SHAPED but unknown-prefix tokens ('SEC1') can never resolve — catchable per-fragment, unlike a
@@ -140,7 +141,10 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     (a T4 harvest fragment has no flows; a trace fragment has no entry points) — per-fragment the
     signal is vacuous or a guaranteed false positive, so it runs in `validate` only."""
     _problems, warnings = check_domain_relations(m.entities)
-    return warnings + _granularity_warnings(m)
+    # The roleless-C→D-verb nudge rides THIS non-blocking channel (never `lint_fragment_problems`,
+    # which would promote it to a blocking problem — trap T7), so an authoring agent SEES it and
+    # decides, without a legitimately-generic `uses` failing the lint.
+    return warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
 
 
 def main(argv: list[str] | None = None) -> int:

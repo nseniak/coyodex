@@ -323,6 +323,64 @@ REL_KIND = {
 # non-canonical structural verb -> the canonical verb to use instead (drives the validator hint).
 REL_ALIAS = {v: CANONICAL_VERB[k] for v, k in REL_KIND.items() if v != CANONICAL_VERB[k].lower()}
 
+# ── Backbone edge verb → ROLE ──────────────────────────────────────────────────────────────────────
+# The verb families that decide what a backbone edge MEANS — the ONE place backbone-verb meaning is
+# decided (like REL_KIND / CANONICAL_VERB above for entity relations). `assemble._infer_ce_verb` reads
+# the persist/write/emit/encrypt families to derive a C→E edge's verb; `edge_role` reads all of them
+# (plus the read + call families) to derive a dependency's ROLE from its incoming C→D verbs. Moving
+# them here keeps the fix landing once — a new verb is added in a single place, never copied.
+#
+# The persist/write/emit/encrypt families keep the EXACT membership they had in assemble.py so the C→E
+# derivation cannot regress; the read + call families are additions for the role classification.
+PERSIST_VERBS = frozenset("persist persists store stores stored upsert upserts save saves saved "
+                          "insert inserts inserted".split())
+WRITE_VERBS = frozenset("write writes wrote update updates updated create creates created delete "
+                        "deletes deleted remove removes removed append appends set sets put puts "
+                        "record records add adds modify modifies increment decrement".split())
+EMIT_VERBS = frozenset("emit emits emitted publish publishes dispatch dispatches broadcast "
+                       "broadcasts enqueue enqueues".split())
+ENCRYPT_VERBS = frozenset("encrypt encrypts encrypted decrypt decrypts".split())
+# A READ of a data store — `queries`/`fetches` map here, NOT to service: "queries the database" /
+# "fetches the record" are the standard way to describe a store read, so a `queries` edge on a SQL dep
+# derives 'datastore'. (`_infer_ce_verb` still DEFAULTS ambiguous phrases to `reads`; this set only
+# drives `edge_role`, so it never changes that derivation.)
+READ_VERBS = frozenset("read reads queries query fetch fetches get gets load loads lookup lookups "
+                       "select selects scan scans".split())
+# An unambiguous SERVICE call — reserved for genuine call verbs (NOT queries/fetches, which are reads).
+CALL_VERBS = frozenset("call calls called request requests requested invoke invokes invoked".split())
+# Generic / ROLELESS verbs — a C→D edge using one names no role (the thing the WS2 nudge flags).
+# `edge_role` maps every one of these (and any unrecognized verb) to None.
+GENERIC_VERBS = frozenset("uses use used integrates integrate integrated connects connect connected "
+                          "accesses access accessed talks talk".split())
+
+
+def edge_role(verb: str) -> str | None:
+    """The ROLE a backbone edge's verb reveals: 'datastore' (persist/write/read families — a query IS a
+    read), 'messaging' (emit family), 'service' (call family ONLY), 'security' (encrypt family), or None
+    for a generic/roleless verb (`uses`/`connects`/…) or any unrecognized verb — the None case is what
+    the C→D role nudge flags. A dependency's role SET is the union of its incoming C→D edges' roles
+    (`dep_roles`), so a dual-role dep (Redis as bus + store) is captured by its two real verbs, not a
+    stored field."""
+    v = (verb or "").strip().lower()
+    if v in PERSIST_VERBS or v in WRITE_VERBS or v in READ_VERBS:
+        return "datastore"
+    if v in EMIT_VERBS:
+        return "messaging"
+    if v in CALL_VERBS:
+        return "service"
+    if v in ENCRYPT_VERBS:
+        return "security"
+    return None
+
+
+def dep_roles(verbs: Iterable[str]) -> set[str]:
+    """The role SET a dependency plays, DERIVED from the verbs of its incoming C→D edges: each verb's
+    `edge_role`, minus the roleless None. `[publishes, writes]` → `{messaging, datastore}` ('bus ·
+    store'); no C→D edges → empty set (renders no role tag). Purely derived, so it can never drift from
+    the edges (no parallel stored field)."""
+    return {r for r in (edge_role(v) for v in verbs) if r is not None}
+
+
 # A field's `FK→Ex` / `FK->Ex` marker, captured as a whole id token (so `FK→E1` never matches `E11`).
 FK_MARKER = re.compile(r"FK(?:→|->)(E\d+)")
 

@@ -46,6 +46,11 @@ class Node:
     runs_in: list[str] = field(default_factory=list)  # components only: the deployment unit name(s)
                                   # whose process runs this component — the Deployment view's `runs`
                                   # edges (process → this component's subsystem) derive from it
+    roles: list[str] = field(default_factory=list)  # deps only: the role SET derived from the dep's
+                                  # incoming C→D edge verbs (grammar.dep_roles) — 'datastore' /
+                                  # 'messaging' / 'service' / 'security'. A dual-role dep (Redis as bus +
+                                  # store) → ['datastore', 'messaging']; no C→D edge → [] (no role tag).
+                                  # Purely derived (no stored model field), so it can't drift from edges.
 
 
 @dataclass

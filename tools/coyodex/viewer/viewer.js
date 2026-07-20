@@ -787,17 +787,25 @@ const REDUNDANT_FIELD_BY_KIND = {
   subsystem: ['parent'], subdomain: ['parent'],
   component: ['subsystem'], dep: ['kind', 'bucket'],
 };
+// A derived dependency ROLE → its short display label. The role SET is derived from the dep's incoming
+// C→D edge verbs (grammar.dep_roles); a dual-role dep (Redis as bus + store) shows both ('bus', 'store').
+const ROLE_LABEL = { datastore: 'store', messaging: 'bus', service: 'service', security: 'crypto' };
 // The type pill(s) after a box's title. Every box leads with its element type; a dependency adds a
-// pill for its structural Context sub-type (datastore/service/…, the shape/colour the diagram encodes)
-// AND its purpose bucket (Observability/…, the group it clusters into) — the two axes at a glance, so
-// the generic "dependency" alone isn't the whole story. Both drop from the field rows below (shown here).
+// pill for its structural Context sub-type (datastore/service/…, the shape/colour the diagram encodes),
+// its purpose bucket (Observability/…, the group it clusters into), AND its DERIVED role(s) (bus/store/…
+// read off its incoming edge verbs) — the axes at a glance, so the generic "dependency" alone isn't the
+// whole story. Kind + bucket drop from the field rows below (shown here); roles are edge-derived, not a field.
 function kindPills(n) {
   const type = n.kind === 'dep' ? 'dependency' : n.kind;
   const sub = n.kind === 'dep' && n.fields ? n.fields.Kind : '';
   const bucket = n.kind === 'dep' && n.fields ? n.fields.Bucket : '';
+  const roles = (n.kind === 'dep' && Array.isArray(n.roles)) ? n.roles : [];
+  const roleBadges = roles.map((r) =>
+    `<span class="badge role" title="derived from this dependency's incoming edge verbs">${esc(ROLE_LABEL[r] || r)}</span>`).join('');
   return `<span class="badge kind">${esc(type)}</span>`
     + (sub ? `<span class="badge kind">${esc(sub)}</span>` : '')
-    + (bucket ? `<span class="badge kind">${esc(bucket)}</span>` : '');
+    + (bucket ? `<span class="badge kind">${esc(bucket)}</span>` : '')
+    + roleBadges;
 }
 // A node's full detail as an HTML string (title + tag + explanation + fields + source link) — no DOM
 // writes, no handler wiring. Used by showNode to fill the panel with a single element's detail.

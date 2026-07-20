@@ -69,6 +69,15 @@ def test_lint_surfaces_fk_heuristic_as_nonfatal_warning():
     assert not any("FK→E2" in p for p in lint_fragment.lint_fragment_problems(m, None))
 
 
+def test_lint_roleless_cd_verb_is_a_warning_not_a_problem():
+    # T7 (load-bearing): a roleless C→D verb (`uses`) surfaces in lint WARNINGS (nudge the agent) and
+    # must NOT be a blocking problem — else a legitimately-generic verb would FAIL the fragment lint.
+    m = make_fragment({"deps": [{"id": "D1", "name": "Redis", "kind": "messaging", "type": "broker"}],
+                       "edges": [{"src": "C1", "verb": "uses", "dst": "D1", "where": "a.py:3"}]})
+    assert any("name no role" in w and "C1 uses D1" in w for w in lint_fragment.lint_fragment_warnings(m))
+    assert not any("name no role" in p for p in lint_fragment.lint_fragment_problems(m, None))
+
+
 def test_fragment_rejects_malformed_ids_at_load():
     # 'S1a' used to pass fragment lint and die at the LEAD's validate — the exact shift-left failure
     # this module exists to prevent; the id-shape rule now runs at load_fragment too

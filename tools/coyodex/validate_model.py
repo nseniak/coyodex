@@ -1032,6 +1032,27 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
+def roleless_cd_verb_warnings(m: ProjectModel) -> list[str]:
+    """Advisory (NON-BLOCKING): a C→D edge (dst is a dep) whose verb names no role — `C uses D` erases
+    whether D is a bus, a store, or a service. Surface the roleless edges so the author picks a
+    role-revealing verb (the role is then DERIVED from the verb — `grammar.dep_roles` — never a stored
+    field). Aggregated + capped (one line, not one warning per edge).
+
+    Deliberately NOT a `_check_edges` warning: `lint_fragment_problems` PROMOTES those to blocking
+    problems, which would FAIL the fragment lint and force an agent to rewrite a legitimately-generic
+    verb (trap T7). Instead this rides the non-blocking channel — whole-map `validate` warnings and
+    `lint_fragment_warnings`. Scoped strictly to C→D (a C→C / C→E generic `uses` is fine and would
+    otherwise flood)."""
+    roleless = [f"{e.src} {e.verb} {e.dst}" for e in m.edges
+                if e.dst.startswith("D") and grammar.edge_role(e.verb) is None]
+    if not roleless:
+        return []
+    shown = ", ".join(roleless[:8]) + (f", +{len(roleless) - 8} more" if len(roleless) > 8 else "")
+    return [f"{len(roleless)} C→D edge(s) name no role (generic verb): {shown} — use a role-revealing "
+            f"verb so the dependency's role is legible: publishes/emits (message bus), "
+            f"reads/writes/persists/queries (data store), calls (service)."]
+
+
 def check_domain_relations(entities: list[Entity]) -> tuple[list[str], list[str]]:
     """Per-relation problems + warnings for a set of domain cards: verb alias, half-cardinality,
     duplicate relation, and the `keyed_by` rules (empty entry / names a real field / redundant with a
@@ -1497,6 +1518,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
     warnings.extend(edge_warnings)
+    warnings.extend(roleless_cd_verb_warnings(m))
     card_problems, card_warnings = _check_domain_cards(m)
     problems.extend(card_problems)
     warnings.extend(card_warnings)
