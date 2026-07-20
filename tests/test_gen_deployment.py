@@ -7,7 +7,7 @@ Run either way (needs an editable install: `make deps`):
 """
 from __future__ import annotations
 
-from coyodex.model import Component, Dep, DeploymentRow, Edge, Group, ProjectModel
+from coyodex.model import Component, Dep, DeploymentRow, Edge, Group, ProjectModel, VariantTag
 from coyodex.views import model_to_graph
 from coyodex.viewer import gen_viewer as G
 
@@ -143,8 +143,8 @@ def _env_model() -> ProjectModel:
     m.deps = [Dep(id="D1", name="PG", kind="datastore", type="db")]
     m.edges = [Edge(src="C1", verb="reads", dst="D1", why="x", where="a.py:2")]
     m.environments = ["dev", "prod"]
-    m.deployment = [DeploymentRow(unit="api", variants=["prod"]),
-                    DeploymentRow(unit="devbox", variants=["dev"]),
+    m.deployment = [DeploymentRow(unit="api", variants=[VariantTag(env="prod", source="docker-compose.yml:5")]),
+                    DeploymentRow(unit="devbox", variants=[VariantTag(env="dev")]),  # inferred (no source)
                     DeploymentRow(unit="shared")]                  # empty variants → ungated (every env)
     return m
 

@@ -35,6 +35,7 @@ from coyodex.model import (
     SecurityRow,
     SubFlow,
     UseCase,
+    VariantTag,
     to_canonical_json,
 )
 from coyodex.validate_model import (
@@ -1358,13 +1359,49 @@ def test_non_atomic_unit_name_is_flagged_but_a_spaced_name_is_not():
 def test_deployment_variant_must_name_a_declared_environment():
     m = make_valid_model()
     m.environments = ["standalone", "cloud"]
-    m.deployment = [DeploymentRow(unit="backend", variants=["cloud"])]
+    m.deployment = [DeploymentRow(unit="backend", variants=[VariantTag(env="cloud")])]
     assert problems_of(m) == []                                   # a declared env → clean
-    m.deployment = [DeploymentRow(unit="backend", variants=["ghost"])]
+    m.deployment = [DeploymentRow(unit="backend", variants=[VariantTag(env="ghost")])]
     assert any("undeclared environment" in p and "ghost" in p for p in problems_of(m))
     # a variant with NO environments declared at all is also flagged (can't gate to an unnamed env)
     m.environments = []
     assert any("no `environments` are declared" in p for p in problems_of(m))
+
+
+def test_variant_source_dead_anchor_blocks_with_check_sources():
+    # WS1/T6: a CITED variant anchor that doesn't resolve on disk is a hard block under --check-sources
+    # (same existence path as security[].source); an empty source (inferred) is NOT checked here.
+    with tempfile.TemporaryDirectory() as td:
+        Path(td, "docker-compose.yml").write_text("services:\n  api:\n", encoding="utf-8")
+        m = make_valid_model()
+        m.environments = ["cloud"]
+        m.deployment = [DeploymentRow(unit="api",
+                                      variants=[VariantTag(env="cloud", source="docker-compose.yml:2")])]
+        problems, _ = validate_model(m, repo_root=Path(td), check_sources=True)
+        assert not any("variant" in p and "does not resolve" in p for p in problems)  # resolves → clean
+        m.deployment[0].variants = [VariantTag(env="cloud", source="nope.yml:9")]  # cited but missing
+        problems, _ = validate_model(m, repo_root=Path(td), check_sources=True)
+        assert any("variant 'cloud'" in p and "does not resolve" in p for p in problems)
+
+
+def test_variant_source_malformed_is_a_format_error():
+    m = make_valid_model()
+    m.environments = ["cloud"]
+    m.deployment = [DeploymentRow(unit="api",
+                                  variants=[VariantTag(env="cloud", source="docker-compose.yml#L9")])]
+    assert any("variant 'cloud'" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_inferred_variant_tag_warns_and_is_silenced_by_runs_in_exception():
+    # WS1/T8: an unanchored (source="") variant tag surfaces as an advisory (aggregated, non-blocking),
+    # in the deployment family — silenced by the `runs-in` Balance-exceptions literal.
+    m = make_valid_model()
+    m.environments = ["cloud"]
+    m.deployment = [DeploymentRow(unit="api", variants=[VariantTag(env="cloud")])]  # no source → inferred
+    assert not any("inferred" in p for p in problems_of(m))       # advisory, never a problem
+    assert any("inferred (no manifest anchor)" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: single unit")]
+    assert not any("inferred (no manifest anchor)" in w for w in warnings_of(m))  # silenced
 
 
 def test_environments_absent_is_silent_but_declared_untagged_advises():

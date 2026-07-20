@@ -3364,10 +3364,24 @@ function refTable(rows, cols) {
   const head = cols.map((c) => `<th>${esc(c.head)}</th>`).join('');
   const body = rows.map((r) => '<tr>' + cols.map((c) => {
     const v = c.get(r);
-    const cell = (v && typeof v === 'object' && 'src' in v) ? srcCell(v.src) : mdInline(v || '');
+    const cell = (v && typeof v === 'object' && 'src' in v) ? srcCell(v.src)
+      : (v && typeof v === 'object' && 'html' in v) ? v.html   // pre-built HTML (e.g. a list of src links)
+      : mdInline(v || '');
     return `<td>${cell}</td>`;
   }).join('') + '</tr>').join('');
   return `<table class="glossary"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+}
+// A deployment unit's variant tags, each with its grounding: `env · <anchor link>` when the tag cites a
+// manifest source, `env · inferred` when it doesn't (no manifest witness — a soft claim). Empty = the
+// unit is ungated (shared across every environment). The src buttons are wired by the enclosing
+// renderSystem's wireSrcLinks pass.
+function variantsCell(variants) {
+  if (!variants || !variants.length) return '<span class="gloss-none">— (all envs)</span>';
+  return variants.map((v) => {
+    const env = esc((v && v.env) || '');
+    const g = (v && v.source) ? srcCell(v.source) : '<span class="gloss-plain">inferred</span>';
+    return `${env} · ${g}`;
+  }).join('<br>');
 }
 // The System tab: the operational / reference collections the diagram doesn't hold (run commands, entry
 // points, deployment, observability, security, config, non-entity types, freeform extras). A stack of
@@ -3425,9 +3439,14 @@ function renderSystem() {
   parts.push(sec('Run commands', refTable(G.run_commands, [
     { head: 'Action', get: (r) => r.action }, { head: 'Command', get: (r) => r.command },
     { head: 'Source', get: (r) => ({ src: r.source }) }])));
-  parts.push(sec('Deployment & topology', refTable(G.deployment, [
+  const deployCols = [
     { head: 'Unit', get: (r) => r.unit }, { head: 'Runs on', get: (r) => r.runs_on },
-    { head: 'Exposed as', get: (r) => r.exposed_as }, { head: 'Config source', get: (r) => r.config_source }])));
+    { head: 'Exposed as', get: (r) => r.exposed_as }, { head: 'Config source', get: (r) => r.config_source }];
+  // Variants column only when the map declares an environment axis — each tag shows its env and the
+  // manifest anchor that grounds it (clickable), or 'inferred' when the tag cites no source (WS1).
+  if (DEPLOY_ENVS && DEPLOY_ENVS.length) deployCols.push(
+    { head: 'Variants', get: (r) => ({ html: variantsCell(r.variants) }) });
+  parts.push(sec('Deployment & topology', refTable(G.deployment, deployCols)));
   parts.push(sec('Observability', refTable(G.observability, [
     { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
     { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }])));

@@ -142,6 +142,14 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                  + " The auth check in code (the enforcement site)."},
     ("NonEntityType", "source"): {"description": _DIR_OR_FILE_DESC
                                    + " Where the deliberately-unmodelled type is defined."},
+    ("VariantTag", "env"): {"description": "the environment this deployment unit runs in — must name a "
+                             "`environments` entry."},
+    ("VariantTag", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC
+                                + " The manifest line that PLACES the unit in this environment (the "
+                                "compose `profiles:` line, the overlay/values file, the stage). Empty "
+                                "string = INFERRED (no manifest witness): `validate` surfaces it as an "
+                                "advisory, never blocks; a CITED source that doesn't resolve IS a hard "
+                                "block under `--check-sources`."},
     ("ProjectModel", "format"): {"const": FORMAT},
     ("ProjectModel", "commit"): {"description": "short commit sha the map was built at."},
     ("ProjectModel", "committed"): {"description": "YYYY-MM-DD."},

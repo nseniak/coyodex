@@ -88,7 +88,8 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "no_call_site": false } ],
 
   "deployment":     [ { "unit", "runs_on", "exposed_as", "config_source",
-                        "variants": [ "<environments[] name>", … ] } ],  // env(s) this unit runs in; empty = ungated (all envs)
+                        "variants": [ { "env": "<environments[] name>",     // env(s) this unit runs in; empty list = ungated (all envs)
+                                        "source": "<bare path:line to the manifest line that places it here>" }, … ] } ],  // source "" = INFERRED (advisory)
   "environments":   [ "<deployment-variant name>", … ],                  // declared variants (compose profiles / overlays / stages); empty = single-deploy
   "observability":  [ { "signal", "where_emitted", "where_viewed", "alerts" } ],
   "security":       [ { "surface", "who", "source": "<bare path:line anchor to the auth check>", "risk" } ],
@@ -207,7 +208,9 @@ Semantics, stated on the fields:
   joined by a separator. `components[].source`, `entities[].source`, `glossary[].source`,
   `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `flows[].steps[].where`,
   `entry_points[].source`,
-  `evidence[].file`, **`run_commands[].source`**, **`security[].source`**, and
+  `evidence[].file`, **`run_commands[].source`**, **`security[].source`**,
+  **`deployment[].variants[].source`** (the manifest line grounding a variant tag; may be `""` =
+  inferred), and
   **`non_entity_types[].source`** all use it — `glossary[].source` and the file OR directory fields
   (`components[].source`, `entities[].source`, `non_entity_types[].source`) may also be a bare
   directory ref `path/`, and `glossary[].source` is additionally nullable (a pure product-level term

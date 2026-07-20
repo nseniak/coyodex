@@ -819,7 +819,7 @@ def _check_environments(m: ProjectModel) -> list[str]:
     valid = set(m.environments)
     problems: list[str] = []
     for i, d in enumerate(m.deployment):
-        bad = [v for v in d.variants if v not in valid]
+        bad = [v.env for v in d.variants if v.env not in valid]
         if bad:
             problems.append(f"deployment[{i}] ('{d.unit}') variants name undeclared environment(s): "
                             f"{', '.join(bad)} — each must match a `environments` entry"
@@ -891,6 +891,17 @@ def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
     if "runs-in" in balance_lib._exceptions(m):
         return []                              # deliberately unmapped / justified — silence the family
     warnings: list[str] = []
+    # Inferred variant tags (WS1): a variant with NO manifest anchor is a soft claim — surface it so an
+    # invented tag can't hide, but never block (an inference may be legit). Aggregated + capped (one
+    # line, not one per tag) and in the deployment family, so the first re-validate of a just-shipped
+    # `variants: ["cloud"]` map (all sources now empty) is a single nudge, not a wall (T8).
+    inferred = [f"{d.unit}:{v.env}" for d in m.deployment for v in d.variants if not v.source]
+    if inferred:
+        shown = ", ".join(inferred[:8]) + (f", +{len(inferred) - 8} more" if len(inferred) > 8 else "")
+        warnings.append(f"{len(inferred)} deployment variant tag(s) are inferred (no manifest anchor): "
+                        f"{shown} — cite the compose profile / overlay / stage line that places each unit "
+                        f"in that environment (else confirm it's a real inference). Record the literal "
+                        f"`runs-in` under a 'Balance exceptions' extras heading to silence this.")
     if m.environments and not any(d.variants for d in m.deployment):
         warnings.append(f"{len(m.environments)} environment(s) declared but no deployment unit is tagged "
                         f"with a `variants` value — the Deployment view can't split by environment "
@@ -1171,6 +1182,9 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
         bad_file(f"run_commands[{i}].source", r.source)
     for i, s in enumerate(m.security):
         bad_file(f"security[{i}].source", s.source)
+    for i, d in enumerate(m.deployment):
+        for v in d.variants:                   # a cited variant anchor is a bare `path:line`, like security's
+            bad_file(f"deployment[{i}] ('{d.unit}') variant '{v.env}' source", v.source)
     for t in m.non_entity_types:
         bad_anchor(f"non_entity_types '{t.name}' source", t.source)
     # Test-completeness rows cite exercising suites as {file, why} — `file` is a bare anchor (a
@@ -1300,6 +1314,13 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         href = _first_link_of(s, [s.source]) or (s.source or None)
         if href and not url.match(href):
             out.append((f"security '{s.surface}'", href))
+    for d in m.deployment:
+        # a variant's grounding anchor rides the SAME existence path as security anchors (T6): a CITED
+        # `source` that doesn't resolve is a hard block under `--check-sources`. An empty source is the
+        # inferred case (no anchor to check) — surfaced as an advisory elsewhere, not here.
+        for v in d.variants:
+            if v.source and not url.match(v.source):
+                out.append((f"deployment '{d.unit}' variant '{v.env}'", v.source))
     return out
 
 

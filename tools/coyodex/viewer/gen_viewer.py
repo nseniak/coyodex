@@ -1441,11 +1441,16 @@ def _allinone_uids(process_uids: list[str], comps_by_uid: dict[str, set[str]]) -
 
 
 def _unit_variants(graph: GraphDict) -> dict[str, set[str]]:
-    """`{unit_name: {environment…}}` from the deployment rows — a unit's declared variants. An empty
-    set means UNGATED (the unit appears in every environment)."""
+    """`{unit_name: {environment…}}` from the deployment rows — a unit's declared variant ENVs. An empty
+    set means UNGATED (the unit appears in every environment). Each variant is a `{env, source}` object
+    (source = the manifest anchor grounding it, or "" when inferred); only the `env` axis filters the
+    view."""
     out: dict[str, set[str]] = {}
     for r in graph["deployment"]:
-        out[str(r.get("unit", ""))] = {str(v) for v in (r.get("variants") or [])}  # type: ignore[union-attr]
+        raw = r.get("variants")
+        variants = raw if isinstance(raw, list) else []
+        out[str(r.get("unit", ""))] = {str(v["env"]) for v in variants
+                                       if isinstance(v, dict) and v.get("env")}
     return out
 
 

@@ -838,12 +838,30 @@
         "variants": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/VariantTag"
           }
         }
       },
       "required": [
         "unit"
+      ],
+      "additionalProperties": false
+    },
+    "VariantTag": {
+      "type": "object",
+      "properties": {
+        "env": {
+          "type": "string",
+          "description": "the environment this deployment unit runs in \u2014 must name a `environments` entry."
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). The manifest line that PLACES the unit in this environment (the compose `profiles:` line, the overlay/values file, the stage). Empty string = INFERRED (no manifest witness): `validate` surfaces it as an advisory, never blocks; a CITED source that doesn't resolve IS a hard block under `--check-sources`."
+        }
+      },
+      "required": [
+        "env"
       ],
       "additionalProperties": false
     },

@@ -253,16 +253,31 @@ class Edge:                          # one backbone edge (C↔C, C↔D, C→E)
 
 
 @dataclass
+class VariantTag:
+    """One environment placement of a deployment unit, WITH its grounding. `env` names a
+    `ProjectModel.environments` entry; `source` is a bare `path:line` anchor to the manifest line that
+    places the unit in that environment (the compose `profiles:` line, the overlay/values file, the
+    stage declaration). `source == ""` = INFERRED: no manifest witness, so `validate` surfaces it as an
+    advisory (escapable via the `runs-in` Balance-exceptions literal), never blocks — an unanchored tag
+    is a soft claim, not a proven fact. A CITED `source` that does not resolve on disk IS a hard block
+    under `--check-sources` (same treatment as `security[].source`)."""
+    env: str                         # must name a `ProjectModel.environments` entry
+    source: str = ""                 # bare `path:line` anchor to the manifest line; "" = INFERRED
+
+
+@dataclass
 class DeploymentRow:
     unit: str
     runs_on: str = ""
     exposed_as: str = ""
     config_source: str = ""
-    variants: list[str] = field(default_factory=list)  # the environment(s) this unit belongs to — each
-                                     # must name a `ProjectModel.environments` entry. Empty = UNGATED:
-                                     # the unit appears in every environment (shared infra / no variant
-                                     # axis). Harvested from the deploy manifests (compose `profiles:`,
-                                     # k8s overlays, Helm values, env-file suffixes, Terraform envs).
+    variants: list[VariantTag] = field(default_factory=list)  # the environment(s) this unit belongs to
+                                     # — each `VariantTag.env` must name a `ProjectModel.environments`
+                                     # entry, and SHOULD cite the manifest line that grounds it (else it
+                                     # is inferred). Empty = UNGATED: the unit appears in every
+                                     # environment (shared infra / no variant axis). Harvested from the
+                                     # deploy manifests (compose `profiles:`, k8s overlays, Helm values,
+                                     # env-file suffixes, Terraform envs).
 
 
 @dataclass
@@ -568,6 +583,28 @@ def _build(data: object, cls: type, path: str):
         raise ModelError(f"{path}: {e}") from e
 
 
+def _normalize_variants(data: object) -> None:
+    """Backward-compat pre-pass: the just-shipped maps store `deployment[].variants` as a list of bare
+    environment STRINGS (`["cloud"]`); the current model types it `list[VariantTag]`. Rewrite each bare
+    string element `s` → `{"env": s}` in place BEFORE `_build`, so an old map loads as
+    `VariantTag(env=s, source="")` (inferred). A localized coercion, not a `_build` union hook: a
+    `list[VariantTag | str]` type does NOT work — `_check`'s Union branch only handles `X | None`, so a
+    bare string element is rejected. Any element that is neither a str nor a dict is left untouched for
+    `_build` to report with its exact JSON path."""
+    if not isinstance(data, dict):
+        return
+    deployment = data.get("deployment")
+    if not isinstance(deployment, list):
+        return
+    for row in deployment:
+        if not isinstance(row, dict):
+            continue
+        variants = row.get("variants")
+        if not isinstance(variants, list):
+            continue
+        row["variants"] = [{"env": v} if isinstance(v, str) else v for v in variants]
+
+
 def load_model(text: str) -> ProjectModel:
     """Parse + structurally validate a project-map.json document. Raises ModelError on any shape
     violation (bad JSON, wrong type, unknown field, missing required field, wrong id prefix)."""
@@ -580,6 +617,7 @@ def load_model(text: str) -> ProjectModel:
     fmt = data.get("format")
     if fmt != FORMAT:
         raise ModelError(f"format: expected '{FORMAT}', got {fmt!r}")
+    _normalize_variants(data)
     m = _build(data, ProjectModel, "$")
     for attr, prefix in ID_ARRAYS.items():
         for i, el in enumerate(getattr(m, attr)):

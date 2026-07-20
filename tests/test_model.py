@@ -28,6 +28,7 @@ from coyodex.model import (
     ProjectModel,
     TestRow as _TestRow,  # aliased: a bare `TestRow` name makes pytest try to collect it as a test class
     UseCase,
+    VariantTag,
     all_elements,
     load_model,
     remap_element_ids,
@@ -114,13 +115,33 @@ def test_serializer_deterministic_across_builds():
 def test_environments_and_variants_round_trip():
     m = make_model()
     m.environments = ["standalone", "cloud"]
-    m.deployment = [DeploymentRow(unit="backend", variants=["cloud"]),
-                    DeploymentRow(unit="db", variants=["dev", "cloud"]),
-                    DeploymentRow(unit="shared")]                 # ungated: empty variants
+    m.deployment = [
+        DeploymentRow(unit="backend", variants=[VariantTag(env="cloud", source="docker-compose.yml:96")]),
+        DeploymentRow(unit="db", variants=[VariantTag(env="dev"), VariantTag(env="cloud")]),  # 'dev' inferred
+        DeploymentRow(unit="shared")]                             # ungated: empty variants
     m2 = load_model(to_canonical_json(m))
     assert m2.environments == ["standalone", "cloud"]
-    assert [(d.unit, d.variants) for d in m2.deployment] == [
-        ("backend", ["cloud"]), ("db", ["dev", "cloud"]), ("shared", [])]
+    assert [(d.unit, [(v.env, v.source) for v in d.variants]) for d in m2.deployment] == [
+        ("backend", [("cloud", "docker-compose.yml:96")]),
+        ("db", [("dev", ""), ("cloud", "")]),
+        ("shared", [])]
+
+
+def test_variants_bare_string_shape_loads_as_inferred_tag():
+    """Backward-compat (T1): the just-shipped maps store `variants: ["cloud"]` (list of strings). The
+    load pre-pass must coerce each bare string `s` → VariantTag(env=s, source="") (inferred), or every
+    existing map breaks."""
+    m = make_model()
+    m.environments = ["cloud", "dev"]
+    doc = json.loads(to_canonical_json(m))
+    doc["deployment"] = [{"unit": "backend", "variants": ["cloud"]},
+                         {"unit": "db", "variants": ["dev", "cloud"]},
+                         {"unit": "shared", "variants": []}]
+    m2 = load_model(json.dumps(doc))
+    assert [(d.unit, [(v.env, v.source) for v in d.variants]) for d in m2.deployment] == [
+        ("backend", [("cloud", "")]),
+        ("db", [("dev", ""), ("cloud", "")]),
+        ("shared", [])]
 
 
 def test_serializer_sorts_extra_dicts():

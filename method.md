@@ -329,16 +329,22 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     suffixes, serverless/Procfile stages. **Capture it, don't flatten it** (a build once dropped the
     dev/prod/standalone split as "over-modeling" and lost real information). List the variant names in
     the top-level **`environments`** array, and tag each `deployment[].unit` with the **`variants`** it
-    belongs to (empty = **ungated / shared**, appears in every environment). Keep the unit name the
-    process identity (`backend`), not the env (`backend (cloud/prod)`) — the env lives in `variants`. A
-    component's environment is **derived** from the variants of the units it `runs_in`. Two grounding
-    rules keep the tags honest (both from a real mis-tag — a Vite dev server tagged into `standalone` +
-    `cloud` where it does not run):
-    1. **Ground each `variants` tag in the explicit profile axis; never invent one.** The compose
-       `profiles:` (or overlays / values files / stages) ARE the authoritative "what runs where" list.
-       A process that appears in **no** profile is an ad-hoc / local-dev launcher (started by a
-       `start.sh`, a Makefile target, a `README` step) — tag it **`dev`** (or leave it untagged), never
-       a real deploy variant it has no manifest basis for.
+    belongs to (empty = **ungated / shared**, appears in every environment). Each variant tag is an
+    object **`{env, source}`**: `env` names the environment, and `source` is a bare `path:line` anchor to
+    the manifest line that places the unit there. Keep the unit name the process identity (`backend`),
+    not the env (`backend (cloud/prod)`) — the env lives in `variants`. A component's environment is
+    **derived** from the variants of the units it `runs_in`. Two grounding rules keep the tags honest
+    (both from a real mis-tag — a Vite dev server tagged into `standalone` + `cloud` where it does not
+    run):
+    1. **Ground each `variants` tag in the explicit profile axis; cite it, never invent one.** The
+       compose `profiles:` (or overlays / values files / stages) ARE the authoritative "what runs where"
+       list — so put the exact line you read in the tag's **`source`** (e.g. `docker-compose.yml:96`).
+       `validate --check-sources` verifies that line exists, so a fabricated anchor is a hard block. A
+       tag you genuinely cannot anchor is **inferred**: record it with an empty `source` and `validate`
+       surfaces it as an advisory — do NOT dress an inference as a fact. A process that appears in **no**
+       profile is an ad-hoc / local-dev launcher (started by a `start.sh`, a Makefile target, a `README`
+       step) — tag it **`dev`** (or leave it untagged), never a real deploy variant it has no manifest
+       basis for.
     2. **A built / static asset served by another process is NOT its own deployment process there.** A
        Dockerfile that does `npm run build` (or any `build`) then `COPY …/dist …` bakes an artifact
        INTO an existing unit — the artifact is *served by* that unit, not *run as* a separate process.
@@ -346,9 +352,11 @@ prose level, the model has no field for it, and builders rightly skipped it — 
        as a live process (e.g. the frontend is a Vite dev server in `dev`, but a static bundle baked
        into `standalone` and `nginx` for `cloud` — so it is a separate unit in `dev` alone).
 
-    `validate` blocks a `variants` value that names no declared `environments` entry, and advises when
-    `environments` are declared but no unit is tagged. **If the project has no meaningful variant axis
-    (a single deploy), leave both empty** — the Deployment view then behaves exactly as before.
+    `validate` blocks a `variants` tag whose `env` names no declared `environments` entry, blocks a
+    cited `source` that doesn't resolve on disk (under `--check-sources`), and advises both when
+    `environments` are declared but no unit is tagged and when a tag is inferred (no `source`). **If the
+    project has no meaningful variant axis (a single deploy), leave both empty** — the Deployment view
+    then behaves exactly as before.
     *(Deferred, not modelled yet: per-environment config/secret differences, env-specific
     scaling/replicas, and a cross-environment comparison view.)*
 - **Observability**: `Signal | Where emitted | Where viewed | Alerts`.
