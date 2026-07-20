@@ -45,6 +45,19 @@ def test_dep_node_roles_derived_from_incoming_cd_verbs():
     assert nodes["D2"]["roles"] == ["datastore"]                  # writes → store only
 
 
+def test_infra_band_dual_role_goes_to_bus_and_roleless_falls_back():
+    # A dual-role infra dep (Redis: emits + writes → bus + store) bands under Message bus (messaging
+    # wins). A roleless-verb infra dep still bands by its structural dep_kind (fallback).
+    m = make_deploy_model()
+    m.edges.append(Edge(src="C2", verb="writes", dst="D1", why="rl", where="z.py:1"))  # Redis now bus+store
+    m.deps.append(Dep(id="D3", name="Postgres", kind="datastore", type="db"))
+    m.edges.append(Edge(src="C1", verb="uses", dst="D3", why="q", where="a.py:9"))       # roleless verb
+    m.components[0].runs_in = ["bot"]                                                      # ensure C1 hosts
+    mm = G.gen_deployment_mermaid(model_to_graph(m))
+    assert "class D1 infraBus" in mm                       # dual role → bus (primary)
+    assert "class D3 infraStore" in mm                     # roleless verb → dep_kind fallback (datastore)
+
+
 def test_dep_with_no_cd_edge_has_no_roles():
     m = make_deploy_model()
     m.deps.append(Dep(id="D3", name="Grafana", kind="service", type="observability",
@@ -112,40 +125,43 @@ def test_process_box_label_is_the_unit_name_not_the_id():
     assert 'U_0["bot"]' in mm and 'U_1["worker"]' in mm and 'U_2["shard"]' in mm
 
 
-def test_layered_lanes_split_shared_runtime_from_standalone():
-    # bot+worker share Plugins → "Shared runtime"; shard owns its component alone → "Standalone services".
+def test_single_processes_lane_and_aggregate_runs_arrow():
+    # REDESIGN: one "Processes" lane (no core/satellite split), one "Subsystems" lane, joined by a
+    # SINGLE aggregate `runs` arrow between the two lane BOXES — not a per-process→subsystem fan.
     mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
-    assert 'subgraph L_core["Shared runtime"]' in mm
-    assert 'subgraph L_sat["Standalone services"]' in mm
+    assert 'subgraph L_proc["Processes"]' in mm
+    assert 'subgraph L_core["Shared runtime"]' not in mm and 'subgraph L_sat[' not in mm
     assert 'subgraph L_subs["Subsystems"]' in mm
     assert 'subgraph L_infra["Infrastructure"]' in mm
-    assert mm.count("subgraph ") == mm.count("\n  end")   # balanced
+    assert "L_proc -->|runs| L_subs" in mm                # the one aggregate arrow
+    assert mm.count("-->") == 1                            # NO per-process→subsystem fan remains
+    ends = sum(1 for l in mm.splitlines() if l.strip() == "end")
+    assert mm.count("subgraph ") == ends                  # balanced (incl. nested infra bands)
 
 
-def test_gen_deployment_emits_processes_runs_and_declared_boxes():
+def test_gen_deployment_emits_processes_and_declared_boxes():
     mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
     # process boxes (bot/worker/shard = U_0/U_1/U_2)
     assert "class U_0 process" in mm and "class U_1 process" in mm and "class U_2 process" in mm
-    # a runs edge to a subsystem, and BOTH the shared component's processes point at Plugins (S1)
-    assert "U_0 --> S1" in mm and "U_1 --> S1" in mm      # bot AND worker run Plugins (the monolith mesh)
-    assert "U_1 --> S2" in mm                             # worker runs Memberships
     # subsystem endpoint boxes are DECLARED (else they'd be bare inert nodes)
     assert "class S1 subsystem" in mm and "class S2 subsystem" in mm
 
 
-def test_overview_infra_is_an_ambient_band_with_no_process_arrows():
-    # AMBIENT INFRA: the brokers/stores are drawn as an Infrastructure band (so their use is implied by
-    # adjacency) but the overview draws NO process→infra arrows — those live on the drill cards.
+def test_overview_infra_is_banded_by_role_with_no_process_arrows():
+    # AMBIENT INFRA banded by DERIVED role: Redis (emits → messaging) in Message bus, Mongo (writes →
+    # datastore) in Data store; still NO process→infra arrows (those live on the drill cards).
     mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
     assert 'subgraph L_infra["Infrastructure"]' in mm
-    assert "class D1 dep" in mm and "class D2 dep" in mm  # both infra boxes present
+    assert 'subgraph L_infra_bus["Message bus"]' in mm and "class D1 infraBus" in mm    # Redis = bus
+    assert 'subgraph L_infra_store["Data store"]' in mm and "class D2 infraStore" in mm  # Mongo = store
     assert "--> D1" not in mm and "--> D2" not in mm      # ...but nothing points an arrow at them
 
 
-def test_ungrouped_component_runs_edge_targets_the_component():
-    # C3 has no subsystem, so shard's runs edge targets the component itself (still a real node → binds).
+def test_ungrouped_component_is_a_runs_endpoint_box():
+    # C3 has no subsystem, so shard's runs endpoint is the component itself — it sits in the Subsystems
+    # lane as a real (binding) box; the aggregate arrow targets the lane, not C3 directly.
     mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
-    assert "U_2 --> C3" in mm and "class C3 component" in mm
+    assert "class C3 component" in mm and "U_2 --> C3" not in mm
 
 
 # --- environments (C2) ----------------------------------------------------------
@@ -224,16 +240,15 @@ def make_allinone_model() -> ProjectModel:
     return m
 
 
-def test_superset_unit_is_folded_not_fanned():
+def test_superset_unit_keeps_allinone_label_in_processes_lane():
     # standalone (U_2) runs everything backend+frontend run between them → an all-in-one packaging.
-    # It is folded to a labelled annotation with NO arrows; only the two real processes fan out.
+    # With the single aggregate arrow there's no fold lane / core-satellite split: it sits in the one
+    # Processes lane, keeping only a label suffix; the overview draws ONE aggregate arrow, no fan.
     mm = G.gen_deployment_mermaid(model_to_graph(make_allinone_model()))
-    assert 'subgraph L_allinone["All-in-one"]' in mm
-    assert "standalone — all-in-one: runs everything below" in mm
-    assert "U_2 -->" not in mm                                   # the folded unit draws no arrows
-    assert "U_0 --> S1" in mm and "U_1 --> S2" in mm             # backend + frontend still fan out
-    # only the two meaningful runs arrows remain (no infra, no standalone fan)
-    assert mm.count(" --> ") == 2
+    assert 'subgraph L_proc["Processes"]' in mm and 'subgraph L_allinone' not in mm
+    assert "standalone — all-in-one: runs every subsystem" in mm
+    assert "L_proc -->|runs| L_subs" in mm
+    assert mm.count("-->") == 1                                  # exactly the one aggregate arrow
 
 
 def test_folded_unit_still_has_a_drill_card_showing_everything():
@@ -251,7 +266,7 @@ def test_all_equal_units_are_not_all_folded():
     ]
     m.deployment = [DeploymentRow(unit="a"), DeploymentRow(unit="b")]
     mm = G.gen_deployment_mermaid(model_to_graph(m))
-    assert 'subgraph L_allinone' not in mm                       # neither unit folded
+    assert "all-in-one" not in mm                                # neither unit labelled all-in-one
     assert "class U_0 process" in mm and "class U_1 process" in mm
 
 

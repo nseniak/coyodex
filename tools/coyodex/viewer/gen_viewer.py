@@ -388,6 +388,21 @@ DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     —
 CONTAINER_STYLE = f"fill:#ecfdf5,stroke:#065f46,color:#064e3b,{_CONTAINER_BORDER}"
 PROCESS_STYLE   = f"fill:#fef3c7,stroke:#b45309,color:#78350f,{_CONTAINER_BORDER}"  # amber-100 — a deployable process/thread (Deployment view), a runtime container
 INFRA_STYLE     = "fill:#f1f5f9,stroke:#475569,color:#1e293b"  # slate       — infrastructure node (broker/store) in the Deployment view
+# Deployment infra BANDING by derived role (WS2 grammar.dep_roles): a broker/store/service dep's colour
+# in the Deployment view's Infrastructure lane echoes its role band. Roleless infra falls back to slate.
+INFRA_BUS_STYLE   = "fill:#ede9fe,stroke:#6d28d9,color:#4c1d95"  # violet — message bus (messaging)
+INFRA_STORE_STYLE = "fill:#e0f2fe,stroke:#0369a1,color:#0c4a6e"  # sky    — data store (datastore)
+INFRA_SVC_STYLE   = "fill:#ccfbf1,stroke:#0f766e,color:#134e4a"  # teal   — service (service)
+INFRA_SEC_STYLE   = "fill:#ffe4e6,stroke:#be123c,color:#881337"  # rose   — security (encrypt)
+# (band_role, subgraph id, lane title, mermaid classDef name) — fixed display order; a dual-role dep
+# lands in the FIRST band it qualifies for (messaging beats datastore, per the redesign).
+_INFRA_BANDS: tuple[tuple[str, str, str, str], ...] = (
+    ("messaging", "L_infra_bus", "Message bus", "infraBus"),
+    ("datastore", "L_infra_store", "Data store", "infraStore"),
+    ("service", "L_infra_svc", "Service", "infraSvc"),
+    ("security", "L_infra_sec", "Security", "infraSec"),
+    ("other", "L_infra_other", "Other", "infra"),
+)
 DOMAIN_SUBDOMAIN_CLASSDEF = f"  classDef subdomain {SUBDOMAIN_STYLE};"
 
 
@@ -1361,6 +1376,25 @@ def _subsystem_box_of(graph: GraphDict, cid: str) -> str:
     return _top_subsystem(graph, cid) or cid
 
 
+def _infra_band_of(graph: GraphDict, did: str) -> str:
+    """The Infrastructure role-band an infra dep box belongs to (one of `_INFRA_BANDS`' roles). Prefer
+    the dep's DERIVED role set (WS2 `grammar.dep_roles` on the node, from its incoming C→D verbs), in
+    the fixed priority messaging > datastore > service > security so a dual-role dep (Redis = bus +
+    store) lands in one band deterministically. Fall back to the structural `dep_kind` when the dep has
+    no verb-derived role (a roleless C→D edge, or infra wired at deployment level only), then to
+    'other' (slate) so a box is never bandless."""
+    node = graph["nodes"].get(did, {})
+    roles = node.get("roles") if isinstance(node, dict) else None
+    role_set = {str(r) for r in roles} if isinstance(roles, list) else set()
+    for role, _bid, _title, _cls in _INFRA_BANDS:
+        if role != "other" and role in role_set:
+            return role
+    dep_kind = str(node.get("dep_kind") or "") if isinstance(node, dict) else ""
+    if dep_kind in ("messaging", "datastore", "service"):
+        return dep_kind
+    return "other"
+
+
 def _declare_box(graph: GraphDict, nid: str, default_kind: str) -> list[str]:
     """The two mermaid lines declaring a node box (`id["label"]:::cy-id` + `class id kind`), so an
     endpoint that would otherwise render as a bare inert node binds with the right colour."""
@@ -1471,19 +1505,22 @@ def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
     runs in units of several environments contributes its infra to each of them (env-specific infra
     needs env-specific components — stated in method.md).
 
-    Two readability rules keep the overview from hairballing (both DERIVED — kind + `runs_in`, no
-    authored input):
-      * AMBIENT INFRA — the brokers/stores the app talks to are drawn as an Infrastructure band at the
-        bottom, but NOT wired with process→infra arrows (adjacency implies use). Each process's actual
-        brokers/stores live on its drill card. This drops the fan of infra arrows.
-      * ALL-IN-ONE FOLD — a unit that runs everything the other processes run between them (a superset
-        packaging, e.g. `standalone`) is not a peer; fanning it re-draws every arrow. It is folded to a
-        labelled annotation ("… — all-in-one: runs everything below"), no arrows.
-    What remains is the meaningful skeleton: each genuine process → the subsystems it (alone) runs.
+    Three DERIVED readability rules keep the overview from hairballing (kind + `runs_in` + edge verbs,
+    no authored input):
+      * SINGLE AGGREGATE ARROW — one `runs` arrow between the Processes lane box and the Subsystems lane
+        box, NOT a per-process→subsystem fan. Which process runs which subsystem lives on each process's
+        drill card (one click away); the overview shows only that the processes, together, run the
+        subsystems. This is what collapses the mesh.
+      * ROLE-BANDED INFRA — the brokers/stores/services the app talks to are an ambient Infrastructure
+        lane (NO process→infra arrows; adjacency implies use), banded by each dep's DERIVED role
+        (`grammar.dep_roles` via `node.roles`): Message bus / Data store / Service / Security / Other,
+        each box coloured by its band. A dual-role dep (Redis = bus + store) lands in one band.
+      * ALL-IN-ONE annotation — a superset packaging (a `standalone` that runs everything) keeps a
+        "… — all-in-one: runs every subsystem" label suffix; with the single arrow it no longer needs a
+        fold or a core/satellite split.
 
-    LAYERED layout: nodes band into subgraph lanes — the all-in-one packagings, then the fanned
-    processes (shared-runtime apart from standalone when a monolith is present), then the Subsystems
-    band, then Infrastructure — so dagre stacks them into readable rows instead of a flat mesh."""
+    LAYERED layout: nodes band into subgraph lanes — Processes, then Subsystems, then the (nested)
+    Infrastructure role bands, then any Untraced units — so dagre stacks them into readable rows."""
     units = _deployment_unit_ids(graph)
     uid_of = {unit: uid for uid, unit in units}
     # Per-environment filter: a unit is IN `env` when its variants include it or are empty (ungated).
@@ -1492,10 +1529,9 @@ def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
     variants_of = _unit_variants(graph)
     env_uids = {uid for uid, name in units
                 if env is None or env in variants_of.get(name, set()) or not variants_of.get(name, set())}
-    runs, infra, boxes_by_uid = _deployment_edges(graph, uid_of)
+    runs, infra, _boxes_by_uid = _deployment_edges(graph, uid_of)
     runs = {(u, b) for (u, b) in runs if u in env_uids}
     infra = {(u, b) for (u, b) in infra if u in env_uids}
-    boxes_by_uid = {u: bs for u, bs in boxes_by_uid.items() if u in env_uids}
     # Only units that HOST code are process boxes (B2). A no-host unit is either an infra dep already
     # drawn in the Infrastructure lane (name-match → drawn NOWHERE) or a genuinely-unlinked unit (a real
     # gap → the small "Untraced units" lane, so it is never dropped silently — S2).
@@ -1505,40 +1541,30 @@ def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
     untraced = [uid for uid, name in units
                 if name not in process_units and not _unit_matches_system_dep(name, dep_names)
                 and uid in env_uids]
-    # ALL-IN-ONE FOLD: superset units are annotated, not fanned. Only the fanned units draw `runs` arrows
-    # and drive the core/satellite split, so a monolith's own arrows don't paint every peer as "shared".
+    # ALL-IN-ONE annotation: a superset packaging (a `standalone` that runs everything) keeps a
+    # label suffix so it still reads as "runs the lot" — but with the single aggregate arrow there is no
+    # fan for it to distort, so the old core/satellite split is gone (all processes share one lane).
     comps_by_uid = _components_run_by_uid(graph, uid_of)
     fold = _allinone_uids(process_uids, comps_by_uid)
-    fanned = [uid for uid in process_uids if uid not in fold]
-    fanned_set = set(fanned)
-    fanned_runs = {(u, b) for (u, b) in runs if u in fanned_set}
-    endpoints = {b for _u, b in fanned_runs}
-    # core = a fanned process sharing a subsystem with another fanned process; satellite = runs its
-    # subsystems alone. (Folded all-in-one units are excluded — they run everything, so counting them
-    # would mark every process as shared.)
-    runners_of: dict[str, set[str]] = {}
-    for uid, box in fanned_runs:
-        runners_of.setdefault(box, set()).add(uid)
-    def is_core(uid: str) -> bool:
-        return any(len(runners_of.get(b, ())) > 1 for b in boxes_by_uid.get(uid, ()))
-    core = [uid for uid in fanned if is_core(uid)]
-    sat = [uid for uid in fanned if uid not in set(core)]
-    # AMBIENT INFRA: the Infrastructure band shows every broker/store any running component touches, as an
-    # ambient lane under the processes — NO process→infra arrows on the overview (they live on the cards).
+    proc_set = set(process_uids)
+    all_runs = {(u, b) for (u, b) in runs if u in proc_set}
+    sub_boxes = sorted({b for _u, b in all_runs})
+    # AMBIENT INFRA: every broker/store/service any running component touches, banded by its DERIVED role
+    # (grammar.dep_roles via node.roles) — NO process→infra arrows on the overview (they live on the cards).
     infra_boxes = sorted({b for _u, b in infra})
-    sub_boxes = sorted(endpoints)
 
     lines = ["flowchart TB"]
     class_lines: list[str] = []
     label_of = {uid: unit for uid, unit in units}  # process ids aren't in the clean graph — label from units
-    allinone_label = {uid: f"{label_of.get(uid, uid)} — all-in-one: runs everything below" for uid in fold}
+    allinone_label = {uid: f"{label_of.get(uid, uid)} — all-in-one: runs every subsystem" for uid in fold}
 
-    def _decl(nid: str, default_kind: str) -> tuple[str, str]:
+    def _decl(nid: str, default_kind: str, cls_override: str | None = None) -> tuple[str, str]:
         node = graph["nodes"].get(nid, {})
         name = allinone_label.get(nid) or label_of.get(nid) or str(node.get("name", nid))
         kind = str(node.get("kind") or default_kind)
         shape = SHAPE.get(kind, ('["', '"]'))
-        cls = kind if kind in ("subsystem", "component", "infra", "dep", "process") else "subsystem"
+        cls = cls_override or (kind if kind in ("subsystem", "component", "infra", "dep", "process")
+                               else "subsystem")
         return f'{nid}{shape[0]}{_safe_label(name)}{shape[1]}:::cy-{nid}', f"  class {nid} {cls}"
 
     def lane(lid: str, title: str, ids: list[str], default_kind: str) -> None:
@@ -1551,28 +1577,45 @@ def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
             class_lines.append(cls)
         lines.append("  end")
 
-    # Folded all-in-one packagings first — labelled boxes, no arrows (they still bind + drill to a card
-    # showing everything they run).
-    lane("L_allinone", "All-in-one", sorted(fold), "process")
-    if core:                                              # a monolith is present → split the fanned band
-        lane("L_core", "Shared runtime", core, "process")
-        lane("L_sat", "Standalone services", sat, "process")
-    else:
-        lane("L_proc", "Processes", fanned, "process")
+    # REDESIGN: one "Processes" lane, one "Subsystems" lane, joined by a SINGLE aggregate `runs` arrow
+    # between the two lane boxes (the per-process→subsystem fan moves to each process's drill card).
+    lane("L_proc", "Processes", process_uids, "process")
     lane("L_subs", "Subsystems", sub_boxes, "subsystem")
-    lane("L_infra", "Infrastructure", infra_boxes, "infra")
+    # Infrastructure lane, BANDED by derived role: nested role sub-bands (Message bus / Data store /
+    # Service / Security / Other), each infra box coloured by its band. A dual-role dep (Redis =
+    # bus + store) lands in the first band it qualifies for; a roleless infra falls to "Other" (slate).
+    if infra_boxes:
+        bands: dict[str, list[str]] = {}
+        for did in infra_boxes:
+            bands.setdefault(_infra_band_of(graph, did), []).append(did)
+        lines.append('  subgraph L_infra["Infrastructure"]')
+        for role, bid, title, cls in _INFRA_BANDS:
+            ids = bands.get(role)
+            if not ids:
+                continue
+            lines.append(f'    subgraph {bid}["{title}"]')
+            for did in ids:
+                decl, clsline = _decl(did, "infra", cls)
+                lines.append(f"      {decl}")
+                class_lines.append(clsline)
+            lines.append("    end")
+        lines.append("  end")
     # A unit hosting no code and matching no infra dep is a real gap — surface it in its own lane rather
     # than dropping it silently (S2). It has no injected graph node (so it stays inert), and the viewer
     # keeps it searchable via a non-process fallback row.
     lane("L_untraced", "Untraced units", untraced, "process")
 
     lines += class_lines
-    for a, b in sorted(fanned_runs):                      # only fanned processes draw arrows; infra is ambient
-        lines.append(f"  {a} --> {b}")
+    if process_uids and sub_boxes:                        # ONE aggregate arrow between the lane boxes
+        lines.append("  L_proc -->|runs| L_subs")
     lines.append(f"  classDef process {PROCESS_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
     lines.append(f"  classDef infra {INFRA_STYLE};")
+    lines.append(f"  classDef infraBus {INFRA_BUS_STYLE};")
+    lines.append(f"  classDef infraStore {INFRA_STORE_STYLE};")
+    lines.append(f"  classDef infraSvc {INFRA_SVC_STYLE};")
+    lines.append(f"  classDef infraSec {INFRA_SEC_STYLE};")
     return "\n".join(lines)
 
 
