@@ -248,10 +248,16 @@ def model_to_markdown(m: ProjectModel) -> str:
                 body.append(f"why: {hp.why}")
         section("Happy Path — the spine (an ordered walk through the use cases)", body)
     if m.subsystems:
-        section("Subsystems (S) — the container altitude",
-                _table(["ID", "Subsystem", "Purpose", "Parent", "Source", "Conf."],
-                       [[f"**{s.id}**", s.name, s.purpose, s.parent or "", s.source or "",
-                         s.confidence] for s in m.subsystems]))
+        # Tech column only when some subsystem states one (conditional-column rule — existing maps'
+        # committed md stays byte-identical). A cited tech shows its manifest anchor inline.
+        with_tech = any(s.tech for s in m.subsystems)
+        s_headers = ["ID", "Subsystem", "Purpose", "Parent"] + (["Tech"] if with_tech else []) + [
+            "Source", "Conf."]
+        s_rows = [[f"**{s.id}**", s.name, s.purpose, s.parent or ""]
+                  + ([f"{s.tech} ({_anchor_link(s.tech_source)})" if s.tech_source else s.tech]
+                     if with_tech else [])
+                  + [s.source or "", s.confidence] for s in m.subsystems]
+        section("Subsystems (S) — the container altitude", _table(s_headers, s_rows))
     if m.components:
         headers, with_conf, extra = _component_headers(m)
         rows = []
@@ -437,7 +443,10 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     for s in m.subsystems:
         parent_name = subsystem_names.get(s.parent, s.parent) if s.parent else ""
         nodes[s.id] = _node(s, "subsystem", s.name, s.source,
-                            {"Subsystem": s.name, "Purpose": s.purpose, "Parent": parent_name},
+                            {"Subsystem": s.name, "Purpose": s.purpose, "Parent": parent_name,
+                             # tech is subsystem-only (validate blocks it on subdomains), so the
+                             # subdomain population below deliberately does NOT mirror this row.
+                             **({"Tech": s.tech} if s.tech else {})},
                             s.parent)
     # T4 entry points grouped by the component they name — surfaced as each component's "Triggered by"
     # list in the info pane (the standalone table also lives on the System tab). Each flat entry point

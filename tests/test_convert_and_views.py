@@ -32,6 +32,7 @@ from coyodex.model import (
     Flow,
     FlowStep,
     GlossaryRow,
+    Group,
     ProjectModel,
     SubFlow,
     UseCase,
@@ -217,6 +218,24 @@ def test_glossary_where_renders_as_link_and_reaches_graph():
     g = model_to_graph(m)
     assert g["glossary"] == [{"term": "Order", "meaning": "a customer order", "source": "src/order.py:12"},
                              {"term": "Brand", "meaning": "the product itself", "source": ""}]
+
+
+def test_subsystem_tech_column_is_conditional_and_reaches_graph():
+    """WS-A7: the subsystems `Tech` column appears only when some subsystem states one, and the
+    label lands on the subsystem node's info-pane fields (subdomains deliberately not mirrored)."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.subsystems = [Group(id="S1", name="Core", purpose="the core")]
+    m.components = [Component(id="C1", name="Worker", purpose="works", subsystem="S1")]
+    md = model_to_markdown(m)
+    assert "| Tech |" not in md                                  # no tech anywhere → no column
+    m.subsystems[0].tech = "Python/FastAPI"
+    m.subsystems[0].tech_source = "pyproject.toml:1"
+    md = model_to_markdown(m)
+    assert "| Tech |" in md
+    assert "Python/FastAPI ([pyproject.toml](pyproject.toml:1))" in md
+    g = model_to_graph(m)
+    s1 = cast("dict[str, dict[str, str]]", g["nodes"]["S1"])
+    assert s1["fields"]["Tech"] == "Python/FastAPI"
 
 
 def test_cadence_column_is_conditional_and_reaches_graph():

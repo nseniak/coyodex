@@ -932,6 +932,18 @@ def _check_runs_in(m: ProjectModel) -> list[str]:
     return problems
 
 
+def _check_group_tech(m: ProjectModel) -> list[str]:
+    """`tech` is a SUBSYSTEM field (one honest stack label off the manifests). The `Group`
+    dataclass backs both forests, so nothing structural stops a subdomain from carrying one — but
+    a bounded context has no stack, and letting it through would seed a parallel, contradictable
+    tech axis on the domain side. Blocking: cheap and unambiguous to fix (drop it or move it to
+    the owning subsystem)."""
+    return [f"{sd.id} carries `tech` ('{(sd.tech or sd.tech_source).strip()}') — tech is a "
+            "subsystem field (a bounded context has no stack); drop it, or move it to the "
+            "subsystem that implements this subdomain"
+            for sd in m.subdomains if (sd.tech or "").strip() or (sd.tech_source or "").strip()]
+
+
 def _check_environments(m: ProjectModel) -> list[str]:
     """Each `deployment[].variants` value must name a declared `environments` entry (the same
     resolve-or-die rule `_check_runs_in` applies to `runs_in`→unit). Blocking: a variant that names no
@@ -1319,6 +1331,7 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
         bad_anchor(f"glossary '{g.term}' source", g.source)
     for group in (*m.subsystems, *m.subdomains):
         bad_anchor(f"{group.id} source", group.source)
+        bad_file(f"{group.id} tech_source", group.tech_source)
     # Operational-table source fields that the viewer turns into code links — same bare-anchor rule as
     # every other source (the deployment/observability location fields stay free prose, so they are NOT
     # checked here: they describe topology, not a single line, and the viewer renders them as text).
@@ -1430,6 +1443,8 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for group in (*m.subsystems, *m.subdomains):
         if group.source and not url.match(group.source):
             out.append((f"{group.id} source", group.source))
+        if group.tech_source and not url.match(group.tech_source):
+            out.append((f"{group.id} tech", group.tech_source))
     for c in m.components:
         if c.source and not url.match(c.source):
             out.append((f"{c.id} source", c.source))
@@ -1640,6 +1655,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_check_entry_kinds(m))
     warnings.extend(_kind_coverage_warnings(m))
     warnings.extend(_cadence_warnings(m))
+    problems.extend(_check_group_tech(m))
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
     warnings.extend(_deployment_placement_warnings(m))

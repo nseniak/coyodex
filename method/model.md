@@ -51,7 +51,9 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "use_cases":   [ { "id": "UCn", "name", "actors": ["Rn", ...], "trigger_outcome" } ],
   "happy_path": [ { "id": "HPn", "title", "uc": "UCn", "why": "<prerequisite or null>" } ],
 
-  "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "source", "confidence" } ],
+  "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "source", "confidence",
+                     "tech": "<one stack label, e.g. 'Python/FastAPI'>",   // subsystem-only; blocked on subdomains
+                     "tech_source": "<bare path:line to the manifest line>" } ],
   "components":  [ { "id": "Cn",  "name", "subsystem": "Sn|null", "purpose",
                      "entry_point": "<path:line|null>", "depends_on": "<derived summary text>",
                      "source": "<canonical source anchor|null>", "confidence",
@@ -143,6 +145,12 @@ Semantics, stated on the fields:
   existence-checked under `--check-sources` and joins the audit L2 skeptic worklist (schedules are
   config-tuned and drift silently). A self-activated EP with no cadence draws an aggregated
   advisory; the escape is the literal `cadence` under a **"Balance exceptions"** heading.
+- **`subsystems[].tech`** is ONE honest stack label per subsystem ("Python/FastAPI", "Go",
+  "Elixir") read off the manifests, with `tech_source` anchoring the manifest line that proves it
+  (go.mod, package.json, pyproject.toml) — not a stack essay, and never inferred from vibes. Live
+  maps left every container's tech buried in deployment prose; this is the one field a reader's
+  "what is this piece written in?" lands on. Subsystem-only: `validate` BLOCKS `tech` on a
+  subdomain (a bounded context has no stack). Missing tech is silent (a label, not a contract).
 - **Membership is single-source on the child**: `components[].subsystem`, `subsystems[].parent`,
   `entities[].subdomain`, `subdomains[].parent`. Member lists, inter-group edges, and the
   subsystem→subdomain bridge stay **derived, never stored**. Nesting depth isn't capped — the
@@ -237,7 +245,8 @@ Semantics, stated on the fields:
   joined by a separator. `components[].source`, `entities[].source`, `glossary[].source`,
   `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `flows[].steps[].where`,
   `entry_points[].source`, **`entry_points[].cadence_source`** (the line declaring a schedule; may
-  be `""` = inferred),
+  be `""` = inferred), **`subsystems[].tech_source`** (the manifest line proving a tech label;
+  optional),
   `evidence[].file`, **`run_commands[].source`**, **`security[].source`**,
   **`deployment[].variants[].source`** (the manifest line grounding a variant tag; may be `""` =
   inferred), and

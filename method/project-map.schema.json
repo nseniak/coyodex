@@ -316,6 +316,15 @@
         },
         "confidence": {
           "type": "string"
+        },
+        "tech": {
+          "type": "string",
+          "description": "SUBSYSTEM-ONLY: one honest stack label ('Python/FastAPI', 'Go', 'Elixir') read off the manifests \u2014 not a stack essay. validate blocks it on a subdomain (a bounded context has no stack)."
+        },
+        "tech_source": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "optional bare path:line anchor to the manifest line proving the tech label (go.mod, package.json, pyproject.toml)."
         }
       },
       "required": [

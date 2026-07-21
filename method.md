@@ -170,6 +170,9 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   level by level inside the one map — there is no depth limit (deep chains only warn). Group the **top
   levels by capability** (what the system does), not by tech tier, and keep every card's fan-out near
   the **5±2 target** — see *Diagram balance — the fan-out rule* under Cross-cutting rules.
+  Give each subsystem a **`tech`** label — ONE honest stack name ("Python/FastAPI", "Go", "Elixir")
+  read off the manifests, with `tech_source` anchoring the manifest line (go.mod, package.json) —
+  from the manifests, not a stack essay. Subsystem-only (`validate` blocks it on subdomains).
 - **T1 Components**: `Component | Subsystem | Purpose | Entry point | Depends on` (the `Subsystem`
   cell is the component's one parent `S`, or empty = ungrouped).
 - **T2 External dependencies**: `Name | Kind | Bucket | Type | Used for | Where configured`. Two

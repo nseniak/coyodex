@@ -156,6 +156,30 @@ def test_kind_coverage_line_folds_alias_spellings() -> None:
     assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
 
 
+# --- tech on subsystems (WS-A7) ---------------------------------------------------
+
+def test_tech_on_subdomain_blocks_and_on_subsystem_is_clean() -> None:
+    m = make_valid_model()
+    m.subsystems = [Group(id="S1", name="Core", purpose="core", tech="Python/FastAPI",
+                          tech_source="pyproject.toml:1")]
+    m.components[0].subsystem = "S1"
+    assert not any("tech" in p.lower() for p in problems_of(m))
+    m.subdomains = [Group(id="SD1", name="Orders", purpose="orders", tech="Python")]
+    m.entities[0].subdomain = "SD1"
+    assert any("SD1" in p and "subsystem field" in p for p in problems_of(m))
+
+
+def test_bad_tech_source_anchor_blocks_and_cited_joins_check_sources() -> None:
+    m = make_valid_model()
+    m.subsystems = [Group(id="S1", name="Core", purpose="core", tech="Go",
+                          tech_source="see go.mod")]
+    m.components[0].subsystem = "S1"
+    assert any("S1 tech_source" in p and "not a valid" in p for p in problems_of(m))
+    m.subsystems[0].tech_source = "go.mod:1"
+    assert not any("S1 tech_source" in p for p in problems_of(m))
+    assert any(label == "S1 tech" and href == "go.mod:1" for label, href in _anchor_pairs(m))
+
+
 # --- entry-point cadence (WS-A2) --------------------------------------------------
 
 def test_missing_cadence_on_self_ep_is_aggregated_and_literal_silences() -> None:

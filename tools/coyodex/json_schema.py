@@ -108,6 +108,13 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                         "DECLARING the schedule (beat/cron config, compose, the "
                                         "loop's sleep) — often a different line than `source`; '' "
                                         "on a set cadence = inferred (advisory)."},
+    ("Group", "tech"): {"description": "SUBSYSTEM-ONLY: one honest stack label ('Python/FastAPI', "
+                         "'Go', 'Elixir') read off the manifests — not a stack essay. validate "
+                         "blocks it on a subdomain (a bounded context has no stack)."},
+    ("Group", "tech_source"): {"pattern": _ANCHOR_LINE.pattern,
+                                "description": "optional bare path:line anchor to the manifest "
+                                "line proving the tech label (go.mod, package.json, "
+                                "pyproject.toml)."},
     ("EntryPoint", "activation"): {"enum": [*grammar.ACTIVATIONS, ""], "description": "who starts it: "
                                     "'self' (timer/loop/boot/signal/queue consumer — runs with no "
                                     "caller) or 'external' (route/CLI/callback/webhook); '' → inferred "

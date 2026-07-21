@@ -79,6 +79,12 @@ class Group:
     source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
                                # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""
+    tech: str = ""             # SUBSYSTEM-ONLY: one honest stack label ("Python/FastAPI", "Go",
+                               # "Elixir") read off the manifests — live maps left container tech
+                               # buried in deployment prose. `validate` blocks it on a subdomain
+                               # (a bounded context has no stack).
+    tech_source: str = ""      # optional bare `path:line` anchor to the manifest line proving the
+                               # label (go.mod, package.json, pyproject.toml)
 
 
 @dataclass
