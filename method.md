@@ -670,6 +670,18 @@ synthesis → parallel trace.**
     touched" list or a bag of `C→E` edges — those record which component uses an entity, not how the
     entities relate; the `E↔E` RELATIONS are the domain backbone and only the T5 owner authors them.
     (`--check-coverage` independently flags a sparse / under-harvested domain model — see below.)
+    - **The T5 owner needs the deps legend to fill `store.dep` — sequence or inject it.** The
+      structured store's `dep` is a D-id, and a T5 agent launched in parallel with the deps
+      harvest has no D-id universe: two of three live rebuilds shipped `dep: null` on EVERY
+      entity, silently disabling the persistence-coverage rule. Either run the T2 deps slice
+      first and inject its datastore/messaging ids into the T5 prompt (`D1=MongoDB, D2=Redis…`),
+      or have synthesis BACKFILL `store.dep` from the assembled deps (a `--reconcile` set). The
+      "container but no dep" validate advisory is the backstop, not the plan.
+    - **Author `states` where the code implements a lifecycle** — an entity with a status
+      enum/constants (a subscription's states) gets a `states` machine on its card; a component
+      whose purpose lists phases ("5-phase: disabled/deferred/connecting/live/failed") gets one
+      on the component. A lifecycle left in purpose prose is unqueryable and rots first — the
+      motivating live-rebuild case shipped its 5-phase machine as prose twice.
     - **Large domain models (many entities) — shard the RELATIONS pass, never skip it.** One agent can
       read ~40 entities and author a complete `E↔E` graph; on a 150–200-entity domain it will
       under-author relations and the graph comes out sparse (a fresh large-monorepo build left ~a
@@ -745,6 +757,19 @@ synthesis → parallel trace.**
     the calling step's `where`.
   - **Assign each trace agent an `SFn` id range** (SF1–9, SF10–19, …), exactly like the per-agent
     component id ranges, so parallel extractions never collide.
+  - **Show the sub-flow SHAPE in the prompt** — `{"id": "SFn", "name": "<display text>", "steps":
+    [...]}`. A flow's display text is `title` but a sub-flow's is **`name`**; five trace agents in
+    one live rebuild wrote `subflows[].title` by analogy and each burned a lint round (the loader
+    now accepts `title` as an alias, but the prompt should still show the canonical shape).
+  - **A step MAY reference a sibling agent's sub-flow** (the id ranges make it unambiguous): pass
+    `--ids build-fragments/` (a directory scans every fragment) so the reference resolves at
+    lint time instead of forcing the agent to duplicate the shared trace inline. The sub-flow
+    refcount nudge ("referenced once — consider inlining") is ADVISORY on the fragment channel:
+    the other reference may live in a sibling fragment, so never rewrite just to silence it.
+  - **A named queue/topic in the trace is a `messaging` row** — when a step or edge goes through a
+    named channel (`JOB_QUEUE`, a per-org pub/sub channel), record the catalog row (name, broker
+    dep, publishers, consumers, payload) alongside the `C→broker` edge; three live rebuilds
+    shipped rich broker EDGES with an empty catalog.
   - **A `C→E` `reads` edge — or entity step — requires the entity TYPE at the site** — a function
     operating on a string/field extracted from an entity is not reading the entity (the
     false-reads class the grounding pass keeps refuting).

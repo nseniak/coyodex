@@ -328,18 +328,31 @@ def _check_flows(m: ProjectModel) -> tuple[list[str], list[str]]:
                 for end in (st.src, st.dst):
                     if not grammar.is_step_id(end) and end not in role_ids:
                         problems.append(f"{tag}: actor '{end}' is not a defined Role id")
-    # A sub-flow's reason to exist is REUSE: referenced once (or never), it's indirection for free
+    return problems, warnings
+
+
+def subflow_refcount_warnings(m: ProjectModel) -> list[str]:
+    """Advisory (NON-BLOCKING, and — unlike the rest of the flow rulebook — deliberately NOT
+    promoted by `lint_fragment_problems`): a sub-flow's reason to exist is REUSE, so one referenced
+    once (or never) is indirection for free. This is judgment-shaped (the roleless-verb precedent):
+    riding the blocking fragment channel made one live rebuild inline three legitimate sub-flows,
+    duplicate a shared trace, and ship a fragment its author believed had passed. Counts reference
+    STEPS (two references inside one flow are still reuse), matching the wording — the old
+    'referenced by N flow(s)' text counted steps while saying flows, so lint and validate could
+    disagree on the same fragment."""
     ref_counts: dict[str, int] = {}
     for f in m.flows:
         for st in f.steps:
             if st.subflow:
                 ref_counts[st.subflow] = ref_counts.get(st.subflow, 0) + 1
+    out: list[str] = []
     for sf in m.subflows:
         n_refs = ref_counts.get(sf.id, 0)
         if n_refs < 2:
-            warnings.append(f"{sf.id} ({sf.name}) is referenced by {n_refs} flow(s) — a sub-flow "
-                            "earns its keep at ≥2; consider inlining it")
-    return problems, warnings
+            out.append(f"{sf.id} ({sf.name}) is referenced {n_refs} time(s) — a sub-flow earns its "
+                       "keep at ≥2 references; consider inlining it (advisory: another fragment's "
+                       "flow may hold the other reference)")
+    return out
 
 
 # ── use-case granularity (advisory) — the flow analog of the diagram fan-out band ────────────────
@@ -1017,6 +1030,40 @@ def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
+def _messaging_gap_warnings(m: ProjectModel) -> list[str]:
+    """The async-catalog canary (advisory, ONE aggregated line): three live rebuilds shipped
+    `messaging: []` while their edges plainly showed a bus in use (one map had 20 emit + 13
+    listen edges into its Redis broker and ~8 nameable channels). The row-local messaging rules
+    only fire when rows EXIST — this canary fires on the absence: emit/listen-family C→D edges
+    into a messaging- OR datastore-kind dep (a Redis authored as datastore routinely doubles as
+    the bus — a live map's pub/sub rode exactly that) with an EMPTY catalog. Service/platform deps
+    are excluded: `emits Sentry` / `emits StatsD` is observability, not a channel. Escape = the
+    literal `messaging` (line-leading) under a 'Balance exceptions' extras heading (a bus used
+    only through an abstraction with genuinely no nameable channels)."""
+    if m.messaging or not m.edges:
+        return []
+    deps_by_id = {d.id: d for d in m.deps}
+    bus_edges: list[str] = []
+    for e in m.edges:
+        v = e.verb.strip().lower()
+        if not (e.src.startswith("C") and e.dst.startswith("D")):
+            continue
+        if v not in grammar.EMIT_VERBS and v not in grammar.LISTEN_VERBS:
+            continue
+        d = deps_by_id.get(e.dst)
+        if d is not None and grammar.classify_dep(d.kind or "", d.type) in ("messaging", "datastore"):
+            bus_edges.append(f"{e.src} {e.verb} {e.dst}")
+    if not bus_edges:
+        return []
+    if "messaging" in balance_lib._exceptions(m):
+        return []
+    shown = ", ".join(bus_edges[:6]) + (f", +{len(bus_edges) - 6} more" if len(bus_edges) > 6 else "")
+    return [f"{len(bus_edges)} emit/listen edge(s) touch a messaging dep ({shown}) but the "
+            "`messaging` catalog is empty — name the channels/queues (one row each: name, broker, "
+            "publishers, consumers, payload), or record the literal `messaging` under a "
+            "'Balance exceptions' extras heading"]
+
+
 def _check_states(m: ProjectModel) -> tuple[list[str], list[str]]:
     """State-machine well-formedness (row-local — safe per-fragment). Blocking: an empty `states`
     list (a machine with no states claims nothing), duplicate state names, a transition endpoint
@@ -1103,19 +1150,22 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
     A second aggregated nudge lists entities still carrying an UNSTRUCTURED store (notes-only);
     the literal `store` under 'Balance exceptions' silences that one."""
     warnings: list[str] = []
+    write_verbs = grammar.PERSIST_VERBS | grammar.WRITE_VERBS
     structured = [e for e in m.entities if e.store and e.store.dep]
     if structured:
-        write_verbs = grammar.PERSIST_VERBS | grammar.WRITE_VERBS
         deps_by_id = {d.id: d for d in m.deps}
         excepted = _recorded_ids(m, "persistence exceptions", ("C",))
         entities_of_dep: dict[str, set[str]] = {}
         for e in structured:
             entities_of_dep.setdefault(e.store.dep, set()).add(e.id)  # type: ignore[union-attr]
         writers_of_entity: dict[str, set[str]] = {}
+        writers_into_component: dict[str, set[str]] = {}  # C -> components with a write-family edge INTO it
         for ed in m.edges:
-            if ed.src.startswith("C") and ed.dst.startswith("E") \
-                    and ed.verb.strip().lower() in write_verbs:
-                writers_of_entity.setdefault(ed.dst, set()).add(ed.src)
+            if ed.src.startswith("C") and ed.verb.strip().lower() in write_verbs:
+                if ed.dst.startswith("E"):
+                    writers_of_entity.setdefault(ed.dst, set()).add(ed.src)
+                elif ed.dst.startswith("C"):
+                    writers_into_component.setdefault(ed.dst, set()).add(ed.src)
         seen_pairs: set[tuple[str, str]] = set()
         for ed in m.edges:
             verb = ed.verb.strip().lower()
@@ -1127,23 +1177,47 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
             if ed.src in excepted or (ed.src, ed.dst) in seen_pairs:
                 continue
             seen_pairs.add((ed.src, ed.dst))
-            explained = any(ed.src in writers_of_entity.get(eid, set())
-                            for eid in entities_of_dep.get(ed.dst, set()))
+            dep_owner_ids = {cid for eid in entities_of_dep.get(ed.dst, set())
+                            for cid in writers_of_entity.get(eid, set())}
+            # Explained when the writing component itself owns an entity stored in this dep, OR —
+            # the layered-architecture case a live rebuild false-positived on — when it is a store
+            # ADAPTER: some entity-owning service has a write-family edge INTO it (`C1 persists
+            # C30`, and C30 carries the physical `writes D1`). One hop, write-family only.
+            explained = (ed.src in dep_owner_ids
+                         or bool(dep_owner_ids & writers_into_component.get(ed.src, set())))
             if not explained:
                 warnings.append(
                     f"{ed.src} {verb} into {ed.dst} ({d.name}) but no entity both records {ed.dst} "
-                    f"as its store AND is written by {ed.src} — a real container may be missing "
-                    "from the domain model (the unmodeled-collection class); add the entity (with "
-                    f"its structured store), or record '{ed.src}: <why>' under a "
-                    "'Persistence exceptions' extras heading")
-    unstructured = [e.id for e in m.entities
-                    if e.store is not None and not e.store.dep and not e.store.mode]
-    if unstructured and "store" not in balance_lib._exceptions(m):
-        warnings.append(
-            f"{len(unstructured)} entity store(s) are unstructured (notes-only: "
-            f"{', '.join(unstructured[:8])}{', …' if len(unstructured) > 8 else ''}) — set "
-            "`store.dep`/`container`/`mode` so persistence is queryable, or record the literal "
-            "`store` under a 'Balance exceptions' extras heading")
+                    f"as its store AND is written by {ed.src} (directly, or through it as a store "
+                    "adapter) — a real container may be missing from the domain model (the "
+                    "unmodeled-collection class); add the entity (with its structured store), or "
+                    f"record '{ed.src}: <why>' under a 'Persistence exceptions' extras heading")
+    # Store-hygiene family (one aggregated nudge each; escape = the literal `store`, line-leading,
+    # under 'Balance exceptions'):
+    #  * notes-only stores (no dep, no mode) — fully unstructured;
+    #  * a CONTAINER named but no `dep` linked — the live-rebuild failure mode: the T5 agent ran
+    #    without the deps legend, wrote `dep: null` on every row, and the coverage rule above
+    #    (adoption-gated on `dep`) silently never engaged. Modes that legitimately have no dep
+    #    (embedded rides its parent; transient/in-code/enum live nowhere) are exempt.
+    if "store" not in balance_lib._exceptions(m):
+        unstructured = [e.id for e in m.entities
+                        if e.store is not None and not e.store.dep and not e.store.mode]
+        if unstructured:
+            warnings.append(
+                f"{len(unstructured)} entity store(s) are unstructured (notes-only: "
+                f"{', '.join(unstructured[:8])}{', …' if len(unstructured) > 8 else ''}) — set "
+                "`store.dep`/`container`/`mode` so persistence is queryable, or record the literal "
+                "`store` under a 'Balance exceptions' extras heading")
+        deplinkable = [e.id for e in m.entities
+                       if e.store is not None and not e.store.dep and e.store.container
+                       and e.store.mode in ("collection", "cache")]
+        if deplinkable:
+            warnings.append(
+                f"{len(deplinkable)} entity store(s) name a container but link no `dep` "
+                f"({', '.join(deplinkable[:8])}{', …' if len(deplinkable) > 8 else ''}) — the "
+                "persistence-coverage rule can't engage without the D-id; link `store.dep` to the "
+                "datastore dep (give the domain agent the deps legend, or backfill at synthesis), "
+                "or record the literal `store` under a 'Balance exceptions' extras heading")
     return warnings
 
 
@@ -1398,14 +1472,19 @@ def roleless_cd_verb_warnings(m: ProjectModel) -> list[str]:
     problems, which would FAIL the fragment lint and force an agent to rewrite a legitimately-generic
     verb (trap T7). Instead this rides the non-blocking channel — whole-map `validate` warnings and
     `lint_fragment_warnings`. Scoped strictly to C→D (a C→C / C→E generic `uses` is fine and would
-    otherwise flood)."""
+    otherwise flood). FOLDED framework/library deps are exempt: `uses` IS the honest verb for an
+    in-process framework (three live rebuilds justified exactly those firings instead of fixing
+    them — a nudge nobody ever acts on is noise)."""
+    folded = {d.id for d in m.deps
+              if grammar.classify_dep(d.kind or "", d.type) in grammar.DEP_KINDS_FOLDED}
     roleless = [f"{e.src} {e.verb} {e.dst}" for e in m.edges
-                if e.dst.startswith("D") and grammar.edge_role(e.verb) is None]
+                if e.dst.startswith("D") and e.dst not in folded
+                and grammar.edge_role(e.verb) is None]
     if not roleless:
         return []
     shown = ", ".join(roleless[:8]) + (f", +{len(roleless) - 8} more" if len(roleless) > 8 else "")
     return [f"{len(roleless)} C→D edge(s) name no role (generic verb): {shown} — use a role-revealing "
-            f"verb so the dependency's role is legible: publishes/emits (message bus), "
+            f"verb so the dependency's role is legible: publishes/emits/listens-to (message bus), "
             f"reads/writes/persists/queries (data store), calls (service)."]
 
 
@@ -1877,6 +1956,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     flow_problems, flow_warnings = _check_flows(m)
     problems.extend(flow_problems)
     warnings.extend(flow_warnings)
+    warnings.extend(subflow_refcount_warnings(m))
     warnings.extend(_granularity_warnings(m))
     warnings.extend(_completeness_warnings(m))
     problems.extend(_check_roles(m))
@@ -1913,6 +1993,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     msg_problems, msg_warnings = _check_messaging(m)
     problems.extend(msg_problems)
     warnings.extend(msg_warnings)
+    warnings.extend(_messaging_gap_warnings(m))
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)

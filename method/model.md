@@ -166,11 +166,16 @@ Semantics, stated on the fields:
   stated. This makes "what is persisted in <store>?" a query instead of a prose hunt, and powers
   the **persistence-coverage rule** (advisory, adoption-gated): once any entity structures its
   store, every write-family `C→D` edge into a datastore/messaging dep must be explained by an
-  entity that records that dep as its store AND is written by that component — an unexplained pair
-  is how real collections with no named type (locks, token stores, schema-hash docs) escape the
-  domain model. The operator's escape is the C id under a **"Persistence exceptions"** extras
-  heading (line-leading `Cn: <why>`); notes-only stores draw one aggregated "structure them"
-  nudge, silenced by the literal `store` under "Balance exceptions". Each structured store also
+  entity that records that dep as its store AND is written by that component — **directly, or
+  through it as a store ADAPTER** (one write-family hop: `C1 persists C30`, C30 carries the
+  physical `writes D1` — the layered-architecture shape a live rebuild false-positived on). An
+  unexplained pair is how real collections with no named type (locks, token stores, schema-hash
+  docs) escape the domain model. The operator's escape is the C id under a **"Persistence
+  exceptions"** extras heading (line-leading `Cn: <why>`); notes-only stores draw one aggregated
+  "structure them" nudge, and a named container in a dep-linkable mode (collection/cache) with no
+  `dep` draws its own (two of three live rebuilds shipped `dep: null` on every row — the T5 agent
+  needs the deps legend, or synthesis backfills) — both silenced by the literal `store`
+  (line-leading) under "Balance exceptions". Each structured store also
   joins the audit L2 skeptic worklist ("En is stored in Dn container 'x'", anchored at the
   entity's source).
 - **`messaging`** catalogs the async half of the system — one NAME-keyed row per channel / queue /
@@ -183,6 +188,10 @@ Semantics, stated on the fields:
   that is a folded framework/library. A channel with no consumers draws a dead-letter nudge. Each
   row joins the audit L2 skeptic worklist (verify the enqueue/consume sites name this channel).
   `kind` is seeded-open (`queue`/`topic`/`stream`/`pubsub`/`job-queue`; mint when none fits).
+  **The empty-catalog canary**: emit/listen-family `C→D` edges into a messaging- or
+  datastore-kind dep with an EMPTY catalog draw one aggregated advisory (three live rebuilds
+  shipped rich broker edges and zero rows); the escape is the literal `messaging` (line-leading)
+  under a "Balance exceptions" heading.
 - **`states`** (optional, on entities AND components) records a lifecycle the code actually
   implements — state names + transitions (`{src, dst, on}`) + a `source` anchoring the line that
   DECLARES them (an enum, status constants, a dispatch table). Entity lifecycles (a subscription's

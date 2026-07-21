@@ -12,7 +12,7 @@ from __future__ import annotations
 import tempfile
 from pathlib import Path
 
-from coyodex import grammar
+from coyodex import grammar, lint_fragment
 from coyodex.model import (
     Component,
     DeploymentRow,
@@ -211,6 +211,66 @@ def test_persistence_coverage_is_adoption_gated_fires_and_escapes() -> None:
     m.extras = [ExtraSection(heading="Persistence exceptions",
                              body="C1: lock rows only — infra, not domain")]
     assert not any("no entity both records" in w for w in warnings_of(m))
+
+
+def test_container_without_dep_is_nudged_and_exempt_modes_stay_quiet() -> None:
+    # Rebuild finding M-B5: two of three live rebuilds shipped `dep: null` on EVERY entity (the T5
+    # agent had no deps legend), silently disabling the coverage rule. A named container in a
+    # dep-linkable mode (collection/cache) with no dep now draws ONE aggregated nudge.
+    m = make_valid_model()
+    m.entities = [Entity(id="E1", name="A", meaning="x", source="src/a.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         store=Store(container="guilds", mode="collection")),
+                  Entity(id="E2", name="B", meaning="x", source="src/b.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         store=Store(container="users", mode="embedded"))]   # embedded: exempt
+    m.edges = [e for e in m.edges if not e.dst.startswith("E")]
+    ws = [w for w in warnings_of(m) if "link no `dep`" in w]
+    assert len(ws) == 1 and "1 entity store(s)" in ws[0] and "E1" in ws[0]
+    m.extras = [ExtraSection(heading="Balance exceptions", body="store: dual-mode, dep ambiguous")]
+    assert not any("link no `dep`" in w for w in warnings_of(m))
+
+
+def test_persistence_coverage_adapter_hop_explains_layered_writes() -> None:
+    # Rebuild finding: argus false positive — services own the entities, the ADAPTER carries the
+    # physical writes edge. One write-family hop through the adapter now explains the pair.
+    m = make_valid_model()
+    m.components.append(Component(id="C30", name="Store adapter", purpose="mongo adapter"))
+    m.entities[0].store = Store(dep="D1", container="orders", mode="collection")
+    m.edges = [Edge(src="C1", verb="persists", dst="E1", why="owns", where="src/v.py:5"),
+               Edge(src="C1", verb="persists", dst="C30", why="through adapter", where="src/v.py:6"),
+               Edge(src="C30", verb="writes", dst="D1", why="documents", where="src/a.py:9")]
+    assert not any("no entity both records" in w for w in warnings_of(m))
+    # remove the service→adapter edge: the hop breaks and the pair is unexplained again
+    m.edges = [e for e in m.edges if e.dst != "C30"]
+    assert any("C30 writes into D1" in w for w in warnings_of(m))
+
+
+def test_messaging_gap_canary_fires_and_escapes() -> None:
+    # Rebuild finding: three builds shipped `messaging: []` while their edges showed a bus in use.
+    m = make_valid_model()
+    m.deps.append(Dep(id="D2", name="Redis broker", kind="messaging", type="queue broker"))
+    m.edges.append(Edge(src="C1", verb="enqueues", dst="D2", why="jobs", where="src/v.py:8"))
+    m.edges.append(Edge(src="C1", verb="listens-to", dst="D2", why="jobs", where="src/v.py:9"))
+    ws = [w for w in warnings_of(m) if "`messaging` catalog is empty" in w]
+    assert len(ws) == 1 and "2 emit/listen edge(s)" in ws[0]
+    m.messaging = [MessagingRow(name="JOBS", kind="job-queue", broker="D2", publishers=["C1"],
+                                consumers=["C1"], source="src/q.py:1")]
+    assert not any("catalog is empty" in w for w in warnings_of(m))   # rows exist → quiet
+    m.messaging = []
+    m.extras = [ExtraSection(heading="Balance exceptions", body="messaging: no nameable channels")]
+    assert not any("catalog is empty" in w for w in warnings_of(m))   # adjudicated → quiet
+
+
+def test_roleless_nudge_exempts_folded_deps_and_knows_listen_verbs() -> None:
+    m = make_valid_model()
+    m.deps = [Dep(id="D1", name="FastAPI", kind="framework", type="web framework"),
+              Dep(id="D2", name="Redis broker", kind="messaging", type="queue broker")]
+    m.edges = [Edge(src="C1", verb="uses", dst="D1", why="serves", where="src/v.py:7"),      # folded
+               Edge(src="C1", verb="listens-to", dst="D2", why="jobs", where="src/v.py:8")]  # role verb
+    assert not any("name no role" in w for w in warnings_of(m))
+    m.edges.append(Edge(src="C1", verb="uses", dst="D2", why="jobs", where="src/v.py:9"))    # roleless
+    assert any("name no role" in w and "C1 uses D2" in w for w in warnings_of(m))
 
 
 def test_unstructured_stores_draw_one_aggregated_nudge_with_store_literal_escape() -> None:
@@ -696,8 +756,37 @@ def test_empty_flow_warns_under_band():
 def test_subflow_referenced_once_is_an_advisory():
     m = make_model_with_subflow()
     m.flows[1].steps = [FlowStep(n=1, src="R1", dst="C1", phrase="asks")]  # drop UC2's reference
-    assert any("referenced by 1 flow(s)" in w for w in warnings_of(m))
-    assert not any("referenced by" in w for w in warnings_of(make_model_with_subflow()))
+    assert any("referenced 1 time(s)" in w for w in warnings_of(m))
+    assert not any("referenced 1 time" in w for w in warnings_of(make_model_with_subflow()))
+
+
+def test_subflow_refcount_stays_off_the_blocking_fragment_channel():
+    # Rebuild finding M-B2: the refcount nudge is judgment-shaped AND per-fragment blind (the other
+    # reference may live in a sibling fragment) — it must ride lint's ADVISORY channel, never fail
+    # a fragment. Also: two references inside ONE flow count as reuse (steps, not distinct flows).
+    m = make_model_with_subflow()
+    m.flows[1].steps = [FlowStep(n=1, src="R1", dst="C1", phrase="asks")]  # SF1 now referenced once
+    assert not any("referenced" in p for p in lint_fragment.lint_fragment_problems(m, None))
+    assert any("referenced 1 time(s)" in w for w in lint_fragment.lint_fragment_warnings(m))
+    # two step-references in one flow = reuse → quiet (the old wording counted steps but said flows)
+    m2 = make_model_with_subflow()
+    m2.flows[1].steps = [FlowStep(n=1, src="C1", dst="C1", subflow="SF1"),
+                         FlowStep(n=2, src="C1", dst="C1", subflow="SF1")]
+    assert not any("referenced" in w for w in warnings_of(m2))
+
+
+def test_cross_fragment_subflow_ref_passes_lint_with_known_ids():
+    # Rebuild finding M-B3: a step may legitimately reference a SIBLING fragment's sub-flow; with
+    # an --ids universe that knows the SF id, the undefined-sub-flow problem must not fire (without
+    # one, an invented SF still dies in the authoring agent's turn).
+    m = make_valid_model()
+    m.flows[0].steps.append(FlowStep(n=2, src="C1", dst="C1", subflow="SF10"))
+    assert any("undefined sub-flow 'SF10'" in p
+               for p in lint_fragment.lint_fragment_problems(m, None))
+    assert not any("undefined sub-flow" in p
+                   for p in lint_fragment.lint_fragment_problems(m, None, {"SF10"}))
+    assert any("undefined sub-flow 'SF10'" in p
+               for p in lint_fragment.lint_fragment_problems(m, None, {"SF99"}))
 
 
 # --- granularity advisories (band, fused names, literal duplication) ----------------

@@ -407,6 +407,12 @@ WRITE_VERBS = frozenset("write writes wrote update updates updated create create
                         "record records add adds modify modifies increment decrement".split())
 EMIT_VERBS = frozenset("emit emits emitted publish publishes dispatch dispatches broadcast "
                        "broadcasts enqueue enqueues".split())
+# The CONSUMING side of a bus — `listens-to`/`subscribes`/`consumes` a broker. A separate family
+# (NOT added to EMIT_VERBS, whose membership is frozen for the C→E derivation above): consumed only
+# by `edge_role`, so a consumer edge reveals the messaging role instead of drawing the roleless
+# nudge (three live rebuilds justified-not-fixed exactly this — `C4 listens-to D8` is role-revealing).
+LISTEN_VERBS = frozenset("listen listens listens-to listened subscribe subscribes subscribed "
+                         "consume consumes consumed dequeue dequeues polls-from".split())
 ENCRYPT_VERBS = frozenset("encrypt encrypts encrypted decrypt decrypts".split())
 # A READ of a data store — `queries`/`fetches` map here, NOT to service: "queries the database" /
 # "fetches the record" are the standard way to describe a store read, so a `queries` edge on a SQL dep
@@ -424,7 +430,8 @@ GENERIC_VERBS = frozenset("uses use used integrates integrate integrated connect
 
 def edge_role(verb: str) -> str | None:
     """The ROLE a backbone edge's verb reveals: 'datastore' (persist/write/read families — a query IS a
-    read), 'messaging' (emit family), 'service' (call family ONLY), 'security' (encrypt family), or None
+    read), 'messaging' (emit + listen families — publishing AND consuming a bus both reveal it),
+    'service' (call family ONLY), 'security' (encrypt family), or None
     for a generic/roleless verb (`uses`/`connects`/…) or any unrecognized verb — the None case is what
     the C→D role nudge flags. A dependency's role SET is the union of its incoming C→D edges' roles
     (`dep_roles`), so a dual-role dep (Redis as bus + store) is captured by its two real verbs, not a
@@ -432,7 +439,7 @@ def edge_role(verb: str) -> str | None:
     v = (verb or "").strip().lower()
     if v in PERSIST_VERBS or v in WRITE_VERBS or v in READ_VERBS:
         return "datastore"
-    if v in EMIT_VERBS:
+    if v in EMIT_VERBS or v in LISTEN_VERBS:
         return "messaging"
     if v in CALL_VERBS:
         return "service"

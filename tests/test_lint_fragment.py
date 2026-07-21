@@ -172,6 +172,16 @@ def test_lint_kind_drift_nudge_fires_per_fragment_as_warning():
     assert not any("Entry-point coverage" in w for w in lint_fragment.lint_fragment_warnings(m))
 
 
+def test_fragment_subflow_title_alias_is_accepted():
+    # Rebuild finding M-B1: trace agents write `subflows[].title` by analogy with the flow shape —
+    # the fragment loader now aliases it to `name` instead of failing `unknown field`.
+    m = make_fragment({"subflows": [{"id": "SF1", "title": "Shared dispatch",
+                                     "steps": [{"n": 1, "src": "C1", "dst": "C2",
+                                                "phrase": "dispatches", "where": "src/a.py:3"}]}]})
+    assert m.subflows[0].name == "Shared dispatch"
+    assert not any("unknown field" in p for p in lint_fragment.lint_fragment_problems(m, None))
+
+
 def test_lint_extensionless_anchor_is_accepted():
     # A2: an extensionless ops file with a line is a valid anchor, so lint must not reject it.
     m = make_fragment({"deps": [{"id": "D1", "name": "img", "where_configured": "Dockerfile:1"}]})

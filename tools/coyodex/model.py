@@ -686,6 +686,22 @@ def _normalize_variants(data: object) -> None:
         row["variants"] = [{"env": v} if isinstance(v, str) else v for v in variants]
 
 
+def _normalize_subflow_title(data: object) -> None:
+    """Alias pre-pass: `Flow` names its display text `title`, `SubFlow` names it `name` — and five
+    trace agents in one live rebuild wrote `subflows[].title` by analogy with the flow shape they'd
+    just authored, each failing a lint round on `unknown field`. Accept `title` as an alias
+    (rewritten to `name` before `_build`; `name` stays canonical — renaming the field would break
+    the three maps rebuilt with it today). Applied by BOTH `load_model` and fragment loading."""
+    if not isinstance(data, dict):
+        return
+    subflows = data.get("subflows")
+    if not isinstance(subflows, list):
+        return
+    for row in subflows:
+        if isinstance(row, dict) and "title" in row and "name" not in row:
+            row["name"] = row.pop("title")
+
+
 def _reject_legacy_store(data: object) -> None:
     """The `entities[].store` retype (free string → Store object) is a HARD break, no coercion —
     but the generic `_build` error ("expected an object, got str") would leave the reader guessing.
@@ -723,6 +739,7 @@ def load_model(text: str) -> ProjectModel:
     if fmt != FORMAT:
         raise ModelError(f"format: expected '{FORMAT}', got {fmt!r}")
     _normalize_variants(data)
+    _normalize_subflow_title(data)
     _reject_legacy_store(data)
     m = _build(data, ProjectModel, "$")
     for attr, prefix in ID_ARRAYS.items():

@@ -51,6 +51,15 @@ def test_dep_roles_unions_incoming_verbs():
     assert dep_roles(["publishes", "writes"]) == {"messaging", "datastore"}
 
 
+def test_listen_family_reveals_the_messaging_role():
+    # Rebuild finding: `C4 listens-to D8` was the most-repeated justified-not-fixed roleless
+    # warning (11 firings in one build) — consuming a bus reveals its role as much as publishing.
+    assert edge_role("listens-to") == "messaging"
+    assert edge_role("subscribes") == "messaging"
+    assert edge_role("consumes") == "messaging"
+    assert dep_roles(["listens-to", "writes"]) == {"messaging", "datastore"}
+
+
 def test_dep_roles_drops_roleless_and_empty_is_empty():
     assert dep_roles(["uses", "reads"]) == {"datastore"}   # the generic verb contributes nothing
     assert dep_roles([]) == set()                           # no C→D edges → no role tag

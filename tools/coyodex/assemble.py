@@ -34,6 +34,7 @@ from coyodex.model import (
     ModelError,
     ProjectModel,
     _build,
+    _normalize_subflow_title,
     remap_element_ids,
     to_canonical_json,
 )
@@ -129,6 +130,8 @@ def load_fragment(text: str, label: str) -> ProjectModel:
     data.setdefault("format", FORMAT)
     if data["format"] != FORMAT:
         raise ModelError(f"{label}: format: expected '{FORMAT}', got {data['format']!r}")
+    _normalize_subflow_title(data)  # `subflows[].title` alias — the shape agents guess by analogy
+    # with Flow; five identical lint failures in one live rebuild (see model._normalize_subflow_title)
     m = _build(data, ProjectModel, label)
     for attr, prefix in ID_ARRAYS.items():
         for i, el in enumerate(getattr(m, attr)):

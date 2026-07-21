@@ -33,6 +33,7 @@ from coyodex.validate_model import (
     check_domain_relations,
     check_entity_sources_model,
     roleless_cd_verb_warnings,
+    subflow_refcount_warnings,
 )
 
 # id-SHAPED but unknown-prefix tokens ('SEC1') can never resolve — catchable per-fragment, unlike a
@@ -104,7 +105,8 @@ def lint_unknown_references(m: ProjectModel, known_ids: set[str]) -> list[str]:
     return out
 
 
-def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]:
+def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
+                           known_ids: set[str] | None = None) -> list[str]:
     """Every non-schema problem in one (partial) fragment: anchor format + `extra`-key conventions +
     the domain-relation rules (`keyed_by` misuse, verb alias, cardinality, dup) + the per-edge rules
     (missing/contradictory `where`, empty verb, intra-fragment dup), plus — when a repo root is given
@@ -132,6 +134,15 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
     # agent's own turn, not a phase later at the lead's `validate`. Safe on a partial fragment: the
     # actor-id check self-disables when the fragment defines no roles. Warnings promoted, like edges'.
     flow_problems, flow_warnings = _check_flows(m)
+    # A step referencing a sub-flow DEFINED IN A SIBLING FRAGMENT is legal (per-agent SF id ranges
+    # make collisions impossible; the map assembles whole) — but this fragment can't see it, so the
+    # undefined-sub-flow problem false-fires. With an `--ids` universe that KNOWS the SF id, drop
+    # that problem; without one, it stands (an invented SF must still die here). A live rebuild
+    # duplicated a shared trace inline because this filter didn't exist.
+    if known_ids:
+        flow_problems = [p for p in flow_problems
+                         if not (( mo := re.search(r"references undefined sub-flow '(SF\d+)'", p))
+                                 and mo.group(1) in known_ids)]
     problems += flow_problems + flow_warnings
     problems += _check_reference_shapes(m)
     if repo_root is not None:
@@ -161,8 +172,11 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     # COVERAGE contract and the missing-cadence family do not (each relates the whole T4 inventory
     # to an extras heading another fragment may carry — vacuous per-fragment, like
     # `_completeness_warnings`).
+    # The sub-flow refcount nudge rides here too — it is judgment-shaped AND per-fragment blind
+    # (the other reference may live in a sibling fragment); promoting it to blocking made a live
+    # rebuild inline three legitimate sub-flows and ship a fragment its author believed had passed.
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
-            + _check_entry_kinds(m) + _cadence_row_warnings(m))
+            + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -192,12 +206,18 @@ def main(argv: list[str] | None = None) -> int:
         elif a == "--ids":
             i += 1
             if i >= len(argv) or not Path(argv[i]).exists():
-                print("ERROR: --ids needs an existing legend/map file", file=sys.stderr)
+                print("ERROR: --ids needs an existing legend/map file (or a directory of fragments)",
+                      file=sys.stderr)
                 return 2
             # any format works: the universe is every id-shaped token in the file (a markdown legend,
-            # the assembled map, or a plain id list all read the same way)
-            known_ids = {t for t in re.findall(r"\b[A-Z]+\d+\b",
-                                               Path(argv[i]).read_text(encoding="utf-8"))
+            # the assembled map, or a plain id list all read the same way). A DIRECTORY scans its
+            # *.json/*.md files — pass `build-fragments/` so ids DEFINED by sibling fragments (a
+            # trace agent's SF the legend predates) resolve instead of forcing inline duplication.
+            ids_path = Path(argv[i])
+            sources = (sorted([*ids_path.glob("*.json"), *ids_path.glob("*.md")])
+                       if ids_path.is_dir() else [ids_path])
+            known_ids = {t for src in sources
+                         for t in re.findall(r"\b[A-Z]+\d+\b", src.read_text(encoding="utf-8"))
                          if ID_SHAPE.match(t)}
         elif a.startswith("-"):
             print(f"ERROR: unknown option '{a}'", file=sys.stderr)
@@ -220,7 +240,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{p.name}: SCHEMA — {e}", file=sys.stderr)
             clean = False
             continue
-        problems = lint_fragment_problems(m, repo_root)
+        problems = lint_fragment_problems(m, repo_root, known_ids)
         if known_ids is not None:
             problems += lint_unknown_references(m, known_ids)
         if problems:

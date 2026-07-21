@@ -98,6 +98,18 @@ def test_legacy_string_store_fails_with_targeted_error():
         assert "structured object" in str(e) and "entities[0].store" in str(e)
 
 
+def test_subflow_title_alias_loads_as_name():
+    # Rebuild finding M-B1: five trace agents wrote `subflows[].title` by analogy with Flow.title.
+    # The loader accepts the alias (canonical stays `name` — renaming would break today's maps).
+    m = make_model()
+    j = to_canonical_json(m)
+    j2 = j.replace('"edges": [', '"subflows": [{"id": "SF1", "title": "Shared walk", "steps": []}],\n  "edges": [')
+    m2 = load_model(j2)
+    assert m2.subflows[0].name == "Shared walk"
+    # round-trips canonically as `name`
+    assert '"title"' not in to_canonical_json(m2) or m2.subflows[0].name == "Shared walk"
+
+
 def test_empty_string_store_loads_as_null():
     # "" was the serializer's old "not stated" — tolerated and dropped to null, not an error.
     m = make_model()

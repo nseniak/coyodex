@@ -172,7 +172,9 @@ def _exceptions(m: ProjectModel) -> set[str]:
     enumerated-but-nothing-links advisory (code that truly runs as one unit); the literal `cadence`
     silences the self-activated-entry-points-record-no-cadence advisory (loops that are all
     genuinely continuous / caller-shaped); the literal `store` silences the unstructured-entity-
-    stores advisory (a map deliberately keeping notes-only stores). `cadence` and `store` are
+    stores advisory (a map deliberately keeping notes-only stores); the literal `messaging`
+    silences the bus-edges-but-empty-catalog canary (a bus used only through an abstraction with
+    no nameable channels). `cadence`, `store` and `messaging` are
     ordinary prose words, so unlike the other tokens they record LINE-LEADING + separator only
     (`cadence: <why>`) — a sentence merely using the word never silences. All consumed only as
     skip-sets, so the families can't cross-silence anything. Without a machine-readable escape a
@@ -186,7 +188,7 @@ def _exceptions(m: ProjectModel) -> set[str]:
         # silently disable a whole advisory family (adversarial-review finding #2). They record
         # LINE-LEADING + separator only, the `_RECORD_LINE` discipline: `cadence: <why>`.
         for line in body.splitlines():
-            hit = re.match(r"^\s*(?:[-*]\s+)?\**\s*(cadence|store)\**\s*[:(—–-]", line)
+            hit = re.match(r"^\s*(?:[-*]\s+)?\**\s*(cadence|store|messaging)\**\s*[:(—–-]", line)
             if hit:
                 out.add(hit.group(1))
     return out
