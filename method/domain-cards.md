@@ -26,7 +26,7 @@ One card per entity. The heading **defines** the `E` id (like `**HP1 — …**` 
 labeled lines carry the rest:
 
 ```
-**E<n> — <Name>** *(<stored where>)*
+**E<n> — <Name>** *(<rendered store>)*
 SUBDOMAIN: <SD-id>                        ← optional; the one subdomain the entity belongs to
 MEANING: <one-line meaning>
 FIELDS: <field> · <field> · …            ← inline, OR a bullet list (see FIELDS)
@@ -36,12 +36,18 @@ SOURCE: [<file>](<path>:<line>)
 
 | Part | Required | Holds | Parses to |
 |---|---|---|---|
-| heading `**En — Name** *(store)*` | yes | id, display name, store | node id / name + `fields.Stored` |
+| heading `**En — Name** *(store)*` | yes | id, display name, rendered store | node id / name + `fields.Stored` |
 | `SUBDOMAIN:` | no | one `SD` id (the entity's subdomain) | `node.parent` |
 | `MEANING:` | yes | one-line gloss | `fields.Meaning` |
 | `FIELDS:` | yes | attribute list | `node.attrs` |
 | `RELATIONS:` | no | typed `E→E` edges | `edges` (carry `card` + `kind`) |
 | `SOURCE:` | yes | `[text](path:line)` | `node.file` / `node.line` |
+
+> **The store is STRUCTURED in the model** (`store: {dep, container, mode, notes}` — see
+> [the map model](model.md), `entities[].store`): the heading parens carry its one RENDERED form,
+> `D1.guilds — collection; 30-day TTL` (dep.container — mode; notes), degrading gracefully when
+> parts are unstated. Authoring agents write the structured object in the fragment; the card view
+> only displays it.
 
 > **`SUBDOMAIN:` groups the entity** into a bounded context (`SD`) — the domain-model analog of a
 > component's `subsystem` field, single-sourced on the child. It is **optional and additive**: omit
@@ -290,6 +296,10 @@ The validator (when domain cards are implemented — see "Implementation status"
 - `MEANING` and `SOURCE` present (the `SOURCE` anchor drives the confidence label).
 - the relation verb is the canonical one for its kind (aliases rejected — see the verb table).
 - no raw `|` inside a card line.
+- the structured `store`: `store.dep` is a D-id resolving to a real (non-folded) dep; `store.mode`
+  is in the closed vocabulary (`collection`/`embedded`/`transient`/`cache`/`in-code`/`enum`). The
+  persistence-coverage rule (advisory, adoption-gated) and the "Persistence exceptions" escape are
+  specified in [the map model](model.md), `entities[].store`.
 
 It also emits a **non-blocking warning** (printed, but the build still passes) for a completeness
 gap: an **association** that no field backs (no `FK→`/typed field on either side) **and** has no
@@ -331,13 +341,16 @@ validates clean and the Domain `classDiagram` renders with a working click-bridg
 browser: clicking a class shows its fields + source, clicking a relation shows its kind +
 cardinality).
 
-1. **`tools/coyodex/model.py`** — `Entity` / `EntityField` / `EntityRelation` are the model's own
-   typed fields (`fields`, `relations`), not a parsed card; `grammar.py` holds the shared relation
-   vocabulary (`REL_KIND`, the backing resolver `resolve_backing` + `fk_targets`, token-exact `FK→`
-   matching).
+1. **`tools/coyodex/model.py`** — `Entity` / `EntityField` / `EntityRelation` / `Store` are the
+   model's own typed fields (`fields`, `relations`, `store`), not a parsed card; `grammar.py` holds
+   the shared relation vocabulary (`REL_KIND`, the backing resolver `resolve_backing` +
+   `fk_targets`, token-exact `FK→` matching) and the closed `STORE_MODES`.
 2. **`tools/coyodex/validate_model.py`** — `_check_domain_cards` (MEANING/SOURCE/FIELDS present, every
    field typed, every relation well-formed, single-side); plus a non-blocking warning for a
-   field-less, note-less association. Card ids ride the generic duplicate/undefined-reference checks.
+   field-less, note-less association. Card ids ride the generic duplicate/undefined-reference
+   checks; `_check_stores` (shape/mode/folded-dep) and `_persistence_coverage_warnings` (the
+   adoption-gated coverage advisory) guard the structured store; `views._store_str` is the one
+   store renderer (card parens + entity pane).
 3. **`tools/coyodex/views.py`** — `model_to_graph` builds each entity's `Node.attrs` and each
    relation's `Edge.kind` / `src_card` / `dst_card` straight from the model, resolving each
    relation's backing field into `Edge.fk_field` / `Edge.fk_side` and carrying the `{how}` note as

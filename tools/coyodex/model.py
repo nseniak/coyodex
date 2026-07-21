@@ -189,10 +189,26 @@ class EntityRelation:
 
 
 @dataclass
+class Store:
+    """WHERE an entity physically lives — structured so "what is persisted in <datastore>?" is a
+    query, not a prose hunt (live maps wrote `"mdb: guilds (+ redis cache)"` free text: unqueryable,
+    typo-prone, and real collections with no domain type escaped the entity net entirely)."""
+    dep: str | None = None           # Dn — the physical datastore/messaging dep holding it; None
+                                     # for a store with no dep (in-memory, in-code registry)
+    container: str = ""              # the compartment inside the dep: collection / table / key
+                                     # prefix / bucket / file name
+    mode: str = ""                   # grammar.STORE_MODES (collection/embedded/transient/cache/
+                                     # in-code/enum) — closed, exact-match; "" = unstated
+    notes: str = ""                  # what the shape can't say: TTL, cache tiers, compression
+
+
+@dataclass
 class Entity:                        # a T5 domain card
     id: str
     name: str
-    store: str = ""
+    store: Store | None = None       # None = not persisted / not stated. HARD retype (no legacy
+                                     # string form): a map authored with `store: "<prose>"` fails
+                                     # to load with a targeted error — rebuild or migrate.
     meaning: str = ""
     subdomain: str | None = None
     source: str | None = None        # path:line anchoring the real named type
@@ -484,6 +500,8 @@ def remap_element_ids(m: ProjectModel, remap: dict[str, str]) -> None:
     for en in m.entities:
         if en.subdomain:
             en.subdomain = r(en.subdomain)
+        if en.store and en.store.dep:
+            en.store.dep = r(en.store.dep)
         for rel in en.relations:
             if rel.target:
                 rel.target = r(rel.target)
@@ -619,6 +637,30 @@ def _normalize_variants(data: object) -> None:
         row["variants"] = [{"env": v} if isinstance(v, str) else v for v in variants]
 
 
+def _reject_legacy_store(data: object) -> None:
+    """The `entities[].store` retype (free string → Store object) is a HARD break, no coercion —
+    but the generic `_build` error ("expected an object, got str") would leave the reader guessing.
+    Raise a targeted message instead, so a pre-retype map says exactly what happened and what to do.
+    (Empty string is tolerated as "not stated" → dropped to null, since serializers never emitted a
+    meaningful `""`.)"""
+    if not isinstance(data, dict):
+        return
+    entities = data.get("entities")
+    if not isinstance(entities, list):
+        return
+    for i, row in enumerate(entities):
+        if not isinstance(row, dict):
+            continue
+        store = row.get("store")
+        if store == "":
+            row["store"] = None
+        elif isinstance(store, str):
+            raise ModelError(
+                f"$.entities[{i}].store: '{store}' — `store` is now a structured object "
+                '({"dep": "Dn", "container": "...", "mode": "...", "notes": "..."}), not free '
+                "text. Rebuild the map with the current method, or migrate the row.")
+
+
 def load_model(text: str) -> ProjectModel:
     """Parse + structurally validate a project-map.json document. Raises ModelError on any shape
     violation (bad JSON, wrong type, unknown field, missing required field, wrong id prefix)."""
@@ -632,6 +674,7 @@ def load_model(text: str) -> ProjectModel:
     if fmt != FORMAT:
         raise ModelError(f"format: expected '{FORMAT}', got {fmt!r}")
     _normalize_variants(data)
+    _reject_legacy_store(data)
     m = _build(data, ProjectModel, "$")
     for attr, prefix in ID_ARRAYS.items():
         for i, el in enumerate(getattr(m, attr)):

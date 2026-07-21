@@ -75,7 +75,11 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
 
 
   "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "source", "confidence" } ],
-  "entities":    [ { "id": "En",  "name", "store", "meaning", "subdomain": "SDn|null",
+  "entities":    [ { "id": "En",  "name",
+                     "store": { "dep": "Dn|null", "container": "<collection/table/bucket>",
+                                "mode": "<collection|embedded|transient|cache|in-code|enum|''>",
+                                "notes": "<TTL, cache tiers, …>" } /* or null = not persisted/stated */,
+                     "meaning", "subdomain": "SDn|null",
                      "source": "<path:line|null>",
                      "fields":    [ { "name", "type", "markers": ["PK", "FK→En", "[]", …] } ],
                      "relations": [ { "verb", "target": "En", "src_card", "dst_card",
@@ -145,6 +149,22 @@ Semantics, stated on the fields:
   existence-checked under `--check-sources` and joins the audit L2 skeptic worklist (schedules are
   config-tuned and drift silently). A self-activated EP with no cadence draws an aggregated
   advisory; the escape is the literal `cadence` under a **"Balance exceptions"** heading.
+- **`entities[].store`** is a STRUCTURED object (never free text — the pre-retype prose form fails
+  to load with a targeted error): `dep` names the physical datastore/messaging dep (a D-id, so it
+  resolves and remaps like any reference), `container` the compartment inside it (collection /
+  table / key prefix / bucket / file), `mode` the closed relation vocabulary
+  (`collection`/`embedded`/`transient`/`cache`/`in-code`/`enum` — exact match, `validate` blocks a
+  near-miss), `notes` what the shape can't say (TTL, cache tiers). `null` = not persisted / not
+  stated. This makes "what is persisted in <store>?" a query instead of a prose hunt, and powers
+  the **persistence-coverage rule** (advisory, adoption-gated): once any entity structures its
+  store, every write-family `C→D` edge into a datastore/messaging dep must be explained by an
+  entity that records that dep as its store AND is written by that component — an unexplained pair
+  is how real collections with no named type (locks, token stores, schema-hash docs) escape the
+  domain model. The operator's escape is the C id under a **"Persistence exceptions"** extras
+  heading (line-leading `Cn: <why>`); notes-only stores draw one aggregated "structure them"
+  nudge, silenced by the literal `store` under "Balance exceptions". Each structured store also
+  joins the audit L2 skeptic worklist ("En is stored in Dn container 'x'", anchored at the
+  entity's source).
 - **`subsystems[].tech`** is ONE honest stack label per subsystem ("Python/FastAPI", "Go",
   "Elixir") read off the manifests, with `tech_source` anchoring the manifest line that proves it
   (go.mod, package.json, pyproject.toml) — not a stack essay, and never inferred from vibes. Live
@@ -169,10 +189,12 @@ Semantics, stated on the fields:
   These two read ids from **line-leading tokens only, one id per line, followed by a separator**
   — write `C713: <why>` / `- R4: <why>` (an `UC15 (name) — why` form also reads) — so prose that
   merely mentions another id, or a sentence that starts with one, never silences it. A pair form
-  (`C713 & C714: <why>`) records only the first id — give each its own line. A fifth machine-read
-  heading, **"Entry-point coverage"**, carries the per-kind T4 completeness contract (`<kind>:
+  (`C713 & C714: <why>`) records only the first id — give each its own line. Two more machine-read
+  headings: **"Entry-point coverage"** carries the per-kind T4 completeness contract (`<kind>:
   complete|sampled|partial — <how>`, line-leading kind + separator — see the `entry_points[].kind`
-  bullet above). All five headings are machine-read by `validate`,
+  bullet above), and **"Persistence exceptions"** (`Cn: <why>` lines) adjudicates a write-family
+  `C→D` edge no entity's structured store explains (see the `entities[].store` bullet below). All
+  six headings are machine-read by `validate`,
   so an adjudicated advisory goes quiet instead of re-firing forever.
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).
   Duplicated authored rows are preserved as authored (the graph views de-duplicate by

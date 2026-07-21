@@ -2682,7 +2682,12 @@
     {
       "id": "E1",
       "name": "Organization",
-      "store": "Mongo `organizations` / file `config/`",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "Mongo `organizations` / file `config/`"
+      },
       "meaning": "A tenant — the top-level isolation boundary everything is scoped to.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/ports/organization_repository.py:15",
@@ -2748,7 +2753,12 @@
     {
       "id": "E2",
       "name": "Subscription",
-      "store": "embedded in Organization",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in Organization"
+      },
       "meaning": "The org's billing plan, held separately so future billing fields don't bloat Organization.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/subscription.py:19",
@@ -2774,7 +2784,12 @@
     {
       "id": "E12",
       "name": "PlanName",
-      "store": "enum, embedded",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "enum, embedded"
+      },
       "meaning": "Enumerated plan tier.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/subscription.py:14",
@@ -2795,7 +2810,12 @@
     {
       "id": "E3",
       "name": "Membership",
-      "store": "Mongo `memberships` / file",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "Mongo `memberships` / file"
+      },
       "meaning": "A human user's seat in one org, carrying their role name.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/ports/organization_repository.py:32",
@@ -2849,7 +2869,12 @@
     {
       "id": "E4",
       "name": "SettingsConfig",
-      "store": "Mongo `settings` per-org / `config/settings.json`",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "Mongo `settings` per-org / `config/settings.json`"
+      },
       "meaning": "The per-org policy config root — upstream options, roles, and user→role assignments.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:77",
@@ -2909,7 +2934,12 @@
     {
       "id": "E5",
       "name": "RoleDefinition",
-      "store": "embedded in SettingsConfig.roles",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in SettingsConfig.roles"
+      },
       "meaning": "A named role: admin/default flags plus its access settings.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:47",
@@ -2945,7 +2975,12 @@
     {
       "id": "E6",
       "name": "UserDefinition",
-      "store": "embedded in SettingsConfig.users",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in SettingsConfig.users"
+      },
       "meaning": "A user's role assignment inside the policy config.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:53",
@@ -2973,7 +3008,12 @@
     {
       "id": "E7",
       "name": "RoleSettings",
-      "store": "embedded in RoleDefinition",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in RoleDefinition"
+      },
       "meaning": "The access controls attached to a role: which MCPs and tools it may use.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:34",
@@ -3036,7 +3076,12 @@
     {
       "id": "E8",
       "name": "McpAccessConfig",
-      "store": "embedded in RoleSettings",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in RoleSettings"
+      },
       "meaning": "Auto-enable flag plus a per-MCP allow/deny map.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:13",
@@ -3057,7 +3102,12 @@
     {
       "id": "E9",
       "name": "ToolAccessConfig",
-      "store": "embedded in RoleSettings.tool_access",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in RoleSettings.tool_access"
+      },
       "meaning": "Per-upstream tool allow/deny: category defaults, per-tool overrides, fallback.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:20",
@@ -3085,7 +3135,12 @@
     {
       "id": "E11",
       "name": "ArgumentConstraint",
-      "store": "embedded in RoleSettings.argument_constraints",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in RoleSettings.argument_constraints"
+      },
       "meaning": "A regex allow/forbid rule on a tool argument.",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:8",
@@ -3106,7 +3161,12 @@
     {
       "id": "E13",
       "name": "UpstreamOptions",
-      "store": "embedded in SettingsConfig.upstreams",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in SettingsConfig.upstreams"
+      },
       "meaning": "Per-upstream display/auth options in the policy config (parallel to the runtime def).",
       "subdomain": "SD1",
       "source": "backend/src/mcpolis/domain/model/settings.py:57",
@@ -3153,7 +3213,12 @@
     {
       "id": "E10",
       "name": "UpstreamDefinition",
-      "store": "Mongo `upstreams` / `mcp.json`, per-org",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "Mongo `upstreams` / `mcp.json`, per-org"
+      },
       "meaning": "A registered backend MCP server — transport choice, its config, and auth.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/upstream.py:84",
@@ -3242,7 +3307,12 @@
     {
       "id": "E15",
       "name": "TransportType",
-      "store": "enum, embedded",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "enum, embedded"
+      },
       "meaning": "How the gateway talks to an upstream: stdio sandbox or streamable HTTP.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/upstream.py:11",
@@ -3263,7 +3333,12 @@
     {
       "id": "E18",
       "name": "StdioTransportConfig",
-      "store": "embedded in UpstreamDefinition",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in UpstreamDefinition"
+      },
       "meaning": "Launch config for a sandboxed stdio MCP: command, args, env, sandbox sizing.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/upstream.py:45",
@@ -3325,7 +3400,12 @@
     {
       "id": "E19",
       "name": "HttpTransportConfig",
-      "store": "embedded in UpstreamDefinition",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in UpstreamDefinition"
+      },
       "meaning": "Connection config for a remote HTTP MCP: URL and static headers.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/upstream.py:79",
@@ -3346,7 +3426,12 @@
     {
       "id": "E20",
       "name": "UpstreamAuthConfig",
-      "store": "embedded in UpstreamDefinition",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in UpstreamDefinition"
+      },
       "meaning": "How the upstream authenticates: service-account token or OAuth (admin / per-user).",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/policy.py:14",
@@ -3407,7 +3492,12 @@
     {
       "id": "E21",
       "name": "AuthMode",
-      "store": "enum, embedded",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "enum, embedded"
+      },
       "meaning": "The upstream auth strategy.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/policy.py:8",
@@ -3433,7 +3523,12 @@
     {
       "id": "E25",
       "name": "OAuthAppEntry",
-      "store": "`oauth_apps.json`, keyed by domain",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "`oauth_apps.json`, keyed by domain"
+      },
       "meaning": "Pre-registered OAuth client credentials for an upstream domain.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/settings.py:68",
@@ -3454,7 +3549,12 @@
     {
       "id": "E33",
       "name": "UpstreamSelfDescription",
-      "store": "in-memory, captured at connect",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "in-memory, captured at connect"
+      },
       "meaning": "Free-form text an upstream advertises at initialize, folded into the gateway's own initialize.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/upstream.py:111",
@@ -3511,7 +3611,12 @@
     {
       "id": "E34",
       "name": "ServerInfo",
-      "store": "in-memory, from InitializeResult",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "in-memory, from InitializeResult"
+      },
       "meaning": "An upstream's reported server name/version/title.",
       "subdomain": "SD2",
       "source": "backend/src/mcpolis/domain/model/upstream.py:105",
@@ -3539,7 +3644,12 @@
     {
       "id": "E16",
       "name": "ServiceTokenRecord",
-      "store": "Mongo `service_tokens` / file registry",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "Mongo `service_tokens` / file registry"
+      },
       "meaning": "A headless bearer credential pinned to one org and role; only the sha256 hash is stored.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/domain/model/service_token.py:35",
@@ -3612,7 +3722,12 @@
     {
       "id": "E17",
       "name": "OAuthToken",
-      "store": "ConnectionStore — Mongo per-org / file",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "ConnectionStore — Mongo per-org / file"
+      },
       "meaning": "A stored OAuth credential for an upstream (admin or per-user) with refresh bookkeeping.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/adapters/repositories/connection_store.py:9",
@@ -3673,7 +3788,12 @@
     {
       "id": "E22",
       "name": "TemplateVarSummary",
-      "store": "TemplateVarRepository — Mongo encrypted / file",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "TemplateVarRepository — Mongo encrypted / file"
+      },
       "meaning": "A per-MCP `${NAME}` variable (secret or plain) substituted into upstream config at launch.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/domain/model/template_var.py:66",
@@ -3730,7 +3850,12 @@
     {
       "id": "E23",
       "name": "SandboxFile",
-      "store": "Mongo encrypted / file, keyed by org+upstream",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "Mongo encrypted / file, keyed by org+upstream"
+      },
       "meaning": "A per-MCP uploaded credential/config file the launcher writes into the sandbox before exec.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/domain/model/sandbox_file.py:73",
@@ -3802,7 +3927,12 @@
     {
       "id": "E24",
       "name": "SandboxFileSummary",
-      "store": "view DTO — never persisted with contents",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "view DTO — never persisted with contents"
+      },
       "meaning": "Metadata-only view of a SandboxFile (no contents) for the dashboard.",
       "subdomain": "SD3",
       "source": "backend/src/mcpolis/domain/model/sandbox_file.py:146",
@@ -3848,7 +3978,12 @@
     {
       "id": "E26",
       "name": "ToolCatalogSnapshot",
-      "store": "ToolCatalogRepository — Mongo / file",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "ToolCatalogRepository — Mongo / file"
+      },
       "meaning": "Cached per-upstream catalog of tools/resources/prompts so the admin UI renders without a reconnect.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/ports/tool_catalog_repository.py:15",
@@ -3933,7 +4068,12 @@
     {
       "id": "E27",
       "name": "DiscoveredTool",
-      "store": "embedded in ToolCatalogSnapshot.tools",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in ToolCatalogSnapshot.tools"
+      },
       "meaning": "One tool advertised by an upstream, with its prefixed gateway name and schema.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/model/upstream.py:161",
@@ -4011,7 +4151,12 @@
     {
       "id": "E31",
       "name": "ToolAnnotations",
-      "store": "embedded in DiscoveredTool",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in DiscoveredTool"
+      },
       "meaning": "MCP behavior hints (readOnly/destructive/idempotent/openWorld) used in policy matching.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/model/upstream.py:140",
@@ -4057,7 +4202,12 @@
     {
       "id": "E28",
       "name": "DiscoveredResource",
-      "store": "embedded in ToolCatalogSnapshot.resources",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in ToolCatalogSnapshot.resources"
+      },
       "meaning": "One resource advertised by an upstream.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/model/upstream.py:179",
@@ -4113,7 +4263,12 @@
     {
       "id": "E29",
       "name": "DiscoveredResourceTemplate",
-      "store": "embedded in ToolCatalogSnapshot.resource_templates",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in ToolCatalogSnapshot.resource_templates"
+      },
       "meaning": "One RFC 6570 resource template advertised by an upstream.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/model/upstream.py:197",
@@ -4169,7 +4324,12 @@
     {
       "id": "E30",
       "name": "DiscoveredPrompt",
-      "store": "embedded in ToolCatalogSnapshot.prompts",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in ToolCatalogSnapshot.prompts"
+      },
       "meaning": "One prompt template advertised by an upstream, with its arguments.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/model/upstream.py:221",
@@ -4235,7 +4395,12 @@
     {
       "id": "E32",
       "name": "PromptArgument",
-      "store": "embedded in DiscoveredPrompt.arguments",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "embedded in DiscoveredPrompt.arguments"
+      },
       "meaning": "One declared argument of a discovered prompt.",
       "subdomain": "SD4",
       "source": "backend/src/mcpolis/domain/model/upstream.py:215",
@@ -4265,7 +4430,12 @@
     {
       "id": "E35",
       "name": "AuditEntry",
-      "store": "Mongo `audit` / file audit log, per-org",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "Mongo `audit` / file audit log, per-org"
+      },
       "meaning": "One audited gateway action — what tool was called and whether policy allowed it (never argument values).",
       "subdomain": "SD5",
       "source": "backend/src/mcpolis/domain/model/audit.py:8",
@@ -4391,7 +4561,12 @@
     {
       "id": "E36",
       "name": "Event",
-      "store": "in-memory realtime bus; not persisted",
+      "store": {
+        "dep": null,
+        "container": "",
+        "mode": "",
+        "notes": "in-memory realtime bus; not persisted"
+      },
       "meaning": "A typed message on the realtime bus, targeted at one user email or broadcast.",
       "subdomain": "SD5",
       "source": "backend/src/mcpolis/domain/model/events.py:9",

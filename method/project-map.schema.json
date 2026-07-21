@@ -577,7 +577,7 @@
           "type": "string"
         },
         "store": {
-          "type": "string"
+          "$ref": "#/$defs/Store"
         },
         "meaning": {
           "type": "string"
@@ -614,6 +614,42 @@
         "id",
         "name"
       ],
+      "additionalProperties": false
+    },
+    "Store": {
+      "type": "object",
+      "properties": {
+        "dep": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^D\\d+$",
+          "description": "the physical datastore/messaging dep holding this entity (a D-id); null for a store with no dep (in-memory, in-code registry)."
+        },
+        "container": {
+          "type": "string",
+          "description": "the compartment inside the dep: collection / table / key prefix / bucket / file name."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "collection",
+            "embedded",
+            "transient",
+            "cache",
+            "in-code",
+            "enum",
+            ""
+          ],
+          "description": "how the entity relates to its store \u2014 closed vocabulary, exact match: collection (own compartment) / embedded (inside a parent's row) / transient / cache / in-code / enum; '' = unstated."
+        },
+        "notes": {
+          "type": "string",
+          "description": "what the shape can't say: TTL, cache tiers, compression."
+        }
+      },
+      "required": [],
       "additionalProperties": false
     },
     "EntityField": {

@@ -212,6 +212,8 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     for en in m.entities:
         if en.subdomain:
             refs.add(en.subdomain)
+        if en.store and en.store.dep:
+            refs.add(en.store.dep)                     # the physical datastore dep holding it
         for r in en.relations:
             if r.target:
                 refs.add(r.target)
@@ -930,6 +932,91 @@ def _check_runs_in(m: ProjectModel) -> list[str]:
             problems.append(f"entry_points[{i}] runs_in names unknown deployment unit(s): "
                             f"{', '.join(bad)} — each must match a `deployment[].unit` name")
     return problems
+
+
+_STORE_DEP_SHAPE = re.compile(r"^D\d+$")
+
+
+def _check_stores(m: ProjectModel) -> list[str]:
+    """Structured-store shape rules (blocking, row-local — safe per-fragment): `store.dep` is a
+    D-id; `store.mode` is the closed `grammar.STORE_MODES` vocabulary (EXACT match, the
+    `activation` discipline — a near-miss like 'Collection' would silently escape every
+    mode-driven grouping); a resolvable `dep` must be a real store (datastore/messaging/…), never
+    a folded framework/library (a wrapper module is not where data lives). Resolution itself rides
+    `_check_references` via `_referenced_ids`."""
+    problems: list[str] = []
+    deps_by_id = {d.id: d for d in m.deps}
+    for e in m.entities:
+        st = e.store
+        if st is None:
+            continue
+        if st.dep and not _STORE_DEP_SHAPE.match(st.dep):
+            problems.append(f"{e.id} store.dep '{st.dep}' is not a D-id — name the physical "
+                            "datastore dep (e.g. D1), not a prose store name")
+        if st.mode and st.mode not in grammar.STORE_MODES:
+            problems.append(f"{e.id} store.mode '{st.mode}' is invalid — use one of: "
+                            f"{', '.join(grammar.STORE_MODES)}, or leave it empty")
+        d = deps_by_id.get(st.dep or "")
+        if d is not None and grammar.classify_dep(d.kind or "", d.type) in grammar.DEP_KINDS_FOLDED:
+            problems.append(f"{e.id} store.dep {st.dep} ({d.name}) classifies as a folded "
+                            "framework/library — data lives in a datastore/messaging/service/"
+                            "platform dep, never in an in-process library (name the real store)")
+    return problems
+
+
+def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
+    """The persistence-coverage rule (advisory, ADOPTION-GATED): once any entity structures its
+    store (`store.dep` set), every write-family `C→D` edge into a store-shaped dep must be
+    EXPLAINED — some entity records that dep as its store AND that component writes the entity.
+    An unexplained pair is exactly how real collections escaped the map (a live build persisted
+    OAuth-token and lock collections that appeared nowhere in the domain model, because they had
+    no named type). Escape: the C id recorded under a **'Persistence exceptions'** extras heading
+    (an infra-only writer — a lock, a migration, a schema-hash doc — adjudicated by the operator).
+    A second aggregated nudge lists entities still carrying an UNSTRUCTURED store (notes-only);
+    the literal `store` under 'Balance exceptions' silences that one."""
+    warnings: list[str] = []
+    structured = [e for e in m.entities if e.store and e.store.dep]
+    if structured:
+        write_verbs = grammar.PERSIST_VERBS | grammar.WRITE_VERBS
+        deps_by_id = {d.id: d for d in m.deps}
+        excepted = _recorded_ids(m, "persistence exceptions", ("C",))
+        entities_of_dep: dict[str, set[str]] = {}
+        for e in structured:
+            entities_of_dep.setdefault(e.store.dep, set()).add(e.id)  # type: ignore[union-attr]
+        writers_of_entity: dict[str, set[str]] = {}
+        for ed in m.edges:
+            if ed.src.startswith("C") and ed.dst.startswith("E") \
+                    and ed.verb.strip().lower() in write_verbs:
+                writers_of_entity.setdefault(ed.dst, set()).add(ed.src)
+        seen_pairs: set[tuple[str, str]] = set()
+        for ed in m.edges:
+            verb = ed.verb.strip().lower()
+            if not (ed.src.startswith("C") and ed.dst.startswith("D") and verb in write_verbs):
+                continue
+            d = deps_by_id.get(ed.dst)
+            if d is None or grammar.classify_dep(d.kind or "", d.type) not in ("datastore", "messaging"):
+                continue
+            if ed.src in excepted or (ed.src, ed.dst) in seen_pairs:
+                continue
+            seen_pairs.add((ed.src, ed.dst))
+            explained = any(ed.src in writers_of_entity.get(eid, set())
+                            for eid in entities_of_dep.get(ed.dst, set()))
+            if not explained:
+                warnings.append(
+                    f"{ed.src} {verb} into {ed.dst} ({d.name}) but no entity both records {ed.dst} "
+                    f"as its store AND is written by {ed.src} — a real container may be missing "
+                    "from the domain model (the unmodeled-collection class); add the entity (with "
+                    f"its structured store), or record '{ed.src}: <why>' under a "
+                    "'Persistence exceptions' extras heading")
+    unstructured = [e.id for e in m.entities
+                    if e.store is not None and not e.store.dep and not e.store.mode]
+    if unstructured and "store" not in balance_lib._exceptions(m):
+        warnings.append(
+            f"{len(unstructured)} entity store(s) are unstructured (notes-only: "
+            f"{', '.join(unstructured[:8])}{', …' if len(unstructured) > 8 else ''}) — set "
+            "`store.dep`/`container`/`mode` so persistence is queryable, or record the literal "
+            "`store` under a 'Balance exceptions' extras heading")
+    return warnings
 
 
 def _check_group_tech(m: ProjectModel) -> list[str]:
@@ -1668,6 +1755,8 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     card_problems, card_warnings = _check_domain_cards(m)
     problems.extend(card_problems)
     warnings.extend(card_warnings)
+    problems.extend(_check_stores(m))
+    warnings.extend(_persistence_coverage_warnings(m))
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)

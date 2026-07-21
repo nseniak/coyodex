@@ -33,6 +33,7 @@ from coyodex.model import (
     ProjectModel,
     Role,
     SecurityRow,
+    Store,
     SubFlow,
     UseCase,
     VariantTag,
@@ -52,7 +53,7 @@ from coyodex.views import model_to_markdown
 
 def make_entity(eid: str = "E1", name: str = "Order", source: str | None = "src/order.py:1",
                 relations: list[EntityRelation] | None = None) -> Entity:
-    return Entity(id=eid, name=name, store="orders", meaning="a thing", source=source,
+    return Entity(id=eid, name=name, store=Store(notes="orders"), meaning="a thing", source=source,
                   fields=[EntityField(name="id", type="str", markers=["PK"])],
                   relations=relations or [])
 
@@ -154,6 +155,62 @@ def test_kind_coverage_line_folds_alias_spellings() -> None:
     m.entry_points = [make_ep(kind="http-route")]
     m.extras = [ExtraSection(heading="Entry-point coverage", body="http: complete — walked routes")]
     assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
+
+
+# --- structured store + persistence coverage (WS-A1) ------------------------------
+
+def test_store_dep_shape_and_mode_are_blocking() -> None:
+    m = make_valid_model()
+    m.entities = [Entity(id="E1", name="Order", meaning="a thing", source="src/order.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         store=Store(dep="Postgres", mode="Collection"))]
+    ps = problems_of(m)
+    assert any("store.dep 'Postgres' is not a D-id" in p for p in ps)
+    assert any("store.mode 'Collection' is invalid" in p for p in ps)   # closed vocab, EXACT match
+
+
+def test_store_dep_must_resolve_and_not_be_folded() -> None:
+    m = make_valid_model()
+    m.entities[0].store = Store(dep="D7", container="orders", mode="collection")
+    assert any("D7" in p for p in problems_of(m))                       # dangling → _check_references
+    m.entities[0].store = Store(dep="D1", container="orders", mode="collection")
+    assert not any("store" in p.lower() for p in problems_of(m))        # resolves to a datastore dep
+    m.deps = [Dep(id="D1", name="SQLAlchemy", kind="library", type="ORM library")]
+    m.edges = [e for e in m.edges if e.dst != "D1"]  # drop the C→D edge; the folded dep is the point
+    assert any("folded" in p and "E1" in p for p in problems_of(m))
+
+
+def test_persistence_coverage_is_adoption_gated_fires_and_escapes() -> None:
+    m = make_valid_model()
+    # a write-family C→D edge into the datastore dep, with NO structured store anywhere → silent
+    m.edges.append(Edge(src="C1", verb="persists", dst="D1", why="rows", where="src/v.py:9"))
+    assert not any("no entity both records" in w for w in warnings_of(m))
+    # adoption: E1 structures its store on D1, but C1's persists edge writes no entity → advisory
+    m.entities[0].store = Store(dep="D1", container="orders", mode="collection")
+    assert any("C1 persists into D1" in w and "Persistence exceptions" in w for w in warnings_of(m))
+    # explaining pair: C1 also persists E1 (whose store is D1) → quiet
+    m.edges.append(Edge(src="C1", verb="persists", dst="E1", why="rows", where="src/v.py:10"))
+    assert not any("no entity both records" in w for w in warnings_of(m))
+    # escape channel: the C id recorded under 'Persistence exceptions' silences it
+    m.edges.pop()
+    m.extras = [ExtraSection(heading="Persistence exceptions",
+                             body="C1: lock rows only — infra, not domain")]
+    assert not any("no entity both records" in w for w in warnings_of(m))
+
+
+def test_unstructured_stores_draw_one_aggregated_nudge_with_store_literal_escape() -> None:
+    m = make_valid_model()
+    m.entities = [Entity(id="E1", name="A", meaning="x", source="src/a.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         store=Store(notes="mdb: a")),
+                  Entity(id="E2", name="B", meaning="x", source="src/b.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         store=Store(notes="mdb: b"))]
+    m.edges = [e for e in m.edges if not e.dst.startswith("E")]
+    ws = [w for w in warnings_of(m) if "unstructured" in w]
+    assert len(ws) == 1 and "2 entity store(s)" in ws[0]
+    m.extras = [ExtraSection(heading="Balance exceptions", body="store: notes-only by choice")]
+    assert not any("unstructured" in w for w in warnings_of(m))
 
 
 # --- tech on subsystems (WS-A7) ---------------------------------------------------
@@ -946,7 +1003,7 @@ def test_keyed_by_alone_is_clean_and_quiets_fieldless_nudge():
 def test_keyed_by_naming_a_declared_source_field_is_rejected():
     # the key IS a plain (unmarked) field on the source row → it's a foreign key, not a storage key.
     # This is the `Membership.role` misuse class the FK-marker XOR rule alone would miss.
-    e1 = Entity(id="E1", name="Membership", store="x", meaning="a thing", source="src/o.py:1",
+    e1 = Entity(id="E1", name="Membership", store=Store(notes="x"), meaning="a thing", source="src/o.py:1",
                 fields=[EntityField(name="id", type="str", markers=["PK"]),
                         EntityField(name="role", type="string", markers=[])],
                 relations=[EntityRelation(verb="assignedRole", target="E2", src_card="*",
@@ -958,7 +1015,7 @@ def test_keyed_by_naming_a_declared_source_field_is_rejected():
 
 def test_keyed_by_naming_a_declared_target_field_is_rejected():
     # the key matches a field on the TARGET row → a reverse FK; still not a storage key.
-    e2 = Entity(id="E2", name="Child", store="x", meaning="a thing", source="src/c.py:1",
+    e2 = Entity(id="E2", name="Child", store=Store(notes="x"), meaning="a thing", source="src/c.py:1",
                 fields=[EntityField(name="id", type="str", markers=["PK"]),
                         EntityField(name="parent_id", type="str", markers=[])])
     m = make_valid_model()
@@ -969,7 +1026,7 @@ def test_keyed_by_naming_a_declared_target_field_is_rejected():
 
 def test_keyed_by_with_differently_named_backing_fk_is_rejected():
     # a real FK field (a DIFFERENT name than the key) backs the relation → the XOR rule catches it.
-    e1 = Entity(id="E1", name="Order", store="orders", meaning="a thing", source="src/o.py:1",
+    e1 = Entity(id="E1", name="Order", store=Store(notes="orders"), meaning="a thing", source="src/o.py:1",
                 fields=[EntityField(name="id", type="str", markers=["PK"]),
                         EntityField(name="parent", type="E2", markers=[])],   # typed by the target
                 relations=[make_keyed_relation(["some_store_key"])])

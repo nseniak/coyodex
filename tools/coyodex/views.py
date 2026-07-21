@@ -25,6 +25,7 @@ from coyodex.model import (
     FlowStep,
     Group,
     ProjectModel,
+    Store,
     TestRow,
     UseCase,
     all_elements,
@@ -162,6 +163,20 @@ def _relation_item(r) -> str:
     if r.how:
         parts.append("{" + r.how + "}")
     return " ".join(parts)
+
+
+def _store_str(st: Store | None) -> str:
+    """The ONE human rendering of a structured store — shared by the domain-card parenthetical and
+    the entity pane's "Stored" row, so the two can never phrase the same store differently.
+    `D1.guilds — collection; 30-day TTL` (dep.container — mode; notes), degrading gracefully when
+    parts are unstated (a notes-only store renders just its notes)."""
+    if st is None:
+        return ""
+    place = f"{st.dep}.{st.container}" if st.dep and st.container else (st.dep or st.container)
+    head = f"{place} — {st.mode}" if place and st.mode else (place or st.mode)
+    if head and st.notes:
+        return f"{head}; {st.notes}"
+    return head or st.notes
 
 
 def _component_headers(m: ProjectModel) -> tuple[list[str], bool, list[str]]:
@@ -315,7 +330,7 @@ def model_to_markdown(m: ProjectModel) -> str:
     if m.entities:
         body: list[str] = []
         for e in m.entities:
-            store = f" *({e.store})*" if e.store else ""
+            store = f" *({_store_str(e.store)})*" if e.store else ""
             body.append(f"**{e.id} — {e.name}**{store}")
             if e.subdomain:
                 body.append(f"SUBDOMAIN: {e.subdomain}")
@@ -512,7 +527,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         if e.meaning:
             meta["Meaning"] = e.meaning
         if e.store:
-            meta["Stored"] = e.store
+            meta["Stored"] = _store_str(e.store)
         node = Node(id=e.id, kind="entity", name=e.name, file=e.source, line=_line_of(e.source),
                     fields=meta, parent=e.subdomain,
                     attrs=[{"name": f.name, "type": f.type, "markers": " ".join(f.markers)}

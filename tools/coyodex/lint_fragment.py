@@ -23,6 +23,7 @@ from coyodex.validate_model import (
     _check_entry_kinds,
     _check_extra_conventions,
     _check_flows,
+    _check_stores,
     _granularity_warnings,
     _referenced_ids,
     check_anchor_existence_model,
@@ -115,6 +116,8 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
     problems += extra_problems
     rel_problems, _rel_warnings = check_domain_relations(m.entities)
     problems += rel_problems
+    problems += _check_stores(m)  # row-local store-shape rules (dep id shape, closed mode); the
+    # folded-dep check self-disables when the fragment doesn't define the dep (it can't resolve it)
     edge_problems, edge_warnings = _check_edges(m)
     problems += edge_problems + edge_warnings
     # Flow rules (missing step `where`, duplicate step n, missing phrase/endpoint) fail in the trace

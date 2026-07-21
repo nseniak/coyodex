@@ -230,6 +230,19 @@ _SELF_START_SIGNATURES = ("background", "loop", "cron", "schedul", "timer", "tic
                           "subscrib", "queue", "listener", "watch")
 
 
+# ── Entity STORE mode — how an entity relates to its physical store ───────────────────────────────
+# CLOSED, exact-match (the `activation` discipline, not the seeded-open bucket one): the mode drives
+# grouping in the persistence views, and the six values partition the observed population of three
+# real maps completely — a new mode is a method change, not a per-map minting.
+#   collection = its own compartment (collection/table/bucket/file) in a dep
+#   embedded   = persisted INSIDE a parent entity's row/document
+#   transient  = in-memory / event object / API projection — never persisted
+#   cache      = lives only in a cache tier (a projection of another source of truth)
+#   in-code    = a module-level registry/constants (persisted in the source itself)
+#   enum       = a closed value set (often a bitfield); its "store" is the type definition
+STORE_MODES = ("collection", "embedded", "transient", "cache", "in-code", "enum")
+
+
 # ── Entry-point KIND — the seeded-open naming axis (mirror of the dep PURPOSE bucket) ─────────────
 # Unlike `activation` (CLOSED: who starts it), `kind` names WHAT the entry point is, and stays
 # SEEDED-OPEN: reuse a seed when one fits, mint a project-specific kind (`gateway-loop`,

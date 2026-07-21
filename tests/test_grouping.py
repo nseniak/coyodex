@@ -628,7 +628,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders collection",
+      "store": {"notes": "orders collection"},
       "meaning": "a purchase",
       "subdomain": null,
       "source": "order.py:12",
@@ -660,7 +660,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E2",
       "name": "LineItem",
-      "store": "",
+      "store": null,
       "meaning": "a line",
       "subdomain": null,
       "source": "order.py:58",
@@ -726,7 +726,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:1",
@@ -747,7 +747,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E2",
       "name": "AuthMode",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:2",
@@ -808,7 +808,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E1",
       "name": "Snapshot",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:1",
@@ -849,7 +849,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E2",
       "name": "StoredRefreshToken",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:2",
@@ -910,7 +910,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E1",
       "name": "Org",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:1",
@@ -950,7 +950,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E2",
       "name": "Membership",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:2",
@@ -973,7 +973,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E3",
       "name": "Subscription",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:3",
@@ -1034,7 +1034,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E1",
       "name": "A",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:1",
@@ -1059,7 +1059,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E2",
       "name": "B",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:2",
@@ -1120,7 +1120,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E1",
       "name": "Membership",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:1",
@@ -1152,7 +1152,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E2",
       "name": "RoleDefinition",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:2",
@@ -1213,7 +1213,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E1",
       "name": "Org",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:1",
@@ -1248,7 +1248,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E2",
       "name": "Membership",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:2",
@@ -1266,7 +1266,7 @@ def make_domain_map(cards: str | None = None) -> str:
     {
       "id": "E3",
       "name": "Token",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:3",
@@ -1747,7 +1747,7 @@ def make_nested_bridge_map() -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {"notes": "orders"},
       "meaning": "x",
       "subdomain": "SD2",
       "source": "f:1",
@@ -1892,7 +1892,7 @@ def test_glued_collection_relation_is_labelled() -> None:
     {
       "id": "E1",
       "name": "Snapshot",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:1",
@@ -1924,7 +1924,7 @@ def test_glued_collection_relation_is_labelled() -> None:
     {
       "id": "E28",
       "name": "StoredAccessToken",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": null,
       "source": "f:2",
@@ -2100,7 +2100,7 @@ def test_class_diagram_inheritance_arrow_labelled_isa() -> None:
     {
       "id": "E1",
       "name": "Base",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:1",
@@ -2116,7 +2116,7 @@ def test_class_diagram_inheritance_arrow_labelled_isa() -> None:
     {
       "id": "E2",
       "name": "Child",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": null,
       "source": "f:2",
@@ -2219,7 +2219,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {"notes": "orders"},
       "meaning": "a purchase",
       "subdomain": "SD1",
       "source": "order.py:12",
@@ -2246,7 +2246,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     {
       "id": "E2",
       "name": "LineItem",
-      "store": "",
+      "store": null,
       "meaning": "a line",
       "subdomain": "SD2",
       "source": "order.py:58",
@@ -2276,7 +2276,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     {
       "id": "E3",
       "name": "Product",
-      "store": "",
+      "store": null,
       "meaning": "a product",
       "subdomain": "SD3",
       "source": "product.py:9",
@@ -2353,7 +2353,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {"notes": "orders"},
       "meaning": "a purchase",
       "subdomain": "SD1",
       "source": "order.py:12",
@@ -2393,7 +2393,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     {
       "id": "E2",
       "name": "LineItem",
-      "store": "",
+      "store": null,
       "meaning": "a line",
       "subdomain": "SD1",
       "source": "order.py:58",
@@ -2409,7 +2409,7 @@ def make_context_map(cards: str | None = None, contexts: str | None = None) -> s
     {
       "id": "E4",
       "name": "Product",
-      "store": "",
+      "store": null,
       "meaning": "a product",
       "subdomain": "SD2",
       "source": "product.py:9",
@@ -2500,7 +2500,7 @@ def make_nested_subdomain_map() -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {"notes": "orders"},
       "meaning": "a purchase",
       "subdomain": "SD1",
       "source": "order.py:12",
@@ -2527,7 +2527,7 @@ def make_nested_subdomain_map() -> str:
     {
       "id": "E2",
       "name": "LineItem",
-      "store": "",
+      "store": null,
       "meaning": "a line",
       "subdomain": "SD2",
       "source": "order.py:58",
@@ -2557,7 +2557,7 @@ def make_nested_subdomain_map() -> str:
     {
       "id": "E3",
       "name": "Product",
-      "store": "",
+      "store": null,
       "meaning": "a product",
       "subdomain": "SD3",
       "source": "product.py:9",
@@ -2710,7 +2710,7 @@ def make_bridge_map() -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {"notes": "orders"},
       "meaning": "m",
       "subdomain": "SD1",
       "source": "f:1",
@@ -2919,7 +2919,7 @@ def _two_context_map(cards_extra: str = "") -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": "SD1",
       "source": "f:1",
@@ -3039,7 +3039,7 @@ def make_both_groupings_map() -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "s",
+      "store": {"notes": "s"},
       "meaning": "m",
       "subdomain": "SD1",
       "source": "f:1",
@@ -3077,7 +3077,7 @@ def make_both_groupings_map() -> str:
     {
       "id": "E2",
       "name": "Line",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": "SD1",
       "source": "f:2",
@@ -3093,7 +3093,7 @@ def make_both_groupings_map() -> str:
     {
       "id": "E3",
       "name": "Product",
-      "store": "",
+      "store": null,
       "meaning": "m",
       "subdomain": "SD2",
       "source": "f:3",

@@ -130,6 +130,16 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                       "carries the id (marked FK or a plain same-named column) that is "
                                       "a (reverse) foreign key, not a key. Drawn on the arrow with the "
                                       "«key» marker."},
+    ("Store", "dep"): {"pattern": r"^D\d+$", "description": "the physical datastore/messaging dep "
+                        "holding this entity (a D-id); null for a store with no dep (in-memory, "
+                        "in-code registry)."},
+    ("Store", "mode"): {"enum": [*grammar.STORE_MODES, ""],
+                         "description": "how the entity relates to its store — closed vocabulary, "
+                         "exact match: collection (own compartment) / embedded (inside a parent's "
+                         "row) / transient / cache / in-code / enum; '' = unstated."},
+    ("Store", "container"): {"description": "the compartment inside the dep: collection / table / "
+                              "key prefix / bucket / file name."},
+    ("Store", "notes"): {"description": "what the shape can't say: TTL, cache tiers, compression."},
     ("Entity", "id"): {"pattern": r"^E\d+$"},
     ("Entity", "subdomain"): {"pattern": r"^SD\d+$", "description": "the owning subdomain's id, "
                                "or null if ungrouped."},

@@ -143,7 +143,7 @@ def make_counts_map() -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {"notes": "orders"},
       "meaning": "a customer order",
       "subdomain": "SD1",
       "source": "order.py:1",
@@ -153,7 +153,7 @@ def make_counts_map() -> str:
     {
       "id": "E2",
       "name": "Line",
-      "store": "lines",
+      "store": {"notes": "lines"},
       "meaning": "a line item",
       "subdomain": "SD1",
       "source": "line.py:1",
@@ -576,7 +576,7 @@ def make_read_before_create_map() -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {"notes": "orders"},
       "meaning": "a customer order",
       "subdomain": null,
       "source": "order.py:1",

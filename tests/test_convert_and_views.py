@@ -34,6 +34,7 @@ from coyodex.model import (
     GlossaryRow,
     Group,
     ProjectModel,
+    Store,
     SubFlow,
     UseCase,
     all_elements,
@@ -57,7 +58,7 @@ def make_small_model() -> ProjectModel:
     m.components = [Component(id="C1", name="Viewer", subsystem=None, purpose="shows orders",
                               entry_point="src/v.py:1", depends_on="", source=None,
                               confidence="")]
-    m.entities = [Entity(id="E1", name="Order", store="orders", meaning="a customer order",
+    m.entities = [Entity(id="E1", name="Order", store=Store(notes="orders"), meaning="a customer order",
                          source="src/order.py:1",
                          fields=[EntityField(name="id", type="str", markers=["PK"])])]
     return m
@@ -218,6 +219,27 @@ def test_glossary_where_renders_as_link_and_reaches_graph():
     g = model_to_graph(m)
     assert g["glossary"] == [{"term": "Order", "meaning": "a customer order", "source": "src/order.py:12"},
                              {"term": "Brand", "meaning": "the product itself", "source": ""}]
+
+
+def test_structured_store_renders_one_shared_form():
+    """WS-A1: the domain-card parenthetical and the entity pane's 'Stored' row share ONE renderer
+    (`_store_str`) — `D1.guilds — collection; 30-day TTL`, degrading when parts are unstated."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.entities = [Entity(id="E1", name="Guild", meaning="a server", source="src/g.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         store=Store(dep="D1", container="guilds", mode="collection",
+                                     notes="30-day TTL"))]
+    md = model_to_markdown(m)
+    assert "**E1 — Guild** *(D1.guilds — collection; 30-day TTL)*" in md
+    g = model_to_graph(m)
+    e1 = cast("dict[str, dict[str, str]]", g["nodes"]["E1"])
+    assert e1["fields"]["Stored"] == "D1.guilds — collection; 30-day TTL"
+    # notes-only degrades to the bare notes (the migrated-legacy look)
+    m.entities[0].store = Store(notes="mdb: guilds")
+    assert "**E1 — Guild** *(mdb: guilds)*" in model_to_markdown(m)
+    # no store → no parens at all
+    m.entities[0].store = None
+    assert "**E1 — Guild**\n" in model_to_markdown(m)
 
 
 def test_subsystem_tech_column_is_conditional_and_reaches_graph():

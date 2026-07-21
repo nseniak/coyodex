@@ -25,6 +25,7 @@ from coyodex.model import (
     HappyStep,
     Group,
     ModelError,
+    Store,
     ProjectModel,
     TestRow as _TestRow,  # aliased: a bare `TestRow` name makes pytest try to collect it as a test class
     UseCase,
@@ -66,6 +67,47 @@ def test_remap_covers_every_referenced_id_site():
     assert m.extras[0].body == "see [[C1]] for details"
 
 
+def test_remap_covers_store_dep():
+    # WS-A1 lockstep: `store.dep` is a reference site — a dep merge must re-point it, and
+    # _referenced_ids must read it (so a dangling store.dep is a validate problem, not silence).
+    from coyodex.validate_model import _referenced_ids
+    m = ProjectModel(title="t", goal="g")
+    m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL"),
+              Dep(id="D9", name="Postgres dup", kind="datastore", type="SQL")]
+    m.entities = [Entity(id="E1", name="Order", store=Store(dep="D9", container="orders",
+                                                            mode="collection"))]
+    assert "D9" in _referenced_ids(m)
+    remap_element_ids(m, {"D9": "D1"})
+    st = m.entities[0].store
+    assert st is not None and st.dep == "D1"
+    assert "D9" not in _referenced_ids(m)
+
+
+def test_legacy_string_store_fails_with_targeted_error():
+    # WS-A1 hard retype: a pre-retype map (`store: "<prose>"`) must fail with a message that says
+    # exactly what happened — not the generic "expected an object, got str".
+    m = make_model()
+    j = to_canonical_json(m).replace(
+        '"store": {\n        "dep": null,\n        "container": "",\n        "mode": "",\n        "notes": "orders"\n      }',
+        '"store": "mdb: orders collection"')
+    assert '"store": "mdb: orders collection"' in j    # the replacement really landed
+    try:
+        load_model(j)
+        raise AssertionError("legacy string store must not load")
+    except ModelError as e:
+        assert "structured object" in str(e) and "entities[0].store" in str(e)
+
+
+def test_empty_string_store_loads_as_null():
+    # "" was the serializer's old "not stated" — tolerated and dropped to null, not an error.
+    m = make_model()
+    j = to_canonical_json(m).replace(
+        '"store": {\n        "dep": null,\n        "container": "",\n        "mode": "",\n        "notes": "orders"\n      }',
+        '"store": ""')
+    m2 = load_model(j)
+    assert m2.entities[0].store is None
+
+
 # --- builders -------------------------------------------------------------------
 
 def make_model(extra_order: tuple[str, ...] = ("Zeta", "Alpha")) -> ProjectModel:
@@ -84,7 +126,7 @@ def make_model(extra_order: tuple[str, ...] = ("Zeta", "Alpha")) -> ProjectModel
     ]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database",
                   used_for="orders", where_configured="cfg.py:1")]
-    m.entities = [Entity(id="E1", name="Order", store="orders", meaning="a customer order",
+    m.entities = [Entity(id="E1", name="Order", store=Store(notes="orders"), meaning="a customer order",
                          source="src/order.py#L1",
                          fields=[EntityField(name="id", type="str", markers=["PK"])],
                          relations=[EntityRelation(verb="has", target="E1",

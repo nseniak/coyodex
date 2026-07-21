@@ -19,12 +19,14 @@ import tempfile
 from coyodex import audit_model
 from coyodex.model import (
     Component,
+    Dep,
     Edge,
     Entity,
     EntryPoint,
     Flow,
     FlowStep,
     ProjectModel,
+    Store,
     SubFlow,
     UseCase,
     load_model,
@@ -136,7 +138,7 @@ def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
     {{
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {{"notes": "orders"}},
       "meaning": "a customer order",
       "subdomain": null,
       "source": "order.py:1",
@@ -325,7 +327,7 @@ def make_shared_read_map() -> str:
     {
       "id": "E1",
       "name": "User",
-      "store": "users",
+      "store": {"notes": "users"},
       "meaning": "a user",
       "subdomain": null,
       "source": "u.py:1",
@@ -494,7 +496,7 @@ def make_cc_routed_read_map() -> str:
     {
       "id": "E1",
       "name": "Organization",
-      "store": "orgs",
+      "store": {"notes": "orgs"},
       "meaning": "tenant",
       "subdomain": null,
       "source": "o.py:1",
@@ -711,7 +713,7 @@ def make_read_never_created_map() -> str:
     {
       "id": "E9",
       "name": "AppConfig",
-      "store": "config",
+      "store": {"notes": "config"},
       "meaning": "config",
       "subdomain": null,
       "source": "c.py:1",
@@ -1249,7 +1251,7 @@ def make_described_map() -> str:
     {
       "id": "E1",
       "name": "Order",
-      "store": "orders",
+      "store": {"notes": "orders"},
       "meaning": "m",
       "subdomain": null,
       "source": "src/order.py:1",
@@ -1576,6 +1578,23 @@ def test_touch_sets_see_subflow_content() -> None:
                     steps=[FlowStep(n=1, src="C2", dst="E1", subflow="SF1")])]
     writes, _reads = audit_model._touch_sets(m)
     assert "E1" in writes["UC1"]
+
+
+# --- L2 structured-store tier (WS-A1) -------------------------------------------
+def test_l2_worklist_carries_structured_store_claims() -> None:
+    # "En is stored in Dn container 'x'" is a skeptic-refutable claim; anchored at the entity's
+    # own source. A store with no dep (notes-only / transient) emits no item.
+    m = ProjectModel(title="T", goal="g")
+    m.deps = [Dep(id="D1", name="MongoDB", kind="datastore", type="document db")]
+    m.entities = [
+        Entity(id="E1", name="Guild", source="src/g.py:9",
+               store=Store(dep="D1", container="guilds", mode="collection")),
+        Entity(id="E2", name="Event", store=Store(notes="transient")),
+    ]
+    items = [it for it in audit_model.l2_worklist_model(m) if "is stored in" in it.claim]
+    assert len(items) == 1
+    assert "E1" in items[0].claim and "D1 container 'guilds'" in items[0].claim
+    assert items[0].anchor == "src/g.py:9"
 
 
 # --- L2 cadence tier (WS-A2) ----------------------------------------------------

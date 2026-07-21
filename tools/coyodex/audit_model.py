@@ -402,6 +402,21 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     items.extend(dep_items)
     items.extend(entity_items)
     items.extend(other_items)
+    # Structured-store claims (WS-A1): "En is stored in Dn container 'x'" is a claim a skeptic can
+    # refute by reading the entity's repository/type — a wrong dep or container silently mis-answers
+    # the canonical "what is persisted where?" question. Anchor = the entity's own source (the type
+    # definition is where the storage wiring is discoverable from). Drift is REPORT-ONLY: a refuted
+    # store claim is re-authored, never anchor-nudged.
+    for en in m.entities:
+        st = en.store
+        if st is not None and st.dep:
+            where = f"{st.dep} container '{st.container}'" if st.container else st.dep
+            mode = f" ({st.mode})" if st.mode else ""
+            items.append(WorkItem(
+                claim=f"{en.id} ({en.name}) is stored in {where}{mode}",
+                anchor=_anchor(en.source or ""),
+                why_risky=("the persistence inventory hangs on this row — a wrong dep/container "
+                           "mis-answers 'what is persisted where?' for every reader.")))
     # Cadence claims (WS-A2): a recorded schedule is a claim about WHEN code runs, and schedules
     # drift in real life (an interval tuned in config, a cron moved) — so each anchored cadence is
     # a skeptic target. Anchor = the declaring line (`cadence_source`), falling back to the entry
