@@ -93,6 +93,12 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Dep", "extra"): {"description": _EXTRA_DESC},
     ("EntryPoint", "source"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},
     ("EntryPoint", "component"): {"pattern": r"^C\d+$", "description": "the owning component's id."},
+    ("EntryPoint", "kind"): {"description": "what the entry point IS — a SEEDED-OPEN vocabulary "
+                              "(never blocking): prefer a seed "
+                              f"({', '.join(grammar.ENTRY_POINT_KINDS)}); mint a project-specific "
+                              "kind only when none fits, and reuse the exact spelling on rebuild "
+                              "(validate folds known drift like 'http'→'http-route' and nudges the "
+                              "rest)."},
     ("EntryPoint", "activation"): {"enum": [*grammar.ACTIVATIONS, ""], "description": "who starts it: "
                                     "'self' (timer/loop/boot/signal/queue consumer — runs with no "
                                     "caller) or 'external' (route/CLI/callback/webhook); '' → inferred "

@@ -56,6 +56,40 @@ def test_dep_roles_drops_roleless_and_empty_is_empty():
     assert dep_roles([]) == set()                           # no C→D edges → no role tag
 
 
+# --- entry-point kind vocabulary (WS-A8) --------------------------------------------------------
+
+def test_canonical_entry_kind_folds_aliases_and_case_drift():
+    from coyodex.grammar import canonical_entry_kind
+    assert canonical_entry_kind("http") == "http-route"           # the mee6 drift spelling
+    assert canonical_entry_kind("event") == "event-consumer"
+    assert canonical_entry_kind("cron") == "job"
+    assert canonical_entry_kind("lifespan-hook") == "startup-hook"  # the argus spelling
+    assert canonical_entry_kind("Http-Route") == "http-route"     # seed case drift folds too
+    assert canonical_entry_kind(" webhook ") == "webhook"          # trimmed
+
+
+def test_canonical_entry_kind_keeps_minted_kinds_as_authored():
+    from coyodex.grammar import canonical_entry_kind
+    assert canonical_entry_kind("gateway-loop") == "gateway-loop"  # project-specific, passes through
+    assert canonical_entry_kind("") == ""
+
+
+def test_ui_route_never_folds_into_http_route():
+    # the alias fold is EXACT-string, never substring — `ui-route` contains `route` but is a seed.
+    from coyodex.grammar import canonical_entry_kind
+    assert canonical_entry_kind("ui-route") == "ui-route"
+
+
+def test_seed_kind_fixes_activation_job_is_self():
+    # `job` matches no _SELF_START_SIGNATURES needle — without the seed fast path the heuristic
+    # misfiles it as external. The canonical-kind fast path fixes it (and `cron` via the alias).
+    from coyodex.grammar import classify_activation
+    assert classify_activation("job") == "self"
+    assert classify_activation("cron") == "self"
+    assert classify_activation("mcp-tool") == "external"
+    assert classify_activation("http-route") == "external"
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_") and callable(fn):

@@ -148,14 +148,28 @@ def test_lint_invalid_activation_is_a_fragment_problem():
 def test_lint_completeness_family_never_fires_per_fragment():
     # The use-case/HP completeness advisories are WHOLE-MAP signals (T4 ↔ flows ↔ HP) — a T4
     # harvest fragment has entry points but no flows, so neither the warnings nor the problems
-    # path may say anything about unclaimed surfaces.
-    m = make_fragment({"entry_points": [{"kind": "http", "trigger": "GET /x",
+    # path may say anything about unclaimed surfaces. (Kind is the CANONICAL spelling here: the
+    # row-local kind-drift nudge legitimately rides the warnings channel and is tested separately.)
+    m = make_fragment({"entry_points": [{"kind": "http-route", "trigger": "GET /x",
                                          "source": "src/a.py:1", "component": "C1",
                                          "activation": "external"}]})
     # asserted EMPTY, not substring-matched: any leak of the whole-map family into the fragment
     # paths must fail this test regardless of the warnings' wording
     assert lint_fragment.lint_fragment_problems(m, None) == []
     assert lint_fragment.lint_fragment_warnings(m) == []
+
+
+def test_lint_kind_drift_nudge_fires_per_fragment_as_warning():
+    # WS-A8: the alias-spelling nudge is row-local, so the authoring agent hears it in its own
+    # turn — on the ADVISORY channel (seeded-open vocabulary: a spelling must never fail a fragment).
+    m = make_fragment({"entry_points": [{"kind": "http", "trigger": "GET /x",
+                                         "source": "src/a.py:1", "component": "C1",
+                                         "activation": "external"}]})
+    assert lint_fragment.lint_fragment_problems(m, None) == []
+    assert any("drift spelling" in w and "http-route" in w
+               for w in lint_fragment.lint_fragment_warnings(m))
+    # the whole-map per-kind COVERAGE contract stays out of the fragment paths
+    assert not any("Entry-point coverage" in w for w in lint_fragment.lint_fragment_warnings(m))
 
 
 def test_lint_extensionless_anchor_is_accepted():

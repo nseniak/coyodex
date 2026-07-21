@@ -108,6 +108,54 @@ def test_bucket_seed_spelling_passes_clean() -> None:
     assert not any("bucket" in w.lower() for w in warnings_of(m))
 
 
+# --- entry-point kind vocabulary + per-kind coverage contract (WS-A8) -------------
+
+def make_ep(kind: str = "http-route", trigger: str = "GET /x", activation: str = "",
+            component: str = "C1") -> EntryPoint:
+    return EntryPoint(kind=kind, trigger=trigger, source="src/v.py:1", component=component,
+                      activation=activation)
+
+
+def test_alias_kind_spelling_is_an_advisory_not_a_gate() -> None:
+    # the observed real-map drift: `http` and `http-route` rows for the same thing.
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="http"), make_ep(kind="http", trigger="GET /y")]
+    ws = warnings_of(m)
+    assert any("'http'" in w and "http-route" in w and "2 row(s)" in w for w in ws)
+    assert not any("drift spelling" in p for p in problems_of(m))    # seeded-open: never blocking
+
+
+def test_seed_kind_is_silent_and_minted_kinds_nudge_one_aggregated_line() -> None:
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="webhook"),
+                      make_ep(kind="gateway-loop", trigger="loop a"),
+                      make_ep(kind="gateway-loop", trigger="loop b"),
+                      make_ep(kind="generator-loop", trigger="gen")]
+    minted = [w for w in warnings_of(m) if "minted" in w and "entry-point kind" in w]
+    assert len(minted) == 1                                          # ONE line, not one per kind/row
+    assert "'gateway-loop'" in minted[0] and "'generator-loop'" in minted[0]
+    assert "'webhook'" not in minted[0]                              # seed spelling stays silent
+
+
+def test_kind_coverage_contract_nudges_and_heading_silences() -> None:
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="http-route"), make_ep(kind="cli", trigger="cx")]
+    assert any("Entry-point coverage" in w and "'cli'" in w and "'http-route'" in w
+               for w in warnings_of(m))                              # one AGGREGATED line
+    m.extras = [ExtraSection(
+        heading="Entry-point coverage",
+        body="http-route: complete — walked app.routes\ncli: sampled — main scripts only")]
+    assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
+
+
+def test_kind_coverage_line_folds_alias_spellings() -> None:
+    # a contract written as `http` covers the `http-route` rows — both fold through canonical kind.
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="http-route")]
+    m.extras = [ExtraSection(heading="Entry-point coverage", body="http: complete — walked routes")]
+    assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
+
+
 # --- clean baseline ---------------------------------------------------------------
 
 def test_valid_model_has_no_problems():

@@ -783,6 +783,87 @@ def _check_activations(m: ProjectModel) -> list[str]:
             if ep.activation and ep.activation not in grammar.ACTIVATIONS]
 
 
+def _check_entry_kinds(m: ProjectModel) -> list[str]:
+    """Entry-point `kind` hygiene — ALL advisory (the vocabulary is seeded-open like dep buckets,
+    never a gate: real maps legitimately mint project-specific kinds such as `mcp-tool` on one map,
+    `gateway-loop` on another). What this kills is SPELLING drift of the common kinds: live maps grew
+    `http` vs `http-route` and `event` vs `event-consumer` for the same thing, which splits the
+    System-tab grouping and any per-kind coverage statement. A kind that folds to a seed via
+    `grammar.canonical_entry_kind` (case drift or a known alias) nudges toward the canonical
+    spelling, aggregated per distinct spelling; a minted kind gets ONE "synonym of a seed?" nudge."""
+    warnings: list[str] = []
+    alias_count: dict[str, int] = {}          # authored drift spelling -> row count
+    alias_canon: dict[str, str] = {}          # authored drift spelling -> canonical seed
+    minted: set[str] = set()
+    for ep in m.entry_points:
+        authored = (ep.kind or "").strip()
+        if not authored:
+            continue
+        canonical = grammar.canonical_entry_kind(authored)
+        if canonical != authored:
+            alias_count[authored] = alias_count.get(authored, 0) + 1
+            alias_canon[authored] = canonical
+        elif canonical not in grammar.ENTRY_POINT_KINDS:
+            minted.add(canonical)
+    for authored in sorted(alias_count):
+        warnings.append(
+            f"entry-point kind '{authored}' ({alias_count[authored]} row(s)) is a drift spelling — "
+            f"write the canonical '{alias_canon[authored]}' so grouping and per-kind coverage "
+            "statements don't split")
+    if minted:  # ONE aggregated line — an older map can carry a dozen minted kinds, and repeating
+        # the seed list per kind would drown the report (the `_clip`/aggregation hygiene).
+        warnings.append(
+            "entry-point kind(s) minted (not a seed): "
+            + ", ".join(f"'{k}'" for k in sorted(minted))
+            + " — fine where the seeds name nothing close; where one is a synonym of a seed, reuse "
+              f"that exact spelling on rebuild (seeds: {', '.join(grammar.ENTRY_POINT_KINDS)})")
+    return warnings
+
+
+# A recorded entry-point coverage line: a line-leading KIND token followed by a separator and one of
+# the contract words — "http-route: complete — enumerated from FastAPI app.routes". The same
+# line-leading + separator discipline as `_RECORD_LINE` / `_COVERAGE_DIR_LINE`, so prose mentioning
+# a kind mid-sentence can't record a contract for it.
+_KIND_COVERAGE_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?\**\s*([A-Za-z][\w-]*)\**\s*[:(—–-]\s*\**(complete|sampled|partial)\b",
+    re.IGNORECASE)
+
+
+def _recorded_kind_coverage(m: ProjectModel) -> dict[str, str]:
+    """The per-kind completeness contract recorded under an **'Entry-point coverage'** extras heading:
+    canonical kind -> `complete` / `sampled` / `partial`. Keys fold through
+    `grammar.canonical_entry_kind` so a contract written as `http` covers the `http-route` rows."""
+    out: dict[str, str] = {}
+    for body in balance_lib.extras_bodies(m, "entry-point coverage"):
+        for line in body.splitlines():
+            hit = _KIND_COVERAGE_LINE.match(line)
+            if hit:
+                out[grammar.canonical_entry_kind(hit.group(1))] = hit.group(2).lower()
+    return out
+
+
+def _kind_coverage_warnings(m: ProjectModel) -> list[str]:
+    """The per-kind completeness contract (advisory, ONE aggregated line): live maps proved that
+    T4 exhaustiveness is silently build-dependent — one map enumerated 38 http routes, a bigger one
+    recorded 7 for a far larger API, and nothing in the map said which inventory was complete. The
+    remedy is an honesty statement per kind, recorded under an **'Entry-point coverage'** extras
+    heading (`<kind>: complete|sampled|partial — how it was enumerated`), read by
+    `_recorded_kind_coverage`. A kind present in `entry_points` with no statement gets nudged —
+    aggregated into one warning so a fresh map reads one actionable line, not one per kind."""
+    if not m.entry_points:
+        return []
+    recorded = _recorded_kind_coverage(m)
+    present = sorted({grammar.canonical_entry_kind(ep.kind)
+                      for ep in m.entry_points if (ep.kind or "").strip()})
+    missing = [k for k in present if k not in recorded]
+    if not missing:
+        return []
+    return ["Entry-point coverage: no completeness statement for kind(s) "
+            + ", ".join(f"'{k}'" for k in missing)
+            + " — is each inventory complete or a sample? Record '<kind>: complete|sampled|partial "
+              "— <how it was enumerated>' under an 'Entry-point coverage' extras heading"]
+
+
 def _check_runs_in(m: ProjectModel) -> list[str]:
     """`runs_in` (on components and self-started entry points) is the Deployment-view link to a
     deployment unit. It must name a REAL unit, and unit names must be unique so a value resolves
@@ -1510,6 +1591,8 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(dep_bucket_problems)
     warnings.extend(dep_bucket_warnings)
     problems.extend(_check_activations(m))
+    warnings.extend(_check_entry_kinds(m))
+    warnings.extend(_kind_coverage_warnings(m))
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
     warnings.extend(_deployment_placement_warnings(m))

@@ -64,7 +64,8 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "alternative": "<fallback used instead, and when>",
                      "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "run_commands":  [ { "action", "command", "source" } ],                       // T3
-  "entry_points":  [ { "kind", "trigger", "source": "<path:line>", "component": "Cn",
+  "entry_points":  [ { "kind": "<seeded-open vocab — see the entry_points[].kind bullet>",
+                       "trigger", "source": "<path:line>", "component": "Cn",
                        "activation": "<self|external|'' → inferred from kind>",
                        "runs_in": [ "<deployment[].unit>", … ] } ],   // optional: a self-started loop's PRECISE host unit(s); else its component's runs_in
 
@@ -117,6 +118,19 @@ Semantics, stated on the fields:
   entry-surface coverage advisory, the eval profile) share one rule that falls back to the kind
   heuristic for anything not in the vocabulary, so a truthy near-miss (`"External"`, `"mounted"`)
   would otherwise silently reclassify the row instead of being heard.
+- **`entry_points[].kind`** is a SEEDED-OPEN vocabulary (the mirror of dep purpose buckets, never
+  a gate). Reuse a seed when one fits — external: `http-route`, `ui-route`, `cli`, `webhook`,
+  `mcp-tool`, `middleware`; self: `job`, `poller`, `event-consumer`, `startup-hook`,
+  `signal-handler` — and mint a project-specific kind (`gateway-loop`) only when none does. Every
+  reader routes through `grammar.canonical_entry_kind`, which folds known drift spellings
+  (`http`→`http-route`, `event`→`event-consumer`, `cron`→`job`, …) so grouping and per-kind
+  coverage never split; `validate` nudges (advisory) an alias spelling toward its canonical form
+  and asks, once per kind, whether a minted kind is a seed synonym. **Per-kind completeness is
+  stated, not assumed**: live maps proved T4 exhaustiveness is silently build-dependent (one map
+  enumerated 38 http routes; a bigger one recorded 7 for a far larger API). Record one line per
+  kind under an **"Entry-point coverage"** extras heading — `<kind>: complete|sampled|partial —
+  <how it was enumerated>` (e.g. `http-route: complete — walked FastAPI app.routes`) — and
+  `validate` nudges (one aggregated advisory) any kind present in the table with no statement.
 - **Membership is single-source on the child**: `components[].subsystem`, `subsystems[].parent`,
   `entities[].subdomain`, `subdomains[].parent`. Member lists, inter-group edges, and the
   subsystem→subdomain bridge stay **derived, never stored**. Nesting depth isn't capped — the
@@ -135,7 +149,10 @@ Semantics, stated on the fields:
   These two read ids from **line-leading tokens only, one id per line, followed by a separator**
   — write `C713: <why>` / `- R4: <why>` (an `UC15 (name) — why` form also reads) — so prose that
   merely mentions another id, or a sentence that starts with one, never silences it. A pair form
-  (`C713 & C714: <why>`) records only the first id — give each its own line. All four headings are machine-read by `validate`,
+  (`C713 & C714: <why>`) records only the first id — give each its own line. A fifth machine-read
+  heading, **"Entry-point coverage"**, carries the per-kind T4 completeness contract (`<kind>:
+  complete|sampled|partial — <how>`, line-leading kind + separator — see the `entry_points[].kind`
+  bullet above). All five headings are machine-read by `validate`,
   so an adjudicated advisory goes quiet instead of re-firing forever.
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).
   Duplicated authored rows are preserved as authored (the graph views de-duplicate by

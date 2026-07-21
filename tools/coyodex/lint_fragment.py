@@ -20,6 +20,7 @@ from coyodex.validate_model import (
     _check_activations,
     _check_anchor_format,
     _check_edges,
+    _check_entry_kinds,
     _check_extra_conventions,
     _check_flows,
     _granularity_warnings,
@@ -143,8 +144,12 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     _problems, warnings = check_domain_relations(m.entities)
     # The roleless-C→D-verb nudge rides THIS non-blocking channel (never `lint_fragment_problems`,
     # which would promote it to a blocking problem — trap T7), so an authoring agent SEES it and
-    # decides, without a legitimately-generic `uses` failing the lint.
-    return warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
+    # decides, without a legitimately-generic `uses` failing the lint. The entry-point-kind nudges
+    # ride here too (seeded-OPEN vocabulary — a minted kind must never fail a fragment); the per-kind
+    # COVERAGE contract does not (it relates the whole T4 inventory to an extras heading another
+    # fragment may carry — vacuous per-fragment, like `_completeness_warnings`).
+    return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
+            + _check_entry_kinds(m))
 
 
 def main(argv: list[str] | None = None) -> int:

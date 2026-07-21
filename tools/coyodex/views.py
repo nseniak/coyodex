@@ -444,8 +444,13 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         # wins; when absent, derive it from the free-text `kind` — mirrors classify_dep, so old maps
         # (and any untagged entry) still classify without a rebuild.
         activation = grammar.effective_activation(ep.activation, ep.kind)
+        # The canonical kind (seed spelling / alias fold) rides ALONGSIDE the authored `kind` — the
+        # System tab groups by it so `http` and `http-route` rows land in one group, while the row
+        # still shows the authored spelling. Same one-resolver rule as `effective_activation`.
+        canonical_kind = grammar.canonical_entry_kind(ep.kind)
         ep_dict: dict[str, object] = asdict(ep)
         ep_dict["activation"] = activation
+        ep_dict["canonical_kind"] = canonical_kind
         if ep.component:
             ep_dict["index"] = len(eps_by_comp.setdefault(ep.component, []))
             eps_by_comp[ep.component].append(

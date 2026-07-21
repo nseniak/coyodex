@@ -511,7 +511,8 @@
       "type": "object",
       "properties": {
         "kind": {
-          "type": "string"
+          "type": "string",
+          "description": "what the entry point IS \u2014 a SEEDED-OPEN vocabulary (never blocking): prefer a seed (http-route, ui-route, cli, webhook, mcp-tool, middleware, job, poller, event-consumer, startup-hook, signal-handler); mint a project-specific kind only when none fits, and reuse the exact spelling on rebuild (validate folds known drift like 'http'\u2192'http-route' and nudges the rest)."
         },
         "trigger": {
           "type": "string"

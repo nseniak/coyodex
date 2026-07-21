@@ -202,6 +202,14 @@ prose level, the model has no field for it, and builders rightly skipped it — 
 
 ### Level 1 (one Level-0 row expanded)
 - **T4 Entry points**: `Kind | Trigger | Code entity | Component | Activation` (activation = self|external, blank → inferred from kind).
+  `Kind` is a **seeded-open vocabulary** — reuse a seed when one fits (external: `http-route`,
+  `ui-route`, `cli`, `webhook`, `mcp-tool`, `middleware`; self: `job`, `poller`, `event-consumer`,
+  `startup-hook`, `signal-handler`), mint a project-specific kind only when none does, and reuse the
+  exact spelling on rebuild (`validate` folds known drift like `http`→`http-route` and nudges the
+  rest). **State per-kind completeness honestly**: for each kind you record, say whether the
+  inventory is complete or a sample — one line per kind under an **"Entry-point coverage"** extras
+  heading, `<kind>: complete|sampled|partial — <how it was enumerated>` (e.g. `http-route: complete
+  — walked FastAPI app.routes`). An unstated kind draws one aggregated `validate` advisory.
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
   like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).

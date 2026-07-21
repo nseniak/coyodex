@@ -230,12 +230,64 @@ _SELF_START_SIGNATURES = ("background", "loop", "cron", "schedul", "timer", "tic
                           "subscrib", "queue", "listener", "watch")
 
 
+# ── Entry-point KIND — the seeded-open naming axis (mirror of the dep PURPOSE bucket) ─────────────
+# Unlike `activation` (CLOSED: who starts it), `kind` names WHAT the entry point is, and stays
+# SEEDED-OPEN: reuse a seed when one fits, mint a project-specific kind (`gateway-loop`,
+# `generator-loop`) when none does. What the seeds + alias fold kill is SPELLING drift of the common
+# kinds — real maps grew `http` vs `http-route` and `event` vs `event-consumer` for the same thing,
+# which splits the System-tab grouping and any per-kind coverage statement. Never blocking: `validate`
+# only nudges an alias spelling toward its canonical form and asks (once per kind) whether a minted
+# kind is a synonym of a seed.
+ENTRY_POINT_KINDS_EXTERNAL = ("http-route", "ui-route", "cli", "webhook", "mcp-tool", "middleware")
+ENTRY_POINT_KINDS_SELF = ("job", "poller", "event-consumer", "startup-hook", "signal-handler")
+ENTRY_POINT_KINDS = ENTRY_POINT_KINDS_EXTERNAL + ENTRY_POINT_KINDS_SELF
+
+# Exact-string fold (matched on the trimmed, lowercased kind): observed drift spellings -> the seed.
+# NOT substring matching — `ui-route` must never fold into `http-route` via its `route` tail. Only
+# UNAMBIGUOUS synonyms fold; a spelling that could mean something else ("background loop",
+# "mounted ASGI") stays minted and gets the synonym nudge instead of a silent reroute.
+ENTRY_POINT_KIND_ALIASES = {
+    "http": "http-route", "http route": "http-route", "route": "http-route",
+    "endpoint": "http-route", "api-route": "http-route",
+    "spa route": "ui-route", "spa-route": "ui-route",
+    "event": "event-consumer", "consumer": "event-consumer", "queue-consumer": "event-consumer",
+    "event-handler": "event-consumer",
+    "cron": "job", "cron-job": "job", "scheduled-job": "job", "timer": "job",
+    "lifespan-hook": "startup-hook", "boot-hook": "startup-hook", "startup": "startup-hook",
+    "boot task": "startup-hook", "process boot": "startup-hook",
+    "signal": "signal-handler",
+    "command": "cli",
+}
+
+# One lookup for both folds: a seed's own spelling (case drift) and the alias spellings.
+_ENTRY_KIND_CANON = {k: k for k in ENTRY_POINT_KINDS} | ENTRY_POINT_KIND_ALIASES
+
+# A seed kind's activation is FIXED by what the kind means — `job` IS self-started even though the
+# word matches no `_SELF_START_SIGNATURES` needle (the substring heuristic misfiles it as external).
+KIND_ACTIVATION = (
+    {k: "external" for k in ENTRY_POINT_KINDS_EXTERNAL} | {k: "self" for k in ENTRY_POINT_KINDS_SELF}
+)
+
+
+def canonical_entry_kind(kind: str) -> str:
+    """Fold an entry-point kind to its canonical seed spelling when it matches a seed (case drift) or
+    a known alias (`http` -> `http-route`); a minted (non-seed) kind is returned trimmed, exactly as
+    authored. The single normalizer every reader routes through — the System-tab grouping, the
+    per-kind coverage contract, the eval profile — so no two consumers can split the same kind."""
+    s = (kind or "").strip()
+    return _ENTRY_KIND_CANON.get(s.lower(), s)
+
+
 def classify_activation(kind: str) -> str:
     """The entry point's activation (one of ACTIVATIONS): "self" if it starts itself
     (timer/loop/boot/signal/queue consumer), else "external" (route/CLI/callback/webhook — something
-    outside asks). Heuristic over the free-text `kind`; the authored `activation` column is the
-    accurate path and this is the fallback when it's absent. Unrecognised → "external" (the common
-    case, and the safe default)."""
+    outside asks). A kind that folds to a SEED gets that seed's fixed activation (`job` is self-run
+    even though no keyword needle says so); otherwise a heuristic over the free-text `kind`. The
+    authored `activation` column is the accurate path and this is the fallback when it's absent.
+    Unrecognised → "external" (the common case, and the safe default)."""
+    canonical = canonical_entry_kind(kind)
+    if canonical in KIND_ACTIVATION:
+        return KIND_ACTIVATION[canonical]
     k = (kind or "").lower()
     return "self" if any(s in k for s in _SELF_START_SIGNATURES) else "external"
 

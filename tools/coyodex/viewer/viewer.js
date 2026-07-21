@@ -3412,15 +3412,16 @@ function renderSystem() {
     return `<section class="uc-group" id="${id}"><h3 class="uc-actor">${esc(title)}</h3>${inner}</section>`;
   };
   const parts = [];
-  // Entry points — grouped by kind; each kind heading carries a small self/external tag, and the
-  // self-starting kinds are listed first so "what runs with no user?" clusters at the top without a
-  // separate section. Each row links to its owning component.
+  // Entry points — grouped by CANONICAL kind (the server folds alias spellings: `http` and
+  // `http-route` rows land in one group, WS-A8); each kind heading carries a small self/external
+  // tag, and the self-starting kinds are listed first so "what runs with no user?" clusters at the
+  // top without a separate section. Each row links to its owning component.
   const eps = G.entry_points || [];
   if (eps.length) {
     const byKind = {};
     const order = [];
     for (const e of eps) {
-      const k = (e.kind || 'other').trim() || 'other';
+      const k = (e.canonical_kind || e.kind || 'other').trim() || 'other';
       if (!byKind[k]) { byKind[k] = []; order.push(k); }
       byKind[k].push(e);
     }

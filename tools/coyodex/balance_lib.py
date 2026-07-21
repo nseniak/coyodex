@@ -156,8 +156,8 @@ def is_homogeneous(m: ProjectModel, children: list[str]) -> bool:
 def extras_bodies(m: ProjectModel, heading: str) -> list[str]:
     """The bodies of every extras section under the given machine-read heading (case-insensitive,
     whitespace-tolerant) — the one reader all recorded-exception headings share ('Balance
-    exceptions', 'Accepted duplications', 'Unclaimed surfaces', 'Happy Path coverage'), so heading
-    matching can never drift between the escape families."""
+    exceptions', 'Accepted duplications', 'Unclaimed surfaces', 'Happy Path coverage',
+    'Entry-point coverage'), so heading matching can never drift between the escape families."""
     want = heading.strip().lower()
     return [x.body for x in m.extras if x.heading.strip().lower() == want]
 
