@@ -394,6 +394,9 @@
             "$ref": "#/$defs/EvidenceItem"
           }
         },
+        "states": {
+          "$ref": "#/$defs/StateMachine"
+        },
         "extra": {
           "type": "object",
           "description": "freeform authored columns \u2014 any JSON value, agent-chosen keys. The ONE place with no fixed meaning: a key `coyodex validate` gives an enforced shape to, or that the method documents as a convention, graduates to a real field instead and is then rejected here under its old spelling (this is how `files`/`evidence`/`package`/`alternative` were promoted)."
@@ -421,6 +424,53 @@
       "required": [
         "file",
         "why"
+      ],
+      "additionalProperties": false
+    },
+    "StateMachine": {
+      "type": "object",
+      "properties": {
+        "states": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "the declared state names \u2014 non-empty, unique; never synthesized (record only a lifecycle the code implements in an enum / status constants / dispatch table)."
+        },
+        "transitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/StateTransition"
+          }
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "bare path:line anchor to the line DECLARING the states; '' = inferred (advisory)."
+        }
+      },
+      "required": [
+        "states"
+      ],
+      "additionalProperties": false
+    },
+    "StateTransition": {
+      "type": "object",
+      "properties": {
+        "src": {
+          "type": "string"
+        },
+        "dst": {
+          "type": "string"
+        },
+        "on": {
+          "type": "string",
+          "description": "the trigger label ('connect ok', 'refresh failed'); optional."
+        }
+      },
+      "required": [
+        "src",
+        "dst"
       ],
       "additionalProperties": false
     },
@@ -608,6 +658,9 @@
           "items": {
             "$ref": "#/$defs/EntityRelation"
           }
+        },
+        "states": {
+          "$ref": "#/$defs/StateMachine"
         }
       },
       "required": [

@@ -172,14 +172,23 @@ def _exceptions(m: ProjectModel) -> set[str]:
     enumerated-but-nothing-links advisory (code that truly runs as one unit); the literal `cadence`
     silences the self-activated-entry-points-record-no-cadence advisory (loops that are all
     genuinely continuous / caller-shaped); the literal `store` silences the unstructured-entity-
-    stores advisory (a map deliberately keeping notes-only stores). All consumed only as
+    stores advisory (a map deliberately keeping notes-only stores). `cadence` and `store` are
+    ordinary prose words, so unlike the other tokens they record LINE-LEADING + separator only
+    (`cadence: <why>`) — a sentence merely using the word never silences. All consumed only as
     skip-sets, so the families can't cross-silence anything. Without a machine-readable escape a
     justified advisory re-fires forever — and worse, invites rewording prose to dodge a heuristic."""
     out: set[str] = set()
     for body in extras_bodies(m, _EXCEPTIONS_HEADING):
         out.update(re.findall(
-            r"\b(?:root|granularity|entity-flows|runs-in|cadence|store|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b",
-            body))
+            r"\b(?:root|granularity|entity-flows|runs-in|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b", body))
+        # `cadence` and `store` are ordinary English words a justification sentence naturally uses
+        # ("its cadence lives in ops config") — an anywhere-in-body scan would let unrelated prose
+        # silently disable a whole advisory family (adversarial-review finding #2). They record
+        # LINE-LEADING + separator only, the `_RECORD_LINE` discipline: `cadence: <why>`.
+        for line in body.splitlines():
+            hit = re.match(r"^\s*(?:[-*]\s+)?\**\s*(cadence|store)\**\s*[:(—–-]", line)
+            if hit:
+                out.add(hit.group(1))
     return out
 
 

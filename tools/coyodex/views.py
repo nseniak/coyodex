@@ -25,6 +25,7 @@ from coyodex.model import (
     FlowStep,
     Group,
     ProjectModel,
+    StateMachine,
     Store,
     TestRow,
     UseCase,
@@ -163,6 +164,18 @@ def _relation_item(r) -> str:
     if r.how:
         parts.append("{" + r.how + "}")
     return " ".join(parts)
+
+
+def _states_str(sm: StateMachine | None) -> str:
+    """The ONE text rendering of a state machine — the domain card's STATES line and the info
+    pane's "States" row (panel text only; a stateDiagram view is a viewer follow-up). Transitions
+    as `a → b (on x)` joined by ` · `; a transition-less machine lists the state names."""
+    if sm is None:
+        return ""
+    if not sm.transitions:
+        return " · ".join(sm.states)
+    return " · ".join(f"{t.src} → {t.dst}" + (f" (on {t.on})" if t.on else "")
+                      for t in sm.transitions)
 
 
 def _store_str(st: Store | None) -> str:
@@ -341,6 +354,9 @@ def model_to_markdown(m: ProjectModel) -> str:
                     " ".join([f"{f.name}:{f.type}"] + f.markers).rstrip() for f in e.fields))
             if e.relations:
                 body.append("RELATIONS: " + " · ".join(_relation_item(r) for r in e.relations))
+            if e.states:
+                sm_src = f" — {_anchor_link(e.states.source)}" if e.states.source else ""
+                body.append(f"STATES: {_states_str(e.states)}{sm_src}")
             if e.source:
                 body.append(_source_line(e.source))
             body.append("")
@@ -492,6 +508,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         fields = {"Component": c.name, "Subsystem": subsystem_name, "Purpose": c.purpose,
                   "Entry point": c.entry_point or "",
                   **({"Runs in": ", ".join(c.runs_in)} if c.runs_in else {}),
+                  **({"States": _states_str(c.states)} if c.states else {}),
                   **{k: _extra_str(v) for k, v in c.extra.items()}}
         # `source` is the v2 canonical home; `entry_point` (also bare) is the next best single
         # location; only then fall back to hunting a markdown link in the free-text cells.
@@ -528,6 +545,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
             meta["Meaning"] = e.meaning
         if e.store:
             meta["Stored"] = _store_str(e.store)
+        if e.states:
+            meta["States"] = _states_str(e.states)
         node = Node(id=e.id, kind="entity", name=e.name, file=e.source, line=_line_of(e.source),
                     fields=meta, parent=e.subdomain,
                     attrs=[{"name": f.name, "type": f.type, "markers": " ".join(f.markers)}

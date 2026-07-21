@@ -83,7 +83,10 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "source": "<path:line|null>",
                      "fields":    [ { "name", "type", "markers": ["PK", "FK→En", "[]", …] } ],
                      "relations": [ { "verb", "target": "En", "src_card", "dst_card",
-                                      "display", "how" } ] } ],
+                                      "display", "how" } ],
+                     "states": { "states": ["a", "b", …],           // optional lifecycle (also on components)
+                                 "transitions": [ { "src", "dst", "on" } ],
+                                 "source": "<bare path:line to the DECLARING line>" } /* or null */ } ],
   "non_entity_types": [ { "name", "source", "why" } ],
 
   "flows":       [ { "uc": "UCn", "title",
@@ -130,10 +133,12 @@ Semantics, stated on the fields:
   a gate). Reuse a seed when one fits — external: `http-route`, `ui-route`, `cli`, `webhook`,
   `mcp-tool`, `middleware`; self: `job`, `poller`, `event-consumer`, `startup-hook`,
   `signal-handler` — and mint a project-specific kind (`gateway-loop`) only when none does. Every
-  reader routes through `grammar.canonical_entry_kind`, which folds known drift spellings
-  (`http`→`http-route`, `event`→`event-consumer`, `cron`→`job`, …) so grouping and per-kind
-  coverage never split; `validate` nudges (advisory) an alias spelling toward its canonical form
-  and asks, once per kind, whether a minted kind is a seed synonym. **Per-kind completeness is
+  reader routes through `grammar.canonical_entry_kind`, which folds known UNAMBIGUOUS drift
+  spellings (`http`→`http-route`, `queue-consumer`→`event-consumer`, `cron`→`job`, …) so grouping
+  and per-kind coverage never split; an ambiguous spelling (`event`, `route`, `command`,
+  `endpoint` — each spans seeds or meanings across ecosystems) deliberately stays minted and
+  draws the nudge instead of a silent reroute. `validate` nudges (advisory) an alias spelling
+  toward its canonical form and asks, once per kind, whether a minted kind is a seed synonym. **Per-kind completeness is
   stated, not assumed**: live maps proved T4 exhaustiveness is silently build-dependent (one map
   enumerated 38 http routes; a bigger one recorded 7 for a far larger API). Record one line per
   kind under an **"Entry-point coverage"** extras heading — `<kind>: complete|sampled|partial —
@@ -165,6 +170,17 @@ Semantics, stated on the fields:
   nudge, silenced by the literal `store` under "Balance exceptions". Each structured store also
   joins the audit L2 skeptic worklist ("En is stored in Dn container 'x'", anchored at the
   entity's source).
+- **`states`** (optional, on entities AND components) records a lifecycle the code actually
+  implements — state names + transitions (`{src, dst, on}`) + a `source` anchoring the line that
+  DECLARES them (an enum, status constants, a dispatch table). Entity lifecycles (a subscription's
+  states) and component lifecycles (a connection manager's disabled/deferred/connecting/live/
+  failed) both qualify; live maps buried exactly these in purpose prose, where they rot first.
+  `validate` blocks an empty state list, duplicate names, and a transition endpoint not in the
+  list; a machine citing no `source` draws an aggregated "inferred" advisory, and a cited source
+  is existence-checked under `--check-sources`. Each machine joins the audit L2 skeptic worklist
+  ("Cn has states […]", anchored at the declaring line). Never synthesize: if the code has no
+  named states (no enum/constants/dispatch), there is no machine to record. Renders as a `STATES:`
+  line on the domain card and a "States" row in the panel (a stateDiagram view is a follow-up).
 - **`subsystems[].tech`** is ONE honest stack label per subsystem ("Python/FastAPI", "Go",
   "Elixir") read off the manifests, with `tech_source` anchoring the manifest line that proves it
   (go.mod, package.json, pyproject.toml) — not a stack essay, and never inferred from vibes. Live
@@ -268,7 +284,8 @@ Semantics, stated on the fields:
   `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `flows[].steps[].where`,
   `entry_points[].source`, **`entry_points[].cadence_source`** (the line declaring a schedule; may
   be `""` = inferred), **`subsystems[].tech_source`** (the manifest line proving a tech label;
-  optional),
+  optional), **`states.source`** (the line declaring a state machine, on entities and components;
+  may be `""` = inferred),
   `evidence[].file`, **`run_commands[].source`**, **`security[].source`**,
   **`deployment[].variants[].source`** (the manifest line grounding a variant tag; may be `""` =
   inferred), and

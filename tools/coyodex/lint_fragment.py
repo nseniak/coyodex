@@ -17,12 +17,14 @@ from coyodex import grammar
 from coyodex.assemble import load_fragment
 from coyodex.model import ID_SHAPE, ModelError, ProjectModel, all_elements
 from coyodex.validate_model import (
+    _cadence_row_warnings,
     _check_activations,
     _check_anchor_format,
     _check_edges,
     _check_entry_kinds,
     _check_extra_conventions,
     _check_flows,
+    _check_states,
     _check_stores,
     _granularity_warnings,
     _referenced_ids,
@@ -118,6 +120,8 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
     problems += rel_problems
     problems += _check_stores(m)  # row-local store-shape rules (dep id shape, closed mode); the
     # folded-dep check self-disables when the fragment doesn't define the dep (it can't resolve it)
+    state_problems, _state_warnings = _check_states(m)  # row-local machine rules (empty list, dup
+    problems += state_problems                          # names, undeclared transition endpoint)
     edge_problems, edge_warnings = _check_edges(m)
     problems += edge_problems + edge_warnings
     # Flow rules (missing step `where`, duplicate step n, missing phrase/endpoint) fail in the trace
@@ -148,11 +152,13 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     # The roleless-C→D-verb nudge rides THIS non-blocking channel (never `lint_fragment_problems`,
     # which would promote it to a blocking problem — trap T7), so an authoring agent SEES it and
     # decides, without a legitimately-generic `uses` failing the lint. The entry-point-kind nudges
-    # ride here too (seeded-OPEN vocabulary — a minted kind must never fail a fragment); the per-kind
-    # COVERAGE contract does not (it relates the whole T4 inventory to an extras heading another
-    # fragment may carry — vacuous per-fragment, like `_completeness_warnings`).
+    # and the ROW-LOCAL cadence nudges (contradiction / inferred / dangling anchor) ride here too
+    # (seeded-OPEN vocabulary and judgment-shaped signals — never fail a fragment); the per-kind
+    # COVERAGE contract and the missing-cadence family do not (each relates the whole T4 inventory
+    # to an extras heading another fragment may carry — vacuous per-fragment, like
+    # `_completeness_warnings`).
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
-            + _check_entry_kinds(m))
+            + _check_entry_kinds(m) + _cadence_row_warnings(m))
 
 
 def main(argv: list[str] | None = None) -> int:

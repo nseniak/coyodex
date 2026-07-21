@@ -33,6 +33,8 @@ from coyodex.model import (
     ProjectModel,
     Role,
     SecurityRow,
+    StateMachine,
+    StateTransition,
     Store,
     SubFlow,
     UseCase,
@@ -157,6 +159,18 @@ def test_kind_coverage_line_folds_alias_spellings() -> None:
     assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
 
 
+def test_kind_coverage_records_spaced_and_case_drifted_minted_kinds() -> None:
+    # review #1/#4: a minted kind may contain spaces ("Mounted ASGI") and has no canonical case —
+    # the contract line the advisory itself prescribes MUST be able to silence it.
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="Mounted ASGI"), make_ep(kind="gateway-loop", trigger="loop")]
+    assert any("Entry-point coverage" in w for w in warnings_of(m))   # nudges before recording
+    m.extras = [ExtraSection(
+        heading="Entry-point coverage",
+        body="Mounted ASGI: complete — enumerated the mounts\nGateway-loop: sampled — main loop only")]
+    assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
+
+
 # --- structured store + persistence coverage (WS-A1) ------------------------------
 
 def test_store_dep_shape_and_mode_are_blocking() -> None:
@@ -213,6 +227,37 @@ def test_unstructured_stores_draw_one_aggregated_nudge_with_store_literal_escape
     assert not any("unstructured" in w for w in warnings_of(m))
 
 
+# --- state machines (WS-A3) --------------------------------------------------------
+
+def test_state_machine_endpoint_and_dup_rules_block() -> None:
+    m = make_valid_model()
+    m.entities[0].states = StateMachine(
+        states=["draft", "draft", "sent"],
+        transitions=[StateTransition(src="draft", dst="shipped", on="ship")],
+        source="src/order.py:20")
+    ps = problems_of(m)
+    assert any("duplicate state name(s): draft" in p for p in ps)
+    assert any("'shipped' is not a declared state" in p for p in ps)
+    m.components[0].states = StateMachine(states=[], source="src/v.py:3")
+    assert any("C1 states: empty state list" in p for p in problems_of(m))
+
+
+def test_state_machine_inferred_source_and_isolated_state_are_advisory() -> None:
+    m = make_valid_model()
+    m.entities[0].states = StateMachine(
+        states=["a", "b", "c"], transitions=[StateTransition(src="a", dst="b")])
+    ws = warnings_of(m)
+    assert any("cite no `source`" in w and "E1" in w for w in ws)
+    assert any("no transition in or out: c" in w for w in ws)
+    assert not any("states" in p for p in problems_of(m))            # both are advisory
+    sm = m.entities[0].states
+    assert sm is not None
+    sm.source = "src/order.py:20"
+    assert not any("cite no `source`" in w for w in warnings_of(m))
+    assert any(label == "E1 states" and href == "src/order.py:20"
+               for label, href in _anchor_pairs(m))                  # cited → --check-sources
+
+
 # --- tech on subsystems (WS-A7) ---------------------------------------------------
 
 def test_tech_on_subdomain_blocks_and_on_subsystem_is_clean() -> None:
@@ -247,6 +292,25 @@ def test_missing_cadence_on_self_ep_is_aggregated_and_literal_silences() -> None
     assert len(ws) == 1 and "2 self-activated" in ws[0]              # one aggregated line
     m.extras = [ExtraSection(heading="Balance exceptions", body="cadence: all loops continuous")]
     assert not any("record no cadence" in w for w in warnings_of(m))
+
+
+def test_cadence_literal_in_prose_does_not_silence() -> None:
+    # review #2: `cadence` is an ordinary English word — a justification sentence merely USING it
+    # ("its cadence lives in ops config") must not disable the family; only a line-leading record.
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="poller", trigger="poll twitch")]
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="C7: one worker on purpose — its cadence lives in ops config.")]
+    assert any("record no cadence" in w for w in warnings_of(m))
+
+
+def test_dangling_cadence_source_without_value_is_nudged() -> None:
+    # review #7: an anchor that labels nothing.
+    m = make_valid_model()
+    ep = make_ep(kind="poller")
+    ep.cadence_source = "src/beat.py:12"
+    m.entry_points = [ep]
+    assert any("records no `cadence`" in w for w in warnings_of(m))
 
 
 def test_cadence_on_external_ep_is_a_contradiction_nudge() -> None:

@@ -26,6 +26,8 @@ from coyodex.model import (
     Flow,
     FlowStep,
     ProjectModel,
+    StateMachine,
+    StateTransition,
     Store,
     SubFlow,
     UseCase,
@@ -1595,6 +1597,20 @@ def test_l2_worklist_carries_structured_store_claims() -> None:
     assert len(items) == 1
     assert "E1" in items[0].claim and "D1 container 'guilds'" in items[0].claim
     assert items[0].anchor == "src/g.py:9"
+
+
+# --- L2 state-machine tier (WS-A3) ----------------------------------------------
+def test_l2_worklist_carries_state_machine_claims() -> None:
+    m = ProjectModel(title="T", goal="g")
+    m.components = [Component(id="C1", name="Manager", purpose="manages",
+                              states=StateMachine(states=["idle", "live"],
+                                                  transitions=[StateTransition(src="idle",
+                                                                               dst="live")],
+                                                  source="src/mgr.py:7"))]
+    items = [it for it in audit_model.l2_worklist_model(m) if "states" in it.claim]
+    assert len(items) == 1
+    assert "C1" in items[0].claim and "idle" in items[0].claim
+    assert items[0].anchor == "src/mgr.py:7"
 
 
 # --- L2 cadence tier (WS-A2) ----------------------------------------------------

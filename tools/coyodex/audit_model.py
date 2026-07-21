@@ -417,6 +417,19 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                 anchor=_anchor(en.source or ""),
                 why_risky=("the persistence inventory hangs on this row — a wrong dep/container "
                            "mis-answers 'what is persisted where?' for every reader.")))
+    # State-machine claims (WS-A3): states rot fast — the enum gains a member, the dispatch grows
+    # a branch, and the map's lifecycle silently lies. Each recorded machine is a prime skeptic
+    # target, anchored at its declaring line (else the element's own source). Drift REPORT-ONLY.
+    for el in (*m.entities, *m.components):
+        sm = getattr(el, "states", None)
+        if sm is not None and sm.states:
+            src = sm.source or getattr(el, "source", "") or ""
+            items.append(WorkItem(
+                claim=f"{el.id} ({el.name}) has states [{', '.join(sm.states)}]"
+                      + (f" with {len(sm.transitions)} transition(s)" if sm.transitions else ""),
+                anchor=_anchor(src),
+                why_risky=("lifecycles rot first — verify the declaring enum/constants still "
+                           "list exactly these states and transitions.")))
     # Cadence claims (WS-A2): a recorded schedule is a claim about WHEN code runs, and schedules
     # drift in real life (an interval tuned in config, a cron moved) — so each anchored cadence is
     # a skeptic target. Anchor = the declaring line (`cadence_source`), falling back to the entry
@@ -424,11 +437,17 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     # writer, so a refuted/moved cadence is re-authored, not auto-nudged.
     for ep in m.entry_points:
         if (ep.cadence or "").strip():
+            # An INFERRED cadence (no declaring anchor) still deserves a skeptic, but the honest
+            # instruction differs: the fallback anchor is the EP's own line, which never declared
+            # the schedule — send the skeptic hunting, don't imply the line says it (review #5).
+            cited = bool((ep.cadence_source or "").strip())
             items.append(WorkItem(
                 claim=f"Entry point [{ep.kind}] {ep.trigger} runs on cadence '{ep.cadence}'",
-                anchor=_anchor(ep.cadence_source or ep.source),
+                anchor=_anchor(ep.cadence_source if cited else ep.source),
                 why_risky=("a schedule is config-tuned and drifts silently — verify the declaring "
-                           "line still says this cadence.")))
+                           "line still says this cadence." if cited else
+                           "cadence is INFERRED (no declaring anchor) — find the line that "
+                           "actually declares the schedule and check the value.")))
     seen: set[str] = set()
     unique: list[WorkItem] = []
     for it in items:

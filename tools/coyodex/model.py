@@ -112,6 +112,8 @@ class Component:
                                      # image), inferred for the shared monolith; empty = untraced. Each
                                      # value must resolve to a `deployment[].unit` (validate).
     evidence: list[EvidenceItem] = field(default_factory=list)
+    states: "StateMachine | None" = None  # the component's runtime lifecycle, when the code
+                                     # implements one (a connection manager's connecting/live/failed)
     extra: dict[str, object] = field(default_factory=dict)  # non-standard authored columns, by
     # header; values are any JSON value (agents return lists/numbers/bools naturally — the views
     # render non-string values as compact JSON). A key `coyodex validate` gives a fixed shape to
@@ -189,6 +191,26 @@ class EntityRelation:
 
 
 @dataclass
+class StateTransition:
+    src: str                         # a state name declared in the owning StateMachine.states
+    dst: str
+    on: str = ""                     # the trigger label ("connect ok", "refresh failed")
+
+
+@dataclass
+class StateMachine:
+    """A lifecycle the code actually implements — states + transitions + the line DECLARING them
+    (an enum / status constants / a dispatch table). Live maps kept these in prose ("disabled/
+    deferred/connecting/live/failed" buried in a component purpose): unqueryable, and the first
+    thing to rot when the code moves. Optional on entities AND components (a subscription's states
+    are entity lifecycle; a connection manager's are component lifecycle)."""
+    states: list[str]                # required, non-empty, unique names
+    transitions: list[StateTransition] = field(default_factory=list)
+    source: str = ""                 # bare `path:line` anchor to the DECLARATION; "" = inferred
+                                     # (advisory — cite the enum/constants line)
+
+
+@dataclass
 class Store:
     """WHERE an entity physically lives — structured so "what is persisted in <datastore>?" is a
     query, not a prose hunt (live maps wrote `"mdb: guilds (+ redis cache)"` free text: unqueryable,
@@ -214,6 +236,7 @@ class Entity:                        # a T5 domain card
     source: str | None = None        # path:line anchoring the real named type
     fields: list[EntityField] = field(default_factory=list)
     relations: list[EntityRelation] = field(default_factory=list)
+    states: StateMachine | None = None  # the entity's lifecycle, when the code implements one
 
 
 @dataclass

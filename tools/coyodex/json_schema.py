@@ -130,6 +130,14 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                       "carries the id (marked FK or a plain same-named column) that is "
                                       "a (reverse) foreign key, not a key. Drawn on the arrow with the "
                                       "«key» marker."},
+    ("StateMachine", "states"): {"description": "the declared state names — non-empty, unique; "
+                                  "never synthesized (record only a lifecycle the code implements "
+                                  "in an enum / status constants / dispatch table)."},
+    ("StateMachine", "source"): {"pattern": _ANCHOR_LINE.pattern,
+                                  "description": "bare path:line anchor to the line DECLARING the "
+                                  "states; '' = inferred (advisory)."},
+    ("StateTransition", "on"): {"description": "the trigger label ('connect ok', 'refresh "
+                                 "failed'); optional."},
     ("Store", "dep"): {"pattern": r"^D\d+$", "description": "the physical datastore/messaging dep "
                         "holding this entity (a D-id); null for a store with no dep (in-memory, "
                         "in-code registry)."},

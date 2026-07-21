@@ -825,22 +825,25 @@ def _check_entry_kinds(m: ProjectModel) -> list[str]:
 # A recorded entry-point coverage line: a line-leading KIND token followed by a separator and one of
 # the contract words — "http-route: complete — enumerated from FastAPI app.routes". The same
 # line-leading + separator discipline as `_RECORD_LINE` / `_COVERAGE_DIR_LINE`, so prose mentioning
-# a kind mid-sentence can't record a contract for it.
+# a kind mid-sentence can't record a contract for it. The kind token ALLOWS spaces (minted kinds
+# like "Mounted ASGI" are legal and must be recordable — the non-greedy match stops at the
+# separator+contract-word, adversarial-review finding #1) and is compared CASEFOLDED (finding #4:
+# minted kinds have no canonical spelling to converge on, so `Gateway-loop:` covers `gateway-loop`).
 _KIND_COVERAGE_LINE = re.compile(
-    r"^\s*(?:[-*]\s+)?\**\s*([A-Za-z][\w-]*)\**\s*[:(—–-]\s*\**(complete|sampled|partial)\b",
+    r"^\s*(?:[-*]\s+)?\**\s*([A-Za-z][\w -]*?)\**\s*[:(—–-]\s*\**(complete|sampled|partial)\b",
     re.IGNORECASE)
 
 
 def _recorded_kind_coverage(m: ProjectModel) -> dict[str, str]:
     """The per-kind completeness contract recorded under an **'Entry-point coverage'** extras heading:
-    canonical kind -> `complete` / `sampled` / `partial`. Keys fold through
+    CASEFOLDED canonical kind -> `complete` / `sampled` / `partial`. Keys fold through
     `grammar.canonical_entry_kind` so a contract written as `http` covers the `http-route` rows."""
     out: dict[str, str] = {}
     for body in balance_lib.extras_bodies(m, "entry-point coverage"):
         for line in body.splitlines():
             hit = _KIND_COVERAGE_LINE.match(line)
             if hit:
-                out[grammar.canonical_entry_kind(hit.group(1))] = hit.group(2).lower()
+                out[grammar.canonical_entry_kind(hit.group(1)).lower()] = hit.group(2).lower()
     return out
 
 
@@ -857,7 +860,7 @@ def _kind_coverage_warnings(m: ProjectModel) -> list[str]:
     recorded = _recorded_kind_coverage(m)
     present = sorted({grammar.canonical_entry_kind(ep.kind)
                       for ep in m.entry_points if (ep.kind or "").strip()})
-    missing = [k for k in present if k not in recorded]
+    missing = [k for k in present if k.lower() not in recorded]
     if not missing:
         return []
     return ["Entry-point coverage: no completeness statement for kind(s) "
@@ -866,37 +869,53 @@ def _kind_coverage_warnings(m: ProjectModel) -> list[str]:
               "— <how it was enumerated>' under an 'Entry-point coverage' extras heading"]
 
 
-def _cadence_warnings(m: ProjectModel) -> list[str]:
-    """Cadence hygiene (all advisory). A self-activated entry point IS the map's answer to "what
-    runs with no user?" — but live maps stopped there: the jobs were named, the WHEN was nowhere
-    (no cron/interval detail on any of three real maps). Three signals:
+def _cadence_row_warnings(m: ProjectModel) -> list[str]:
+    """The ROW-LOCAL cadence nudges (advisory) — shared with `lint_fragment_warnings`, so the
+    authoring agent hears them in its own turn (review #6):
 
       * a cadence on an effectively-EXTERNAL entry point — a schedule on a caller-driven surface is
         a contradiction (fix the activation/kind, or drop the cadence);
       * a set cadence citing no `cadence_source` — inferred, aggregated (the deployment-variant
         rule: cite the declaring line or say it's inferred);
-      * self-activated entry points with NO cadence — aggregated + capped; the escape is the
-        literal `cadence` under a 'Balance exceptions' extras heading (a project whose loops are
-        all genuinely continuous/caller-shaped may silence the family)."""
+      * a `cadence_source` with NO cadence — a dangling anchor that labels nothing (review #7)."""
     warnings: list[str] = []
-    missing: list[str] = []
     inferred = 0
     for ep in m.entry_points:
         act = grammar.effective_activation(ep.activation, ep.kind)
         has_cadence = bool((ep.cadence or "").strip())
+        has_source = bool((ep.cadence_source or "").strip())
         if has_cadence and act != "self":
             warnings.append(
                 f"entry_points[{ep.component} {ep.kind}] records cadence '{_clip(ep.cadence)}' but "
                 "is externally activated — a schedule on a caller-driven surface is a "
                 "contradiction; fix the activation/kind, or drop the cadence")
-        if has_cadence and not (ep.cadence_source or "").strip():
+        if has_cadence and not has_source:
             inferred += 1
-        if not has_cadence and act == "self":
-            missing.append(f"[{ep.kind}] {_clip(ep.trigger)}")
+        if has_source and not has_cadence:
+            warnings.append(
+                f"entry_points[{ep.component} {ep.kind}] cites a `cadence_source` but records no "
+                "`cadence` — the anchor labels nothing; author the cadence value, or drop the anchor")
     if inferred:
         warnings.append(
             f"{inferred} entry-point cadence value(s) cite no `cadence_source` — inferred; anchor "
             "the line that DECLARES the schedule (beat/cron config, compose, the loop's sleep)")
+    return warnings
+
+
+def _cadence_warnings(m: ProjectModel) -> list[str]:
+    """Cadence hygiene (all advisory). A self-activated entry point IS the map's answer to "what
+    runs with no user?" — but live maps stopped there: the jobs were named, the WHEN was nowhere
+    (no cron/interval detail on any of three real maps). The row-local signals live in
+    `_cadence_row_warnings` (shared with fragment lint); this adds the whole-map family:
+    self-activated entry points with NO cadence — aggregated + capped; the escape is the literal
+    `cadence` (line-leading) under a 'Balance exceptions' extras heading (a project whose loops
+    are all genuinely continuous/caller-shaped may silence the family)."""
+    warnings = _cadence_row_warnings(m)
+    missing: list[str] = []
+    for ep in m.entry_points:
+        if (not (ep.cadence or "").strip()
+                and grammar.effective_activation(ep.activation, ep.kind) == "self"):
+            missing.append(f"[{ep.kind}] {_clip(ep.trigger)}")
     if missing and "cadence" not in balance_lib._exceptions(m):
         shown = "; ".join(missing[:6]) + ("; …" if len(missing) > 6 else "")
         warnings.append(
@@ -932,6 +951,51 @@ def _check_runs_in(m: ProjectModel) -> list[str]:
             problems.append(f"entry_points[{i}] runs_in names unknown deployment unit(s): "
                             f"{', '.join(bad)} — each must match a `deployment[].unit` name")
     return problems
+
+
+def _check_states(m: ProjectModel) -> tuple[list[str], list[str]]:
+    """State-machine well-formedness (row-local — safe per-fragment). Blocking: an empty `states`
+    list (a machine with no states claims nothing), duplicate state names, a transition endpoint
+    not declared in `states` (the diagram would draw an orphan box). Advisory: a machine citing no
+    `source` (inferred — cite the enum/constants/dispatch line, aggregated); a state with no
+    transition in or out while OTHER transitions exist (isolated — a typo'd name usually)."""
+    problems: list[str] = []
+    warnings: list[str] = []
+    inferred: list[str] = []
+    for el in (*m.entities, *m.components):
+        sm = el.states
+        if sm is None:
+            continue
+        label = f"{el.id} states"
+        names = [s.strip() for s in sm.states]
+        if not names or not any(names):
+            problems.append(f"{label}: empty state list — name the states, or drop the machine")
+            continue
+        dups = sorted({n for n in names if names.count(n) > 1})
+        if dups:
+            problems.append(f"{label}: duplicate state name(s): {', '.join(dups)}")
+        declared = set(names)
+        touched: set[str] = set()
+        for t in sm.transitions:
+            for end in (t.src, t.dst):
+                if end not in declared:
+                    problems.append(f"{label}: transition endpoint '{end}' is not a declared "
+                                    f"state (states: {', '.join(names)})")
+                else:
+                    touched.add(end)
+        if sm.transitions:
+            isolated = sorted(declared - touched)
+            if isolated:
+                warnings.append(f"{label}: state(s) with no transition in or out: "
+                                f"{', '.join(isolated)} — a typo'd name, or a state worth wiring")
+        if not sm.source.strip():
+            inferred.append(el.id)
+    if inferred:
+        warnings.append(
+            f"{len(inferred)} state machine(s) cite no `source` ({', '.join(inferred[:8])}"
+            f"{', …' if len(inferred) > 8 else ''}) — inferred; anchor the line DECLARING the "
+            "states (the enum / status constants / dispatch table)")
+    return problems, warnings
 
 
 _STORE_DEP_SHAPE = re.compile(r"^D\d+$")
@@ -1019,16 +1083,23 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
     return warnings
 
 
-def _check_group_tech(m: ProjectModel) -> list[str]:
+def _check_group_tech(m: ProjectModel) -> tuple[list[str], list[str]]:
     """`tech` is a SUBSYSTEM field (one honest stack label off the manifests). The `Group`
     dataclass backs both forests, so nothing structural stops a subdomain from carrying one — but
     a bounded context has no stack, and letting it through would seed a parallel, contradictable
     tech axis on the domain side. Blocking: cheap and unambiguous to fix (drop it or move it to
-    the owning subsystem)."""
-    return [f"{sd.id} carries `tech` ('{(sd.tech or sd.tech_source).strip()}') — tech is a "
-            "subsystem field (a bounded context has no stack); drop it, or move it to the "
-            "subsystem that implements this subdomain"
-            for sd in m.subdomains if (sd.tech or "").strip() or (sd.tech_source or "").strip()]
+    the owning subsystem). Advisory: a subsystem citing a `tech_source` with no `tech` label — the
+    anchor is existence-checked yet labels nothing (review #7)."""
+    problems = [f"{sd.id} carries `tech` ('{(sd.tech or sd.tech_source).strip()}') — tech is a "
+                "subsystem field (a bounded context has no stack); drop it, or move it to the "
+                "subsystem that implements this subdomain"
+                for sd in m.subdomains
+                if (sd.tech or "").strip() or (sd.tech_source or "").strip()]
+    warnings = [f"{s.id} cites a `tech_source` but records no `tech` — the anchor labels "
+                "nothing; author the tech label, or drop the anchor"
+                for s in m.subsystems
+                if (s.tech_source or "").strip() and not (s.tech or "").strip()]
+    return problems, warnings
 
 
 def _check_environments(m: ProjectModel) -> list[str]:
@@ -1396,6 +1467,9 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
     for c in m.components:
         bad_anchor(f"{c.id} source", c.source)
         bad_file(f"{c.id} entry_point", c.entry_point)
+    for el in (*m.entities, *m.components):     # a state machine's declaring line is a file anchor
+        if el.states is not None:
+            bad_file(f"{el.id} states.source", el.states.source)
     for d in m.deps:
         bad_file(f"{d.id} where_configured", d.where_configured)
     for el in (*m.components, *m.deps):                     # evidence citations are file:line anchors too
@@ -1547,6 +1621,11 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for e in m.entities:
         if e.source and not url.match(e.source):
             out.append((e.id, e.source))
+    for el in (*m.entities, *m.components):
+        # a CITED state-machine anchor rides the same existence path (an empty one is the
+        # inferred case — an advisory elsewhere, not here).
+        if el.states is not None and el.states.source and not url.match(el.states.source):
+            out.append((f"{el.id} states", el.states.source))
     for g in m.glossary:
         if g.source and not url.match(g.source):
             out.append((f"glossary '{g.term}'", g.source))
@@ -1742,7 +1821,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_check_entry_kinds(m))
     warnings.extend(_kind_coverage_warnings(m))
     warnings.extend(_cadence_warnings(m))
-    problems.extend(_check_group_tech(m))
+    tech_problems, tech_warnings = _check_group_tech(m)
+    problems.extend(tech_problems)
+    warnings.extend(tech_warnings)
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
     warnings.extend(_deployment_placement_warnings(m))
@@ -1757,6 +1838,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(card_warnings)
     problems.extend(_check_stores(m))
     warnings.extend(_persistence_coverage_warnings(m))
+    state_problems, state_warnings = _check_states(m)
+    problems.extend(state_problems)
+    warnings.extend(state_warnings)
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)

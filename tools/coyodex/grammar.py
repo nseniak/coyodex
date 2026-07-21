@@ -257,19 +257,22 @@ ENTRY_POINT_KINDS = ENTRY_POINT_KINDS_EXTERNAL + ENTRY_POINT_KINDS_SELF
 
 # Exact-string fold (matched on the trimmed, lowercased kind): observed drift spellings -> the seed.
 # NOT substring matching — `ui-route` must never fold into `http-route` via its `route` tail. Only
-# UNAMBIGUOUS synonyms fold; a spelling that could mean something else ("background loop",
-# "mounted ASGI") stays minted and gets the synonym nudge instead of a silent reroute.
+# UNAMBIGUOUS synonyms fold; a spelling that could mean something else stays minted and gets the
+# synonym nudge instead of a silent reroute. Adversarial-review finding #3 removed four entries
+# that violated this rule across ecosystems: `event` (a UI/webhook event handler is NOT a queue
+# consumer — and the fold silently flipped its activation to self), `route` (client-side routes:
+# `spa route` folds to ui-route, proving route-spellings span two seeds), `command` (Discord slash
+# commands, CQRS command handlers), `endpoint` (gRPC/WebSocket endpoints). Those spellings now
+# stay minted and draw the synonym nudge — the author adjudicates, never the fold.
 ENTRY_POINT_KIND_ALIASES = {
-    "http": "http-route", "http route": "http-route", "route": "http-route",
-    "endpoint": "http-route", "api-route": "http-route",
+    "http": "http-route", "http route": "http-route", "api-route": "http-route",
     "spa route": "ui-route", "spa-route": "ui-route",
-    "event": "event-consumer", "consumer": "event-consumer", "queue-consumer": "event-consumer",
-    "event-handler": "event-consumer",
+    "consumer": "event-consumer", "queue-consumer": "event-consumer",
     "cron": "job", "cron-job": "job", "scheduled-job": "job", "timer": "job",
     "lifespan-hook": "startup-hook", "boot-hook": "startup-hook", "startup": "startup-hook",
     "boot task": "startup-hook", "process boot": "startup-hook",
     "signal": "signal-handler",
-    "command": "cli",
+    "mcp tool": "mcp-tool", "mcp tool surface": "mcp-tool",
 }
 
 # One lookup for both folds: a seed's own spelling (case drift) and the alias spellings.

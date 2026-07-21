@@ -31,6 +31,7 @@ SUBDOMAIN: <SD-id>                        ← optional; the one subdomain the en
 MEANING: <one-line meaning>
 FIELDS: <field> · <field> · …            ← inline, OR a bullet list (see FIELDS)
 RELATIONS: <relation> · <relation> · …
+STATES: <a → b (on x)> · <b → c> — [file](path:line)   ← optional; the entity's lifecycle
 SOURCE: [<file>](<path>:<line>)
 ```
 
@@ -41,6 +42,7 @@ SOURCE: [<file>](<path>:<line>)
 | `MEANING:` | yes | one-line gloss | `fields.Meaning` |
 | `FIELDS:` | yes | attribute list | `node.attrs` |
 | `RELATIONS:` | no | typed `E→E` edges | `edges` (carry `card` + `kind`) |
+| `STATES:` | no | the lifecycle's transitions + declaring anchor | `fields.States` (rendered from the structured `states` — see [the map model](model.md)) |
 | `SOURCE:` | yes | `[text](path:line)` | `node.file` / `node.line` |
 
 > **The store is STRUCTURED in the model** (`store: {dep, container, mode, notes}` — see

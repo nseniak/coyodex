@@ -34,6 +34,8 @@ from coyodex.model import (
     GlossaryRow,
     Group,
     ProjectModel,
+    StateMachine,
+    StateTransition,
     Store,
     SubFlow,
     UseCase,
@@ -219,6 +221,30 @@ def test_glossary_where_renders_as_link_and_reaches_graph():
     g = model_to_graph(m)
     assert g["glossary"] == [{"term": "Order", "meaning": "a customer order", "source": "src/order.py:12"},
                              {"term": "Brand", "meaning": "the product itself", "source": ""}]
+
+
+def test_states_render_on_card_and_panes():
+    """WS-A3: STATES line on the domain card (with the declaring anchor), 'States' row on the
+    entity and component panes — panel text only, one shared renderer."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.components = [Component(id="C1", name="Manager", purpose="manages",
+                              states=StateMachine(states=["idle", "live"],
+                                                  transitions=[StateTransition(src="idle", dst="live",
+                                                                               on="connect ok")],
+                                                  source="src/mgr.py:7"))]
+    m.entities = [Entity(id="E1", name="Sub", meaning="a sub", source="src/s.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         states=StateMachine(states=["active", "cancelled"],
+                                             transitions=[StateTransition(src="active",
+                                                                          dst="cancelled")],
+                                             source="src/s.py:9"))]
+    md = model_to_markdown(m)
+    assert "STATES: active → cancelled — [s.py](src/s.py:9)" in md
+    g = model_to_graph(m)
+    e1 = cast("dict[str, dict[str, str]]", g["nodes"]["E1"])
+    c1 = cast("dict[str, dict[str, str]]", g["nodes"]["C1"])
+    assert e1["fields"]["States"] == "active → cancelled"
+    assert c1["fields"]["States"] == "idle → live (on connect ok)"
 
 
 def test_structured_store_renders_one_shared_form():

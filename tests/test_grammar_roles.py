@@ -61,7 +61,7 @@ def test_dep_roles_drops_roleless_and_empty_is_empty():
 def test_canonical_entry_kind_folds_aliases_and_case_drift():
     from coyodex.grammar import canonical_entry_kind
     assert canonical_entry_kind("http") == "http-route"           # the mee6 drift spelling
-    assert canonical_entry_kind("event") == "event-consumer"
+    assert canonical_entry_kind("queue-consumer") == "event-consumer"
     assert canonical_entry_kind("cron") == "job"
     assert canonical_entry_kind("lifespan-hook") == "startup-hook"  # the argus spelling
     assert canonical_entry_kind("Http-Route") == "http-route"     # seed case drift folds too
@@ -72,6 +72,18 @@ def test_canonical_entry_kind_keeps_minted_kinds_as_authored():
     from coyodex.grammar import canonical_entry_kind
     assert canonical_entry_kind("gateway-loop") == "gateway-loop"  # project-specific, passes through
     assert canonical_entry_kind("") == ""
+
+
+def test_ambiguous_spellings_stay_minted_never_fold():
+    # Adversarial-review finding #3: these span seeds/meanings across ecosystems, so folding them
+    # would silently reroute (and `event` would even flip activation). They stay minted — the
+    # synonym NUDGE adjudicates, never the fold.
+    from coyodex.grammar import canonical_entry_kind, classify_activation
+    assert canonical_entry_kind("event") == "event"        # UI event handler ≠ queue consumer
+    assert canonical_entry_kind("route") == "route"        # http-route vs ui-route vs msg routing
+    assert canonical_entry_kind("command") == "command"    # CLI vs slash-command vs CQRS
+    assert canonical_entry_kind("endpoint") == "endpoint"  # HTTP vs gRPC vs WebSocket
+    assert classify_activation("event") == "external"      # pre-fold behavior preserved
 
 
 def test_ui_route_never_folds_into_http_route():
