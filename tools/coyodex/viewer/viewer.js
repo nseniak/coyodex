@@ -3436,7 +3436,10 @@ function renderSystem() {
         const comp = (e.component && G.nodes && G.nodes[e.component])
           ? `<button type="button" class="src sys-node" data-id="${esc(e.component)}" data-idx="${e.index || 0}">${esc(nodeName(e.component))}</button>`
           : '<span class="gloss-none">—</span>';
-        return `<tr><td>${mdInline(e.trigger || '')}</td><td>${comp}</td><td>${srcCell(e.source || '')}</td></tr>`;
+        // WS-A2: a recorded cadence renders as a small tag after the trigger ("when does it run?"
+        // answered inline); clicking its source anchor is served by the Cadence md column instead.
+        const cad = e.cadence ? ` <span class="sys-kind-tag">${esc(e.cadence)}</span>` : '';
+        return `<tr><td>${mdInline(e.trigger || '')}${cad}</td><td>${comp}</td><td>${srcCell(e.source || '')}</td></tr>`;
       }).join('');
       const tag = act === 'self' ? '<span class="sys-kind-tag sys-kind-tag--self">auto-run</span>' : '';
       inner += `<h4 class="sys-subhead">${esc(k)}${tag}</h4>`

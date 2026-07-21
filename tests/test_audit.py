@@ -21,6 +21,7 @@ from coyodex.model import (
     Component,
     Edge,
     Entity,
+    EntryPoint,
     Flow,
     FlowStep,
     ProjectModel,
@@ -1575,6 +1576,23 @@ def test_touch_sets_see_subflow_content() -> None:
                     steps=[FlowStep(n=1, src="C2", dst="E1", subflow="SF1")])]
     writes, _reads = audit_model._touch_sets(m)
     assert "E1" in writes["UC1"]
+
+
+# --- L2 cadence tier (WS-A2) ----------------------------------------------------
+def test_l2_worklist_carries_anchored_cadence_claims() -> None:
+    # a recorded schedule is a drift-prone claim about WHEN code runs — each cadence joins the
+    # skeptic worklist, anchored at the DECLARING line (cadence_source), else the EP's own source.
+    m = ProjectModel(title="T", goal="g")
+    m.entry_points = [
+        EntryPoint(kind="poller", trigger="poll twitch", source="src/p.py:1",
+                   cadence="every 30s", cadence_source="src/beat.py:12"),
+        EntryPoint(kind="http-route", trigger="GET /x", source="src/r.py:1"),  # no cadence → no item
+    ]
+    items = audit_model.l2_worklist_model(m)
+    cadence_items = [it for it in items if "cadence" in it.claim]
+    assert len(cadence_items) == 1
+    assert "every 30s" in cadence_items[0].claim
+    assert cadence_items[0].anchor == "src/beat.py:12"
 
 
 # --- built-in runner ------------------------------------------------------------

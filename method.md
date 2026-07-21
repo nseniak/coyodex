@@ -210,6 +210,9 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   inventory is complete or a sample — one line per kind under an **"Entry-point coverage"** extras
   heading, `<kind>: complete|sampled|partial — <how it was enumerated>` (e.g. `http-route: complete
   — walked FastAPI app.routes`). An unstated kind draws one aggregated `validate` advisory.
+  For every **self-activated** entry point, also record its `cadence` — WHEN it runs (a cron expr,
+  `every 30s`, `on-boot`, `continuous`) — with `cadence_source` anchoring the line that declares
+  the schedule (the beat/cron config or the loop's sleep, often not the entry point's own line).
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
   like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).

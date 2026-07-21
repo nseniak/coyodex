@@ -219,6 +219,27 @@ def test_glossary_where_renders_as_link_and_reaches_graph():
                              {"term": "Brand", "meaning": "the product itself", "source": ""}]
 
 
+def test_cadence_column_is_conditional_and_reaches_graph():
+    """WS-A2: the T4 `Cadence` column appears ONLY when some row states one (committed md of maps
+    without cadences stays byte-identical), and cadence + canonical kind ride into the graph's flat
+    entry points for the System tab."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.components = [Component(id="C1", name="Worker", purpose="works")]
+    m.entry_points = [EntryPoint(kind="poller", trigger="poll twitch", source="src/p.py:1",
+                                 component="C1")]
+    md = model_to_markdown(m)
+    assert "Cadence" not in md                                   # no cadence anywhere → no column
+    m.entry_points[0].cadence = "every 30s"
+    m.entry_points[0].cadence_source = "src/beat.py:12"
+    md = model_to_markdown(m)
+    assert "| Cadence |" in md
+    assert "every 30s ([beat.py](src/beat.py:12))" in md         # cadence + its declaring line
+    g = model_to_graph(m)
+    ep = cast("list[dict[str, object]]", g["entry_points"])[0]
+    assert ep["cadence"] == "every 30s"
+    assert ep["canonical_kind"] == "poller"
+
+
 def test_step_where_renders_in_md_and_reaches_graph():
     """A flow step's own `where` (THE location) renders as an inline ` @ ` code link in the T6 md
     view — between the phrase and the note — and rides into the graph's flow steps for the viewer."""

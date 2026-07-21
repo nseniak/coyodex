@@ -402,6 +402,18 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     items.extend(dep_items)
     items.extend(entity_items)
     items.extend(other_items)
+    # Cadence claims (WS-A2): a recorded schedule is a claim about WHEN code runs, and schedules
+    # drift in real life (an interval tuned in config, a cron moved) — so each anchored cadence is
+    # a skeptic target. Anchor = the declaring line (`cadence_source`), falling back to the entry
+    # point's own source. Drift here is REPORT-ONLY for now: `fix apply-drift` has no cadence
+    # writer, so a refuted/moved cadence is re-authored, not auto-nudged.
+    for ep in m.entry_points:
+        if (ep.cadence or "").strip():
+            items.append(WorkItem(
+                claim=f"Entry point [{ep.kind}] {ep.trigger} runs on cadence '{ep.cadence}'",
+                anchor=_anchor(ep.cadence_source or ep.source),
+                why_risky=("a schedule is config-tuned and drifts silently — verify the declaring "
+                           "line still says this cadence.")))
     seen: set[str] = set()
     unique: list[WorkItem] = []
     for it in items:

@@ -156,6 +156,56 @@ def test_kind_coverage_line_folds_alias_spellings() -> None:
     assert not any("Entry-point coverage: no completeness" in w for w in warnings_of(m))
 
 
+# --- entry-point cadence (WS-A2) --------------------------------------------------
+
+def test_missing_cadence_on_self_ep_is_aggregated_and_literal_silences() -> None:
+    m = make_valid_model()
+    m.entry_points = [make_ep(kind="poller", trigger="poll twitch"),
+                      make_ep(kind="job", trigger="prune data")]
+    ws = [w for w in warnings_of(m) if "record no cadence" in w]
+    assert len(ws) == 1 and "2 self-activated" in ws[0]              # one aggregated line
+    m.extras = [ExtraSection(heading="Balance exceptions", body="cadence: all loops continuous")]
+    assert not any("record no cadence" in w for w in warnings_of(m))
+
+
+def test_cadence_on_external_ep_is_a_contradiction_nudge() -> None:
+    m = make_valid_model()
+    ep = make_ep(kind="http-route")
+    ep.cadence = "every 30s"
+    m.entry_points = [ep]
+    assert any("externally activated" in w and "cadence" in w for w in warnings_of(m))
+
+
+def test_cadence_without_source_is_inferred_advisory_and_cited_is_clean() -> None:
+    m = make_valid_model()
+    ep = make_ep(kind="poller", trigger="poll twitch")
+    ep.cadence = "every 30s"
+    m.entry_points = [ep]
+    assert any("cite no `cadence_source`" in w for w in warnings_of(m))
+    ep.cadence_source = "src/poller.py:12"
+    assert not any("cite no `cadence_source`" in w for w in warnings_of(m))
+    assert not any("record no cadence" in w for w in warnings_of(m))  # cadence present → no missing nudge
+
+
+def test_bad_cadence_source_anchor_blocks() -> None:
+    m = make_valid_model()
+    ep = make_ep(kind="poller")
+    ep.cadence = "every 30s"
+    ep.cadence_source = "see the config"                             # prose, not a bare anchor
+    m.entry_points = [ep]
+    assert any("cadence_source" in p and "not a valid" in p for p in problems_of(m))
+
+
+def test_cited_cadence_source_joins_check_sources_pairs() -> None:
+    m = make_valid_model()
+    ep = make_ep(kind="poller")
+    ep.cadence = "every 30s"
+    ep.cadence_source = "src/poller.py:12"
+    m.entry_points = [ep]
+    assert any("cadence" in label and href == "src/poller.py:12"
+               for label, href in _anchor_pairs(m))
+
+
 # --- clean baseline ---------------------------------------------------------------
 
 def test_valid_model_has_no_problems():

@@ -291,10 +291,16 @@ def model_to_markdown(m: ProjectModel) -> str:
                 _table(["Action", "Command", "Source"],
                        [[r.action, r.command, r.source] for r in m.run_commands]))
     if m.entry_points:
-        section("T4 — Entry points",
-                _table(["Kind", "Trigger", "Code entity", "Component"],
-                       [[e.kind, e.trigger, _anchor_link(e.source), e.component]
-                        for e in m.entry_points]))
+        # Cadence column only when any row states one (the `_component_headers` conditional-column
+        # rule) — maps without cadences keep their committed T4 byte-identical.
+        with_cadence = any(e.cadence for e in m.entry_points)
+        headers = ["Kind", "Trigger", "Code entity", "Component"] + (
+            ["Cadence"] if with_cadence else [])
+        rows = [[e.kind, e.trigger, _anchor_link(e.source), e.component]
+                + ([f"{e.cadence} ({_anchor_link(e.cadence_source)})" if e.cadence_source
+                    else e.cadence] if with_cadence else [])
+                for e in m.entry_points]
+        section("T4 — Entry points", _table(headers, rows))
     if m.subdomains:
         section("Subdomains (SD) — bounded contexts of the domain model",
                 _table(["ID", "Subdomain", "Purpose", "Parent", "Source", "Conf."],

@@ -149,6 +149,14 @@ class EntryPoint:                    # T4
                                      # (a loop's exact process, since its component may run in several);
                                      # empty → falls back to the owning component's runs_in in the
                                      # Deployment view. Each value must resolve to a `deployment[].unit`.
+    cadence: str = ""                # WHEN a self-activated entry point runs: a cron expression
+                                     # ("0 3 * * *"), an interval ("every 30s"), "on-boot", or
+                                     # "continuous". Meaningful only when the effective activation is
+                                     # "self" (validate nudges a cadence on an external EP).
+    cadence_source: str = ""         # bare `path:line` anchor to the line DECLARING the schedule (a
+                                     # beat/cron config, a compose schedule, the loop's sleep) — often
+                                     # a different line than `source`; "" on a set cadence = INFERRED
+                                     # (advisory, the deployment-variant rule).
 
 
 @dataclass

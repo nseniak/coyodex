@@ -864,6 +864,47 @@ def _kind_coverage_warnings(m: ProjectModel) -> list[str]:
               "— <how it was enumerated>' under an 'Entry-point coverage' extras heading"]
 
 
+def _cadence_warnings(m: ProjectModel) -> list[str]:
+    """Cadence hygiene (all advisory). A self-activated entry point IS the map's answer to "what
+    runs with no user?" — but live maps stopped there: the jobs were named, the WHEN was nowhere
+    (no cron/interval detail on any of three real maps). Three signals:
+
+      * a cadence on an effectively-EXTERNAL entry point — a schedule on a caller-driven surface is
+        a contradiction (fix the activation/kind, or drop the cadence);
+      * a set cadence citing no `cadence_source` — inferred, aggregated (the deployment-variant
+        rule: cite the declaring line or say it's inferred);
+      * self-activated entry points with NO cadence — aggregated + capped; the escape is the
+        literal `cadence` under a 'Balance exceptions' extras heading (a project whose loops are
+        all genuinely continuous/caller-shaped may silence the family)."""
+    warnings: list[str] = []
+    missing: list[str] = []
+    inferred = 0
+    for ep in m.entry_points:
+        act = grammar.effective_activation(ep.activation, ep.kind)
+        has_cadence = bool((ep.cadence or "").strip())
+        if has_cadence and act != "self":
+            warnings.append(
+                f"entry_points[{ep.component} {ep.kind}] records cadence '{_clip(ep.cadence)}' but "
+                "is externally activated — a schedule on a caller-driven surface is a "
+                "contradiction; fix the activation/kind, or drop the cadence")
+        if has_cadence and not (ep.cadence_source or "").strip():
+            inferred += 1
+        if not has_cadence and act == "self":
+            missing.append(f"[{ep.kind}] {_clip(ep.trigger)}")
+    if inferred:
+        warnings.append(
+            f"{inferred} entry-point cadence value(s) cite no `cadence_source` — inferred; anchor "
+            "the line that DECLARES the schedule (beat/cron config, compose, the loop's sleep)")
+    if missing and "cadence" not in balance_lib._exceptions(m):
+        shown = "; ".join(missing[:6]) + ("; …" if len(missing) > 6 else "")
+        warnings.append(
+            f"{len(missing)} self-activated entry point(s) record no cadence ({shown}) — when does "
+            "each run? Author `cadence` (a cron expr / 'every 30s' / 'on-boot' / 'continuous') "
+            "with its `cadence_source`, or record the literal `cadence` under a "
+            "'Balance exceptions' extras heading")
+    return warnings
+
+
 def _check_runs_in(m: ProjectModel) -> list[str]:
     """`runs_in` (on components and self-started entry points) is the Deployment-view link to a
     deployment unit. It must name a REAL unit, and unit names must be unique so a value resolves
@@ -1271,6 +1312,7 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
             bad_file(f"{sf.id} step {st.n} where", st.where)
     for ep in m.entry_points:
         bad_file(f"entry_points[{ep.component} {ep.kind}].source", ep.source)
+        bad_file(f"entry_points[{ep.component} {ep.kind}].cadence_source", ep.cadence_source)
     for e in m.entities:
         bad_anchor(f"{e.id} source", e.source)
     for g in m.glossary:
@@ -1409,6 +1451,10 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
     for ep in m.entry_points:
         if ep.source and not url.match(ep.source):
             out.append((f"entry_points[{ep.component} {ep.kind}]", ep.source))
+        # a CITED cadence anchor rides the same existence path as variants' (an empty one is the
+        # inferred case — surfaced as an advisory elsewhere, not here).
+        if ep.cadence_source and not url.match(ep.cadence_source):
+            out.append((f"entry_points[{ep.component} {ep.kind}] cadence", ep.cadence_source))
     for s in m.security:
         # the Auth-check anchor is an L2 grounding claim — verify the enforcement site exists.
         # The canonical `security[].source` is a bare `path:line` (like Entity.source), so take the
@@ -1593,6 +1639,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_activations(m))
     warnings.extend(_check_entry_kinds(m))
     warnings.extend(_kind_coverage_warnings(m))
+    warnings.extend(_cadence_warnings(m))
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
     warnings.extend(_deployment_placement_warnings(m))

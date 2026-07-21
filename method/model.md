@@ -67,7 +67,9 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "entry_points":  [ { "kind": "<seeded-open vocab — see the entry_points[].kind bullet>",
                        "trigger", "source": "<path:line>", "component": "Cn",
                        "activation": "<self|external|'' → inferred from kind>",
-                       "runs_in": [ "<deployment[].unit>", … ] } ],   // optional: a self-started loop's PRECISE host unit(s); else its component's runs_in
+                       "runs_in": [ "<deployment[].unit>", … ],   // optional: a self-started loop's PRECISE host unit(s); else its component's runs_in
+                       "cadence": "<cron expr | 'every 30s' | 'on-boot' | 'continuous'>",  // WHEN a self-activated EP runs
+                       "cadence_source": "<bare path:line to the line DECLARING the schedule>" } ],  // "" on a set cadence = INFERRED (advisory)
 
 
   "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "source", "confidence" } ],
@@ -131,6 +133,16 @@ Semantics, stated on the fields:
   kind under an **"Entry-point coverage"** extras heading — `<kind>: complete|sampled|partial —
   <how it was enumerated>` (e.g. `http-route: complete — walked FastAPI app.routes`) — and
   `validate` nudges (one aggregated advisory) any kind present in the table with no statement.
+- **`entry_points[].cadence`** answers the question the self-activated inventory used to stop
+  short of: not just WHAT runs with no user, but WHEN. Meaningful only when the effective
+  activation is `self` (a cadence on an external EP draws a contradiction advisory). Forms: a cron
+  expression (`0 3 * * *`), an interval (`every 30s`), `on-boot`, or `continuous`.
+  `cadence_source` anchors the line that DECLARES the schedule (a beat/cron config, a compose
+  schedule, the loop's own sleep) — often a different line than `source`; a set cadence with no
+  anchor is INFERRED (advisory, the deployment-variant rule), and a cited anchor is
+  existence-checked under `--check-sources` and joins the audit L2 skeptic worklist (schedules are
+  config-tuned and drift silently). A self-activated EP with no cadence draws an aggregated
+  advisory; the escape is the literal `cadence` under a **"Balance exceptions"** heading.
 - **Membership is single-source on the child**: `components[].subsystem`, `subsystems[].parent`,
   `entities[].subdomain`, `subdomains[].parent`. Member lists, inter-group edges, and the
   subsystem→subdomain bridge stay **derived, never stored**. Nesting depth isn't capped — the
@@ -224,7 +236,8 @@ Semantics, stated on the fields:
   syntax (see the schema for the exact shape) — never a markdown link, never prose, never two refs
   joined by a separator. `components[].source`, `entities[].source`, `glossary[].source`,
   `components[].entry_point`, `deps[].where_configured`, `edges[].where`, `flows[].steps[].where`,
-  `entry_points[].source`,
+  `entry_points[].source`, **`entry_points[].cadence_source`** (the line declaring a schedule; may
+  be `""` = inferred),
   `evidence[].file`, **`run_commands[].source`**, **`security[].source`**,
   **`deployment[].variants[].source`** (the manifest line grounding a variant tag; may be `""` =
   inferred), and

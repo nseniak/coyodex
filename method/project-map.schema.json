@@ -541,6 +541,15 @@
           "items": {
             "type": "string"
           }
+        },
+        "cadence": {
+          "type": "string",
+          "description": "WHEN a self-activated entry point runs: a cron expression ('0 3 * * *'), an interval ('every 30s'), 'on-boot', or 'continuous'. Meaningful only when the effective activation is 'self' (a cadence on an external EP draws an advisory)."
+        },
+        "cadence_source": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "bare path:line anchor to the line DECLARING the schedule (beat/cron config, compose, the loop's sleep) \u2014 often a different line than `source`; '' on a set cadence = inferred (advisory)."
         }
       },
       "required": [

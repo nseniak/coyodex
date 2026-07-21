@@ -99,6 +99,15 @@ FIELD_META: dict[tuple[str, str], dict] = {
                               "kind only when none fits, and reuse the exact spelling on rebuild "
                               "(validate folds known drift like 'http'→'http-route' and nudges the "
                               "rest)."},
+    ("EntryPoint", "cadence"): {"description": "WHEN a self-activated entry point runs: a cron "
+                                 "expression ('0 3 * * *'), an interval ('every 30s'), 'on-boot', "
+                                 "or 'continuous'. Meaningful only when the effective activation "
+                                 "is 'self' (a cadence on an external EP draws an advisory)."},
+    ("EntryPoint", "cadence_source"): {"pattern": _ANCHOR_LINE.pattern,
+                                        "description": "bare path:line anchor to the line "
+                                        "DECLARING the schedule (beat/cron config, compose, the "
+                                        "loop's sleep) — often a different line than `source`; '' "
+                                        "on a set cadence = inferred (advisory)."},
     ("EntryPoint", "activation"): {"enum": [*grammar.ACTIVATIONS, ""], "description": "who starts it: "
                                     "'self' (timer/loop/boot/signal/queue consumer — runs with no "
                                     "caller) or 'external' (route/CLI/callback/webhook); '' → inferred "
