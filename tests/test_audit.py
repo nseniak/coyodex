@@ -25,6 +25,7 @@ from coyodex.model import (
     EntryPoint,
     Flow,
     FlowStep,
+    MessagingRow,
     ProjectModel,
     StateMachine,
     StateTransition,
@@ -1597,6 +1598,21 @@ def test_l2_worklist_carries_structured_store_claims() -> None:
     assert len(items) == 1
     assert "E1" in items[0].claim and "D1 container 'guilds'" in items[0].claim
     assert items[0].anchor == "src/g.py:9"
+
+
+# --- L2 messaging tier (WS-A5) --------------------------------------------------
+def test_l2_worklist_carries_messaging_claims() -> None:
+    m = ProjectModel(title="T", goal="g")
+    m.components = [Component(id="C1", name="Worker", purpose="works"),
+                    Component(id="C2", name="Consumer", purpose="consumes")]
+    m.deps = [Dep(id="D1", name="Redis", kind="messaging", type="queue broker")]
+    m.messaging = [MessagingRow(name="JOB_QUEUE", kind="job-queue", broker="D1",
+                                publishers=["C1"], consumers=["C2"],
+                                source="src/queues.py:3")]
+    items = [it for it in audit_model.l2_worklist_model(m) if "Channel" in it.claim]
+    assert len(items) == 1
+    assert "'JOB_QUEUE' on D1" in items[0].claim and "C1" in items[0].claim
+    assert items[0].anchor == "src/queues.py:3"
 
 
 # --- L2 state-machine tier (WS-A3) ----------------------------------------------

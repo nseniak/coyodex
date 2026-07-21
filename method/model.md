@@ -98,6 +98,9 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "steps": [ /* same step shape and rules as flows[].steps */ ] } ],  // T6b
   "edges":       [ { "src", "verb", "dst", "why", "where": "<call-site path:line|null>",
                      "no_call_site": false } ],
+  "messaging":   [ { "name": "<unique channel/queue/topic name>", "kind": "<queue|topic|stream|pubsub|job-queue|…>",
+                     "broker": "Dn|''", "publishers": ["Cn", …], "consumers": ["Cn", …],
+                     "payload": "En|''", "source": "<bare path:line where the channel name is declared>" } ],
 
   "deployment":     [ { "unit", "runs_on", "exposed_as", "config_source",
                         "variants": [ { "env": "<environments[] name>",     // env(s) this unit runs in; empty list = ungated (all envs)
@@ -170,6 +173,16 @@ Semantics, stated on the fields:
   nudge, silenced by the literal `store` under "Balance exceptions". Each structured store also
   joins the audit L2 skeptic worklist ("En is stored in Dn container 'x'", anchored at the
   entity's source).
+- **`messaging`** catalogs the async half of the system — one NAME-keyed row per channel / queue /
+  topic (no id prefix: nothing points at a channel; the row itself is the join, like a deployment
+  unit). `broker` is the D-id of the bus/store carrying it, `publishers`/`consumers` are C-ids,
+  `payload` the E-id a message carries, `source` the line declaring the channel name. **The rows
+  CATALOG; the backbone edges CLAIM**: each publisher/consumer is expected to also carry a real
+  `C→broker` edge — `validate` nudges (advisory) an edge-less participation, because the diagrams
+  and the change-impact ripple only walk edges. Blocking: duplicate names, malformed ids, a broker
+  that is a folded framework/library. A channel with no consumers draws a dead-letter nudge. Each
+  row joins the audit L2 skeptic worklist (verify the enqueue/consume sites name this channel).
+  `kind` is seeded-open (`queue`/`topic`/`stream`/`pubsub`/`job-queue`; mint when none fits).
 - **`states`** (optional, on entities AND components) records a lifecycle the code actually
   implements — state names + transitions (`{src, dst, on}`) + a `source` anchoring the line that
   DECLARES them (an enum, status constants, a dispatch table). Entity lifecycles (a subscription's
@@ -285,7 +298,7 @@ Semantics, stated on the fields:
   `entry_points[].source`, **`entry_points[].cadence_source`** (the line declaring a schedule; may
   be `""` = inferred), **`subsystems[].tech_source`** (the manifest line proving a tech label;
   optional), **`states.source`** (the line declaring a state machine, on entities and components;
-  may be `""` = inferred),
+  may be `""` = inferred), **`messaging[].source`** (the line declaring a channel name),
   `evidence[].file`, **`run_commands[].source`**, **`security[].source`**,
   **`deployment[].variants[].source`** (the manifest line grounding a variant tag; may be `""` =
   inferred), and

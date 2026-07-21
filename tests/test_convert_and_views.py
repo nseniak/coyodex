@@ -33,6 +33,7 @@ from coyodex.model import (
     FlowStep,
     GlossaryRow,
     Group,
+    MessagingRow,
     ProjectModel,
     StateMachine,
     StateTransition,
@@ -221,6 +222,23 @@ def test_glossary_where_renders_as_link_and_reaches_graph():
     g = model_to_graph(m)
     assert g["glossary"] == [{"term": "Order", "meaning": "a customer order", "source": "src/order.py:12"},
                              {"term": "Brand", "meaning": "the product itself", "source": ""}]
+
+
+def test_messaging_section_is_conditional_and_reaches_graph():
+    """WS-A5: the md 'Messaging' section appears only when the catalog has rows, and the rows ride
+    into the graph for the System-tab table."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.components = [Component(id="C1", name="Worker", purpose="works")]
+    assert "Messaging — channels" not in model_to_markdown(m)
+    m.messaging = [MessagingRow(name="JOB_QUEUE", kind="job-queue", broker="D1",
+                                publishers=["C1"], consumers=["C1"], payload="E1",
+                                source="src/queues.py:3")]
+    md = model_to_markdown(m)
+    assert "Messaging — channels" in md and "**JOB_QUEUE**" in md
+    assert "[queues.py](src/queues.py:3)" in md
+    g = model_to_graph(m)
+    rows = cast("list[dict[str, object]]", g["messaging"])
+    assert rows[0]["name"] == "JOB_QUEUE" and rows[0]["publishers"] == ["C1"]
 
 
 def test_states_render_on_card_and_panes():

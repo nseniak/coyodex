@@ -24,6 +24,7 @@ from coyodex.validate_model import (
     _check_entry_kinds,
     _check_extra_conventions,
     _check_flows,
+    _check_messaging,
     _check_states,
     _check_stores,
     _granularity_warnings,
@@ -122,6 +123,9 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None) -> list[str]
     # folded-dep check self-disables when the fragment doesn't define the dep (it can't resolve it)
     state_problems, _state_warnings = _check_states(m)  # row-local machine rules (empty list, dup
     problems += state_problems                          # names, undeclared transition endpoint)
+    msg_problems, _msg_warnings = _check_messaging(m)   # row-local channel rules (id shapes,
+    problems += msg_problems                            # dup names); the backing-edge advisory
+    # stays out — the edges usually live in another fragment
     edge_problems, edge_warnings = _check_edges(m)
     problems += edge_problems + edge_warnings
     # Flow rules (missing step `where`, duplicate step n, missing phrase/endpoint) fail in the trace

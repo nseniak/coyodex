@@ -29,6 +29,7 @@ from coyodex.model import (
     HappyStep,
     Group,
     ExtraSection,
+    MessagingRow,
     NonEntityType,
     ProjectModel,
     Role,
@@ -225,6 +226,55 @@ def test_unstructured_stores_draw_one_aggregated_nudge_with_store_literal_escape
     assert len(ws) == 1 and "2 entity store(s)" in ws[0]
     m.extras = [ExtraSection(heading="Balance exceptions", body="store: notes-only by choice")]
     assert not any("unstructured" in w for w in warnings_of(m))
+
+
+# --- messaging catalog (WS-A5) -----------------------------------------------------
+
+def make_msg(name: str = "JOB_QUEUE", broker: str = "D1", publishers: list[str] | None = None,
+             consumers: list[str] | None = None) -> MessagingRow:
+    return MessagingRow(name=name, kind="job-queue", broker=broker,
+                        publishers=publishers if publishers is not None else ["C1"],
+                        consumers=consumers if consumers is not None else ["C1"],
+                        source="src/queues.py:3")
+
+
+def test_messaging_shape_rules_block() -> None:
+    m = make_valid_model()
+    m.messaging = [make_msg(), make_msg(),                       # duplicate name
+                   MessagingRow(name="X", broker="Redis", publishers=["worker"],
+                                consumers=["C1"], payload="Order", source="see code")]
+    ps = problems_of(m)
+    assert any("Duplicate messaging channel name(s): JOB_QUEUE" in p for p in ps)
+    assert any("broker 'Redis' is not a D-id" in p for p in ps)
+    assert any("publisher 'worker' is not a C-id" in p for p in ps)
+    assert any("payload 'Order' is not an E-id" in p for p in ps)
+    assert any("messaging[2] ('X') source" in p and "not a valid" in p for p in ps)
+
+
+def test_messaging_broker_resolution_and_backing_edge_advisories() -> None:
+    m = make_valid_model()
+    m.deps = [Dep(id="D1", name="Redis", kind="messaging", type="queue broker")]
+    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show", where="src/v.py:5")]
+    m.messaging = [make_msg()]                                   # C1 has no C→D1 edge
+    ws = warnings_of(m)
+    assert any("carry no backbone edge to D1" in w for w in ws)  # invisible to ripple/diagrams
+    m.edges.append(Edge(src="C1", verb="enqueues", dst="D1", why="jobs", where="src/v.py:8"))
+    assert not any("carry no backbone edge" in w for w in warnings_of(m))
+    m.messaging[0].consumers = []
+    assert any("no consumers recorded" in w for w in warnings_of(m))
+    # a dangling broker id is blocking via _check_references
+    m.messaging[0].broker = "D9"
+    assert any("D9" in p for p in problems_of(m))
+
+
+def test_messaging_folded_broker_blocks_and_service_broker_nudges() -> None:
+    m = make_valid_model()
+    m.deps = [Dep(id="D1", name="requests", kind="library", type="HTTP client library")]
+    m.messaging = [make_msg()]
+    assert any("folded" in p and "JOB_QUEUE" in p for p in problems_of(m))
+    m.deps = [Dep(id="D1", name="Webhook svc", kind="service", type="external API")]
+    m.edges.append(Edge(src="C1", verb="enqueues", dst="D1", why="jobs", where="src/v.py:8"))
+    assert any("not messaging/datastore" in w for w in warnings_of(m))
 
 
 # --- state machines (WS-A3) --------------------------------------------------------

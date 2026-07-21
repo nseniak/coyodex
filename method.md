@@ -216,6 +216,10 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   For every **self-activated** entry point, also record its `cadence` — WHEN it runs (a cron expr,
   `every 30s`, `on-boot`, `continuous`) — with `cadence_source` anchoring the line that declares
   the schedule (the beat/cron config or the loop's sleep, often not the entry point's own line).
+  While harvesting queue consumers, also fill the **`messaging` catalog** — one row per named
+  channel/queue/topic (name, broker dep, publisher/consumer components, payload entity, the line
+  declaring the channel name); each participant still needs its real `C→broker` edge (the rows
+  catalog, the edges claim — see [the map model](method/model.md)).
 - **T5 Domain model** *(domain cards)*: one **card** per entity, not a table row — a block
   `**En — Name**` + `MEANING` / `FIELDS` / `RELATIONS` / `SOURCE` (a block with a defining heading,
   like the Happy Path and T6 flows). Renders as a Mermaid `classDiagram` (boxes with attributes + typed, cardinal relations).

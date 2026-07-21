@@ -191,6 +191,22 @@ class EntityRelation:
 
 
 @dataclass
+class MessagingRow:
+    """One channel/queue/topic — the async sibling of a backbone edge, NAME-keyed like a
+    deployment unit (nothing points AT a channel, so no id prefix; the row itself is the join).
+    The rows CATALOG; the backbone edges CLAIM — each publisher/consumer is expected to also carry
+    a real `C→broker` edge (advisory), which is how messaging participation reaches the diagrams
+    and the change-impact ripple without a second edge system."""
+    name: str                        # unique channel/queue/topic name ("JOB_QUEUE")
+    kind: str = ""                   # seeded-open: queue | topic | stream | pubsub | job-queue | …
+    broker: str = ""                 # Dn — the messaging/datastore dep carrying it; "" = in-process
+    publishers: list[str] = field(default_factory=list)   # C ids that put messages on it
+    consumers: list[str] = field(default_factory=list)    # C ids that take messages off it
+    payload: str = ""                # En — the entity a message carries; "" = untyped/none
+    source: str = ""                 # bare `path:line` anchor to where the channel NAME is declared
+
+
+@dataclass
 class StateTransition:
     src: str                         # a state name declared in the owning StateMachine.states
     dst: str
@@ -402,6 +418,9 @@ class ProjectModel:
     flows: list[Flow] = field(default_factory=list)
     subflows: list[SubFlow] = field(default_factory=list)
     edges: list[Edge] = field(default_factory=list)
+    messaging: list[MessagingRow] = field(default_factory=list)  # channels/queues/topics — the
+                                     # async catalog (name-keyed; see MessagingRow). Sits right
+                                     # after `edges`: it reads as the edge list's async sibling.
     deployment: list[DeploymentRow] = field(default_factory=list)
     environments: list[str] = field(default_factory=list)  # the declared deployment-variant names
                                      # (compose profiles / k8s overlays / stages …), in display order —
@@ -520,6 +539,13 @@ def remap_element_ids(m: ProjectModel, remap: dict[str, str]) -> None:
         comp = ep.component.strip()
         if comp in remap:
             ep.component = remap[comp]
+    for mr in m.messaging:
+        if mr.broker:
+            mr.broker = r(mr.broker)
+        mr.publishers = [r(c) for c in mr.publishers]
+        mr.consumers = [r(c) for c in mr.consumers]
+        if mr.payload:
+            mr.payload = r(mr.payload)
     for en in m.entities:
         if en.subdomain:
             en.subdomain = r(en.subdomain)

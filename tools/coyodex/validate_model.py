@@ -209,6 +209,13 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
         comp = ep.component.strip()
         if comp:  # the owning component — a dangling owner was invisible to the reference scan
             refs.add(comp)
+    for mr in m.messaging:
+        if mr.broker:
+            refs.add(mr.broker)
+        refs.update(mr.publishers)
+        refs.update(mr.consumers)
+        if mr.payload:
+            refs.add(mr.payload)
     for en in m.entities:
         if en.subdomain:
             refs.add(en.subdomain)
@@ -953,6 +960,63 @@ def _check_runs_in(m: ProjectModel) -> list[str]:
     return problems
 
 
+def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
+    """Messaging-catalog rules. The rows CATALOG, the edges CLAIM — so the shape rules are
+    blocking (row-local: unique name, D-shaped broker / C-shaped participants / E-shaped payload,
+    non-folded broker, `source` anchor shape via `_check_anchor_format`; id RESOLUTION rides
+    `_check_references`), while everything relating a row to the rest of the map is advisory:
+
+      * a broker that classifies as neither messaging nor datastore — a channel usually lives on
+        a bus or a store; a `service` broker is worth a second look;
+      * a publisher/consumer with NO backbone `C→broker` edge — the diagrams and the change-impact
+        ripple only walk edges, so an edge-less participation is INVISIBLE to both (the
+        `unbacked_entity_steps` rule, applied to messaging); author the edge;
+      * a channel with no consumers — a dead letter (or an external consumer worth a dep)."""
+    problems: list[str] = []
+    warnings: list[str] = []
+    deps_by_id = {d.id: d for d in m.deps}
+    counts: dict[str, int] = {}
+    for mr in m.messaging:
+        counts[mr.name] = counts.get(mr.name, 0) + 1
+    dups = sorted(n for n, c in counts.items() if c > 1)
+    if dups:
+        problems.append(f"Duplicate messaging channel name(s): {', '.join(dups)} — channel names "
+                        "must be unique (they are the row's key, like deployment units)")
+    edge_pairs = {(e.src, e.dst) for e in m.edges}
+    for i, mr in enumerate(m.messaging):
+        label = f"messaging[{i}] ('{mr.name}')"
+        if not mr.name.strip():
+            problems.append(f"messaging[{i}]: empty channel name")
+        if mr.broker and not _STORE_DEP_SHAPE.match(mr.broker):
+            problems.append(f"{label} broker '{mr.broker}' is not a D-id")
+        for role, ids in (("publisher", mr.publishers), ("consumer", mr.consumers)):
+            for cid in ids:
+                if not re.fullmatch(r"C\d+", cid):
+                    problems.append(f"{label} {role} '{cid}' is not a C-id")
+        if mr.payload and not re.fullmatch(r"E\d+", mr.payload):
+            problems.append(f"{label} payload '{mr.payload}' is not an E-id")
+        d = deps_by_id.get(mr.broker)
+        if d is not None:
+            dk = grammar.classify_dep(d.kind or "", d.type)
+            if dk in grammar.DEP_KINDS_FOLDED:
+                problems.append(f"{label} broker {mr.broker} ({d.name}) classifies as a folded "
+                                "framework/library — a channel lives on a real bus/store dep")
+            elif dk not in ("messaging", "datastore"):
+                warnings.append(f"{label}: broker {mr.broker} ({d.name}) classifies as '{dk}', "
+                                "not messaging/datastore — is this really where the channel lives?")
+            for role, ids in (("publisher", mr.publishers), ("consumer", mr.consumers)):
+                unbacked = [c for c in ids if (c, mr.broker) not in edge_pairs]
+                if unbacked:
+                    warnings.append(
+                        f"{label}: {role}(s) {', '.join(unbacked)} carry no backbone edge to "
+                        f"{mr.broker} — the diagrams and impact ripple only walk edges, so this "
+                        "participation is invisible to both; author the C→broker edge")
+        if not mr.consumers:
+            warnings.append(f"{label}: no consumers recorded — a dead letter, or an external "
+                            "consumer worth modeling as a dep")
+    return problems, warnings
+
+
 def _check_states(m: ProjectModel) -> tuple[list[str], list[str]]:
     """State-machine well-formedness (row-local — safe per-fragment). Blocking: an empty `states`
     list (a machine with no states claims nothing), duplicate state names, a transition endpoint
@@ -1470,6 +1534,8 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
     for el in (*m.entities, *m.components):     # a state machine's declaring line is a file anchor
         if el.states is not None:
             bad_file(f"{el.id} states.source", el.states.source)
+    for i, mr in enumerate(m.messaging):        # a channel's declaring line is a file anchor
+        bad_file(f"messaging[{i}] ('{mr.name}') source", mr.source)
     for d in m.deps:
         bad_file(f"{d.id} where_configured", d.where_configured)
     for el in (*m.components, *m.deps):                     # evidence citations are file:line anchors too
@@ -1626,6 +1692,9 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         # inferred case — an advisory elsewhere, not here).
         if el.states is not None and el.states.source and not url.match(el.states.source):
             out.append((f"{el.id} states", el.states.source))
+    for mr in m.messaging:
+        if mr.source and not url.match(mr.source):
+            out.append((f"messaging '{mr.name}'", mr.source))
     for g in m.glossary:
         if g.source and not url.match(g.source):
             out.append((f"glossary '{g.term}'", g.source))
@@ -1841,6 +1910,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     state_problems, state_warnings = _check_states(m)
     problems.extend(state_problems)
     warnings.extend(state_warnings)
+    msg_problems, msg_warnings = _check_messaging(m)
+    problems.extend(msg_problems)
+    warnings.extend(msg_warnings)
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)

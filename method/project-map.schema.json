@@ -126,6 +126,12 @@
         "$ref": "#/$defs/Edge"
       }
     },
+    "messaging": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/MessagingRow"
+      }
+    },
     "deployment": {
       "type": "array",
       "items": {
@@ -925,6 +931,50 @@
         "src",
         "verb",
         "dst"
+      ],
+      "additionalProperties": false
+    },
+    "MessagingRow": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "unique channel/queue/topic name \u2014 the row's key (name-keyed like a deployment unit; nothing points at a channel)."
+        },
+        "kind": {
+          "type": "string",
+          "description": "seeded-open: queue / topic / stream / pubsub / job-queue; mint a project-specific kind when none fits."
+        },
+        "broker": {
+          "type": "string",
+          "pattern": "^D\\d+$",
+          "description": "the messaging/datastore dep carrying the channel; '' = in-process."
+        },
+        "publishers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "consumers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "payload": {
+          "type": "string",
+          "pattern": "^E\\d+$",
+          "description": "the entity a message carries; '' = untyped/none."
+        },
+        "source": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "bare path:line anchor to where the channel NAME is declared."
+        }
+      },
+      "required": [
+        "name"
       ],
       "additionalProperties": false
     },

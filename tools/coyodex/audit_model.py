@@ -417,6 +417,19 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                 anchor=_anchor(en.source or ""),
                 why_risky=("the persistence inventory hangs on this row — a wrong dep/container "
                            "mis-answers 'what is persisted where?' for every reader.")))
+    # Messaging-channel claims (WS-A5): "C12 publishes to 'JOB_QUEUE' on D3; C30 consumes" is a
+    # wiring claim a skeptic refutes by reading the enqueue/consume sites — a wrong participant
+    # list silently mis-draws the async half of the system. Anchor = the channel's declaring line.
+    # Drift REPORT-ONLY (a refuted row is re-authored).
+    for mr in m.messaging:
+        pubs = ", ".join(mr.publishers) or "nobody"
+        cons = ", ".join(mr.consumers) or "nobody"
+        on = f" on {mr.broker}" if mr.broker else ""
+        items.append(WorkItem(
+            claim=f"Channel '{mr.name}'{on}: {pubs} publish(es); {cons} consume(s)",
+            anchor=_anchor(mr.source),
+            why_risky=("the async catalog hangs on this row — verify the enqueue/consume call "
+                       "sites actually name this channel.")))
     # State-machine claims (WS-A3): states rot fast — the enum gains a member, the dispatch grows
     # a branch, and the map's lifecycle silently lies. Each recorded machine is a prime skeptic
     # target, anchored at its declaring line (else the element's own source). Drift REPORT-ONLY.

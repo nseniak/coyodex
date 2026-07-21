@@ -422,6 +422,12 @@ def model_to_markdown(m: ProjectModel) -> str:
         section("Relationships — backbone edge list",
                 _table(["From", "Verb", "To", "Why", "Where (example)"],
                        [[e.src, e.verb, e.dst, e.why or "", _anchor_link(e.where)] for e in m.edges]))
+    if m.messaging:  # only-when-present: maps without an async catalog keep their md byte-identical
+        section("Messaging — channels & queues (the async catalog; participation is claimed by edges)",
+                _table(["Name", "Kind", "Broker", "Publishers", "Consumers", "Payload", "Source"],
+                       [[f"**{r.name}**", r.kind, r.broker, ", ".join(r.publishers),
+                         ", ".join(r.consumers), r.payload, _anchor_link(r.source)]
+                        for r in m.messaging]))
     if m.tests or m.tests_note:
         body = []
         if m.tests_note:
@@ -644,6 +650,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         "non_entity_types": [asdict(t) for t in m.non_entity_types],
         "deployment": [asdict(r) for r in m.deployment],
         "environments": list(m.environments),
+        "messaging": [asdict(r) for r in m.messaging],
+
         "observability": [asdict(r) for r in m.observability],
         "security": [asdict(r) for r in m.security],
         "config": [asdict(r) for r in m.config],

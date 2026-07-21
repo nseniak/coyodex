@@ -121,6 +121,8 @@ class GraphDict(TypedDict):
     non_entity_types: list[dict[str, str]]  # deliberately-unmodelled types: {name, source, why}
     deployment: list[dict[str, object]]     # {unit, runs_on, exposed_as, config_source, variants: [{env, source}…]}
     environments: list[str]                 # declared deployment-variant names (compose profiles / stages); [] = none
+    messaging: list[dict[str, object]]      # async catalog: {name, kind, broker, publishers, consumers,
+                                            # payload, source} — rendered as a System-tab table
     observability: list[dict[str, str]]     # {signal, where_emitted, where_viewed, alerts}
     security: list[dict[str, str]]          # {surface, who, source, risk}
     config: list[dict[str, str]]            # {key, purpose, default, per_env}

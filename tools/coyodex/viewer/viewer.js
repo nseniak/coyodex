@@ -73,7 +73,7 @@ function applyBundle(b) {
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
-  HAS_SYSTEM = ['run_commands', 'entry_points', 'non_entity_types', 'deployment', 'observability',
+  HAS_SYSTEM = ['run_commands', 'entry_points', 'non_entity_types', 'deployment', 'messaging', 'observability',
     'security', 'config', 'extras'].some((k) => Array.isArray(GRAPH[k]) && GRAPH[k].length > 0);
   HAS_TESTS = (Array.isArray(GRAPH.tests) && GRAPH.tests.length > 0) || !!(GRAPH.tests_note || '').trim();
 }
@@ -3459,6 +3459,17 @@ function renderSystem() {
   if (DEPLOY_ENVS && DEPLOY_ENVS.length) deployCols.push(
     { head: 'Variants', get: (r) => ({ html: variantsCell(r.variants) }) });
   parts.push(sec('Deployment & topology', refTable(G.deployment, deployCols)));
+  // WS-A5: the async catalog — publishers/consumers link to their component nodes.
+  const compBtn = (cid) => (cid && G.nodes && G.nodes[cid])
+    ? `<button type="button" class="src sys-node" data-id="${esc(cid)}">${esc(nodeName(cid))}</button>`
+    : esc(cid || '');
+  parts.push(sec('Messaging — channels & queues', refTable(G.messaging, [
+    { head: 'Name', get: (r) => r.name }, { head: 'Kind', get: (r) => r.kind },
+    { head: 'Broker', get: (r) => ({ html: compBtn(r.broker) }) },
+    { head: 'Publishers', get: (r) => ({ html: (r.publishers || []).map(compBtn).join(', ') }) },
+    { head: 'Consumers', get: (r) => ({ html: (r.consumers || []).map(compBtn).join(', ') }) },
+    { head: 'Payload', get: (r) => ({ html: compBtn(r.payload) }) },
+    { head: 'Source', get: (r) => ({ src: r.source }) }])));
   parts.push(sec('Observability', refTable(G.observability, [
     { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
     { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }])));

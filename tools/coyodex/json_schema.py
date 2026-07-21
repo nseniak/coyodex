@@ -130,6 +130,17 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                       "carries the id (marked FK or a plain same-named column) that is "
                                       "a (reverse) foreign key, not a key. Drawn on the arrow with the "
                                       "«key» marker."},
+    ("MessagingRow", "name"): {"description": "unique channel/queue/topic name — the row's key "
+                                "(name-keyed like a deployment unit; nothing points at a channel)."},
+    ("MessagingRow", "kind"): {"description": "seeded-open: queue / topic / stream / pubsub / "
+                                "job-queue; mint a project-specific kind when none fits."},
+    ("MessagingRow", "broker"): {"pattern": r"^D\d+$", "description": "the messaging/datastore dep "
+                                  "carrying the channel; '' = in-process."},
+    ("MessagingRow", "payload"): {"pattern": r"^E\d+$", "description": "the entity a message "
+                                   "carries; '' = untyped/none."},
+    ("MessagingRow", "source"): {"pattern": _ANCHOR_LINE.pattern,
+                                  "description": "bare path:line anchor to where the channel NAME "
+                                  "is declared."},
     ("StateMachine", "states"): {"description": "the declared state names — non-empty, unique; "
                                   "never synthesized (record only a lifecycle the code implements "
                                   "in an enum / status constants / dispatch table)."},
