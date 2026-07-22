@@ -641,6 +641,20 @@ synthesis → parallel trace.**
   harvest as one concurrent batch** (all agents in a single fan-out), not in waves — the slices are
   disjoint and use pre-allocated ID ranges, so no agent needs another's output first, and they
   return compact rows (not file dumps) so reading them together is cheap.
+  - **Pre-size the slices from the pre-index so no slice becomes the critical path.** The whole
+    phase ends when the SLOWEST agent does: a live build's entrypoints+security slice ran 23
+    minutes while every sibling finished in 4–8, stalling the barrier by a quarter hour. The
+    pre-index already counts files/symbols per area — aim for roughly EQUAL estimated work per
+    slice, and specifically split the entry-points+security harvest **by router / surface** on a
+    large route surface (per-kind coverage statements merge cleanly; the coverage sweep catches
+    seam misses, so splitting costs no completeness).
+  - **Resilience: write a DRAFT fragment early, finalize at the end.** An agent that dies mid-run
+    (API outage, machine sleep — two live builds each lost ~13 minutes this way) loses ALL its
+    reading if the fragment only exists at the end. Write incremental progress to
+    `<id>.draft.json` and RENAME to `<id>.json` only when complete — the draft suffix keeps a
+    half-written file out of the assemble glob (a partial fragment must never assemble). The lead
+    probes stalled agents early (a couple of minutes of no progress, not a late `ls` sweep) and
+    resumes a dead agent via SendMessage with its draft as the continuation point, or relaunches.
   - **Reconcile your slice expectations with E BEFORE launching.** Hand each agent its slice's E
     from the pre-index `granularity.per_dir` — never your own gut numbers. If you deliberately
     deviate (a file-per-class repo where per-dir E under-counts), SUM your slice expectations first:
@@ -692,7 +706,14 @@ synthesis → parallel trace.**
       isolated-entity count is the check.
 - Phase 2 Synthesize (barrier, one agent): T1 clusters/dedups all harvest outputs, and (large
   maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier. **Synthesis
-  is the final-ID authority.** Harvest agents may use per-slice *provisional* ids; synthesis assigns the
+  is the final-ID authority.** **Only the dedup/renumber step is the hard barrier — overlap the
+  rest.** No trace launches before dedup completes (a trace referencing an id that dedup then
+  renumbers is the dangling-ref class this barrier exists to prevent — do not trade that for
+  minutes). But dedup itself is fast; the SLOW synthesis work carries no id risk and should run
+  concurrently once dedup is done: fan out the **test-completeness agent** and any remaining
+  **deployment/ops backfill** WHILE the lead authors the reconcile assignments
+  (subsystem/subdomain/runs_in/bucket) — a live build spent 13 lead-only minutes here with every
+  agent idle, then ran tests/backfill serially after the traces. Harvest agents may use per-slice *provisional* ids; synthesis assigns the
   final canonical ids here. This is the safe place to renumber: Phase 1 produced only nodes (no edges
   yet — those are Phase 3), so the only intra-slice references to fix up are `entry_point.component`,
   `entity.subdomain`, and the `E↔E` `relation.target` / `FK→En` markers. Because collisions are resolved
@@ -741,6 +762,13 @@ synthesis → parallel trace.**
   `Used in UC` view and line-level diff impact derive from the steps, so edges alone leave the
   domain model untraceable. This is *additional*: the `C↔C`/`C↔D` edges
   remain the primary output and must stay complete (every dep wired, the component graph not sparse).
+  **Size the trace fan-out so no agent becomes the straggler**: heaviness is predictable up front
+  (a slice's use-case count × its entry-point/component counts) — a live build's monetization
+  trace ran 13½ minutes while the lead idled at the barrier, purely because one agent carried too
+  many use cases. Split a heavy slice into two agents at LAUNCH, **always at use-case
+  boundaries — never split one use case's flow across agents** (a flow traced by two contexts
+  loses coherence; per-agent SF ranges + cross-fragment `--ids build-fragments/` handle any shared
+  sub-flow between them).
   Trace-prompt discipline (all proven on live builds):
   - **Prescribe likely sub-flows in the prompts.** The lead can usually see from the use-case list
     which machinery is shared ("UC10 and UC13 walk the same tool-call path — EXTRACT it as a
@@ -805,10 +833,14 @@ synthesis → parallel trace.**
   take the audit's **L2 grounding worklist** and disprove it against the code (read it with
   `coyodex audit --json` — the machine-readable `{findings, worklist}` payload built for this
   batching step; never regex-parse the human report). **Batch by theme/risk,
-  don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group the claims into a
-  handful of themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage), one
+  don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group the claims into
+  themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage), one
   fresh-context skeptic per batch, and for the riskiest claims (auth, scoping, encryption) run **N
-  skeptics + majority vote**. Each is told to *disprove* the claim (default to *refuted* on doubt). This
+  skeptics + majority vote**. **Cap each batch at ~40 claims** and split an oversized theme into
+  two skeptics rather than one long-running one — a live build gave one skeptic 144 claims (150
+  turns, 10 minutes, the phase's critical path) while its siblings finished in half the time;
+  more, smaller skeptics also mean fresher context per claim, so this trades nothing away. Keep
+  the split WITHIN a theme (related claims still travel together). Each is told to *disprove* the claim (default to *refuted* on doubt). This
   is the *breaking* twin of the parallel *build*, aimed at falsification. **Fresh context is the whole
   point** — a verifier that sees the build reasoning inherits its blind spots. Each skeptic also reports
   the ONE `file:line` where the operation **actually** happens (the true call site); a drifted anchor
