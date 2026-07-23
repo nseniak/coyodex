@@ -1425,6 +1425,7 @@ function bindFlow(uc) {
       ev.stopPropagation();
       flowSyncCur(i);  // clicking a step's arrow directly moves the player's counter to it
       pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
+      if (ev.shiftKey) frameArrow(line || text);  // shift-click frames the step's arrow
     };
     const on = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = HOVER; };
     const off = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = hpRestFilter(scene, el); };
@@ -2043,6 +2044,25 @@ function matchTextSize(el) {
   if (!onScreenFontSize || !targetFontSize) return;
   applyZoomAndCenter(el, targetFontSize / onScreenFontSize);
 }
+// The arrow analog of matchTextSize: a shift-click on ANY arrow (a flowchart edge, or a Happy Path /
+// use-case message) centers it and zooms so its extent fills a comfortable slice of the viewport. Unlike
+// matchTextSize (which sizes a box against its name label), this measures the arrow's own bounding box, so
+// it works the same whether or not the arrow carries a label — every arrow type frames identically.
+function frameArrow(el) {
+  if (!mainPz || !el) return;
+  const r = el.getBoundingClientRect();
+  const stage = diagram.getBoundingClientRect();
+  if ((r.width < 1 && r.height < 1) || !stage.width) return;
+  // Fit the arrow's bounding box into ~70% of the viewport in BOTH axes (the tighter axis binds), so a
+  // wide, near-horizontal message arrow zooms only enough to frame it end-to-end centered, while a short
+  // arrow zooms in — never the axis-mismatched over-zoom of sizing one dimension against the other.
+  const fitW = r.width >= 1 ? stage.width / r.width : Infinity;
+  const fitH = r.height >= 1 ? stage.height / r.height : Infinity;
+  // Clamp to a sane band: at most ~2.5x in (a very short arrow just gets a moderate zoom, not a jarring
+  // leap) and at most 2x out (a diagram-spanning arrow zooms out enough to see end-to-end, no further).
+  const scale = Math.min(Math.max(0.7 * Math.min(fitW, fitH), 0.5), 2.5);
+  applyZoomAndCenter(el, scale);
+}
 
 // Select the collapsed Libraries box: highlight + show its roster (showLibsFold), and dim to its
 // neighbourhood (the System + the SYS→box arrow) just like selecting a dependency — the bundles arrow
@@ -2303,6 +2323,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
     if (opts.onDrill && isDrillClick(ev)) { hoverOff(); opts.onDrill(); return; }  // ⌥-click drills in
     hoverOff();  // drop the hover glow before selecting, so it can't linger under HILITE
     pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
+    if (ev.shiftKey) frameArrow(p);  // shift-click frames the arrow (the edge analog of a box's matchTextSize)
   };
   scene.edgeEls.push({ e, path: p, label });
   attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn, () => selHas(scene, selKey));
@@ -3149,6 +3170,7 @@ function bindHP() {
       off();
       if (isDrillClick(ev)) { go({ kind: 'usecase', uc: step.uc }); return; }  // ⌥-click drills into the use case's flow
       pickSel(scene, hpStepDesc(scene, i, hpId, aidOfStep[i]), ev);
+      if (ev.shiftKey) frameArrow(line || text);  // shift-click frames the step's arrow
     };
     for (const el of [text, line]) {
       if (!el) continue;
@@ -5471,12 +5493,13 @@ setSave.addEventListener('click', saveSettings);
 modal.addEventListener('click', (e) => { if (e.target === modal) closeSettings(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) closeSettings(); });
 
-// --- first-run navigation guide -------------------------------------------------
-// A one-time overlay teaching click-to-focus / ⌘-click-to-drill, remembered in localStorage so it
-// shows once (Esc / backdrop / "Got it" dismiss it). The canvas hint is informational, not a reopener.
+// --- navigation guide -----------------------------------------------------------
+// An overlay teaching the map's gestures. It auto-shows once on the first visit (remembered in
+// localStorage), and the header "?" button reopens it any time. Esc / backdrop / "Got it" dismiss it.
 const coach = document.getElementById('coach');
 const dismissCoach = () => { coach.hidden = true; lsSet(LS.coach, '1'); };
 document.getElementById('coachok').addEventListener('click', dismissCoach);
+document.getElementById('helpbtn').addEventListener('click', () => { coach.hidden = false; });
 coach.addEventListener('click', (e) => { if (e.target === coach) dismissCoach(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.hidden) dismissCoach(); });
 if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once
