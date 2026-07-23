@@ -4964,6 +4964,7 @@ function codeItemsForPath(path) {
 function paintCodeTags() {
   if (!cvTable || !cvPath) return;
   hideUcPick();  // a repaint replaces the pill the picker was anchored to
+  cvpop.hidden = true;  // and drops any hover card pinned to an about-to-be-removed pill
   cvTable.querySelectorAll('td.cvtag').forEach((td) => { td.textContent = ''; });  // clear a previous paint
   for (const it of codeItemsForPath(cvPath)) {
     const row = cvTable.querySelector('tr[data-ln="' + it.line + '"]');
@@ -5000,6 +5001,9 @@ function showMarkPop(el, name, label, kind) {
 function attachMarkPop(el, name, label, kind) {
   el.addEventListener('mouseenter', () => showMarkPop(el, name, label, kind));
   el.addEventListener('mouseleave', () => { cvpop.hidden = true; });
+  // Clicking the pill navigates (and repaints the tags), which removes this pill from the DOM — so its
+  // mouseleave never fires and the hover card would otherwise linger. Dismiss it explicitly on click.
+  el.addEventListener('click', () => { cvpop.hidden = true; });
 }
 // The picker for a use-case pill covering SEVERAL use cases (they share the line's edge): a small
 // floating card listing each one; picking runs the same selection a plain click performs when the pill
