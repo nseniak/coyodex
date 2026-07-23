@@ -428,6 +428,12 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
    part of the item, aligned under its why line — not as a separate block below. */
 #panel .xlist .xfacts { padding-left: 14px; }
 #panel .xlist .xfacts dt:first-child { margin-top: 8px; }
+/* A concrete (single) arrow renders as its own selection card — bare content, no list bullet and no
+   selected-row side bar (the card itself frames + marks it). The from→to pair reads as the card's lead;
+   the why line + relation facts sit beneath, aligned like a selected row minus the list chrome. */
+#panel .xarrow .xpair { font-weight: 600; }
+#panel .xarrow .xfacts { padding-left: 14px; }
+#panel .xarrow .xfacts dt:first-child { margin-top: 8px; }
 
 /* While ⌥ (Option/Alt) is held (body.altmod), drillable subsystem boxes + inter-subsystem arrows show a
    drill-in cursor — the affordance for ⌥-click drilling (⌘ is the multi-select modifier). !important

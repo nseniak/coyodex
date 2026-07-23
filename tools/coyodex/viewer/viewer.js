@@ -314,15 +314,39 @@ function selReplace(scene, desc) { selClear(scene); selAdd(scene, desc); }
 // selection; a plain click replaces the selection with just this element. Every plain-select entry point
 // goes through here so the two gestures behave uniformly across every view.
 function pickSel(scene, desc, e) { if (isMultiSelectClick(e)) selToggle(scene, desc); else selReplace(scene, desc); }
-// Restore a saved selection onto the freshly-bound scene: replay each key's selector (which adds it back).
-// Prefers the captured multi-selection (`sels`), falling back to a single requested key (`sel`, used by a
-// focus-drill / a flow-step navigation). Returns whether anything was applied.
+// `box` is `node`, or an ancestor of it in the group tree (subsystem/subdomain containment).
+function isAncestorOrSelf(box, node) { return box === node || isAncestorOf(box, node); }
+// The keys of the drawn arrows in THIS scene that COVER any of the bundle's underlying links — a drawn
+// arrow src→dst covers a link a.src→a.dst when each drawn end is that link end or an ancestor of it. This
+// is how a synthetic-arrow drill selects the right arrows without predicting the target card's grouping:
+// a card that drew the links individually matches them one-to-one; a card that re-bundled them under a
+// child box matches that one aggregated arrow (its endpoints are ancestors of the links'). Reuses the SAME
+// ancestor test the card itself used, run against the arrows it really drew — so nothing can drift.
+function coverKeys(scene, atoms) {
+  const keys = new Set();
+  for (const x of scene.edgeEls) {
+    if (!x.key) continue;  // a focus-only edge (a derived deployment arrow) has no selector — skip
+    if (atoms.some((a) => isAncestorOrSelf(x.e.src, a.src) && isAncestorOrSelf(x.e.dst, a.dst))) keys.add(x.key);
+  }
+  return [...keys];
+}
+// The selection keys a state wants restored on arrival, in priority order: an exact captured multi-selection
+// (`sels`, from history), else a synthetic arrow's covered arrows (`selCover`, resolved against what the
+// target card drew), else a single requested key (`sel`, a focus-drill / flow-step / bridge leaf). Filtered
+// to keys whose selectors exist in this scene.
+function selectionKeysFor(scene, s) {
+  let keys = (s.sels || []).filter((k) => scene.selectors[k]);
+  if (!keys.length && s.selCover) keys = coverKeys(scene, s.selCover);
+  if (!keys.length && s.sel && scene.selectors[s.sel]) keys = [s.sel];
+  return keys;
+}
+// Restore a saved selection onto the freshly-bound scene: replay each resolved key's selector (adds it back).
+// Returns whether anything was applied.
 function restoreSelection(scene, s) {
-  const keys = (s.sels && s.sels.length) ? s.sels : (s.sel ? [s.sel] : []);
-  const usable = keys.filter((k) => scene.selectors[k]);
-  if (!usable.length) return false;
+  const keys = selectionKeysFor(scene, s);
+  if (!keys.length) return false;
   selClear(scene);
-  for (const k of usable) scene.selectors[k]();
+  for (const k of keys) scene.selectors[k]();
   return true;
 }
 function applyFocus(scene, keepNode, keepEdge) {
@@ -1015,10 +1039,10 @@ function showNodeDetailSynced(id) {
   updateFolderPeek(id);  // auto-opens browsing for a folder element (see updateFolderPeek)
 }
 
-// One arrow's full panel row: the from→to pair + a why line, with the structured relation facts
-// (cardinality / implemented-by / keyed-by) beneath. Shared by showEdge (a single selected row) and
-// showPairEdges (every parallel edge of a drawn pair) so the two read as one idiom.
-function edgeRowHtml(e, sel) {
+// One arrow's detail BODY: the from→to pair + a why line, with the structured relation facts
+// (cardinality / implemented-by / keyed-by) beneath. Shared by the concrete-arrow card (showEdge — as bare
+// card content, no bullet/selected-row bar) and the arrow-LIST rows (edgeRowHtml / showPairEdges).
+function edgeRowInner(e) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
   // domain relations carry a kind (composition/…) + cardinality; component edges carry why/where. The
   // verb + kind ride in the row's why line (or the Verb fact row); cardinality/impl/keyed sit below.
@@ -1052,15 +1076,21 @@ function edgeRowHtml(e, sel) {
   const kindTag = e.kind ? ' <span class="muted">(' + esc(e.kind) + ')</span>' : '';
   const whyLine = e.why ? mdInline(e.why) : (e.verb ? esc(e.verb) + kindTag : '');
   const facts = card + implRow + keyedRow;
-  return arrowRow(nm(e.src), nm(e.dst), whyLine, sel,
-                  facts ? '<dl class="xfacts">' + facts + '</dl>' : '');
+  return arrowRowInner(nm(e.src), nm(e.dst), whyLine,
+                       facts ? '<dl class="xfacts">' + facts + '</dl>' : '');
+}
+// The arrow as a LIST row (a parallel-pair list); the concrete-arrow card uses edgeRowInner directly.
+function edgeRowHtml(e, sel) {
+  return '<li class="xrow' + (sel ? ' sel' : '') + '">' + edgeRowInner(e) + '</li>';
 }
 // Selecting an arrow shows its relationship facts ONLY. An arrow deliberately does NOT point at code:
 // its `where` is an example call site (a witness kept for validation/impact/drift), never THE location
 // of the interaction — so there is no source link, the code viewer is left untouched, and the tree
 // highlight is cleared so a previous selection's path can't read as this arrow's location.
 function showEdge(e) {
-  panel.innerHTML = '<ul class="xlist">' + edgeRowHtml(e, true) + '</ul>';
+  // A concrete arrow is now its own selection card, so it renders as bare card content — no list bullet,
+  // no selected-row side bar (the card frames it). List views (parallel pairs, crossings) still use rows.
+  panel.innerHTML = '<div class="xarrow">' + edgeRowInner(e) + '</div>';
   cvElement = null;  // an edge has no single owning element -> no header pill
   setTreeSelection(null);  // clear pill emphasis + selection pills
   highlightTreePath(null);
@@ -1165,27 +1195,50 @@ function showBridge(sid, sd) {
 // no click, no hover glow — to never present the example as "the" location of the interaction. Precise
 // anchors (element sources, flow-step `where`) keep their code links elsewhere. `sel` renders the
 // single-arrow view's own row (showEdge) in the selected state.
+function arrowRowInner(srcName, dstName, whyHtml, extra) {
+  return '<div class="xpair">' + esc(srcName) + ' → ' + esc(dstName) + ':</div>'
+    + (whyHtml ? '<div class="xwhy">' + whyHtml + '</div>' : '') + (extra || '');
+}
 function arrowRow(srcName, dstName, whyHtml, sel, extra) {
-  return '<li class="xrow' + (sel ? ' sel' : '')
-    + '"><div class="xpair">' + esc(srcName) + ' → ' + esc(dstName) + ':</div>'
-    + (whyHtml ? '<div class="xwhy">' + whyHtml + '</div>' : '') + (extra || '') + '</li>';
+  return '<li class="xrow' + (sel ? ' sel' : '') + '">' + arrowRowInner(srcName, dstName, whyHtml, extra) + '</li>';
 }
 // Selecting (not drilling) a Subsystems arrow: list every component→component crossing it bundles as
 // `from → to:` with its explanation (and a link to its call site) indented below — one uniform font, no
 // verb — so the wiring is readable without leaving the map.
-function showContainerEdge(a, b, drawn) {
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+// The crossing component→component edges an inter-subsystem arrow bundles — CONTAINER_EDGES[a>b],
+// narrowed to a member component's own crossings when the DRAWN arrow ends on one (a subsystem card's
+// member arrow; in the Subsystems overview both ends are subsystems, so nothing is filtered). Shared by
+// showContainerEdge (the panel list) AND the drill (which pre-selects exactly these arrows in the edge card).
+function containerEdgeList(a, b, drawn) {
   let list = CONTAINER_EDGES[a + '>' + b] || [];
-  // In a subsystem card the clicked arrow is drawn from/to ONE member component (the neighbour is a
-  // collapsed box), so its LABEL counts only that component's crossings. Narrow the pair's crossing
-  // list to the same component so the panel count matches the label. A drawn endpoint that is the
-  // subsystem box itself (a or b) doesn't constrain — every component inside it stays. In the
-  // Subsystems overview both drawn ends ARE a/b (subsystems), so nothing is filtered.
   const isComp = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'component';
   const srcC = drawn && isComp(drawn.src) ? drawn.src : null;
   const dstC = drawn && isComp(drawn.dst) ? drawn.dst : null;
   if (srcC) list = list.filter((r) => r.src === srcC);
   if (dstC) list = list.filter((r) => r.dst === dstC);
+  return list;
+}
+// The entity→entity relations an inter-subdomain arrow bundles — the domain analog of containerEdgeList.
+function domainContainerEdgeList(a, b, drawn) {
+  let list = DOMAIN_CONTAINER_EDGES[a + '>' + b] || [];
+  const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
+  const srcE = drawn && isEnt(drawn.src) ? drawn.src : null;
+  const dstE = drawn && isEnt(drawn.dst) ? drawn.dst : null;
+  if (srcE) list = list.filter((r) => r.src === srcE);
+  if (dstE) list = list.filter((r) => r.dst === dstE);
+  return list;
+}
+// The underlying links a synthetic arrow bundles, as endpoint atoms {src, dst}. Carried on the drill state
+// (`selCover`) and resolved AFTER the target card renders — see coverKeys — so we select whatever arrows the
+// card actually drew for these links, at whatever grouping level it chose, instead of predicting keys.
+function bundleAtoms(list) {
+  const seen = new Set(); const atoms = [];
+  for (const r of list) { const k = r.src + '>' + r.dst; if (!seen.has(k)) { seen.add(k); atoms.push({ src: r.src, dst: r.dst }); } }
+  return atoms;
+}
+function showContainerEdge(a, b, drawn) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const list = containerEdgeList(a, b, drawn);
   const items = list.map((r) => arrowRow(r.srcName, r.dstName, r.why ? mdInline(r.why) : '')).join('');
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(headA)) + ' → ' + esc(nm(headB)) + '</h2>'
@@ -1197,16 +1250,7 @@ function showContainerEdge(a, b, drawn) {
 // `from → to:` with its verb (+ kind) below — the domain analog of showContainerEdge.
 function showDomainContainerEdge(a, b, drawn) {
   const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
-  let list = DOMAIN_CONTAINER_EDGES[a + '>' + b] || [];
-  // Mirror showContainerEdge: in a subdomain card the clicked arrow is drawn from/to ONE focal entity
-  // (the neighbour is a collapsed box), so its LABEL counts only that entity's relations. Narrow the
-  // pair's relation list to the same entity so the panel count matches the label. A drawn endpoint that
-  // is the subdomain box itself (a or b) doesn't constrain. In the Domain overview both ends ARE a/b.
-  const isEnt = (id) => GRAPH.nodes[id] && GRAPH.nodes[id].kind === 'entity';
-  const srcE = drawn && isEnt(drawn.src) ? drawn.src : null;
-  const dstE = drawn && isEnt(drawn.dst) ? drawn.dst : null;
-  if (srcE) list = list.filter((r) => r.src === srcE);
-  if (dstE) list = list.filter((r) => r.dst === dstE);
+  const list = domainContainerEdgeList(a, b, drawn);
   const items = list.map((r) => arrowRow(r.srcName, r.dstName,
     esc(r.verb) + (r.kind ? ' <span class="muted">(' + esc(r.kind) + ')</span>' : ''))).join('');
   const headA = drawn ? drawn.src : a, headB = drawn ? drawn.dst : b;
@@ -1221,15 +1265,13 @@ function showDomainContainerEdge(a, b, drawn) {
 // showContainerEdge. BRIDGE_EDGES is one flat list of every C→E edge; narrow it to the arrow's drawn
 // endpoints by KIND (component→src, entity→dst, subsystem→sub, subdomain→sd), which covers both arrow
 // orientations, so the panel count matches the arrow's label.
-function showBridgeEdge(drawn) {
-  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+// The component→entity edges a bridge arrow bundles — BRIDGE_EDGES narrowed to the arrow's drawn endpoints
+// by KIND (a leaf end matches its own id; a group end matches any atom in its subtree, at any nesting
+// level). Shared by showBridgeEdge (the panel list) AND the drill (which pre-selects these C→E arrows in
+// the bridge card, where each is keyed 'edge:component>entity' just like a component edge — see bindDomain).
+function bridgeEdgeList(drawn) {
   const ends = [drawn.src, drawn.dst];
-  // Match each drawn end against the C→E atom by kind. A leaf end (component/entity) matches its own
-  // id. A GROUP end (subsystem/subdomain box) matches any atom whose component/entity is in that box's
-  // subtree — `isAncestorOf` covers BOTH the top-level box (a subsystem/subdomain overview arrow) AND a
-  // NESTED child box (a bridge card draws arrows from child boxes), so the panel count matches the
-  // arrow's label at every level. (A pre-computed top-ancestor field would miss the nested boxes.)
-  const list = (BRIDGE_EDGES || []).filter((r) => ends.every((id) => {
+  return (BRIDGE_EDGES || []).filter((r) => ends.every((id) => {
     const k = GRAPH.nodes[id] && GRAPH.nodes[id].kind;
     return k === 'component' ? r.src === id
       : k === 'entity' ? r.dst === id
@@ -1237,6 +1279,10 @@ function showBridgeEdge(drawn) {
           : k === 'subdomain' ? isAncestorOf(id, r.dst)
             : true;
   }));
+}
+function showBridgeEdge(drawn) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const list = bridgeEdgeList(drawn);
   const items = list.map((r) => arrowRow(r.srcName, r.dstName,
     esc(r.verb) + (r.why ? ' — ' + mdInline(r.why) : ''))).join('');
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(drawn.src)) + ' → ' + esc(nm(drawn.dst)) + '</h2>'
@@ -1364,6 +1410,7 @@ function bindFlow(uc) {
         if (isDrag(e)) return;
         e.stopPropagation();
         if (openSrcClick(id, e)) return;  // ⌥-click opens source (component/entity), consistent with the rest
+        if (e.shiftKey) { frameArrow(parts[0]); return; }  // shift-click is a pure camera move — frame the participant, never select
         pickSel(scene, desc, e);  // ⌘-click toggles into the multi-selection, a plain click replaces
       });
     }
@@ -1396,7 +1443,9 @@ function bindFlow(uc) {
     scene.selectors[selKey] = () => selAdd(scene, desc);
     const on = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = HOVER; };
     const off = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
-    const click = (e) => { if (isDrag(e)) return; e.stopPropagation(); pickSel(scene, desc, e); };
+    const click = (e) => { if (isDrag(e)) return; e.stopPropagation();
+      if (e.shiftKey) { frameArrow(parts[0]); return; }  // shift-click frames the actor, never selects
+      pickSel(scene, desc, e); };
     for (const el of parts) {
       if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
       el.style.cursor = 'pointer';
@@ -1423,9 +1472,9 @@ function bindFlow(uc) {
     const onClick = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
+      if (ev.shiftKey) { frameArrow(line || text); return; }  // shift-click is a pure camera move — frame, no select, no counter move
       flowSyncCur(i);  // clicking a step's arrow directly moves the player's counter to it
       pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
-      if (ev.shiftKey) frameArrow(line || text);  // shift-click frames the step's arrow
     };
     const on = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = HOVER; };
     const off = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = hpRestFilter(scene, el); };
@@ -1961,10 +2010,10 @@ function selectNode(scene, el, id) { selReplace(scene, nodeDesc(scene, el, id));
 // sidebar's text size (matchTextSize). A ⌘-click never reframes — piling several boxes into view then
 // zooming to the last one would be jarring while building a selection.
 function selectNodeFromCanvas(el, id, e) {
+  if (e && e.shiftKey) { matchTextSize(el); return; }  // shift-click is a pure camera move — zoom+center, never select
   const desc = nodeDesc(mainScene, el, id);
   if (isMultiSelectClick(e)) { selToggle(mainScene, desc); return; }
   selReplace(mainScene, desc);
-  if (e && e.shiftKey) matchTextSize(el);
 }
 
 // The zoom-by-`scale`-then-recenter step behind matchTextSize (scale === 1 skips straight to just
@@ -2322,10 +2371,10 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
     ev.stopPropagation();
     if (opts.onDrill && isDrillClick(ev)) { hoverOff(); opts.onDrill(); return; }  // ⌥-click drills in
     hoverOff();  // drop the hover glow before selecting, so it can't linger under HILITE
+    if (ev.shiftKey) { frameArrow(p); return; }  // shift-click is a pure camera move — frame the arrow, never select
     pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
-    if (ev.shiftKey) frameArrow(p);  // shift-click frames the arrow (the edge analog of a box's matchTextSize)
   };
-  scene.edgeEls.push({ e, path: p, label });
+  scene.edgeEls.push({ e, path: p, label, key: selKey });  // `key` lets coverKeys select this arrow for a synthetic-arrow drill
   attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn, () => selHas(scene, selKey));
 }
 
@@ -2347,8 +2396,10 @@ function bindContainerEdge(scene, p, label, a, b, focusE) {
   // component isn't drawn in the edge card, render falls back to the plain two-subsystem panel.
   const focusComp = isComp(drawn.src) ? drawn.src : (isComp(drawn.dst) ? drawn.dst : null);
   // Drill lands on the crossings LIST. For a member's cross-arrow, carry the drawn endpoints as `efocus`
-  // so the list is narrowed to just that member's crossings; a box↔box arrow lists the whole pair.
+  // so the list is narrowed to just that member's crossings; a box↔box arrow lists the whole pair. `sels`
+  // pre-selects, in the edge card, exactly the real arrows this one synthetic arrow stood for.
   const edge = focusComp ? { kind: 'edge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'edge', a, b };
+  edge.selCover = bundleAtoms(containerEdgeList(a, b, drawn));
   // Key the selection by the DRAWN endpoints, not the collapsed pair: a card can draw several arrows to
   // the same neighbour (one per member component), and each is its own selectable arrow with its own
   // filtered panel.
@@ -2370,7 +2421,11 @@ function bindBridgeEdge(scene, p, label, a, b, target) {
   // the bridge analog of the container drill focusing its member. pendingCenter centres it on arrival.
   const leaf = (kindOf(a) === 'component' || kindOf(a) === 'entity') ? a
     : (kindOf(b) === 'component' || kindOf(b) === 'entity') ? b : null;
-  const tgt = leaf ? { ...target, sel: 'node:' + leaf } : target;
+  // Pre-select, in the bridge card, the arrows that cover the component→entity links this one synthetic
+  // arrow stood for (`selCover` — resolved against whatever the card drew, individual or re-bundled); the
+  // leaf `sel` stays as a fallback if the card drew none of them.
+  const tgt = { ...target, selCover: bundleAtoms(bridgeEdgeList(drawn)) };
+  if (leaf) tgt.sel = 'node:' + leaf;
   bindSelectEdge(scene, p, label, drawn, 'bridge:' + a + '>' + b,
     () => showBridgeEdge(drawn),
     { onDrill: () => { if (leaf) pendingCenter = leaf; go(tgt); }, actionFn: () => actionTipEdge(a, b, drawn) });
@@ -2806,8 +2861,10 @@ function bindDomainContainerEdge(scene, p, label, a, b, focusE) {
   // (the Domain overview) opens the pair unfocused, as before.
   const focusEnt = isEnt(drawn.src) ? drawn.src : (isEnt(drawn.dst) ? drawn.dst : null);
   // Drill lands on the relations LIST — narrowed to the focal entity's relations for a member arrow,
-  // the whole pair for a box↔box arrow (see bindContainerEdge for the same shape).
+  // the whole pair for a box↔box arrow (see bindContainerEdge for the same shape). `sels` pre-selects the
+  // real relation arrows this synthetic arrow stood for, in the domain edge card.
   const dom = focusEnt ? { kind: 'domedge', a, b, efocus: { src: drawn.src, dst: drawn.dst } } : { kind: 'domedge', a, b };
+  dom.selCover = bundleAtoms(domainContainerEdgeList(a, b, drawn));
   bindSelectEdge(scene, p, label, drawn, 'dctxedge:' + drawn.src + '>' + drawn.dst,
     () => showDomainContainerEdge(a, b, drawn),
     { onDrill: () => go(dom), actionFn: () => actionTipEdge(a, b, drawn) });
@@ -3169,8 +3226,8 @@ function bindHP() {
       ev.stopPropagation();
       off();
       if (isDrillClick(ev)) { go({ kind: 'usecase', uc: step.uc }); return; }  // ⌥-click drills into the use case's flow
+      if (ev.shiftKey) { frameArrow(line || text); return; }  // shift-click is a pure camera move — frame, never select
       pickSel(scene, hpStepDesc(scene, i, hpId, aidOfStep[i]), ev);
-      if (ev.shiftKey) frameArrow(line || text);  // shift-click frames the step's arrow
     };
     for (const el of [text, line]) {
       if (!el) continue;
@@ -3196,7 +3253,9 @@ function bindHP() {
     scene.selectors[selKey] = () => selAdd(scene, hpActorDesc(scene, a));  // back/forward restore
     const on = () => { if (!selHas(scene, selKey)) for (const el of rec.els) el.style.filter = HOVER; };
     const off = () => { if (!selHas(scene, selKey)) for (const el of rec.els) el.style.filter = hpRestFilter(scene, el); };
-    const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off(); pickSel(scene, hpActorDesc(scene, a), ev); };
+    const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off();
+      if (ev.shiftKey) { frameArrow(rec.els.find((x) => x.tagName !== 'line') || rec.els[0]); return; }  // shift-click frames the actor, never selects
+      pickSel(scene, hpActorDesc(scene, a), ev); };
     for (const el of rec.els) {
       if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
       el.style.cursor = 'pointer';
@@ -3973,7 +4032,7 @@ async function render(sArg, transient) {
   }
   // Whether this state carries a selection we can restore below (its captured multi-selection, or a single
   // requested key) — used to skip the plain landing panel that a restore would just overwrite.
-  const willRestore = (s.sels && s.sels.some((k) => mainScene.selectors[k])) || (s.sel && mainScene.selectors[s.sel]);
+  const willRestore = selectionKeysFor(mainScene, s).length > 0;
   // Skip the plain landing panel when a more specific selection below is about to override it anyway —
   // it would just be thrown away, and (since showNode/syncTreeToNode mirror into the file browser) it'd
   // also plant a spurious intermediate tree-highlight that throws off the near/far centering heuristic
