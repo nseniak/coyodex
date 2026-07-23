@@ -95,6 +95,7 @@
             <button data-view="container">Subsystems</button>
             <button data-view="context">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
             <button data-view="deployment">Deployment</button>  <!-- processes/threads ↔ subsystems (hidden when no deployment[] units) -->
+            <button data-view="data">Data</button>  <!-- store-centric: physical stores → collections + who writes/reads + async channels (hidden when no stores) -->
             <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
             <button data-view="system">System</button>  <!-- operational reference tables: run/deploy/observability/security/config/entry-points (hidden when empty) -->
             <button data-view="tests">Tests</button>  <!-- test-completeness gap table (hidden when empty) -->
@@ -186,10 +187,10 @@
     <h2>Getting around the map</h2>
     <ul class="coach-list">
       <li><b>Select a view</b> at the top of the graph pane</li>
-      <li><b>Scroll</b> to zoom, <b>drag</b> to move</li>
-      <li><b>Click</b> a box or arrow &mdash; shows its details (and its source in the code viewer)</li>
-      <li><b>Double-click</b> a subsystem box (or its corner icon) &mdash; drills into it</li>
-      <li>Open the shown file in your editor with the <b>&#8599;</b> in the code header</li>
+      <li><b>Pinch</b> to zoom, <b>scroll</b> or <b>drag</b> to move</li>
+      <li><b>Click</b> a box or arrow to see its details</li>
+      <li><b>&#8984;-click</b> (Cmd / Ctrl) another box or arrow &mdash; adds it to the selection</li>
+      <li><b>Double-click</b> or <b>&#8997;-click</b> (Option / Alt) a container to drill into it</li>
     </ul>
     <div class="modal-btns">
       <button id="coachok" type="button" class="primary">Got it</button>

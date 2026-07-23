@@ -40,6 +40,9 @@ let HAS_HP;
 let HAS_GLOSSARY;    // gates the Glossary tab (derived from the graph in applyBundle)
 let HAS_USECASES;    // gates the Use Cases tab (any use-case node present)
 let HAS_SYSTEM;      // gates the System tab (any operational/reference collection present)
+let HAS_DATA;        // gates the Data tab (any physical store present in data_view)
+let DATA_VIEW;       // the store-centric Data-view payload (GRAPH.data_view)
+let MERMAID_CHANNELS; // per-broker async flowchart source, keyed by broker dep id
 let HAS_TESTS;       // gates the Tests tab (a test-completeness table or honesty note present)
 let CONTEXT_EDGES;
 let HAS_DIFF;
@@ -75,6 +78,8 @@ function applyBundle(b) {
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
   HAS_SYSTEM = ['run_commands', 'entry_points', 'non_entity_types', 'deployment', 'messaging', 'observability',
     'security', 'config', 'extras'].some((k) => Array.isArray(GRAPH[k]) && GRAPH[k].length > 0);
+  DATA_VIEW = GRAPH.data_view || {}; MERMAID_CHANNELS = b.mermaidChannels || {};
+  HAS_DATA = Array.isArray(DATA_VIEW.stores) && DATA_VIEW.stores.length > 0;
   HAS_TESTS = (Array.isArray(GRAPH.tests) && GRAPH.tests.length > 0) || !!(GRAPH.tests_note || '').trim();
 }
 
@@ -119,7 +124,12 @@ mermaid.initialize({ startOnLoad: false, securityLevel: 'loose', theme: 'default
 
 const diagram = document.getElementById('diagram');
 const stage = document.getElementById('stage');
-const panel = document.getElementById('panel');
+// `panel` is the side detail pane. It is normally the real #panel element, but while a multi-selection's
+// stacked cards are rendered (see renderSelPanel) it is TEMPORARILY re-pointed at the card being filled,
+// so every existing `show*` fn keeps writing + wiring into the right card with no per-fn changes. Hence
+// `let`, not `const`. PANEL_HOST is the stable real element (never reassigned) for direct host writes.
+let panel = document.getElementById('panel');
+const PANEL_HOST = panel;
 const legend = document.getElementById('legend');
 const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
@@ -249,15 +259,71 @@ let mainScene = null;
 function makeScene(root, defaultPanel) {
   // dimEls: a flat list of extra focusable elements (the Happy Path's actor figures, lifelines and
   // message text/lines) that the standard node/edge focus model doesn't cover — dimmed/restored together.
-  // selectors: selectedKey -> a zero-arg closure that re-applies that selection (panel + glow + focus),
-  //   registered at bind time so back/forward can restore the element that was selected in this view.
-  // noAction: node ids that must NOT get a corner action icon or a ⌘-drill in this view — the box you
+  // selection: the ordered list of selected-element DESCRIPTORS (click order = card/stack order; the LAST
+  //   is the "primary" that drives the tree + code viewer). selKeys mirrors their keys for O(1) membership
+  //   (hover-glow / already-selected tests). selectedKey = the primary's key (or null) — a compat handle
+  //   for the few spots that want "the/most-recent" selection. A descriptor is { key, glow, focus, show }:
+  //     glow()  -> apply this element's highlight, return a cleanup fn (glowNode / glowEdge / hpHighlight)
+  //     focus   -> flowchart: { nodes:Set<id>, edge:(e)=>bool }; sequence: { els:Set<DOMEl> }; null = don't dim
+  //     show()  -> fill `panel` with this element's detail (an existing show* fn; also syncs tree/code when primary)
+  // focusUnion(scene, selection) dims to the UNION of every selected element's neighbourhood — the default
+  //   is the node/edge model; bindHP/bindFlow swap in the sequence-diagram variant.
+  // selectors: key -> a zero-arg closure that ADDS that element to the selection (selAdd), registered at
+  //   bind time so back/forward can restore a whole multi-selection (and single-select navigations replay one).
+  // noAction: node ids that must NOT get a corner action icon or an ⌥-drill in this view — the box you
   //   are already zoomed INTO (e.g. a process on its own card), which has nothing further to drill to.
-  return { root, nodeEls: {}, edgeEls: [], dimEls: [], hpLit: new Set(), noAction: new Set(), selectedKey: null, selectors: {}, clearHighlight: null, defaultPanel };
+  return { root, nodeEls: {}, edgeEls: [], dimEls: [], hpLit: new Set(), noAction: new Set(),
+           selection: [], selKeys: new Set(), selectedKey: null, selectors: {}, _selClear: null,
+           focusUnion: focusUnionNodes, defaultPanel };
 }
-function sceneSelect(scene, applyFn) {  // one highlight at a time within a scene
-  if (scene.clearHighlight) scene.clearHighlight();
-  scene.clearHighlight = applyFn ? applyFn() : null;
+function selHas(scene, key) { return scene.selKeys.has(key); }
+// Re-apply the whole selection as one atomic state: tear down the previous glows, re-glow every selected
+// element, dim to the UNION of their neighbourhoods, and (re)stack their detail cards — or, when nothing is
+// selected, restore the scene's default panel + full-lit diagram. Glow is fully rebuilt each time (a plain
+// CSS-filter swap, no visible flicker) so an element leaving the set can't strand a highlight, and shared
+// highlights (a step lit by both a participant and its own selection) stay consistent.
+function selApply(scene) {
+  if (scene._selClear) { scene._selClear(); scene._selClear = null; }
+  const undos = scene.selection.map((d) => d.glow());
+  scene._selClear = () => undos.forEach((f) => f && f());
+  if (scene.selection.length) scene.focusUnion(scene, scene.selection); else clearFocus(scene);
+  renderSelPanel(scene);
+  // Deselecting the last element (⌘-click it off) returns to the empty state: clear the file-browser
+  // highlight + default the code slot to browse, the same cleanup empty-canvas click / Escape do.
+  if (!scene.selection.length) { highlightTreePath(null); setBrowsing(true); }
+}
+function selAdd(scene, desc) {
+  if (scene.selKeys.has(desc.key)) { scene.selectedKey = desc.key; return; }  // already in the set (dedupe restore)
+  scene.selection.push(desc); scene.selKeys.add(desc.key); scene.selectedKey = desc.key;
+  selApply(scene);
+}
+function selRemove(scene, key) {
+  const i = scene.selection.findIndex((d) => d.key === key);
+  if (i < 0) return;
+  scene.selection.splice(i, 1); scene.selKeys.delete(key);
+  scene.selectedKey = scene.selection.length ? scene.selection[scene.selection.length - 1].key : null;
+  selApply(scene);
+}
+function selToggle(scene, desc) { if (scene.selKeys.has(desc.key)) selRemove(scene, desc.key); else selAdd(scene, desc); }
+function selClear(scene) {  // drop every selected element (tear down glows) WITHOUT touching the panel/focus
+  if (scene._selClear) { scene._selClear(); scene._selClear = null; }
+  scene.selection = []; scene.selKeys = new Set(); scene.selectedKey = null;
+}
+function selReplace(scene, desc) { selClear(scene); selAdd(scene, desc); }
+// The click-time router: a multi-select modifier (⌘ / ⌃) toggles the element in/out of the running
+// selection; a plain click replaces the selection with just this element. Every plain-select entry point
+// goes through here so the two gestures behave uniformly across every view.
+function pickSel(scene, desc, e) { if (isMultiSelectClick(e)) selToggle(scene, desc); else selReplace(scene, desc); }
+// Restore a saved selection onto the freshly-bound scene: replay each key's selector (which adds it back).
+// Prefers the captured multi-selection (`sels`), falling back to a single requested key (`sel`, used by a
+// focus-drill / a flow-step navigation). Returns whether anything was applied.
+function restoreSelection(scene, s) {
+  const keys = (s.sels && s.sels.length) ? s.sels : (s.sel ? [s.sel] : []);
+  const usable = keys.filter((k) => scene.selectors[k]);
+  if (!usable.length) return false;
+  selClear(scene);
+  for (const k of usable) scene.selectors[k]();
+  return true;
 }
 function applyFocus(scene, keepNode, keepEdge) {
   // `.dim` mirrors the opacity (see viewer.css) so a dimmed box's corner pill stays hidden even on
@@ -285,6 +351,43 @@ function focusNode(scene, id) {
 }
 function focusEdge(scene, e0) {
   applyFocus(scene, (nid) => nid === e0.src || nid === e0.dst, (e) => e.src === e0.src && e.dst === e0.dst);
+}
+// Flowchart focus for a multi-selection: keep the UNION of every selected element's neighbourhood lit, dim
+// the rest. A descriptor whose element isn't drawn in this scene carries focus:null and contributes nothing
+// — matching the old single-select behaviour of not dimming at all for an off-scene selection (so a lone
+// off-scene pick leaves the whole diagram lit, while it rides along invisibly when mixed with on-scene picks).
+function focusUnionNodes(scene, selection) {
+  const withFocus = selection.filter((d) => d.focus);
+  if (!withFocus.length) { clearFocus(scene); return; }
+  const keepN = new Set();
+  for (const d of withFocus) d.focus.nodes.forEach((n) => keepN.add(n));
+  applyFocus(scene, (n) => keepN.has(n), (e) => withFocus.some((d) => d.focus.edge(e)));
+}
+// Sequence-diagram focus (Happy Path / use-case flow): keep the union of every selected element's lit DOM
+// parts, dim the rest. Swapped in for focusUnionNodes by bindHP/bindFlow.
+function focusUnionEls(scene, selection) {
+  const keep = new Set();
+  for (const d of selection) if (d.focus && d.focus.els) d.focus.els.forEach((x) => keep.add(x));
+  hpFocus(scene, keep);
+}
+// Render the side panel for the current selection as a STACK of cards, one per selected element, in click
+// order (the primary — most-recently-clicked — is last). Each card is filled by the element's existing
+// show* fn with the global `panel` temporarily re-pointed at that card, so every show* keeps writing +
+// wiring exactly as it did for a single selection. Because show* also mirror into the tree + code viewer
+// (a global side effect), rendering the primary LAST makes its tree/code sync the one that sticks. Nothing
+// selected -> the scene's default panel. A single selection is one card (styled to read like the old flat
+// panel), so single and multi share this one path.
+function renderSelPanel(scene) {
+  panel = PANEL_HOST;
+  PANEL_HOST.innerHTML = '';
+  if (!scene.selection.length) { scene.defaultPanel(); return; }
+  for (const d of scene.selection) {
+    const card = document.createElement('section');
+    card.className = 'sel-card';  // multi vs single is styled by `.sel-card + .sel-card` (a divider), no host class
+    PANEL_HOST.appendChild(card);
+    panel = card;
+    try { d.show(); } finally { panel = PANEL_HOST; }
+  }
 }
 // Paint a rect with a kind's injected fill/stroke (ELEMENT_TINT). Shared by the two spots Mermaid
 // renders a box kind-agnostically — cluster frames and flow participant boxes. No-op if the rect or the
@@ -676,9 +779,10 @@ function clearFocus(scene) {
   refreshAllPills();  // un-dimming restores hover-reveal for a box the cursor is still over
 }
 function resetScene(scene) {  // clear selection + focus, restore the scene's default panel
+  selClear(scene);          // tear down every selected element's glow + empty the selection set
   clearFocus(scene);
-  sceneSelect(scene, null);
-  scene.selectedKey = null;
+  panel = PANEL_HOST;
+  PANEL_HOST.innerHTML = '';
   scene.defaultPanel();
   highlightTreePath(null);  // drop the file-browser highlight too
   setBrowsing(true);        // nothing selected -> the code slot defaults to the file browser
@@ -687,20 +791,25 @@ function resetScene(scene) {  // clear selection + focus, restore the scene's de
 // A click whose pointer moved far from its mousedown is the tail of a drag-pan — ignore it,
 // so panning never deselects.
 function isDrag(e) { return Math.abs(e.clientX - downX) > 5 || Math.abs(e.clientY - downY) > 5; }
-// A ⌘-click (⌃-click off Mac), OR a double-click — a native `click` event's second firing reports
+// A ⌥-click (Option / Alt), OR a double-click — a native `click` event's second firing reports
 // `detail >= 2`, and svg-pan-zoom's own double-click-to-zoom is disabled (see render()) precisely so
-// this gesture is free for the diagram to use — turns a select into a drill-in / open-source. Flashes
-// that node's corner icon (if it has one) so double-clicking teaches the icon's meaning even to someone
-// who never clicks the icon directly; a direct icon click flashes itself already, so this only needs to
-// cover the ⌘-click / double-click paths.
+// this gesture is free for the diagram to use — turns a select into a drill-in / open-source. (⌘/⌃ is
+// reserved for multi-select — see isMultiSelectClick — so drilling moved to ⌥.) Flashes that node's
+// corner icon (if it has one) so double-clicking teaches the icon's meaning even to someone who never
+// clicks the icon directly; a direct icon click flashes itself already, so this only needs to cover the
+// ⌥-click / double-click paths.
 function isDrillClick(e) {
-  const drill = !!e && (e.metaKey || e.ctrlKey || e.detail >= 2);
+  const drill = !!e && (e.altKey || e.detail >= 2);
   if (drill && e.currentTarget) {
     const id = idOf(e.currentTarget);
     if (id && ACTION_ICONS[id]) flashIcon(ACTION_ICONS[id]);
   }
   return drill;
 }
+// A ⌘-click (⌃-click off Mac) adds/removes the clicked element from the running multi-selection (Finder /
+// spreadsheet muscle memory). A double-click never counts (that drills). Kept separate from isDrillClick so
+// the two gestures can never both fire for one event.
+function isMultiSelectClick(e) { return !!e && (e.metaKey || e.ctrlKey) && e.detail < 2; }
 
 // --- side panel -----------------------------------------------------------------
 // The "Used in UC" backward view for an element: the use cases whose T6 flow steps through it, as
@@ -768,6 +877,46 @@ function selectEntryPoint(componentId, epIdx) {
 function applyPendingEpSelect() {
   if (pendingEpSelect && selectTriggeredBy(pendingEpSelect.comp, pendingEpSelect.idx)) pendingEpSelect = null;
 }
+// Entity info-pane rows: WHERE it's persisted (the store dep chip + container/mode) and — reusing the
+// Data view's C→E derivation — WHO writes and reads it. Every chip (store dep, writer, reader)
+// navigates to that element, whose own node carries its source link (the "link every element to its
+// code" rule). The "See in Data view" link deep-links to this entity's row in the Data tab.
+function persistedInHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || n.kind !== 'entity' || !n.store) return '';
+  const st = n.store; const parts = [];
+  if (st.dep && GRAPH.nodes[st.dep]) parts.push(dvChip(st.dep, GRAPH.nodes[st.dep].name, 'dv-ent'));
+  else if (st.dep) parts.push(esc(st.dep));
+  if (st.container) parts.push(`<span class="dv-coll">${esc(st.container)}</span>`);
+  if (st.mode) parts.push(`<span class="dv-tag">${esc(st.mode)}</span>`);
+  if (st.notes) parts.push(`<span class="dv-tag">${esc(st.notes)}</span>`);
+  if (!parts.length) return '';
+  let dd = parts.join(' ');
+  if (HAS_DATA && st.dep) dd += ` <a href="#" class="dv-seelink" data-store="${esc(st.dep)}" data-entity="${esc(id)}">See in Data view →</a>`;
+  return `<dt>Persisted in</dt><dd class="dv-panerow">${dd}</dd>`;
+}
+function accessRowsHtml(id) {
+  const n = GRAPH.nodes[id];
+  const a = (DATA_VIEW.access || {})[id];
+  if (!n || n.kind !== 'entity' || !a) return '';
+  const wl = (a.writers || []).map((c) => dvChip(c.id, c.name, c.owner ? 'dv-write dv-persist' : 'dv-write', c.verb));
+  const rl = (a.readers || []).concat(a.other || []).map((c) => dvChip(c.id, c.name, 'dv-read', c.verb));
+  let out = '';
+  if (wl.length) out += `<dt>Written by</dt><dd class="dv-panerow"><div class="dv-chips">${wl.join('')}</div></dd>`;
+  if (rl.length) out += `<dt>Read by</dt><dd class="dv-panerow"><div class="dv-chips">${rl.join('')}</div></dd>`;
+  return out;
+}
+// Datastore/messaging dep info-pane row: a link into the Data tab focused on this store's pane.
+function persistedDataLinkHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || n.kind !== 'dep' || !HAS_DATA) return '';
+  const st = (DATA_VIEW.stores || []).find((s) => s.dep === id);
+  if (!st) return '';
+  const nrows = st.rows.length; const nch = st.channels.length;
+  const label = nrows ? `${nrows} collection${nrows === 1 ? '' : 's'}`
+    : (nch ? `${nch} channel${nch === 1 ? '' : 's'}` : 'this store');
+  return `<dt>Data</dt><dd class="dv-panerow"><a href="#" class="dv-seelink" data-store="${esc(id)}">View persisted data (${label}) →</a></dd>`;
+}
 // The one free-text "what/why" field a node kind carries — Purpose (subsystem/subdomain/component),
 // Used for (dep), Meaning (entity). Shown as plain prose with no label, since the field IS the
 // description (mirrors how showContextEdge/showHPActor treat Wants, and showEdge treats Why).
@@ -825,7 +974,7 @@ function nodeDetailHtml(id) {
   // code viewer, which carry the path and the sole "open externally" control.
   return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`
     + explain
-    + `<dl>${rows}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
+    + `<dl>${rows}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
     + impactSectionHtml(id);
 }
 // Wire the interactive bits inside the just-written detail panel: the use-case-flow refs and the
@@ -833,6 +982,16 @@ function nodeDetailHtml(id) {
 function bindNodeDetailHandlers(root) {
   root.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
+  }));
+  // Data-view rows in the panel: element chips navigate; the "See in Data view" / "View persisted
+  // data" links deep-link into the Data tab focused on a store pane (and, for an entity, its row).
+  root.querySelectorAll('.dv-chip[data-id]').forEach((b) =>
+    b.addEventListener('click', () => selectFromTree(b.getAttribute('data-id'))));
+  root.querySelectorAll('a.dv-seelink').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const st = { kind: 'data', store: a.getAttribute('data-store') };
+    if (a.getAttribute('data-entity')) st.entity = a.getAttribute('data-entity');
+    go(st);
   }));
   bindTriggeredBy(root);
   bindImpactSection(root);
@@ -948,7 +1107,7 @@ function showLibsFold() {
   const items = FOLDED_LIBS.map((d) =>
     '<dd>• ' + esc(d.name) + (d.type ? ' <span class="muted">— ' + esc(d.type) + '</span>' : '') + '</dd>').join('');
   panel.innerHTML = '<div class="pane-title"><h2>Libraries</h2><span class="badge kind">libraries</span></div>'
-    + '<p class="empty">Frameworks &amp; libraries linked into the process — folded out of the Context view. ⌘-click to drill in.</p>'
+    + '<p class="empty">Frameworks &amp; libraries linked into the process — folded out of the Context view. ⌥-click to drill in.</p>'
     + (items ? '<dl><dt>Bundled (' + FOLDED_LIBS.length + ' in-process)</dt>' + items + '</dl>' : '');
 }
 
@@ -965,18 +1124,15 @@ function showBucketFold(bkid) {
   if (!b) { panel.innerHTML = EMPTY_PANEL; return; }
   const items = b.members.map((m) => '<dd>• ' + esc(m.name) + '</dd>').join('');
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(b.name) + '</h2><span class="badge kind">bucket</span></div>'
-    + '<p class="empty">External systems grouped by purpose — folded out of the Context view. ⌘-click to drill in.</p>'
+    + '<p class="empty">External systems grouped by purpose — folded out of the Context view. ⌥-click to drill in.</p>'
     + (items ? '<dl><dt>' + b.count + ' dependencies</dt>' + items + '</dl>' : '');
 }
 // Select a folded-bucket count box: roster panel + dim to its neighbourhood (SYS + the arrow), exactly
 // like selecting the Libraries fold. Reuses the node selKey so the hover guard matches.
-function selectBucketFold(scene, el, bkid) {
-  const selKey = 'node:' + bkid;
-  scene.selectedKey = selKey;
-  showBucketFold(bkid);
-  sceneSelect(scene, () => glowNode(el));
-  if (scene.nodeEls[bkid]) focusNode(scene, bkid); else clearFocus(scene);
+function bucketFoldDesc(scene, el, bkid) {
+  return { key: 'node:' + bkid, glow: () => glowNode(el), focus: nodeFocus(scene, bkid), show: () => showBucketFold(bkid) };
 }
+function selectBucketFold(scene, el, bkid) { selReplace(scene, bucketFoldDesc(scene, el, bkid)); }
 // Tag every folded-bucket box with the drill cursor (⌘-drills into its members), like subsystem boxes.
 function markBucketFoldDrill() {
   (FOLDED_BUCKETS || []).forEach((b) => { const el = mainScene.nodeEls[b.id]; if (el) el.classList.add('drill'); });
@@ -1182,38 +1338,33 @@ function bindFlow(uc) {
   const texts = [...root.querySelectorAll('text.messageText')];
   const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
   leftAlignMessageLabels(texts, lines);
+  scene.focusUnion = focusUnionEls;  // this is a sequence diagram — union selections dim by DOM-part set
   const msgEls = steps.map((_, i) => [texts[i], lines[i]].filter(Boolean));
   for (const els of msgEls) for (const el of els) scene.dimEls.push(el);
 
-  // element participants: select (focus to its messages + their other ends) / ⌘-drill to home / tooltip.
+  // element participants: select (focus to its messages + their other ends) / ⌥-open source / tooltip.
   for (const id of Object.keys(partsById)) {
     const parts = partsById[id], selKey = 'node:' + id;
     const myMsg = steps.map((st, i) => (st.srcId === id || st.dstId === id) ? i : -1).filter((i) => i >= 0);
-    const select = () => {
-      scene.selectedKey = selKey;
-      showNode(id);
-      const stepEls = myMsg.flatMap((i) => msgEls[i] || []);
-      const keep = new Set([...parts, ...stepEls]);
-      for (const i of myMsg) {
-        for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
-      }
-      sceneSelect(scene, () => hpHighlight(scene, [...parts, ...stepEls]));
-      hpFocus(scene, keep);
-    };
-    scene.selectors[selKey] = select;  // so back/forward can restore this participant selection
-    const on = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = HOVER; };
-    const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
+    const stepEls = myMsg.flatMap((i) => msgEls[i] || []);
+    const glowEls = [...parts, ...stepEls];
+    const keep = new Set(glowEls);
+    for (const i of myMsg) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
+    const desc = { key: selKey, glow: () => hpHighlight(scene, glowEls), focus: { els: keep }, show: () => showNode(id) };
+    scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward can restore this participant selection
+    const on = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = HOVER; };
+    const off = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
     for (const el of parts) {
       el.style.cursor = 'pointer';
       markOpenSrc(el, id);  // </> cursor on a component/entity leaf with a source ref, like the other diagrams
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
-      attachTip(el, () => actionTipNode(id));  // ⌘-hover shows the open-source action
+      attachTip(el, () => actionTipNode(id));  // ⌥-hover shows the open-source action
       el.addEventListener('click', (e) => {
         if (isDrag(e)) return;
         e.stopPropagation();
-        if (openSrcClick(id, e)) return;  // ⌘-click opens source (component/entity), consistent with the rest
-        select();
+        if (openSrcClick(id, e)) return;  // ⌥-click opens source (component/entity), consistent with the rest
+        pickSel(scene, desc, e);  // ⌘-click toggles into the multi-selection, a plain click replaces
       });
     }
   }
@@ -1237,19 +1388,15 @@ function bindFlow(uc) {
     if (!parts.length) continue;
     for (const el of parts) scene.dimEls.push(el);
     for (const i of a.stepIdx) (actorPartsByStep[i] || (actorPartsByStep[i] = [])).push(...parts);
-    const select = () => {
-      scene.selectedKey = selKey;
-      showFlowActor(uc, a);
-      const stepEls = a.stepIdx.flatMap((i) => msgEls[i] || []);
-      const keep = new Set([...parts, ...stepEls]);
-      for (const i of a.stepIdx) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
-      sceneSelect(scene, () => hpHighlight(scene, [...parts, ...stepEls]));
-      hpFocus(scene, keep);
-    };
-    scene.selectors[selKey] = select;
-    const on = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = HOVER; };
-    const off = () => { if (scene.selectedKey !== selKey) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
-    const click = (e) => { if (isDrag(e)) return; e.stopPropagation(); select(); };
+    const stepEls = a.stepIdx.flatMap((i) => msgEls[i] || []);
+    const glowEls = [...parts, ...stepEls];
+    const keep = new Set(glowEls);
+    for (const i of a.stepIdx) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
+    const desc = { key: selKey, glow: () => hpHighlight(scene, glowEls), focus: { els: keep }, show: () => showFlowActor(uc, a) };
+    scene.selectors[selKey] = () => selAdd(scene, desc);
+    const on = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = HOVER; };
+    const off = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
+    const click = (e) => { if (isDrag(e)) return; e.stopPropagation(); pickSel(scene, desc, e); };
     for (const el of parts) {
       if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
       el.style.cursor = 'pointer';
@@ -1268,24 +1415,19 @@ function bindFlow(uc) {
     if (!els.length) return;
     const text = texts[i] || null, line = lines[i] || null;
     const selKey = 'flowstep:' + uc + ':' + i;
-    const doSelect = () => {
-      scene.selectedKey = selKey;
-      flowSyncCur(i);  // clicking a step's arrow directly moves the player's counter to it
-      showFlowStep(uc, i);
-      const keep = new Set(els);
-      for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
-      for (const el of (actorPartsByStep[i] || [])) keep.add(el);  // Role endpoints have no node id
-      sceneSelect(scene, () => hpHighlight(scene, els));
-      hpFocus(scene, keep);
-    };
-    scene.selectors[selKey] = doSelect;  // so back/forward can restore this flow-step selection
+    const keep = new Set(els);
+    for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
+    for (const el of (actorPartsByStep[i] || [])) keep.add(el);  // Role endpoints have no node id
+    const desc = { key: selKey, glow: () => hpHighlight(scene, els), focus: { els: keep }, show: () => showFlowStep(uc, i) };
+    scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward + the step player can restore this flow-step selection
     const onClick = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
-      doSelect();
+      flowSyncCur(i);  // clicking a step's arrow directly moves the player's counter to it
+      pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
     };
-    const on = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = HOVER; };
-    const off = () => { if (scene.selectedKey !== selKey) for (const el of els) el.style.filter = hpRestFilter(scene, el); };
+    const on = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = HOVER; };
+    const off = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = hpRestFilter(scene, el); };
     if (line) attachEdgeHandlers(line, text, onClick, on, off, null);
     else { text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important'); text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off); }
   });
@@ -1380,8 +1522,9 @@ function flowGoto(i) {
   if (!flowPlay || !flowPlay.steps.length) return;
   const n = flowPlay.steps.length;
   i = Math.max(0, Math.min(n - 1, i));
+  flowPlay.cur = i;  // the player walks one step at a time -> REPLACE the selection with this step
   const sel = mainScene.selectors['flowstep:' + flowPlay.uc + ':' + i];
-  if (sel) sel(); else flowPlay.cur = i;  // sel() runs doSelect, which calls flowSyncCur(i) -> cur + counter
+  if (sel) { selClear(mainScene); sel(); }  // selClear + selAdd = a single-step selection (not additive)
   flowReveal(flowPlay.msgEls[i] || [], i);
   flowCounter();
 }
@@ -1485,11 +1628,11 @@ function moveTip(x, y) {  // below-right of the cursor; flip toward the cursor i
   tip.style.top = Math.max(6, ny) + 'px';
 }
 function hideTip() { tip.classList.remove('on'); }
-// The element currently under the cursor and its `actionFn` (what a ⌘-click does here, or null). Held so
-// pressing/releasing ⌘ can swap the tooltip live, without waiting for a new mouse event (see setCmd).
+// The element currently under the cursor and its `actionFn` (what an ⌥-click does here, or null). Held so
+// pressing/releasing ⌥ can swap the tooltip live, without waiting for a new mouse event (see setDrillMod).
 let hover = null;
 function renderHoverTip() {
-  if (!hover || !hover.actionFn || !document.body.classList.contains('cmd')) { hideTip(); return; }
+  if (!hover || !hover.actionFn || !document.body.classList.contains('altmod')) { hideTip(); return; }
   const html = hover.actionFn();
   if (!html) { hideTip(); return; }
   tip.innerHTML = html;
@@ -1791,28 +1934,35 @@ function glowNode(el) {
 // Skipped while the node is the active selection, so glowNode's HILITE wins over a lingering hover.
 function bindHoverGlow(scene, el, id) {
   const shape = shapeOf(el);
-  el.addEventListener('mouseenter', () => { if (scene.selectedKey !== 'node:' + id) shape.style.filter = HOVER; });
-  el.addEventListener('mouseleave', () => { if (scene.selectedKey !== 'node:' + id) shape.style.filter = ''; });
+  el.addEventListener('mouseenter', () => { if (!selHas(scene, 'node:' + id)) shape.style.filter = HOVER; });
+  el.addEventListener('mouseleave', () => { if (!selHas(scene, 'node:' + id)) shape.style.filter = ''; });
 }
-// Select a normal node within a scene: show + highlight + focus. Re-selecting the current node just
-// re-applies the same state (a harmless no-op) — clicking an already-selected element never deselects
-// it; a click on empty canvas space or Escape are the only ways back to the default panel.
-function selectNode(scene, el, id) {
-  scene.selectedKey = 'node:' + id;
-  showNodeDetailSynced(id);  // mirrors into the file browser (graph -> tree) as a side effect
-  sceneSelect(scene, () => glowNode(el));
-  // Dim to this node's neighbourhood only when the node is drawn in this scene; a box that isn't
-  // registered (e.g. a neighbourhood's external subsystem) would otherwise dim everything around it.
-  if (scene.nodeEls[id]) focusNode(scene, id); else clearFocus(scene);
+// A node's focus contribution: its own box + its immediate neighbours (kept lit), and its own edges. null
+// when the node isn't drawn in this scene (a neighbourhood's external box) — so it doesn't dim everything.
+function nodeFocus(scene, id) {
+  if (!scene.nodeEls[id]) return null;
+  const keep = new Set([id]);
+  for (const x of scene.edgeEls) { if (x.e.src === id) keep.add(x.e.dst); if (x.e.dst === id) keep.add(x.e.src); }
+  return { nodes: keep, edge: (e) => e.src === id || e.dst === id };
 }
+// A normal node's selection descriptor: glow the box, dim to its neighbourhood, show its detail (+ mirror
+// into the file browser / code viewer when it's the primary card).
+function nodeDesc(scene, el, id) {
+  return { key: 'node:' + id, glow: () => glowNode(el), focus: nodeFocus(scene, id), show: () => showNodeDetailSynced(id) };
+}
+// Select a normal node within a scene: REPLACE the selection with just this node (glow + dim + panel).
+// Used by every non-modifier select path (tree click, search hit, history restore's single-key case).
+function selectNode(scene, el, id) { selReplace(scene, nodeDesc(scene, el, id)); }
 
-// Canvas-click selection: applies the selection, then decides what (if anything) happens to the
-// camera. A plain click holds the view perfectly still — auto-panning would fight a reader who clicked
-// a box precisely BECAUSE it was already comfortably in view. Only a shift-click reframes, zooming to
-// match the sidebar's text size (matchTextSize). selectFromTree applies matchTextSize unconditionally
-// for a file-tree-driven selection — there's no modifier key on a tree row to gate it on.
+// Canvas-click selection: a ⌘-click toggles this box in/out of the multi-selection; a plain click replaces
+// the selection with it and holds the camera still (auto-panning would fight a reader who clicked a box
+// precisely BECAUSE it was already comfortably in view). Only a shift-click reframes, zooming to match the
+// sidebar's text size (matchTextSize). A ⌘-click never reframes — piling several boxes into view then
+// zooming to the last one would be jarring while building a selection.
 function selectNodeFromCanvas(el, id, e) {
-  selectNode(mainScene, el, id);
+  const desc = nodeDesc(mainScene, el, id);
+  if (isMultiSelectClick(e)) { selToggle(mainScene, desc); return; }
+  selReplace(mainScene, desc);
   if (e && e.shiftKey) matchTextSize(el);
 }
 
@@ -1898,13 +2048,10 @@ function matchTextSize(el) {
 // neighbourhood (the System + the SYS→box arrow) just like selecting a dependency — the bundles arrow
 // is a registered context edge, so focusNode resolves the connection. Reuses the node selKey so
 // bindNodes' hover guard matches and the selection glow isn't overwritten by a passing hover.
-function selectLibsFold(scene, el) {
-  const selKey = 'node:' + LIBS_ID;
-  scene.selectedKey = selKey;
-  showLibsFold();
-  sceneSelect(scene, () => glowNode(el));
-  if (scene.nodeEls[LIBS_ID]) focusNode(scene, LIBS_ID); else clearFocus(scene);
+function libsFoldDesc(scene, el) {
+  return { key: 'node:' + LIBS_ID, glow: () => glowNode(el), focus: nodeFocus(scene, LIBS_ID), show: () => showLibsFold() };
 }
+function selectLibsFold(scene, el) { selReplace(scene, libsFoldDesc(scene, el)); }
 // Tag the Libraries box with the drill cursor (it ⌘-drills into the full list), like subsystem boxes.
 function markLibsDrill() {
   const el = mainScene.nodeEls[LIBS_ID];
@@ -2133,29 +2280,32 @@ function markSyntheticEdge(p) {
 }
 
 // Wire one edge for the SELECT model (highlight + focus + panel) — context, components, internal edges.
-// `opts.onDrill` (optional) makes a ⌘-click drill instead of select, and marks the arrow with the drill
-// cursor; `opts.actionFn` (optional) is what a ⌘-hover previews for that drill.
+// An edge's focus contribution: keep both endpoints + the edge itself lit. null when neither endpoint is
+// drawn here (an aggregated arrow whose ends aren't in this scene) — so it doesn't dim the whole view.
+function edgeFocus(scene, e) {
+  if (!(scene.nodeEls[e.src] || scene.nodeEls[e.dst])) return null;
+  return { nodes: new Set([e.src, e.dst]), edge: (x) => x.src === e.src && x.dst === e.dst };
+}
+function edgeDesc(scene, p, label, e, selKey, showFn) {
+  return { key: selKey, glow: () => glowEdge(p, label), focus: edgeFocus(scene, e), show: showFn };
+}
+// `opts.onDrill` (optional) makes an ⌥-click drill instead of select, and marks the arrow with the drill
+// cursor; `opts.actionFn` (optional) is what an ⌥-hover previews for that drill.
 function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
-  const hoverOn = () => { if (scene.selectedKey !== selKey) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
-  const hoverOff = () => { if (scene.selectedKey !== selKey) { p.style.filter = ''; if (label) label.style.filter = ''; } };
-  const doSelect = () => {
-    scene.selectedKey = selKey;
-    showFn(); sceneSelect(scene, () => glowEdge(p, label));
-    // Dim to the edge only when its endpoints are drawn here; an aggregated arrow whose ends aren't
-    // (e.g. a neighbourhood's cross arrow) would otherwise dim the whole view.
-    if (scene.nodeEls[e.src] || scene.nodeEls[e.dst]) focusEdge(scene, e); else clearFocus(scene);
-  };
-  scene.selectors[selKey] = doSelect;  // so back/forward can restore this edge selection
+  const desc = edgeDesc(scene, p, label, e, selKey, showFn);
+  const hoverOn = () => { if (!selHas(scene, selKey)) { p.style.filter = HOVER; if (label) label.style.filter = HOVER; } };
+  const hoverOff = () => { if (!selHas(scene, selKey)) { p.style.filter = ''; if (label) label.style.filter = ''; } };
+  scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward can restore this edge selection
   const onClick = (ev) => {
     if (isDrag(ev)) return;  // tail of a drag-pan, not a real click
     ev.stopPropagation();
-    if (opts.onDrill && isDrillClick(ev)) { hoverOff(); opts.onDrill(); return; }  // ⌘-click drills in
+    if (opts.onDrill && isDrillClick(ev)) { hoverOff(); opts.onDrill(); return; }  // ⌥-click drills in
     hoverOff();  // drop the hover glow before selecting, so it can't linger under HILITE
-    doSelect();
+    pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
   };
   scene.edgeEls.push({ e, path: p, label });
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn, () => scene.selectedKey === selKey);
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn, () => selHas(scene, selKey));
 }
 
 // An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
@@ -2246,6 +2396,8 @@ function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
     + (s.unit ? ':' + s.unit : '')  // deploymentUnit cards are keyed by unit name (else they collide)
+    + (s.store ? ':' + s.store : '')  // Data-view cross-links focus a store pane — key on it so a
+    + (s.entity ? '#' + s.entity : '')  // store→store / row jump actually re-renders (not a no-op)
     + (s.bkid ? ':' + s.bkid : '');  // bucketfold drills are keyed by their BKF id
 }
 // The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
@@ -2293,7 +2445,10 @@ function captureViewState() {  // stash the leaving entry's pan/zoom + selection
     history[hi].vp = vp;
     vpByView[stateKey(history[hi])] = vp;  // remember this diagram's view so any later return reuses it
   }
-  history[hi].sel = mainScene ? mainScene.selectedKey : null;
+  // Capture the WHOLE multi-selection (ordered keys), so back/forward restores every selected element, not
+  // just the primary. `sels` supersedes the old scalar `sel`; a freshly-built navigation state may still
+  // carry a single requested `sel` (a focus-drill / flow-step link) — restoreSelection handles both.
+  history[hi].sels = mainScene ? mainScene.selection.map((d) => d.key) : null;
   history[hi].content = (pendingLeaveContent !== undefined) ? pendingLeaveContent : snapContent();
   pendingLeaveContent = undefined;
 }
@@ -2305,7 +2460,7 @@ function pushContentPoint(content) {
   captureViewState();
   const c = history[hi];
   history = history.slice(0, hi + 1);
-  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd, unit: c.unit, bkid: c.bkid, sel: c.sel, content });
+  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd, unit: c.unit, bkid: c.bkid, sels: c.sels, content });
   hi = history.length - 1;
   renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
@@ -2404,8 +2559,7 @@ function driveTransition(from) {
   // A content-only step (same diagram view — a file switch, or a browser open/close): leave the diagram
   // untouched and just restore the right pane (+ any selection change) and refresh the chrome.
   if (from && to && mainScene && stateKey(from) === stateKey(to)) {
-    if (to.sel && mainScene.selectors[to.sel]) mainScene.selectors[to.sel]();
-    else resetScene(mainScene);   // no sel, OR a sel whose selector is gone -> clear (never leave a stale one)
+    if (!restoreSelection(mainScene, to)) resetScene(mainScene);  // replay the whole saved selection, else clear
     applyContent(to.content);
     renderChrome(to);
     return;
@@ -2456,9 +2610,9 @@ function bindContext() {
       selectNodeFromCanvas(el, id, e);
       return;
     }
-    if (id === LIBS_ID) {  // collapsed Libraries box: ⌘-click drills to the full list, plain click previews it
+    if (id === LIBS_ID) {  // collapsed Libraries box: ⌥-click drills to the full list, plain/⌘ click previews/multi-selects it
       if (isDrillClick(e)) { go({ kind: 'libs' }); return; }
-      selectLibsFold(mainScene, el);
+      pickSel(mainScene, libsFoldDesc(mainScene, el), e);
       return;
     }
     if (tryFoldNodeClick(id, el, e)) return;
@@ -2471,15 +2625,15 @@ function bindContext() {
   // The Libraries fold selects to its own roster panel (not a plain node panel), so pre-register its
   // re-select — the generic node loop in render() then skips it, keeping back/forward faithful.
   const libsEl = mainScene.nodeEls[LIBS_ID];
-  if (libsEl) mainScene.selectors['node:' + LIBS_ID] = () => selectLibsFold(mainScene, libsEl);
+  if (libsEl) mainScene.selectors['node:' + LIBS_ID] = () => selAdd(mainScene, libsFoldDesc(mainScene, libsEl));
 }
 // A folded-bucket count box click (shared by the Context view and the Libraries drill, which both draw
-// them): ⌘-click drills to its members, a plain click previews its roster. Returns true when handled.
+// them): ⌥-click drills to its members, a plain/⌘ click previews/multi-selects its roster. Returns true when handled.
 function tryFoldNodeClick(id, el, e) {
   const n = GRAPH.nodes[id];
   if (!n || n.kind !== 'bucketfold') return false;
   if (isDrillClick(e)) { go({ kind: 'bucketfold', bkid: id }); return true; }
-  selectBucketFold(mainScene, el, id);
+  pickSel(mainScene, bucketFoldDesc(mainScene, el, id), e);
   return true;
 }
 // Tag every present count box with the drill cursor + pre-register its roster re-select (the generic
@@ -2488,7 +2642,7 @@ function registerFoldSelectors() {
   markBucketFoldDrill();
   (FOLDED_BUCKETS || []).forEach((b) => {
     const bel = mainScene.nodeEls[b.id];
-    if (bel) mainScene.selectors['node:' + b.id] = () => selectBucketFold(mainScene, bel, b.id);
+    if (bel) mainScene.selectors['node:' + b.id] = () => selAdd(mainScene, bucketFoldDesc(mainScene, bel, b.id));
   });
 }
 // The Libraries drill-down: the System + every folded in-process dep (grouped by purpose bucket — big
@@ -2880,11 +3034,13 @@ function hpGlow(el) {
 }
 // Glow a set of elements and remember them in scene.hpLit (a step driven by a selected actor is
 // glowed but isn't itself the selection, so its own hover handlers must restore THIS glow on leave —
-// not blank it). Returns a cleanup that both undoes the glow and forgets the set.
+// not blank it). ADDITIVE, so several selected sequence elements can be lit at once (multi-select): each
+// call adds its els to the running lit set and its cleanup removes exactly those. selApply rebuilds the
+// whole set from scratch on every change, so a shared el (lit by two selections) can't be stranded.
 function hpHighlight(scene, els) {
-  scene.hpLit = new Set(els);
   const undo = els.map(hpGlow);
-  return () => { undo.forEach((f) => f()); scene.hpLit = new Set(); };
+  for (const el of els) scene.hpLit.add(el);
+  return () => { undo.forEach((f) => f()); for (const el of els) scene.hpLit.delete(el); };
 }
 // The filter an element should rest at given the current selection: the HP_SEL glow if the selection
 // lit it, else none. Hover-off restores to this instead of blanking, so a selection glow survives a
@@ -2896,35 +3052,27 @@ function hpFocus(scene, keep) {  // dim every focusable HP element not in the ke
   for (const el of scene.dimEls) el.style.opacity = keep.has(el) ? '' : DIM;
 }
 // Select an actor: its figure + lifeline + every step it drives glow; the rest dims.
-function selectHPActor(scene, a) {
-  const selKey = 'hpactor:' + a.aid;
-  scene.selectedKey = selKey;
-  showHPActor(a);
+function hpActorDesc(scene, a) {
   const stepEls = [];
   for (const i of a.stepIdx) { const m = scene.hpMsg[i]; if (m) { if (m.text) stepEls.push(m.text); if (m.line) stepEls.push(m.line); } }
   const lit = [...scene.hpActor[a.aid].els, ...stepEls];
-  sceneSelect(scene, () => hpHighlight(scene, lit));
-  hpFocus(scene, new Set(lit));
+  return { key: 'hpactor:' + a.aid, glow: () => hpHighlight(scene, lit), focus: { els: new Set(lit) }, show: () => showHPActor(a) };
 }
+function selectHPActor(scene, a) { selReplace(scene, hpActorDesc(scene, a)); }
 // Select a step: the step (text + line) glows and its driving actor stays lit; the rest dims.
-function selectHPStep(scene, i, hpId, aid) {
-  const selKey = 'hpstep:' + hpId;
-  scene.selectedKey = selKey;
-  showHPArrow(hpId);  // plain select = just the X → Y interaction; the full flow is behind the drill
+function hpStepDesc(scene, i, hpId, aid) {
   const m = scene.hpMsg[i] || {};
   const glow = [m.text, m.line].filter(Boolean);
   const rec = aid ? scene.hpActor[aid] : null;
-  sceneSelect(scene, () => hpHighlight(scene, glow));
-  hpFocus(scene, new Set([...glow, ...(rec ? rec.els : [])]));
+  return { key: 'hpstep:' + hpId, glow: () => hpHighlight(scene, glow),
+           focus: { els: new Set([...glow, ...(rec ? rec.els : [])]) }, show: () => showHPArrow(hpId) };
 }
+function selectHPStep(scene, i, hpId, aid) { selReplace(scene, hpStepDesc(scene, i, hpId, aid)); }
 // Select a whole use case on the Happy Path (reached from a Use-cases `HPn` pill): EVERY step that
 // realizes it glows and its driving actor stays lit; the rest dims. A use case can occupy several
 // positions, so more than one step may light — that is exactly the "appears twice" signal. The panel
 // shows the use case (not a single step), and the selection is keyed by uc so back/forward restores it.
-function selectHPUseCase(scene, uc) {
-  const selKey = 'hpuc:' + uc;
-  scene.selectedKey = selKey;
-  showUseCaseSummary(uc);  // same facts as the Use Cases list row; the flow is behind the drill
+function hpUseCaseDesc(scene, uc) {
   const glow = [], keep = [];
   (GRAPH.happy_path || []).forEach((step, i) => {
     if (step.uc !== uc) return;
@@ -2934,9 +3082,10 @@ function selectHPUseCase(scene, uc) {
     const rec = HP_ACTOR_OF_STEP[step.id] ? scene.hpActor[HP_ACTOR_OF_STEP[step.id].aid] : null;
     if (rec) keep.push(...rec.els);
   });
-  sceneSelect(scene, () => hpHighlight(scene, glow));
-  hpFocus(scene, new Set([...glow, ...keep]));
+  return { key: 'hpuc:' + uc, glow: () => hpHighlight(scene, glow),
+           focus: { els: new Set([...glow, ...keep]) }, show: () => showUseCaseSummary(uc) };
 }
+function selectHPUseCase(scene, uc) { selReplace(scene, hpUseCaseDesc(scene, uc)); }
 
 // Bind the Happy Path: steps + actors both select; a step ⌘-clicks to its Level-2 components view.
 // The step id is no longer in the label, so message[i] pairs with GRAPH.happy_path[i] by order; an actor's
@@ -2950,6 +3099,7 @@ function bindHP() {
   const texts = [...root.querySelectorAll('text.messageText')];
   const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
   leftAlignMessageLabels(texts, lines);
+  scene.focusUnion = focusUnionEls;  // this is a sequence diagram — union selections dim by DOM-part set
   scene.hpMsg = {};  // step index -> { text, line }
   for (let i = 0; i < (GRAPH.happy_path || []).length; i++) {
     const text = texts[i] || null;
@@ -2973,38 +3123,38 @@ function bindHP() {
   for (const a of HP_ACTORS) for (const i of a.stepIdx) aidOfStep[i] = a.aid;
   // Per-use-case selector: arriving from a Use-cases `HPn` pill (state `sel: 'hpuc:<uc>'`) lights every
   // step of that use case. Registered for each use case that occupies ≥1 position; back/forward too.
-  for (const uc of Object.keys(HP_STEPS_BY_UC)) scene.selectors['hpuc:' + uc] = () => selectHPUseCase(scene, uc);
+  for (const uc of Object.keys(HP_STEPS_BY_UC)) scene.selectors['hpuc:' + uc] = () => selAdd(scene, hpUseCaseDesc(scene, uc));
 
-  // steps: plain click selects (panel), ⌘-click drills to Level 2.
+  // steps: plain click selects (panel), ⌘-click adds to the multi-selection, ⌥-click drills to Level 2.
   (GRAPH.happy_path || []).forEach((step, i) => {
     const { text, line } = scene.hpMsg[i];
     if (!text) return;
     const hpId = step.id, selKey = 'hpstep:' + hpId;
-    scene.selectors[selKey] = () => selectHPStep(scene, i, hpId, aidOfStep[i]);  // back/forward restore
+    scene.selectors[selKey] = () => selAdd(scene, hpStepDesc(scene, i, hpId, aidOfStep[i]));  // back/forward restore
     // Drilling a step opens its use case's flow — the SAME view (and breadcrumb: "Use Cases › …") a
     // click from the Use Cases tab lands on, so a use case's flow has ONE home regardless of entry.
     addLabelActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'usecase', uc: step.uc }) });
     const icon = ACTION_ICONS[selKey];
     // A dimmed step (hpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
     // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
-    const on = () => { if (scene.selectedKey !== selKey) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
+    const on = () => { if (!selHas(scene, selKey)) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
     // restore to the resting glow (an actor-selected step keeps its HILITE), not blank — and for the
     // same reason, the pill sticks too: `scene.hpLit` is exactly what hpRestFilter already checks to
     // decide that, so hiding the icon only when this step ISN'T in that lit set keeps it up for as
     // long as its driving actor is selected, not just for as long as the step itself is.
-    const off = () => { if (scene.selectedKey !== selKey) { text.style.filter = hpRestFilter(scene, text); if (line) line.style.filter = hpRestFilter(scene, line); if (!scene.hpLit.has(text)) hideIcon(icon); } };
+    const off = () => { if (!selHas(scene, selKey)) { text.style.filter = hpRestFilter(scene, text); if (line) line.style.filter = hpRestFilter(scene, line); if (!scene.hpLit.has(text)) hideIcon(icon); } };
     const click = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
       off();
-      if (isDrillClick(ev)) { go({ kind: 'usecase', uc: step.uc }); return; }  // ⌘-click drills into the use case's flow
-      selectHPStep(scene, i, hpId, aidOfStep[i]);
+      if (isDrillClick(ev)) { go({ kind: 'usecase', uc: step.uc }); return; }  // ⌥-click drills into the use case's flow
+      pickSel(scene, hpStepDesc(scene, i, hpId, aidOfStep[i]), ev);
     };
     for (const el of [text, line]) {
       if (!el) continue;
       el.style.cursor = 'pointer';
       el.style.setProperty('pointer-events', el === text ? 'all' : 'stroke', 'important');
-      el.classList.add('drill');  // ⌘-held cursor affordance
+      el.classList.add('drill');  // ⌥-held cursor affordance
       el.addEventListener('click', click);
       el.addEventListener('mouseenter', on);
       el.addEventListener('mouseleave', off);
@@ -3021,10 +3171,10 @@ function bindHP() {
   // actors: click the figure or anywhere on the lifeline to select the actor (no drill).
   for (const a of HP_ACTORS) {
     const rec = scene.hpActor[a.aid], selKey = 'hpactor:' + a.aid;
-    scene.selectors[selKey] = () => selectHPActor(scene, a);  // back/forward restore
-    const on = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = HOVER; };
-    const off = () => { if (scene.selectedKey !== selKey) for (const el of rec.els) el.style.filter = hpRestFilter(scene, el); };
-    const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off(); selectHPActor(scene, a); };
+    scene.selectors[selKey] = () => selAdd(scene, hpActorDesc(scene, a));  // back/forward restore
+    const on = () => { if (!selHas(scene, selKey)) for (const el of rec.els) el.style.filter = HOVER; };
+    const off = () => { if (!selHas(scene, selKey)) for (const el of rec.els) el.style.filter = hpRestFilter(scene, el); };
+    const click = (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); off(); pickSel(scene, hpActorDesc(scene, a), ev); };
     for (const el of rec.els) {
       if (el.tagName === 'line') continue;  // the lifeline gets a fat transparent hit (below)
       el.style.cursor = 'pointer';
@@ -3100,7 +3250,7 @@ function bindFor(s) {
   else bindComponent();
 }
 function topView(kind) {  // which top-level button a state lives under (container/subsystem/edge → Subsystems)
-  if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'tests') return kind;
+  if (kind === 'context' || kind === 'component' || kind === 'domain' || kind === 'glossary' || kind === 'system' || kind === 'data' || kind === 'tests') return kind;
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
   if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog (incl. a Happy Path drill)
@@ -3116,6 +3266,7 @@ function stateTitle(s) {
   if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
   if (s.kind === 'glossary') return 'Glossary';
   if (s.kind === 'system') return 'System';
+  if (s.kind === 'data') return 'Data';
   if (s.kind === 'tests') return 'Tests';
   if (s.kind === 'usecases') return 'Use Cases';
   if (s.kind === 'deployment') return 'Deployment';
@@ -3161,6 +3312,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'component') return [{ kind: 'component' }];
   if (s.kind === 'glossary') return [{ kind: 'glossary' }];
   if (s.kind === 'system') return [{ kind: 'system' }];
+  if (s.kind === 'data') return [{ kind: 'data' }];
   if (s.kind === 'tests') return [{ kind: 'tests' }];
   const trail = [{ kind: 'container' }];                  // the Subsystems overview is the root of this branch
   if (s.kind === 'subsystem') trail.push(...groupChain('subsystem', 'sid', s.sid));  // full nesting path top → sid
@@ -3533,6 +3685,176 @@ function bindSysIndex() {
   spy();
 }
 
+// ── Data tab (store-centric) ──────────────────────────────────────────────────────────────────────
+// A rail of physical stores → a pane each: the collections (entities keyed by their structured store)
+// with who writes / reads them, the coverage gaps, and — for a broker — its async channels (cards + a
+// lazily-rendered per-broker flowchart). All data is server-derived (GRAPH.data_view); source cells and
+// element chips honour the "link every element to its code" rule. A cross-link carries s.store (open
+// that pane) and s.entity (highlight that row).
+function dvChip(id, name, cls, title) {  // an element chip that navigates to `id` on click (tstref idiom)
+  return `<button type="button" class="dv-chip ${cls}" data-id="${esc(id)}"`
+    + (title ? ` title="${esc(title)}"` : '')
+    + `>${esc(name)} <span class="dv-cid">${esc(id)}</span></button>`;
+}
+// One async-channel card — publishers → consumers → payload entity + the declaring source line. Shared
+// by a broker store's pane and the "unassigned channels" pane so the two can never drift.
+function dvChannelCard(ch) {
+  const chips = (arr, cls) => arr && arr.length
+    ? arr.map((c) => dvChip(c.id, c.name, cls)).join('') : '<span class="dv-none">—</span>';
+  return `<div class="dv-card"><h4>${esc(ch.name)} <span class="dv-kindpill">${esc(ch.kind || 'channel')}</span></h4>`
+    + `<div class="dv-cardrow"><span class="dv-lbl">Publishers</span><div class="dv-chips">${chips(ch.publishers, 'dv-write')}</div></div>`
+    + `<div class="dv-cardrow"><span class="dv-lbl">Consumers</span><div class="dv-chips">${chips(ch.consumers, 'dv-read')}</div></div>`
+    + `<div class="dv-cardrow"><span class="dv-lbl">Payload</span><div class="dv-chips">${ch.payload ? dvChip(ch.payload, ch.payload_name, 'dv-ent') : '<span class="dv-none">untyped</span>'}</div></div>`
+    + `<div class="dv-cardrow"><span class="dv-lbl">Declared</span>${srcCell(ch.source || '')}</div></div>`;
+}
+function dvRenderChannels(pane) {  // lazily render each broker flowchart in a shown pane (once)
+  pane.querySelectorAll('.dv-chan[data-dep]').forEach(async (ph) => {
+    if (ph.dataset.rendered) return;
+    const src = MERMAID_CHANNELS[ph.getAttribute('data-dep')];
+    if (!src) { ph.remove(); return; }
+    ph.dataset.rendered = '1';
+    const seq = renderSeq;
+    let svg;
+    try { ({ svg } = await mermaid.render('dvChan' + (rc++), src)); }
+    catch (_) { return; }
+    if (seq !== renderSeq || !document.body.contains(ph)) return;  // navigated away mid-layout — drop
+    ph.innerHTML = svg;
+    // Best-effort: bind a mermaid component node (id like `flowchart-C116-3`) to navigate to it.
+    ph.querySelectorAll('g.node').forEach((g) => {
+      const m = /-((?:C|D|E|S|SD|UC)\d+)-\d+$/.exec(g.id || '');
+      if (m && GRAPH.nodes[m[1]]) { g.style.cursor = 'pointer'; g.addEventListener('click', () => selectFromTree(m[1])); }
+    });
+  });
+}
+function dvShow(paneId) {
+  diagram.querySelectorAll('.dv-pane').forEach((p) => p.classList.toggle('active', p.id === paneId));
+  diagram.querySelectorAll('.dv-store').forEach((b) => b.setAttribute('aria-current', String(b.dataset.pane === paneId)));
+  const pane = diagram.querySelector('#' + paneId);
+  if (pane) { dvRenderChannels(pane); const c = diagram.querySelector('.dv-content'); if (c) c.scrollTop = 0; }
+}
+function renderData(s) {
+  const dv = DATA_VIEW || {};
+  const stores = dv.stores || [];
+  const nodeName = (id) => (GRAPH.nodes && GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const gapsByDep = {}; for (const g of (dv.gaps || [])) gapsByDep[g.dep] = g.pairs;
+  const paneId = (dep) => 'dv-pane-' + dep;
+  const rail = [];    // rail button HTML
+  const panes = [];   // pane HTML
+
+  // Writer/reader/other chip lists for one collection row.
+  const rwCell = (list, cls, empty) => list && list.length
+    ? `<div class="dv-chips">${list.map((c) => dvChip(c.id, c.name, cls + (c.owner ? ' dv-persist' : ''), c.verb)).join('')}</div>`
+    : `<span class="dv-none">${empty}</span>`;
+
+  const dbRail = [];
+  const busRail = [];
+  for (const st of stores) {
+    const gaps = gapsByDep[st.dep];
+    const warn = gaps && gaps.length ? '<span class="dv-warn-dot" title="coverage gap"></span>' : '';
+    const isBus = st.kind === 'messaging';
+    const cnt = st.rows.length || (st.channels.length ? st.channels.length : 0);
+    const dot = `<span class="dv-dot${isBus ? ' bus' : ''}${st.rows.length || st.channels.length ? '' : ' ghost'}"></span>`;
+    const btn = `<button type="button" class="dv-store" data-pane="${paneId(st.dep)}">${dot}`
+      + `<span class="dv-nm">${esc(st.name)}</span>${warn}<span class="dv-ct">${cnt || '·'}</span></button>`;
+    (isBus ? busRail : dbRail).push(btn);
+
+    // ── pane ──
+    const roleTag = (st.roles || []).length ? `<span class="dv-roles">${(st.roles).map(esc).join(' · ')}</span>` : '';
+    let body = `<div class="dv-panehead"><h2>${esc(st.name)}</h2>`
+      + `<span class="dv-kindpill">${esc(st.kind || 'store')}</span>${roleTag}`
+      + `<span class="dv-stat"><b>${st.rows.length}</b> ${st.rows.length === 1 ? 'collection' : 'collections'}</span>`
+      + (st.channels.length ? `<span class="dv-stat"><b>${st.channels.length}</b> ${st.channels.length === 1 ? 'channel' : 'channels'}</span>` : '')
+      + (st.where ? `<span class="dv-stat">${srcCell(st.where)}</span>` : '') + '</div>';
+    if (gaps && gaps.length) {
+      body += `<div class="dv-coverage"><span aria-hidden="true">&#9888;</span> <span><b>`
+        + `${gaps.length} write${gaps.length === 1 ? '' : 's'} into ${esc(st.name)} not explained by any entity:</b> `
+        + gaps.map((p) => dvChip(p.component, nodeName(p.component), 'dv-write', p.verb)).join(' ')
+        + ` — a real container may be missing from the domain model.</span></div>`;
+    }
+    if (st.rows.length) {
+      const access = dv.access || {};
+      const rows = st.rows.map((r) => {
+        const notes = [];
+        if (r.mode && r.mode !== 'collection') notes.push(`<span class="dv-tag">${esc(r.mode)}</span>`);
+        if (r.notes) notes.push(`<span class="dv-tag">${esc(r.notes)}</span>`);
+        const a = access[r.entity] || {};
+        const readers = (a.readers || []).concat(a.other || []);
+        return `<tr><td class="dv-coll">${r.container ? esc(r.container) : '<span class="dv-none">—</span>'}</td>`
+          + `<td>${dvChip(r.entity, r.name, 'dv-ent')}</td>`
+          + `<td class="dv-meaning">${mdInline(r.meaning || '')}</td>`
+          + `<td>${notes.join(' ')}</td>`
+          + `<td>${rwCell(a.writers, 'dv-write', 'no mapped writers')}</td>`
+          + `<td>${rwCell(readers, 'dv-read', 'no mapped readers')}</td></tr>`;
+      }).join('');
+      body += `<div class="dv-tablewrap"><table class="dv-table"><thead><tr><th>Collection</th><th>Entity</th>`
+        + `<th>Meaning</th><th>Notes</th><th>Written by</th><th>Read by</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    } else if (!st.channels.length) {
+      body += `<p class="dv-derived">No entity in the domain model declares this store — it exists as a `
+        + `dependency with edges, but nothing structured names it as its <code>store</code>.</p>`;
+    }
+    if (st.channels.length) {
+      body += `<h3 class="dv-subhead">Async channels</h3>`;
+      if (MERMAID_CHANNELS[st.dep]) body += `<div class="dv-chan" data-dep="${esc(st.dep)}"></div>`;
+      body += '<div class="dv-cards">' + st.channels.map(dvChannelCard).join('') + '</div>';
+    }
+    panes.push(`<div class="dv-pane" id="${paneId(st.dep)}" role="region" aria-label="${esc(st.name)}">${body}</div>`);
+  }
+
+  // Unassigned channels (broker: '') — a pane so catalogued channels are never silently dropped.
+  const unassigned = dv.unassigned_channels || [];
+  if (unassigned.length) {
+    busRail.push(`<button type="button" class="dv-store" data-pane="dv-pane-unassigned"><span class="dv-dot bus"></span>`
+      + `<span class="dv-nm">Unassigned channels</span><span class="dv-ct">${unassigned.length}</span></button>`);
+    const cards = unassigned.map(dvChannelCard).join('');
+    panes.push(`<div class="dv-pane" id="dv-pane-unassigned" role="region" aria-label="Unassigned channels">`
+      + `<div class="dv-panehead"><h2>Unassigned channels</h2><span class="dv-stat">no broker dependency recorded</span></div>`
+      + `<div class="dv-cards">${cards}</div></div>`);
+  }
+
+  // Not-persisted groups → one pane, one rail button per group (all jump to the pane).
+  const np = dv.not_persisted || [];
+  const npRail = [];
+  if (np.length) {
+    const groups = np.map((grp) => `<div class="dv-grouprow"><h3>${esc(grp.label)} (${grp.entities.length})`
+      + (grp.warn ? ' <span class="dv-tag dv-tag-warn">no dep linked</span>' : '') + `</h3>`
+      + `<div class="dv-chips">${grp.entities.map((e) =>
+          dvChip(e.id, e.name, 'dv-ent', e.container || e.mode)).join('')}</div></div>`).join('');
+    panes.push(`<div class="dv-pane" id="dv-pane-np" role="region" aria-label="Not persisted">`
+      + `<div class="dv-panehead"><h2>Not persisted</h2><span class="dv-stat"><b>`
+      + `${np.reduce((n, g) => n + g.entities.length, 0)}</b> entities never persisted to a store</span></div>`
+      + `<p class="dv-derived">The other side of <code>entities[].store</code> — what is <i>not</i> in a database, so you know before you go looking.</p>`
+      + `<div class="dv-grouplist">${groups}</div></div>`);
+    for (const grp of np) npRail.push(`<button type="button" class="dv-store" data-pane="dv-pane-np">`
+      + `<span class="dv-dot ghost"></span><span class="dv-nm">${esc(grp.label)}</span>`
+      + (grp.warn ? '<span class="dv-warn-dot"></span>' : '') + `<span class="dv-ct">${grp.entities.length}</span></button>`);
+  }
+
+  if (dbRail.length) rail.push(`<div class="dv-railgroup">Data stores</div>${dbRail.join('')}`);
+  if (busRail.length) rail.push(`<div class="dv-railgroup">Message bus</div>${busRail.join('')}`);
+  if (npRail.length) rail.push(`<div class="dv-railgroup">Not persisted</div>${npRail.join('')}`);
+
+  diagram.innerHTML = `<div class="dv-wrap"><nav class="dv-rail" aria-label="Physical stores">${rail.join('')}</nav>`
+    + `<section class="dv-content">${panes.join('')}</section></div>`;
+  wireSrcLinks(diagram);
+  diagram.querySelectorAll('.dv-store').forEach((b) => b.addEventListener('click', () => dvShow(b.dataset.pane)));
+  diagram.querySelectorAll('.dv-chip[data-id]').forEach((b) =>
+    b.addEventListener('click', () => selectFromTree(b.getAttribute('data-id'))));
+
+  // Default pane: a cross-link's target store, else the store with the most collections, else the first.
+  let target = (s && s.store && diagram.querySelector('#' + paneId(s.store))) ? paneId(s.store) : null;
+  if (!target && stores.length) {
+    const best = stores.reduce((a, b) => (b.rows.length > a.rows.length ? b : a), stores[0]);
+    target = paneId(best.dep);
+  }
+  if (!target) target = (diagram.querySelector('.dv-pane') || {}).id;
+  if (target) dvShow(target);
+  if (s && s.entity) {  // cross-link to a specific collection row — scroll it in + flash it
+    const row = [...diagram.querySelectorAll('.dv-chip.dv-ent[data-id="' + (window.CSS && CSS.escape ? CSS.escape(s.entity) : s.entity) + '"]')]
+      .map((c) => c.closest('tr')).find(Boolean);
+    if (row) { row.classList.add('dv-flash'); row.scrollIntoView({ block: 'center' }); }
+  }
+}
+
 // A test row's Target cell: each target element by NAME (the server already resolved id -> name +
 // node, so there is NO client-side id parsing). A target that is a drawn node links out to locate it
 // in its home view; an unresolved one is plain text. The optional grouping `label` prefixes them.
@@ -3590,6 +3912,8 @@ async function render(sArg, transient) {
   if (s.kind === 'usecases') { renderUseCases(); mainScene = null; renderChrome(s); return; }
   // The System tab is a set of operational reference tables (HTML), not a mermaid diagram — same shape.
   if (s.kind === 'system') { renderSystem(); mainScene = null; renderChrome(s); return; }
+  // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
+  if (s.kind === 'data') { renderData(s); mainScene = null; renderChrome(s); return; }
   // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
   if (s.kind === 'tests') { renderTests(); mainScene = null; renderChrome(s); return; }
   // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,
@@ -3622,9 +3946,12 @@ async function render(sArg, transient) {
   for (const id in mainScene.nodeEls) {
     if (!mainScene.selectors['node:' + id]) {
       const el = mainScene.nodeEls[id];
-      mainScene.selectors['node:' + id] = () => selectNode(mainScene, el, id);
+      mainScene.selectors['node:' + id] = () => selAdd(mainScene, nodeDesc(mainScene, el, id));
     }
   }
+  // Whether this state carries a selection we can restore below (its captured multi-selection, or a single
+  // requested key) — used to skip the plain landing panel that a restore would just overwrite.
+  const willRestore = (s.sels && s.sels.some((k) => mainScene.selectors[k])) || (s.sel && mainScene.selectors[s.sel]);
   // Skip the plain landing panel when a more specific selection below is about to override it anyway —
   // it would just be thrown away, and (since showNode/syncTreeToNode mirror into the file browser) it'd
   // also plant a spurious intermediate tree-highlight that throws off the near/far centering heuristic
@@ -3632,7 +3959,7 @@ async function render(sArg, transient) {
   // Landing on a view with nothing selected (a tab / drill, not a folder element click): show its
   // default panel and default the code slot to the file browser (nothing selected -> browse). An explicit
   // selection (pendingSelect below) instead runs through updateFolderPeek, which browses only for a folder.
-  if (!transient && !pendingSelect && !(s.sel && mainScene.selectors[s.sel])) { applyDefaultPanel(s); setBrowsing(true); }
+  if (!transient && !pendingSelect && !willRestore) { applyDefaultPanel(s); setBrowsing(true); }
   if (mode === 'diff' && hasDiff()) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
@@ -3647,10 +3974,11 @@ async function render(sArg, transient) {
     const el = mainScene.nodeEls[id];
     if (el) selectNode(mainScene, el, id); else showNodeDetailSynced(id);
     if (el) pendingMatchTextId = id;
-  } else if (!transient && s.sel && mainScene.selectors[s.sel]) {
-    mainScene.selectors[s.sel]();  // history revisit OR fresh focus-drill: apply the selection
-    // A fresh focus-drill (pendingCenter set at drill time) centers its focused node at the fit zoom so
-    // it can't land off-screen; a plain history revisit leaves pendingCenter null and keeps the camera.
+  } else if (!transient && restoreSelection(mainScene, s)) {
+    // history revisit (the whole captured multi-selection) OR a fresh focus-drill (a single requested key)
+    // — restoreSelection replayed it above. A fresh focus-drill (pendingCenter set at drill time) centers
+    // its focused node at the fit zoom so it can't land off-screen; a plain history revisit leaves
+    // pendingCenter null and keeps the camera.
     if (pendingCenter && s.sel === 'node:' + pendingCenter && mainScene.nodeEls[pendingCenter]) pendingCenterId = pendingCenter;
   }
   if (!transient) pendingCenter = null;
@@ -3683,7 +4011,9 @@ async function render(sArg, transient) {
     else if (pendingCenterId) applyZoomAndCenter(mainScene.nodeEls[pendingCenterId], 1);  // centre only, keep the fit zoom
     flowInit();  // a flow view: show the step player (unstarted on a fresh open; nothing auto-selected)
   }
-  if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e)) resetScene(mainScene); });  // empty space deselects
+  // Empty-space click deselects — but a ⌘-click on empty space is a no-op (Finder semantics): while
+  // building a multi-selection, a ⌘-click that just misses an element must not wipe what's selected.
+  if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e) && !isMultiSelectClick(e)) resetScene(mainScene); });
   // Restore this point's remembered right pane (file+scroll or browser), overriding the selection-derived
   // pane above — so back/forward reopens the exact file/browser the point was left with, not just the
   // selection's source. Only history points carry `content` (set on leave); a fresh go() has none.
@@ -3983,7 +4313,7 @@ function selectFromTree(nodeId) {
     // Read BEFORE selectNode overwrites it: re-selecting the ALREADY-selected element (e.g. picking
     // another file of the same element in the tree) must hold the camera perfectly still — the reader
     // is browsing files, not asking to be re-framed on a box they already see.
-    const alreadySelected = mainScene && mainScene.selectedKey === 'node:' + t.selectId;
+    const alreadySelected = mainScene && selHas(mainScene, 'node:' + t.selectId);
     if (el) selectNode(mainScene, el, t.selectId); else showNodeDetailSynced(t.selectId);
     // A node NEWLY reached via the file tree gets the zoom-to-match-sidebar-text-size move — there's
     // no modifier key on a tree row to gate it on, unlike a canvas click (see selectNodeFromCanvas).
@@ -4509,7 +4839,7 @@ function selectFlowStep(uc, i) {
   const state = { kind: 'usecase', uc: uc, sel: 'flowstep:' + uc + ':' + i };
   const cur = history[hi];
   if (cur && stateKey(cur) === stateKey(state) && mainScene && mainScene.selectors[state.sel]) {
-    mainScene.selectors[state.sel]();
+    selClear(mainScene); mainScene.selectors[state.sel]();  // select this one step in place (replace)
   } else {
     go(state);
   }
@@ -4899,12 +5229,14 @@ document.addEventListener('keydown', (e) => {
   }
   if (e.key === 'Escape' && mainScene) resetScene(mainScene);
 });
-// While ⌘ (or ⌃ off Mac) is held, flag the body so drillable subsystems/arrows show the drill-in
-// cursor (see .drill in the CSS). Clear on key-up and on blur so a released key never sticks.
-const setCmd = (on) => { document.body.classList.toggle('cmd', on); renderHoverTip(); };
-document.addEventListener('keydown', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(true); });
-document.addEventListener('keyup', (e) => { if (e.key === 'Meta' || e.key === 'Control') setCmd(false); });
-window.addEventListener('blur', () => setCmd(false));
+// While ⌥ (Option / Alt) is held, flag the body so drillable subsystems/arrows show the drill-in cursor
+// (see .drill in the CSS) and the hover tip previews the drill/open action. (⌘/⌃ is now the multi-select
+// modifier — see isMultiSelectClick — so the drill affordance moved to ⌥.) Clear on key-up and on blur so
+// a released key never sticks.
+const setDrillMod = (on) => { document.body.classList.toggle('altmod', on); renderHoverTip(); };
+document.addEventListener('keydown', (e) => { if (e.key === 'Alt') setDrillMod(true); });
+document.addEventListener('keyup', (e) => { if (e.key === 'Alt') setDrillMod(false); });
+window.addEventListener('blur', () => setDrillMod(false));
 window.addEventListener('resize', refitStage);  // keep the diagram fitted when the window itself resizes
 window.addEventListener('resize', updateAllPillFades);  // and re-evaluate the pill-box edge fades
 
@@ -5682,6 +6014,7 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'deployment' && !HAS_DEPLOYMENT) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'glossary' && !HAS_GLOSSARY) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'system' && !HAS_SYSTEM) { b.style.display = 'none'; return; }
+  if (b.dataset.view === 'data' && !HAS_DATA) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'tests' && !HAS_TESTS) { b.style.display = 'none'; return; }
   b.addEventListener('click', () => go({ kind: b.dataset.view }));
 });
@@ -5939,7 +6272,7 @@ if (impactbtn) {
     }
     DIFF_STATE = impactProjection();
     captureViewState(); render();
-    if (mainScene && !mainScene.selectedKey) showImpactSummary();
+    if (mainScene && !mainScene.selection.length) showImpactSummary();
   }));
 }
 

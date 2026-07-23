@@ -389,6 +389,10 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
               padding: 0 3px; border-radius: 3px; color: #1f2937; }
 /* Subsystems-arrow panel: every crossing in one uniform font — `from → to:` then the explanation
    indented below. No small-caps dt; the bullet and indent carry the structure instead. */
+/* Selected-element detail cards. A single selection is ONE card that reads exactly like the old flat
+   panel (no extra chrome). A multi-selection (⌘-click) stacks one card per selected element, in click
+   order, each separated from the previous by a rule so it reads as its own distinct element. */
+#panel .sel-card + .sel-card { margin-top: 16px; padding-top: 16px; border-top: 2px solid #e5e7eb; }
 #panel .xcount { color: #6b7280; margin-bottom: 10px; }
 #panel .xlist { margin: 0; padding-left: 18px; }
 #panel .xlist li { margin-top: 12px; }
@@ -425,14 +429,15 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 #panel .xlist .xfacts { padding-left: 14px; }
 #panel .xlist .xfacts dt:first-child { margin-top: 8px; }
 
-/* While ⌘ is held (body.cmd), drillable subsystem boxes + inter-subsystem arrows show a drill-in
-   cursor — the affordance for ⌘-click drilling. !important beats the inline cursor:pointer. */
-body.cmd .drill, body.cmd .drill * { cursor: zoom-in !important; }
+/* While ⌥ (Option/Alt) is held (body.altmod), drillable subsystem boxes + inter-subsystem arrows show a
+   drill-in cursor — the affordance for ⌥-click drilling (⌘ is the multi-select modifier). !important
+   beats the inline cursor:pointer. */
+body.altmod .drill, body.altmod .drill * { cursor: zoom-in !important; }
 /* Leaf boxes with a source ref (components / domain entities) show a slanted-arrow cursor instead —
-   ⌘-click opens the source rather than drilling. Hand-drawn to match the corner action icon's own
+   ⌥-click opens the source rather than drilling. Hand-drawn to match the corner action icon's own
    "open externally" glyph (see buildGlyph's `open` branch in viewer.js) — same shaft + corner-arrowhead
    shape, just repositioned for this cursor's own 28x22 box. SVG data-URI cursor, pointer as the fallback. */
-body.cmd .opensrc, body.cmd .opensrc * {
+body.altmod .opensrc, body.altmod .opensrc * {
   cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='22'%20viewBox='0%200%2028%2022'%3E%3Crect%20x='1'%20y='1'%20width='26'%20height='20'%20rx='5'%20fill='%234f46e5'%20stroke='%23fff'%20stroke-width='1.5'/%3E%3Cpath%20d='M9,15%20L17,7%20M17,10.5%20L17,7%20L13.5,7'%20fill='none'%20stroke='%23fff'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E") 4 4, pointer !important;
 }
 
@@ -770,3 +775,78 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 #panel .impsec a:hover { text-decoration: underline; }
 #panel .impwarn { margin: 6px 0; padding: 6px 8px; background: #fffbeb; border: 1px solid #fde68a;
            border-radius: 6px; color: #92400e; font-size: 11px; }
+
+/* --- Data tab (store-centric): rail of physical stores + a pane each ----------------------------- */
+.dv-wrap { display: flex; height: 100%; overflow: hidden; }
+.dv-rail { flex: 0 0 250px; overflow-y: auto; border-right: 1px solid #e5e7eb; background: #fff; padding-bottom: 16px; }
+.dv-content { flex: 1 1 auto; min-width: 0; overflow-y: auto; background: #f8fafc; }
+.dv-railgroup { padding: 12px 14px 3px; font-size: 10px; font-weight: 700; letter-spacing: .05em;
+                text-transform: uppercase; color: #9ca3af; }
+.dv-store { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; font: inherit;
+            font-size: 13px; padding: 6px 14px; border: 0; border-left: 2px solid transparent;
+            background: none; color: #111827; cursor: pointer; }
+.dv-store:hover { background: #f5f7ff; }
+.dv-store[aria-current="true"] { background: #eef2ff; border-left-color: #6366f1; font-weight: 600; }
+.dv-dot { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 2px; background: #c2410c; opacity: .75; }
+.dv-dot.bus { border-radius: 50%; background: #6d28d9; }
+.dv-dot.ghost { background: #9ca3af; opacity: .5; }
+.dv-nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dv-ct { flex: 0 0 auto; font-family: ui-monospace, monospace; font-size: 11px; color: #9ca3af; }
+.dv-warn-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
+.dv-pane { display: none; padding: 16px 20px 40px; }
+.dv-pane.active { display: block; }
+.dv-panehead { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 2px 0 12px; }
+.dv-panehead h2 { font-size: 16px; margin: 0; font-weight: 650; }
+.dv-kindpill { font-size: 9.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
+               padding: 2px 6px; border-radius: 4px; background: #ffedd5; color: #c2410c; }
+.dv-roles { font-size: 11px; color: #6b7280; }
+.dv-stat { font-size: 12px; color: #6b7280; }
+.dv-stat b { color: #111827; }
+.dv-derived { font-size: 12px; color: #6b7280; margin: 0 0 14px; max-width: 72ch; }
+.dv-derived code { font-family: ui-monospace, monospace; font-size: 11px; background: #f1f5f9;
+                   color: #475569; border-radius: 3px; padding: 0 4px; }
+.dv-subhead { margin: 20px 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase;
+              letter-spacing: .04em; color: #64748b; }
+.dv-coverage { display: flex; gap: 10px; align-items: flex-start; background: #fffbeb; border: 1px solid #f59e0b;
+               border-left-width: 4px; border-radius: 6px; padding: 9px 12px; margin: 0 0 16px;
+               font-size: 12.5px; color: #92400e; }
+.dv-coverage b { font-weight: 700; }
+.dv-tablewrap { overflow-x: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; }
+.dv-table { border-collapse: collapse; width: 100%; min-width: 900px; }
+.dv-table thead th { position: sticky; top: 0; background: #fff; z-index: 2; text-align: left; font-size: 10px;
+                     font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #9ca3af;
+                     padding: 9px 12px; border-bottom: 1px solid #e5e7eb; }
+.dv-table tbody td { padding: 8px 12px; border-bottom: 1px solid #f3f4f6; vertical-align: top; font-size: 13px; }
+.dv-table tbody tr:last-child td { border-bottom: 0; }
+.dv-table tbody tr:hover td { background: #f9fafb; }
+.dv-coll { font-family: ui-monospace, monospace; font-size: 12px; white-space: nowrap; font-weight: 600; color: #334155; }
+.dv-meaning { color: #6b7280; font-size: 12.5px; max-width: 34ch; }
+.dv-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.dv-chip { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11px; line-height: 1.3;
+           padding: 2px 7px; border-radius: 10px; border: 0; cursor: pointer; white-space: nowrap; }
+.dv-chip:hover { filter: brightness(.96); }
+.dv-cid { font-family: ui-monospace, monospace; font-size: 9.5px; opacity: .7; font-weight: 400; }
+.dv-ent { background: #ede9fe; color: #6d28d9; font-weight: 600; }
+.dv-write { background: #fef3c7; color: #92400e; font-weight: 600; }
+.dv-read { background: transparent; color: #475569; box-shadow: inset 0 0 0 1px #cbd5e1; }
+.dv-chip.dv-persist { background: #6d28d9; color: #f5f3ff; font-weight: 600; }
+.dv-none { font-size: 11px; color: #9ca3af; font-style: italic; }
+.dv-tag { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 4px;
+          background: #f1f5f9; color: #475569; white-space: nowrap; }
+.dv-tag-warn { background: #fef3c7; color: #92400e; }
+.dv-chan { margin: 0 0 14px; overflow-x: auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 8px; }
+#diagram .dv-chan svg { width: auto; max-width: 100%; height: auto; }
+.dv-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.dv-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 14px; }
+.dv-card h4 { margin: 0 0 8px; font-size: 13.5px; font-weight: 650; display: flex; align-items: center; gap: 7px; }
+.dv-cardrow { display: flex; gap: 8px; align-items: baseline; margin: 0 0 5px; font-size: 12px; }
+.dv-lbl { flex: 0 0 74px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; color: #9ca3af; }
+.dv-grouplist { display: flex; flex-direction: column; gap: 14px; max-width: 900px; }
+.dv-grouprow h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: #64748b; }
+.dv-flash { animation: dvflash 1.4s ease; }
+@keyframes dvflash { from { background: #fef9c3; } to { background: transparent; } }
+/* Data-view rows inside the element info pane (Persisted in / Written by / Read by / dep Data link). */
+#panel .dv-panerow { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+#panel .dv-seelink { color: #4f46e5; text-decoration: none; font-size: 12px; white-space: nowrap; }
+#panel .dv-seelink:hover { text-decoration: underline; }
+#panel .dv-coll { font-family: ui-monospace, monospace; font-size: 12px; color: #334155; }
