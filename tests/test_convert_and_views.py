@@ -21,11 +21,12 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 from coyodex import audit_model, grammar
 from coyodex.model import (
     Component,
+    Dep,
     Entity,
     EntityField,
     EntryPoint,
@@ -45,7 +46,7 @@ from coyodex.model import (
     to_canonical_json,
 )
 from coyodex.viewer.gen_viewer import flow_actors, flow_narrative, gen_flow_mermaid
-from coyodex.views import model_to_graph, model_to_markdown
+from coyodex.views import _store_str, model_to_graph, model_to_markdown
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mcpolis-project-map.json"
 RENDER = [sys.executable, "-m", "coyodex.viewer.render"]
@@ -266,18 +267,28 @@ def test_states_render_on_card_and_panes():
 
 
 def test_structured_store_renders_one_shared_form():
-    """WS-A1: the domain-card parenthetical and the entity pane's 'Stored' row share ONE renderer
-    (`_store_str`) — `D1.guilds — collection; 30-day TTL`, degrading when parts are unstated."""
+    """WS-A1 + Data view: the markdown domain-card parenthetical always uses the ONE shared `_store_str`
+    renderer (`D1.guilds — collection; 30-day TTL`). In the interactive pane, storage shows EXACTLY
+    once: a PERSISTED entity (store.dep set) carries the structured store on its node (the richer
+    'Persisted in' row) and drops the plain 'Stored' text; a NOT-persisted store keeps the shared
+    'Stored' text row (no structured row), so the two never duplicate."""
     m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.deps = [Dep(id="D1", name="MongoDB", kind="datastore", type="document db")]
     m.entities = [Entity(id="E1", name="Guild", meaning="a server", source="src/g.py:1",
                          fields=[EntityField(name="id", type="str")],
                          store=Store(dep="D1", container="guilds", mode="collection",
                                      notes="30-day TTL"))]
     md = model_to_markdown(m)
     assert "**E1 — Guild** *(D1.guilds — collection; 30-day TTL)*" in md
-    g = model_to_graph(m)
-    e1 = cast("dict[str, dict[str, str]]", g["nodes"]["E1"])
-    assert e1["fields"]["Stored"] == "D1.guilds — collection; 30-day TTL"
+    e1 = cast("dict[str, Any]", model_to_graph(m)["nodes"]["E1"])
+    assert "Stored" not in e1["fields"]                       # persisted → no plain text row (structured instead)
+    assert e1["store"] == {"dep": "D1", "container": "guilds", "mode": "collection",
+                           "notes": "30-day TTL", "dep_name": "MongoDB"}
+    # a NOT-persisted store (no dep) keeps the shared "Stored" text row, no structured "Persisted in"
+    transient = Store(mode="transient", notes="derived at request time")
+    m.entities[0].store = transient
+    e1b = cast("dict[str, dict[str, str]]", model_to_graph(m)["nodes"]["E1"])
+    assert e1b["fields"]["Stored"] == _store_str(transient)
     # notes-only degrades to the bare notes (the migrated-legacy look)
     m.entities[0].store = Store(notes="mdb: guilds")
     assert "**E1 — Guild** *(mdb: guilds)*" in model_to_markdown(m)

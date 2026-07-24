@@ -915,16 +915,18 @@ function applyPendingEpSelect() {
 // code" rule). The "See in Data view" link deep-links to this entity's row in the Data tab.
 function persistedInHtml(id) {
   const n = GRAPH.nodes[id];
-  if (!n || n.kind !== 'entity' || !n.store) return '';
+  // Only for an entity with a PHYSICAL store (store.dep). A not-persisted entity (transient/embedded/
+  // in-code) keeps its plain "Stored" text row instead (set server-side), so storage shows exactly once.
+  if (!n || n.kind !== 'entity' || !n.store || !n.store.dep) return '';
   const st = n.store; const parts = [];
-  if (st.dep && GRAPH.nodes[st.dep]) parts.push(dvChip(st.dep, GRAPH.nodes[st.dep].name, 'dv-ent'));
-  else if (st.dep) parts.push(esc(st.dep));
+  if (GRAPH.nodes[st.dep]) parts.push(dvChip(st.dep, GRAPH.nodes[st.dep].name, 'dv-ent'));
+  else parts.push(esc(st.dep));
   if (st.container) parts.push(`<span class="dv-coll">${esc(st.container)}</span>`);
   if (st.mode) parts.push(`<span class="dv-tag">${esc(st.mode)}</span>`);
   if (st.notes) parts.push(`<span class="dv-tag">${esc(st.notes)}</span>`);
   if (!parts.length) return '';
   let dd = parts.join(' ');
-  if (HAS_DATA && st.dep) dd += ` <a href="#" class="dv-seelink" data-store="${esc(st.dep)}" data-entity="${esc(id)}">See in Data view →</a>`;
+  if (HAS_DATA) dd += ` <a href="#" class="dv-seelink" data-store="${esc(st.dep)}" data-entity="${esc(id)}">See in Data view →</a>`;
   return `<dt>Persisted in</dt><dd class="dv-panerow">${dd}</dd>`;
 }
 function accessRowsHtml(id) {

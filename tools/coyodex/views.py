@@ -689,7 +689,11 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         meta: dict[str, str] = {}
         if e.meaning:
             meta["Meaning"] = e.meaning
-        if e.store:
+        # A persisted entity (store.dep set) gets the richer structured "Persisted in" row in the info
+        # pane (clickable dep + Data-view link, see viewer.js persistedInHtml), so the plain "Stored"
+        # text line would just duplicate it. Keep "Stored" ONLY for a not-persisted store (no dep),
+        # where the structured row does not render — so every entity shows its storage exactly once.
+        if e.store and not e.store.dep:
             meta["Stored"] = _store_str(e.store)
         if e.states:
             meta["States"] = _states_str(e.states)
