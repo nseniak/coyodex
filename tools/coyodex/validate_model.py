@@ -30,6 +30,7 @@ from coyodex.pysrc import parse_python
 from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
+    Dep,
     Entity,
     EntryPoint,
     FlowStep,
@@ -1139,6 +1140,60 @@ def _check_stores(m: ProjectModel) -> list[str]:
     return problems
 
 
+def unexplained_persistence_pairs(m: ProjectModel) -> list[tuple[str, str, Dep]]:
+    """The shared core of the persistence-coverage rule (reused by the validator's warning and the
+    viewer's Data-view coverage strip, so the two can never disagree): the deduped,
+    exception-filtered, adoption-gated list of write-family `C→D` edges into a store-shaped dep
+    (datastore/messaging) that NO entity's structured store explains — directly, or through the
+    writing component as a one-hop store ADAPTER (`C1 persists C30`, and C30 carries the physical
+    `writes D1` — the layered-architecture shape a live rebuild false-positived on).
+
+    Returns `(component_id, lowercased_verb, dep)` triples in first-seen edge order, one per unique
+    `(src, dst)` pair. Empty when no entity has structured its store (`store.dep` set) — the
+    adoption gate. Ids recorded under a 'Persistence exceptions' extras heading are filtered out
+    (the operator's escape for an infra-only writer). The verb is lowercased and the `Dep` object is
+    returned (its `.id == component's edge dst`) so the validator's warning stays byte-identical."""
+    pairs: list[tuple[str, str, Dep]] = []
+    write_verbs = grammar.PERSIST_VERBS | grammar.WRITE_VERBS
+    structured = [e for e in m.entities if e.store and e.store.dep]
+    if not structured:
+        return pairs
+    deps_by_id = {d.id: d for d in m.deps}
+    excepted = _recorded_ids(m, "persistence exceptions", ("C",))
+    entities_of_dep: dict[str, set[str]] = {}
+    for e in structured:
+        entities_of_dep.setdefault(e.store.dep, set()).add(e.id)  # type: ignore[union-attr]
+    writers_of_entity: dict[str, set[str]] = {}
+    writers_into_component: dict[str, set[str]] = {}  # C -> components with a write-family edge INTO it
+    for ed in m.edges:
+        if ed.src.startswith("C") and ed.verb.strip().lower() in write_verbs:
+            if ed.dst.startswith("E"):
+                writers_of_entity.setdefault(ed.dst, set()).add(ed.src)
+            elif ed.dst.startswith("C"):
+                writers_into_component.setdefault(ed.dst, set()).add(ed.src)
+    seen_pairs: set[tuple[str, str]] = set()
+    for ed in m.edges:
+        verb = ed.verb.strip().lower()
+        if not (ed.src.startswith("C") and ed.dst.startswith("D") and verb in write_verbs):
+            continue
+        d = deps_by_id.get(ed.dst)
+        if d is None or grammar.classify_dep(d.kind or "", d.type) not in ("datastore", "messaging"):
+            continue
+        if ed.src in excepted or (ed.src, ed.dst) in seen_pairs:
+            continue
+        seen_pairs.add((ed.src, ed.dst))
+        dep_owner_ids = {cid for eid in entities_of_dep.get(ed.dst, set())
+                        for cid in writers_of_entity.get(eid, set())}
+        # Explained when the writing component itself owns an entity stored in this dep, OR — the
+        # layered-architecture case a live rebuild false-positived on — when it is a store ADAPTER:
+        # some entity-owning service has a write-family edge INTO it. One hop, write-family only.
+        explained = (ed.src in dep_owner_ids
+                     or bool(dep_owner_ids & writers_into_component.get(ed.src, set())))
+        if not explained:
+            pairs.append((ed.src, verb, d))
+    return pairs
+
+
 def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
     """The persistence-coverage rule (advisory, ADOPTION-GATED): once any entity structures its
     store (`store.dep` set), every write-family `C→D` edge into a store-shaped dep must be
@@ -1150,48 +1205,13 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
     A second aggregated nudge lists entities still carrying an UNSTRUCTURED store (notes-only);
     the literal `store` under 'Balance exceptions' silences that one."""
     warnings: list[str] = []
-    write_verbs = grammar.PERSIST_VERBS | grammar.WRITE_VERBS
-    structured = [e for e in m.entities if e.store and e.store.dep]
-    if structured:
-        deps_by_id = {d.id: d for d in m.deps}
-        excepted = _recorded_ids(m, "persistence exceptions", ("C",))
-        entities_of_dep: dict[str, set[str]] = {}
-        for e in structured:
-            entities_of_dep.setdefault(e.store.dep, set()).add(e.id)  # type: ignore[union-attr]
-        writers_of_entity: dict[str, set[str]] = {}
-        writers_into_component: dict[str, set[str]] = {}  # C -> components with a write-family edge INTO it
-        for ed in m.edges:
-            if ed.src.startswith("C") and ed.verb.strip().lower() in write_verbs:
-                if ed.dst.startswith("E"):
-                    writers_of_entity.setdefault(ed.dst, set()).add(ed.src)
-                elif ed.dst.startswith("C"):
-                    writers_into_component.setdefault(ed.dst, set()).add(ed.src)
-        seen_pairs: set[tuple[str, str]] = set()
-        for ed in m.edges:
-            verb = ed.verb.strip().lower()
-            if not (ed.src.startswith("C") and ed.dst.startswith("D") and verb in write_verbs):
-                continue
-            d = deps_by_id.get(ed.dst)
-            if d is None or grammar.classify_dep(d.kind or "", d.type) not in ("datastore", "messaging"):
-                continue
-            if ed.src in excepted or (ed.src, ed.dst) in seen_pairs:
-                continue
-            seen_pairs.add((ed.src, ed.dst))
-            dep_owner_ids = {cid for eid in entities_of_dep.get(ed.dst, set())
-                            for cid in writers_of_entity.get(eid, set())}
-            # Explained when the writing component itself owns an entity stored in this dep, OR —
-            # the layered-architecture case a live rebuild false-positived on — when it is a store
-            # ADAPTER: some entity-owning service has a write-family edge INTO it (`C1 persists
-            # C30`, and C30 carries the physical `writes D1`). One hop, write-family only.
-            explained = (ed.src in dep_owner_ids
-                         or bool(dep_owner_ids & writers_into_component.get(ed.src, set())))
-            if not explained:
-                warnings.append(
-                    f"{ed.src} {verb} into {ed.dst} ({d.name}) but no entity both records {ed.dst} "
-                    f"as its store AND is written by {ed.src} (directly, or through it as a store "
-                    "adapter) — a real container may be missing from the domain model (the "
-                    "unmodeled-collection class); add the entity (with its structured store), or "
-                    f"record '{ed.src}: <why>' under a 'Persistence exceptions' extras heading")
+    for src, verb, d in unexplained_persistence_pairs(m):
+        warnings.append(
+            f"{src} {verb} into {d.id} ({d.name}) but no entity both records {d.id} "
+            f"as its store AND is written by {src} (directly, or through it as a store "
+            "adapter) — a real container may be missing from the domain model (the "
+            "unmodeled-collection class); add the entity (with its structured store), or "
+            f"record '{src}: <why>' under a 'Persistence exceptions' extras heading")
     # Store-hygiene family (one aggregated nudge each; escape = the literal `store`, line-leading,
     # under 'Balance exceptions'):
     #  * notes-only stores (no dep, no mode) — fully unstructured;

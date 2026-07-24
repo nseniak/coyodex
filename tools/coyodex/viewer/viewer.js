@@ -3778,9 +3778,11 @@ function bindSysIndex() {
 // element chips honour the "link every element to its code" rule. A cross-link carries s.store (open
 // that pane) and s.entity (highlight that row).
 function dvChip(id, name, cls, title) {  // an element chip that navigates to `id` on click (tstref idiom)
+  // Shows the NAME only — element ids stay internal (the `data-id` handle drives navigation), matching
+  // every other view. Never surface the raw id in the UI unless the user explicitly asks.
   return `<button type="button" class="dv-chip ${cls}" data-id="${esc(id)}"`
     + (title ? ` title="${esc(title)}"` : '')
-    + `>${esc(name)} <span class="dv-cid">${esc(id)}</span></button>`;
+    + `>${esc(name)}</button>`;
 }
 // One async-channel card — publishers → consumers → payload entity + the declaring source line. Shared
 // by a broker store's pane and the "unassigned channels" pane so the two can never drift.

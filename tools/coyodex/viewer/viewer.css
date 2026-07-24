@@ -832,7 +832,6 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .dv-chip { display: inline-flex; align-items: center; gap: 4px; font: inherit; font-size: 11px; line-height: 1.3;
            padding: 2px 7px; border-radius: 10px; border: 0; cursor: pointer; white-space: nowrap; }
 .dv-chip:hover { filter: brightness(.96); }
-.dv-cid { font-family: ui-monospace, monospace; font-size: 9.5px; opacity: .7; font-weight: 400; }
 .dv-ent { background: #ede9fe; color: #6d28d9; font-weight: 600; }
 .dv-write { background: #fef3c7; color: #92400e; font-weight: 600; }
 .dv-read { background: transparent; color: #475569; box-shadow: inset 0 0 0 1px #cbd5e1; }

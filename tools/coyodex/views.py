@@ -32,6 +32,7 @@ from coyodex.model import (
     all_elements,
 )
 from coyodex.validate_analysis import strip_anchor
+from coyodex.validate_model import unexplained_persistence_pairs
 from coyodex.viewer.build_graph import (
     LINK,
     Edge as GraphEdge,
@@ -464,6 +465,144 @@ def _node(el, kind: str, name: str, file: str | None, fields: dict[str, str],
                 fields=clean, parent=parent)
 
 
+# The "Not persisted" rail groups (Entity.store present but no `dep`, or no store at all), keyed by
+# Store.mode — fixed display order + human labels, so the Data view groups deterministically. A
+# collection/cache mode with a container but no dep is NOT here: it is a real store the map failed to
+# link (the validator's own "container but no dep" nudge), surfaced as its own warned group below.
+_NP_MODE_LABELS: list[tuple[str, str]] = [
+    ("embedded", "Embedded in a parent document"),
+    ("transient", "Transient / not persisted"),
+    ("cache", "Cache only (no dep linked)"),
+    ("in-code", "In-code registry / constants"),
+    ("enum", "Enum"),
+    ("", "Storage not stated"),
+]
+
+
+def _ce_access(m: ProjectModel, name_of: "dict[str, str]") -> dict[str, dict[str, list[dict[str, object]]]]:
+    """Per-entity writer/reader/other components from the backbone C→E edges, classified by the SAME
+    verb families the persistence rule uses: PERSIST/WRITE → a writer chip (owner=True for the
+    system-of-record persist family), READ → a reader chip, anything else → an `other` chip carrying
+    its raw verb (so a real link is never silently dropped — the multi-word / non-family-verb case).
+    Deduped per (component, role), ordered by component id."""
+    acc: dict[str, dict[str, list[dict[str, object]]]] = {}
+    seen: set[tuple[str, str, str]] = set()
+    for e in sorted(m.edges, key=lambda x: x.src):
+        if not (e.src.startswith("C") and e.dst.startswith("E")):
+            continue
+        verb = e.verb.strip().lower()
+        if verb in grammar.PERSIST_VERBS:
+            role, owner = "writers", True
+        elif verb in grammar.WRITE_VERBS:
+            role, owner = "writers", False
+        elif verb in grammar.READ_VERBS:
+            role, owner = "readers", False
+        else:
+            role, owner = "other", False
+        if (e.src, e.dst, role) in seen:
+            continue
+        seen.add((e.src, e.dst, role))
+        chip: dict[str, object] = {"id": e.src, "name": name_of.get(e.src, e.src), "verb": verb}
+        if owner:
+            chip["owner"] = True
+        acc.setdefault(e.dst, {"writers": [], "readers": [], "other": []})[role].append(chip)
+    return acc
+
+
+def _build_data_view(m: ProjectModel, nodes: dict[str, Node]) -> dict[str, object]:
+    """The store-centric Data view payload (rides in the GraphDict like `messaging`). Every list is
+    built in model order or sorted, so the output is deterministic. Physical stores = deps classified
+    datastore/messaging UNION deps named by any entity's `store.dep` UNION any messaging channel's
+    `broker` — so a channel on a service-classed or unmodelled broker still gets a pane. Per store:
+    the entities whose structured store names it (container/mode/notes + who writes/reads each, from
+    C→E edges) and the channels it carries. Entities with a store but no dep fall into the
+    "Not persisted" rail groups; the coverage strip reuses `unexplained_persistence_pairs`."""
+    name_of = {nid: n.name for nid, n in nodes.items()}
+    access = _ce_access(m, name_of)
+    deps_by_id = {d.id: d for d in m.deps}
+
+    # ── the store set (ordered by m.deps) ──
+    store_ids: list[str] = []
+    referenced = {e.store.dep for e in m.entities if e.store and e.store.dep}
+    referenced |= {ch.broker for ch in m.messaging if ch.broker}
+    for d in m.deps:
+        if grammar.classify_dep(d.kind or "", d.type) in ("datastore", "messaging") or d.id in referenced:
+            store_ids.append(d.id)
+
+    rows_by_dep: dict[str, list[dict[str, object]]] = {sid: [] for sid in store_ids}
+    for e in m.entities:
+        if e.store and e.store.dep in rows_by_dep:
+            rows_by_dep[e.store.dep].append({
+                "entity": e.id, "name": e.name, "source": e.source or "",
+                "meaning": e.meaning, "container": e.store.container, "mode": e.store.mode,
+                "notes": e.store.notes,
+            })
+    channels_by_dep: dict[str, list[dict[str, object]]] = {}
+    unassigned: list[dict[str, object]] = []
+    for ch in m.messaging:
+        row = {"name": ch.name, "kind": ch.kind, "broker": ch.broker,
+               "publishers": [{"id": c, "name": name_of.get(c, c)} for c in ch.publishers],
+               "consumers": [{"id": c, "name": name_of.get(c, c)} for c in ch.consumers],
+               "payload": ch.payload, "payload_name": name_of.get(ch.payload, ch.payload),
+               "source": ch.source}
+        # A channel attaches to its broker's store pane when that broker is a real store dep; an empty
+        # broker OR a broker id that resolves to no store (never happens on a validated map) falls to
+        # "unassigned" so a catalogued channel is never silently dropped.
+        if ch.broker in rows_by_dep:
+            channels_by_dep.setdefault(ch.broker, []).append(row)
+        else:
+            unassigned.append(row)
+
+    stores: list[dict[str, object]] = []
+    for sid in store_ids:
+        d = deps_by_id[sid]
+        stores.append({
+            "dep": sid, "name": d.name,
+            "kind": grammar.classify_dep(d.kind or "", d.type),
+            "roles": nodes[sid].roles if sid in nodes else [],
+            "where": d.where_configured or "",
+            "rows": rows_by_dep[sid],
+            "channels": channels_by_dep.get(sid, []),
+        })
+
+    # ── not-persisted rail groups + the "persisted but no dep linked" warned group ──
+    np_buckets: dict[str, list[dict[str, object]]] = {mode: [] for mode, _ in _NP_MODE_LABELS}
+    unlinked: list[dict[str, object]] = []
+    for e in m.entities:
+        if e.store and e.store.dep:
+            continue
+        ent: dict[str, object] = {"id": e.id, "name": e.name,
+               "container": e.store.container if e.store else "",
+               "mode": e.store.mode if e.store else "", "source": e.source or ""}
+        if e.store and not e.store.dep and e.store.container and e.store.mode in ("collection", "cache"):
+            unlinked.append(ent)
+        else:
+            mode = e.store.mode if e.store else ""
+            np_buckets.setdefault(mode if mode in np_buckets else "", []).append(ent)
+    not_persisted: list[dict[str, object]] = []
+    if unlinked:
+        not_persisted.append({"mode": "unlinked", "label": "Persisted but no store linked",
+                              "warn": True, "entities": unlinked})
+    for mode, label in _NP_MODE_LABELS:
+        if np_buckets[mode]:
+            not_persisted.append({"mode": mode, "label": label, "warn": False,
+                                  "entities": np_buckets[mode]})
+
+    # ── coverage gaps (the shared persistence rule), grouped by dep ──
+    gaps_by_dep: dict[str, list[dict[str, object]]] = {}
+    for cid, verb, d in unexplained_persistence_pairs(m):
+        gaps_by_dep.setdefault(d.id, []).append(
+            {"component": cid, "name": name_of.get(cid, cid), "verb": verb})
+    gaps = [{"dep": did, "name": deps_by_id[did].name, "pairs": pairs}
+            for did, pairs in gaps_by_dep.items()]
+
+    # `access` (entity id → {writers, readers, other}) covers EVERY entity with a C→E edge — including
+    # non-persisted ones — so the entity info pane can render "Written by" / "Read by" for any entity,
+    # while the store rows stay lean (the table looks the writer/reader chips up by entity id).
+    return {"stores": stores, "not_persisted": not_persisted, "gaps": gaps,
+            "unassigned_channels": unassigned, "access": access}
+
+
 def model_to_graph(m: ProjectModel) -> GraphDict:
     """The model as the viewer's GraphDict, the shape `gen_viewer.build_view_bundle` consumes. A
     component's drill file prefers its canonical `source` and falls back to its `entry_point`,
@@ -545,6 +684,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         nodes[sd.id] = _node(sd, "subdomain", sd.name, sd.source,
                              {"Subdomain": sd.name, "Purpose": sd.purpose,
                               "Parent": parent_name}, sd.parent)
+    dep_names = {d.id: d.name for d in m.deps}  # for the entity node's store banner (dep id → display name)
     for e in m.entities:
         meta: dict[str, str] = {}
         if e.meaning:
@@ -557,6 +697,12 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                     fields=meta, parent=e.subdomain,
                     attrs=[{"name": f.name, "type": f.type, "markers": " ".join(f.markers)}
                            for f in e.fields])
+        if e.store:
+            node.store = {"dep": e.store.dep or "", "container": e.store.container,
+                          "mode": e.store.mode, "notes": e.store.notes,
+                          # dep NAME (not id) so the Domain-diagram store banner reads "«MongoDB · guilds»"
+                          # without a lookup; "" when the store names no dep.
+                          "dep_name": dep_names.get(e.store.dep, "") if e.store.dep else ""}
         ent_file = _bare_local_file(e.source)
         node.files = [ent_file] if ent_file else []
         nodes[e.id] = node
@@ -655,6 +801,10 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         "observability": [asdict(r) for r in m.observability],
         "security": [asdict(r) for r in m.security],
         "config": [asdict(r) for r in m.config],
+        # Store-centric Data view (rail of physical stores → collections + writers/readers + async
+        # channels + coverage gaps). Derived here where the typed model is in hand; rides in the graph
+        # like the other reference collections.
+        "data_view": _build_data_view(m, nodes),
         "tests_note": m.tests_note,
         # Rows carry SERVER-RESOLVED targets ({id, name, node}) so the Tests tab renders element
         # names + locate-links with no client-side id parsing; `tests` cites suites as {file, why}.

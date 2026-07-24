@@ -51,6 +51,10 @@ class Node:
                                   # 'messaging' / 'service' / 'security'. A dual-role dep (Redis as bus +
                                   # store) → ['datastore', 'messaging']; no C→D edge → [] (no role tag).
                                   # Purely derived (no stored model field), so it can't drift from edges.
+    store: dict[str, str] | None = None  # entities only: the structured store {dep, container, mode,
+                                  # notes} (Entity.store), exposed so the info pane can render a
+                                  # "Persisted in" row (dep chip + container) without re-parsing the
+                                  # human "Stored" field string. None = not persisted / not stated.
 
 
 @dataclass
@@ -126,6 +130,11 @@ class GraphDict(TypedDict):
     observability: list[dict[str, str]]     # {signal, where_emitted, where_viewed, alerts}
     security: list[dict[str, str]]          # {surface, who, source, risk}
     config: list[dict[str, str]]            # {key, purpose, default, per_env}
+    # Store-centric Data view (viewer.js renderData): {stores:[{dep,name,kind,roles,where,rows:[{entity,
+    # name,source,meaning,container,mode,notes,writers,readers,other}], channels:[…]}], not_persisted:
+    # [{mode,label,warn,entities}], gaps:[{dep,name,pairs}], unassigned_channels:[…]}. Derived (writers/
+    # readers from C→E edges, gaps from the shared persistence rule); not part of project-map.json.
+    data_view: dict[str, object]
     tests_note: str                         # the "Tests run for this table?" honesty line
     # targets resolved server-side (name + node-locatability) so the Tests tab needs no id parsing.
     tests: list[TestRowView]

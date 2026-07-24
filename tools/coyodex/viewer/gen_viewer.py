@@ -89,13 +89,21 @@ CLASS_ARROW = {"inheritance": "--|>", "composition": "*--", "aggregation": "o--"
 
 
 def _safe_label(name: str) -> str:
-    """Sanitize a node name for a Mermaid label: backticks trigger markdown-string mode,
-    brackets/quotes break node-shape syntax."""
+    """Sanitize a node name for a Mermaid label — the ONE place every diagram's label text is made
+    Mermaid-safe, so no call site has to re-escape by hand. Neutralised: `"`/backtick (markdown-string
+    mode), `[`/`]` (node-shape syntax), `{`/`}` (flowchart rhombus + classDiagram member block), `|`
+    (edge-label delimiter), `<`/`>` (open an HTML tag under securityLevel:'loose' htmlLabels). An
+    intentional `<br/>` is added by callers OUTSIDE this function, so it is never stripped here."""
     return (
         name.replace('"', "'")
         .replace("`", "")
         .replace("[", "(")
         .replace("]", ")")
+        .replace("{", "(")
+        .replace("}", ")")
+        .replace("|", "/")
+        .replace("<", "‹")
+        .replace(">", "›")
     )
 
 
@@ -258,16 +266,44 @@ def _relation_label(edge: dict[str, Any]) -> str:
     return label if edge.get("fk_side") == "src" else "↩ " + label
 
 
+def _store_banner(node: dict[str, Any]) -> str | None:
+    """The `<<…>>` stereotype line naming WHERE an entity is persisted — "«MongoDB · guilds»" — so the
+    Domain diagram answers "which store?" at a glance, no click. Shown ONLY for an entity with a
+    physical store (`store.dep` set); a not-persisted entity carries none (its faded ghost fill is the
+    signal instead). `_safe_label` neutralises the class-block-breaking chars (braces in a container
+    name like `config_{plugin}`). Returns None when there is no persisted store."""
+    st = cast("dict[str, str] | None", node.get("store"))
+    if not st or not st.get("dep"):
+        return None
+    label = st.get("dep_name") or st.get("dep") or ""
+    if st.get("container"):
+        label = f"{label} · {st['container']}"
+    return "<<" + _safe_label(label) + ">>"
+
+
+def _entity_style(node: dict[str, Any]) -> str:
+    """An entity's Domain-diagram fill: the normal light fuchsia when it is physically persisted
+    (`store.dep` set), a DRAINED "ghost" fuchsia when it is not — so "which of these actually live in
+    a datastore?" reads at a glance without changing the family hue (a saturation cue, not a new
+    colour, so an entity still reads as an entity)."""
+    st = cast("dict[str, str] | None", node.get("store"))
+    return ENTITY_STYLE if (st and st.get("dep")) else ENTITY_GHOST_STYLE
+
+
 def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
                      with_members: bool) -> list[str]:
     """The `classDiagram` lines for one entity box. `with_members=True` renders its attributes
-    (`type name`); `with_members=False` renders a bare box — used for a cross-subdomain NEIGHBOUR entity
-    in a per-subdomain card, so it reads as collapsed (its detail lives in its own subdomain's view).
-    Shared by the flat Domain view and the per-subdomain card so a class renders identically in both."""
+    (`type name`) plus a store banner (`<<MongoDB · guilds>>` — see _store_banner); `with_members=False`
+    renders a bare box — used for a cross-subdomain NEIGHBOUR entity in a per-subdomain card, so it
+    reads as collapsed (its detail lives in its own subdomain's view). Shared by the flat Domain view
+    and the per-subdomain card so a class renders identically in both."""
     label = _safe_label(str(node["name"]))
     if not with_members:
         return [f'  class {nid}["{label}"]']
     out = [f'  class {nid}["{label}"] {{']
+    banner = _store_banner(node)
+    if banner:
+        out.append(f"    {banner}")
     for a in cast("list[dict[str, str]]", node.get("attrs") or []):
         # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
         atype = _safe_member(ent_names.get(str(a.get("type", "")), str(a.get("type", ""))))
@@ -357,8 +393,8 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
     lines = ["classDiagram"]
     for nid, n in ents:
         lines += _class_box_lines(nid, cast("dict[str, Any]", n), ent_names, with_members=True)
-    for nid, _ in ents:  # tint each entity (light fuchsia member) — the flat view has no namespace to inherit from
-        lines.append(f"  style {nid} {ENTITY_STYLE}")
+    for nid, n in ents:  # tint each entity — normal fuchsia, or drained "ghost" when it isn't persisted
+        lines.append(f"  style {nid} {_entity_style(cast('dict[str, Any]', n))}")
     for e in graph["edges"]:
         if e.get("kind") and str(e["src"]) in ent_ids and str(e["dst"]) in ent_ids:
             lines.append(_class_relation_line(cast("dict[str, Any]", e)))
@@ -380,6 +416,9 @@ _CONTAINER_BORDER = "stroke-width:2.5px,stroke-dasharray:6 3"
 COMPONENT_STYLE = "fill:#eef2ff,stroke:#3730a3,color:#1e1b4b"  # indigo-50   — component (C), light member
 SUBSYSTEM_STYLE = f"fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b,{_CONTAINER_BORDER}"  # indigo-200  — subsystem (S), deep container
 ENTITY_STYLE    = "fill:#fdf4ff,stroke:#86198f,color:#581c87"  # fuchsia-50  — entity (E), light member
+ENTITY_GHOST_STYLE = "fill:#f7f5f7,stroke:#c9b6c6,color:#9a8a97"  # drained fuchsia — a NOT-persisted entity
+                                     # (no store.dep): same hue family, low saturation (Domain-view "which
+                                     # of these actually live in a datastore?" cue — see _entity_style)
 SUBDOMAIN_STYLE = f"fill:#f5d0fe,stroke:#86198f,color:#581c87,{_CONTAINER_BORDER}"  # fuchsia-200 — subdomain (SD), deep container
 DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     — external dependency (D)
 # A dependency/library GROUP container (the Libraries bundle box + folded bucket count boxes): the SAME
@@ -531,8 +570,8 @@ def _subdomain_namespace(graph: GraphDict, sdid: str,
     for cid, cname in _child_subdomains(graph, sdid):  # nested child subdomains: collapsed, drillable
         out.append(f'  class {cid}["{_safe_label(cname)} ({_descendant_entity_count(graph, cid)})"]')
     out.append("}")
-    for eid, _ in members:  # tint each focal entity (light fuchsia member); `style` lives OUTSIDE the namespace
-        out.append(f"  style {eid} {ENTITY_STYLE}")
+    for eid, _ in members:  # tint each focal entity (normal or ghost fuchsia); `style` lives OUTSIDE the namespace
+        out.append(f"  style {eid} {_entity_style(cast('dict[str, Any]', nodes[eid]))}")
     return out
 
 
@@ -2012,6 +2051,42 @@ def merged_graph(graph: GraphDict, diff: DiffDict | None) -> dict[str, Any]:
     return g
 
 
+def gen_channel_mermaids(graph: GraphDict) -> dict[str, str]:
+    """Per-broker async flowchart (LR): publisher components → channel → consumer components, with the
+    channel's kind + payload entity noted on the channel node. ONE diagram per broker carrying ≥2
+    channels (a single-channel broker is fully described by its card — no diagram earns its keep).
+    Keyed by broker dep id. Component nodes keep their C-id so the viewer binds a click→navigate;
+    channel nodes are synthetic (`CH_<i>`) labels. Deterministic: brokers + channels in data_view
+    order, component nodes emitted in sorted id order."""
+    dv = cast("dict[str, Any]", graph.get("data_view") or {})
+    out: dict[str, str] = {}
+    for store in dv.get("stores", []):
+        channels = store.get("channels", [])
+        if len(channels) < 2:
+            continue
+        lines = ["flowchart LR"]
+        comp_names: dict[str, str] = {}
+        for i, ch in enumerate(channels):
+            cid = f"CH_{i}"
+            sub = str(ch.get("kind") or "channel")
+            payload = ch.get("payload_name") or ""
+            if payload:
+                sub += f" · {payload}"
+            lines.append(f'  {cid}["{_safe_label(str(ch["name"]))}<br/>{_safe_label(sub)}"]:::chan')
+            for p in ch.get("publishers", []):
+                comp_names[p["id"]] = p["name"]
+                lines.append(f'  {p["id"]} --> {cid}')
+            for c in ch.get("consumers", []):
+                comp_names[c["id"]] = c["name"]
+                lines.append(f'  {cid} --> {c["id"]}')
+        for c in sorted(comp_names):
+            lines.append(f'  {c}["{_safe_label(comp_names[c])}"]:::comp')
+        lines.append(f"  classDef chan {INFRA_BUS_STYLE};")
+        lines.append(f"  classDef comp {COMPONENT_STYLE};")
+        out[str(store["dep"])] = "\n".join(lines)
+    return out
+
+
 class ViewBundle(TypedDict):
     """All the per-project view data the frontend needs — the graph plus every pre-rendered diagram
     source, edge-crossing list, flow, colour table, and config flag. Built from the model by
@@ -2060,6 +2135,8 @@ class ViewBundle(TypedDict):
     hasDomain: bool
     hasSubdomains: bool
     hasHp: bool
+    mermaidChannels: dict[str, str]  # per-broker async flowchart (dep id → source), for brokers with
+                                     # ≥2 channels; rendered inside the Data tab's broker pane
     meta: str                      # the header meta line (HTML)
     diffState: dict[str, str]
 
@@ -2144,6 +2221,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         contextEdges=context_edges,
         hasDiff=diff is not None,
         hasGrouping=grouping, hasDomain=domain, hasSubdomains=subdomains, hasHp=hp,
+        mermaidChannels=gen_channel_mermaids(graph),
         meta=meta, diffState=state,
     )
 
