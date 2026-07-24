@@ -922,7 +922,9 @@ function persistedInHtml(id) {
   if (GRAPH.nodes[st.dep]) parts.push(dvChip(st.dep, GRAPH.nodes[st.dep].name, 'dv-ent'));
   else parts.push(esc(st.dep));
   if (st.container) parts.push(`<span class="dv-coll">${esc(st.container)}</span>`);
-  if (st.mode) parts.push(`<span class="dv-tag">${esc(st.mode)}</span>`);
+  // `collection` is the default mode (a plain table/collection/bucket) — showing it adds no info and
+  // reads as Mongo-flavoured to SQL users ("table"), so only surface a mode that says something else.
+  if (st.mode && st.mode !== 'collection') parts.push(`<span class="dv-tag">${esc(st.mode)}</span>`);
   if (st.notes) parts.push(`<span class="dv-tag">${esc(st.notes)}</span>`);
   if (!parts.length) return '';
   let dd = parts.join(' ');
