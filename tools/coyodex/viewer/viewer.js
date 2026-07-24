@@ -314,6 +314,14 @@ function selReplace(scene, desc) { selClear(scene); selAdd(scene, desc); }
 // selection; a plain click replaces the selection with just this element. Every plain-select entry point
 // goes through here so the two gestures behave uniformly across every view.
 function pickSel(scene, desc, e) { if (isMultiSelectClick(e)) selToggle(scene, desc); else selReplace(scene, desc); }
+// The full click-gesture handler for a BOX (node / fold): shift-click is a pure camera move (frame the box
+// via matchTextSize — never selects), ⌘-click toggles it in/out of the multi-selection, a plain click
+// replaces. Every box entry point routes here so all three gestures behave identically for regular boxes
+// AND fold boxes (Libraries / external-system buckets), which previously bypassed the shift/⌘ handling.
+function pickSelBox(scene, desc, el, e) {
+  if (e && e.shiftKey) { matchTextSize(el); return; }
+  pickSel(scene, desc, e);
+}
 // `box` is `node`, or an ancestor of it in the group tree (subsystem/subdomain containment).
 function isAncestorOrSelf(box, node) { return box === node || isAncestorOf(box, node); }
 // The keys of the drawn arrows in THIS scene that COVER any of the bundle's underlying links — a drawn
@@ -2010,10 +2018,7 @@ function selectNode(scene, el, id) { selReplace(scene, nodeDesc(scene, el, id));
 // sidebar's text size (matchTextSize). A ⌘-click never reframes — piling several boxes into view then
 // zooming to the last one would be jarring while building a selection.
 function selectNodeFromCanvas(el, id, e) {
-  if (e && e.shiftKey) { matchTextSize(el); return; }  // shift-click is a pure camera move — zoom+center, never select
-  const desc = nodeDesc(mainScene, el, id);
-  if (isMultiSelectClick(e)) { selToggle(mainScene, desc); return; }
-  selReplace(mainScene, desc);
+  pickSelBox(mainScene, nodeDesc(mainScene, el, id), el, e);  // shift=frame, ⌘=toggle, plain=replace
 }
 
 // The zoom-by-`scale`-then-recenter step behind matchTextSize (scale === 1 skips straight to just
@@ -2686,9 +2691,9 @@ function bindContext() {
       selectNodeFromCanvas(el, id, e);
       return;
     }
-    if (id === LIBS_ID) {  // collapsed Libraries box: ⌥-click drills to the full list, plain/⌘ click previews/multi-selects it
+    if (id === LIBS_ID) {  // collapsed Libraries box: ⌥-click drills to the full list, shift=frame, ⌘=multi-select, plain=select
       if (isDrillClick(e)) { go({ kind: 'libs' }); return; }
-      pickSel(mainScene, libsFoldDesc(mainScene, el), e);
+      pickSelBox(mainScene, libsFoldDesc(mainScene, el), el, e);
       return;
     }
     if (tryFoldNodeClick(id, el, e)) return;
@@ -2709,7 +2714,7 @@ function tryFoldNodeClick(id, el, e) {
   const n = GRAPH.nodes[id];
   if (!n || n.kind !== 'bucketfold') return false;
   if (isDrillClick(e)) { go({ kind: 'bucketfold', bkid: id }); return true; }
-  pickSel(mainScene, bucketFoldDesc(mainScene, el, id), e);
+  pickSelBox(mainScene, bucketFoldDesc(mainScene, el, id), el, e);
   return true;
 }
 // Tag every present count box with the drill cursor + pre-register its roster re-select (the generic
@@ -4092,9 +4097,16 @@ async function render(sArg, transient) {
     else if (pendingCenterId) applyZoomAndCenter(mainScene.nodeEls[pendingCenterId], 1);  // centre only, keep the fit zoom
     flowInit();  // a flow view: show the step player (unstarted on a fresh open; nothing auto-selected)
   }
-  // Empty-space click deselects — but a ⌘-click on empty space is a no-op (Finder semantics): while
-  // building a multi-selection, a ⌘-click that just misses an element must not wipe what's selected.
-  if (svgEl) svgEl.addEventListener('click', (e) => { if (!isDrag(e) && !isMultiSelectClick(e)) resetScene(mainScene); });
+  // Empty-space click behaviour, mirroring the on-element gestures: a plain click deselects; a shift-click
+  // is a pure camera move — with no element under it, it fits+centers the WHOLE diagram (the background
+  // analog of shift-clicking an element to frame it); a ⌘-click is a no-op (Finder semantics), so a
+  // ⌘-click that just misses an element while building a multi-selection can't wipe what's selected.
+  if (svgEl) svgEl.addEventListener('click', (e) => {
+    if (isDrag(e)) return;
+    if (e.shiftKey) { if (mainPz) { mainPz.reset(); updateZoomLevel(); } return; }  // fit + center the whole diagram
+    if (isMultiSelectClick(e)) return;
+    resetScene(mainScene);
+  });
   // Restore this point's remembered right pane (file+scroll or browser), overriding the selection-derived
   // pane above — so back/forward reopens the exact file/browser the point was left with, not just the
   // selection's source. Only history points carry `content` (set on leave); a fresh go() has none.
