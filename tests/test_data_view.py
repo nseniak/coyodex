@@ -177,11 +177,19 @@ def test_non_persisted_entity_still_gets_access_rows():
     assert [r["id"] for r in dv["access"]["E4"]["readers"]] == ["C7"]  # embedded entity, still tracked
 
 
-def test_domain_diagram_store_banner_and_ghost_fill():
+def test_domain_diagram_store_line_and_ghost_fill():
     src = gen_domain_mermaid(model_to_graph(make_data_model()))
-    # Persisted entity (E1 → MongoDB.orders): a store banner + the normal fuchsia fill.
-    assert "<<MongoDB · orders>>" in src
+    lines = src.splitlines()
+    # Persisted entity (E1 → MongoDB.orders): the CONTAINER as the box's LAST line + normal fill. It
+    # must sit BELOW the fields (never a `<<…>>` stereotype, which would render above the class name).
+    start = lines.index('  class E1["Order"] {')
+    box = lines[start:lines.index("  }", start) + 1]
+    assert box[-2] == "    ▤ orders"          # last member line, after the fields
+    assert not any(ln.strip().startswith("<<") for ln in box)   # never a stereotype (renders above the name)
     assert f"style E1 {ENTITY_STYLE}" in src
-    # Not-persisted entity (E4, embedded): no banner, the drained ghost fill instead.
+    # The store's NAME never reaches the diagram — it repeats on every box; the pane/Data view answer it.
+    assert "MongoDB" not in src
+    # Not-persisted entity (E4, embedded): no store line, the drained ghost fill instead.
     assert f"style E4 {ENTITY_GHOST_STYLE}" in src
-    assert "<<embedded>>" not in src  # non-dep stores carry no banner (ghost fill is the only signal)
+    e4 = lines.index('  class E4["Address"] {')
+    assert not any("▤" in ln for ln in lines[e4:lines.index("  }", e4) + 1])

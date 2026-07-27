@@ -266,19 +266,21 @@ def _relation_label(edge: dict[str, Any]) -> str:
     return label if edge.get("fk_side") == "src" else "↩ " + label
 
 
-def _store_banner(node: dict[str, Any]) -> str | None:
-    """The `<<…>>` stereotype line naming WHERE an entity is persisted — "«MongoDB · guilds»" — so the
-    Domain diagram answers "which store?" at a glance, no click. Shown ONLY for an entity with a
-    physical store (`store.dep` set); a not-persisted entity carries none (its faded ghost fill is the
-    signal instead). `_safe_label` neutralises the class-block-breaking chars (braces in a container
-    name like `config_{plugin}`). Returns None when there is no persisted store."""
+def _store_line(node: dict[str, Any]) -> str | None:
+    """The CONTAINER an entity is persisted in — `▤ guilds` — rendered as the LAST line inside the
+    class box, below its fields. Deliberately NOT a `<<…>>` stereotype: that renders ABOVE the class
+    name, which costs the diagram its "every box leads with the entity name" uniformity.
+
+    The container only, never the store's name: across live maps essentially every persisted entity
+    sits in the SAME store (36 of 37 in one map), so the store name is one value repeated on every
+    box, while the container (`guilds`, `notifications`) is the genuinely per-entity fact. WHICH store
+    is answered by the info pane and the Data view. The `▤` prefix keeps the line from reading as one
+    more `type name` field. Shown ONLY for an entity with a physical store (`store.dep` set), matching
+    the ghost fill — a not-persisted entity carries none. Returns None when there is nothing to show."""
     st = cast("dict[str, str] | None", node.get("store"))
-    if not st or not st.get("dep"):
+    if not st or not st.get("dep") or not st.get("container"):
         return None
-    label = st.get("dep_name") or st.get("dep") or ""
-    if st.get("container"):
-        label = f"{label} · {st['container']}"
-    return "<<" + _safe_label(label) + ">>"
+    return "▤ " + _safe_member(str(st["container"]))
 
 
 def _entity_style(node: dict[str, Any]) -> str:
@@ -293,17 +295,14 @@ def _entity_style(node: dict[str, Any]) -> str:
 def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
                      with_members: bool) -> list[str]:
     """The `classDiagram` lines for one entity box. `with_members=True` renders its attributes
-    (`type name`) plus a store banner (`<<MongoDB · guilds>>` — see _store_banner); `with_members=False`
-    renders a bare box — used for a cross-subdomain NEIGHBOUR entity in a per-subdomain card, so it
-    reads as collapsed (its detail lives in its own subdomain's view). Shared by the flat Domain view
-    and the per-subdomain card so a class renders identically in both."""
+    (`type name`) followed by its store container as a last line (`▤ guilds` — see _store_line);
+    `with_members=False` renders a bare box — used for a cross-subdomain NEIGHBOUR entity in a
+    per-subdomain card, so it reads as collapsed (its detail lives in its own subdomain's view).
+    Shared by the flat Domain view and the per-subdomain card so a class renders identically in both."""
     label = _safe_label(str(node["name"]))
     if not with_members:
         return [f'  class {nid}["{label}"]']
     out = [f'  class {nid}["{label}"] {{']
-    banner = _store_banner(node)
-    if banner:
-        out.append(f"    {banner}")
     for a in cast("list[dict[str, str]]", node.get("attrs") or []):
         # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
         atype = _safe_member(ent_names.get(str(a.get("type", "")), str(a.get("type", ""))))
@@ -315,6 +314,9 @@ def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
         member = f'{atype} {_safe_member(str(a.get("name", "")))}'.strip()
         if member:
             out.append(f"    {member}")
+    store = _store_line(node)  # LAST line: the container, below the fields (never above the name)
+    if store:
+        out.append(f"    {store}")
     out.append("  }")
     return out
 

@@ -684,7 +684,6 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         nodes[sd.id] = _node(sd, "subdomain", sd.name, sd.source,
                              {"Subdomain": sd.name, "Purpose": sd.purpose,
                               "Parent": parent_name}, sd.parent)
-    dep_names = {d.id: d.name for d in m.deps}  # for the entity node's store banner (dep id → display name)
     for e in m.entities:
         meta: dict[str, str] = {}
         if e.meaning:
@@ -703,10 +702,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                            for f in e.fields])
         if e.store:
             node.store = {"dep": e.store.dep or "", "container": e.store.container,
-                          "mode": e.store.mode, "notes": e.store.notes,
-                          # dep NAME (not id) so the Domain-diagram store banner reads "«MongoDB · guilds»"
-                          # without a lookup; "" when the store names no dep.
-                          "dep_name": dep_names.get(e.store.dep, "") if e.store.dep else ""}
+                          "mode": e.store.mode, "notes": e.store.notes}
         ent_file = _bare_local_file(e.source)
         node.files = [ent_file] if ent_file else []
         nodes[e.id] = node

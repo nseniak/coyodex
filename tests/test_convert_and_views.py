@@ -283,7 +283,7 @@ def test_structured_store_renders_one_shared_form():
     e1 = cast("dict[str, Any]", model_to_graph(m)["nodes"]["E1"])
     assert "Stored" not in e1["fields"]                       # persisted → no plain text row (structured instead)
     assert e1["store"] == {"dep": "D1", "container": "guilds", "mode": "collection",
-                           "notes": "30-day TTL", "dep_name": "MongoDB"}
+                           "notes": "30-day TTL"}
     # a NOT-persisted store (no dep) keeps the shared "Stored" text row, no structured "Persisted in"
     transient = Store(mode="transient", notes="derived at request time")
     m.entities[0].store = transient
