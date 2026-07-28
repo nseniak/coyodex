@@ -1,0 +1,14 @@
+{
+  "schema": "coyodex-provenance/v1",
+  "project": "coyodex",
+  "repo_path": "/Users/nitsanseniak/Projects/coyodex",
+  "sessions": [
+    {
+      "session_id": "25ff248b-c035-4499-a4ae-ff67f3d91142",
+      "built_at": "2026-07-28 21:40",
+      "mode": "build",
+      "code_commit": "025e6a4",
+      "code_committed": "2026-07-28"
+    }
+  ]
+}
