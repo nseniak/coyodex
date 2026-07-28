@@ -3894,12 +3894,28 @@ function bindSysIndex() {
 // lazily-rendered per-broker flowchart). All data is server-derived (GRAPH.data_view); source cells and
 // element chips honour the "link every element to its code" rule. A cross-link carries s.store (open
 // that pane) and s.entity (highlight that row).
-function dvChip(id, name, cls, title) {  // an element chip that navigates to `id` on click (tstref idiom)
+function dvChip(id, name, cls, title, def) {  // an element chip that navigates to `id` on click (tstref idiom)
   // Shows the NAME only — element ids stay internal (the `data-id` handle drives navigation), matching
   // every other view. Never surface the raw id in the UI unless the user explicitly asks.
   return `<button type="button" class="dv-chip ${cls}" data-id="${esc(id)}"`
+    + (def ? ' data-def=""' : '')   // THE line that presents this entity — what a jump reveals
     + (title ? ` title="${esc(title)}"` : '')
     + `>${esc(name)}</button>`;
+}
+// A chip that navigates WITHIN the Data tab, to the line presenting that entity (its collection row,
+// or its own row under "Stored elsewhere" when it is embedded too) — used for the parent of an
+// embedded entity, where leaving for the diagram would lose the thread you are pulling. Carries
+// `data-entity` rather than `data-id` so the plain element-navigation binding skips it.
+function dvJumpChip(id, name) {
+  return `<button type="button" class="dv-chip dv-ent dv-jump" data-entity="${esc(id)}"`
+    + ` title="Show where this entity is stored">${esc(name)}</button>`;
+}
+// The line presenting `id` in the Data tab (marked with data-def), and the row it sits in — a
+// collections-table `tr` or a "stored inside" row. Used to focus a cross-link's target.
+function dvDefRow(id) {
+  const sel = '.dv-chip[data-def][data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]';
+  const def = diagram.querySelector(sel);
+  return def ? { def, row: def.closest('tr, .dv-embrow'), pane: def.closest('.dv-pane') } : null;
 }
 // One async-channel card — publishers → consumers → payload entity + the declaring source line. Shared
 // by a broker store's pane and the "unassigned channels" pane so the two can never drift.
@@ -3985,7 +4001,7 @@ function renderData(s) {
         const a = access[r.entity] || {};
         const readers = (a.readers || []).concat(a.other || []);
         return `<tr><td class="dv-coll">${r.container ? esc(r.container) : '<span class="dv-none">—</span>'}</td>`
-          + `<td>${dvChip(r.entity, r.name, 'dv-ent')}</td>`
+          + `<td>${dvChip(r.entity, r.name, 'dv-ent', '', true)}</td>`
           + `<td class="dv-meaning">${mdInline(r.meaning || '')}</td>`
           + `<td>${notes.join(' ')}</td>`
           + `<td>${rwCell(a.writers, 'dv-write', 'no mapped writers')}</td>`
@@ -4027,11 +4043,11 @@ function renderData(s) {
   };
   const npPaneId = (key) => 'dv-pane-np-' + key;
   const embRow = (e) => {
-    const parents = (e.parents || []).map((p) => dvChip(p.id, p.name, 'dv-ent')).join('');
+    const parents = (e.parents || []).map((p) => dvJumpChip(p.id, p.name)).join('');
     const home = e.home
       ? `<span class="dv-home">🛢 ${esc(e.home.container || e.home.name)}</span>`
       : '<span class="dv-none">no physical home found</span>';
-    return `<div class="dv-embrow">${dvChip(e.id, e.name, 'dv-ent')}`
+    return `<div class="dv-embrow">${dvChip(e.id, e.name, 'dv-ent', '', true)}`
       + `<span class="dv-in">inside</span>${parents || '<span class="dv-none">—</span>'}${home}</div>`;
   };
   const npGroupHtml = (grp) => `<div class="dv-grouprow"><h3>${esc(grp.label)} (${grp.entities.length})`
@@ -4039,7 +4055,7 @@ function renderData(s) {
     + (grp.mode === 'embedded'
       ? `<div class="dv-embtable">${grp.entities.map(embRow).join('')}</div>`
       : `<div class="dv-chips">${grp.entities.map((e) =>
-          dvChip(e.id, e.name, 'dv-ent', e.container || e.mode)).join('')}</div>`)
+          dvChip(e.id, e.name, 'dv-ent', e.container || e.mode, true)).join('')}</div>`)
     + '</div>';
   const npRailBySection = {};
   for (const sec of npSections) {
@@ -4071,20 +4087,23 @@ function renderData(s) {
   diagram.querySelectorAll('.dv-store').forEach((b) => b.addEventListener('click', () => dvShow(b.dataset.pane)));
   diagram.querySelectorAll('.dv-chip[data-id]').forEach((b) =>
     b.addEventListener('click', () => selectFromTree(b.getAttribute('data-id'))));
+  // Stay in the tab: reveal that entity's own line wherever it is presented.
+  diagram.querySelectorAll('.dv-jump[data-entity]').forEach((b) =>
+    b.addEventListener('click', () => go({ kind: 'data', entity: b.getAttribute('data-entity') })));
 
-  // Default pane: a cross-link's target store, else the store with the most collections, else the first.
-  let target = (s && s.store && diagram.querySelector('#' + paneId(s.store))) ? paneId(s.store) : null;
+  // Which pane to open: the pane holding the target ENTITY's own line (it may be a collection row in a
+  // store pane, or a "stored inside" row — a jump doesn't know which, and shouldn't have to), else the
+  // named store, else the store with the most collections, else the first pane.
+  const hit = (s && s.entity) ? dvDefRow(s.entity) : null;
+  let target = (hit && hit.pane) ? hit.pane.id : null;
+  if (!target && s && s.store && diagram.querySelector('#' + paneId(s.store))) target = paneId(s.store);
   if (!target && stores.length) {
     const best = stores.reduce((a, b) => (b.rows.length > a.rows.length ? b : a), stores[0]);
     target = paneId(best.dep);
   }
   if (!target) target = (diagram.querySelector('.dv-pane') || {}).id;
   if (target) dvShow(target);
-  if (s && s.entity) {  // cross-link to a specific collection row — scroll it in + flash it
-    const row = [...diagram.querySelectorAll('.dv-chip.dv-ent[data-id="' + (window.CSS && CSS.escape ? CSS.escape(s.entity) : s.entity) + '"]')]
-      .map((c) => c.closest('tr')).find(Boolean);
-    if (row) { row.classList.add('dv-flash'); row.scrollIntoView({ block: 'center' }); }
-  }
+  if (hit && hit.row) { hit.row.classList.add('dv-flash'); hit.row.scrollIntoView({ block: 'center' }); }
 }
 
 // A test row's Target cell: each target element by NAME (the server already resolved id -> name +

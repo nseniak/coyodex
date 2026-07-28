@@ -873,3 +873,5 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .dv-in { font-size: 11px; color: #9ca3af; }
 .dv-home { font-family: ui-monospace, monospace; font-size: 11px; color: #334155;
            background: #f1f5f9; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }
+/* A parent pill jumps within the Data tab (not out to the diagram) — mark it with a subtle underline. */
+.dv-chip.dv-jump { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
