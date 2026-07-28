@@ -2077,3 +2077,34 @@ def test_mixed_variant_tagging_is_flagged():
     ws = warnings_of(m)
     assert not any("carry no `variants` while others do" in w for w in ws)
     assert any("no deployment unit is tagged" in w for w in ws)
+
+
+def make_channel_catalog(payloads: list[str]) -> ProjectModel:
+    """A catalog of len(payloads) channels; '' entries claim the channel carries no domain type."""
+    m = make_valid_model()
+    m.entities = [Entity(id="E1", name="Job", meaning="m", source="a.py:1")]
+    m.deps = [Dep(id="D1", name="Redis", kind="messaging", type="broker")]
+    m.components = [Component(id="C1", name="Prod", purpose="p", source="a.py:1")]
+    m.messaging = [MessagingRow(name=f"chan{i}", broker="D1", publishers=["C1"], consumers=["C1"],
+                                payload=pl) for i, pl in enumerate(payloads)]
+    return m
+
+
+def test_an_entirely_unfilled_payload_column_is_flagged():
+    """`payload: ''` CLAIMS the channel carries no domain type, so an unfilled column reads as N
+    untyped channels. A live map made that claim on 25 of 25 channels — including `shard.events`
+    and `job_queue` — with 134 entities available to reference."""
+    ws = warnings_of(make_channel_catalog(["", "", ""]))
+    assert any("names a `payload`" in w for w in ws)
+
+
+def test_a_partly_typed_catalog_stays_quiet():
+    # one genuinely untyped channel among typed ones is unremarkable — only ALL-empty is the signal.
+    assert not any("names a `payload`" in w for w in warnings_of(make_channel_catalog(["E1", "", ""])))
+
+
+def test_the_payload_canary_needs_entities_and_enough_channels():
+    assert not any("names a `payload`" in w for w in warnings_of(make_channel_catalog(["", ""])))
+    m = make_channel_catalog(["", "", ""])
+    m.entities = []          # nothing to reference -> nothing to claim
+    assert not any("names a `payload`" in w for w in warnings_of(m))

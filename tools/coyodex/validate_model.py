@@ -1070,6 +1070,30 @@ def _runs_in_of(m: ProjectModel, cid: str) -> list[str]:
     return []
 
 
+_PAYLOAD_CANARY_MIN = 3   # below this, an all-empty column is too weak to read as a gap
+
+
+def _messaging_payload_warnings(m: ProjectModel) -> list[str]:
+    """ADVISORY: a catalog where NO channel names a payload, on a map that has entities.
+
+    `payload: ""` means "untyped / carries no domain entity" — a positive claim, not a blank. One
+    channel legitimately making it is unremarkable; EVERY channel making it is the signature of a
+    field nobody filled, which is the same shape the method already records for two other columns
+    (three rebuilds shipped rich broker edges with an empty catalog; two shipped `dep: null` on every
+    entity, silently disabling the persistence-coverage rule). Measured on a live map: 25 of 25
+    channels claimed no payload — including `shard.events`, `job_queue` and `analytics_events` —
+    with 134 entities available to reference. Deliberately fires only on the ALL-empty case, so a
+    map that types most of its channels and leaves a couple genuinely untyped stays quiet."""
+    if len(m.messaging) < _PAYLOAD_CANARY_MIN or not m.entities:
+        return []
+    if any(c.payload for c in m.messaging):
+        return []
+    return [f"None of the {len(m.messaging)} messaging channel(s) names a `payload`, on a map with "
+            f"{len(m.entities)} entities — an empty payload CLAIMS the channel carries no domain "
+            f"type, so an unfilled column reads as {len(m.messaging)} untyped channels. Name the "
+            f"entity each message carries (or confirm they really are untyped)"]
+
+
 def _messaging_gap_warnings(m: ProjectModel) -> list[str]:
     """The async-catalog canary (advisory, ONE aggregated line): three live rebuilds shipped
     `messaging: []` while their edges plainly showed a bus in use (one map had 20 emit + 13
@@ -2324,6 +2348,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(msg_problems)
     warnings.extend(msg_warnings)
     warnings.extend(_messaging_gap_warnings(m))
+    warnings.extend(_messaging_payload_warnings(m))
     warnings.extend(_isolated_component_warnings(m))
     warnings.extend(_grounding_warnings(m))
     warnings.extend(_inheritance_runs_in_warnings(m))
