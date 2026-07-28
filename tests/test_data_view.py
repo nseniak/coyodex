@@ -44,7 +44,9 @@ def make_data_model() -> ProjectModel:
     m.deps = [
         Dep(id="D1", name="MongoDB", kind="datastore", type="document db",
             where_configured="src/db.py:3"),
-        Dep(id="D2", name="Redis", kind="datastore", type="kv cache"),
+        # Name carries parens on purpose (a live map ships `Redis (cache / main)`): the diagram's
+        # store line is a `container(store)` shape, so nested parens would break Mermaid parsing.
+        Dep(id="D2", name="Redis (cache / main)", kind="datastore", type="kv cache"),
         Dep(id="D3", name="Elasticsearch", kind="datastore", type="search"),
         Dep(id="D4", name="ExternalBus", kind="service", type="third-party api"),
     ]
@@ -180,16 +182,17 @@ def test_non_persisted_entity_still_gets_access_rows():
 def test_domain_diagram_store_line_and_ghost_fill():
     src = gen_domain_mermaid(model_to_graph(make_data_model()))
     lines = src.splitlines()
-    # Persisted entity (E1 → MongoDB.orders): the CONTAINER as the box's LAST line + normal fill. It
-    # must sit BELOW the fields (never a `<<…>>` stereotype, which would render above the class name).
+    # Persisted entity (E1 → MongoDB.orders): `container(store)` as the box's LAST line + normal fill.
+    # The `()` shape is what lands it in the box's SECOND compartment (below the divider, apart from
+    # the fields); it must never be a `<<…>>` stereotype, which would render ABOVE the class name.
     start = lines.index('  class E1["Order"] {')
     box = lines[start:lines.index("  }", start) + 1]
-    assert box[-2] == "    ▤ orders"          # last member line, after the fields
-    assert not any(ln.strip().startswith("<<") for ln in box)   # never a stereotype (renders above the name)
+    assert box[-2] == "    🛢 orders(MongoDB)"
+    assert not any(ln.strip().startswith("<<") for ln in box)
     assert f"style E1 {ENTITY_STYLE}" in src
-    # The store's NAME never reaches the diagram — it repeats on every box; the pane/Data view answer it.
-    assert "MongoDB" not in src
+    # A store name carrying its own parens ("Redis (cache / main)") would nest and break parsing.
+    assert "🛢 sess(Redis cache / main)" in src
     # Not-persisted entity (E4, embedded): no store line, the drained ghost fill instead.
     assert f"style E4 {ENTITY_GHOST_STYLE}" in src
     e4 = lines.index('  class E4["Address"] {')
-    assert not any("▤" in ln for ln in lines[e4:lines.index("  }", e4) + 1])
+    assert not any("🛢" in ln for ln in lines[e4:lines.index("  }", e4) + 1])

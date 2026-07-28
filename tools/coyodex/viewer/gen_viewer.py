@@ -266,21 +266,28 @@ def _relation_label(edge: dict[str, Any]) -> str:
     return label if edge.get("fk_side") == "src" else "↩ " + label
 
 
-def _store_line(node: dict[str, Any]) -> str | None:
-    """The CONTAINER an entity is persisted in — `▤ guilds` — rendered as the LAST line inside the
-    class box, below its fields. Deliberately NOT a `<<…>>` stereotype: that renders ABOVE the class
-    name, which costs the diagram its "every box leads with the entity name" uniformity.
+def _store_line(node: dict[str, Any], dep_names: dict[str, str]) -> str | None:
+    """WHERE an entity is persisted — `🛢 guilds(MongoDB)` — rendered in the class box's SECOND
+    compartment, the one below the divider that classDiagram reserves for methods and that these
+    boxes otherwise leave empty. Two deliberate placement choices:
 
-    The container only, never the store's name: across live maps essentially every persisted entity
-    sits in the SAME store (36 of 37 in one map), so the store name is one value repeated on every
-    box, while the container (`guilds`, `notifications`) is the genuinely per-entity fact. WHICH store
-    is answered by the info pane and the Data view. The `▤` prefix keeps the line from reading as one
-    more `type name` field. Shown ONLY for an entity with a physical store (`store.dep` set), matching
-    the ghost fill — a not-persisted entity carries none. Returns None when there is nothing to show."""
+    * NOT a `<<…>>` stereotype — that draws ABOVE the class name, costing the diagram its "every box
+      leads with the entity name" uniformity;
+    * NOT a plain member line — that shares the compartment with the real fields, where a store reads
+      as one more property.
+
+    Landing in that second compartment REQUIRES the `name(args)` method shape, so the store name
+    renders parenthesised (a verified constraint: classDiagram strips any space before the paren).
+    Parens inside the names would nest and break parsing — a live map ships a dep literally named
+    `Redis (cache / main)` — so both parts drop them. Shown ONLY for an entity with a physical store
+    (`store.dep` + a container), matching the ghost fill; a not-persisted entity carries no line."""
     st = cast("dict[str, str] | None", node.get("store"))
     if not st or not st.get("dep") or not st.get("container"):
         return None
-    return "▤ " + _safe_member(str(st["container"]))
+    depobj = dep_names.get(str(st["dep"]), str(st["dep"]))
+    where = _safe_member(depobj).replace("(", "").replace(")", "").strip()
+    container = _safe_member(str(st["container"])).replace("(", "").replace(")", "").strip()
+    return f"🛢 {container}({where})" if container else None
 
 
 def _entity_style(node: dict[str, Any]) -> str:
@@ -293,12 +300,13 @@ def _entity_style(node: dict[str, Any]) -> str:
 
 
 def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
-                     with_members: bool) -> list[str]:
+                     with_members: bool, dep_names: dict[str, str] | None = None) -> list[str]:
     """The `classDiagram` lines for one entity box. `with_members=True` renders its attributes
-    (`type name`) followed by its store container as a last line (`▤ guilds` — see _store_line);
-    `with_members=False` renders a bare box — used for a cross-subdomain NEIGHBOUR entity in a
-    per-subdomain card, so it reads as collapsed (its detail lives in its own subdomain's view).
-    Shared by the flat Domain view and the per-subdomain card so a class renders identically in both."""
+    (`type name`) plus, in the box's own second compartment, where it is persisted
+    (`🛢 guilds(MongoDB)` — see _store_line); `with_members=False` renders a bare box — used for a
+    cross-subdomain NEIGHBOUR entity in a per-subdomain card, so it reads as collapsed (its detail
+    lives in its own subdomain's view). Shared by the flat Domain view and the per-subdomain card so
+    a class renders identically in both."""
     label = _safe_label(str(node["name"]))
     if not with_members:
         return [f'  class {nid}["{label}"]']
@@ -314,7 +322,7 @@ def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
         member = f'{atype} {_safe_member(str(a.get("name", "")))}'.strip()
         if member:
             out.append(f"    {member}")
-    store = _store_line(node)  # LAST line: the container, below the fields (never above the name)
+    store = _store_line(node, dep_names or {})  # its own compartment, below the fields
     if store:
         out.append(f"    {store}")
     out.append("  }")
@@ -382,6 +390,13 @@ def _sibling_subdomain_box(graph: GraphDict, nid: str, sdid: str) -> str | None:
     return _top_subdomain(graph, nid)
 
 
+def _dep_name_map(graph: GraphDict) -> dict[str, str]:
+    """`D-id → display name` for every dependency node — what an entity box's store line names as the
+    place it lives (`🛢 guilds(MongoDB)`). Read off the graph rather than stored on each entity node,
+    so the name can't drift from the dep it points at."""
+    return {nid: str(n["name"]) for nid, n in graph["nodes"].items() if str(n["kind"]) == "dep"}
+
+
 def gen_domain_mermaid(graph: GraphDict) -> str:
     """C4 Code altitude: the T5 domain model as a Mermaid `classDiagram` — each entity a class box
     (id = its `E` id, label = its name) holding its attributes (`type name`), with typed, cardinal
@@ -392,9 +407,10 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
     ents = [(nid, n) for nid, n in graph["nodes"].items() if str(n["kind"]) == "entity"]
     ent_ids = {nid for nid, _ in ents}
     ent_names = {nid: str(n["name"]) for nid, n in ents}
+    dep_names = _dep_name_map(graph)
     lines = ["classDiagram"]
     for nid, n in ents:
-        lines += _class_box_lines(nid, cast("dict[str, Any]", n), ent_names, with_members=True)
+        lines += _class_box_lines(nid, cast("dict[str, Any]", n), ent_names, True, dep_names)
     for nid, n in ents:  # tint each entity — normal fuchsia, or drained "ghost" when it isn't persisted
         lines.append(f"  style {nid} {_entity_style(cast('dict[str, Any]', n))}")
     for e in graph["edges"]:
@@ -568,7 +584,8 @@ def _subdomain_namespace(graph: GraphDict, sdid: str,
     nm = _safe_label(str(nodes[sdid]["name"])) if sdid in nodes else sdid
     out = [f'namespace {sdid}["{nm}"] {{']
     for eid, _ in members:
-        out += _class_box_lines(eid, cast("dict[str, Any]", nodes[eid]), ent_names, with_members=True)
+        out += _class_box_lines(eid, cast("dict[str, Any]", nodes[eid]), ent_names, True,
+                                _dep_name_map(graph))
     for cid, cname in _child_subdomains(graph, sdid):  # nested child subdomains: collapsed, drillable
         out.append(f'  class {cid}["{_safe_label(cname)} ({_descendant_entity_count(graph, cid)})"]')
     out.append("}")
