@@ -36,6 +36,9 @@ Commands:
              needs, so they are never hand-scripted. Re-run validate → audit → render after.
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
+  reconcile  Expand path RULES into an explicit `reconcile.json` (the synthesis
+             assignment pass), resolving ids against a real map and reporting every
+             rule that matched nothing. Feed the result to `assemble --reconcile`.
   balance    Report per-diagram fan-out (target 5±2), the inter-subsystem edge
              matrix, and advisory split proposals for over-dense diagrams —
              apply accepted proposals via a Direct map change.
@@ -97,6 +100,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "balance":
         from coyodex import balance  # stdlib-only; defaults its own map path
         return balance.main(rest)
+    if cmd == "reconcile":
+        from coyodex import reconcile_build  # stdlib-only
+        return reconcile_build.main(rest)
     if cmd == "lint-fragment":
         from coyodex import lint_fragment  # stdlib-only
         return lint_fragment.main(rest)
