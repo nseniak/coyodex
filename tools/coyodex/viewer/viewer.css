@@ -856,3 +856,9 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 #panel .dv-seelink { color: #4f46e5; text-decoration: none; font-size: 12px; white-space: nowrap; }
 #panel .dv-seelink:hover { text-decoration: underline; }
 #panel .dv-coll { font-family: ui-monospace, monospace; font-size: 12px; color: #334155; }
+/* Entity-diagram "Details" toggle: sits beside the view switcher, shown only on the entity views. */
+#detailsbtn { font: inherit; font-size: 12px; font-weight: 600; color: #64748b; background: #eef2f7;
+              border: 1px solid transparent; border-radius: 9px; padding: 3px 10px; margin-left: 8px;
+              cursor: pointer; white-space: nowrap; }
+#detailsbtn:hover { background: #e2e8f0; }
+#detailsbtn.on { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }

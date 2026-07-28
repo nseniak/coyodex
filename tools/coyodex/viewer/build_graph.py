@@ -55,6 +55,9 @@ class Node:
                                   # notes} (Entity.store), exposed so the info pane can render a
                                   # "Persisted in" row (dep chip + container) without re-parsing the
                                   # human "Stored" field string. None = not persisted / not stated.
+    states_count: int = 0         # entities/components only: how many states its lifecycle declares
+                                  # (0 = none). The `States` field holds the human TEXT; only the count
+                                  # is countable, and the Domain diagram's lifecycle marker needs it.
 
 
 @dataclass

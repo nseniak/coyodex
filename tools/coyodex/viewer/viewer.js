@@ -144,6 +144,7 @@ const flowplayer = document.getElementById('flowplayer');
 const flowprev = document.getElementById('flowprev');
 const flownext = document.getElementById('flownext');
 const flowcount = document.getElementById('flowcount');
+const detailsbtn = document.getElementById('detailsbtn');
 document.getElementById('meta').innerHTML = META;
 // Escape for HTML output. Covers BOTH contexts esc() feeds: text content AND double/single-quoted
 // attributes (e.g. data-term="${esc(...)}"). Quotes must be escaped so a value can't break out of an
@@ -476,6 +477,58 @@ function elementPill(id) {
 // box) or expanded (a frame). The cluster's DOM id ends with its element id (`<diagramId>-S1` / `-SD1`);
 // one pass covers flowchart subgraphs (subsystem cards) AND classDiagram namespaces (subdomain cards +
 // the mixed S×SD bridge), where Mermaid's `style` directive can't reach the frame.
+// ── entity-box detail toggle ──────────────────────────────────────────────────────────────────────
+// The extras on an entity box — a field's key markers (` · PK FK ?`) and the retention / lifecycle
+// lines — are ALWAYS baked into the diagram source, so Mermaid lays every box out WITH them. Turning
+// them off therefore never re-runs the layout: it rewrites glyphs in the already-drawn SVG (a marker
+// suffix is swapped for its stripped text; a whole extra line goes `visibility:hidden`, which keeps
+// its space). Nothing moves — the cost is that a box stays sized for its "details on" state.
+const DETAIL_MARKERS = / · (?:PK|FK|uniq|\?)(?: (?:PK|FK|uniq|\?))*$/;
+const DETAIL_LINE = /^\s*[⏱⟳]/;   // a whole extra line (retention / lifecycle)
+const ENTITY_VIEWS = new Set(['domain', 'domsub', 'domedge', 'bridge']);  // views that draw entity boxes
+let ENTITY_DETAILS = null;  // lazily read: lsGet is defined further down, so never touch it at import
+function entityDetailsOn() {
+  if (ENTITY_DETAILS === null) ENTITY_DETAILS = lsGet('entityDetails') !== 'off';
+  return ENTITY_DETAILS;
+}
+// Re-apply the current setting to a freshly rendered (or already showing) diagram. Idempotent: the
+// first pass classifies each text leaf and remembers its full/plain forms on the element itself.
+function applyEntityDetails(root) {
+  const on = entityDetailsOn();
+  // Mermaid draws classDiagram members as HTML (`<p>` inside a foreignObject) under htmlLabels, and
+  // as `<text>`/`<tspan>` otherwise — cover both, then keep only leaves so a wrapper is never rewritten.
+  root.querySelectorAll('text, tspan, p').forEach((el) => {
+    if (el.children.length) return;                       // leaves only — never a wrapper
+    if (el.dataset.dkind === undefined) {                 // first sight of this element: classify once
+      const full = el.textContent;
+      if (DETAIL_LINE.test(full)) el.dataset.dkind = 'line';
+      else if (DETAIL_MARKERS.test(full)) {
+        el.dataset.dkind = 'mark';
+        el.dataset.dfull = full;
+        el.dataset.dplain = full.replace(DETAIL_MARKERS, '');
+      } else { el.dataset.dkind = 'none'; }
+    }
+    if (el.dataset.dkind === 'line') el.style.visibility = on ? '' : 'hidden';
+    else if (el.dataset.dkind === 'mark') el.textContent = on ? el.dataset.dfull : el.dataset.dplain;
+  });
+}
+function syncDetailsBtn(s) {
+  const shown = ENTITY_VIEWS.has(s.kind);
+  detailsbtn.hidden = !shown;
+  if (shown) {
+    const on = entityDetailsOn();
+    detailsbtn.setAttribute('aria-pressed', String(on));
+    detailsbtn.classList.toggle('on', on);
+  }
+}
+detailsbtn.addEventListener('click', () => {
+  ENTITY_DETAILS = !entityDetailsOn();
+  lsSet('entityDetails', ENTITY_DETAILS ? 'on' : 'off');
+  applyEntityDetails(diagram);
+  detailsbtn.setAttribute('aria-pressed', String(ENTITY_DETAILS));
+  detailsbtn.classList.toggle('on', ENTITY_DETAILS);
+});
+
 function tintClusters(root) {
   root.querySelectorAll('g.cluster').forEach((g) => {
     const m = (g.id || '').match(/-([A-Za-z]+\d+)$/);
@@ -3422,6 +3475,7 @@ function renderChrome(s) {
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
   const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
+  syncDetailsBtn(s);  // the entity-box Details toggle belongs to the entity views only
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it.
@@ -4025,6 +4079,7 @@ async function render(sArg, transient) {
   if (seq !== renderSeq) return;  // a newer render started during the async layout — drop this stale one
   diagram.innerHTML = svg;
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
+  applyEntityDetails(diagram);  // honour the Details toggle on the freshly drawn entity boxes
   emphasizeZoomedFrame(diagram, s);  // thicker border + bigger title on the group you drilled into
   if (s.kind === 'deployment' || s.kind === 'deploymentUnit') styleDeploymentLanes(diagram);  // bold lane titles + gap
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));

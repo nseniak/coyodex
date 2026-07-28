@@ -290,14 +290,60 @@ def _store_line(node: dict[str, Any], dep_names: dict[str, str]) -> str | None:
     return f"🛢 {container}({where})" if container else None
 
 
+# The DETAIL separator: everything after it on a member line is a toggleable extra (the field's key
+# markers). Chosen because no type/name carries it, so the viewer can strip the extras back off with
+# one unambiguous rule — see viewer.js applyEntityDetails.
+DETAIL_SEP = " · "
+# Key/relation markers, in fixed render order (determinism) — the map's own vocabulary, shortened.
+# `[]` is deliberately absent: it is part of the type's SHAPE and already rides on the type itself.
+_MARKER_LABEL: tuple[tuple[str, str], ...] = (("PK", "PK"), ("FK", "FK"), ("unique", "uniq"), ("?", "?"))
+_TTL_AMOUNT = re.compile(r"(?:TTL\s*(?:of\s*)?(\d+\s*[-\w]+)|(\d+[-\s]?\w+)\s*TTL)", re.I)
+
+
+def _field_markers(markers: str) -> str:
+    """The toggleable key markers for one field — `PK`, `FK`, `uniq`, `?` — as a ` · `-prefixed
+    suffix (`string id · PK`). Every live map is full of these (one map: 47 PK, 52 FK, 50 optional)
+    and the box drew NONE of them; they answer "which field is the key / points elsewhere / is
+    optional" without opening the panel. An `FK→E7` marker renders as bare `FK`: which entity it
+    points at is already drawn as the relation arrow between the two boxes."""
+    have = {m.split("→")[0].strip() for m in markers.split()}
+    out = [label for key, label in _MARKER_LABEL if key in have]
+    return DETAIL_SEP + " ".join(out) if out else ""
+
+
+def _retention_line(node: dict[str, Any]) -> str | None:
+    """`⏱ retention(30 days)` — the TTL an entity's store notes record, promoted out of prose onto the
+    box (live maps bury "TTL 30 days" mid-sentence in the notes). Rendered in the same second
+    compartment as the store line, and only when the notes actually mention a TTL."""
+    st = cast("dict[str, str] | None", node.get("store"))
+    notes = str(st.get("notes", "")) if st else ""
+    if not notes or "ttl" not in notes.lower():
+        return None
+    hit = _TTL_AMOUNT.search(notes)
+    amount = (hit.group(1) or hit.group(2)).strip() if hit else "TTL"
+    return f"⏱ retention({_safe_member(amount).replace('(', '').replace(')', '')})"
+
+
+def _lifecycle_line(node: dict[str, Any]) -> str | None:
+    """`⟳ lifecycle(3 states)` — a marker that this entity's code declares a state machine, which the
+    diagram otherwise never showed (the states themselves stay in the panel, where they fit). Rare by
+    nature (2 entities across three live maps), so it costs the diagram nothing when absent."""
+    n = int(node.get("states_count") or 0)
+    return f"⟳ lifecycle({n} states)" if n else None
+
+
 def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
                      with_members: bool, dep_names: dict[str, str] | None = None) -> list[str]:
     """The `classDiagram` lines for one entity box. `with_members=True` renders its attributes
-    (`type name`) plus, in the box's own second compartment, where it is persisted
-    (`🛢 guilds(MongoDB)` — see _store_line); `with_members=False` renders a bare box — used for a
-    cross-subdomain NEIGHBOUR entity in a per-subdomain card, so it reads as collapsed (its detail
-    lives in its own subdomain's view). Shared by the flat Domain view and the per-subdomain card so
-    a class renders identically in both."""
+    (`type name`, each with its toggleable key markers) plus, in the box's own second compartment,
+    where it is persisted (`🛢 guilds(MongoDB)`), its retention and its lifecycle; `with_members=False`
+    renders a bare box — used for a cross-subdomain NEIGHBOUR entity in a per-subdomain card, so it
+    reads as collapsed (its detail lives in its own subdomain's view). Shared by the flat Domain view
+    and the per-subdomain card so a class renders identically in both.
+
+    The detail extras are ALWAYS emitted, never conditionally: the viewer's Details toggle hides them
+    in the already-rendered SVG (viewer.js applyEntityDetails) precisely so that switching it can
+    never re-run the layout and shift the boxes."""
     label = _safe_label(str(node["name"]))
     if not with_members:
         return [f'  class {nid}["{label}"]']
@@ -305,17 +351,18 @@ def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
     for a in cast("list[dict[str, str]]", node.get("attrs") or []):
         # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
         atype = _safe_member(ent_names.get(str(a.get("type", "")), str(a.get("type", ""))))
-        # `[]` is part of the type's SHAPE (it makes the field multi-valued), so show it in the box
-        # — unlike PK/FK/?/unique (annotations), which stay in the click-panel. Otherwise a
-        # collection reads as single-valued in the box and the `*` lives only on the relation arrow.
-        if "[]" in str(a.get("markers", "")).split():
+        # `[]` is part of the type's SHAPE (it makes the field multi-valued), so it rides on the type
+        # — unlike PK/FK/?/unique, which render as a toggleable ` · ` suffix (see _field_markers).
+        markers = str(a.get("markers", ""))
+        if "[]" in markers.split():
             atype += "[]"
         member = f'{atype} {_safe_member(str(a.get("name", "")))}'.strip()
         if member:
-            out.append(f"    {member}")
-    store = _store_line(node, dep_names or {})  # its own compartment, below the fields
-    if store:
-        out.append(f"    {store}")
+            out.append(f"    {member}{_field_markers(markers)}")
+    # Second compartment (below the divider): where it lives, how long it is kept, its lifecycle.
+    for extra in (_store_line(node, dep_names or {}), _retention_line(node), _lifecycle_line(node)):
+        if extra:
+            out.append(f"    {extra}")
     out.append("  }")
     return out
 

@@ -16,8 +16,10 @@ from coyodex.model import (
     Dep,
     Edge,
     Entity,
+    EntityField,
     MessagingRow,
     ProjectModel,
+    StateMachine,
     Store,
 )
 from coyodex.validate_model import unexplained_persistence_pairs
@@ -51,7 +53,13 @@ def make_data_model() -> ProjectModel:
     ]
     m.entities = [
         Entity(id="E1", name="Order", meaning="a customer order", source="src/order.py:1",
-               store=Store(dep="D1", container="orders", mode="collection", notes="30-day TTL")),
+               store=Store(dep="D1", container="orders", mode="collection", notes="30-day TTL"),
+               fields=[EntityField(name="id", type="str", markers=["PK"]),
+                       EntityField(name="customer_id", type="str", markers=["FK→E2", "?"]),
+                       EntityField(name="code", type="str", markers=["unique"]),
+                       EntityField(name="tags", type="str", markers=["[]"]),
+                       EntityField(name="total", type="int")],
+               states=StateMachine(states=["new", "paid", "shipped"], source="src/order.py:9")),
         Entity(id="E2", name="Customer", meaning="a buyer", source="src/cust.py:1",
                store=Store(dep="D1", container="customers", mode="collection")),
         Entity(id="E3", name="Session", meaning="a login session", source="src/sess.py:1",
@@ -178,21 +186,35 @@ def test_non_persisted_entity_still_gets_access_rows():
     assert [r["id"] for r in dv["access"]["E4"]["readers"]] == ["C7"]  # embedded entity, still tracked
 
 
-def test_domain_diagram_store_line_and_ghost_fill():
-    src = gen_domain_mermaid(model_to_graph(make_data_model()))
+def _box(src: str, decl: str) -> list[str]:
     lines = src.splitlines()
-    # Persisted entity (E1 → MongoDB.orders): `container(store)` as the box's LAST line + normal fill.
-    # The `()` shape is what lands it in the box's SECOND compartment (below the divider, apart from
-    # the fields); it must never be a `<<…>>` stereotype, which would render ABOVE the class name.
-    start = lines.index('  class E1["Order"] {')
-    box = lines[start:lines.index("  }", start) + 1]
-    assert box[-2] == "    🛢 orders(MongoDB)"
-    assert not any(ln.strip().startswith("<<") for ln in box)
+    start = lines.index(decl)
+    return [ln.strip() for ln in lines[start + 1:lines.index("  }", start)]]
+
+
+def test_domain_diagram_box_carries_store_retention_lifecycle_and_markers():
+    src = gen_domain_mermaid(model_to_graph(make_data_model()))
+    box = _box(src, '  class E1["Order"] {')
+    # Fields keep `[]` on the TYPE (it is the shape) and carry their key markers as a ` · ` suffix —
+    # the toggleable part the viewer strips back off without re-laying the diagram out.
+    assert box[:5] == ["str id · PK", "str customer_id · FK ?", "str code · uniq",
+                       "str[] tags", "int total"]
+    # The second compartment, in order: where it lives, how long it is kept, its lifecycle. Each is a
+    # `name(args)` line — the shape that lands it below the divider, apart from the fields.
+    assert box[5:] == ["🛢 orders(MongoDB)", "⏱ retention(30-day)", "⟳ lifecycle(3 states)"]
+    assert not any(ln.startswith("<<") for ln in box)   # never above the entity name
     assert f"style E1 {ENTITY_STYLE}" in src
     # A store name carrying its own parens ("Redis (cache / main)") would nest and break parsing.
     assert "🛢 sess(Redis cache / main)" in src
     # A not-persisted entity (E4, embedded) simply carries NO store line — the absence IS the signal,
     # so it keeps the ordinary entity tint (no dimming, which would only restate the same fact).
-    e4 = lines.index('  class E4["Address"] {')
-    assert not any("🛢" in ln for ln in lines[e4:lines.index("  }", e4) + 1])
+    assert not any("🛢" in ln for ln in _box(src, '  class E4["Address"] {'))
     assert f"style E4 {ENTITY_STYLE}" in src
+
+
+def test_detail_extras_are_always_emitted_so_the_toggle_never_relayouts():
+    """The Details toggle hides extras in the RENDERED svg, so the generator must emit them
+    unconditionally — otherwise the box would be laid out without them and toggling would move it."""
+    m = make_data_model()
+    src = gen_domain_mermaid(model_to_graph(m))
+    assert " · PK" in src and "⏱ retention(" in src and "⟳ lifecycle(" in src

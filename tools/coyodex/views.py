@@ -703,6 +703,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         if e.store:
             node.store = {"dep": e.store.dep or "", "container": e.store.container,
                           "mode": e.store.mode, "notes": e.store.notes}
+        if e.states:
+            node.states_count = len(e.states.states)
         ent_file = _bare_local_file(e.source)
         node.files = [ent_file] if ent_file else []
         nodes[e.id] = node
