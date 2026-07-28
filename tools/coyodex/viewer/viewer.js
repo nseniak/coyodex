@@ -4016,27 +4016,54 @@ function renderData(s) {
       + `<div class="dv-cards">${cards}</div></div>`);
   }
 
-  // Not-persisted groups → one pane, one rail button per group (all jump to the pane).
+  // Entities with no collection of their own. Split by SECTION, because "not persisted" was wrong for
+  // the biggest of them: an embedded entity IS stored, inside a parent's document — so that group also
+  // names the parent and the collection it ultimately lands in (dv.not_persisted[].entities[].home).
   const np = dv.not_persisted || [];
-  const npRail = [];
-  if (np.length) {
-    const groups = np.map((grp) => `<div class="dv-grouprow"><h3>${esc(grp.label)} (${grp.entities.length})`
-      + (grp.warn ? ' <span class="dv-tag dv-tag-warn">no dep linked</span>' : '') + `</h3>`
-      + `<div class="dv-chips">${grp.entities.map((e) =>
-          dvChip(e.id, e.name, 'dv-ent', e.container || e.mode)).join('')}</div></div>`).join('');
-    panes.push(`<div class="dv-pane" id="dv-pane-np" role="region" aria-label="Not persisted">`
-      + `<div class="dv-panehead"><h2>Not persisted</h2><span class="dv-stat"><b>`
-      + `${np.reduce((n, g) => n + g.entities.length, 0)}</b> entities never persisted to a store</span></div>`
-      + `<p class="dv-derived">The other side of <code>entities[].store</code> — what is <i>not</i> in a database, so you know before you go looking.</p>`
-      + `<div class="dv-grouplist">${groups}</div></div>`);
-    for (const grp of np) npRail.push(`<button type="button" class="dv-store" data-pane="dv-pane-np">`
+  const npSections = dv.np_sections || [];
+  const SECTION_BLURB = {
+    elsewhere: 'Durable data with no collection of its own — it rides inside another entity’s document, so it lives wherever that parent lives.',
+    outside: 'Never written to a datastore — derived at request time, or living in the source itself.',
+  };
+  const npPaneId = (key) => 'dv-pane-np-' + key;
+  const embRow = (e) => {
+    const parents = (e.parents || []).map((p) => dvChip(p.id, p.name, 'dv-ent')).join('');
+    const home = e.home
+      ? `<span class="dv-home">🛢 ${esc(e.home.container || e.home.name)}</span>`
+      : '<span class="dv-none">no physical home found</span>';
+    return `<div class="dv-embrow">${dvChip(e.id, e.name, 'dv-ent')}`
+      + `<span class="dv-in">inside</span>${parents || '<span class="dv-none">—</span>'}${home}</div>`;
+  };
+  const npGroupHtml = (grp) => `<div class="dv-grouprow"><h3>${esc(grp.label)} (${grp.entities.length})`
+    + (grp.warn ? ' <span class="dv-tag dv-tag-warn">no store linked</span>' : '') + '</h3>'
+    + (grp.mode === 'embedded'
+      ? `<div class="dv-embtable">${grp.entities.map(embRow).join('')}</div>`
+      : `<div class="dv-chips">${grp.entities.map((e) =>
+          dvChip(e.id, e.name, 'dv-ent', e.container || e.mode)).join('')}</div>`)
+    + '</div>';
+  const npRailBySection = {};
+  for (const sec of npSections) {
+    const groups = np.filter((g) => g.section === sec.key);
+    if (!groups.length) continue;
+    const total = groups.reduce((n, g) => n + g.entities.length, 0);
+    panes.push(`<div class="dv-pane" id="${npPaneId(sec.key)}" role="region" aria-label="${esc(sec.label)}">`
+      + `<div class="dv-panehead"><h2>${esc(sec.label)}</h2>`
+      + `<span class="dv-stat"><b>${total}</b> ${total === 1 ? 'entity' : 'entities'}</span></div>`
+      + `<p class="dv-derived">${SECTION_BLURB[sec.key] || ''}</p>`
+      + `<div class="dv-grouplist">${groups.map(npGroupHtml).join('')}</div></div>`);
+    npRailBySection[sec.key] = { label: sec.label, buttons: groups.map((grp) =>
+      `<button type="button" class="dv-store" data-pane="${npPaneId(sec.key)}">`
       + `<span class="dv-dot ghost"></span><span class="dv-nm">${esc(grp.label)}</span>`
-      + (grp.warn ? '<span class="dv-warn-dot"></span>' : '') + `<span class="dv-ct">${grp.entities.length}</span></button>`);
+      + (grp.warn ? '<span class="dv-warn-dot"></span>' : '')
+      + `<span class="dv-ct">${grp.entities.length}</span></button>`).join('') };
   }
 
   if (dbRail.length) rail.push(`<div class="dv-railgroup">Data stores</div>${dbRail.join('')}`);
   if (busRail.length) rail.push(`<div class="dv-railgroup">Message bus</div>${busRail.join('')}`);
-  if (npRail.length) rail.push(`<div class="dv-railgroup">Not persisted</div>${npRail.join('')}`);
+  for (const sec of npSections) {   // one rail heading per section — each states what it actually is
+    const g = npRailBySection[sec.key];
+    if (g) rail.push(`<div class="dv-railgroup">${esc(g.label)}</div>${g.buttons}`);
+  }
 
   diagram.innerHTML = `<div class="dv-wrap"><nav class="dv-rail" aria-label="Physical stores">${rail.join('')}</nav>`
     + `<section class="dv-content">${panes.join('')}</section></div>`;

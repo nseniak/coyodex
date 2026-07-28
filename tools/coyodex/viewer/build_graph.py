@@ -137,9 +137,12 @@ class GraphDict(TypedDict):
     security: list[dict[str, str]]          # {surface, who, source, risk}
     config: list[dict[str, str]]            # {key, purpose, default, per_env}
     # Store-centric Data view (viewer.js renderData): {stores:[{dep,name,kind,roles,where,rows:[{entity,
-    # name,source,meaning,container,mode,notes,writers,readers,other}], channels:[…]}], not_persisted:
-    # [{mode,label,warn,entities}], gaps:[{dep,name,pairs}], unassigned_channels:[…]}. Derived (writers/
-    # readers from C→E edges, gaps from the shared persistence rule); not part of project-map.json.
+    # name,source,meaning,container,mode,notes}], channels:[…]}], access:{E-id:{writers,readers,other}},
+    # not_persisted:[{section,mode,label,warn,entities}] + np_sections:[{key,label}] (entities with no
+    # collection of their own, SPLIT by whether they are still durable — an embedded row also carries
+    # its `parents` and the `home` collection it lands in), gaps:[{dep,name,pairs}],
+    # unassigned_channels:[…]. All derived (writers/readers from C→E edges, gaps from the shared
+    # persistence rule, homes by walking containment); not part of project-map.json.
     data_view: dict[str, object]
     tests_note: str                         # the "Tests run for this table?" honesty line
     # targets resolved server-side (name + node-locatability) so the Tests tab needs no id parsing.

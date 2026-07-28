@@ -865,3 +865,11 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 /* Lifecycle transitions in the info pane: one per line, so each trigger reads on its own. */
 #panel .st-list { list-style: none; margin: 0; padding: 0; }
 #panel .st-list li { padding: 1px 0 1px 10px; text-indent: -10px; line-height: 1.45; }
+/* Embedded entities: each row names the parent it rides in and the collection it lands in. */
+.dv-embtable { display: flex; flex-direction: column; gap: 3px; }
+.dv-embrow { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 3px 0;
+             border-bottom: 1px solid #f3f4f6; }
+.dv-embrow:last-child { border-bottom: 0; }
+.dv-in { font-size: 11px; color: #9ca3af; }
+.dv-home { font-family: ui-monospace, monospace; font-size: 11px; color: #334155;
+           background: #f1f5f9; border-radius: 4px; padding: 1px 6px; white-space: nowrap; }

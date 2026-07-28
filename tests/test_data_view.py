@@ -134,14 +134,53 @@ def test_dual_role_store_carries_rows_and_channels():
     assert d2["channels"][0]["payload"] == "E1"
 
 
-def test_not_persisted_groups_and_unlinked_warned_group():
+def test_storeless_groups_split_by_what_they_actually_are():
+    """An `embedded` entity IS persisted (inside a parent), and `in-code`/`enum` live in the source —
+    only `transient` is truly nowhere. The groups carry a SECTION saying which, so nothing durable is
+    filed under "not persisted"."""
     dv = _data_view(make_data_model())
     by_mode = {g["mode"]: g for g in dv["not_persisted"]}
+    section = {g["mode"]: g["section"] for g in dv["not_persisted"]}
+    # durable, just not in a collection of its own
+    assert section["embedded"] == "elsewhere" and [e["id"] for e in by_mode["embedded"]["entities"]] == ["E4"]
+    assert section["unlinked"] == "elsewhere" and by_mode["unlinked"]["warn"] is True
     assert [e["id"] for e in by_mode["unlinked"]["entities"]] == ["E5"]  # container+collection, no dep
-    assert by_mode["unlinked"]["warn"] is True
-    assert [e["id"] for e in by_mode["embedded"]["entities"]] == ["E4"]
-    assert [e["id"] for e in by_mode["enum"]["entities"]] == ["E6"]
-    assert [e["id"] for e in by_mode[""]["entities"]] == ["E7"]  # store is None → "storage not stated"
+    # not in a datastore at all — `enum` folds into `in-code` (both mean "the values live in the code")
+    assert section["in-code"] == "outside" and [e["id"] for e in by_mode["in-code"]["entities"]] == ["E6"]
+    assert "enum" not in by_mode
+    assert section[""] == "outside" and [e["id"] for e in by_mode[""]["entities"]] == ["E7"]
+    assert [s["key"] for s in dv["np_sections"]] == ["elsewhere", "outside"]
+
+
+def test_embedded_entity_reports_its_parent_and_physical_home():
+    """The fact the old "not persisted" label hid: WHERE an embedded entity actually lands. Resolved by
+    walking the containment chain up to the nearest ancestor that owns a real store."""
+    m = make_data_model()
+    # E4 Address is embedded; E1 Order (stored in MongoDB.orders) types a field with it, and E8 rides
+    # inside E4 — a nested value whose home is still the collection at the top of the chain.
+    m.entities[0].fields.append(EntityField(name="ship_to", type="E4"))
+    m.entities.append(Entity(id="E8", name="GeoPoint", meaning="a lat/long", source="src/geo.py:1",
+                             store=Store(container="embedded", mode="embedded")))
+    m.entities[3].fields.append(EntityField(name="at", type="E8"))       # E4 Address contains E8
+    emb = next(g for g in _data_view(m)["not_persisted"] if g["mode"] == "embedded")
+    rows = {e["id"]: e for e in emb["entities"]}
+    assert [p["name"] for p in rows["E4"]["parents"]] == ["Order"]
+    assert rows["E4"]["home"]["container"] == "orders"
+    # nested: GeoPoint sits in Address, which is itself embedded — the home is still Order's collection
+    assert [p["name"] for p in rows["E8"]["parents"]] == ["Address"]
+    assert rows["E8"]["home"]["container"] == "orders"
+
+
+def test_entity_id_in_a_field_type_matches_whole_not_prefix():
+    """`E1` must not resolve as the parent of `E10` — a substring match would silently invent a home."""
+    m = make_data_model()
+    m.entities.append(Entity(id="E10", name="Nested", meaning="x", source="src/n.py:1",
+                             store=Store(container="embedded", mode="embedded")))
+    m.entities[0].fields.append(EntityField(name="ref", type="E10"))   # only E10 is referenced
+    emb = next(g for g in _data_view(m)["not_persisted"] if g["mode"] == "embedded")
+    rows = {e["id"]: e for e in emb["entities"]}
+    assert [p["name"] for p in rows["E10"]["parents"]] == ["Order"]
+    assert rows["E4"]["parents"] == []          # Address is referenced by nothing — no false parent
 
 
 def test_coverage_gap_strip_reuses_shared_rule():

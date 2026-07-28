@@ -473,18 +473,73 @@ def _node(el, kind: str, name: str, file: str | None, fields: dict[str, str],
                 fields=clean, parent=parent)
 
 
-# The "Not persisted" rail groups (Entity.store present but no `dep`, or no store at all), keyed by
-# Store.mode — fixed display order + human labels, so the Data view groups deterministically. A
-# collection/cache mode with a container but no dep is NOT here: it is a real store the map failed to
-# link (the validator's own "container but no dep" nudge), surfaced as its own warned group below.
-_NP_MODE_LABELS: list[tuple[str, str]] = [
-    ("embedded", "Embedded in a parent document"),
-    ("transient", "Transient / not persisted"),
-    ("cache", "Cache only (no dep linked)"),
-    ("in-code", "In-code registry / constants"),
-    ("enum", "Enum"),
-    ("", "Storage not stated"),
+# The Data view's non-collection rail groups, in fixed display order (determinism). Each entity here
+# has no store of its OWN, but that covers four genuinely different situations, and calling them all
+# "not persisted" was wrong for the biggest of them: an `embedded` entity IS persisted — it just lives
+# inside a parent's document — and `in-code`/`enum` are persisted in the SOURCE. Only `transient` is
+# actually not stored anywhere. So the groups carry a SECTION that states which is which.
+#   elsewhere = the data is durable, just not in a collection of its own
+#   outside   = it is not in a datastore at all
+_NP_SECTIONS: list[tuple[str, str]] = [("elsewhere", "Stored elsewhere"), ("outside", "Not in a datastore")]
+# (mode key, section, label). `enum` folds into `in-code`: both mean "the values live in the code".
+_NP_MODE_LABELS: list[tuple[str, str, str]] = [
+    ("embedded", "elsewhere", "Inside another entity"),
+    ("in-code", "outside", "Lives in code"),
+    ("transient", "outside", "Derived at runtime"),
+    ("cache", "outside", "Cache, no store linked"),
+    ("", "outside", "Storage not stated"),
 ]
+_NP_MODE_ALIAS = {"enum": "in-code"}   # an enum is a code-level registry by another name
+_ENTITY_REF = re.compile(r"\bE\d+\b")  # an entity id INSIDE a field type — matched whole, so E1 != E10
+
+
+def _embedded_homes(m: ProjectModel) -> dict[str, dict[str, object]]:
+    """For every entity stored INSIDE another one, the parent(s) it lives in and the physical store it
+    therefore ends up in — the fact the old "not persisted" label hid. A parent is an entity that
+    either types a field with this entity's id, or declares a containment relation onto it; the
+    physical home is found by walking those parents up until one has a real store (embedding nests —
+    a config inside a role inside a document), so even a deeply nested value reports where it lands.
+    Resolvable for every embedded entity across the live maps."""
+    ents = {e.id: e for e in m.entities}
+    parents: dict[str, list[str]] = {}
+    for owner in m.entities:
+        for f in owner.fields:
+            for ref in _ENTITY_REF.findall(f.type or ""):
+                if ref in ents and owner.id not in parents.setdefault(ref, []):
+                    parents[ref].append(owner.id)
+        for r in owner.relations:
+            if r.target in ents and r.verb.strip().lower() in ("contains", "embeds", "has"):
+                if owner.id not in parents.setdefault(r.target, []):
+                    parents[r.target].append(owner.id)
+
+    def home(eid: str, seen: set[str], depth: int = 0) -> str | None:
+        """The id of the nearest ancestor holding a real store — None when the chain never reaches one."""
+        if depth > 4:
+            return None
+        for pid in parents.get(eid, []):
+            if pid in seen:
+                continue
+            seen.add(pid)
+            p = ents.get(pid)
+            if p and p.store and p.store.dep:
+                return pid
+            deeper = home(pid, seen, depth + 1)
+            if deeper:
+                return deeper
+        return None
+
+    out: dict[str, dict[str, object]] = {}
+    for e in m.entities:
+        if not (e.store and e.store.mode == "embedded"):
+            continue
+        hid = home(e.id, {e.id})
+        holder = ents.get(hid) if hid else None
+        out[e.id] = {
+            "parents": [{"id": p, "name": ents[p].name} for p in parents.get(e.id, []) if p in ents],
+            "home": ({"id": holder.id, "name": holder.name,
+                      "container": holder.store.container} if holder and holder.store else None),
+        }
+    return out
 
 
 def _ce_access(m: ProjectModel, name_of: "dict[str, str]") -> dict[str, dict[str, list[dict[str, object]]]]:
@@ -573,8 +628,9 @@ def _build_data_view(m: ProjectModel, nodes: dict[str, Node]) -> dict[str, objec
             "channels": channels_by_dep.get(sid, []),
         })
 
-    # ── not-persisted rail groups + the "persisted but no dep linked" warned group ──
-    np_buckets: dict[str, list[dict[str, object]]] = {mode: [] for mode, _ in _NP_MODE_LABELS}
+    # ── the groups for entities with no store of their own (see _NP_SECTIONS on why they split) ──
+    homes = _embedded_homes(m)
+    np_buckets: dict[str, list[dict[str, object]]] = {mode: [] for mode, _, _ in _NP_MODE_LABELS}
     unlinked: list[dict[str, object]] = []
     for e in m.entities:
         if e.store and e.store.dep:
@@ -584,17 +640,23 @@ def _build_data_view(m: ProjectModel, nodes: dict[str, Node]) -> dict[str, objec
                "mode": e.store.mode if e.store else "", "source": e.source or ""}
         if e.store and not e.store.dep and e.store.container and e.store.mode in ("collection", "cache"):
             unlinked.append(ent)
-        else:
-            mode = e.store.mode if e.store else ""
-            np_buckets.setdefault(mode if mode in np_buckets else "", []).append(ent)
+            continue
+        mode = e.store.mode if e.store else ""
+        mode = _NP_MODE_ALIAS.get(mode, mode)
+        if mode == "embedded":                       # WHERE it actually lands, the label used to hide
+            ent.update(homes.get(e.id, {"parents": [], "home": None}))
+        np_buckets.setdefault(mode if mode in np_buckets else "", []).append(ent)
     not_persisted: list[dict[str, object]] = []
-    if unlinked:
-        not_persisted.append({"mode": "unlinked", "label": "Persisted but no store linked",
-                              "warn": True, "entities": unlinked})
-    for mode, label in _NP_MODE_LABELS:
+    if unlinked:  # persisted for real — the map just failed to name the store (validator nudges it too)
+        not_persisted.append({"section": "elsewhere", "mode": "unlinked",
+                              "label": "Persisted, but no store linked", "warn": True,
+                              "entities": unlinked})
+    for mode, section, label in _NP_MODE_LABELS:
         if np_buckets[mode]:
-            not_persisted.append({"mode": mode, "label": label, "warn": False,
+            not_persisted.append({"section": section, "mode": mode, "label": label, "warn": False,
                                   "entities": np_buckets[mode]})
+    sections = [{"key": k, "label": lbl} for k, lbl in _NP_SECTIONS
+                if any(g["section"] == k for g in not_persisted)]
 
     # ── coverage gaps (the shared persistence rule), grouped by dep ──
     gaps_by_dep: dict[str, list[dict[str, object]]] = {}
@@ -607,7 +669,7 @@ def _build_data_view(m: ProjectModel, nodes: dict[str, Node]) -> dict[str, objec
     # `access` (entity id → {writers, readers, other}) covers EVERY entity with a C→E edge — including
     # non-persisted ones — so the entity info pane can render "Written by" / "Read by" for any entity,
     # while the store rows stay lean (the table looks the writer/reader chips up by entity id).
-    return {"stores": stores, "not_persisted": not_persisted, "gaps": gaps,
+    return {"stores": stores, "not_persisted": not_persisted, "np_sections": sections, "gaps": gaps,
             "unassigned_channels": unassigned, "access": access}
 
 
