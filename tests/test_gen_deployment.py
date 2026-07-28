@@ -180,7 +180,7 @@ def test_overview_draws_runtime_only_no_subsystems_lane():
     assert 'subgraph L_core["Shared runtime"]' not in mm and 'subgraph L_sat[' not in mm
     assert "L_subs" not in mm and "-->|runs|" not in mm    # no lane, and no tautological aggregate arrow
     assert "class S1 subsystem" not in mm                  # no subsystem boxes at all
-    assert 'subgraph L_infra["Shared infrastructure — used by 2+ processes"]' in mm
+    assert 'subgraph L_infra["Shared infrastructure"]' in mm
     # Every arrow a process draws points at shared infra (a `Dn`) or another process (`U_n`).
     targets = [l.split("-->")[1].strip() for l in mm.splitlines() if l.strip().startswith("U_") and "-->" in l]
     assert targets and all(t.startswith("D") or t.startswith("U_") for t in targets)
@@ -200,7 +200,7 @@ def test_overview_infra_is_only_the_coupling_points_and_they_get_real_arrows():
     # (D2) is written only by C2 (worker alone) → not a coupling point → not on the overview at all;
     # it stays on worker's card. A catalog here would just restate the Dependencies view.
     mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
-    assert 'subgraph L_infra["Shared infrastructure — used by 2+ processes"]' in mm
+    assert 'subgraph L_infra["Shared infrastructure"]' in mm
     assert 'subgraph L_infra_bus["Message bus"]' in mm and "class D1 infraBus" in mm    # Redis = bus
     assert "U_0 --> D1" in mm and "U_1 --> D1" in mm      # real arrows, one per process that uses it
     assert "class D2" not in mm and "--> D2" not in mm    # single-process infra is not drawn here…

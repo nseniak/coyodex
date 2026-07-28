@@ -1941,7 +1941,7 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
         bands: dict[str, list[str]] = {}
         for did in infra_boxes:
             bands.setdefault(_infra_band_of(graph, did), []).append(did)
-        lines.append('  subgraph L_infra["Shared infrastructure — used by 2+ processes"]')
+        lines.append('  subgraph L_infra["Shared infrastructure"]')
         for role, bid, title, cls in _INFRA_BANDS:
             ids = bands.get(role)
             if not ids:

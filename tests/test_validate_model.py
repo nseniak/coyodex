@@ -1962,3 +1962,62 @@ def test_referenced_paths_matches_root_files_but_not_root_directories():
         refs = referenced_paths(m, root)
         assert "Makefile" in refs          # the root FILE anchor is seen
         assert "i18n" not in refs          # the prose mention of a root DIR is not
+
+
+def make_channel_map(publishers: list[str], consumers: list[str],
+                     runs_in: list[str] | None = None) -> ProjectModel:
+    """A one-channel map whose participants optionally carry a deployment placement."""
+    hosts = runs_in if runs_in is not None else ["api"]
+    return ProjectModel(
+        components=[Component(id=c, name=c, purpose="p", source="a.py:1", runs_in=list(hosts))
+                    for c in sorted(set(publishers) | set(consumers))],
+        deps=[Dep(id="D1", name="Redis", kind="messaging", type="broker")],
+        deployment=[DeploymentRow(unit="api"), DeploymentRow(unit="worker")],
+        messaging=[MessagingRow(name="JOB_QUEUE", broker="D1",
+                                publishers=list(publishers), consumers=list(consumers))],
+    )
+
+
+def test_channel_missing_a_side_warns_with_the_topology_consequence():
+    """A one-sided catalog row draws NO process arrow, and the hole is invisible in every view.
+
+    On a live map 5 of 25 channels were one-sided; their traffic then appeared only as a link to
+    the broker box, which says "this process uses Redis" but never who it talks to."""
+    for pubs, cons, word in (([], ["C2"], "publisher"), (["C1"], [], "consumer")):
+        _, warnings = validate_model(make_channel_map(pubs, cons))[:2]
+        hits = [w for w in warnings if "JOB_QUEUE" in w and f"no {word}s recorded" in w]
+        assert len(hits) == 1, (pubs, cons, warnings)
+        assert "Deployment view" in hits[0]
+
+
+def test_channel_missing_both_sides_reports_them_together():
+    _, warnings = validate_model(make_channel_map([], []))[:2]
+    hits = [w for w in warnings if "no publishers and no consumers recorded" in w]
+    assert len(hits) == 1
+
+
+def test_a_two_sided_channel_does_not_warn():
+    _, warnings = validate_model(make_channel_map(["C1"], ["C2"]))[:2]
+    assert not [w for w in warnings if "recorded —" in w and "JOB_QUEUE" in w]
+
+
+def test_untagged_participants_warn_separately():
+    # Both sides named, but nothing says which process runs them — same invisible outcome as a
+    # missing side, different fix (tag runs_in, not "record the other end").
+    _, warnings = validate_model(make_channel_map(["C1"], ["C2"], runs_in=[]))[:2]
+    hits = [w for w in warnings if "cannot place this channel" in w]
+    assert len(hits) == 1 and "runs_in" in hits[0]
+
+
+def test_placement_warning_is_silent_without_deployment_units():
+    # No deployment[] means no process boxes at all, so there is no topology to be missing.
+    m = make_channel_map(["C1"], ["C2"], runs_in=[])
+    m.deployment = []
+    _, warnings = validate_model(m)[:2]
+    assert not [w for w in warnings if "cannot place this channel" in w]
+
+
+def test_the_one_sided_warning_is_advisory_not_blocking():
+    # A channel whose other end lives outside the mapped repo is legitimately one-sided.
+    problems, _ = validate_model(make_channel_map(["C1"], []))[:2]
+    assert not [p for p in problems if "JOB_QUEUE" in p]

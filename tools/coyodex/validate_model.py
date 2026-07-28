@@ -1031,10 +1031,43 @@ def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
                         f"{label}: {role}(s) {', '.join(unbacked)} carry no backbone edge to "
                         f"{mr.broker} — the diagrams and impact ripple only walk edges, so this "
                         "participation is invisible to both; author the C→broker edge")
-        if not mr.consumers:
-            warnings.append(f"{label}: no consumers recorded — a dead letter, or an external "
-                            "consumer worth modeling as a dep")
+        # A one-sided row is a claim with a hole in it, and the hole is INVISIBLE in every view: the
+        # Deployment view composes its process→process arrows from publishers × consumers (each
+        # resolved through `runs_in`), so a row missing either side silently produces no arrow at
+        # all. On a live map 5 of 25 channels were one-sided; the traffic then showed up only as a
+        # link to the broker box, which says "this process uses Redis" but not who it is talking to.
+        # Advisory, not blocking: a channel whose other end lives OUTSIDE the mapped repo (an
+        # external publisher, a third-party consumer) is legitimately one-sided — it just has to be
+        # a decision rather than an omission.
+        missing = [r for r, ids in (("publishers", mr.publishers), ("consumers", mr.consumers))
+                   if not ids]
+        if missing:
+            warnings.append(
+                f"{label}: no {' and no '.join(missing)} recorded — the Deployment view composes "
+                "process→process arrows from publishers × consumers, so this channel draws none "
+                "and its traffic shows only as a link to the broker. Record the missing side, or "
+                "model an out-of-repo end as a dep")
+        elif m.deployment:
+            # Both sides named, but the view still cannot place the channel: no participant says
+            # which process runs it. Same invisible outcome, different cause — so a different fix
+            # (tag `runs_in`) than the one above.
+            placed = {r: [c for c in ids if _runs_in_of(m, c)]
+                      for r, ids in (("publisher", mr.publishers), ("consumer", mr.consumers))}
+            unplaced = [r for r, ids in placed.items() if not ids]
+            if unplaced:
+                warnings.append(
+                    f"{label}: no {' and no '.join(unplaced)} sets `runs_in`, so the Deployment "
+                    "view cannot place this channel and draws no process→process arrow — tag the "
+                    "participating component(s) with the unit whose process runs them")
     return problems, warnings
+
+
+def _runs_in_of(m: ProjectModel, cid: str) -> list[str]:
+    """The units a component id runs in ([] when unknown or untagged)."""
+    for c in m.components:
+        if c.id == cid:
+            return list(c.runs_in or [])
+    return []
 
 
 def _messaging_gap_warnings(m: ProjectModel) -> list[str]:
