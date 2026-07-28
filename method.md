@@ -318,12 +318,36 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     (below).
 
 ### Operational dimensions — standard core four
-- **Deployment & topology**: `Unit | Runs on | Exposed as | Config source`. **Link the code to the
+- **Deployment & topology**: `Unit | Runs on | Exposed as | Config source`. These are NOT tabled on the System tab — that page is for facts no diagram holds. Each row's facts live on the box that represents it in the Deployment view: its **process box** for a unit that hosts code (or an untraced one), and the **dependency box** standing in for it when the unit is infrastructure hosting no code. `variants` shows there too, as an **Environments** row with its grounding anchors. **Link the code to the
   runtime with `runs_in`** — on each component, the deployment `Unit` name(s) whose process executes
   it (a component may run in several: the C4 *instance* relation, one static box → many processes). It
   powers the **Deployment view** (`coyodex serve` → Deployment tab): processes and infra as nodes,
   their self-started threads on drill, and derived `runs` edges to the subsystems each process
-  executes. **Derive `runs_in` by READING THE DEPLOY MANIFESTS — never formula-fill by id range.** Open
+  executes. It also carries the view's **process topology**, composed from `runs_in` two ways:
+  **asynchronously**, via the async catalog (a channel's `publishers`/`consumers` are components, each
+  naming its host unit) → an arrow per channel one unit publishes and another consumes; and
+  **synchronously**, via the backbone edges (a component→component edge whose ends run in DIFFERENT
+  units is one process calling another) → an arrow per crossing call. Both matter: a message-driven
+  system is all channels, an ordinary client/server app is all calls, and deriving only one leaves the
+  other kind of project with an empty diagram. One arrow per ordered pair either way, on the overview
+  and on both units' cards, selectable to list what it stands for with each declaring line. The overview's
+  infrastructure lane is likewise **placement, not a catalog**: it shows only the brokers/stores/services
+  used by **2+ processes** — the coupling points — each with a real arrow per user, selectable to list
+  the components inside that process that reach it, with their verb, reason and call site. Infra a single
+  process touches stays on that process's card; the full inventory is the Dependencies view's job (and
+  the Data view's, for stores), so repeating it here would only restate them less completely.
+  Selecting an **environment** never removes a box: units the environment excludes are **dimmed in
+  place and made inert**, so "not deployed there" is visible instead of being a silent absence, and the
+  layout does not move when you switch. (One diagram serves every environment; the `variants` tags ride
+  on the boxes and the viewer fades the rest.)
+  The overview draws **runtime things only** — processes and the infrastructure coupling them. There is
+  no subsystems lane: subsystems are code structure, the Subsystems view already draws all of them with
+  their real relationships, and a lane here could only restate the subset whose components happen to
+  carry `runs_in`. The code→process placement is answered in the **info pane** instead: selecting a
+  subsystem or a component shows **Runs in** — the units that run it, each a link opening that
+  process's card — and each unit's own card still draws what it runs. The row is absent when nothing
+  records running that code, which is the visible sign that its `runs_in` tagging is missing.
+  **Derive `runs_in` by READING THE DEPLOY MANIFESTS — never formula-fill by id range.** Open
   the docker-compose services, the Dockerfiles + their `CMD`/`ENTRYPOINT`, k8s/Helm, the `Procfile`, and
   the launch entrypoints (`manage.py`, `main`, the worker bootstraps): for each unit, tag the
   component(s) whose process loads it, and tag each background-loop entry point with its precise host.
@@ -604,7 +628,17 @@ silences its promote-to-subsystem altitude nudge; the literal **`granularity`** 
 component-count-vs-E advisory (record it with the why when the altitude decision is conscious); the
 literal **`entity-flows`** silences the no-entity-in-any-flow canary; the literal **`runs-in`**
 silences the deployment-units-enumerated-but-nothing-links advisory (code that truly runs as one
-unit). Never reword prose to dodge a heuristic — record the exception instead. The contract that keeps balance safe: **balance never gates and only ever
+unit); the literal **`isolated`** silences the components-wired-to-nothing canary (see below).
+Never reword prose to dodge a heuristic — record the exception instead.
+
+**Wire what the prose claims.** `validate` emits one aggregated advisory for components carrying **no
+backbone edge and no `messaging` role** — code the model shows connected to nothing. Every view walks
+edges and channels (the subsystem arrows, the change-impact ripple, the Deployment view's
+process→process topology), so such a component is drawn isolated *however well its `Purpose` describes
+what it talks to*: a live map's custom-shard fleet said it "pushes their events to the same broker" and
+still drew no arrow to the bot it feeds, because neither an edge nor a channel row recorded it. Fix it
+by authoring the edge or adding the component as a channel publisher/consumer — **never** by having a
+view infer topology from prose. Record the literal `isolated` for code that genuinely stands alone. The contract that keeps balance safe: **balance never gates and only ever
 re-groups** — grouping is a free, view-only choice (membership on the child, member lists derived),
 while the **leaf decision is grounded by E and out of bounds for balance tooling**: no balance
 finding may merge or split components to hit a number.

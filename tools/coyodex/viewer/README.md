@@ -51,6 +51,34 @@ browse to a folder containing a `.coyodex/project-map.json`; your choices are re
 `~/.coyodex/serve-recents.json` and shown as a recents list on the next start (each openable, or
 removable with the ✕). highlight.js is lazy-loaded from a pinned + SRI CDN on first use.
 
+## Finding your way around
+
+Chrome that orients a first-time reader, so the map is readable without knowing its conventions:
+
+- **View caption** — the info pane's top-level state (what it shows when nothing is selected): the
+  view's name as the title, and under it the question that view answers. The Happy Path additionally
+  keeps the system's own description, since it is the view that tells the whole story. The tabs are ordered by altitude — what it does · how it's built · what runs ·
+  reference — so the row itself suggests a reading path.
+- **Emptiness note** — a quiet chip under the caption saying why a view looks bare when it does ("no
+  infrastructure is used by 2+ processes"). A lane a rule found nothing for looks identical to one
+  nobody recorded anything for; the note says which. Deliberately NOT coverage counts — "N of M
+  components have no recorded connection" only restates that a map is incomplete, which is a given, and
+  never changes how to read the diagram. Completeness belongs to `validate`, with the ids to fix.
+- **Environment filter** (bottom-left, Deployment overview only) — picks a deployment variant. Boxes
+  and arrows the environment excludes are **dimmed and made unclickable**, never removed: a silent
+  absence answers nothing, and the layout stays put while you compare environments. It floats over the canvas because it changes what the canvas draws; the
+  per-process cards are environment-independent, so it hides there.
+- **Legend** (bottom-right) — ONE key for the whole map: every box kind in its own colour AND its own
+  shape, the infrastructure role colours, and the two stroke conventions (dashed border = collapsed,
+  dashed arrow = bundled). In diff mode it gains a Changes section, so there is exactly one place to
+  look anything up. Colours come from `ELEMENT_TINT`, the same styles the generators paint with, so it
+  cannot drift. Close it with the × in its corner; the **?** beside the view tabs brings it back, and
+  the choice persists. Shown only on views that actually draw a diagram — never over a text table.
+- **First-run guide** (`?` in the header) — the gestures, including drill (double-click or ⌥-click)
+  and search (`/`). Shown once, reopenable any time.
+- **One-time notes** — e.g. the first time a selection dims the diagram, a line explains that the fade
+  is a focus, not a failure.
+
 ## What it shows — the C4 altitudes
 
 **Hover preview** — hovering any node or edge pops a small tooltip with its *meaning* (a node's

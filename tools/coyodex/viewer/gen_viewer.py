@@ -107,6 +107,22 @@ def _safe_label(name: str) -> str:
     )
 
 
+def _edge_label(text: str) -> str:
+    """Sanitize authored text for a Mermaid PIPE edge label (`-->|…|`) — and return it WITH its quotes,
+    so a call site can never forget them.
+
+    A pipe label is far stricter than a node label: unquoted, `(`, `)`, `[`, `]`, `{`, `}` and `@` are
+    hard PARSE errors, and one bad character fails the WHOLE diagram (the frontend then shows "this view
+    could not be rendered"), not just that label. Quoting admits all of them, so authored text survives
+    intact — a channel named `gateway.rpc.{guild_id}` or a verb reading `emits (fan-out)` renders as
+    itself instead of being mangled by `_safe_label`'s node-shape substitutions.
+
+    Only what quoting cannot cover is neutralised: `"`/backtick, which would close the string early,
+    and `<`/`>`, which open an HTML tag under securityLevel:'loose' htmlLabels."""
+    inner = text.replace('"', "'").replace("`", "").replace("<", "‹").replace(">", "›")
+    return f'"{inner}"'
+
+
 def _draw_nodes(graph: GraphDict, diff: DiffDict | None) -> list[tuple[str, str, str]]:
     """(id, label, kind) for every node drawn at component level, incl. added ones."""
     out: list[tuple[str, str, str]] = []
@@ -152,7 +168,7 @@ def gen_mermaid(graph: GraphDict, diff: DiffDict | None = None, only: set[str] |
         lines.append(f"  {nid}{open_b}{label}{close_b}:::cy-{nid}")
         lines.append(f"  class {nid} {kind}")
     for src, verb, dst in _diagram_edges(graph, diff, ids):
-        lines.append(f"  {src} -->|{verb}| {dst}")
+        lines.append(f"  {src} -->|{_edge_label(verb)}| {dst}")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
     lines.append(f"  classDef dep {DEP_STYLE};")
     return "\n".join(lines)
@@ -290,9 +306,8 @@ def _store_line(node: dict[str, Any], dep_names: dict[str, str]) -> str | None:
     return f"🛢 {container}({where})" if container else None
 
 
-# The DETAIL separator: everything after it on a member line is a toggleable extra (the field's key
-# markers). Chosen because no type/name carries it, so the viewer can strip the extras back off with
-# one unambiguous rule — see viewer.js applyEntityDetails.
+# The DETAIL separator: everything after it on a member line is the field's key markers. Chosen because
+# no type/name carries it, so the marker run stays unambiguously separable from the field itself.
 DETAIL_SEP = " · "
 # Key/relation markers, in fixed render order (determinism) — the map's own vocabulary, shortened.
 # `[]` is deliberately absent: it is part of the type's SHAPE and already rides on the type itself.
@@ -343,9 +358,9 @@ def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
     reads as collapsed (its detail lives in its own subdomain's view). Shared by the flat Domain view
     and the per-subdomain card so a class renders identically in both.
 
-    The detail extras are ALWAYS emitted, never conditionally: the viewer's Details toggle hides them
-    in the already-rendered SVG (viewer.js applyEntityDetails) precisely so that switching it can
-    never re-run the layout and shift the boxes."""
+    The detail extras are ALWAYS emitted — the generator is the one place that decides what a box says.
+    (A viewer-side "Details" toggle used to hide them in the rendered SVG; it was removed as a control
+    nobody needed, and one that could silently leave a reader with a poorer diagram.)"""
     label = _safe_label(str(node["name"]))
     if not with_members:
         return [f'  class {nid}["{label}"]']
@@ -535,6 +550,15 @@ ELEMENT_TINT = {
     # "a drillable box of these" rather than a foreign-coloured panel. Matches CONTAINER_STYLE.
     "bucket": {"fill": "#ecfdf5", "stroke": "#065f46", "strokeWidth": "2.5px", "strokeDasharray": "6 3"},
     "bucketfold": {"fill": "#ecfdf5", "stroke": "#065f46", "strokeWidth": "2.5px", "strokeDasharray": "6 3"},
+    # The remaining drawn vocabularies, so the viewer's LEGEND can build its swatches from the very
+    # styles the diagrams paint with (one source of truth — a legend that can drift is worse than none).
+    "system": {"fill": "#1e1b4b", "stroke": "#312e81"},
+    "human": {"fill": "#fff7ed", "stroke": "#c2410c"},
+    "svc": {"fill": "#eef2ff", "stroke": "#4338ca"},
+    "infraBus": _fill_stroke(INFRA_BUS_STYLE),
+    "infraStore": _fill_stroke(INFRA_STORE_STYLE),
+    "infraSvc": _fill_stroke(INFRA_SVC_STYLE),
+    "infraSec": _fill_stroke(INFRA_SEC_STYLE),
 }
 
 def gen_domain_container_mermaid(graph: GraphDict) -> str:
@@ -1045,7 +1069,7 @@ def gen_subsystem_card_mermaid(graph: GraphDict, sid: str) -> str:
         lines.append(f'  {sd}["{_safe_label(str(graph["nodes"][sd]["name"]))}"]:::cy-{sd}')
         lines.append(f"  class {sd} subdomain")
     for src, verb, dst in _diagram_edges(graph, None, keep):  # internal + dep edges (labelled)
-        lines.append(f"  {src} -->|{verb}| {dst}")
+        lines.append(f"  {src} -->|{_edge_label(verb)}| {dst}")
     for (src, dst), c in sorted(cross.items()):  # neighbourhood arrows (click -> edge card)
         lines.append(f"  {src} -->|{c}| {dst}")
     for (src, dst), c in sorted(childcross.items()):  # nested child-subsystem arrows (aggregated; box drills in)
@@ -1080,9 +1104,9 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
     members_b = {cid for cid, _ in _components_of(graph, b)}
     lines = ["flowchart LR", *_component_subgraph(graph, a), *_component_subgraph(graph, b)]
     for src, verb, dst in _diagram_edges(graph, None, members_a):  # a's inner links
-        lines.append(f"  {src} -->|{verb}| {dst}")
+        lines.append(f"  {src} -->|{_edge_label(verb)}| {dst}")
     for src, verb, dst in _diagram_edges(graph, None, members_b):  # b's inner links
-        lines.append(f"  {src} -->|{verb}| {dst}")
+        lines.append(f"  {src} -->|{_edge_label(verb)}| {dst}")
     agg: dict[tuple[str, str], int] = {}
     for e in graph["edges"]:  # the a->b crossings, bucketed to each frame's immediate children
         s, d = str(e["src"]), str(e["dst"])
@@ -1090,7 +1114,7 @@ def gen_edge_card_mermaid(graph: GraphDict, a: str, b: str) -> str:
             continue
         ba, bb = _child_under(graph, s, a), _child_under(graph, d, b)
         if ba == s and bb == d:                      # both direct members -> labelled (resolves to the edge)
-            lines.append(f"  {s} -->|{e['verb']}| {d}")
+            lines.append(f"  {s} -->|{_edge_label(str(e['verb']))}| {d}")
         else:                                        # reaches into a child subsystem -> aggregated box arrow
             agg[(str(ba), str(bb))] = agg.get((str(ba), str(bb)), 0) + 1
     for (src, dst), c in sorted(agg.items()):
@@ -1446,23 +1470,107 @@ def _unit_matches_system_dep(unit: str, dep_names: list[str]) -> bool:
     return any(unit_name_matches_dep(unit, dn) for dn in dep_names)
 
 
+def _unit_fields(r: dict[str, object]) -> dict[str, str]:
+    """A deployment row's operational facts as pane fields — the columns the System tab used to table."""
+    return {k: str(v) for k, v in (("Runs on", r.get("runs_on")),
+                                   ("Exposed as", r.get("exposed_as")),
+                                   ("Config source", r.get("config_source"))) if v}
+
+
 def add_deployment_nodes(g: dict[str, Any], graph: GraphDict) -> None:
-    """Inject one view-only `process` node per deployment unit that HOSTS code (a component or entry
-    point runs in it — `_process_unit_names`), so the Deployment view's process boxes bind + drill +
-    show a panel. Infrastructure units (mongo/redis/nginx — no `runs_in` points at them) get NO process
-    node: they are already the dep box the running components point at, so a process box would be a dead,
-    arrow-less duplicate. `_deployment_unit_ids` stays complete (the shared index→id map); the skip is
-    HERE, at the usage site (S1). `unit` carries the raw name for the drill/reverse lookup."""
+    """Inject one view-only `process` node per deployment unit the view DRAWS a box for, so each binds +
+    drills + shows a panel carrying that unit's operational facts (its `runs_on` / `exposed_as` /
+    `config_source` / `variants` — the pane is their only home now that the System tab no longer tables
+    them). Two kinds of unit get a node: one that HOSTS code (`_process_unit_names`), and one that hosts
+    nothing yet matches no system dep — the "Untraced units" lane draws that box too, and a drawn box
+    that cannot be selected breaks the every-box-binds rule.
+
+    Infrastructure units (mongo/redis/nginx — no `runs_in` points at them, and their name matches a
+    system dep) still get NO process node: they are already the dep box the running components point at,
+    so a process box would be a dead, arrow-less duplicate. `annotate_unit_dep_facts` puts their facts on
+    that dep box instead, so nothing is lost. `_deployment_unit_ids` stays complete (the shared index→id
+    map); the skip is HERE, at the usage site (S1). `unit` carries the raw name for the reverse lookup."""
     process_units = _process_unit_names(graph)
+    dep_names = _system_dep_names(graph)
     for uid, unit in _deployment_unit_ids(graph):
-        if unit not in process_units:
+        if unit not in process_units and _unit_matches_system_dep(unit, dep_names):
             continue
         r = graph["deployment"][int(uid[2:])]
-        fields = {k: str(v) for k, v in (("Runs on", r.get("runs_on")),
-                                         ("Exposed as", r.get("exposed_as")),
-                                         ("Config source", r.get("config_source"))) if v}
         g["nodes"][uid] = {"id": uid, "kind": "process", "name": unit or uid,
-                           "file": None, "line": None, "fields": fields, "unit": unit}
+                           "file": None, "line": None, "fields": _unit_fields(r), "unit": unit,
+                           "variants": r.get("variants") or []}
+
+
+def annotate_unit_dep_facts(g: dict[str, Any], graph: GraphDict) -> None:
+    """Copy an INFRASTRUCTURE unit's operational facts onto the dependency box that represents it.
+
+    A unit like `mongo` hosts no code, so it gets no process box — it IS the Mongo dep box the running
+    components point at. Its `runs_on` / `exposed_as` / `config_source` / `variants` would otherwise have
+    no home at all once the System tab stops tabling `deployment[]`. Authored dep fields win on a key
+    clash: the dep's own text is about the dependency, the unit's is about how it is deployed here."""
+    dep_names = _system_dep_names(graph)
+    process_units = _process_unit_names(graph)
+    by_name = {str(n.get("name", "")): nid for nid, n in graph["nodes"].items()
+               if str(n.get("kind")) == "dep" and n.get("dep_kind") in DEP_KINDS_SYSTEM}
+    for uid, unit in _deployment_unit_ids(graph):
+        if unit in process_units or not _unit_matches_system_dep(unit, dep_names):
+            continue
+        did = next((nid for name, nid in by_name.items() if unit_name_matches_dep(unit, name)), None)
+        node = g["nodes"].get(did) if did else None
+        if not isinstance(node, dict):
+            continue
+        r = graph["deployment"][int(uid[2:])]
+        fields = node.setdefault("fields", {})
+        for k, v in _unit_fields(r).items():
+            fields.setdefault(k, v)
+        if r.get("variants") and not node.get("variants"):
+            node["variants"] = r.get("variants")
+        # The unit NAME on the dep node, so search can still find `mongo` when the dep is `MongoDB`.
+        # `kind` stays `dep`, so nothing that keys off `process` picks this up.
+        node["unit"] = unit
+
+
+def annotate_run_by(g: dict[str, Any], graph: GraphDict) -> None:
+    """Annotate every box that the Deployment view's `runs` edges point at — a top subsystem, or an
+    ungrouped component — plus each component itself, with the PROCESS UNITS that run it (`node.run_by`).
+
+    This is where "where does this code actually run" gets answered for a SUBSYSTEM. The overview draws
+    one aggregate `runs` arrow (the per-process fan would be ~22 arrows on a map MEE6's size), so the
+    placement lives in the info pane instead of on the canvas: select a subsystem, read the processes,
+    click one to open its card. Derived from the one `_deployment_edges` source, so the pane and the
+    diagram can never disagree. Units are filtered to real PROCESS units (B2): a name that hosts no code
+    has no card to open, exactly as the diagram draws no box for it."""
+    units = _deployment_unit_ids(graph)
+    uid_of = {unit: uid for uid, unit in units}
+    name_of = dict(units)
+    # `_process_unit_names` is every name some `runs_in` mentions — which may include a unit with NO
+    # `deployment[]` row. Such a name has no process box and no card, so intersect with the declared
+    # units: the pane must not offer a link that opens nothing.
+    hosted = {u for u in _process_unit_names(graph) if u in uid_of}
+    runs, _infra, _boxes = _deployment_edges(graph, uid_of)
+    by_box: dict[str, set[str]] = {}
+    for uid, box in runs:
+        unit = name_of.get(uid, "")
+        if unit in hosted:
+            by_box.setdefault(box, set()).add(unit)
+    # A component states its OWN hosts, so a leaf answers the question without climbing to its subsystem.
+    for nid, node in graph["nodes"].items():
+        if str(node.get("kind")) == "component":
+            own = {u for u in _node_runs_in(node) if u in hosted}
+            if own:
+                by_box.setdefault(nid, set()).update(own)
+    for box, hosts in by_box.items():
+        node = g["nodes"].get(box)
+        if not isinstance(node, dict):
+            continue
+        node["run_by"] = sorted(hosts)
+        # A component already carries an authored "Runs in" TEXT field saying the same thing. Keeping
+        # both would print the unit twice under two different labels; the annotated row supersedes it
+        # because it links to each process's card. Dropped only when we actually replace it — a
+        # `runs_in` naming no real unit yields no `run_by`, and there the authored text is all there is.
+        fields = node.get("fields")
+        if isinstance(fields, dict):
+            fields.pop("Runs in", None)
 
 
 def _subsystem_box_of(graph: GraphDict, cid: str) -> str:
@@ -1501,13 +1609,42 @@ def _declare_box(graph: GraphDict, nid: str, default_kind: str) -> list[str]:
     return [f'  {nid}{shape[0]}{_safe_label(name)}{shape[1]}:::cy-{nid}', f"  class {nid} {cls}"]
 
 
+def _infra_call_sites(graph: GraphDict, uid_of: dict[str, str]
+                      ) -> dict[tuple[str, str], list[dict[str, str]]]:
+    """`{(process_uid, infra_dep_id): [the component→dep calls behind that arrow]}` — the ONE derivation
+    of process→infra, so the arrows drawn and the calls listed when one is selected can never disagree
+    (`_deployment_edges` takes its `infra` set straight from these keys).
+
+    A process reaches a broker/store/service through the components it runs, so each arrow stands for
+    one or more real call sites. Rows carry the endpoint NAMES, the verb, the why and the bare
+    `path:line` anchor — the same shape `gen_container_edges` uses, so the viewer renders both with the
+    same panel idiom."""
+    out: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for e in graph["edges"]:
+        did, cid = str(e["dst"]), str(e["src"])
+        dn, cn = graph["nodes"].get(did), graph["nodes"].get(cid)
+        if not dn or str(dn.get("kind")) != "dep" or dn.get("dep_kind") not in _INFRA_DEP_KINDS:
+            continue
+        if not cn or str(cn.get("kind")) != "component":
+            continue
+        row = {"src": cid, "dst": did,
+               "srcName": str(cn.get("name") or cid), "dstName": str(dn.get("name") or did),
+               "verb": str(e.get("verb") or ""), "why": str(e.get("why") or ""),
+               "where": str(e.get("where") or "")}
+        for unit in _node_runs_in(cn):
+            uid = uid_of.get(str(unit))
+            if uid:
+                out.setdefault((uid, did), []).append(row)
+    return out
+
+
 def _deployment_edges(graph: GraphDict, uid_of: dict[str, str]
                       ) -> tuple[set[tuple[str, str]], set[tuple[str, str]], dict[str, set[str]]]:
     """Derive the Deployment view's edges: `runs` (process → the subsystem/ungrouped-component of each
-    component it runs) and `infra` (process → a broker/store dep a running component touches). Also
-    returns `boxes_by_uid` (the subsystem boxes each process runs) for the core/satellite lane split."""
+    component it runs) and `infra` (process → a broker/store dep a running component touches, straight
+    from `_infra_call_sites`). Also returns `boxes_by_uid` (the subsystem boxes each process runs)."""
     runs: set[tuple[str, str]] = set()
-    infra: set[tuple[str, str]] = set()
+    infra: set[tuple[str, str]] = set(_infra_call_sites(graph, uid_of))
     boxes_by_uid: dict[str, set[str]] = {}
     for nid, node in graph["nodes"].items():
         if str(node.get("kind")) != "component":
@@ -1519,18 +1656,103 @@ def _deployment_edges(graph: GraphDict, uid_of: dict[str, str]
             box = _subsystem_box_of(graph, nid)
             runs.add((uid, box))
             boxes_by_uid.setdefault(uid, set()).add(box)
-    for e in graph["edges"]:
-        dn = graph["nodes"].get(str(e["dst"]))
-        cn = graph["nodes"].get(str(e["src"]))
-        if not dn or str(dn.get("kind")) != "dep" or dn.get("dep_kind") not in _INFRA_DEP_KINDS:
-            continue
-        if not cn or str(cn.get("kind")) != "component":
-            continue
-        for unit in _node_runs_in(cn):
-            uid = uid_of.get(str(unit))
-            if uid:
-                infra.add((uid, str(e["dst"])))
     return runs, infra, boxes_by_uid
+
+
+def _channel_units(graph: GraphDict, ch: dict[str, object], key: str, hosted: set[str]) -> set[str]:
+    """The PROCESS units at one end of an async channel: each component id under `key`
+    (`publishers`/`consumers`) resolved through its `runs_in`, keeping only units that actually host
+    code (a unit with no host is not drawn as a process box, so an arrow to it would dangle — B1)."""
+    ids = ch.get(key)
+    return {u for cid in (ids if isinstance(ids, list) else [])
+            for u in _node_runs_in(graph["nodes"].get(str(cid))) if u in hosted}
+
+
+def _channel_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set[str]
+                           ) -> dict[tuple[str, str], list[dict[str, str]]]:
+    """`{(publisher_uid, consumer_uid): [channel row…]}` — the process→process topology DERIVED from
+    the async catalog, the one thing the Deployment view can say that no other diagram does.
+
+    A channel already names its publishing and consuming COMPONENTS; each component already names the
+    unit(s) it `runs_in`. Composing the two turns 'this queue exists' into 'this process feeds that
+    process', with the channel as the arrow's evidence. Nothing new is authored.
+
+    Every publisher-unit × consumer-unit pair crosses (a component running in two units really does
+    publish from both). A same-unit pair is DROPPED: a process queueing work for itself is a self-loop,
+    not topology — its channel is still listed on the unit's own Data-tab broker section."""
+    out: dict[tuple[str, str], list[dict[str, str]]] = {}
+    # A `runs_in` may name a unit that has no `deployment[]` row at all (an unvalidated or mid-edit map
+    # — `serve` renders without validating). Such a unit has no id and no box, so drop it HERE rather
+    # than letting the id lookup below fail: one bad name must not 500 the whole map.
+    known = {u for u in hosted if u in uid_of}
+    for ch in graph["messaging"]:
+        pubs, cons = _channel_units(graph, ch, "publishers", known), _channel_units(graph, ch, "consumers", known)
+        if not pubs or not cons:
+            continue
+        bid = str(ch.get("broker") or "")
+        row = {"name": str(ch.get("name") or ""), "kind": str(ch.get("kind") or ""),
+               "broker": bid, "brokerName": str((graph["nodes"].get(bid) or {}).get("name") or bid),
+               "source": str(ch.get("source") or "")}
+        for p in sorted(pubs):
+            for c in sorted(cons):
+                if p != c:
+                    out.setdefault((uid_of[p], uid_of[c]), []).append(row)
+    return out
+
+
+def _call_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set[str]
+                        ) -> dict[tuple[str, str], list[dict[str, str]]]:
+    """`{(caller_uid, callee_uid): [the component→component calls crossing that process boundary]}` —
+    the SYNCHRONOUS half of the process topology, composed exactly like the async half: a backbone
+    component→component edge whose two ends `runs_in` DIFFERENT units is, by definition, one process
+    calling another (a browser bundle calling an HTTP API, a worker calling an id service).
+
+    Without this the view is blank for any ordinary client/server app: its processes talk over HTTP, not
+    over a queue, so the async catalog has nothing to say about them. Same-unit pairs are dropped — an
+    in-process call is not topology — and units that host no code are skipped (they have no box)."""
+    out: dict[tuple[str, str], list[dict[str, str]]] = {}
+    known = {u for u in hosted if u in uid_of}
+    for e in graph["edges"]:
+        sid, did = str(e["src"]), str(e["dst"])
+        sn, dn = graph["nodes"].get(sid), graph["nodes"].get(did)
+        if not sn or not dn or str(sn.get("kind")) != "component" or str(dn.get("kind")) != "component":
+            continue
+        row = {"src": sid, "dst": did,
+               "srcName": str(sn.get("name") or sid), "dstName": str(dn.get("name") or did),
+               "verb": str(e.get("verb") or ""), "why": str(e.get("why") or ""),
+               "where": str(e.get("where") or "")}
+        for a in sorted({u for u in _node_runs_in(sn) if u in known}):
+            for b in sorted({u for u in _node_runs_in(dn) if u in known}):
+                if a != b:
+                    out.setdefault((uid_of[a], uid_of[b]), []).append(row)
+    return out
+
+
+def _call_edge_label(rows: list[dict[str, str]]) -> str:
+    """A synchronous process→process arrow's label: the verb when the pair is one call (`requests` says
+    more than `1 call`), else the count."""
+    if len(rows) != 1:
+        return f"{len(rows)} calls"
+    return rows[0]["verb"] or "calls"
+
+
+def _process_edge_label(chans: list[dict[str, str]], calls: list[dict[str, str]]) -> str:
+    """The label for the ONE arrow drawn per ordered process pair. A pair usually talks one way or the
+    other; when it does both, the label counts each mechanism rather than picking a winner."""
+    if chans and calls:
+        n = lambda k, word: f"{k} {word}" + ("" if k == 1 else "s")  # noqa: E731 - local formatting only
+        return f"{n(len(chans), 'channel')}, {n(len(calls), 'call')}"
+    return _channel_edge_label(chans) if chans else _call_edge_label(calls)
+
+
+def _channel_edge_label(rows: list[dict[str, str]]) -> str:
+    """A process→process arrow's label: the channel's own name when it carries ONE (the useful fact —
+    `shard.events` says more than `1 channel`), else the count. Long/templated names are elided to keep
+    the arrow from stretching its rank; the full name is always on the arrow's select panel."""
+    if len(rows) != 1:
+        return f"{len(rows)} channels"
+    name = rows[0]["name"]
+    return name if len(name) <= 30 else name[:29] + "…"
 
 
 def _components_run_by_uid(graph: GraphDict, uid_of: dict[str, str]) -> dict[str, set[str]]:
@@ -1588,65 +1810,73 @@ def deployment_environments(graph: GraphDict) -> list[str]:
     return [str(e) for e in graph.get("environments", [])]
 
 
-def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
+def gen_deployment_mermaid(graph: GraphDict) -> str:
     """The Deployment overview: each deployable unit a `process` box and derived `runs` edges to the
     subsystems it executes. Everything drawn is a real (or injected) graph node, so every box binds
     (the B1 rule).
 
-    `env` (an entry of `graph["environments"]`) filters the overview to one deployment variant: a unit
-    is shown iff its `variants` include `env` OR its `variants` are empty (ungated / shared). `env=None`
-    is the "All" view (every unit — today's behavior, unchanged when a map declares no environments).
-    NB the infra/`runs` derivation is from AGGREGATE component→dep/subsystem edges, so a component that
-    runs in units of several environments contributes its infra to each of them (env-specific infra
-    needs env-specific components — stated in method.md).
+    ONE diagram, whatever environment is selected. Every unit is drawn; the viewer DIMS the boxes and
+    arrows the chosen environment excludes (`applyEnvDim`, driven by each node's `variants`) instead of
+    dropping them. Filtering here made units silently disappear — the reader could not tell "not
+    deployed there" from "not in the map", and every switch relaid the whole diagram out from scratch.
 
-    Three DERIVED readability rules keep the overview from hairballing (kind + `runs_in` + edge verbs,
-    no authored input):
-      * SINGLE AGGREGATE ARROW — one `runs` arrow between the Processes lane box and the Subsystems lane
-        box, NOT a per-process→subsystem fan. Which process runs which subsystem lives on each process's
-        drill card (one click away); the overview shows only that the processes, together, run the
-        subsystems. This is what collapses the mesh.
-      * ROLE-BANDED INFRA — the brokers/stores/services the app talks to are an ambient Infrastructure
-        lane (NO process→infra arrows; adjacency implies use), banded by each dep's DERIVED role
-        (`grammar.dep_roles` via `node.roles`): Message bus / Data store / Service / Security / Other,
-        each box coloured by its band. A dual-role dep (Redis = bus + store) lands in one band.
+    Four DERIVED readability rules keep the overview from hairballing (kind + `runs_in` + edge verbs +
+    the async catalog, no authored input):
+      * PROCESS TOPOLOGY — a process→process arrow per async channel one unit publishes and another
+        consumes (`_channel_process_links`), labelled with the channel (or a count when several cross
+        the same pair). This is the view's own content: which process feeds which, evidenced by a
+        catalogued channel. Every other lane restates a diagram the reader already has.
+      * RUNTIME ONLY, NO SUBSYSTEMS LANE — the overview draws processes and infrastructure: the things
+        that exist at run time. Subsystems are CODE STRUCTURE, and the Subsystems view already draws all
+        of them with their real relationships; a lane here showed a subset (only those whose components
+        happen to carry `runs_in`) joined by one aggregate `runs` arrow that said no more than "the
+        processes run the code". Placement is a property of the code, so it is answered where you ask
+        about that code — `annotate_run_by` puts a linked "Runs in" row in the info pane of every
+        subsystem and component — and per-process on each unit's drill card, which still draws what it
+        runs. A per-process fan here would be ~22 arrows on a map MEE6's size.
+      * COUPLING POINTS, NOT A CATALOG — the Infrastructure lane holds only the brokers/stores/services
+        used by 2+ processes, each with REAL process→infra arrows. Listing everything the app talks to
+        duplicated the Dependencies view (and the Data view, which covers stores far more deeply) while
+        silently under-reporting it, since the list is derived from `runs_in` coverage. "Which
+        infrastructure couples processes together" is the deployment-specific question, and the 2+ rule
+        bounds the fan by construction. Single-process infra stays on that process's card. Boxes stay
+        banded by each dep's DERIVED role (`grammar.dep_roles` via `node.roles`): Message bus / Data
+        store / Service / Security / Other. A dual-role dep (Redis = bus + store) lands in one band.
       * ALL-IN-ONE annotation — a superset packaging (a `standalone` that runs everything) keeps a
-        "… — all-in-one: runs every subsystem" label suffix; with the single arrow it no longer needs a
-        fold or a core/satellite split.
+        "… — all-in-one: runs every subsystem" label suffix, so it still reads as "runs the lot" without
+        needing a fold or a core/satellite split.
 
-    LAYERED layout: nodes band into subgraph lanes — Processes, then Subsystems, then the (nested)
-    Infrastructure role bands, then any Untraced units — so dagre stacks them into readable rows."""
+    LAYERED layout: nodes band into subgraph lanes — Processes, then the (nested) Infrastructure role
+    bands, then any Untraced units — so dagre stacks them into readable rows."""
     units = _deployment_unit_ids(graph)
     uid_of = {unit: uid for uid, unit in units}
-    # Per-environment filter: a unit is IN `env` when its variants include it or are empty (ungated).
-    # `env=None` (All) admits every unit, so the `_deployment_unit_ids` index map stays complete (S1) —
-    # only which uids are DRAWN is filtered, never the U_n numbering.
-    variants_of = _unit_variants(graph)
-    env_uids = {uid for uid, name in units
-                if env is None or env in variants_of.get(name, set()) or not variants_of.get(name, set())}
     runs, infra, _boxes_by_uid = _deployment_edges(graph, uid_of)
-    runs = {(u, b) for (u, b) in runs if u in env_uids}
-    infra = {(u, b) for (u, b) in infra if u in env_uids}
     # Only units that HOST code are process boxes (B2). A no-host unit is either an infra dep already
     # drawn in the Infrastructure lane (name-match → drawn NOWHERE) or a genuinely-unlinked unit (a real
     # gap → the small "Untraced units" lane, so it is never dropped silently — S2).
     process_units = _process_unit_names(graph)
     dep_names = _system_dep_names(graph)
-    process_uids = [uid for uid, name in units if name in process_units and uid in env_uids]
+    process_uids = [uid for uid, name in units if name in process_units]
     untraced = [uid for uid, name in units
-                if name not in process_units and not _unit_matches_system_dep(name, dep_names)
-                and uid in env_uids]
+                if name not in process_units and not _unit_matches_system_dep(name, dep_names)]
     # ALL-IN-ONE annotation: a superset packaging (a `standalone` that runs everything) keeps a
     # label suffix so it still reads as "runs the lot" — but with the single aggregate arrow there is no
     # fan for it to distort, so the old core/satellite split is gone (all processes share one lane).
     comps_by_uid = _components_run_by_uid(graph, uid_of)
     fold = _allinone_uids(process_uids, comps_by_uid)
     proc_set = set(process_uids)
-    all_runs = {(u, b) for (u, b) in runs if u in proc_set}
-    sub_boxes = sorted({b for _u, b in all_runs})
-    # AMBIENT INFRA: every broker/store/service any running component touches, banded by its DERIVED role
-    # (grammar.dep_roles via node.roles) — NO process→infra arrows on the overview (they live on the cards).
-    infra_boxes = sorted({b for _u, b in infra})
+    # COUPLING POINTS: the infrastructure used by 2+ processes, with REAL arrows. A catalog of every
+    # broker/store/service the app touches is what the Dependencies view already is (and the Data view
+    # covers the stores in far more depth) — repeating it here added nothing and, being derived from
+    # `runs_in`, silently under-reported it. What only THIS view can say is placement: which
+    # infrastructure couples processes together. Infra touched by a single process is not a coupling
+    # point; it stays on that process's card, where it already is.
+    infra_procs: dict[str, set[str]] = {}
+    for u, b in infra:
+        if u in proc_set:
+            infra_procs.setdefault(b, set()).add(u)
+    shared_infra = {b: us for b, us in infra_procs.items() if len(us) >= 2}
+    infra_boxes = sorted(shared_infra)
 
     lines = ["flowchart TB"]
     class_lines: list[str] = []
@@ -1675,7 +1905,6 @@ def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
     # REDESIGN: one "Processes" lane, one "Subsystems" lane, joined by a SINGLE aggregate `runs` arrow
     # between the two lane boxes (the per-process→subsystem fan moves to each process's drill card).
     lane("L_proc", "Processes", process_uids, "process")
-    lane("L_subs", "Subsystems", sub_boxes, "subsystem")
     # Infrastructure lane, BANDED by derived role: nested role sub-bands (Message bus / Data store /
     # Service / Security / Other), each infra box coloured by its band. A dual-role dep (Redis =
     # bus + store) lands in the first band it qualifies for; a roleless infra falls to "Other" (slate).
@@ -1683,7 +1912,7 @@ def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
         bands: dict[str, list[str]] = {}
         for did in infra_boxes:
             bands.setdefault(_infra_band_of(graph, did), []).append(did)
-        lines.append('  subgraph L_infra["Infrastructure"]')
+        lines.append('  subgraph L_infra["Shared infrastructure — used by 2+ processes"]')
         for role, bid, title, cls in _INFRA_BANDS:
             ids = bands.get(role)
             if not ids:
@@ -1701,8 +1930,25 @@ def gen_deployment_mermaid(graph: GraphDict, env: str | None = None) -> str:
     lane("L_untraced", "Untraced units", untraced, "process")
 
     lines += class_lines
-    if process_uids and sub_boxes:                        # ONE aggregate arrow between the lane boxes
-        lines.append("  L_proc -->|runs| L_subs")
+    # PROCESS TOPOLOGY: the one thing only this view can say. A process→process arrow per ordered pair
+    # that talks — asynchronously over a catalogued channel (`_channel_process_links`) OR synchronously
+    # over a cross-process call (`_call_process_links`). BOTH mechanisms matter: a message-driven system
+    # is all channels, an ordinary client/server app is all calls, and drawing only one leaves the other
+    # kind of project with an empty diagram. ONE arrow per pair whichever way they talk, so an id can
+    # never bind to the wrong bundle. Drawn only between boxes present in THIS env.
+    chan_links = _channel_process_links(graph, uid_of, process_units)
+    call_links = _call_process_links(graph, uid_of, process_units)
+    for pair in sorted(set(chan_links) | set(call_links)):
+        a, b = pair
+        if a in proc_set and b in proc_set:
+            label = _process_edge_label(chan_links.get(pair, []), call_links.get(pair, []))
+            lines.append(f"  {a} -->|{_edge_label(label)}| {b}")
+    # …and a real arrow per process using a COUPLING POINT, so the sharing is visible rather than
+    # implied by adjacency (which no reader can actually read). Bounded by construction: only infra
+    # with 2+ users is drawn, so this cannot fan out into the hairball that removed these arrows before.
+    for did in infra_boxes:
+        for uid in sorted(shared_infra[did]):
+            lines.append(f"  {uid} --> {did}")
     lines.append(f"  classDef process {PROCESS_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
@@ -1719,7 +1965,14 @@ def gen_deployment_unit_card_mermaid(graph: GraphDict, unit: str) -> str:
     uses. The infra arrows are dropped from the OVERVIEW (ambient band there) and shown HERE instead, so
     a process's actual dependencies are still one click away. Its threads are a panel list on the
     frontend, not diagram nodes. Reuses `_deployment_edges` so the card's runs/infra match the overview's
-    exactly (one derivation)."""
+    exactly (one derivation).
+
+    KNOWN LIMIT — a card is ENVIRONMENT-INDEPENDENT (see `deployment_cards`): it lists everything the
+    unit runs, uses and exchanges channels with, whatever environment the picker has selected. For the
+    subsystems and infra that is right (they do not change per environment). For a PEER PROCESS it is a
+    compromise: with `prod` selected, a card can still name a dev-only peer the overview has hidden, and
+    that peer box still drills. Closing it means generating cards per environment (the shape
+    the viewer's environment dimming already uses) — deliberately not done here."""
     units = _deployment_unit_ids(graph)
     uid_of = {name: u for u, name in units}
     uid = uid_of.get(unit)
@@ -1735,6 +1988,19 @@ def gen_deployment_unit_card_mermaid(graph: GraphDict, unit: str) -> str:
     for did in sorted({d for u, d in infra if u == uid}):       # brokers/stores it uses (dropped from overview)
         lines += _declare_box(graph, did, "infra")
         lines.append(f"  {uid} --> {did}")
+    # The peer processes it exchanges channels with, in both directions — the same derivation the
+    # overview draws, narrowed to this unit, so a card answers "who feeds me / who do I feed".
+    name_of = dict(units)
+    hosted = _process_unit_names(graph)
+    chan_links = _channel_process_links(graph, uid_of, hosted)
+    call_links = _call_process_links(graph, uid_of, hosted)
+    mine = sorted({p for p in set(chan_links) | set(call_links) if uid in p and p[0] != p[1]})
+    for peer in sorted({b if a == uid else a for a, b in mine}):
+        lines.append(f'  {peer}["{_safe_label(name_of.get(peer, peer))}"]:::cy-{peer}')
+        lines.append(f"  class {peer} process")
+    for pair in mine:
+        label = _process_edge_label(chan_links.get(pair, []), call_links.get(pair, []))
+        lines.append(f"  {pair[0]} -->|{_edge_label(label)}| {pair[1]}")
     lines.append(f"  classDef process {PROCESS_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
@@ -1750,11 +2016,33 @@ def deployment_cards(graph: GraphDict) -> dict[str, str]:
             for _uid, unit in _deployment_unit_ids(graph) if unit}
 
 
-def deployment_mermaid_by_env(graph: GraphDict) -> dict[str, str]:
-    """`{environment_name: overview_mermaid}` — one filtered Deployment overview per declared
-    environment (the "All" view stays `mermaidDeployment`). Empty `{}` when the map declares no
-    environments, so the frontend shows no picker and renders the single overview as before."""
-    return {e: gen_deployment_mermaid(graph, e) for e in deployment_environments(graph)}
+def gen_deployment_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """For each process→process arrow the Deployment view can draw — on the overview AND on either
+    end's card — the async channels it carries, keyed `'<src_uid>><dst_uid>'` to match the edge bridge
+    (the deployment analog of `gen_container_edges`). Selecting the arrow lists these, each with its
+    kind, its broker and the source line that declares it."""
+    uid_of = {unit: uid for uid, unit in _deployment_unit_ids(graph)}
+    return {f"{a}>{b}": rows
+            for (a, b), rows in _channel_process_links(graph, uid_of, _process_unit_names(graph)).items()}
+
+
+def gen_deployment_call_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """For each process→process arrow, the SYNCHRONOUS component→component calls behind it — keyed
+    `'<src_uid>><dst_uid>'`, the sibling of `gen_deployment_edges` (which carries the async channels).
+    A pair may appear in both when two processes talk each way; the viewer draws one arrow and lists
+    each mechanism under its own heading."""
+    uid_of = {unit: uid for uid, unit in _deployment_unit_ids(graph)}
+    return {f"{a}>{b}": rows
+            for (a, b), rows in _call_process_links(graph, uid_of, _process_unit_names(graph)).items()}
+
+
+def gen_deployment_infra_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
+    """For each process→infrastructure arrow, the component→dep CALLS behind it — keyed
+    `'<process_uid>><dep_id>'` to match the edge bridge, like `gen_deployment_edges` does for channels.
+    Selecting a coupling-point arrow then answers "why does this process need this store" with the
+    components, verbs, reasons and call sites, instead of leaving the arrow mute."""
+    uid_of = {unit: uid for uid, unit in _deployment_unit_ids(graph)}
+    return {f"{uid}>{did}": rows for (uid, did), rows in _infra_call_sites(graph, uid_of).items()}
 
 
 def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
@@ -2172,8 +2460,13 @@ class ViewBundle(TypedDict):
     domainContainerEdges: dict[str, list[dict[str, str]]]
     mermaidDeployment: str
     deploymentCards: dict[str, str]
+    deploymentEdges: dict[str, list[dict[str, str]]]  # process→process arrow 'U_a>U_b' -> the async
+                                     # channels it carries (the arrow's select panel)
+    deploymentInfraEdges: dict[str, list[dict[str, str]]]  # process→infra arrow 'U_a>D_n' -> the
+                                     # component→dep calls behind it (same panel idiom)
+    deploymentCallEdges: dict[str, list[dict[str, str]]]  # process→process arrow 'U_a>U_b' -> the
+                                     # synchronous cross-process calls behind it
     deploymentEnvironments: list[str]
-    mermaidDeploymentByEnv: dict[str, str]
     hasDeployment: bool
     mermaidHp: str
     flowsMm: dict[str, str]
@@ -2242,6 +2535,8 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
     add_context_nodes(mg, graph)
     if deployment:
         add_deployment_nodes(mg, graph)
+        annotate_unit_dep_facts(mg, graph)
+        annotate_run_by(mg, graph)
     return ViewBundle(
         repoRoot=repo_root, ghRepo=gh_repo, ghCommit=gh_commit,
         graph=mg,
@@ -2259,8 +2554,10 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         domainContainerEdges=gen_domain_container_edges(graph) if subdomains else {},
         mermaidDeployment=gen_deployment_mermaid(graph) if deployment else "",
         deploymentCards=deployment_cards(graph) if deployment else {},
+        deploymentEdges=gen_deployment_edges(graph) if deployment else {},
+        deploymentInfraEdges=gen_deployment_infra_edges(graph) if deployment else {},
+        deploymentCallEdges=gen_deployment_call_edges(graph) if deployment else {},
         deploymentEnvironments=deployment_environments(graph) if deployment else [],
-        mermaidDeploymentByEnv=deployment_mermaid_by_env(graph) if deployment else {},
         hasDeployment=deployment,
         mermaidHp=gen_hp_mermaid(graph) if hp else "",
         # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so

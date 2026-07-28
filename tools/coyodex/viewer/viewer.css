@@ -121,8 +121,16 @@ body.vresizing #stage { pointer-events: none; }
 #viewsw button:hover { background: #eef2ff; }
 #viewsw button.active { background: #6366f1; color: #fff; }
 /* Deployment environment picker (variants) — sits atop the deployment info panel. */
-.env-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin: 0 0 14px;
-              padding-bottom: 12px; border-bottom: 1px solid #e5e7eb; }
+/* The picker floats over the diagram at bottom-left, mirroring #legend at bottom-right. */
+#envpicker { position: absolute; left: 12px; bottom: 12px; z-index: 5; background: #fff;
+             border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 10px;
+             box-shadow: 0 2px 10px rgba(0,0,0,.07); }
+#envpicker[hidden] { display: none; }
+/* A box (or arrow) the selected environment excludes: still drawn — so "not deployed here" is visible
+   rather than a silent absence — but faded and inert. `!important` because the focus/dim pass writes
+   opacity inline, and an environment exclusion must outrank a transient selection highlight. */
+.envout { opacity: .16 !important; pointer-events: none !important; }
+.env-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .env-picker-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280;
                     margin-right: 3px; }
 .env-opt { font: inherit; font-size: 12px; padding: 3px 10px; border: 1px solid #c7d2fe;
@@ -130,6 +138,22 @@ body.vresizing #stage { pointer-events: none; }
 .env-opt:hover { background: #eef2ff; }
 .env-opt.active { background: #6366f1; border-color: #6366f1; color: #fff; }
 #stagehead .hint { border-bottom: 1px solid #e5e7eb; }
+/* The view caption lives in the INFO PANE's top-level state (see viewIntroHtml), not over the diagram:
+   it belongs with "what am I looking at", and the canvas keeps its full height. Always present when
+   nothing is selected — never a tooltip, since a reader who doesn't know the vocabulary yet cannot
+   hover-explore ten tabs to find the one they want. */
+#panel .viewq { font-style: italic; color: #4b5563; margin: 2px 0 10px; }
+#panel .viewnotes { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 14px; }
+/* A note says only why a view is EMPTY ("no infrastructure is used by 2+ processes") — a definite
+   outcome, not a gap — so it reads as quiet information, never as a warning. */
+#panel .vnote { background: #f3f4f6; color: #4b5563; border: 1px solid #e5e7eb;
+                border-radius: 10px; padding: 1px 8px; font-size: 11px; }
+/* One-time note when a selection first dims the diagram — a focus reads as a failure until you know. */
+#dimnote { position: absolute; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 8;
+           background: #1f2937; color: #f9fafb; font-size: 12px; padding: 7px 13px; border-radius: 6px;
+           box-shadow: 0 4px 14px rgba(0,0,0,.25); opacity: 1; transition: opacity .35s ease;
+           pointer-events: none; max-width: 80%; }
+#dimnote.out { opacity: 0; }
 #diagram svg { width: 100%; height: 100%; }
 /* Glossary tab: the ubiquitous-language terms as a table rendered straight into #diagram (not a
    mermaid diagram). Scrolls inside the fixed-size stage (already below the header, so just a small
@@ -535,6 +559,20 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #legend { position: absolute; right: 12px; bottom: 12px; background: #fff; border: 1px solid #e5e7eb;
           border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.08); display: none; }
 #legend.on { display: block; }
+/* One legend for the whole map: it can get tall, so cap it and let it scroll rather than overrun the
+   canvas. The close button sits in its top-right corner; the `?` beside the views brings it back. */
+#legend { max-height: 62%; overflow-y: auto; padding-right: 22px; }
+#legend .lgh { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+               color: #9ca3af; margin: 8px 0 3px; }
+#legend .lgh:first-of-type { margin-top: 0; }
+#legendclose { position: absolute; top: 4px; right: 5px; border: 0; background: transparent;
+               color: #9ca3af; font-size: 15px; line-height: 1; padding: 2px 4px; cursor: pointer; }
+#legendclose:hover { color: #374151; }
+#legendbtn { font: inherit; font-size: 12px; font-weight: 700; color: #64748b; background: #eef2f7;
+             border: 1px solid transparent; border-radius: 9px; padding: 2px 9px; margin-left: 8px;
+             cursor: pointer; }
+#legendbtn:hover { background: #e2e8f0; }
+#legendbtn.on { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
 
@@ -856,12 +894,6 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 #panel .dv-seelink { color: #4f46e5; text-decoration: none; font-size: 12px; white-space: nowrap; }
 #panel .dv-seelink:hover { text-decoration: underline; }
 #panel .dv-coll { font-family: ui-monospace, monospace; font-size: 12px; color: #334155; }
-/* Entity-diagram "Details" toggle: sits beside the view switcher, shown only on the entity views. */
-#detailsbtn { font: inherit; font-size: 12px; font-weight: 600; color: #64748b; background: #eef2f7;
-              border: 1px solid transparent; border-radius: 9px; padding: 3px 10px; margin-left: 8px;
-              cursor: pointer; white-space: nowrap; }
-#detailsbtn:hover { background: #e2e8f0; }
-#detailsbtn.on { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }
 /* Lifecycle transitions in the info pane: one per line, so each trigger reads on its own. */
 #panel .st-list { list-style: none; margin: 0; padding: 0; }
 #panel .st-list li { padding: 1px 0 1px 10px; text-indent: -10px; line-height: 1.45; }

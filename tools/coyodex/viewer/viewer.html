@@ -90,15 +90,19 @@
         <div id="stageheadrow">
           <button id="searchbtn" title="Search the map (press /)" aria-label="Search">&#128269;</button>
           <span id="viewsw">
+            <!-- Ordered by ALTITUDE, so the row itself suggests a reading path: what it does ->
+                 how it is built -> what runs -> reference. The order carries that on its own; an
+                 earlier attempt to add group separators was removed as invisible and useless.
+                 Each view's caption lives in the info pane's top-level state (see VIEW_Q). -->
             <button data-view="hp">Happy Path</button>  <!-- the landing view; internal kind stays `hp` -->
             <button data-view="usecases">Use Cases</button>  <!-- actor-grouped catalog (hidden when no use cases) -->
-            <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
             <button data-view="container">Subsystems</button>
+            <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
             <button data-view="context">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
             <button data-view="data">Data</button>  <!-- store-centric: physical stores → collections + who writes/reads + async channels (hidden when no stores) -->
-            <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
-            <button data-view="system">System</button>  <!-- operational reference tables: run/deploy/observability/security/config/entry-points (hidden when empty) -->
             <button data-view="deployment">Deployment</button>  <!-- processes/threads ↔ subsystems (hidden when no deployment[] units) -->
+            <button data-view="system">System</button>  <!-- operational reference tables: run/observability/security/config/entry-points (hidden when empty) -->
+            <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
             <button data-view="tests">Tests</button>  <!-- test-completeness gap table (hidden when empty) -->
 
             <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
@@ -106,16 +110,20 @@
                  `component` machinery are kept dormant so the tab can be restored by re-adding this button.
                  Components are now reached by drilling a subsystem; change impact lives on the Subsystems view. -->
           </span>
-          <!-- Entity-diagram detail toggle: hides/shows the field key markers, retention and
-               lifecycle on entity boxes. Shown only on the entity views; it never re-renders the
-               diagram (see applyEntityDetails), so toggling can't shift a single box. -->
-          <button id="detailsbtn" type="button" hidden aria-pressed="true"
-                  title="Show or hide field keys, retention and lifecycle on entity boxes">Details</button>
+          <!-- Reopens the map legend (the single vocabulary key). Distinct from the header's `?`, which
+               opens the navigation guide — this one is about what the SHAPES mean, not the gestures. -->
+          <button id="legendbtn" type="button" aria-pressed="true"
+                  title="Show or hide the legend — what the shapes and colours mean">?</button>
         </div>
         <div class="hint"><span id="crumb"></span></div>
       </div>
       <div id="diagram"></div>
       <div id="legend"></div>
+      <!-- Deployment environment filter. Floats over the diagram (bottom-left, mirroring #legend) rather
+           than living in the info pane: it filters what the DIAGRAM draws, so it belongs beside it — and
+           in the pane it vanished the moment you selected a box, stranding you in a filtered view with
+           no way back. Hidden on every view but the Deployment overview. -->
+      <div id="envpicker" hidden></div>
       <!-- Step player: shown only on a use-case flow view (a Happy Path step drill-down). Walks the flow's
            actions one at a time — glowing and centering the current arrow — without touching the info pane.
            Absolutely positioned like #legend, so it floats over the diagram as it pans/zooms underneath. -->
@@ -198,6 +206,7 @@
       <li><b>&#8984;-click</b> (Cmd / Ctrl) another box or arrow &mdash; adds it to the selection</li>
       <li><b>Double-click</b> or <b>&#8997;-click</b> (Option / Alt) a container to drill into it</li>
       <li><b>Shift-click</b> a box or arrow to zoom in and center it</li>
+      <li><b>Press /</b> (or &#8984;K) to search every element, file and term in the map</li>
     </ul>
     <div class="modal-btns">
       <button id="coachok" type="button" class="primary">Got it</button>

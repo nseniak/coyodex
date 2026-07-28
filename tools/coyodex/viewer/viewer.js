@@ -19,8 +19,10 @@ let BRIDGE_EDGES;               // flat list of every component->entity edge (st
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
 let MERMAID_DEPLOYMENT;    // Deployment overview (the "All" view): processes + infra + derived `runs` edges
 let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of the subsystems it runs
+let DEPLOYMENT_EDGES;      // process->process arrow 'U_a>U_b' -> [async channels it carries]
+let DEPLOYMENT_INFRA_EDGES;  // process->infra arrow 'U_a>Dn' -> [component->dep calls behind it]
+let DEPLOYMENT_CALL_EDGES;   // process->process arrow 'U_a>U_b' -> [synchronous cross-process calls]
 let DEPLOY_ENVS;           // declared deployment environments (variant names), or [] — gates the env picker
-let MERMAID_DEPLOYMENT_BY_ENV;  // {environment -> overview mermaid filtered to that variant}
 let DEPLOY_ENV = null;     // the selected environment (null = All); persists across the session
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box sequence
@@ -66,7 +68,9 @@ function applyBundle(b) {
   MERMAID_DOMAIN_SUB = b.mermaidDomainSub; MERMAID_DOMAIN_EDGE_CARD = b.mermaidDomainEdgeCard;
   MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; BRIDGE_EDGES = b.bridgeEdges; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
   MERMAID_DEPLOYMENT = b.mermaidDeployment; DEPLOYMENT_CARDS = b.deploymentCards; HAS_DEPLOYMENT = b.hasDeployment;
-  DEPLOY_ENVS = b.deploymentEnvironments || []; MERMAID_DEPLOYMENT_BY_ENV = b.mermaidDeploymentByEnv || {};
+  DEPLOY_ENVS = b.deploymentEnvironments || [];
+  DEPLOYMENT_EDGES = b.deploymentEdges || {}; DEPLOYMENT_INFRA_EDGES = b.deploymentInfraEdges || {};
+  DEPLOYMENT_CALL_EDGES = b.deploymentCallEdges || {};
   MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
   HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
@@ -76,7 +80,9 @@ function applyBundle(b) {
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
-  HAS_SYSTEM = ['run_commands', 'entry_points', 'non_entity_types', 'deployment', 'messaging', 'observability',
+  // `deployment` / `messaging` are deliberately absent: the tab no longer tables them (each is drawn
+  // and paned in the Deployment / Data views), so a map carrying only those must NOT open an empty tab.
+  HAS_SYSTEM = ['run_commands', 'entry_points', 'non_entity_types', 'observability',
     'security', 'config', 'extras'].some((k) => Array.isArray(GRAPH[k]) && GRAPH[k].length > 0);
   DATA_VIEW = GRAPH.data_view || {}; MERMAID_CHANNELS = b.mermaidChannels || {};
   HAS_DATA = Array.isArray(DATA_VIEW.stores) && DATA_VIEW.stores.length > 0;
@@ -131,6 +137,8 @@ const stage = document.getElementById('stage');
 let panel = document.getElementById('panel');
 const PANEL_HOST = panel;
 const legend = document.getElementById('legend');
+const legendbtn = document.getElementById('legendbtn');
+const envpicker = document.getElementById('envpicker');
 const toggle = document.getElementById('toggle');
 const viewsw = document.getElementById('viewsw');
 const navback = document.getElementById('navback');
@@ -144,7 +152,6 @@ const flowplayer = document.getElementById('flowplayer');
 const flowprev = document.getElementById('flowprev');
 const flownext = document.getElementById('flownext');
 const flowcount = document.getElementById('flowcount');
-const detailsbtn = document.getElementById('detailsbtn');
 document.getElementById('meta').innerHTML = META;
 // Escape for HTML output. Covers BOTH contexts esc() feeds: text content AND double/single-quoted
 // attributes (e.g. data-term="${esc(...)}"). Quotes must be escaped so a value can't break out of an
@@ -358,7 +365,19 @@ function restoreSelection(scene, s) {
   for (const k of keys) scene.selectors[k]();
   return true;
 }
+// Shown ONCE, the first time a selection dims the diagram: the fade is a focus, not a failure, and a
+// first-time reader has no way to tell those apart. Auto-clears; the guide behind `?` carries the rest.
+function noteFirstDim() {
+  if (lsGet(LS.dimSeen) === '1') return;
+  lsSet(LS.dimSeen, '1');
+  const el = document.createElement('div');
+  el.id = 'dimnote';
+  el.textContent = 'Faded boxes are just unrelated — click empty space to clear the selection.';
+  (document.getElementById('stage') || document.body).appendChild(el);
+  setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 5200);
+}
 function applyFocus(scene, keepNode, keepEdge) {
+  noteFirstDim();
   // `.dim` mirrors the opacity (see viewer.css) so a dimmed box's corner pill stays hidden even on
   // hover — a box you're not focused on shouldn't invite drilling into it just because the cursor
   // passed over it while dimmed.
@@ -483,51 +502,11 @@ function elementPill(id) {
 // them off therefore never re-runs the layout: it rewrites glyphs in the already-drawn SVG (a marker
 // suffix is swapped for its stripped text; a whole extra line goes `visibility:hidden`, which keeps
 // its space). Nothing moves — the cost is that a box stays sized for its "details on" state.
-const DETAIL_MARKERS = / · (?:PK|FK|uniq|opt)(?: (?:PK|FK|uniq|opt))*$/;
-const DETAIL_LINE = /^\s*[⏱⟳]/;   // a whole extra line (retention / lifecycle)
-const ENTITY_VIEWS = new Set(['domain', 'domsub', 'domedge', 'bridge']);  // views that draw entity boxes
-let ENTITY_DETAILS = null;  // lazily read: lsGet is defined further down, so never touch it at import
-function entityDetailsOn() {
-  if (ENTITY_DETAILS === null) ENTITY_DETAILS = lsGet('entityDetails') !== 'off';
-  return ENTITY_DETAILS;
-}
-// Re-apply the current setting to a freshly rendered (or already showing) diagram. Idempotent: the
-// first pass classifies each text leaf and remembers its full/plain forms on the element itself.
-function applyEntityDetails(root) {
-  const on = entityDetailsOn();
-  // Mermaid draws classDiagram members as HTML (`<p>` inside a foreignObject) under htmlLabels, and
-  // as `<text>`/`<tspan>` otherwise — cover both, then keep only leaves so a wrapper is never rewritten.
-  root.querySelectorAll('text, tspan, p').forEach((el) => {
-    if (el.children.length) return;                       // leaves only — never a wrapper
-    if (el.dataset.dkind === undefined) {                 // first sight of this element: classify once
-      const full = el.textContent;
-      if (DETAIL_LINE.test(full)) el.dataset.dkind = 'line';
-      else if (DETAIL_MARKERS.test(full)) {
-        el.dataset.dkind = 'mark';
-        el.dataset.dfull = full;
-        el.dataset.dplain = full.replace(DETAIL_MARKERS, '');
-      } else { el.dataset.dkind = 'none'; }
-    }
-    if (el.dataset.dkind === 'line') el.style.visibility = on ? '' : 'hidden';
-    else if (el.dataset.dkind === 'mark') el.textContent = on ? el.dataset.dfull : el.dataset.dplain;
-  });
-}
-function syncDetailsBtn(s) {
-  const shown = ENTITY_VIEWS.has(s.kind);
-  detailsbtn.hidden = !shown;
-  if (shown) {
-    const on = entityDetailsOn();
-    detailsbtn.setAttribute('aria-pressed', String(on));
-    detailsbtn.classList.toggle('on', on);
-  }
-}
-detailsbtn.addEventListener('click', () => {
-  ENTITY_DETAILS = !entityDetailsOn();
-  lsSet('entityDetails', ENTITY_DETAILS ? 'on' : 'off');
-  applyEntityDetails(diagram);
-  detailsbtn.setAttribute('aria-pressed', String(ENTITY_DETAILS));
-  detailsbtn.classList.toggle('on', ENTITY_DETAILS);
-});
+// Entity boxes ALWAYS carry their full detail — the field key markers (PK/FK/uniq/opt), retention and
+// lifecycle lines the generator draws. There used to be a "Details" toggle that hid them, defaulting to
+// on; it was one more control to discover for a choice nobody needs to make, and a reader who happened
+// to leave it off would silently see a poorer diagram with nothing saying so. The generator is the one
+// place that decides what a box says.
 
 function tintClusters(root) {
   root.querySelectorAll('g.cluster').forEach((g) => {
@@ -901,13 +880,39 @@ function isMultiSelectClick(e) { return !!e && (e.metaKey || e.ctrlKey) && e.det
 // --- side panel -----------------------------------------------------------------
 // The "Used in UC" backward view for an element: the use cases whose T6 flow steps through it, as
 // links into each use case's flow. Derived from USES_BY_NODE; '' when no flow touches this element.
+// "Runs in" — the deployment units whose process runs this subsystem / component. ONE row for the
+// code→process relation, under the map's own vocabulary (`runs_in`): a component's authored text
+// version is dropped server-side when this replaces it, so the unit is never printed twice under two
+// labels. The Deployment overview draws one aggregate `runs` arrow (a per-process fan would swamp it),
+// so this pane is where placement is actually read — each unit opens its own card. '' when nothing is
+// recorded as running this code, which is itself the signal that its `runs_in` tagging is missing.
+// "Environments" — which deployment variants a unit belongs to, each with the manifest line that
+// grounds it (or `inferred` when the tag cites none). Lives on the process box's pane, and on the dep
+// box standing in for an infrastructure unit. Empty `variants` = ungated (present in every
+// environment), which the env picker already shows by never filtering it out — so no row.
+function variantsPaneHtml(id) {
+  const n = GRAPH.nodes[id];
+  const v = (n && n.variants) || [];
+  if (!v.length) return '';
+  return '<dt>Environments</dt><dd>' + variantsCell(v) + '</dd>';
+}
+function runByHtml(id) {
+  const n = GRAPH.nodes[id];
+  const units = (n && n.run_by) || [];
+  if (!units.length) return '';
+  const links = units.map((u) =>
+    '<a href="#" class="procref" data-unit="' + esc(u) + '">' + esc(u) + '</a>').join(', ');
+  return '<dt>Runs in</dt><dd>' + links + '</dd>';
+}
 function usedInHtml(id) {
   const set = USES_BY_NODE[id];
   if (!set || !set.size) return '';
   const links = [...set].sort().map((uc) =>
     '<a href="#" class="ucref" data-uc="' + esc(uc) + '">'
     + esc(GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc) + '</a>').join(', ');
-  return '<dt>Used in</dt><dd>' + links + '</dd>';
+  // "In use cases", not "Used in": the values ARE use cases, and the bare "Used in" left the reader to
+  // guess what kind of thing the list held (processes? subsystems? files?). The label names the list.
+  return '<dt>In use cases</dt><dd>' + links + '</dd>';
 }
 // The "Triggered by" forward view for a component: its T4 entry points — how the outside world reaches
 // it (an HTTP route, a CLI command, a cron, an event). Like the arrow/crossing rows, each entry point is
@@ -1065,7 +1070,7 @@ function nodeDetailHtml(id) {
   // code viewer, which carry the path and the sole "open externally" control.
   return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`
     + explain
-    + `<dl>${rows}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
+    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
     + impactSectionHtml(id);
 }
 // Wire the interactive bits inside the just-written detail panel: the use-case-flow refs and the
@@ -1073,6 +1078,10 @@ function nodeDetailHtml(id) {
 function bindNodeDetailHandlers(root) {
   root.querySelectorAll('a.ucref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'usecase', uc: a.getAttribute('data-uc') });
+  }));
+  // "Runs in": each unit opens its own process card, the same target its box drills to.
+  root.querySelectorAll('a.procref').forEach((a) => a.addEventListener('click', (ev) => {
+    ev.preventDefault(); go({ kind: 'deploymentUnit', unit: a.getAttribute('data-unit') });
   }));
   // Data-view rows in the panel: element chips navigate; the "See in Data view" / "View persisted
   // data" links deep-link into the Data tab focused on a store pane (and, for an entity, its row).
@@ -1888,34 +1897,191 @@ function rescaleDiffBadges() {   // counter-zoom every live badge so it stays a 
   const inv = curIconInv();
   for (const g of DIFF_BADGES) if (g && g._anchor) g.setAttribute('transform', `translate(${g._anchor.x},${g._anchor.y}) scale(${inv})`);
 }
-// Fill the legend with one row per badge state (swatch + its label from the badge map), plus an optional
-// grey tail note. Shared by the diff and coverage legends — they differ only in state list + badge map.
-function fillLegend(states, badgeMap, tailNote) {
-  const d = 2 * ACTION_ICON_R + 2;   // the full badge (halo included) centred on the origin
-  const frag = document.createDocumentFragment();
-  for (const state of states) {
-    const row = document.createElement('div'); row.className = 'row';
-    const svg = document.createElementNS(SVGNS, 'svg');
-    svg.setAttribute('width', 20); svg.setAttribute('height', 20);
-    svg.setAttribute('viewBox', `${-d / 2} ${-d / 2} ${d} ${d}`);
-    svg.appendChild(makeBadge(state));
-    const span = document.createElement('span'); span.textContent = badgeMap[state][2];
-    row.appendChild(svg); row.appendChild(span); frag.appendChild(row);
+// --- view captions, the map legend, and empty-state notes -------------------------
+// The question each view answers, shown in the info pane's top-level state. Keyed by the top-level view
+// id (topView), so a drilled card keeps its tab's caption.
+const VIEW_LABEL = {};   // view id -> its tab label, filled from the buttons at boot (one source)
+const VIEW_Q = {
+  hp: 'What does this system do, end to end?',
+  usecases: 'Who uses it, and what does each of them get done?',
+  container: 'How is the code organised, and what depends on what?',
+  domain: 'What things does this system know about, and how do they relate?',
+  context: 'What does it rely on from the outside world?',
+  data: 'What is stored, where, and who reads and writes it?',
+  deployment: 'What runs as its own process, and how do those talk to each other?',
+  system: 'The operational facts no diagram holds — how to run it, watch it, secure it, configure it.',
+  glossary: 'What do this project’s words mean?',
+  tests: 'What is covered by tests, and what is not?',
+};
+// ONE legend for the whole map, not a guess per view. The per-view lists this replaced were hardcoded
+// and therefore wrong wherever a view's content is data-dependent: the Dependencies view draws bare
+// dependency boxes on a small map but only folded groups on a large one; the Deployment view has no
+// infrastructure lane when nothing is shared; the Happy Path is a sequence diagram that uses none of
+// these styles at all. A single, complete vocabulary is right on every map by construction — the reader
+// looks up what they see, and simply never meets the rows their map has no use for.
+//
+// [tint kind, shape, label]. Colours come from ELEMENT_TINT — the SAME styles the generators paint the
+// boxes with — and the shape mirrors the generators' SHAPE map, so a swatch cannot claim a look the
+// diagrams never draw.
+const LEGEND_SECTIONS = [
+  ['Boxes', [
+    ['system', 'rect', 'the system'],
+    ['human', 'stadium', 'a person'],
+    ['svc', 'hex', 'an outside system or actor'],
+    ['subsystem', 'rect', 'subsystem'],
+    ['component', 'rect', 'component'],
+    ['subdomain', 'rect', 'subdomain'],
+    ['entity', 'rect', 'entity'],
+    ['dep', 'cyl', 'dependency'],
+    ['process', 'rect', 'process'],
+    ['bucketfold', 'rect', 'a collapsed group'],
+  ]],
+  ['Infrastructure, by role', [
+    ['infraBus', 'cyl', 'message bus'],
+    ['infraStore', 'cyl', 'data store'],
+    ['infraSvc', 'cyl', 'service'],
+    ['infraSec', 'cyl', 'security'],
+  ]],
+];
+// The two stroke conventions. They carry meaning no colour can, and are the most misread part of the
+// language: "dashed" reads as provisional to most people, when here it means "there is more inside".
+const LEGEND_STROKES = [
+  ['box', 'dashed border = collapsed; open it'],
+  ['edge', 'dashed arrow = several links bundled; open it'],
+];
+function legendSwatch(kind, shape) {
+  const t = (ELEMENT_TINT || {})[kind] || {};
+  const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('width', 22); svg.setAttribute('height', 15); svg.setAttribute('viewBox', '0 0 22 15');
+  const paint = (el) => {
+    el.setAttribute('fill', t.fill || '#fff');
+    el.setAttribute('stroke', t.stroke || '#9ca3af');
+    el.setAttribute('stroke-width', t.strokeWidth ? '1.8' : '1.25');
+    if (t.strokeDasharray) el.setAttribute('stroke-dasharray', '3.5 2');
+    return el;
+  };
+  if (shape === 'hex') {
+    const el = document.createElementNS(SVGNS, 'polygon');
+    el.setAttribute('points', '5.5,1.5 16.5,1.5 21,7.5 16.5,13.5 5.5,13.5 1,7.5');
+    svg.appendChild(paint(el));
+  } else if (shape === 'cyl') {
+    const body = document.createElementNS(SVGNS, 'rect');
+    body.setAttribute('x', 3); body.setAttribute('y', 3.5); body.setAttribute('width', 16);
+    body.setAttribute('height', 9); body.setAttribute('rx', 1);
+    svg.appendChild(paint(body));
+    const lid = document.createElementNS(SVGNS, 'ellipse');
+    lid.setAttribute('cx', 11); lid.setAttribute('cy', 3.5); lid.setAttribute('rx', 8); lid.setAttribute('ry', 2.4);
+    svg.appendChild(paint(lid));
+  } else {
+    const el = document.createElementNS(SVGNS, 'rect');
+    el.setAttribute('x', 1.5); el.setAttribute('y', 1.5); el.setAttribute('width', 19);
+    el.setAttribute('height', 12); el.setAttribute('rx', shape === 'stadium' ? 6 : 2);
+    svg.appendChild(paint(el));
   }
-  if (tailNote) {
-    const note = document.createElement('div'); note.className = 'row'; note.style.color = '#9ca3af';
-    note.textContent = tailNote;
-    frag.appendChild(note);
+  return svg;
+}
+function strokeSwatch(kind) {
+  const svg = document.createElementNS(SVGNS, 'svg');
+  svg.setAttribute('width', 22); svg.setAttribute('height', 15); svg.setAttribute('viewBox', '0 0 22 15');
+  const el = document.createElementNS(SVGNS, kind === 'box' ? 'rect' : 'line');
+  if (kind === 'box') {
+    el.setAttribute('x', 1.5); el.setAttribute('y', 1.5); el.setAttribute('width', 19);
+    el.setAttribute('height', 12); el.setAttribute('rx', 2); el.setAttribute('fill', 'none');
+  } else {
+    el.setAttribute('x1', 1); el.setAttribute('y1', 7.5); el.setAttribute('x2', 21); el.setAttribute('y2', 7.5);
+  }
+  el.setAttribute('stroke', '#475569'); el.setAttribute('stroke-width', '2');
+  el.setAttribute('stroke-dasharray', '3.5 2');
+  svg.appendChild(el);
+  return svg;
+}
+function legendRow(swatch, label) {
+  const row = document.createElement('div'); row.className = 'row';
+  const span = document.createElement('span'); span.textContent = label;
+  row.appendChild(swatch); row.appendChild(span);
+  return row;
+}
+// Why this view looks EMPTY, when it does. A lane a rule found nothing for looks exactly like one
+// nobody recorded anything for, and only the view itself can tell them apart — so it says so, in its
+// own terms. Derived, never authored, so it cannot go stale.
+//
+// Deliberately NOT coverage counts ("N of M components have no recorded connection"). Those report
+// uncertainty, which is a given for every map: they never change how to read the diagram or what to do
+// next, so on every view they were noise. Completeness is `validate`'s job, where it comes with the
+// specific ids to fix.
+function viewNotes(view) {
+  const n = [];
+  if (view === 'deployment' && !(MERMAID_DEPLOYMENT || '').includes('L_infra')) {
+    n.push('no infrastructure is used by 2+ processes');
+  } else if (view === 'data' && !(DATA_VIEW.stores || []).length) {
+    n.push('no physical store recorded');
+  }
+  return n;
+}
+// The TOP-LEVEL state of the info pane for a view: its name as the title, the question it answers
+// beneath, then a note if the view is empty. This is what the pane shows when nothing is selected —
+// selecting an element replaces it with that element's detail, as before.
+function viewIntroHtml(view) {
+  const notes = viewNotes(view);
+  return `<div class="pane-title"><h2>${esc(VIEW_LABEL[view] || view)}</h2></div>`
+    + (VIEW_Q[view] ? `<p class="viewq">${esc(VIEW_Q[view])}</p>` : '')
+    + (notes.length ? `<div class="viewnotes">${notes.map((t) => `<span class="vnote">${esc(t)}</span>`).join('')}</div>` : '');
+}
+// Build the one legend. The change badges join it as a section in diff mode, so there is still exactly
+// one place to look up what anything on screen means.
+function buildLegend() {
+  const frag = document.createDocumentFragment();
+  const close = document.createElement('button');
+  close.id = 'legendclose'; close.type = 'button'; close.textContent = '\u00d7';
+  close.title = 'Hide the legend (reopen with ? beside the views)';
+  close.setAttribute('aria-label', 'Hide the legend');
+  close.addEventListener('click', () => setLegendOpen(false));
+  frag.appendChild(close);
+  for (const [title, rows] of LEGEND_SECTIONS) {
+    const h = document.createElement('div'); h.className = 'lgh'; h.textContent = title;
+    frag.appendChild(h);
+    for (const [kind, shape, label] of rows) frag.appendChild(legendRow(legendSwatch(kind, shape), label));
+  }
+  const h2 = document.createElement('div'); h2.className = 'lgh'; h2.textContent = 'Lines';
+  frag.appendChild(h2);
+  for (const [kind, label] of LEGEND_STROKES) frag.appendChild(legendRow(strokeSwatch(kind), label));
+  if (mode === 'diff') {
+    const h3 = document.createElement('div'); h3.className = 'lgh'; h3.textContent = 'Changes';
+    frag.appendChild(h3);
+    const states = IMPACT ? ['added', 'modified', 'deleted', 'drifted', 'rippled']
+                          : ['added', 'modified', 'deleted', 'rippled'];
+    const d = 2 * ACTION_ICON_R + 2;
+    for (const st of states) {
+      const svg = document.createElementNS(SVGNS, 'svg');
+      svg.setAttribute('width', 22); svg.setAttribute('height', 15);
+      svg.setAttribute('viewBox', `${-d / 2} ${-d / 2} ${d} ${d}`);
+      svg.appendChild(makeBadge(st));
+      frag.appendChild(legendRow(svg, BADGE[st][2]));
+    }
   }
   legend.innerHTML = ''; legend.appendChild(frag);
+  legend.dataset.mode = mode;
 }
-// Swap the legend to the given kind, rebuilding its rows only when the kind actually changes (renderChrome
-// runs on every render, so this avoids needless DOM churn / flicker).
-function setLegendMode(kind) {
-  if (legend.dataset.kind === kind) return;
-  legend.dataset.kind = kind;
-  if (kind === 'diff') fillLegend(['added', 'modified', 'deleted', 'rippled'], BADGE, 'no badge = unchanged');
-  if (kind === 'impact') fillLegend(['added', 'modified', 'deleted', 'drifted', 'rippled'], BADGE, 'no badge = not impacted');
+// Open/closed is the reader's choice and persists. Closed = shown NOWHERE; open = shown on every view
+// that actually draws a diagram (a colour key over a table of text explains nothing).
+let LEGEND_OPEN = null;
+function legendOpen() {
+  if (LEGEND_OPEN === null) LEGEND_OPEN = lsGet(LS.legend) !== 'off';
+  return LEGEND_OPEN;
+}
+function setLegendOpen(on) {
+  LEGEND_OPEN = on;
+  lsSet(LS.legend, on ? 'on' : 'off');
+  syncLegend(history[hi]);
+}
+// The text tabs render HTML tables, not diagrams — nothing there has a shape or a colour to look up.
+const TEXT_VIEWS = new Set(['glossary', 'usecases', 'system', 'data', 'tests']);
+function syncLegend(s) {
+  const on = legendOpen() && !!s && !TEXT_VIEWS.has(topView(s.kind));
+  legend.classList.toggle('on', on);
+  legendbtn.classList.toggle('on', legendOpen());
+  legendbtn.setAttribute('aria-pressed', String(legendOpen()));
+  if (on && legend.dataset.mode !== mode) buildLegend();   // rebuilt only when the diff section changes
 }
 
 // --- diff overlay on the Subsystems views ---------------------------------------
@@ -2412,11 +2578,14 @@ function eachEdge(root, fn) {
   const paths = [...root.querySelectorAll('.edgePaths path.flowchart-link')];
   const labels = [...root.querySelectorAll('.edgeLabels > g.edgeLabel')];
   paths.forEach((p, i) => {
-    // Mermaid edge id: `L_<src>_<dst>_<index>`. The SOURCE group is greedy (`.+`) so it tolerates an
-    // underscore in the src id — the Deployment view's process ids are `U_<n>` (the only ids with an
-    // underscore, and always a source). The dst id never has one (`[^_]+`), and the index is digits, so
-    // backtracking splits `L_U_0_S1_0` into src=`U_0`, dst=`S1`, index=`0` unambiguously.
-    const m = p.id.match(/L_(.+)_([^_]+)_(\d+)$/);
+    // Mermaid edge id: `<graph>-L_<src>_<dst>_<index>` — so the pattern stays UNANCHORED at the front
+    // (the diagram-name prefix is not ours to match). Both endpoints are spelled out as EITHER a
+    // process id (`U_<n>` — the only ids carrying an underscore) or an underscore-free id, so the
+    // split is unambiguous at either end: `L_U_0_S1_0` -> (U_0, S1, 0) and, now that the Deployment
+    // view draws process->process channel arrows, `L_U_0_U_15_0` -> (U_0, U_15, 0). A greedy `.+`
+    // source would mis-split the latter into src=`U_0_U`, dst=`15`. A lane-to-lane arrow
+    // (`L_L_proc_L_subs_0`) matches nothing and is skipped — scaffolding with no node behind it.
+    const m = p.id.match(/L_(U_\d+|[^_]+)_(U_\d+|[^_]+)_(\d+)$/);
     if (m) fn(p, labels[i] || null, m);
   });
 }
@@ -2883,21 +3052,28 @@ function bindComponent() {
 // inter-group arrows. `drillFor(id)` is the drill-in state; `edgeBinder` wires each arrow. Shared so
 // the component-subsystem and entity-subdomain overviews behave identically (the bridge is symmetry).
 // `noDrillId` (optional) is a box drawn here that you are already zoomed INTO — it keeps plain-click
-// select but gets no drill class, no ⌘-drill and (via scene.noAction) no corner icon.
+// select but gets no drill class, no ⌘-drill and (via scene.noAction) no corner icon. `drillFor` may
+// also return NULL for a box that leads nowhere from this view (an external service on the Deployment
+// overview): same treatment. A box only ever shows the drill cursor when a ⌘-click will actually take
+// you somewhere — promising a zoom and then re-rendering the same view reads as a broken control.
 function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
     if (!id || !GRAPH.nodes[id]) return;
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
-    const drillable = id !== noDrillId;
-    if (drillable) el.classList.add('drill'); else mainScene.noAction.add(id);
+    const target = id === noDrillId ? null : drillFor(id);
+    if (target) el.classList.add('drill'); else mainScene.noAction.add(id);
     bindHoverGlow(mainScene, el, id);
     attachTip(el, () => actionTipNode(id));
     el.addEventListener('click', (e) => {
       if (isDrag(e)) return;
+      // Excluded by the environment filter: inert. `pointer-events:none` already stops a real cursor,
+      // but the guard also covers a click that arrives any other way, so "not selectable" is a property
+      // of the box rather than of CSS hit-testing.
+      if (el.classList.contains('envout')) return;
       e.stopPropagation();
-      if (drillable && isDrillClick(e)) { go(drillFor(id)); return; }  // ⌘-click drills in
+      if (target && isDrillClick(e)) { go(target); return; }  // ⌘-click drills in
       selectNodeFromCanvas(el, id, e);
     });
   });
@@ -2909,26 +3085,115 @@ function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
 }
 function bindContainer() { bindGroupContainer((id) => ({ kind: 'subsystem', sid: id }), bindContainerEdge); }
 // The Deployment view (overview + per-process card): a process box ⌘-drills to its unit card, a
-// subsystem box ⌘-drills (cross-navigates) to its subsystem card, and a dep/component box has no drill
-// (its drillFor returns the current overview so `go()` never sees null — go(null) would throw). The
-// `runs`/infra arrows are derived, so they carry no per-edge detail: mark them synthetic, no binder.
+// subsystem box ⌘-drills (cross-navigates) to its subsystem card, a store/broker box opens its
+// Data-tab section, and anything else returns null — bindGroupContainer then leaves it without a drill
+// cursor or corner icon, instead of offering a zoom that lands back on the same view.
 function deploymentDrill(id) {
   const n = GRAPH.nodes[id];
   if (n && n.kind === 'process') return { kind: 'deploymentUnit', unit: n.unit };
   if (n && n.kind === 'subsystem') return { kind: 'subsystem', sid: id };
-  return { kind: 'deployment' };  // dep / ungrouped component: no drill (re-shows the overview)
+  // A store/broker box drills into its Data-tab section here too — the same gesture it already has on
+  // Dependencies, the Libraries fold and the bucket drills. An affordance that works in one view and
+  // not the next is worse than no affordance.
+  return dataDrillFor(id);  // null for an ungrouped component / a service with no data — no drill at all
 }
-// A derived `runs`/infra arrow: style it as a synthetic bundle AND register it in the scene (src→dst),
-// so selecting a process dims to its neighbourhood — its target subsystems/infra stay lit while the
-// rest fades. It carries no per-edge detail, so it gets no click handler (not selectable), just focus.
+// The async channels a process→process arrow carries — DEPLOYMENT_EDGES['U_a>U_b'], the deployment
+// analog of containerEdgeList. Empty for a `runs`/infra arrow (those bundle nothing selectable).
+function deploymentEdgeList(a, b) { return (DEPLOYMENT_EDGES && DEPLOYMENT_EDGES[a + '>' + b]) || []; }
+// Where ⌘-clicking a process→process arrow drills: the Data tab's section for the broker the channels
+// ride, where each one already has a full card (publishers, consumers, payload). Only when every
+// channel on the arrow shares ONE broker — otherwise the drill would have to pick a winner. null when
+// the broker has no Data-view section, and the arrow then only selects.
+function channelDrillFor(chans) {
+  const brokers = new Set(chans.map((c) => c.broker).filter(Boolean));
+  return brokers.size === 1 ? dataDrillFor([...brokers][0]) : null;
+}
+// The broker the drill actually lands on — resolved the SAME way channelDrillFor picks it, so the
+// ⌥-hover tip can never name a different broker than the one it opens (the first channel on the arrow
+// may carry no broker at all).
+function channelDrillBroker(chans) {
+  const withBroker = chans.filter((c) => c.broker);
+  return withBroker.length ? withBroker[0].brokerName : '';
+}
+// A Deployment arrow. A process→process one carries real per-edge detail (the channels it was derived
+// from), so it SELECTS to a panel listing them and ⌘-drills to its broker's data section — the same
+// idiom as an inter-subsystem arrow. A `runs`/infra arrow bundles nothing, so it stays inert: marked
+// synthetic and registered in the scene (src→dst) only so selecting a process dims to its
+// neighbourhood — its targets stay lit while the rest fades.
 function markDeploymentEdge(scene, p, label, a, b) {
+  const chans = deploymentEdgeList(a, b);
+  const xproc = (DEPLOYMENT_CALL_EDGES && DEPLOYMENT_CALL_EDGES[a + '>' + b]) || [];
+  const calls = (DEPLOYMENT_INFRA_EDGES && DEPLOYMENT_INFRA_EDGES[a + '>' + b]) || [];
   markSyntheticEdge(p);
-  scene.edgeEls.push({ e: { src: a, dst: b }, path: p, label });
+  if (chans.length || xproc.length) {   // process→process: one arrow, either or both mechanisms
+    const drill = channelDrillFor(chans);
+    bindSelectEdge(scene, p, label, { src: a, dst: b }, 'uedge:' + a + '>' + b,
+      () => showDeploymentEdge(a, b, chans, xproc),
+      drill ? { onDrill: () => go(drill), actionFn: () => actionTipChannels(chans) } : undefined);
+    return;
+  }
+  if (calls.length) {   // a coupling-point arrow: it stands for real call sites, so it is selectable too
+    const drill = dataDrillFor(b);
+    bindSelectEdge(scene, p, label, { src: a, dst: b }, 'uedge:' + a + '>' + b,
+      () => showDeploymentInfraEdge(a, b, calls),
+      drill ? { onDrill: () => go(drill), actionFn: () => actionTipNode(b) } : undefined);
+    return;
+  }
+  scene.edgeEls.push({ e: { src: a, dst: b }, path: p, label });  // `runs` lane arrow: nothing to show
+}
+function actionTipChannels(chans) {
+  const nm = channelDrillBroker(chans);
+  return '<div class="tt">Open data</div>' + (nm ? '<div class="tm">' + esc(nm) + '</div>' : '');
+}
+// Selecting a process→process arrow: list the async channels it stands for — name, kind, the broker
+// they ride and the line that declares each — so the wiring between two processes is readable without
+// leaving the map. Mirrors showContainerEdge's shape (title + count + one uniform list).
+function showDeploymentEdge(a, b, chans, calls) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  chans = chans || []; calls = calls || [];
+  // Async rows lead with the channel; sync rows lead with `caller → callee`, since both ends vary.
+  const chanRows = chans.map((c) => '<li class="xrow"><div class="xpair">' + esc(c.name) + '</div>'
+    + '<div class="xwhy"><span class="tb-kind">' + esc(c.kind || 'channel') + '</span>'
+    + (c.brokerName ? 'via ' + esc(c.brokerName) + ' ' : '') + srcCell(c.source || '')
+    + '</div></li>').join('');
+  const callRows = calls.map((c) => '<li class="xrow">'
+    + '<div class="xpair">' + esc(c.srcName) + ' &rarr; ' + esc(c.dstName) + '</div>'
+    + '<div class="xwhy">' + (c.verb ? '<span class="tb-kind">' + esc(c.verb) + '</span>' : '')
+    + (c.why ? mdInline(c.why) + ' ' : '') + srcCell(c.where || '')
+    + '</div></li>').join('');
+  const n = (k, one) => k + ' ' + one + (k === 1 ? '' : 's');
+  const badge = (chans.length && calls.length) ? 'links' : (chans.length ? 'channels' : 'calls');
+  let body = '';
+  if (chans.length) body += '<div class="xcount">' + n(chans.length, 'channel') + '</div>'
+    + '<ul class="xlist">' + chanRows + '</ul>';
+  if (calls.length) body += '<div class="xcount"' + (chans.length ? ' style="margin-top:16px"' : '') + '>'
+    + n(calls.length, 'call') + '</div><ul class="xlist">' + callRows + '</ul>';
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' &rarr; ' + esc(nm(b)) + '</h2>'
+    + '<span class="badge edge">' + badge + '</span></div>' + body;
+  wireSrcLinks(panel);
+}
+// Selecting a coupling-point arrow (process → shared infrastructure): list the components INSIDE that
+// process which actually reach the store/broker — each with its verb, its reason and its call site — so
+// "why does this process need this" is answered on the spot. Same shape as showDeploymentEdge, its
+// sibling arrow in this view: the thing the arrow stands for as the lead, its detail beneath.
+function showDeploymentInfraEdge(a, b, calls) {
+  const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id);
+  const items = calls.map((c) => '<li class="xrow"><div class="xpair">' + esc(c.srcName) + '</div>'
+    + '<div class="xwhy">' + (c.verb ? '<span class="tb-kind">' + esc(c.verb) + '</span>' : '')
+    + (c.why ? mdInline(c.why) + ' ' : '') + srcCell(c.where || '')
+    + '</div></li>').join('');
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' &rarr; ' + esc(nm(b)) + '</h2>'
+    + '<span class="badge edge">connections</span></div>'
+    + '<div class="xcount">' + calls.length + ' connection' + (calls.length === 1 ? '' : 's')
+    + ' from the code this process runs</div>'
+    + '<ul class="xlist">' + items + '</ul>';
+  wireSrcLinks(panel);
 }
 // `focalUnit` (set on a process card) is the process you're already zoomed into: it drills nowhere
 // further, so it gets no drill affordance/icon — only the OTHER boxes (subsystems it runs) drill.
 function bindDeployment(focalUnit) {
   bindGroupContainer(deploymentDrill, markDeploymentEdge, focalUnit ? unitProcessNodeId(focalUnit) : null);
+  applyEnvDim(mainScene);
 }
 // Resolve which unit(s) actually run a self-started entry point: its own `runs_in` wins (precise),
 // else the owning component's `runs_in` (coarser — a loop whose component runs in >1 unit then shows
@@ -2958,24 +3223,57 @@ function showDeployment() {
       + `Tag <code>runs_in</code> on the entry point or its component.</div>${threadRowsHtml(unplaced)}</section>`;
     wireSrcLinks(panel);
   } else if (GRAPH.nodes['SYS']) { showNode('SYS'); } else { panel.innerHTML = EMPTY_PANEL; }
-  injectEnvPicker();
 }
 // The environment picker (deployment variants). Present only when the map declares `environments`;
 // selecting one filters the overview to that variant (empty variants = shared, shown in every env).
 // The selection is module state (DEPLOY_ENV) and re-renders the current deployment scene.
-function injectEnvPicker() {
-  if (!DEPLOY_ENVS || !DEPLOY_ENVS.length) return;
+// Is this box part of the selected environment? A node with no `variants` is UNGATED — present in
+// every environment — so it always stays live. Only a unit that names its environments can fall out of
+// one. Process boxes carry `variants` from their deployment row; an infrastructure unit's row lands on
+// the dependency box standing in for it, so those dim correctly too.
+function inSelectedEnv(node) {
+  if (!DEPLOY_ENV) return true;
+  const v = (node && node.variants) || [];
+  return !v.length || v.some((x) => x && x.env === DEPLOY_ENV);
+}
+// Dim — rather than remove — everything the selected environment excludes, and make it unclickable.
+// Removing the boxes (what the per-environment diagrams used to do) answered no question: a unit simply
+// vanished, and the reader could not tell "not deployed here" from "not in the map at all". Dimmed in
+// place, the answer is on screen, and the layout never moves when you switch.
+function applyEnvDim(scene) {
+  if (!scene) return;
+  const out = new Set();
+  for (const id in scene.nodeEls) {
+    const off = !inSelectedEnv(GRAPH.nodes[id]);
+    scene.nodeEls[id].classList.toggle('envout', off);
+    if (off) out.add(id);
+  }
+  // An arrow is only as live as its ends: dim it when either endpoint is out of this environment.
+  for (const e of scene.edgeEls) {
+    const off = out.has(e.e.src) || out.has(e.e.dst);
+    e.path.classList.toggle('envout', off);
+    if (e.label) e.label.classList.toggle('envout', off);
+  }
+}
+// Draw (or hide) the environment filter. It sits OVER THE DIAGRAM, not in the info pane: it changes
+// what the diagram draws, so it belongs beside it — and in the pane it disappeared as soon as anything
+// was selected, leaving a filtered diagram with no visible way back to `All`. Shown only on the
+// Deployment overview: the per-process cards are environment-independent, so it would do nothing there.
+function syncEnvPicker(s) {
+  const on = !!(DEPLOY_ENVS && DEPLOY_ENVS.length) && s && s.kind === 'deployment';
+  envpicker.hidden = !on;
+  if (!on) { envpicker.innerHTML = ''; return; }
   const opts = ['All'].concat(DEPLOY_ENVS);
-  const html = `<div class="env-picker"><span class="env-picker-label">Environment</span>`
+  envpicker.innerHTML = `<div class="env-picker"><span class="env-picker-label">Environment</span>`
     + opts.map((o) => {
       const val = o === 'All' ? '' : o;
       const active = (DEPLOY_ENV || '') === val;
       return `<button class="env-opt${active ? ' active' : ''}" data-env="${esc(val)}">${esc(o)}</button>`;
     }).join('') + `</div>`;
-  panel.insertAdjacentHTML('afterbegin', html);
-  panel.querySelectorAll('.env-opt').forEach((btn) => btn.addEventListener('click', () => {
+  envpicker.querySelectorAll('.env-opt').forEach((btn) => btn.addEventListener('click', () => {
     DEPLOY_ENV = btn.dataset.env || null;
-    render();  // re-draw the current (deployment) scene through mermaidFor's env branch
+    syncEnvPicker(history[hi]);   // repaint the picker's own active state
+    applyEnvDim(mainScene);       // ...and re-dim in place: no re-render, no layout jump
   }));
 }
 // A process card's default panel: the process node's own detail + the threads/loops it hosts.
@@ -3431,7 +3729,7 @@ function mermaidFor(s) {
   if (s.kind === 'domsub') return MERMAID_DOMAIN_SUB[s.sd];
   if (s.kind === 'domedge') return MERMAID_DOMAIN_EDGE_CARD[s.a + '>' + s.b];
   if (s.kind === 'bridge') return MERMAID_BRIDGE_CARD[s.sid + '>' + s.sd];
-  if (s.kind === 'deployment') return (DEPLOY_ENV && MERMAID_DEPLOYMENT_BY_ENV[DEPLOY_ENV]) || MERMAID_DEPLOYMENT;
+  if (s.kind === 'deployment') return MERMAID_DEPLOYMENT;  // one diagram; the env dims, never filters
   if (s.kind === 'deploymentUnit') return DEPLOYMENT_CARDS[s.unit];
   if (s.kind === 'hp') return MERMAID_HP;
   if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
@@ -3441,7 +3739,26 @@ function mermaidFor(s) {
   // renders the base diagram and lets applyDiffOverlay badge it.
   return (mode === 'diff' && MERMAID_DIFF && !LIVE_DIFF) ? MERMAID_DIFF : MERMAID_BASE;  // component
 }
+// A tab's OWN overview (not a drilled card) — `container` yes, `subsystem` no. Those are the states
+// whose pane leads with the view intro.
+function topLevelView(s) {
+  const tv = topView(s.kind);
+  return s.kind === tv ? tv : null;
+}
+// The pane for a table view (Glossary / Use Cases / System / Data / Tests): it renders no diagram and
+// builds no scene, so it never reaches applyDefaultPanel — it sets its own pane to the view intro.
+function showViewIntro(s) {
+  const top = topLevelView(s);
+  panel.innerHTML = top ? viewIntroHtml(top) : EMPTY_PANEL;
+}
 function applyDefaultPanel(s) {
+  applyDefaultPanelBody(s);
+  // Prepended AFTER the body so it leads the pane whatever the body wrote (including the deployment
+  // env picker, which inserts itself at the top too).
+  const top = topLevelView(s);
+  if (top) panel.insertAdjacentHTML('afterbegin', viewIntroHtml(top));
+}
+function applyDefaultPanelBody(s) {
   setTreeSelection(null);  // a default panel / canvas deselect drops pill emphasis + selection pills
   if (s.kind === 'subsystem') showNode(s.sid);
   else if (s.kind === 'domsub') showNode(s.sd);
@@ -3459,8 +3776,10 @@ function applyDefaultPanel(s) {
   // The Subsystems overview in diff mode leads with the change-impact summary (which subsystems/elements
   // changed), since that is the whole point of opening a diff render.
   else if (s.kind === 'container' && mode === 'diff' && hasDiff()) (IMPACT ? showImpactSummary() : showDiffSummary());
-  // Every overview without a more specific default (Context, Subsystems, Domain) opens on the System's
-  // overview — its overall functionality — instead of a blank panel.
+  // An overview with no more specific default is the view intro alone (added by applyDefaultPanel).
+  // It used to open on the System's card, which repeated the same project description under every tab;
+  // the Happy Path branch above keeps it where it belongs — on the view that tells the whole story.
+  else if (topLevelView(s)) panel.innerHTML = '';
   else if (GRAPH.nodes['SYS']) showNode('SYS');
   else panel.innerHTML = EMPTY_PANEL;
 }
@@ -3557,14 +3876,12 @@ function renderChrome(s) {
   // and the cards badge their member components (via bindNodes).
   const diffHost = IMPACT ? true
     : (s.kind === 'container' || s.kind === 'subsystem' || s.kind === 'edge');
-  // The legend shows diff states in diff mode only (the impact overlay spans every view).
-  if (mode === 'diff' && diffHost) { setLegendMode(IMPACT ? 'impact' : 'diff'); legend.classList.add('on'); }
-  else legend.classList.remove('on');
+  const tv = topView(s.kind);
+  syncLegend(s);
+  syncEnvPicker(s);
   toggle.style.display = (hasDiff() && diffHost) ? '' : 'none';
   toggle.textContent = mode === 'diff' ? 'Show baseline' : 'Show diff';
-  const tv = topView(s.kind);
   viewsw.querySelectorAll('button').forEach((b) => b.classList.toggle('active', b.dataset.view === tv));
-  syncDetailsBtn(s);  // the entity-box Details toggle belongs to the entity views only
   navback.disabled = hi <= 0;
   navfwd.disabled = hi >= history.length - 1;
   // breadcrumb: the structural nesting down to the current view; each ancestor crumb zooms out to it.
@@ -3836,25 +4153,12 @@ function renderSystem() {
   parts.push(sec('Run commands', refTable(G.run_commands, [
     { head: 'Action', get: (r) => r.action }, { head: 'Command', get: (r) => r.command },
     { head: 'Source', get: (r) => ({ src: r.source }) }])));
-  const deployCols = [
-    { head: 'Unit', get: (r) => r.unit }, { head: 'Runs on', get: (r) => r.runs_on },
-    { head: 'Exposed as', get: (r) => r.exposed_as }, { head: 'Config source', get: (r) => r.config_source }];
-  // Variants column only when the map declares an environment axis — each tag shows its env and the
-  // manifest anchor that grounds it (clickable), or 'inferred' when the tag cites no source (WS1).
-  if (DEPLOY_ENVS && DEPLOY_ENVS.length) deployCols.push(
-    { head: 'Variants', get: (r) => ({ html: variantsCell(r.variants) }) });
-  parts.push(sec('Deployment & topology', refTable(G.deployment, deployCols)));
-  // WS-A5: the async catalog — publishers/consumers link to their component nodes.
-  const compBtn = (cid) => (cid && G.nodes && G.nodes[cid])
-    ? `<button type="button" class="src sys-node" data-id="${esc(cid)}">${esc(nodeName(cid))}</button>`
-    : esc(cid || '');
-  parts.push(sec('Messaging — channels & queues', refTable(G.messaging, [
-    { head: 'Name', get: (r) => r.name }, { head: 'Kind', get: (r) => r.kind },
-    { head: 'Broker', get: (r) => ({ html: compBtn(r.broker) }) },
-    { head: 'Publishers', get: (r) => ({ html: (r.publishers || []).map(compBtn).join(', ') }) },
-    { head: 'Consumers', get: (r) => ({ html: (r.consumers || []).map(compBtn).join(', ') }) },
-    { head: 'Payload', get: (r) => ({ html: compBtn(r.payload) }) },
-    { head: 'Source', get: (r) => ({ src: r.source }) }])));
+  // NO "Deployment & topology" and NO "Messaging" tables here. Both restated, less completely, what a
+  // diagram now draws: every deployment row's Unit/Runs on/Exposed as/Config source/Variants is the
+  // pane of its box on the Deployment view (a process box, or — for an infrastructure unit that hosts
+  // no code — the dependency box standing in for it), and every channel is a Data-tab card with the
+  // same fields, its broker implied by the pane it sits in. This tab is for facts NO diagram holds;
+  // duplicating a table here just gave each fact two homes that could drift.
   parts.push(sec('Observability', refTable(G.observability, [
     { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
     { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }])));
@@ -4188,15 +4492,15 @@ async function render(sArg, transient) {
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
-  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; renderChrome(s); return; }
+  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
   // The Use Cases tab is an actor-grouped HTML catalog, not a mermaid diagram — same shape as Glossary.
-  if (s.kind === 'usecases') { renderUseCases(); mainScene = null; renderChrome(s); return; }
+  if (s.kind === 'usecases') { renderUseCases(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
   // The System tab is a set of operational reference tables (HTML), not a mermaid diagram — same shape.
-  if (s.kind === 'system') { renderSystem(); mainScene = null; renderChrome(s); return; }
+  if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
   // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
-  if (s.kind === 'data') { renderData(s); mainScene = null; renderChrome(s); return; }
+  if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); return; }
   // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
-  if (s.kind === 'tests') { renderTests(); mainScene = null; renderChrome(s); return; }
+  if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
   // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,
   // not throw an unhandled rejection that freezes the view mid-navigation. Show a message + keep the
   // chrome (back/forward still work) so the user can step out.
@@ -4214,7 +4518,6 @@ async function render(sArg, transient) {
   if (seq !== renderSeq) return;  // a newer render started during the async layout — drop this stale one
   diagram.innerHTML = svg;
   tintClusters(diagram);  // recolour expanded group frames (subsystem/subdomain clusters) to their family
-  applyEntityDetails(diagram);  // honour the Details toggle on the freshly drawn entity boxes
   emphasizeZoomedFrame(diagram, s);  // thicker border + bigger title on the group you drilled into
   if (s.kind === 'deployment' || s.kind === 'deploymentUnit') styleDeploymentLanes(diagram);  // bold lane titles + gap
   mainScene = makeScene(diagram, () => applyDefaultPanel(s));
@@ -5562,7 +5865,7 @@ const ALLOWED_OPEN_SCHEMES = new Set([
   'goland', 'clion', 'rubymine', 'phpstorm', 'rider', 'datagrip', 'fleet', 'jetbrains', 'subl',
   'txmt', 'mate', 'mvim', 'emacs', 'atom',
 ]);
-const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', leftW: 'coyodex.leftW', panelH: 'coyodex.panelH', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
+const LS = { editor: 'coyodex.editor', custom: 'coyodex.customUri', root: 'coyodex.srcRoot', ok: 'coyodex.rootOk', repo: 'coyodex.ghRepo', coach: 'coyodex.coachSeen', dimSeen: 'coyodex.dimSeen', legend: 'coyodex.legend', leftW: 'coyodex.leftW', panelH: 'coyodex.panelH', treeW: 'coyodex.treeW', treePinned: 'coyodex.treePinned',
   searchOpen: 'coyodex.searchOpen', searchW: 'coyodex.searchW' };
 // The on-disk source root and the GitHub repo URL describe THIS map's repository, so they are stored
 // per-repo — namespaced by the map's baked identity (its repo root, or the GitHub URL as a fallback).
@@ -5771,6 +6074,7 @@ const coach = document.getElementById('coach');
 const dismissCoach = () => { coach.hidden = true; lsSet(LS.coach, '1'); };
 document.getElementById('coachok').addEventListener('click', dismissCoach);
 document.getElementById('helpbtn').addEventListener('click', () => { coach.hidden = false; });
+legendbtn.addEventListener('click', () => setLegendOpen(!legendOpen()));
 coach.addEventListener('click', (e) => { if (e.target === coach) dismissCoach(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !coach.hidden) dismissCoach(); });
 if (lsGet(LS.coach) !== '1') coach.hidden = false;  // first visit -> show the guide once
@@ -5894,13 +6198,17 @@ function sbBuildStatic() {
   }
   for (const c of (GRAPH.config || [])) { if (c && c.key) items.push(sysRow(c.key, 'config', 'config')); }
   for (const s of (GRAPH.security || [])) { if (s && s.surface) items.push(sysRow(s.surface, 'security surface', 'security')); }
-  // A HOSTING deployment unit is indexed as a `process` NODE (it routes to the Deployment view via
-  // selectTargetFor); no sysRow for those, or a unit would appear twice and one hit would misroute to
-  // System. A NON-process unit (infra the app talks to, or an untraced unit) has no process node — it
-  // would vanish from search entirely, so give it a System-tab fallback row (the System tab lists every
-  // deployment row). Keeps every unit findable after WS1 stopped drawing infra units as process boxes.
-  for (const d of (GRAPH.deployment || [])) {
-    if (d && d.unit && !unitProcessNodeId(d.unit)) items.push(sysRow(d.unit, 'deployment unit', 'deployment'));
+  // Every deployment unit is now a real NODE, so none needs a System-tab fallback row (the tab no
+  // longer tables `deployment[]`, so such a row would land nowhere): a unit that hosts code, or an
+  // untraced one, is its own `process` node; an INFRASTRUCTURE unit is the dependency node standing in
+  // for it, carrying its facts (annotate_unit_dep_facts). That dep is indexed under the DEP's name, so
+  // index the unit name too whenever the two differ — else searching `mongo` would miss `MongoDB`.
+  for (const id in (GRAPH.nodes || {})) {
+    const n = GRAPH.nodes[id];
+    if (n && n.kind === 'dep' && n.unit && n.unit !== n.name) {
+      items.push({ text: n.unit, sub: n.name, cls: 'dep', badge: 'deployment unit',
+        run: ((nid) => () => selectFromTree(nid))(id) });
+    }
   }
   for (const o of (GRAPH.observability || [])) { if (o && o.signal) items.push(sysRow(o.signal, 'observability', 'signal')); }
   for (const r of (GRAPH.run_commands || [])) { if (r && r.action) items.push(sysRow(r.action, 'run command', 'run')); }
@@ -6299,7 +6607,9 @@ if (lsGet(LS.searchOpen) === '1') setSearchOpen(true);  // collapsed by default;
 buildFileTree();
 initServerMode();  // probe for `coyodex serve`; on success reveal + wire the file browser and code viewer
 
-setLegendMode('diff');  // seed the legend (shown only on diff views)
+buildLegend();  // one legend, built once; syncLegend decides where it shows
+// The intro's title IS the tab's label — read it off the button so the two can never disagree.
+viewsw.querySelectorAll('button[data-view]').forEach((b) => { VIEW_LABEL[b.dataset.view] = b.textContent.trim(); });
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }

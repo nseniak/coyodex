@@ -30,7 +30,7 @@ The **Action** column is empty on purpose — it's where we note what to do with
 
 Every box element renders the same way: a **title** (its name), a **type pill** (two pills for a
 dependency), one **description line** as prose, then **label → value rows**, and a derived
-**"Used in"** row.
+**"In use cases"** row.
 What changes per type is which fields fill those slots. Empty fields, fields that just repeat
 the name, and fields the diagram already shows (like which box a box nests in) are dropped.
 
@@ -38,7 +38,8 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 | Property | Display | Action |
 |---|---|---|
 | Purpose | prose | |
-| Used in | list of use-case links | |
+| Runs in | list of process links (the deployment units running it) | opens that process's card |
+| In use cases | list of use-case links | |
 | *(kind)* | badge: "subsystem" | |
 
 ### Component
@@ -47,7 +48,8 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 | Purpose | prose | |
 | Entry point | text | |
 | *(extra authored fields)* | text | |
-| Used in | list of use-case links | |
+| Runs in | list of process links (replaces the authored text field, which said the same thing) | opens that process's card |
+| In use cases | list of use-case links | |
 | Triggered by | list of its T4 entry points (kind · trigger · source) | source link opens the code viewer |
 | *(kind)* | badge: "component" | |
 
@@ -57,15 +59,17 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 | Used for | prose | |
 | Type | text | |
 | Package | text | |
+| Runs on / Exposed as / Config source | text — present when a `deployment[]` INFRASTRUCTURE unit (one hosting no code) names this dependency; it has no process box, so its facts ride here | |
+| Environments | its deployment variants, each with the manifest anchor grounding it | source link opens the code viewer |
 | *(extra authored fields)* | text | |
-| Used in | list | |
+| In use cases | list | |
 | *(type)* | two pills: `dependency` + its sub-type (datastore / service / messaging / …) | |
 
 ### Subdomain
 | Property | Display | Action |
 |---|---|---|
 | Purpose | prose | |
-| Used in | list | |
+| In use cases | list | |
 | *(kind)* | badge: "subdomain" | |
 
 ### Entity
@@ -73,7 +77,7 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 |---|---|---|
 | Meaning | prose | |
 | Stored | text | |
-| Used in | list | |
+| In use cases | list | |
 | *(kind)* | badge: "entity" | |
 | *(the entity's own fields)* | **not** in the info pane — shown as columns inside the diagram box instead | |
 

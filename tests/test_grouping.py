@@ -1591,14 +1591,14 @@ def test_subsystem_card_keeps_internal_wiring_and_deps() -> None:
     s1 = by_sub["S1"]
     assert "subgraph S1[" in s1                         # the subsystem reads as a labelled frame
     assert "C1" in s1 and "C3" in s1                    # both S1 components present
-    assert "C1 -->|routes| C3" in s1                    # internal wiring kept
+    assert "C1 -->|\"routes\"| C3" in s1                    # internal wiring kept
     assert "class S2 subsystem" in s1                   # the neighbour S2 drawn as a collapsed box
     assert "C1 -->|1| S2" in s1 and "C3 -->|1| S2" in s1  # cross arrows: component -> neighbour box, labelled by edge count
     assert "C2" not in s1                               # the sibling's component itself is NOT drawn
     s2 = by_sub["S2"]
     assert "subgraph S2[" in s2
     assert "C2" in s2 and "D1" in s2                    # Q1=B keeps the dep the component touches
-    assert "C2 -->|reads| D1" in s2                     # ...with its component->dep edge (ground-level, real verb)
+    assert "C2 -->|\"reads\"| D1" in s2                     # ...with its component->dep edge (ground-level, real verb)
     assert "class S1 subsystem" in s2                   # the neighbour S1 box
     assert "S1 -->|2| C2" in s2                         # inbound cross arrow, count 2 (C1->C2 + C3->C2)
 
@@ -1613,8 +1613,8 @@ def test_edge_card_has_both_subsystems_with_cross_and_inner_edges() -> None:
     card = cards["S1>S2"]
     assert "subgraph S1[" in card and "subgraph S2[" in card
     assert "C1" in card and "C3" in card and "C2" in card   # all components of both (Q2=A)
-    assert "C1 -->|calls| C2" in card and "C3 -->|calls| C2" in card  # the cross edges
-    assert "C1 -->|routes| C3" in card                  # S1's inner link now kept
+    assert "C1 -->|\"calls\"| C2" in card and "C3 -->|\"calls\"| C2" in card  # the cross edges
+    assert "C1 -->|\"routes\"| C3" in card                  # S1's inner link now kept
     assert "D1" not in card                             # no deps in an edge card
 
 
@@ -1667,7 +1667,7 @@ def test_nested_edge_cards_for_disjoint_pairs_only() -> None:
     assert {"S2>S3", "S1>S3"} <= set(cards)
     s2s3 = cards["S2>S3"]
     assert "subgraph S2[" in s2s3 and "subgraph S3[" in s2s3
-    assert "C2 -->|calls| C3" in s2s3            # a direct-member crossing stays labelled (ground-level, real verb)
+    assert "C2 -->|\"calls\"| C3" in s2s3            # a direct-member crossing stays labelled (ground-level, real verb)
     assert "S2 -->|1| C3" in cards["S1>S3"]      # a crossing reaching into child S2 is an aggregated box arrow, count-labelled
 
 
@@ -3733,7 +3733,7 @@ def test_context_groups_externals_into_bucket_clusters() -> None:
     mm = gen_viewer.gen_context_mermaid(model_to_graph(_bucket_model()))
     assert 'subgraph CYBK0["Data & storage"]' in mm         # first seed present -> first cluster
     assert '["Observability"]' in mm and mm.count('["Observability"]') == 1  # D3 case-drift folds in, not a 2nd cluster
-    assert "-->|uses|" not in mm                             # the repeated 'uses' label is gone
+    assert "-->|\"uses\"|" not in mm                             # the repeated 'uses' label is gone
     assert "SYS --> D1" in mm                                # System still points at each dep (unlabelled)
     assert "Postgres<br/>Primary store" in mm               # name + caption from the 'Used for' lead
     assert "pydantic" not in mm and "React" not in mm       # in-process libs fold, not shown at Context
