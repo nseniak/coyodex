@@ -3108,18 +3108,24 @@ function eachClassEdge(root, fn) {
     if (m) fn(p, aligned ? labels[i] || null : null, m[1], m[2]);
   });
 }
-// Mermaid's classDiagram markers are oversized (an ~18-unit diamond/triangle on a 1px line) and
-// default to markerUnits="strokeWidth", so the selection highlight's 3px stroke scales them 3x.
-// Pin them to a fixed user-space size and shrink them, so they stay proportional AND steady on select.
+// Mermaid's classDiagram markers default to markerUnits="strokeWidth", so the selection highlight's
+// 3px stroke would scale them 3x. Pinning them to a fixed user-space size keeps them steady on select;
+// the scale below then sets how big a relation's arrowhead / diamond reads.
+const MARKER_SCALE = 0.85;
 function fixDomainMarkers(root) {
-  const s = 0.55;
+  // The one knob for relation-marker size. Mermaid's own shape is ~18 user units; `MARKER_SCALE` is
+  // applied to it (and to refX/refY, so the tip still meets the line where it should). The marker
+  // VIEWPORT must grow with it or the bigger shape is clipped — hence the 20× coupling, which
+  // reproduces the box this used at its original scale. Raise the scale to make heads/diamonds bigger.
+  const s = MARKER_SCALE;
+  const box = String(Math.round(20 * s));
   root.querySelectorAll('marker').forEach((m) => {
     if (m.dataset.fixed) return;
     m.setAttribute('refX', ((parseFloat(m.getAttribute('refX')) || 0) * s).toFixed(2));
     m.setAttribute('refY', ((parseFloat(m.getAttribute('refY')) || 0) * s).toFixed(2));
     m.setAttribute('markerUnits', 'userSpaceOnUse');
-    m.setAttribute('markerWidth', '11');
-    m.setAttribute('markerHeight', '11');
+    m.setAttribute('markerWidth', box);
+    m.setAttribute('markerHeight', box);
     [...m.children].forEach((c) => {
       c.setAttribute('transform', `scale(${s}) ${c.getAttribute('transform') || ''}`.trim());
     });
