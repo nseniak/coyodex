@@ -1238,6 +1238,27 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
                 "persistence-coverage rule can't engage without the D-id; link `store.dep` to the "
                 "datastore dep (give the domain agent the deps legend, or backfill at synthesis), "
                 "or record the literal `store` under a 'Balance exceptions' extras heading")
+        #  * a container that reads as PROSE, not a name — the live-map failure this caught: a map
+        #    recorded `memberships subscriptions` where the code says
+        #    `__collection__ = "memberships_subscriptions"`, and `character features` / `rank card
+        #    configs` for their real snake_case collections. The agent described the compartment
+        #    instead of naming it, which makes the container unusable for the thing it exists for:
+        #    finding the real collection. A space is the tell — real container names (collections,
+        #    tables, buckets, key prefixes) don't carry one. Only the modes whose container IS a
+        #    physical name are checked: `transient`/`in-code`/`enum` legitimately describe ("derived",
+        #    "Chargebee API") and `embedded` rides its parent, so none of them can trip this.
+        prose = [e.id for e in m.entities
+                 if e.store is not None and e.store.mode in ("collection", "cache")
+                 and " " in (e.store.container or "").strip()]
+        if prose:
+            warnings.append(
+                f"{len(prose)} entity store(s) name a container that reads as prose, not a name "
+                f"({', '.join(prose[:8])}{', …' if len(prose) > 8 else ''}) — `container` is the "
+                "LITERAL compartment name (`memberships_subscriptions`), not a description of it "
+                "('memberships subscriptions'); a name with a space in it is almost never the real "
+                "one, and a reader can't find the collection from a paraphrase. Correct the rows "
+                "against the code, or record the literal `store` under a 'Balance exceptions' "
+                "extras heading")
     return warnings
 
 

@@ -288,6 +288,29 @@ def test_unstructured_stores_draw_one_aggregated_nudge_with_store_literal_escape
     assert not any("unstructured" in w for w in warnings_of(m))
 
 
+def test_prose_container_is_nudged_and_descriptive_modes_stay_quiet() -> None:
+    # A live map recorded `memberships subscriptions` where the code says
+    # `__collection__ = "memberships_subscriptions"` — the agent DESCRIBED the compartment instead of
+    # naming it, so the container can't lead a reader to the real collection. A space is the tell.
+    m = make_valid_model()
+    m.deps = [Dep(id="D1", name="Mongo", kind="datastore", type="document db")]
+    m.entities = [
+        Entity(id="E1", name="A", meaning="x", source="src/a.py:1",
+               store=Store(dep="D1", container="memberships subscriptions", mode="collection")),
+        Entity(id="E2", name="B", meaning="x", source="src/b.py:1",
+               store=Store(dep="D1", container="memberships_plans", mode="collection")),   # a real name
+        # `transient` legitimately DESCRIBES where a value comes from — never a container name.
+        Entity(id="E3", name="C", meaning="x", source="src/c.py:1",
+               store=Store(container="Chargebee API", mode="transient")),
+    ]
+    m.edges = [e for e in m.edges if not e.dst.startswith("E")]
+    ws = [w for w in warnings_of(m) if "reads as prose" in w]
+    assert len(ws) == 1 and "1 entity store(s)" in ws[0] and "E1" in ws[0]
+    assert "E2" not in ws[0] and "E3" not in ws[0]
+    m.extras = [ExtraSection(heading="Balance exceptions", body="store: names verified against code")]
+    assert not any("reads as prose" in w for w in warnings_of(m))
+
+
 # --- messaging catalog (WS-A5) -----------------------------------------------------
 
 def make_msg(name: str = "JOB_QUEUE", broker: str = "D1", publishers: list[str] | None = None,

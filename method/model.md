@@ -172,9 +172,15 @@ Semantics, stated on the fields:
   unexplained pair is how real collections with no named type (locks, token stores, schema-hash
   docs) escape the domain model. The operator's escape is the C id under a **"Persistence
   exceptions"** extras heading (line-leading `Cn: <why>`); notes-only stores draw one aggregated
-  "structure them" nudge, and a named container in a dep-linkable mode (collection/cache) with no
+  "structure them" nudge, a named container in a dep-linkable mode (collection/cache) with no
   `dep` draws its own (two of three live rebuilds shipped `dep: null` on every row — the T5 agent
-  needs the deps legend, or synthesis backfills) — both silenced by the literal `store`
+  needs the deps legend, or synthesis backfills), and a container that reads as PROSE rather than a
+  NAME draws a third — `container` is the LITERAL compartment name, and a live map recorded
+  `memberships subscriptions` where the code says `__collection__ = "memberships_subscriptions"`
+  (12 of its 37 rows were paraphrases), which defeats the one thing the field exists for: leading a
+  reader to the real collection. A space is the tell, so only the modes whose container IS a
+  physical name are checked (`transient`/`in-code`/`enum` legitimately DESCRIBE — "derived",
+  "Chargebee API" — and `embedded` rides its parent) — all three silenced by the literal `store`
   (line-leading) under "Balance exceptions". Each structured store also
   joins the audit L2 skeptic worklist ("En is stored in Dn container 'x'", anchored at the
   entity's source).
