@@ -290,15 +290,6 @@ def _store_line(node: dict[str, Any], dep_names: dict[str, str]) -> str | None:
     return f"🛢 {container}({where})" if container else None
 
 
-def _entity_style(node: dict[str, Any]) -> str:
-    """An entity's Domain-diagram fill: the normal light fuchsia when it is physically persisted
-    (`store.dep` set), a DRAINED "ghost" fuchsia when it is not — so "which of these actually live in
-    a datastore?" reads at a glance without changing the family hue (a saturation cue, not a new
-    colour, so an entity still reads as an entity)."""
-    st = cast("dict[str, str] | None", node.get("store"))
-    return ENTITY_STYLE if (st and st.get("dep")) else ENTITY_GHOST_STYLE
-
-
 def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
                      with_members: bool, dep_names: dict[str, str] | None = None) -> list[str]:
     """The `classDiagram` lines for one entity box. `with_members=True` renders its attributes
@@ -411,8 +402,8 @@ def gen_domain_mermaid(graph: GraphDict) -> str:
     lines = ["classDiagram"]
     for nid, n in ents:
         lines += _class_box_lines(nid, cast("dict[str, Any]", n), ent_names, True, dep_names)
-    for nid, n in ents:  # tint each entity — normal fuchsia, or drained "ghost" when it isn't persisted
-        lines.append(f"  style {nid} {_entity_style(cast('dict[str, Any]', n))}")
+    for nid, _ in ents:  # tint each entity (light fuchsia member) — the flat view has no namespace to inherit from
+        lines.append(f"  style {nid} {ENTITY_STYLE}")
     for e in graph["edges"]:
         if e.get("kind") and str(e["src"]) in ent_ids and str(e["dst"]) in ent_ids:
             lines.append(_class_relation_line(cast("dict[str, Any]", e)))
@@ -434,9 +425,6 @@ _CONTAINER_BORDER = "stroke-width:2.5px,stroke-dasharray:6 3"
 COMPONENT_STYLE = "fill:#eef2ff,stroke:#3730a3,color:#1e1b4b"  # indigo-50   — component (C), light member
 SUBSYSTEM_STYLE = f"fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b,{_CONTAINER_BORDER}"  # indigo-200  — subsystem (S), deep container
 ENTITY_STYLE    = "fill:#fdf4ff,stroke:#86198f,color:#581c87"  # fuchsia-50  — entity (E), light member
-ENTITY_GHOST_STYLE = "fill:#f7f5f7,stroke:#c9b6c6,color:#9a8a97"  # drained fuchsia — a NOT-persisted entity
-                                     # (no store.dep): same hue family, low saturation (Domain-view "which
-                                     # of these actually live in a datastore?" cue — see _entity_style)
 SUBDOMAIN_STYLE = f"fill:#f5d0fe,stroke:#86198f,color:#581c87,{_CONTAINER_BORDER}"  # fuchsia-200 — subdomain (SD), deep container
 DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     — external dependency (D)
 # A dependency/library GROUP container (the Libraries bundle box + folded bucket count boxes): the SAME
@@ -589,8 +577,8 @@ def _subdomain_namespace(graph: GraphDict, sdid: str,
     for cid, cname in _child_subdomains(graph, sdid):  # nested child subdomains: collapsed, drillable
         out.append(f'  class {cid}["{_safe_label(cname)} ({_descendant_entity_count(graph, cid)})"]')
     out.append("}")
-    for eid, _ in members:  # tint each focal entity (normal or ghost fuchsia); `style` lives OUTSIDE the namespace
-        out.append(f"  style {eid} {_entity_style(cast('dict[str, Any]', nodes[eid]))}")
+    for eid, _ in members:  # tint each focal entity (light fuchsia member); `style` lives OUTSIDE the namespace
+        out.append(f"  style {eid} {ENTITY_STYLE}")
     return out
 
 

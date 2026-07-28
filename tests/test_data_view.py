@@ -23,7 +23,6 @@ from coyodex.model import (
 from coyodex.validate_model import unexplained_persistence_pairs
 from coyodex.views import model_to_graph
 from coyodex.viewer.gen_viewer import (
-    ENTITY_GHOST_STYLE,
     ENTITY_STYLE,
     gen_channel_mermaids,
     gen_domain_mermaid,
@@ -192,7 +191,8 @@ def test_domain_diagram_store_line_and_ghost_fill():
     assert f"style E1 {ENTITY_STYLE}" in src
     # A store name carrying its own parens ("Redis (cache / main)") would nest and break parsing.
     assert "🛢 sess(Redis cache / main)" in src
-    # Not-persisted entity (E4, embedded): no store line, the drained ghost fill instead.
-    assert f"style E4 {ENTITY_GHOST_STYLE}" in src
+    # A not-persisted entity (E4, embedded) simply carries NO store line — the absence IS the signal,
+    # so it keeps the ordinary entity tint (no dimming, which would only restate the same fact).
     e4 = lines.index('  class E4["Address"] {')
     assert not any("🛢" in ln for ln in lines[e4:lines.index("  }", e4) + 1])
+    assert f"style E4 {ENTITY_STYLE}" in src
