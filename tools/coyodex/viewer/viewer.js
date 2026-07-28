@@ -1056,9 +1056,14 @@ function nodeDetailHtml(id) {
   const explain = explainKey ? `<p class="explain">${mdInline(fields[explainKey])}</p>` : '';
   const dropped = new Set(REDUNDANT_FIELD_BY_KIND[n.kind] || []);
   // an entity's own fields aren't listed here — the class-diagram box already shows them as compartments.
+  // A lifecycle renders ONE TRANSITION PER LINE (each carries its own trigger prose, so joined into a
+  // single string they read as an unparseable wall); every other field stays inline.
+  const lifecycle = (k) => k === 'States' && Array.isArray(n.states_lines) && n.states_lines.length;
   const rows = Object.entries(fields)
     .filter(([k, v]) => k !== explainKey && v !== n.name && !dropped.has(k.toLowerCase()))
-    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${mdInline(v)}</dd>`).join('');
+    .map(([k, v]) => `<dt>${esc(k)}</dt><dd>` + (lifecycle(k)
+      ? `<ul class="st-list">${n.states_lines.map((t) => `<li>${mdInline(t)}</li>`).join('')}</ul>`
+      : mdInline(v)) + '</dd>').join('');
   // No source ref in the panel: selecting the node already mirrors its location into the file browser +
   // code viewer, which carry the path and the sole "open externally" control.
   return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`

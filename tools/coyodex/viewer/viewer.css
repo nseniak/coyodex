@@ -862,3 +862,6 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
               cursor: pointer; white-space: nowrap; }
 #detailsbtn:hover { background: #e2e8f0; }
 #detailsbtn.on { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }
+/* Lifecycle transitions in the info pane: one per line, so each trigger reads on its own. */
+#panel .st-list { list-style: none; margin: 0; padding: 0; }
+#panel .st-list li { padding: 1px 0 1px 10px; text-indent: -10px; line-height: 1.45; }

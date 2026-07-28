@@ -58,6 +58,9 @@ class Node:
     states_count: int = 0         # entities/components only: how many states its lifecycle declares
                                   # (0 = none). The `States` field holds the human TEXT; only the count
                                   # is countable, and the Domain diagram's lifecycle marker needs it.
+    states_lines: list[str] = field(default_factory=list)  # the lifecycle's transitions, ONE per entry
+                                  # (`a → b (on x)`) — the info pane lists them line by line, since a
+                                  # real machine's transitions joined into one string read as a wall.
 
 
 @dataclass

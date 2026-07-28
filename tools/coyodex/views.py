@@ -167,16 +167,24 @@ def _relation_item(r) -> str:
     return " ".join(parts)
 
 
-def _states_str(sm: StateMachine | None) -> str:
-    """The ONE text rendering of a state machine — the domain card's STATES line and the info
-    pane's "States" row (panel text only; a stateDiagram view is a viewer follow-up). Transitions
-    as `a → b (on x)` joined by ` · `; a transition-less machine lists the state names."""
+def _states_parts(sm: StateMachine | None) -> list[str]:
+    """A state machine as its INDIVIDUAL parts — one `a → b (on x)` per transition, or the plain
+    state names when it declares none. The single source both renderings share: `_states_str` joins
+    them for the one-line markdown card, while the info pane lists them one per line (a real machine
+    runs to several transitions, each carrying its own trigger prose — joined up they read as an
+    unparseable paragraph)."""
     if sm is None:
-        return ""
+        return []
     if not sm.transitions:
-        return " · ".join(sm.states)
-    return " · ".join(f"{t.src} → {t.dst}" + (f" (on {t.on})" if t.on else "")
-                      for t in sm.transitions)
+        return list(sm.states)
+    return [f"{t.src} → {t.dst}" + (f" (on {t.on})" if t.on else "") for t in sm.transitions]
+
+
+def _states_str(sm: StateMachine | None) -> str:
+    """The one-LINE text rendering of a state machine — the markdown domain card's STATES line, and
+    the info pane's fallback when the node carries no structured parts. `_states_parts` joined by
+    ` · `; a transition-less machine lists the state names."""
+    return " · ".join(_states_parts(sm))
 
 
 def _store_str(st: Store | None) -> str:
@@ -662,6 +670,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         node.files = _component_files(c)
         node.entry_points = eps_by_comp.get(c.id, [])
         node.runs_in = list(c.runs_in)
+        node.states_lines = _states_parts(c.states)   # a component lifecycle lists per line too
         nodes[c.id] = node
     # A dep's ROLE set is derived from the verbs of its incoming C→D edges (grammar.dep_roles), so a
     # dual-role dep (Redis as bus + store) reads from its two real verbs, never a stored field.
@@ -705,6 +714,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                           "mode": e.store.mode, "notes": e.store.notes}
         if e.states:
             node.states_count = len(e.states.states)
+            node.states_lines = _states_parts(e.states)
         ent_file = _bare_local_file(e.source)
         node.files = [ent_file] if ent_file else []
         nodes[e.id] = node
