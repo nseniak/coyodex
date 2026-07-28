@@ -528,3 +528,71 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(fn):
             fn()
             print(f"ok {name}")
+
+
+# --- process topology: co-residency is not a crossing --------------------------------------------
+
+def make_monolith_model() -> ProjectModel:
+    """The shape that exploded a live map: shared modules loaded into three processes.
+
+    `Launcher` and `BotRuntime` both run in api, bot AND worker (one `manage.py` starts whichever
+    service the sub-command names). Their call is in-process in every one of those units."""
+    m = ProjectModel(title="Monolith", goal="g")
+    m.components = [
+        Component(id="C1", name="Launcher", source="manage.py:1",
+                  runs_in=["api", "bot", "worker"]),
+        Component(id="C2", name="BotRuntime", source="mee6/bot.py:1",
+                  runs_in=["api", "bot", "worker"]),
+        Component(id="C3", name="IdService", source="idsvc/main.go:1", runs_in=["ids"]),
+    ]
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", why="starts the bot", where="manage.py:75"),
+               Edge(src="C2", verb="calls", dst="C3", why="mints ids", where="mee6/bot.py:90")]
+    m.deployment = [DeploymentRow(unit=u) for u in ("api", "bot", "worker", "ids")]
+    return m
+
+
+def _links(m: ProjectModel) -> dict:
+    g = model_to_graph(m)
+    uid_of = {unit: uid for uid, unit in G._deployment_unit_ids(g)}
+    return {(a, b): rows for (a, b), rows in
+            G._call_process_links(g, uid_of, set(uid_of)).items()}
+
+
+def test_co_resident_components_draw_no_process_arrow():
+    # ONE in-process call between two components sharing {api,bot,worker} used to fan out into SIX
+    # false network arrows (every ordered pair of the three units), in both directions.
+    m = make_monolith_model()
+    g = model_to_graph(m)
+    uid_of = {unit: uid for uid, unit in G._deployment_unit_ids(g)}
+    links = G._call_process_links(g, uid_of, set(uid_of))
+    for a in ("api", "bot", "worker"):
+        for b in ("api", "bot", "worker"):
+            assert (uid_of[a], uid_of[b]) not in links, f"{a}->{b} is an in-process call"
+
+
+def test_a_genuinely_disjoint_call_still_draws_from_every_host():
+    # C2 (api/bot/worker) → C3 (ids) really does leave the process, from each of its three hosts.
+    m = make_monolith_model()
+    g = model_to_graph(m)
+    uid_of = {unit: uid for uid, unit in G._deployment_unit_ids(g)}
+    links = G._call_process_links(g, uid_of, set(uid_of))
+    assert {a for a, _ in links} == {uid_of[u] for u in ("api", "bot", "worker")}
+    assert {b for _, b in links} == {uid_of["ids"]}
+
+
+def test_partial_overlap_keeps_the_arrow_from_the_non_hosting_unit():
+    # The blunt "any shared host → drop it" rule erases REAL traffic. A frontend baked into the
+    # backend image AND served by a dev server still crosses the wire from the dev server.
+    m = ProjectModel(title="Web", goal="g")
+    m.components = [
+        Component(id="C1", name="SPA", source="frontend/src/main.tsx:1",
+                  runs_in=["backend", "vite-dev"]),
+        Component(id="C2", name="API", source="backend/app.py:1", runs_in=["backend"]),
+    ]
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", why="fetches pages",
+                    where="frontend/src/api.ts:20")]
+    m.deployment = [DeploymentRow(unit="backend"), DeploymentRow(unit="vite-dev")]
+    g = model_to_graph(m)
+    uid_of = {unit: uid for uid, unit in G._deployment_unit_ids(g)}
+    links = G._call_process_links(g, uid_of, set(uid_of))
+    assert list(links) == [(uid_of["vite-dev"], uid_of["backend"])]

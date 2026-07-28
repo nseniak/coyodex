@@ -1679,7 +1679,14 @@ def _channel_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set
 
     Every publisher-unit × consumer-unit pair crosses (a component running in two units really does
     publish from both). A same-unit pair is DROPPED: a process queueing work for itself is a self-loop,
-    not topology — its channel is still listed on the unit's own Data-tab broker section."""
+    not topology — its channel is still listed on the unit's own Data-tab broker section.
+
+    DELIBERATELY ASYMMETRIC with `_call_process_links`, which drops a pair whose endpoints share a
+    host. That subtraction is right for a SYNCHRONOUS call — co-resident code calls itself in-process
+    — but wrong for a channel: a broker decouples publisher from consumer, so a message published in
+    `api` is delivered to every consumer of that channel wherever it runs, including a different unit
+    that happens to also host the publishing component. The overlap carries no implication of
+    in-process delivery, so there is nothing to subtract."""
     out: dict[tuple[str, str], list[dict[str, str]]] = {}
     # A `runs_in` may name a unit that has no `deployment[]` row at all (an unvalidated or mid-edit map
     # — `serve` renders without validating). Such a unit has no id and no box, so drop it HERE rather
@@ -1709,7 +1716,24 @@ def _call_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set[st
 
     Without this the view is blank for any ordinary client/server app: its processes talk over HTTP, not
     over a queue, so the async catalog has nothing to say about them. Same-unit pairs are dropped — an
-    in-process call is not topology — and units that host no code are skipped (they have no box)."""
+    in-process call is not topology — and units that host no code are skipped (they have no box).
+
+    A CROSSING IS FORCED ONLY FROM A UNIT THAT HOSTS THE CALLER BUT NOT THE CALLEE. A component may
+    run in several units (a monolith loads the same module into its api, bot and worker processes).
+    Pairing every host of one end with every host of the other then invents arrows — in BOTH
+    directions — between processes that never talk: inside the api process the call is api→api, and
+    inside the bot process it is bot→bot, yet the cartesian product draws api→bot AND bot→api.
+    Measured on a 429-component monolith, 589 of 648 such edges (91%) had a host in common, and the
+    heaviest arrows on the overview (`api↔bot` at 511 calls, `api/bot → worker` at 397) were built
+    almost entirely from them — one launcher calling the bot runtime at `manage.py:75`, both ends
+    running in {api, bot, worker}, produced SIX false network arrows from ONE in-process call.
+
+    So the source side is `src_units - dst_units`: units where the caller runs and the callee does
+    NOT, which is exactly where the call has to leave the process. Note this is deliberately not the
+    blunter "drop the edge whenever the host sets overlap" — that also erases REAL traffic: a
+    frontend tagged {backend, vite-dev-server} calling a backend tagged {backend} still genuinely
+    crosses the wire from the dev server, and subtracting keeps that arrow while dropping the
+    self-pair."""
     out: dict[tuple[str, str], list[dict[str, str]]] = {}
     known = {u for u in hosted if u in uid_of}
     for e in graph["edges"]:
@@ -1717,12 +1741,17 @@ def _call_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set[st
         sn, dn = graph["nodes"].get(sid), graph["nodes"].get(did)
         if not sn or not dn or str(sn.get("kind")) != "component" or str(dn.get("kind")) != "component":
             continue
+        src_units = {u for u in _node_runs_in(sn) if u in known}
+        dst_units = {u for u in _node_runs_in(dn) if u in known}
+        crossing_from = src_units - dst_units       # co-resident hosts force nothing
+        if not crossing_from or not dst_units:
+            continue
         row = {"src": sid, "dst": did,
                "srcName": str(sn.get("name") or sid), "dstName": str(dn.get("name") or did),
                "verb": str(e.get("verb") or ""), "why": str(e.get("why") or ""),
                "where": str(e.get("where") or "")}
-        for a in sorted({u for u in _node_runs_in(sn) if u in known}):
-            for b in sorted({u for u in _node_runs_in(dn) if u in known}):
+        for a in sorted(crossing_from):
+            for b in sorted(dst_units):
                 if a != b:
                     out.setdefault((uid_of[a], uid_of[b]), []).append(row)
     return out
