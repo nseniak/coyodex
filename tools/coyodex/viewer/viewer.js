@@ -603,6 +603,8 @@ function primaryActionFor(id) {
   if (n.kind === 'subsystem') return { kind: 'drill', run: () => go({ kind: 'subsystem', sid: id }) };
   if (n.kind === 'subdomain') return { kind: 'drill', run: () => go({ kind: 'domsub', sd: id }) };
   if (n.kind === 'process') return { kind: 'drill', run: () => go(deploymentDrill(id)) };  // a process box drills to its unit card
+  const dd = dataDrillFor(id);  // a store/broker box drills to its Data-tab section (beats opening its config file)
+  if (dd) return { kind: 'drill', run: () => go(dd) };
   const src = srcNode(id);
   return src ? { kind: 'open', run: () => openSource(src) } : null;
 }
@@ -997,14 +999,9 @@ function accessRowsHtml(id) {
 }
 // Datastore/messaging dep info-pane row: a link into the Data tab focused on this store's pane.
 function persistedDataLinkHtml(id) {
-  const n = GRAPH.nodes[id];
-  if (!n || n.kind !== 'dep' || !HAS_DATA) return '';
-  const st = (DATA_VIEW.stores || []).find((s) => s.dep === id);
-  if (!st) return '';
-  const nrows = st.rows.length; const nch = st.channels.length;
-  const label = nrows ? `${nrows} collection${nrows === 1 ? '' : 's'}`
-    : (nch ? `${nch} channel${nch === 1 ? '' : 's'}` : 'this store');
-  return `<dt>Data</dt><dd class="dv-panerow"><a href="#" class="dv-seelink" data-store="${esc(id)}">View persisted data (${label}) →</a></dd>`;
+  if (!dataStoreOf(id)) return '';
+  return `<dt>Data</dt><dd class="dv-panerow"><a href="#" class="dv-seelink" data-store="${esc(id)}">`
+    + `View persisted data (${esc(dataDrillLabel(id))}) →</a></dd>`;
 }
 // The one free-text "what/why" field a node kind carries — Purpose (subsystem/subdomain/component),
 // Used for (dep), Meaning (entity). Shown as plain prose with no label, since the field IS the
@@ -1240,8 +1237,12 @@ function markBucketFoldDrill() {
 // The bucket drill-down: the System + that one bucket's members, same shape as Context — each simply
 // selects to its panel (no further drill); arrows resolve via the context-edge bridge.
 function bindBucketFold() {
-  bindNodes(mainScene, (id, el, e) => selectNodeFromCanvas(el, id, e));
+  bindNodes(mainScene, (id, el, e) => {
+    if (tryDataDrillClick(id, e)) return;
+    selectNodeFromCanvas(el, id, e);
+  });
   bindEdges(mainScene, resolveContextEdge);
+  markDataDrill();
 }
 
 // Subsystems edge: the panel shows both subsystems (name + Purpose); the concrete A→B wiring is the
@@ -1796,6 +1797,10 @@ function actionTipNode(id) {
       return '<div class="tt">' + (HAS_GROUPING ? 'Show subsystems' : 'Show domain') + '</div>';
     return null;
   }
+  // Checked BEFORE the source: a store box's primary action is its data, not its config file — keep
+  // the tooltip in step with primaryActionFor, which prefers the same drill.
+  if (dataDrillFor(id))
+    return '<div class="tt">Open its data</div><div class="tm">' + esc(dataDrillLabel(id)) + '</div>';
   if (srcNode(id)) return actionOpenSrcHtml(n);
   if (String(n.kind) === 'subsystem')
     return '<div class="tt">Open subsystem</div><div class="tm">' + esc(n.name) + '</div>';
@@ -2204,6 +2209,42 @@ function sysDrillTarget() {
 function markSysDrill() {
   const el = mainScene.nodeEls['SYS'];
   if (el && sysDrillTarget()) el.classList.add('drill');
+}
+// A store/broker dependency drills into ITS OWN section of the Data tab — what is persisted in it,
+// who writes and reads that, and the channels it carries. The box IS the store, so drilling it should
+// land on its data, the same way a subsystem box drills into its components; the info pane keeps its
+// "View persisted data" link for the times you arrive from somewhere else. null when this dep has no
+// Data-view section (an ordinary service dep, or a map with no stores at all).
+function dataStoreOf(id) {
+  const n = GRAPH.nodes[id];
+  if (!HAS_DATA || !n || n.kind !== 'dep') return null;
+  return (DATA_VIEW.stores || []).find((s) => s.dep === id) || null;
+}
+function dataDrillFor(id) {
+  return dataStoreOf(id) ? { kind: 'data', store: id } : null;
+}
+// What that store holds, as a count phrase — the ONE wording shared by the box's action tooltip and
+// the info pane's "View persisted data" link, so the two can never describe the same store differently.
+function dataDrillLabel(id) {
+  const st = dataStoreOf(id);
+  if (!st) return '';
+  const nrows = st.rows.length; const nch = st.channels.length;
+  return nrows ? `${nrows} collection${nrows === 1 ? '' : 's'}`
+    : (nch ? `${nch} channel${nch === 1 ? '' : 's'}` : 'no modelled data');
+}
+function markDataDrill() {
+  for (const id in mainScene.nodeEls) {
+    if (dataDrillFor(id)) mainScene.nodeEls[id].classList.add('drill');
+  }
+}
+// The store-box drill gesture, shared by every view that draws dep boxes (Dependencies itself, a
+// purpose-bucket drill, the Libraries fold) so the affordance can't work in one and not the next.
+// Returns true when it handled the click.
+function tryDataDrillClick(id, e) {
+  const dd = dataDrillFor(id);
+  if (!dd || !isDrillClick(e)) return false;
+  go(dd);
+  return true;
 }
 
 function bindNodes(scene, onActivate) {
@@ -2759,11 +2800,13 @@ function bindContext() {
       return;
     }
     if (tryFoldNodeClick(id, el, e)) return;
+    if (tryDataDrillClick(id, e)) return;   // a store/broker box drills into its Data-tab section
     selectNodeFromCanvas(el, id, e);
   });
   bindEdges(mainScene, resolveContextEdge);
   markSysDrill();
   markLibsDrill();
+  markDataDrill();
   registerFoldSelectors();
   // The Libraries fold selects to its own roster panel (not a plain node panel), so pre-register its
   // re-select — the generic node loop in render() then skips it, keeping back/forward faithful.
@@ -2792,8 +2835,13 @@ function registerFoldSelectors() {
 // buckets themselves fold into drillable count boxes here too). A count box drills; SYS and each leaf
 // dep select to their panel; arrows resolve via the context-edge bridge.
 function bindLibs() {
-  bindNodes(mainScene, (id, el, e) => { if (tryFoldNodeClick(id, el, e)) return; selectNodeFromCanvas(el, id, e); });
+  bindNodes(mainScene, (id, el, e) => {
+    if (tryFoldNodeClick(id, el, e)) return;
+    if (tryDataDrillClick(id, e)) return;
+    selectNodeFromCanvas(el, id, e);
+  });
   bindEdges(mainScene, resolveContextEdge);
+  markDataDrill();
   registerFoldSelectors();
 }
 function bindComponent() {
