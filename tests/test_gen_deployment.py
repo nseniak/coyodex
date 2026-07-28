@@ -671,3 +671,45 @@ def test_infra_lane_is_capped_and_says_what_it_dropped():
     mm = G.gen_deployment_mermaid(model_to_graph(m))
     assert mm.count("[(") == G.INFRA_LANE_MAX
     assert "+3 more shared dependencies" in mm         # never a silent truncation
+
+
+def test_container_arrows_carry_selectable_data():
+    """A synthesized arrow must list exactly the member arrows it stands for.
+
+    The container boxes and their arrows are drawn by the deployment renderer, not the model, so the
+    edge-data maps are keyed by process uid and knew nothing about them: the arrows rendered but bound
+    to nothing — visible, unselectable, and silently unlike every other arrow in the viewer."""
+    m = make_big_deploy_model()
+    m.deps = [Dep(id="D1", name="Mongo", kind="datastore", type="db")]
+    m.edges = [Edge(src="C1", verb="calls", dst="M00", why="w", where="a.py:1"),
+               Edge(src="C2", verb="calls", dst="M00", why="w", where="b.py:1"),
+               Edge(src="C1", verb="writes", dst="D1", why="w", where="c.py:1"),
+               Edge(src="M00", verb="writes", dst="D1", why="w", where="d.py:1")]
+    g = model_to_graph(m)
+    groups, _ = G.deployment_groups(g, G._process_unit_names(g))
+    gid = next(iter(groups))
+    calls = G.gen_deployment_call_edges(g)
+    infra = G.gen_deployment_infra_edges(g)
+    assert any(k.startswith(gid + ">") for k in calls), calls
+    assert any(k.startswith(gid + ">") for k in infra), infra
+    # the container's rows are the union of its members', not a fresh claim
+    rows = [r for k, v in calls.items() if k.startswith(gid + ">") for r in v]
+    assert {r["src"] for r in rows} == {"C1", "C2"}
+
+
+def test_every_container_arrow_on_the_overview_is_bound():
+    m = make_big_deploy_model()
+    m.deps = [Dep(id="D1", name="Mongo", kind="datastore", type="db")]
+    m.edges = [Edge(src=f"C{c}", verb="calls", dst="M00", why="w", where="a.py:1") for c in (1, 2)]
+    m.edges += [Edge(src=f"C{c}", verb="writes", dst="D1", why="w", where="b.py:1") for c in (1, 2)]
+    m.edges.append(Edge(src="M00", verb="writes", dst="D1", why="w", where="c.py:1"))
+    g = model_to_graph(m)
+    groups, _ = G.deployment_groups(g, G._process_unit_names(g))
+    keys = set(G.gen_deployment_edges(g)) | set(G.gen_deployment_call_edges(g)) | set(
+        G.gen_deployment_infra_edges(g))
+    import re
+    mm = G.gen_deployment_mermaid(g)
+    arrows = re.findall(r"^\s+(\S+)\s+-->(?:\|[^|]*\|)?\s+(\S+)\s*$", mm, re.M)
+    unbound = [(a, b) for a, b in arrows
+               if (a in groups or b in groups) and f"{a}>{b}" not in keys]
+    assert unbound == [], unbound

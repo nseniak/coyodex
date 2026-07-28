@@ -2237,14 +2237,36 @@ def deployment_cards(graph: GraphDict) -> dict[str, str]:
             for _uid, unit in _deployment_unit_ids(graph) if unit}
 
 
+def _with_group_pairs(graph: GraphDict, links: dict[tuple[str, str], list[dict[str, str]]]
+                      ) -> dict[str, list[dict[str, str]]]:
+    """`{'<src>><dst>': rows}` for every process pair, PLUS the container pairs the overview draws.
+
+    A container arrow stands for its members' arrows, so selecting it must list exactly those. Without
+    the container keys the synthesized arrows rendered but bound to nothing — visible, unselectable,
+    and silently different from every other arrow in the viewer."""
+    process_units = _process_unit_names(graph)
+    uid_of = {unit: uid for uid, unit in _deployment_unit_ids(graph)}
+    _groups, group_of = deployment_groups(graph, process_units)
+    box = {uid_of[u]: g for u, g in group_of.items() if u in uid_of}
+    out: dict[str, list[dict[str, str]]] = {f"{a}>{b}": rows for (a, b), rows in links.items()}
+    merged: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for (a, b), rows in links.items():
+        ga, gb = box.get(a, a), box.get(b, b)
+        if ga != gb and (ga != a or gb != b):        # at least one end is inside a container
+            merged.setdefault((ga, gb), []).extend(rows)
+    for (a, b), rows in merged.items():
+        out[f"{a}>{b}"] = rows
+    return out
+
+
 def gen_deployment_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
     """For each process→process arrow the Deployment view can draw — on the overview AND on either
     end's card — the async channels it carries, keyed `'<src_uid>><dst_uid>'` to match the edge bridge
     (the deployment analog of `gen_container_edges`). Selecting the arrow lists these, each with its
     kind, its broker and the source line that declares it."""
     uid_of = {unit: uid for uid, unit in _deployment_unit_ids(graph)}
-    return {f"{a}>{b}": rows
-            for (a, b), rows in _channel_process_links(graph, uid_of, _process_unit_names(graph)).items()}
+    return _with_group_pairs(
+        graph, _channel_process_links(graph, uid_of, _process_unit_names(graph)))
 
 
 def gen_deployment_call_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
@@ -2253,8 +2275,8 @@ def gen_deployment_call_edges(graph: GraphDict) -> dict[str, list[dict[str, str]
     A pair may appear in both when two processes talk each way; the viewer draws one arrow and lists
     each mechanism under its own heading."""
     uid_of = {unit: uid for uid, unit in _deployment_unit_ids(graph)}
-    return {f"{a}>{b}": rows
-            for (a, b), rows in _call_process_links(graph, uid_of, _process_unit_names(graph)).items()}
+    return _with_group_pairs(
+        graph, _call_process_links(graph, uid_of, _process_unit_names(graph)))
 
 
 def gen_deployment_infra_edges(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
@@ -2263,7 +2285,19 @@ def gen_deployment_infra_edges(graph: GraphDict) -> dict[str, list[dict[str, str
     Selecting a coupling-point arrow then answers "why does this process need this store" with the
     components, verbs, reasons and call sites, instead of leaving the arrow mute."""
     uid_of = {unit: uid for uid, unit in _deployment_unit_ids(graph)}
-    return {f"{uid}>{did}": rows for (uid, did), rows in _infra_call_sites(graph, uid_of).items()}
+    sites = _infra_call_sites(graph, uid_of)
+    _groups, group_of = deployment_groups(graph, _process_unit_names(graph))
+    box = {uid_of[u]: g for u, g in group_of.items() if u in uid_of}
+    out: dict[str, list[dict[str, str]]] = {f"{uid}>{did}": rows for (uid, did), rows in sites.items()}
+    # …and the same rows under the CONTAINER that draws the arrow on the overview, so a coupling-point
+    # arrow leaving a container answers "which of these processes reach this store, and where".
+    merged: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for (uid, did), rows in sites.items():
+        if uid in box:
+            merged.setdefault((box[uid], did), []).extend(rows)
+    for (gid, did), rows in merged.items():
+        out[f"{gid}>{did}"] = rows
+    return out
 
 
 def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:

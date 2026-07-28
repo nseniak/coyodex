@@ -1118,6 +1118,7 @@ function showNode(id) {
 // the panel: the code viewer tags each one on its own source line instead (anchorsByPath / paintCodeTags),
 // so "selecting a box" reads as "here's this one element", and its file-mates are discoverable in the code.
 function showNodeDetailSynced(id) {
+  if (isDeploymentGroup(id)) { showDeploymentGroup(id); return; }
   showNode(id);          // fills the panel with `id` alone and mirrors into the tree + code viewer (syncTreeToNode)
   updateFolderPeek(id);  // auto-opens browsing for a folder element (see updateFolderPeek)
 }
@@ -3066,7 +3067,10 @@ function bindComponent() {
 function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
-    if (!id || !GRAPH.nodes[id]) return;
+    // A capability container is drawn by the deployment renderer, not the model, so it has no
+    // GRAPH node — without this it fell through the gate and got no handler at all, leaving the
+    // box inert (visible, but neither selectable nor drillable).
+    if (!id || !(GRAPH.nodes[id] || isDeploymentGroup(id))) return;
     mainScene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
     const target = id === noDrillId ? null : drillFor(id);
@@ -3086,7 +3090,8 @@ function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
   });
   eachEdge(mainScene.root, (p, label, m) => {
     const a = m[1], b = m[2];
-    if (!(GRAPH.nodes[a] && GRAPH.nodes[b])) return;
+    const known = (x) => !!(GRAPH.nodes[x] || isDeploymentGroup(x));
+    if (!(known(a) && known(b))) return;
     edgeBinder(mainScene, p, label, a, b);
   });
 }
@@ -3096,6 +3101,7 @@ function bindContainer() { bindGroupContainer((id) => ({ kind: 'subsystem', sid:
 // Data-tab section, and anything else returns null — bindGroupContainer then leaves it without a drill
 // cursor or corner icon, instead of offering a zoom that lands back on the same view.
 function deploymentDrill(id) {
+  if (isDeploymentGroup(id)) return { kind: 'deploymentGroup', gid: id };
   const n = GRAPH.nodes[id];
   if (n && n.kind === 'process') return { kind: 'deploymentUnit', unit: n.unit };
   if (n && n.kind === 'subsystem') return { kind: 'subsystem', sid: id };
@@ -3295,6 +3301,20 @@ function syncEnvPicker(s) {
   }));
 }
 // A process card's default panel: the process node's own detail + the threads/loops it hosts.
+// A capability container's panel: what it is, and every process inside it. Each member row opens
+// that process's own card, so the container is a way IN rather than a wall.
+function showDeploymentGroup(gid) {
+  const members = (DEPLOYMENT_GROUP_MEMBERS && DEPLOYMENT_GROUP_MEMBERS[gid]) || [];
+  const rows = members.map((u) =>
+    `<tr><td><a href="#" class="procref" data-unit="${esc(u)}">${esc(u)}</a></td></tr>`).join('');
+  panel.innerHTML = `<section class="uc-group"><h3 class="uc-actor">${esc(groupTitle(gid))}</h3>`
+    + `<div class="gloss-plain">Processes running the same capability, grouped so the overview stays `
+    + `readable. The arrows on the overview are the sum of these processes' own arrows; open a `
+    + `process for its real ones.</div>`
+    + `<table class="glossary"><tbody>${rows}</tbody></table></section>`;
+  bindNodeDetailHandlers(panel);
+  wireSrcLinks(panel);
+}
 function showDeploymentUnit(unit) {
   const uid = unitProcessNodeId(unit);
   const eps = (GRAPH.entry_points || []).filter((e) => e.activation === 'self' && threadHostUnits(e).includes(unit));
