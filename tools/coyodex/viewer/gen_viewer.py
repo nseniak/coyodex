@@ -296,12 +296,14 @@ def _store_line(node: dict[str, Any], dep_names: dict[str, str]) -> str | None:
 DETAIL_SEP = " · "
 # Key/relation markers, in fixed render order (determinism) — the map's own vocabulary, shortened.
 # `[]` is deliberately absent: it is part of the type's SHAPE and already rides on the type itself.
-_MARKER_LABEL: tuple[tuple[str, str], ...] = (("PK", "PK"), ("FK", "FK"), ("unique", "uniq"), ("?", "?"))
+# The authored `?` renders as `opt`: a bare `?` is a symbol the reader has to guess, while PK/FK/uniq
+# are words they already know — every marker should read, not need decoding.
+_MARKER_LABEL: tuple[tuple[str, str], ...] = (("PK", "PK"), ("FK", "FK"), ("unique", "uniq"), ("?", "opt"))
 _TTL_AMOUNT = re.compile(r"(?:TTL\s*(?:of\s*)?(\d+\s*[-\w]+)|(\d+[-\s]?\w+)\s*TTL)", re.I)
 
 
 def _field_markers(markers: str) -> str:
-    """The toggleable key markers for one field — `PK`, `FK`, `uniq`, `?` — as a ` · `-prefixed
+    """The toggleable key markers for one field — `PK`, `FK`, `uniq`, `opt` — as a ` · `-prefixed
     suffix (`string id · PK`). Every live map is full of these (one map: 47 PK, 52 FK, 50 optional)
     and the box drew NONE of them; they answer "which field is the key / points elsewhere / is
     optional" without opening the panel. An `FK→E7` marker renders as bare `FK`: which entity it
@@ -352,7 +354,7 @@ def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
         # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
         atype = _safe_member(ent_names.get(str(a.get("type", "")), str(a.get("type", ""))))
         # `[]` is part of the type's SHAPE (it makes the field multi-valued), so it rides on the type
-        # — unlike PK/FK/?/unique, which render as a toggleable ` · ` suffix (see _field_markers).
+        # — unlike PK/FK/opt/unique, which render as a toggleable ` · ` suffix (see _field_markers).
         markers = str(a.get("markers", ""))
         if "[]" in markers.split():
             atype += "[]"

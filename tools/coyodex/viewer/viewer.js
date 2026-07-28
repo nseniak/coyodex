@@ -483,7 +483,7 @@ function elementPill(id) {
 // them off therefore never re-runs the layout: it rewrites glyphs in the already-drawn SVG (a marker
 // suffix is swapped for its stripped text; a whole extra line goes `visibility:hidden`, which keeps
 // its space). Nothing moves — the cost is that a box stays sized for its "details on" state.
-const DETAIL_MARKERS = / · (?:PK|FK|uniq|\?)(?: (?:PK|FK|uniq|\?))*$/;
+const DETAIL_MARKERS = / · (?:PK|FK|uniq|opt)(?: (?:PK|FK|uniq|opt))*$/;
 const DETAIL_LINE = /^\s*[⏱⟳]/;   // a whole extra line (retention / lifecycle)
 const ENTITY_VIEWS = new Set(['domain', 'domsub', 'domedge', 'bridge']);  // views that draw entity boxes
 let ENTITY_DETAILS = null;  // lazily read: lsGet is defined further down, so never touch it at import

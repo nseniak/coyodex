@@ -197,7 +197,7 @@ def test_domain_diagram_box_carries_store_retention_lifecycle_and_markers():
     box = _box(src, '  class E1["Order"] {')
     # Fields keep `[]` on the TYPE (it is the shape) and carry their key markers as a ` · ` suffix —
     # the toggleable part the viewer strips back off without re-laying the diagram out.
-    assert box[:5] == ["str id · PK", "str customer_id · FK ?", "str code · uniq",
+    assert box[:5] == ["str id · PK", "str customer_id · FK opt", "str code · uniq",
                        "str[] tags", "int total"]
     # The second compartment, in order: where it lives, how long it is kept, its lifecycle. Each is a
     # `name(args)` line — the shape that lands it below the divider, apart from the fields.
