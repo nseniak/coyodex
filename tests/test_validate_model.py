@@ -262,6 +262,40 @@ def test_messaging_gap_canary_fires_and_escapes() -> None:
     assert not any("catalog is empty" in w for w in warnings_of(m))   # adjudicated → quiet
 
 
+def test_isolated_component_canary_fires_and_escapes() -> None:
+    # Live finding: a custom-shard fleet whose Purpose said it "pushes their events to the same
+    # broker" carried no edge and no messaging role, so no view could draw the link it describes.
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Custom shard fleet", purpose="pushes events to the "
+                                  "same broker", entry_point="src/shard.go:1"))
+    ws = [w for w in warnings_of(m) if "carry no backbone edge and no" in w]
+    assert len(ws) == 1                                    # ONE aggregated line, not one per component
+    assert "1 of 2 component(s)" in ws[0] and "C2 (Custom shard fleet)" in ws[0]
+    # wiring it via a backbone edge quiets it...
+    m.edges.append(Edge(src="C2", verb="emits", dst="D1", why="events", where="src/shard.go:9"))
+    assert not any("carry no backbone edge and no" in w for w in warnings_of(m))
+    # ...and so does recording it as a channel publisher (the other way a view can see it)
+    m.edges = [e for e in m.edges if e.src != "C2"]
+    m.messaging = [MessagingRow(name="shard.events", kind="queue", broker="D1", publishers=["C2"],
+                                consumers=["C1"], source="src/shard.go:34")]
+    assert not any("carry no backbone edge and no" in w for w in warnings_of(m))
+    # ...and an adjudicated map stays quiet even while genuinely isolated
+    m.messaging = []
+    m.extras = [ExtraSection(heading="Balance exceptions", body="isolated: leaf plugins stand alone")]
+    assert not any("carry no backbone edge and no" in w for w in warnings_of(m))
+
+
+def test_isolated_component_canary_caps_the_inline_list() -> None:
+    m = make_valid_model()
+    for i in range(2, 14):
+        m.components.append(Component(id=f"C{i}", name=f"Leaf {i}", purpose="p",
+                                      entry_point=f"src/l{i}.py:1"))
+    ws = [w for w in warnings_of(m) if "carry no backbone edge and no" in w]
+    assert len(ws) == 1 and "12 of 13 component(s)" in ws[0]
+    assert "+4 more" in ws[0]                              # 12 isolated, 8 shown inline
+    assert "C13 (Leaf 13)" not in ws[0]
+
+
 def test_roleless_nudge_exempts_folded_deps_and_knows_listen_verbs() -> None:
     m = make_valid_model()
     m.deps = [Dep(id="D1", name="FastAPI", kind="framework", type="web framework"),

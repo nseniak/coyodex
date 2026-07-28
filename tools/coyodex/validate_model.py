@@ -1065,6 +1065,48 @@ def _messaging_gap_warnings(m: ProjectModel) -> list[str]:
             "'Balance exceptions' extras heading"]
 
 
+ISOLATED_COMPONENT_SHOWN = 8       # ids listed inline before the "+N more" tail
+
+
+def _isolated_component_warnings(m: ProjectModel) -> list[str]:
+    """The disconnected-code canary (advisory, ONE aggregated line): components that appear in NO
+    backbone edge (either end) and in NO `messaging` row (publisher or consumer).
+
+    Every derived view walks edges and channels — the Subsystems arrows, the change-impact ripple, and
+    the Deployment view's process→process topology (both its async and its synchronous half). A
+    component wired to nothing is therefore invisible in all of them, however well its `Purpose` prose
+    describes what it talks to. This canary was added after a live map's custom-shard fleet drew no
+    arrow to the bot it demonstrably feeds: its purpose text said "pushes their events to the same
+    broker", but neither an edge nor a channel row recorded it, so nothing could be drawn.
+
+    Advisory and aggregated on purpose: a real map carries some genuinely standalone code (a leaf
+    utility, a plugin nothing else calls), and a per-component warning at this rate would be noise
+    nobody reads. Escape = the literal `isolated` (line-leading) under a 'Balance exceptions' extras
+    heading, for a map whose components legitimately stand alone."""
+    if not m.components:
+        return []
+    wired: set[str] = set()
+    for e in m.edges:
+        wired.add(e.src)
+        wired.add(e.dst)
+    for mr in m.messaging:
+        wired.update(mr.publishers)
+        wired.update(mr.consumers)
+    isolated = [c for c in m.components if c.id not in wired]
+    if not isolated:
+        return []
+    if "isolated" in balance_lib._exceptions(m):
+        return []
+    shown = ", ".join(f"{c.id} ({c.name})" for c in isolated[:ISOLATED_COMPONENT_SHOWN])
+    more = len(isolated) - ISOLATED_COMPONENT_SHOWN
+    return [f"{len(isolated)} of {len(m.components)} component(s) carry no backbone edge and no "
+            f"`messaging` role: {shown}{f', +{more} more' if more > 0 else ''} — every view walks "
+            "edges and channels, so these are drawn connected to nothing (a relationship stated only "
+            "in `Purpose` prose is invisible). Author the edge, or add the component as a channel "
+            "publisher/consumer; record the literal `isolated` under a 'Balance exceptions' extras "
+            "heading for code that genuinely stands alone"]
+
+
 def _check_states(m: ProjectModel) -> tuple[list[str], list[str]]:
     """State-machine well-formedness (row-local — safe per-fragment). Blocking: an empty `states`
     list (a machine with no states claims nothing), duplicate state names, a transition endpoint
@@ -2035,6 +2077,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(msg_problems)
     warnings.extend(msg_warnings)
     warnings.extend(_messaging_gap_warnings(m))
+    warnings.extend(_isolated_component_warnings(m))
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)
