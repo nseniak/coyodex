@@ -1741,10 +1741,14 @@ def test_formula_filled_runs_in_is_flagged_but_a_true_monolith_is_not():
     # a legit all-in-one app (single unit hosting everything, no empty peer) must NOT nag
     m.deployment = [DeploymentRow(unit="standalone")]
     assert not any("formula-filled" in w for w in warnings_of(m))
-    # the recorded `runs-in` exception silences the family even with the empty peer back
+    # The recorded `runs-in` exception silences the family's DETAIL even with the empty peer back —
+    # but the suppression itself stays visible, because one literal switches off five unrelated
+    # checks and a silence you cannot see reads exactly like having no findings.
     m.deployment = [DeploymentRow(unit="standalone"), DeploymentRow(unit="worker")]
     m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in")]
-    assert not any("formula-filled" in w for w in warnings_of(m))
+    ws = warnings_of(m)
+    assert not any("one unit blankets" in w or "per-id-range" in w for w in ws)   # detail gone
+    assert any("suppressed by the recorded `runs-in` exception" in w for w in ws)  # count kept
 
 
 def test_formula_fill_silent_on_grounded_dual_deployment():
@@ -1840,7 +1844,9 @@ def test_inferred_variant_tag_warns_and_is_silenced_by_runs_in_exception():
     assert not any("inferred" in p for p in problems_of(m))       # advisory, never a problem
     assert any("inferred (no manifest anchor)" in w for w in warnings_of(m))
     m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: single unit")]
-    assert not any("inferred (no manifest anchor)" in w for w in warnings_of(m))  # silenced
+    ws = warnings_of(m)
+    assert not any("inferred (no manifest anchor)" in w for w in ws)               # detail silenced
+    assert any("suppressed by the recorded `runs-in` exception" in w for w in ws)  # count kept
 
 
 def test_environments_absent_is_silent_but_declared_untagged_advises():
@@ -2047,3 +2053,27 @@ def test_base_class_must_run_where_its_subclass_runs():
     m.edges = [Edge(src="C1", verb="calls", dst="C2", why="w", where="a.py:1")]
     m.components[1].runs_in = ["rss"]
     assert _inheritance_runs_in_warnings(m) == []           # a plain call may legitimately cross
+
+
+def test_mixed_variant_tagging_is_flagged():
+    """An untagged unit reads as 'runs in EVERY environment', so on a partly-tagged map a FORGOTTEN
+    unit does not go missing — it silently claims to run everywhere.
+
+    Same shape as the `runs_in` gap that drew eight false process arrows on a live map: an absence
+    read as a positive claim. The pre-existing check only fired when NO unit was tagged, which is
+    the one state where nothing is hidden."""
+    m = make_valid_model()
+    m.environments = ["dev", "prod"]
+    m.deployment = [DeploymentRow(unit="api", variants=[VariantTag(env="prod", source="c.yml:1")]),
+                    DeploymentRow(unit="spa")]                       # forgotten
+    ws = warnings_of(m)
+    assert any("carry no `variants` while others do" in w and "spa" in w for w in ws)
+    # fully tagged -> silent
+    m.deployment[1].variants = [VariantTag(env="dev", source="c.yml:9")]
+    assert not any("carry no `variants` while others do" in w for w in warnings_of(m))
+    # nothing tagged at all -> the pre-existing all-or-nothing advisory owns it, not this one
+    for d in m.deployment:
+        d.variants = []
+    ws = warnings_of(m)
+    assert not any("carry no `variants` while others do" in w for w in ws)
+    assert any("no deployment unit is tagged" in w for w in ws)

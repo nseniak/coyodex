@@ -1627,6 +1627,13 @@ def _infra_call_sites(graph: GraphDict, uid_of: dict[str, str]
             continue
         if not cn or str(cn.get("kind")) != "component":
             continue
+        # Same rule as the process→process derivation: `extends`/`implements` describe the shape of
+        # the code, not runtime traffic, so they cannot evidence a process reaching infrastructure.
+        # Latent today (the only structural C→D edges on live maps point at deps classified
+        # `library`, which never enter this lane) — but the filter belongs with the claim, not with
+        # the accident that no map has tripped it yet.
+        if str(e.get("verb") or "") in ("extends", "implements"):
+            continue
         row = {"src": cid, "dst": did,
                "srcName": str(cn.get("name") or cid), "dstName": str(dn.get("name") or did),
                "verb": str(e.get("verb") or ""), "why": str(e.get("why") or ""),

@@ -1487,7 +1487,7 @@ def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
             f"`runs-in` under a 'Balance exceptions' extras heading to silence this."]
 
 
-def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
+def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
     """Advisory: the Deployment view is only trustworthy if `runs_in` was GROUNDED (read off the deploy
     manifests), not formula-guessed. `validate` used to check only PRESENCE, so a hand-script that
     blanket-tagged every component to one unit (no manifest read, 0 entry points placed) passed clean.
@@ -1503,8 +1503,6 @@ def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
       no `runs_in` of its own — the view then picks a host arbitrarily."""
     if not m.deployment:
         return []
-    if "runs-in" in balance_lib._exceptions(m):
-        return []                              # deliberately unmapped / justified — silence the family
     warnings: list[str] = []
     # Inferred variant tags (WS1): a variant with NO manifest anchor is a soft claim — surface it so an
     # invented tag can't hide, but never block (an inference may be legit). Aggregated + capped (one
@@ -1521,6 +1519,21 @@ def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
         warnings.append(f"{len(m.environments)} environment(s) declared but no deployment unit is tagged "
                         f"with a `variants` value — the Deployment view can't split by environment "
                         f"(every unit shows in all). Tag each unit with the environment(s) it runs in.")
+    elif m.environments:
+        # THE MIXED STATE, which the all-or-nothing check above cannot see. An empty `variants` means
+        # "ungated — runs in EVERY environment", so on a partly-tagged map a FORGOTTEN unit does not
+        # go missing, it silently claims to run everywhere. That is the same shape as the `runs_in`
+        # gap that drew eight false process arrows on a live map: an absence read as a positive
+        # claim. When some units are tagged and others are not, the untagged ones are worth a second
+        # look — being genuinely shared is possible, but it is now a decision rather than a default.
+        untagged = [d.unit for d in m.deployment if not d.variants]
+        if untagged:
+            shown = ", ".join(untagged[:6]) + (" …" if len(untagged) > 6 else "")
+            warnings.append(
+                f"{len(untagged)} of {len(m.deployment)} deployment unit(s) carry no `variants` while "
+                f"others do: {shown} — an untagged unit reads as 'runs in every environment' "
+                f"({', '.join(m.environments)}), so a forgotten tag becomes a claim rather than a gap. "
+                f"Tag the environment(s) each really runs in, or confirm it is genuinely ungated.")
     # a real unit name may contain spaces ('api worker'); only a SEPARATOR (shared with the dep-match
     # guard) signals two units crammed into one row (S5)
     non_atomic = [d.unit for d in m.deployment
@@ -1582,6 +1595,26 @@ def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
         warnings.append(f"{len(ambiguous)} self-started entry point(s) whose owning component runs in >1 "
                         f"unit but which set no `runs_in` — the host process is ambiguous (the view picks "
                         f"one). Set `runs_in` on the entry point to pin its exact process: {shown}")
+    return warnings
+
+
+def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
+    """The deployment-quality family, with the recorded `runs-in` exception applied ONCE, at the only
+    exit (the worker above has several).
+
+    The escape hatch is honoured but NOT silently. That one literal switches off the whole family —
+    unit naming, formula-fill, unlinked units, thread hosts, variant tagging — while the
+    justification behind it is usually about a single member. A live map recorded `runs-in` for
+    exactly one reason ("two test-profile units run no product code") and thereby hid two unrelated
+    findings, including a real variant-tagging gap. Suppression you cannot see is indistinguishable
+    from having no findings, so the COUNT stays visible even when the detail does not."""
+    warnings = _deployment_quality_warnings_raw(m)
+    if warnings and "runs-in" in balance_lib._exceptions(m):
+        return [f"{len(warnings)} deployment advisory/advisories suppressed by the recorded "
+                f"`runs-in` exception. That literal silences the WHOLE deployment family (unit "
+                f"naming, formula-filled `runs_in`, unlinked units, thread hosts, variant tagging) "
+                f"— if the justification only covered one of them, re-read the rest by validating a "
+                f"copy with the exception removed."]
     return warnings
 
 
