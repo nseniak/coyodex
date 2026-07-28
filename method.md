@@ -643,12 +643,29 @@ re-groups** — grouping is a free, view-only choice (membership on the child, m
 while the **leaf decision is grounded by E and out of bounds for balance tooling**: no balance
 finding may merge or split components to hit a number.
 
-**The hand-off — read the stderr summary first; don't reverse-engineer the JSON.** `preindex` writes
-the JSON to `.coyodex/preindex.json` **and** prints a one-line human summary to **stderr** (heaviest
-top-level dirs, file/LOC totals, ambiguous-symbol count, languages without symbols, the GR1/GR2
-reminders). **Read that stderr summary** — do *not* pipe the run through `tail`/`head` and discard it,
-and don't re-derive "the largest files/dirs" by hand: the weight tree already ranks them (children are
-sorted by LOC, descending). The JSON shape, so you don't have to guess its keys:
+**The hand-off — `coyodex preindex --report`; don't reverse-engineer the JSON.** The build run prints
+a one-line summary to **stderr** (heaviest top-level dirs, totals, the GR1/GR2 reminders), but that
+summary carries only the top-5 dirs and the whole-repo E — while the harvest plan needs the **weight
+tree** and the **per-slice E**, which live only inside the JSON. So there is a read command:
+
+```
+.venv/bin/coyodex preindex --report [--depth N] [--top N]   # weight tree + per-dir E + coverage
+```
+
+Use it instead of hand-parsing. (All four measured builds wrote throwaway
+`python3 -c "json.load(open('.coyodex/preindex.json'))…"` to get exactly this — the doc forbade the
+reverse-engineering it made necessary. It reads the file and writes nothing.) Note also that
+`preindex --help` is a real help flag now; it used to run a full pre-index and overwrite the artifact.
+
+**Reconcile E with what it is BOUND BY.** The report says whether the file-count ceiling or the LOC
+ceiling produced E, plus the median file size. This matters: on a file-per-UI-component frontend the
+FILE cap fires long before the LOC cap, so E counts many tiny files as unit-sized mass and lands well
+above the honest altitude (a live monorepo: E≈994 vs a built 429, with a 48-LOC median file). Three
+of four measured builds disagreed with E by 2–4× and had no way to see why. When you build outside
+the band deliberately, record the literal `granularity` under a `Balance exceptions` extras heading
+with the reason — that is a judgement, and it belongs in the map, not the transcript.
+
+The JSON shape, so you don't have to guess its keys:
 
 ```
 { "tool", "root",                       # provenance
@@ -667,14 +684,29 @@ This concretises finding **G1** in
 guardrails above are **GR1/GR2/GR3/GR5** there. The validator's `--check-coverage` (below) is the
 verification half — it re-measures the tree independently and never reads this JSON (**GR4**).
 
-**Parallel mode (large repos only — serial is simpler and just as accurate on small
-ones).** The build order maps to a fan-out workflow: **parallel harvest → barrier
+**Parallel mode covers HARVESTING ONLY (large repos; serial is simpler and just as accurate on small
+ones). Verification is NOT part of it — see "After the trace — every build" below, which a serial
+build owes in full.** The build order maps to a fan-out workflow: **parallel harvest → barrier
 synthesis → parallel trace.**
+
+> **Scope warning (a real failure).** Phases 3.5 / test completeness / 4 used to sit as bullets
+> *inside* this section, so a serial build read the whole block as inapplicable and skipped them. A
+> live small-repo build did exactly that: it finished, then told the user "the method wants
+> fresh-context skeptics to try to disprove the claims, **which I did not have**" — the map was
+> built and checked by ONE context, the precise blind spot Phase 4 exists to break. Serial mode is
+> exempt from *fanning out the harvest*, never from *verifying the result*.
+
 - Phase 1 Harvest (fan out, one agent each): T4 entry points, T2 deps, T5 model, T3
   run/build, T0/Roles reader. Parallel harvest also improves completeness. **Launch the whole
   harvest as one concurrent batch** (all agents in a single fan-out), not in waves — the slices are
   disjoint and use pre-allocated ID ranges, so no agent needs another's output first, and they
   return compact rows (not file dumps) so reading them together is cheap.
+  - **"One batch" means one MESSAGE: emit all N agent calls as N tool calls in a SINGLE assistant
+    turn.** Stated as a property of the fan-out this rule reads as satisfied by launching agents
+    back-to-back, and every measured build did exactly that — one agent per turn: 9 agents over
+    3m35s (argus harvest), 10 over 4m26s (mcpolis), 9 over 3m55s (mee6). Repeated across the
+    harvest, trace and skeptic fan-outs that is **~9–11 minutes of pure launch latency per build**,
+    before any agent has finished. The same rule applies to every fan-out below, not just harvest.
   - **Pre-size the slices from the pre-index so no slice becomes the critical path.** The whole
     phase ends when the SLOWEST agent does: a live build's entrypoints+security slice ran 23
     minutes while every sibling finished in 4–8, stalling the barrier by a quarter hour. The
@@ -730,6 +762,14 @@ synthesis → parallel trace.**
       whose purpose lists phases ("5-phase: disabled/deferred/connecting/live/failed") gets one
       on the component. A lifecycle left in purpose prose is unqueryable and rots first — the
       motivating live-rebuild case shipped its 5-phase machine as prose twice.
+      **But author it ONLY from a declared state list, and cite THAT line.** A `states` machine is
+      the one claim with no per-state anchor, so it is the easiest thing in the map to invent — and
+      the most invented: on a fresh build the Phase-4 skeptics refuted **5 of ~11 machines**, all the
+      same two shapes (states lifted from docstring PROSE, and a start state bolted onto an
+      otherwise-real enum). The `source` must point at the **enum / constants / dispatch block that
+      declares the states**, never a docstring or a class header, and every state name must be a name
+      that block actually contains. `validate --check-sources` now reports state names missing from
+      the cited file — if you cannot cite a declaration, the lifecycle is prose, so don't author it.
     - **Large domain models (many entities) — shard the RELATIONS pass, never skip it.** One agent can
       read ~40 entities and author a complete `E↔E` graph; on a 150–200-entity domain it will
       under-author relations and the graph comes out sparse (a fresh large-monorepo build left ~a
@@ -845,6 +885,30 @@ synthesis → parallel trace.**
     element-only legend no longer false-flags `uc` — but a complete legend still catches an invented one.
   - A **return-direction step** usually has no invoking line of its own: set `no_call_site: true`
     (or anchor the callee's `return` statement when that aids drilling) — either is fine; silence is not.
+  - **Name the three overclaim shapes the skeptics keep refuting** — they are predictable enough to
+    prevent in the prompt instead of paying for later. Across live builds these three accounted for
+    most refutations: (1) **transitive attribution** — a component calling a first-party wrapper
+    credited with the external call the *wrapper's owner* makes (5 of 40 dependency claims on one
+    build); (2) **ownership overclaim** — a controller that calls `.save()` credited as the system
+    of record when the real upsert lives in the repository/model component (5 of 40); (3)
+    **constructs ≠ persists** — a storage/client factory recorded as writing to the stores it only
+    *builds clients for*. In all three the rule is the same: **attribute the edge to the component
+    whose own code contains the operative line**, and if the line you found is a call into another
+    component, the edge belongs to that one.
+  - **Fill the `messaging` catalog from the SAME line that proves the edge.** The catalog is the
+    weakest-quality area measured: after earlier builds shipped rich broker edges with an EMPTY
+    catalog, one build filled it and its messaging skeptic returned **11 refutations — the most of
+    any batch** — wrong brokers and duplicated rows. A catalog row is a claim like any other: its
+    `source` is the line that DECLARES the channel name, its `broker` is the dep that line connects
+    to (not the one the component happens to use elsewhere), and a channel already in the catalog is
+    never added twice under a second spelling.
+
+### After the trace — EVERY build (serial included)
+
+The three steps below are **not** parallel-mode-only. They run on every build; parallel mode only
+changes how many agents do the work (a serial build still FANS OUT for Phase 4 — fresh context is
+the point, not concurrency). See the scope warning at the top of parallel mode.
+
 - Phase 3.5 Re-balance reconcile (lead, not delegated — runs ONCE, after the trace). The grouping was
   cut at Phase 2 **before any edge existed**, so re-check it now against the real graph: run
   `coyodex balance` and reconcile each finding — apply a Drilling-deeper operation (nest / promote /
@@ -873,7 +937,20 @@ synthesis → parallel trace.**
   skeptics + majority vote**. **Cap each batch at ~40 claims** and split an oversized theme into
   two skeptics rather than one long-running one — a live build gave one skeptic 144 claims (150
   turns, 10 minutes, the phase's critical path) while its siblings finished in half the time;
-  more, smaller skeptics also mean fresher context per claim, so this trades nothing away. Keep
+  more, smaller skeptics also mean fresher context per claim, so this trades nothing away.
+  **When the worklist exceeds what you can ground, TRIAGE ON THE RECORD — never silently.** The
+  worklist is already ranked most-dangerous-first, so working it top-down is the right call; what is
+  not optional is saying how far you got. A live monorepo build grounded **319 of 1,608 claims (20%)
+  with an 11% refutation rate among them** — i.e. the unchallenged remainder plausibly held ~140 more
+  wrong claims — and reported that only in chat, where it evaporates. Record it in the model's
+  **`grounding`** object (`claims_total` / `claims_grounded` / `claims_refuted` + a `note` saying
+  which claims were prioritized). `validate` warns when coverage is thin, and warns when a map with a
+  real claim surface carries no `grounding` record at all: an unchallenged map and a fully-verified
+  one otherwise look identical in every view and pass every gate the same way.
+  **First run the free pass:** `coyodex validate --check-sources` (and `coyodex anchor-drift --map …`
+  with NO `--verdicts`) flags every call-site anchor pointing at a line that cannot act — a `def`
+  header, an import, a comment. That is deterministic, needs no skeptics, and on live maps it
+  reproduced what the skeptics found by reading; spend the skeptics on what it cannot decide. Keep
   the split WITHIN a theme (related claims still travel together). Each is told to *disprove* the claim (default to *refuted* on doubt). This
   is the *breaking* twin of the parallel *build*, aimed at falsification. **Fresh context is the whole
   point** — a verifier that sees the build reasoning inherits its blind spots. Each skeptic also reports
