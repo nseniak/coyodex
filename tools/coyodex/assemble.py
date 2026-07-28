@@ -46,7 +46,11 @@ from coyodex.reconcile import (
 )
 from coyodex.validate_model import unbacked_entity_steps
 
-_SINGLETONS = ("title", "goal", "commit", "committed", "built", "tests_note")
+# Top-level NON-list fields, merged one-per-map with a conflict report. `grounding` belongs here:
+# it is written by the Phase-4 reconcile as its own fragment, and omitting it meant `assemble`
+# silently dropped the field on the only code path that writes a map — so the coverage record could
+# never survive to the committed model, and `validate` then reported the map as never grounded.
+_SINGLETONS = ("title", "goal", "commit", "committed", "built", "tests_note", "grounding")
 
 # Phase-4 verdicts files ({"grounding": [...]}) sometimes land in build-fragments/ and get caught by
 # a `*.json` glob — they are NOT fragments. Recognised so `assemble` skips them with a note instead

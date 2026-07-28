@@ -395,6 +395,26 @@ class ExtraSection:
 
 
 @dataclass
+class Grounding:
+    """How much of the map's L2 claim surface the Phase-4 skeptics actually challenged.
+
+    Every other quality signal in a map is per-row; this one is about the map's OWN confidence, and
+    without it a reader cannot tell a fully-challenged map from an unchallenged one — both render
+    identically and both pass every gate. It matters most exactly where it is hardest: on a large
+    monorepo build, 319 of 1,608 claims (20%) were grounded and 11% of those were REFUTED, so the
+    unchallenged remainder plausibly held ~140 more wrong claims. The lead reported that honestly in
+    chat, where it is lost; recorded here it travels with the map.
+
+    `claims_total` is the size of the audit's L2 worklist at grounding time; `claims_grounded` how
+    many got a verdict; `claims_refuted` how many came back refuted (and were fixed). Leave the
+    whole object absent when no grounding pass ran — `validate` says so rather than assuming."""
+    claims_total: int = 0
+    claims_grounded: int = 0
+    claims_refuted: int = 0
+    note: str = ""                   # how claims were triaged when coverage is partial
+
+
+@dataclass
 class ProjectModel:
     """The whole map. Field order IS the canonical JSON key order (the serializer relies on it)."""
     format: str = FORMAT
@@ -433,6 +453,7 @@ class ProjectModel:
     config: list[ConfigRow] = field(default_factory=list)
     tests_note: str = ""
     tests: list[TestRow] = field(default_factory=list)
+    grounding: Grounding | None = None   # Phase-4 coverage over the L2 claim surface (see Grounding)
     extras: list[ExtraSection] = field(default_factory=list)
 
 

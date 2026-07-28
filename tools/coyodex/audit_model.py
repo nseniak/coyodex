@@ -101,13 +101,21 @@ class HPStep:
     title: str
     why: str | None
     why_refs: list[int] = field(default_factory=list)
+    why_uc_refs: list[str] = field(default_factory=list)
 
 
 def happy_path_steps(m: ProjectModel) -> list[HPStep]:
     steps: list[HPStep] = []
     for pos, g in enumerate(m.happy_path):
         refs = [int(x) for x in re.findall(r"\bHP(\d+)\b", g.why or "")]
-        steps.append(HPStep(pos=pos, hp_id=g.id, uc=g.uc, title=g.title, why=g.why, why_refs=refs))
+        # A `why:` may cite the prerequisite USE CASE instead of a walk position. `HPn` is "just its
+        # position in the walk", so INSERTING a step silently invalidates every later `HPn` citation
+        # — a live build hit exactly that (adding a missing first step turned a valid `why:` into a
+        # forward reference, a BLOCKING audit failure found after the final assemble). A `UCn`
+        # citation names what the step depends on, not where it happens to sit, so it survives.
+        uc_refs = sorted(set(re.findall(r"\bUC\d+\b", g.why or "")))
+        steps.append(HPStep(pos=pos, hp_id=g.id, uc=g.uc, title=g.title, why=g.why,
+                            why_refs=refs, why_uc_refs=uc_refs))
     return steps
 
 
@@ -199,9 +207,19 @@ def check_precedence(m: ProjectModel) -> list[Finding]:
     return findings
 
 
+_CITE_UC_HINT = ("  Citing the prerequisite USE CASE (`UCn`) instead of the position survives a "
+                 "later insertion; `HPn` does not.")
+
+
 def check_why_refs(m: ProjectModel) -> list[Finding]:
     steps = happy_path_steps(m)
     pos_of = {st.hp_id: st.pos for st in steps}
+    # every walk position each use case occupies (a UC may appear at several)
+    uc_positions: dict[str, list[int]] = {}
+    for st in steps:
+        if st.uc:
+            uc_positions.setdefault(st.uc, []).append(st.pos)
+    known_ucs = {u.id for u in m.use_cases}
     findings: list[Finding] = []
     for st in steps:
         loc = f"HP{st.pos + 1} ({st.uc}) — {st.title}" if st.uc else f"HP{st.pos + 1} — {st.title}"
@@ -210,11 +228,36 @@ def check_why_refs(m: ProjectModel) -> list[Finding]:
             if ref_id not in pos_of:
                 findings.append(Finding(
                     "dangling-why-ref", CONTRADICTION, loc,
-                    f"`why:` cites {ref_id}, which is not a Happy-Path step."))
+                    f"`why:` cites {ref_id}, which is not a Happy-Path step." + _CITE_UC_HINT))
             elif pos_of[ref_id] > st.pos:
                 findings.append(Finding(
                     "backward-why-ref", CONTRADICTION, loc,
-                    f"`why:` cites {ref_id}, which comes AFTER this step in the walk."))
+                    f"`why:` cites {ref_id}, which comes AFTER this step in the walk."
+                    + _CITE_UC_HINT))
+        for uc_ref in st.why_uc_refs:
+            if uc_ref == st.uc:
+                continue                                  # a step naming its own use case
+            if uc_ref not in known_ucs:
+                findings.append(Finding(
+                    "dangling-why-ref", CONTRADICTION, loc,
+                    f"`why:` cites {uc_ref}, which is not a use case in this map."))
+            elif uc_ref not in uc_positions:
+                # a real prerequisite the walk does not carry — legitimate (an off-spine use case),
+                # but it IS a decision, so surface it the way the spine-coverage rule does.
+                findings.append(Finding(
+                    "offspine-why-ref", ADVISORY, loc,
+                    f"`why:` cites {uc_ref}, which has no Happy-Path position — confirm the "
+                    f"prerequisite is reachable off-spine, or give it a step."))
+            elif min(uc_positions[uc_ref]) > st.pos:
+                # ADVISORY, unlike the `HPn` form. `HPn` in a `why:` can only be a position
+                # citation, but a use-case id appears in prose for other reasons ("the same guard
+                # UC3 uses", "unlike UC7, this step does not persist"), and nothing distinguishes
+                # those from a prerequisite. Blocking here would fail a build on a sentence.
+                findings.append(Finding(
+                    "forward-uc-why-ref", ADVISORY, loc,
+                    f"`why:` names {uc_ref}, whose every walk position comes AFTER this step — if "
+                    "that is the prerequisite, the order is wrong; if the sentence merely mentions "
+                    "it, reword so the citation is unambiguous."))
     return findings
 
 
@@ -488,6 +531,12 @@ def _format(findings: list[Finding], worklist: list[WorkItem], verbose: bool = F
         risk_note = "" if verbose else " (per-claim rationale under --verbose)"
         out.append(f"L2 grounding worklist ({len(worklist)} claims to disprove against the code — "
                    f"group by theme/risk and farm to fresh-context skeptics, method.md Phase 4){risk_note}:")
+        # Signpost the machine-readable payload AT THE POINT OF USE. method.md says to batch from
+        # `--json` and "never regex-parse the human report", but a live build still paged this text
+        # with `head -45` + `sed -n '45,90p'` — the option is only discoverable in the method doc,
+        # not where the list is actually read.
+        out.append(f"  (batching these? read `coyodex audit --json` — {{findings, worklist}} as "
+                   "JSON — never parse this text)")
         for i, w in enumerate(worklist, 1):
             anchor = f"  [{w.anchor}]" if w.anchor else ""
             out.append(f"  {i}. {w.claim}{anchor}")

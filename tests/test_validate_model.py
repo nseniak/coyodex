@@ -1937,3 +1937,28 @@ if __name__ == "__main__":
                 failures += 1
                 print(f"FAIL {name}: {e}")
     raise SystemExit(1 if failures else 0)
+
+
+def test_referenced_paths_matches_root_files_but_not_root_directories():
+    """B1 + its adversarial correction.
+
+    A bare root FILE anchor (`Makefile:6`) must count as a reference — `_REF_INLINE` needs a `/`,
+    so root files used to be invisible. But root DIRECTORIES must NOT be matched by name: a dir
+    shares its name with words that appear in ordinary map prose, and accepting them let a `Why`
+    sentence mark a whole tree as referenced (on a live map that silenced a true "i18n/ has no path
+    referenced — likely an unmapped module" finding)."""
+    from coyodex.validate_model import referenced_paths
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        (root / "Makefile").write_text("all:\n")
+        (root / "i18n").mkdir()
+        (root / "i18n" / "en.ts").write_text("export const x = 1\n")
+        m = ProjectModel(
+            components=[Component(id="C1", name="Build", purpose="runs the build",
+                                  source="Makefile:1")],
+            edges=[Edge(src="C1", verb="reads", dst="C2", where="Makefile:1",
+                        why="resolves a key across the bundle's i18n files")],
+        )
+        refs = referenced_paths(m, root)
+        assert "Makefile" in refs          # the root FILE anchor is seen
+        assert "i18n" not in refs          # the prose mention of a root DIR is not

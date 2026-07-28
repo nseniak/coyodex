@@ -171,6 +171,9 @@
         "$ref": "#/$defs/TestRow"
       }
     },
+    "grounding": {
+      "$ref": "#/$defs/Grounding"
+    },
     "extras": {
       "type": "array",
       "items": {
@@ -1119,6 +1122,25 @@
       "required": [
         "targets"
       ],
+      "additionalProperties": false
+    },
+    "Grounding": {
+      "type": "object",
+      "properties": {
+        "claims_total": {
+          "type": "integer"
+        },
+        "claims_grounded": {
+          "type": "integer"
+        },
+        "claims_refuted": {
+          "type": "integer"
+        },
+        "note": {
+          "type": "string"
+        }
+      },
+      "required": [],
       "additionalProperties": false
     },
     "ExtraSection": {

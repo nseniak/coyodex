@@ -81,6 +81,53 @@ def parse_anchor(s: str) -> AnchorLoc | None:
     return AnchorLoc(path=m.group("path"), lo=lo, hi=hi)
 
 
+# --------------------------------------------------------------------------------------
+# The OPERATIVE-LINE check — "anchor the statement that acts, not the header above it"
+# --------------------------------------------------------------------------------------
+# method.md repeats this rule for every call-site anchor ("anchor the exact operative statement —
+# the write / call / enforce line itself — NOT the enclosing `def` or the surrounding assignment")
+# and calls a `def`-header anchor "the most common anchor-drift the adversarial pass finds". Nothing
+# checked it: `--check-sources` only proves the line EXISTS. Measured on a live self-map, 70 of ~150
+# backbone anchors (47%) sat on a definition header — INCLUDING 4 of its 6 security anchors — with
+# every gate green. This makes that class deterministic and free (no LLM, no skeptics).
+#
+# Deliberately conservative — only shapes that can never BE the acting statement, so a hit is a real
+# finding rather than noise. Notably NOT flagged: a decorator (`@app.post(...)` is a legitimate
+# route/enforcement site) and a closing brace.
+_NON_OPERATIVE: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"^(async\s+)?def\s"), "a Python function header"),
+    (re.compile(r"^class\s"), "a class header"),
+    (re.compile(r"^(export\s+(default\s+)?)?function\s"), "a function header"),
+    (re.compile(r"^func\s"), "a Go function header"),
+    (re.compile(r"^(pub\s+)?(async\s+)?fn\s"), "a Rust function header"),
+    (re.compile(r"^(from\s+\S+\s+)?import\s"), "an import line"),
+    (re.compile(r"^(const|var|let)\s+\w+\s*=\s*require\("), "an import line"),
+    # `#[…]` is an ATTRIBUTE, not a comment — Rust's `#[tokio::main]` / `#[get("/users")]` and
+    # PHP 8's `#[Route(...)]` are the exact analog of the `@app.post(...)` decorator this list
+    # deliberately accepts, and a live map flagged a real Rust route site because of it. `#!` keeps
+    # its shebang exemption; `#include`/`#define` are likewise not comments.
+    (re.compile(r"^#(?![!\[]|include\b|define\b|pragma\b)"), "a comment"),
+    (re.compile(r"^//"), "a comment"),
+    (re.compile(r"^/\*"), "a comment"),
+    (re.compile(r"^(\"\"\"|''')"), "a docstring delimiter"),
+)
+
+
+def non_operative_reason(line: str) -> str | None:
+    """Why `line` cannot be the statement an anchor claims fires there — or None when it is fine.
+
+    Takes the RAW source line; leading indentation is ignored. A blank line counts (nothing acts on
+    it). The judgement is advisory by design: it says "this shape never acts", never "this claim is
+    false" — the relationship can be perfectly real with a drifted anchor."""
+    text = line.strip()
+    if not text:
+        return "a blank line"
+    for pat, why in _NON_OPERATIVE:
+        if pat.match(text):
+            return why
+    return None
+
+
 def _basename(path: str) -> str:
     return path.rsplit("/", 1)[-1]
 

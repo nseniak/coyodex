@@ -82,6 +82,13 @@ _ABSENT_MIN_FILES = 25    # a top-level dir this large with nothing referenced i
 # the same local import the coverage check already uses (the core gate stays import-independent).
 _REF_LINK = re.compile(r"\]\(([^)\s#]+)")                         # markdown link target ](path...)
 _REF_INLINE = re.compile(r"(?<![\w/])((?:[\w.\-]+/)+[\w.\-]+)")   # inline a/b/c path
+# A BARE token — no directory part. `_REF_INLINE` requires at least one `/`, so a repo-root file
+# (`Makefile`, `manage.py`, `deploy.sh`) could never be seen as referenced, and the map's own
+# anchors for them read as unmapped. `_REF_LINK` cannot rescue them either: it only matches markdown
+# links, which method.md forbids for anchors ("a bare `path:line`, never a markdown link") — so the
+# only pattern that could see a root file was the one the method bans. Bare tokens are matched by
+# NAME against the repo root's real entries (never by shape), so this adds no false positives.
+_REF_BARE = re.compile(r"(?<![\w/.\-])([\w][\w.\-]*)")
 # Monorepo container roots — under these, a fold one level deeper is still an altitude decision
 # (`packages/app/plugins`), so look one level further. Under an ordinary package it is not, so a leaf
 # component's internal subdirs (`mee6/plugins/achievements/`) stay abstracted (GR6).

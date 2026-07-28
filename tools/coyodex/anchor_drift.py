@@ -16,7 +16,9 @@ from pathlib import Path
 
 from coyodex.anchors import DriftResult, anchor_drift, parse_anchor
 from coyodex.audit_model import WorkItem, l2_worklist_model
-from coyodex.model import load_model
+from coyodex.model import ProjectModel, load_model
+from coyodex.validate_analysis import _source_roots
+from coyodex.validate_model import check_operative_lines_model
 
 _DEFAULT_TOLERANCE = 2
 
@@ -96,17 +98,32 @@ def _format(findings: list[tuple[WorkItem, DriftResult]], tolerance: int) -> str
     return "\n".join(lines)
 
 
+def shape_findings(m: ProjectModel, roots: list[Path]) -> list[str]:
+    """The verdicts-FREE drift pass: call-site anchors pointing at a line that cannot act.
+
+    `--verdicts` mode needs a file only the Phase-4 skeptics produce, so a SERIAL build (no
+    skeptics) could not run this check at all — and the lead then hand-scripted the corrections,
+    which method.md explicitly forbids. This mode needs no verdicts and no LLM: it re-uses the
+    same deterministic classifier `validate --check-sources` runs, so serial and parallel builds
+    get the same floor. It finds SHAPE drift only (a `def` header can never be the acting line);
+    finding the TRUE line still needs the skeptics."""
+    return check_operative_lines_model(m, roots)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex anchor-drift --map <map.json> --verdicts <raw.json> "
+        print("usage: coyodex anchor-drift --map <map.json> [--verdicts <raw.json>] "
               "[--repo <root>] [--tolerance N] [--json]\n\n"
-              "Deterministic Layer-2 anchor-drift over the grounding skeptics' verdicts: for each\n"
-              "CONFIRMED claim, flag when the stored `where` differs from the line the skeptics found.\n"
-              "Informational (non-gating); the lead reconciles by fixing the map's `where` — or feeds\n"
-              "`--json` straight into `coyodex fix apply-drift` to write the corrections.")
+              "Deterministic Layer-2 anchor-drift. WITH --verdicts: for each CONFIRMED claim, flag\n"
+              "when the stored `where` differs from the line the skeptics found (feed `--json` into\n"
+              "`coyodex fix apply-drift` to write the corrections).\n"
+              "WITHOUT --verdicts: the shape-only pass — call-site anchors pointing at a line that\n"
+              "cannot be the acting statement (a `def` header, an import, a comment). Needs no\n"
+              "skeptics, so a SERIAL build gets the same grounding floor as a parallel one.\n"
+              "Informational (non-gating) either way.")
         return 0
-    map_path = verdicts_path = None
+    map_path = verdicts_path = repo_root = None
     tolerance = _DEFAULT_TOLERANCE
     as_json = False
     i = 0
@@ -125,15 +142,32 @@ def main(argv: list[str] | None = None) -> int:
                 verdicts_path = argv[i]
             elif a == "--tolerance":
                 tolerance = int(argv[i])
-            # --repo is accepted for signature parity; drift is a line comparison, no repo needed
+            elif a == "--repo":
+                repo_root = argv[i]   # only the shape-only pass reads code; verdicts mode ignores it
         else:
             print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
             return 2
         i += 1
-    if not map_path or not verdicts_path:
-        print("ERROR: --map and --verdicts are required", file=sys.stderr)
+    if not map_path:
+        print("ERROR: --map is required", file=sys.stderr)
         return 2
     m = load_model(Path(map_path).read_text(encoding="utf-8"))
+    if not verdicts_path:
+        # No verdicts → the shape-only pass, so a serial build still gets a grounding floor.
+        roots = _source_roots(Path(map_path).resolve(),
+                              Path(repo_root).resolve() if repo_root else None)
+        found = shape_findings(m, roots)
+        if as_json:
+            print(json.dumps({"mode": "shape-only", "findings": found}, indent=2))
+        else:
+            head = (f"Shape-only anchor drift ({len(found)} finding(s)) — no verdicts given.\n"
+                    "Each anchor below points at a line that cannot be the acting statement.\n"
+                    "Fix the `where` (or set no_call_site). For the TRUE call site, run the "
+                    "Phase-4 skeptics and re-run with --verdicts.\n")
+            print(head + "\n".join(f"  - {f}" for f in found) if found else
+                  "Shape-only anchor drift: no findings — every call-site anchor points at a "
+                  "line that can act.")
+        return 0
     worklist = l2_worklist_model(m)
     grounding = json.loads(Path(verdicts_path).read_text(encoding="utf-8")).get("grounding", [])
     if as_json:

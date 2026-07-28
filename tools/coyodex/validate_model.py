@@ -25,7 +25,12 @@ import sys
 from pathlib import Path
 
 from coyodex import balance_lib, grammar
-from coyodex.anchors import DIR_ANCHOR as _DIR_ANCHOR, FILE_ANCHOR as _ANCHOR_LINE
+from coyodex.anchors import (
+    DIR_ANCHOR as _DIR_ANCHOR,
+    FILE_ANCHOR as _ANCHOR_LINE,
+    non_operative_reason,
+    parse_anchor,
+)
 from coyodex.pysrc import parse_python
 from coyodex.model import (
     ID_ARRAYS,
@@ -47,6 +52,7 @@ from coyodex.validate_analysis import (
     _ISOLATED_MIN,
     _ISOLATED_MIN_ENTITIES,
     _LIST_ITEM,
+    _REF_BARE,
     _REF_INLINE,
     _REF_LINK,
     _UNCOVERED_FRACTION,
@@ -1107,6 +1113,37 @@ def _isolated_component_warnings(m: ProjectModel) -> list[str]:
             "heading for code that genuinely stands alone"]
 
 
+_GROUNDING_THIN = 0.60   # below this share of the claim surface, say so out loud
+
+
+def _grounding_warnings(m: ProjectModel) -> list[str]:
+    """ADVISORY: report how much of the L2 claim surface was challenged — including "none".
+
+    A map that never ran the grounding pass and a fully-challenged one are indistinguishable in
+    every view and pass every gate identically. Since the refutation rate on challenged claims runs
+    3-11% on live builds, silence here is the difference between "verified" and "plausible". Only
+    ever advisory: grounding is a judgement about effort, never a well-formedness property."""
+    g = m.grounding
+    claim_surface = len(m.edges) + len(m.security)
+    if g is None:
+        if claim_surface >= 20:
+            return [f"No `grounding` record: this map's ~{claim_surface} L2 claims (backbone edges + "
+                    "security surfaces) were never challenged by fresh-context skeptics, and nothing "
+                    "in the map says so. Run the Phase-4 grounding pass, or record the decision in "
+                    "`grounding` (claims_total/claims_grounded/claims_refuted + note)"]
+        return []
+    if g.claims_total <= 0:
+        return []
+    share = g.claims_grounded / g.claims_total
+    if share < _GROUNDING_THIN:
+        return [f"Grounding is partial: {g.claims_grounded} of {g.claims_total} claims challenged "
+                f"({share:.0%}), {g.claims_refuted} refuted. At that refutation rate the "
+                f"{g.claims_total - g.claims_grounded} unchallenged claims are good leads, not "
+                "facts — say which claims were prioritized in `grounding.note`"
+                + ("" if g.note else " (currently empty)")]
+    return []
+
+
 def _check_states(m: ProjectModel) -> tuple[list[str], list[str]]:
     """State-machine well-formedness (row-local — safe per-fragment). Blocking: an empty `states`
     list (a machine with no states claims nothing), duplicate state names, a transition endpoint
@@ -1899,6 +1936,105 @@ def check_anchor_existence_model(m: ProjectModel, roots: list[Path]) -> list[str
     return out
 
 
+# Prose/markup files have no "operative statement" — a leading `#` there is a heading, not a comment.
+_PROSE_SUFFIXES = frozenset({".md", ".markdown", ".rst", ".txt", ".adoc"})
+
+
+def call_site_anchors(m: ProjectModel) -> list[tuple[str, str]]:
+    """(label, anchor) for every anchor that claims AN ACTION FIRES AT THAT LINE.
+
+    Deliberately NOT every anchor: a component/entity/entry-point `source` is supposed to point at a
+    definition, so running the operative-line check over those would flag correct anchors. Only three
+    families make a "this line acts" claim — backbone edge `where`, flow/sub-flow step `where`, and a
+    security surface's enforcement `source`."""
+    out: list[tuple[str, str]] = []
+    for e in m.edges:
+        # `extends`/`implements` are DECLARED by the definition header — `class Sub(Base):` IS the
+        # operative statement for them, so the header is correct here, not drift.
+        if e.where and e.verb not in ("extends", "implements"):
+            out.append((f"edge {e.src} —{e.verb}→ {e.dst} `where`", e.where))
+    for f in m.flows:
+        for st in f.steps:
+            if st.where:
+                out.append((f"{f.uc} flow step {st.n} `where`", st.where))
+    for sf in m.subflows:
+        for st in sf.steps:
+            if st.where:
+                out.append((f"{sf.id} step {st.n} `where`", st.where))
+    for s in m.security:
+        if s.source:
+            out.append((f"security '{s.surface}' auth check", s.source))
+    return out
+
+
+def check_operative_lines_model(m: ProjectModel, roots: list[Path]) -> list[str]:
+    """ADVISORY: a call-site anchor pointing at a line that cannot be the acting statement.
+
+    The deterministic half of what the Phase-4 skeptics find by reading (see
+    `anchors.non_operative_reason`). Non-blocking on purpose: a drifted anchor does NOT refute the
+    relationship — the edge is usually real and only its `where` is wrong — so this points, it does
+    not fail the build."""
+    out: list[str] = []
+    cache: dict[str, list[str] | None] = {}
+    for label, anchor in call_site_anchors(m):
+        loc = parse_anchor(anchor)
+        if loc is None or loc.lo is None:
+            continue                       # a whole-file/dir anchor claims no single line
+        src = _resolve_source_file(anchor, roots)
+        if src is None:
+            continue                       # existence is `check_anchor_existence_model`'s job
+        if src.suffix.lower() in _PROSE_SUFFIXES:
+            continue                       # "the operative statement" means nothing in prose
+        key = str(src)
+        if key not in cache:
+            try:
+                cache[key] = src.read_text(encoding="utf-8", errors="ignore").splitlines()
+            except OSError:
+                cache[key] = None
+        lines = cache[key]
+        if lines is None or not (1 <= loc.lo <= len(lines)):
+            continue
+        why = non_operative_reason(lines[loc.lo - 1])
+        if why:
+            out.append(f"{label}: '{anchor}' points at {why} — anchor the operative statement "
+                       f"(the call / write / enforce line itself), or set no_call_site")
+    return out
+
+
+def check_state_sources_model(m: ProjectModel, roots: list[Path]) -> list[str]:
+    """ADVISORY: state names that do not appear in the file the machine cites.
+
+    A `states` machine is the one map claim NO other gate can reach: it has no per-state anchor, so
+    `--check-sources` only ever proved the machine's own `source` file exists. Live evidence that
+    this matters — a fresh build shipped ~11 lifecycles and the Phase-4 skeptics refuted 5 of them:
+    states lifted from docstring PROSE, and a start state bolted onto an otherwise-real enum. Both
+    shapes leave the same fingerprint: the invented names are not in the cited file. The same
+    lenient token match `check_entity_sources_model` uses, so a `PENDING` declared as `pending`
+    still passes."""
+    out: list[str] = []
+    for el in (*m.entities, *m.components):
+        sm = el.states
+        if sm is None or not sm.source or not sm.states:
+            continue
+        src = _resolve_source_file(sm.source, roots)
+        if src is None:
+            continue
+        try:
+            code = src.read_text(encoding="utf-8", errors="ignore").lower()
+        except OSError:
+            continue
+        missing = [s for s in sm.states if s.strip() and s.strip().lower() not in code]
+        if missing:
+            out.append(
+                f"{el.id} states: {len(missing)} of {len(sm.states)} state name(s) do not appear in "
+                f"the cited source ({strip_anchor(sm.source)}): {', '.join(missing[:6])}"
+                f"{' …' if len(missing) > 6 else ''} — either the name is COINED for a state the "
+                "code expresses without naming (the false side of a boolean flag), in which case "
+                "keep the machine but use the code's own vocabulary; or the lifecycle was read off "
+                "prose rather than a declaration, in which case drop it")
+    return out
+
+
 def check_entity_sources_model(m: ProjectModel, roots: list[Path]) -> list[str]:
     """Each entity's name must appear in its SOURCE file — the anti-synthesized-entity gate, a
     lenient token-substring match against the file's text."""
@@ -1925,10 +2061,23 @@ def referenced_paths(m: ProjectModel, root: Path) -> set[str]:
     """Repo-relative paths the model points at, extracted from every stored string (link targets +
     inline paths), kept only when they exist. The model-native analog of the retired markdown
     reader's per-map referenced-paths scan."""
+    # Repo-root FILES, matched by name so a bare `Makefile` / `manage.py` anchor counts as a
+    # reference (B1: `_REF_INLINE` needs a `/`, so root files were invisible to this scan).
+    # Files ONLY — never directories. A root dir shares its name with words that appear in ordinary
+    # map prose ("assets", "docs", "voice", "output"), so accepting directories let a Why sentence
+    # mark a whole tree as referenced: on a live map it silenced a true "i18n/ has no path
+    # referenced in the map — likely an unmapped module" finding because the word appeared in an
+    # edge's `Why`. Only root files were ever needed here.
+    try:
+        root_names = {p.name for p in root.iterdir() if p.is_file()}
+    except OSError:
+        root_names = set()
     cands: set[str] = set()
     for s in _strings(m):
         cands.update(_REF_LINK.findall(s))
         cands.update(_REF_INLINE.findall(s))
+        if root_names:
+            cands.update(t for t in _REF_BARE.findall(s) if t in root_names)
     rootstr = str(root)
     refs: set[str] = set()
     for c in cands:
@@ -2078,6 +2227,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(msg_warnings)
     warnings.extend(_messaging_gap_warnings(m))
     warnings.extend(_isolated_component_warnings(m))
+    warnings.extend(_grounding_warnings(m))
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)
@@ -2092,6 +2242,11 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         # real error, not a nudge. Blocking (B3) so `validate --check-sources` is the deterministic
         # backstop for the source-side prefix rule (a missing file can never slip through all-green).
         problems.extend(check_anchor_existence_model(m, roots))
+        # ADVISORY, not blocking: the anchor resolves but points at a line that cannot act (a `def`
+        # header, an import, a comment). The relationship is usually real — only its `where` drifted
+        # — so this points at work, it never fails the build.
+        warnings.extend(check_operative_lines_model(m, roots))
+        warnings.extend(check_state_sources_model(m, roots))
 
     parents = _parents(m)
     hier_problems, hier_warnings = check_hierarchy(parents, defined)

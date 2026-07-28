@@ -512,3 +512,28 @@ if __name__ == "__main__":
                 failures += 1
                 print(f"FAIL {name}: {e}")
     raise SystemExit(1 if failures else 0)
+
+
+def test_grounding_survives_assemble():
+    """The Phase-4 coverage record must reach the committed model.
+
+    `grounding` is written as its own fragment by the Phase-4 reconcile. Left out of the singleton
+    merge it was silently DROPPED by the only code path that writes a map, so `validate` then
+    reported a fully-grounded map as never challenged — and a re-assemble wiped any hand-edit."""
+    from coyodex.model import Grounding, ProjectModel
+    frag = ProjectModel(grounding=Grounding(claims_total=150, claims_grounded=40,
+                                            claims_refuted=7, note="security first"))
+    merged, problems = merge_fragments([("verify.json", frag)])
+    assert problems == []
+    assert merged.grounding is not None
+    assert merged.grounding.claims_total == 150
+    assert merged.grounding.claims_grounded == 40
+    assert merged.grounding.note == "security first"
+
+
+def test_conflicting_grounding_records_are_reported():
+    from coyodex.model import Grounding, ProjectModel
+    a = ProjectModel(grounding=Grounding(claims_total=10))
+    b = ProjectModel(grounding=Grounding(claims_total=99))
+    _, problems = merge_fragments([("a.json", a), ("b.json", b)])
+    assert any("grounding" in p for p in problems)

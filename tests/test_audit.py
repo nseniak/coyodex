@@ -1663,3 +1663,81 @@ def _run() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(_run())
+
+
+# --------------------------------------------------------------------------------------
+# `why:` may cite a USE CASE, not only a walk position (B4)
+# --------------------------------------------------------------------------------------
+
+def make_walk(*rows: tuple[str, str, str | None]) -> ProjectModel:
+    """rows = (hp_id, uc_id, why) in walk order, with the matching use cases declared."""
+    from coyodex.model import HappyStep, ProjectModel, UseCase
+    ucs = sorted({uc for _, uc, _ in rows})
+    return ProjectModel(
+        use_cases=[UseCase(id=u, name=u, trigger_outcome="t") for u in ucs],
+        happy_path=[HappyStep(id=hp, uc=uc, title=f"step {hp}", why=why)
+                    for hp, uc, why in rows],
+    )
+
+
+def test_uc_why_ref_pointing_backward_is_accepted():
+    m = make_walk(("HP1", "UC1", None), ("HP2", "UC2", "needs the org from UC1"))
+    assert [f for f in audit_model.check_why_refs(m) if f.severity == audit_model.CONTRADICTION] == []
+
+
+def test_uc_why_ref_pointing_forward_is_advisory_not_blocking():
+    # ADVISORY on purpose: a `UCn` in prose is not necessarily a prerequisite citation ("the same
+    # guard UC3 uses"), so blocking here would fail a build on a sentence. `HPn` stays blocking —
+    # a position citation can only ever mean one thing.
+    m = make_walk(("HP1", "UC1", "needs UC2"), ("HP2", "UC2", None))
+    found = audit_model.check_why_refs(m)
+    assert [(f.check, f.severity) for f in found] == [("forward-uc-why-ref", audit_model.ADVISORY)]
+
+
+def test_uc_why_ref_to_an_unknown_use_case_dangles():
+    m = make_walk(("HP1", "UC1", None), ("HP2", "UC2", "needs UC99"))
+    assert [f.check for f in audit_model.check_why_refs(m)] == ["dangling-why-ref"]
+
+
+def test_uc_why_ref_to_an_offspine_use_case_is_advisory_not_blocking():
+    from coyodex.model import UseCase
+    m = make_walk(("HP1", "UC1", None), ("HP2", "UC2", "needs UC3"))
+    m.use_cases.append(UseCase(id="UC3", name="off-spine", trigger_outcome="t"))
+    found = audit_model.check_why_refs(m)
+    assert [(f.check, f.severity) for f in found] == [("offspine-why-ref", audit_model.ADVISORY)]
+
+
+def test_positional_why_ref_silently_retargets_when_the_walk_is_renumbered():
+    """`HPn` names a POSITION, so a walk edit can point an unchanged `why:` at a different step.
+
+    A live build inserted a missing first act late in the run; the renumbering that followed left an
+    `HP16` citing `HP19` — a forward reference, and a BLOCKING audit failure found after the final
+    assemble. The narrower, always-silent half is shown here: after renumbering, the SAME `why:`
+    text resolves to a different step than its author meant, and no check can notice because the
+    reference is still well-formed and still backward. A `UCn` citation names the prerequisite
+    itself, so neither failure mode can reach it.
+    """
+    from coyodex.model import HappyStep, ProjectModel, UseCase
+
+    def walk(rows: list[tuple[str, str, str | None]]) -> ProjectModel:
+        return ProjectModel(
+            use_cases=[UseCase(id=u, name=u, trigger_outcome="t")
+                       for u in ("UC1", "UC2", "UC9")],
+            happy_path=[HappyStep(id=hp, uc=uc, title=uc, why=why) for hp, uc, why in rows])
+
+    before = walk([("HP1", "UC1", None), ("HP2", "UC2", "needs the org from HP1")])
+    after = walk([("HP1", "UC9", None),                       # inserted first act
+                  ("HP2", "UC1", None),                       # was HP1
+                  ("HP3", "UC2", "needs the org from HP1")])  # citation untouched
+    # well-formed and backward in BOTH walks — the audit cannot see the breakage...
+    assert audit_model.check_why_refs(before) == []
+    assert audit_model.check_why_refs(after) == []
+    # ...yet the cited step is no longer the one that creates the org.
+    uc_cited = lambda m: {st.hp_id: st.uc for st in audit_model.happy_path_steps(m)}["HP1"]
+    assert uc_cited(before) == "UC1" and uc_cited(after) == "UC9"
+
+    # The same prerequisite cited as a use case resolves to the org step in both walks.
+    by_uc = walk([("HP1", "UC9", None), ("HP2", "UC1", None),
+                  ("HP3", "UC2", "needs the org from UC1")])
+    assert audit_model.check_why_refs(by_uc) == []
+    assert audit_model.happy_path_steps(by_uc)[2].why_uc_refs == ["UC1"]
