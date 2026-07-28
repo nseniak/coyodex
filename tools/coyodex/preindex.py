@@ -41,6 +41,7 @@ from coyodex.preindex_lib import (
     imports_for,
     iter_source_files,
     lang_of,
+    median_file_loc,
     slice_expectations,
     symbols_for,
     ts_available,
@@ -235,7 +236,21 @@ def build_granularity(root: Path) -> dict:
     the tree at check time (shared code, never this JSON — GR4)."""
     tree = expected_components(root)
     lo, hi = granularity_band(tree.expected)
+    # WHICH CAP BOUND E. E is `max(files/file_cap, loc/loc_cap)` per directory, so on a codebase of
+    # many small files (a file-per-UI-component frontend) the FILE cap fires long before the LOC cap
+    # and E climbs well above what the LOC mass suggests. Three of four live builds disagreed with E
+    # by 2-4x and had to spend a `granularity` exception on it — with no way to see WHY. Reporting
+    # both ceilings turns a blind disagreement into an informed altitude decision (GR2/GR5).
+    by_files = -(-tree.files // GRANULARITY_FILE_CAP)
+    by_loc = -(-tree.loc // GRANULARITY_LOC_CAP)
     return {
+        "counted_files": tree.files,
+        "counted_loc": tree.loc,
+        "ceiling_by_file_count": by_files,
+        "ceiling_by_loc": by_loc,
+        "bound_by": ("file-count" if by_files > by_loc else
+                     "LOC" if by_loc > by_files else "both equally"),
+        "median_file_loc": median_file_loc(root),
         "rule": ("one component ≈ one module-/folder-sized unit "
                  f"(≤ ~{GRANULARITY_FILE_CAP} source files / ≤ ~{GRANULARITY_LOC_CAP} LOC); "
                  "component-shaped dir → stop (leaf), subsystem-shaped → recurse"),
@@ -254,11 +269,122 @@ def build_granularity(root: Path) -> dict:
 
 
 # --------------------------------------------------------------------------------------
+# 5. --report — the READ path over an existing pre-index
+# --------------------------------------------------------------------------------------
+
+def _fmt_int(n: object) -> str:
+    return f"{n:,}" if isinstance(n, int) else str(n)
+
+
+def _weight_lines(node: dict, depth: int, max_depth: int, out: list[str]) -> None:
+    """The directory weight tree, heaviest child first (the JSON is already sorted by LOC desc)."""
+    pad = "  " * depth
+    path = node.get("path") or "."
+    out.append(f"{pad}{path}  loc={_fmt_int(node.get('loc'))} "
+               f"files={_fmt_int(node.get('file_count'))} "
+               f"churn={_fmt_int(node.get('churn'))} lang={node.get('lang')}")
+    if depth >= max_depth:
+        kids = node.get("children") or []
+        if kids:
+            out.append(f"{pad}  … {len(kids)} more child dir(s) — raise --depth to see them")
+        return
+    for child in node.get("children") or []:
+        _weight_lines(child, depth + 1, max_depth, out)
+
+
+def report(argv: list[str]) -> int:
+    """Print an existing `preindex.json` as the summary the build actually needs.
+
+    The stderr summary of a BUILD run carries only the top-5 dirs and the whole-repo E, but the
+    harvest plan needs the weight tree and the PER-SLICE E (`granularity.per_dir`) — which live
+    only inside the JSON. Without this, every build hand-writes throwaway JSON-parsing code, which
+    is exactly what method.md's "don't reverse-engineer the JSON" tells it not to do."""
+    in_path = Path(_arg(argv, "--in", ".coyodex/preindex.json") or "")
+    try:
+        depth = int(_arg(argv, "--depth", "2") or 2)
+        top = int(_arg(argv, "--top", "40") or 40)
+    except ValueError:
+        sys.stderr.write("preindex --report: --depth and --top take an integer\n")
+        return 2
+    if not in_path.is_file():
+        sys.stderr.write(f"preindex --report: no pre-index at {in_path}\n"
+                         "  build one first: coyodex preindex --root <repo>\n")
+        return 2
+    try:
+        doc = json.loads(in_path.read_text())
+    except (OSError, ValueError) as exc:
+        sys.stderr.write(f"preindex --report: cannot read {in_path}: {exc}\n")
+        return 2
+
+    weight = doc.get("weight") or {}
+    gran = doc.get("granularity") or {}
+    cov = doc.get("coverage") or {}
+    syms = doc.get("symbols") or {}
+    out: list[str] = [f"pre-index {in_path}  (root {doc.get('root')})", "", f"WEIGHT TREE (depth {depth}, heaviest first)"]
+    _weight_lines(weight, 0, depth, out)
+
+    band = gran.get("band") or [None, None]
+    out += ["", f"GRANULARITY — expected components E={gran.get('expected_components')} "
+                f"(band {band[0]}–{band[1]}; caps {gran.get('file_cap')} files / "
+                f"{_fmt_int(gran.get('loc_cap'))} LOC per component)"]
+    if gran.get("bound_by"):
+        out += [f"  bound by {gran['bound_by']}: file-count ceiling {gran.get('ceiling_by_file_count')} "
+                f"vs LOC ceiling {gran.get('ceiling_by_loc')} "
+                f"over {_fmt_int(gran.get('counted_files'))} files / "
+                f"{_fmt_int(gran.get('counted_loc'))} LOC "
+                f"(median file {gran.get('median_file_loc')} LOC)"]
+        if gran.get("bound_by") == "file-count" and int(gran.get("median_file_loc") or 0) < 80:
+            out += ["  NOTE: the FILE cap binds and files are small, so E counts many tiny files as",
+                    "        unit-sized mass. Expect the honest altitude to sit BELOW E here; if you",
+                    "        build under the band, record the literal `granularity` under a",
+                    "        'Balance exceptions' extras heading with the why."]
+    out += ["  Hand each harvest agent ITS slice's number — never a gut estimate (method.md).",
+            "  per-directory E (top %d):" % top]
+    per = gran.get("per_dir") or {}
+    for k, v in sorted(per.items(), key=lambda kv: (-kv[1], kv[0]))[:top]:
+        out.append(f"    {v:6d}  {k}")
+    if len(per) > top:
+        out.append(f"    … {len(per) - top} more dir(s) — raise --top to see them")
+
+    out += ["", "COVERAGE — what the pre-index could NOT see (unparsed = UNKNOWN, not empty)",
+            f"  files counted: {_fmt_int(cov.get('files_counted'))} "
+            f"(skipped/excluded {_fmt_int(cov.get('files_skipped_excluded'))})",
+            f"  git={cov.get('git_available')} tree-sitter={cov.get('tree_sitter_available')} "
+            f"symbol files parsed={_fmt_int(cov.get('symbol_files_parsed'))}",
+            f"  ambiguous symbol names: {len(syms.get('ambiguous') or [])}",
+            f"  languages seen WITHOUT a symbol extractor: "
+            f"{list(cov.get('languages_seen_without_extractor') or {})}"]
+    fails = cov.get("symbol_parse_failure_count") or 0
+    if fails:
+        out.append(f"  symbol parse failures: {fails}")
+    out += ["", "Reconcile every item — this is advisory INPUT, never rows for the map (GR2);",
+            "weight sets attention, your judgement sets altitude (GR5)."]
+    print("\n".join(out))
+    return 0
+
+
+# --------------------------------------------------------------------------------------
 # main
 # --------------------------------------------------------------------------------------
 
+USAGE = """usage: coyodex preindex [--root .] [--out .coyodex/preindex.json] [--since <rev|date>]
+                        [--pairs pairs.json] [--max-depth N]
+       coyodex preindex --report [--in .coyodex/preindex.json] [--depth N]
+
+Build the structural pre-index, or (--report) print an existing one as a readable summary:
+the weight tree, the per-directory component expectation E, and the coverage block.
+--report READS the JSON and writes nothing."""
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    # `--help` must never RUN the pre-index: it writes `.coyodex/preindex.json`, so a help request
+    # would clobber the artifact (and walk a 3M-LOC tree). Every other subcommand guards this.
+    if "-h" in argv or "--help" in argv:
+        print(USAGE)
+        return 0
+    if "--report" in argv:
+        return report(argv)
     root = Path(_arg(argv, "--root", ".") or ".").resolve()
     out_path = Path(_arg(argv, "--out", str(root / ".coyodex" / "preindex.json")) or "")
     since = _arg(argv, "--since")
@@ -316,8 +442,10 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(symbols['ambiguous'])} ambiguous names; "
         f"languages without symbols: {list(coverage['languages_seen_without_extractor'])}\n"
         f"  granularity: expect ~{granularity['expected_components']} components "
-        f"(band {granularity['band'][0]}–{granularity['band'][1]}; per-slice E in "
-        f"the JSON's granularity.per_dir — hand each harvest agent its slice's number)\n"
+        f"(band {granularity['band'][0]}–{granularity['band'][1]}, bound by "
+        f"{granularity['bound_by']}, median file {granularity['median_file_loc']} LOC)\n"
+        f"  READ IT: coyodex preindex --report   "
+        f"(weight tree + per-slice E + coverage — do NOT hand-parse the JSON)\n"
         "  NOTE: draft the behavioral layer BEFORE using this (GR1); reconcile every item, "
         "never copy verbatim (GR2).\n"
     )

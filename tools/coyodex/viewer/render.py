@@ -21,6 +21,10 @@ from pathlib import Path
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
+    if "-h" in argv or "--help" in argv:
+        print("usage: coyodex render <project-map.json> <out.md>  "
+              "(the interactive viewer is served by `coyodex serve`)")
+        return 0
     if len(argv) < 2:
         print("usage: coyodex render <project-map.json> <out.md>  "
               "(the interactive viewer is served by `coyodex serve`)", file=sys.stderr)

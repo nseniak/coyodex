@@ -124,6 +124,19 @@ NON_PRODUCT_DIRS: frozenset[str] = frozenset({
     "tests", "test", "e2e", "internal", "docs", "__pycache__", "node_modules", ".git",
 })
 
+# ASSET trees — excluded from the granularity expectation E ONLY, never from the coverage checks.
+# They hold no behavior to map, but a file-per-icon convention makes them huge by FILE COUNT, which
+# is what drives E (a live monorepo: 679 of 5,007 granularity-counted files, 13.6%, moving E from
+# 994 to 911). They are kept OUT of `NON_PRODUCT_DIRS` on purpose: that set also gates
+# `validate_analysis`'s absent-module and file-level coverage checks, where excluding a dir means
+# "never warn that this code is unmapped" — and real `.ts`/`.js` does live under `static/` and
+# `locales/` in some repos. Sizing and coverage are different questions; they get different lists.
+# Deliberately conservative: `public/` and `lang/` are in neither (too often real code).
+GRANULARITY_ASSET_DIRS: frozenset[str] = frozenset({
+    "assets", "icons", "img", "images", "fonts", "static", "locales", "translations",
+})
+GRANULARITY_SKIP_DIRS: frozenset[str] = NON_PRODUCT_DIRS | GRANULARITY_ASSET_DIRS
+
 
 def lang_of(path: Path) -> str | None:
     return LANG_BY_EXT.get(path.suffix.lstrip(".").lower())
@@ -468,6 +481,21 @@ class DirExpectation:
     children: list["DirExpectation"]
 
 
+def median_file_loc(root: Path) -> int:
+    """Median LOC of the files E is computed over. The companion to `bound_by`: when the file cap
+    binds AND the median file is small, E is counting many tiny files as if each were a unit's worth
+    of mass — the signal that E is high for a structural reason, not because the repo really holds
+    that many components."""
+    sizes = sorted(
+        count_loc(f)
+        for f in iter_source_files(root).files
+        if (lang := lang_of(f)) is not None
+        and lang not in GRANULARITY_TEXT_LANGS
+        and not any(part in GRANULARITY_SKIP_DIRS for part in f.relative_to(root.resolve()).parts[:-1])
+    )
+    return sizes[len(sizes) // 2] if sizes else 0
+
+
 def _ceil_units(files: int, loc: int, file_cap: int, loc_cap: int) -> int:
     """The oversized-flat-group rule: how many cohesive units this much mass should split into —
     the larger of the two cap-relative ceilings, never less than one."""
@@ -489,7 +517,7 @@ def expected_components(root: Path, *, file_cap: int = GRANULARITY_FILE_CAP,
         lang = lang_of(f)
         if lang is None or lang in GRANULARITY_TEXT_LANGS:
             continue
-        if any(part in NON_PRODUCT_DIRS for part in rel.parts[:-1]):
+        if any(part in GRANULARITY_SKIP_DIRS for part in rel.parts[:-1]):
             continue
         node = tree
         for part in rel.parts[:-1]:
