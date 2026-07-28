@@ -713,3 +713,25 @@ def test_every_container_arrow_on_the_overview_is_bound():
     unbound = [(a, b) for a, b in arrows
                if (a in groups or b in groups) and f"{a}>{b}" not in keys]
     assert unbound == [], unbound
+
+
+def test_inheritance_is_not_process_topology():
+    """`extends`/`implements` describe the shape of the CODE, never runtime traffic.
+
+    A subclass does not call the process its base class happens to also run in. Leaving inheritance
+    in the derivation produced exactly that on a live map: a Bluesky plugin drew calls to eight
+    sibling scrapers because it extends a framework class those processes load."""
+    m = ProjectModel(title="T", goal="g")
+    m.components = [
+        Component(id="C1", name="Plugin", source="p/a.py:1", runs_in=["bluesky"]),
+        Component(id="C2", name="Framework", source="p/base.py:1", runs_in=["rss", "twitch"]),
+    ]
+    m.deployment = [DeploymentRow(unit=u) for u in ("bluesky", "rss", "twitch")]
+    m.edges = [Edge(src="C1", verb="extends", dst="C2", why="w", where="p/a.py:1")]
+    g = model_to_graph(m)
+    uid_of = {unit: uid for uid, unit in G._deployment_unit_ids(g)}
+    assert G._call_process_links(g, uid_of, set(uid_of)) == {}
+    # a real call between the same two components DOES cross
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", why="w", where="p/a.py:9")]
+    g = model_to_graph(m)
+    assert G._call_process_links(g, uid_of, set(uid_of)) != {}

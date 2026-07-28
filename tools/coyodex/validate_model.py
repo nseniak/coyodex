@@ -1177,6 +1177,38 @@ def _grounding_warnings(m: ProjectModel) -> list[str]:
     return []
 
 
+def _inheritance_runs_in_warnings(m: ProjectModel) -> list[str]:
+    """ADVISORY: a base class not tagged to run where its SUBCLASS runs.
+
+    A hard invariant of the code, checkable with no code reading: a subclass cannot exist in a
+    process that does not load its base class, so for an `extends`/`implements` edge the source's
+    host units must be a SUBSET of the target's. A gap means the base's `runs_in` is incomplete —
+    which is not cosmetic, because the Deployment view composes process topology from `runs_in`
+    differences. A live map tagged a shared connector framework with eight scraper units but omitted
+    a ninth whose plugin extends it, and that one missing tag drew eight false arrows from that
+    plugin's process to all its siblings."""
+    units = {d.unit for d in m.deployment}
+    if not units:
+        return []
+    host = {c.id: {u for u in (c.runs_in or []) if u in units} for c in m.components}
+    names = {c.id: c.name for c in m.components}
+    out: list[str] = []
+    for e in m.edges:
+        if e.verb not in ("extends", "implements"):
+            continue
+        src, dst = host.get(e.src), host.get(e.dst)
+        if not src or not dst:
+            continue
+        missing = src - dst
+        if missing:
+            out.append(
+                f"{e.dst} ({names.get(e.dst, e.dst)}) is {e.verb.rstrip('s')}ed by {e.src} "
+                f"({names.get(e.src, e.src)}), which runs in {', '.join(sorted(missing))} — but "
+                f"{e.dst} is not tagged to run there. A base cannot be absent from a process that "
+                f"loads its subclass: add the unit(s) to {e.dst}'s `runs_in`")
+    return out
+
+
 def _check_states(m: ProjectModel) -> tuple[list[str], list[str]]:
     """State-machine well-formedness (row-local — safe per-fragment). Blocking: an empty `states`
     list (a machine with no states claims nothing), duplicate state names, a transition endpoint
@@ -2261,6 +2293,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_messaging_gap_warnings(m))
     warnings.extend(_isolated_component_warnings(m))
     warnings.extend(_grounding_warnings(m))
+    warnings.extend(_inheritance_runs_in_warnings(m))
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)

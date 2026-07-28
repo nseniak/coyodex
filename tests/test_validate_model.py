@@ -2021,3 +2021,29 @@ def test_the_one_sided_warning_is_advisory_not_blocking():
     # A channel whose other end lives outside the mapped repo is legitimately one-sided.
     problems, _ = validate_model(make_channel_map(["C1"], []))[:2]
     assert not [p for p in problems if "JOB_QUEUE" in p]
+
+
+def test_base_class_must_run_where_its_subclass_runs():
+    """A subclass cannot exist in a process that does not load its base class.
+
+    That makes `src_units ⊆ dst_units` a hard invariant for inheritance, checkable with no code
+    reading — and a gap is not cosmetic: the Deployment view composes process topology from `runs_in`
+    differences, so one missing tag on a shared connector framework drew eight false process arrows
+    from the plugin that extends it to all its siblings."""
+    from coyodex.validate_model import _inheritance_runs_in_warnings
+    m = ProjectModel(
+        components=[Component(id="C1", name="Plugin", purpose="p", source="a.py:1",
+                              runs_in=["bluesky"]),
+                    Component(id="C2", name="Framework", purpose="p", source="b.py:1",
+                              runs_in=["rss"])],
+        deployment=[DeploymentRow(unit="bluesky"), DeploymentRow(unit="rss")],
+        edges=[Edge(src="C1", verb="extends", dst="C2", why="w", where="a.py:1")])
+    out = _inheritance_runs_in_warnings(m)
+    assert len(out) == 1 and "bluesky" in out[0] and "C2" in out[0]
+
+    m.components[1].runs_in = ["rss", "bluesky"]           # base now loaded where the subclass runs
+    assert _inheritance_runs_in_warnings(m) == []
+
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", why="w", where="a.py:1")]
+    m.components[1].runs_in = ["rss"]
+    assert _inheritance_runs_in_warnings(m) == []           # a plain call may legitimately cross

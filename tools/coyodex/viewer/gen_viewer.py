@@ -1741,6 +1741,13 @@ def _call_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set[st
         sn, dn = graph["nodes"].get(sid), graph["nodes"].get(did)
         if not sn or not dn or str(sn.get("kind")) != "component" or str(dn.get("kind")) != "component":
             continue
+        # STRUCTURAL verbs are not runtime traffic. `extends`/`implements` describe the shape of the
+        # CODE — a subclass does not "call" the process its base class also happens to run in — so
+        # they can never evidence a process→process hop. Leaving them in produced exactly that
+        # nonsense on a live map: a Bluesky plugin drew calls to eight sibling scrapers purely
+        # because it extends a framework class those processes also load.
+        if str(e.get("verb") or "") in ("extends", "implements"):
+            continue
         src_units = {u for u in _node_runs_in(sn) if u in known}
         dst_units = {u for u in _node_runs_in(dn) if u in known}
         crossing_from = src_units - dst_units       # co-resident hosts force nothing
