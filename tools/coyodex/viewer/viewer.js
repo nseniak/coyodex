@@ -2575,6 +2575,11 @@ let hi = -1;  // index of the current state
 // the zoom + position it was last left at, instead of a fresh fit. (Per-entry `vp` below covers only the
 // exact history slot; this covers the diagram wherever it reappears.)
 const vpByView = {};
+// The last state visited under each top-level tab (keyed by topView(kind)), so switching AWAY from a tab
+// and back reopens it exactly where it was left — drill depth, selection, camera and right-pane included —
+// instead of resetting to the tab's overview. Updated on every leave (see captureViewState). Clicking the
+// tab you are ALREADY on ignores this and resets to the overview (see goTab/resetTab).
+const tabLast = {};
 
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
@@ -2635,6 +2640,9 @@ function captureViewState() {  // stash the leaving entry's pan/zoom + selection
   history[hi].sels = mainScene ? mainScene.selection.map((d) => d.key) : null;
   history[hi].content = (pendingLeaveContent !== undefined) ? pendingLeaveContent : snapContent();
   pendingLeaveContent = undefined;
+  // Remember where this tab was left (a shallow clone so later mutation of the history entry can't
+  // rewrite it), so a return to the tab restores this exact spot rather than the overview.
+  tabLast[topView(history[hi].kind)] = { ...history[hi] };
 }
 // Record a new history point that keeps the CURRENT diagram view + selection and changes only the right
 // pane (a file switch in the menu, or opening a file from the browser). Back/forward step through these
@@ -2659,6 +2667,25 @@ function go(state) {
 }
 function back() { if (hi > 0) { const from = history[hi]; captureViewState(); hi -= 1; driveTransition(from); } }
 function fwd() { if (hi < history.length - 1) { const from = history[hi]; captureViewState(); hi += 1; driveTransition(from); } }
+// A top-bar tab click. Switching to a DIFFERENT tab reopens it where it was last left (its remembered
+// drill + selection + camera + pane); its first visit lands on the overview. Clicking the tab you are
+// ALREADY on is a "reset" — it zooms back out to that tab's plain overview (see resetTab).
+function goTab(view) {
+  const cur = hi >= 0 ? topView(history[hi].kind) : null;
+  if (view === cur) { resetTab(view); return; }
+  const saved = tabLast[view];
+  go(saved ? { ...saved } : { kind: view });
+}
+// Reset the current tab to its overview: fresh fit, nothing selected, default panel. Drop the remembered
+// camera for the overview so it re-fits instead of reopening at an old zoom. From a drill-down this rides
+// go()'s normal (animated) zoom-out; already sitting on the overview, go() would no-op, so re-render in
+// place after stripping this entry's camera/selection/pane.
+function resetTab(view) {
+  const root = { kind: view };
+  delete vpByView[stateKey(root)];
+  if (hi >= 0 && stateKey(history[hi]) === stateKey(root)) { history[hi] = root; render(); }
+  else go(root);
+}
 
 // --- drill "dive" transition ----------------------------------------------------
 // Drilling into a container is a full re-render of a different diagram, so on its own it reads as a hard
@@ -6280,7 +6307,7 @@ viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'system' && !HAS_SYSTEM) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'data' && !HAS_DATA) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'tests' && !HAS_TESTS) { b.style.display = 'none'; return; }
-  b.addEventListener('click', () => go({ kind: b.dataset.view }));
+  b.addEventListener('click', () => goTab(b.dataset.view));
 });
 navback.addEventListener('click', back);
 navfwd.addEventListener('click', fwd);
