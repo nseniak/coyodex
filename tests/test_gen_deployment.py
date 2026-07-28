@@ -596,3 +596,78 @@ def test_partial_overlap_keeps_the_arrow_from_the_non_hosting_unit():
     uid_of = {unit: uid for uid, unit in G._deployment_unit_ids(g)}
     links = G._call_process_links(g, uid_of, set(uid_of))
     assert list(links) == [(uid_of["vite-dev"], uid_of["backend"])]
+
+
+# --- capability containers: grouping the overview above the readable cap -------------------------
+
+def make_big_deploy_model(n_connectors: int = 14) -> ProjectModel:
+    """A monolith shape: two all-capability processes plus a fleet of single-capability satellites."""
+    m = ProjectModel(title="Big", goal="g")
+    m.subsystems = [Group(id="S1", name="Connectors"), Group(id="S2", name="Billing"),
+                    Group(id="S3", name="Core")]
+    m.components, m.deployment = [], []
+    for i in range(n_connectors):                       # one capability each -> one container
+        m.components.append(Component(id=f"C{i+1}", name=f"conn{i}", subsystem="S1",
+                                      source=f"conn/{i}.py:1", runs_in=[f"conn-{i}"]))
+        m.deployment.append(DeploymentRow(unit=f"conn-{i}"))
+    for j, unit in enumerate(("api", "bot")):           # every capability -> stays its own box
+        for k, sub in enumerate(("S1", "S2", "S3")):
+            m.components.append(Component(id=f"M{j}{k}", name=f"{unit}-{sub}", subsystem=sub,
+                                          source=f"{unit}/{sub}.py:1", runs_in=["api", "bot"]))
+        m.deployment.append(DeploymentRow(unit=unit))
+    return m
+
+
+def test_small_maps_are_not_grouped_at_all():
+    # Below the cap the flat list IS the clearest drawing; a drill level would buy nothing.
+    g = model_to_graph(make_deploy_model())
+    assert G.deployment_groups(g, G._process_unit_names(g)) == ({}, {})
+
+
+def test_same_capability_processes_collapse_into_one_named_container():
+    m = make_big_deploy_model()
+    g = model_to_graph(m)
+    groups, group_of = G.deployment_groups(g, G._process_unit_names(g))
+    assert len(groups) == 1
+    gid, members = next(iter(groups.items()))
+    assert len(members) == 14 and all(u.startswith("conn-") for u in members)
+    assert G.deployment_group_label(g, members) == "Connectors (14)"
+    assert group_of["conn-3"] == gid
+
+
+def test_a_multi_capability_process_stays_its_own_box():
+    # `api`/`bot` run everything. Folding them into one container produced a box labelled with seven
+    # capability names while hiding the two processes a reader most wants to see.
+    m = make_big_deploy_model()
+    g = model_to_graph(m)
+    _, group_of = G.deployment_groups(g, G._process_unit_names(g))
+    assert "api" not in group_of and "bot" not in group_of
+    mm = G.gen_deployment_mermaid(g)
+    assert '["api"]' in mm and '["bot"]' in mm
+
+
+def test_container_arrows_merge_member_arrows_and_drop_internal_ones():
+    m = make_big_deploy_model()
+    m.edges = [Edge(src="C1", verb="calls", dst="M00", why="w", where="a.py:1"),   # conn-0 -> api/bot
+               Edge(src="C2", verb="calls", dst="M00", why="w", where="b.py:1"),   # conn-1 -> api/bot
+               Edge(src="C1", verb="calls", dst="C2", why="w", where="c.py:1")]    # inside the group
+    g = model_to_graph(m)
+    groups, _ = G.deployment_groups(g, G._process_unit_names(g))
+    gid = next(iter(groups))
+    mm = G.gen_deployment_mermaid(g)
+    out = [l for l in mm.splitlines() if l.strip().startswith(gid) and "-->" in l]
+    assert out, mm
+    assert not any(f"| {gid}" in l for l in out)       # no self-loop from the internal call
+    card = G.gen_deployment_group_card_mermaid(g, gid)
+    assert "U_" in card                                 # members are drawn individually on the card
+
+
+def test_infra_lane_is_capped_and_says_what_it_dropped():
+    m = make_big_deploy_model()
+    m.deps = [Dep(id=f"D{i}", name=f"store{i}", kind="datastore", type="db") for i in range(1, 12)]
+    # every connector touches every store -> 11 shared infra, above the lane cap of 8
+    m.edges = [Edge(src=f"C{c}", verb="writes", dst=f"D{i}", why="w", where="x.py:1")
+               for i in range(1, 12) for c in (1, 2)]
+    mm = G.gen_deployment_mermaid(model_to_graph(m))
+    assert mm.count("[(") == G.INFRA_LANE_MAX
+    assert "+3 more shared dependencies" in mm         # never a silent truncation

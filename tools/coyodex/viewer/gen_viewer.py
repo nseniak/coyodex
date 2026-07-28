@@ -1757,6 +1757,91 @@ def _call_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set[st
     return out
 
 
+# A deployment overview stays flat until it stops being readable. Below this many process boxes the
+# flat list IS the clearest drawing, and a grouping level would add a drill that buys nothing (9, 5
+# and 2-process maps all lose by it). Set at the fan-out rule's advisory cap, so grouping switches on
+# exactly when `validate` would start complaining about the screen.
+DEPLOYMENT_GROUP_MIN = 13
+# Coupling points shown on the overview. The "2+ processes" rule bounds the fan on a small map, but on
+# a 51-process monolith almost every dep clears it — 68 boxes and 243 arrows, where MongoDB alone drew
+# 17. The full inventory is the Dependencies view's job (and the Data view's, for stores); what only
+# THIS view answers is which infrastructure couples the MOST processes, so the lane keeps the heaviest
+# and says how many it dropped.
+INFRA_LANE_MAX = 8
+# A container is only worth drawing if it can be NAMED. Processes running one capability ("the 14
+# social connectors") make a box a reader understands at a glance; a process running seven is a
+# monolith whose identity IS the process, and folding two of them together produced a real box
+# labelled "AI & media services + Core platform + Discord bot experience + Discord connectivity +
+# Monetization + Social content connectors + Web platform API (2)" — while hiding `api` and `bot`,
+# the two processes the reader most wants to see. Above this many capabilities the members stay
+# individual boxes.
+DEPLOYMENT_GROUP_MAX_CAPS = 2
+
+
+def _unit_capabilities(graph: GraphDict) -> dict[str, frozenset[str]]:
+    """`unit name → the top-level subsystems whose components run in that process`.
+
+    The grouping key for the overview. It is SEMANTIC (what the process runs) rather than structural
+    (what it connects to), and both halves are already in the model — `runs_in` on the component, the
+    component's `subsystem`, and the subsystem parent chain — so no new authoring is needed.
+
+    Grouping by connection signature was the obvious alternative and it measures badly: on a
+    51-process monolith, exact same-neighbours grouping yields 46 groups (only 9 units merge at all),
+    and the merges it does find are semantically arbitrary — a memberships worker paired with a
+    sponsorships worker because they touch the same stores. Relaxing the match to 50% overlap reaches
+    30 groups but the groups stop being nameable, a group arrow becomes false for some members, and
+    the whole grouping reshuffles whenever one edge is added (which makes every diagram diff
+    unreadable). Capability signature gives 12 NAMED groups over the same 51 processes, changes only
+    when a component is re-assigned, and matches the method's own capability-first grouping rule."""
+    caps: dict[str, set[str]] = {}
+    for nid, node in graph["nodes"].items():
+        if str(node.get("kind")) != "component":
+            continue
+        top = _top_subsystem(graph, str(nid))
+        if not top:
+            continue
+        for unit in _node_runs_in(node):
+            caps.setdefault(str(unit), set()).add(top)
+    return {u: frozenset(s) for u, s in caps.items()}
+
+
+def deployment_groups(graph: GraphDict, process_units: set[str]
+                      ) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """`({group_id: [unit names]}, {unit name: group_id})` — capability containers for the overview.
+
+    A signature with only ONE process is not a container: it is drawn as the process itself, which is
+    why a monolith's `api`/`bot`/`worker` (each running five capabilities) stay their own boxes. Empty
+    on a map below `DEPLOYMENT_GROUP_MIN`, so small maps render exactly as before."""
+    if len(process_units) < DEPLOYMENT_GROUP_MIN:
+        return {}, {}
+    caps = _unit_capabilities(graph)
+    by_sig: dict[frozenset[str], list[str]] = {}
+    for unit in sorted(process_units):
+        sig = caps.get(unit)
+        if sig:
+            by_sig.setdefault(sig, []).append(unit)
+    groups: dict[str, list[str]] = {}
+    group_of: dict[str, str] = {}
+    # Deterministic ids: biggest group first, then alphabetically by member list — so a re-render at
+    # the same commit produces the same ids and the diagram diffs cleanly.
+    ordered = sorted(by_sig.items(), key=lambda kv: (-len(kv[1]), kv[1]))
+    for i, (_sig, members) in enumerate(
+            (s, m) for s, m in ordered if len(m) >= 2 and len(s) <= DEPLOYMENT_GROUP_MAX_CAPS):
+        gid = f"PG_{i}"
+        groups[gid] = members
+        for u in members:
+            group_of[u] = gid
+    return groups, group_of
+
+
+def deployment_group_label(graph: GraphDict, members: list[str]) -> str:
+    """A container's display text: the capability names its processes run, plus the member count."""
+    caps = _unit_capabilities(graph)
+    sig = caps.get(members[0], frozenset())
+    names = sorted(str(graph["nodes"].get(s, {}).get("name") or s) for s in sig)
+    return f"{' + '.join(names)} ({len(members)})"
+
+
 def _call_edge_label(rows: list[dict[str, str]]) -> str:
     """A synchronous process→process arrow's label: the verb when the pair is one call (`requests` says
     more than `1 call`), else the count."""
@@ -1905,11 +1990,29 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
         if u in proc_set:
             infra_procs.setdefault(b, set()).add(u)
     shared_infra = {b: us for b, us in infra_procs.items() if len(us) >= 2}
+    # …and, on a big map, only the heaviest couplers. NEVER a silent cap: the count that did not fit
+    # is drawn as a note box pointing at the view that does hold the full inventory.
+    infra_dropped = 0
+    if len(shared_infra) > INFRA_LANE_MAX:
+        keep = sorted(shared_infra, key=lambda b: (-len(shared_infra[b]), b))[:INFRA_LANE_MAX]
+        infra_dropped = len(shared_infra) - len(keep)
+        shared_infra = {b: shared_infra[b] for b in keep}
     infra_boxes = sorted(shared_infra)
+
+    # CAPABILITY CONTAINERS: above the readable cap, processes running the same capabilities collapse
+    # into one drillable box (see `deployment_groups`). Members keep their own card; the container
+    # carries the synthesized arrows.
+    groups, group_of = deployment_groups(graph, process_units)
+    uid_group = {uid_of[u]: gid for u, gid in group_of.items() if u in uid_of}
+    box_of = {uid: uid_group.get(uid, uid) for uid in process_uids}      # process uid → what draws it
+    grouped_uids = [uid for uid in process_uids if uid not in uid_group]  # ungrouped stay themselves
+    group_label = {gid: deployment_group_label(graph, members) for gid, members in groups.items()}
+    top_boxes = grouped_uids + sorted(groups)
 
     lines = ["flowchart TB"]
     class_lines: list[str] = []
     label_of = {uid: unit for uid, unit in units}  # process ids aren't in the clean graph — label from units
+    label_of.update(group_label)                   # …and a container is labelled by its capabilities
     allinone_label = {uid: f"{label_of.get(uid, uid)} — all-in-one: runs every subsystem" for uid in fold}
 
     def _decl(nid: str, default_kind: str, cls_override: str | None = None) -> tuple[str, str]:
@@ -1933,7 +2036,7 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
 
     # REDESIGN: one "Processes" lane, one "Subsystems" lane, joined by a SINGLE aggregate `runs` arrow
     # between the two lane boxes (the per-process→subsystem fan moves to each process's drill card).
-    lane("L_proc", "Processes", process_uids, "process")
+    lane("L_proc", "Processes", top_boxes, "process")
     # Infrastructure lane, BANDED by derived role: nested role sub-bands (Message bus / Data store /
     # Service / Security / Other), each infra box coloured by its band. A dual-role dep (Redis =
     # bus + store) lands in the first band it qualifies for; a roleless infra falls to "Other" (slate).
@@ -1952,6 +2055,13 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
                 lines.append(f"      {decl}")
                 class_lines.append(clsline)
             lines.append("    end")
+        if infra_dropped:
+            # Say what was left out, and where it lives. A capped lane that reads as complete is the
+            # "silent truncation" failure — the reader cannot tell 8-of-8 from 8-of-68.
+            lines.append(f'    L_infra_more["+{infra_dropped} more shared '
+                         f'{"dependency" if infra_dropped == 1 else "dependencies"} — '
+                         f'see the Dependencies view"]')
+            class_lines.append("  class L_infra_more infra")
         lines.append("  end")
     # A unit hosting no code and matching no infra dep is a real gap — surface it in its own lane rather
     # than dropping it silently (S2). It has no injected graph node (so it stays inert), and the viewer
@@ -1967,17 +2077,27 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
     # never bind to the wrong bundle. Drawn only between boxes present in THIS env.
     chan_links = _channel_process_links(graph, uid_of, process_units)
     call_links = _call_process_links(graph, uid_of, process_units)
-    for pair in sorted(set(chan_links) | set(call_links)):
-        a, b = pair
-        if a in proc_set and b in proc_set:
-            label = _process_edge_label(chan_links.get(pair, []), call_links.get(pair, []))
-            lines.append(f"  {a} -->|{_edge_label(label)}| {b}")
+    # When containers are on, every endpoint is routed to the box that DRAWS it and the per-pair
+    # bundles merge, so one container arrow stands for every member pair beneath it. A pair whose two
+    # ends land in the SAME container is internal to it and belongs on its drill card, not here.
+    merged_chan: dict[tuple[str, str], list[dict[str, str]]] = {}
+    merged_call: dict[tuple[str, str], list[dict[str, str]]] = {}
+    for src, dst in ((chan_links, merged_chan), (call_links, merged_call)):
+        for (a, b), rows in src.items():
+            if a not in proc_set or b not in proc_set:
+                continue
+            ga, gb = box_of.get(a, a), box_of.get(b, b)
+            if ga != gb:
+                dst.setdefault((ga, gb), []).extend(rows)
+    for pair in sorted(set(merged_chan) | set(merged_call)):
+        label = _process_edge_label(merged_chan.get(pair, []), merged_call.get(pair, []))
+        lines.append(f"  {pair[0]} -->|{_edge_label(label)}| {pair[1]}")
     # …and a real arrow per process using a COUPLING POINT, so the sharing is visible rather than
     # implied by adjacency (which no reader can actually read). Bounded by construction: only infra
     # with 2+ users is drawn, so this cannot fan out into the hairball that removed these arrows before.
     for did in infra_boxes:
-        for uid in sorted(shared_infra[did]):
-            lines.append(f"  {uid} --> {did}")
+        for box in sorted({box_of.get(uid, uid) for uid in shared_infra[did]}):
+            lines.append(f"  {box} --> {did}")
     lines.append(f"  classDef process {PROCESS_STYLE};")
     lines.append(f"  classDef subsystem {SUBSYSTEM_STYLE};")
     lines.append(f"  classDef component {COMPONENT_STYLE};")
@@ -1987,6 +2107,78 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
     lines.append(f"  classDef infraSvc {INFRA_SVC_STYLE};")
     lines.append(f"  classDef infraSec {INFRA_SEC_STYLE};")
     return "\n".join(lines)
+
+
+def gen_deployment_group_card_mermaid(graph: GraphDict, gid: str) -> str:
+    """A capability container's card: its member processes, with the REAL arrows between them.
+
+    The container hides nothing — it defers. The overview shows one synthesized arrow per container
+    pair; opening the container shows which members actually carry it, and each member still drills to
+    its own process card. Arrows that leave the container are drawn to the peer BOX (a sibling
+    container or an ungrouped process), so the card reads as a zoom rather than a different diagram."""
+    process_units = _process_unit_names(graph)
+    groups, group_of = deployment_groups(graph, process_units)
+    lines = ["flowchart TB"]
+    members = groups.get(gid)
+    if not members:
+        return "\n".join(lines + [f'  MISSING["{_safe_label(gid)} — not a process group"]'])
+    units = _deployment_unit_ids(graph)
+    uid_of = {name: u for u, name in units}
+    member_uids = {uid_of[u] for u in members if u in uid_of}
+    uid_group = {uid_of[u]: g for u, g in group_of.items() if u in uid_of}
+    label_of = {uid: name for uid, name in units}
+    label_of.update({g: deployment_group_label(graph, ms) for g, ms in groups.items()})
+
+    lines.append(f'  subgraph {gid}_box["{_safe_label(deployment_group_label(graph, members))}"]')
+    for uid in sorted(member_uids):
+        lines.append(f'    {uid}["{_safe_label(label_of.get(uid, uid))}"]:::cy-{uid}')
+    lines.append("  end")
+    cls = [f"  class {uid} process" for uid in sorted(member_uids)]
+
+    chan = _channel_process_links(graph, uid_of, process_units)
+    call = _call_process_links(graph, uid_of, process_units)
+    inside: dict[tuple[str, str], tuple[list, list]] = {}
+    outside: dict[tuple[str, str], tuple[list, list]] = {}
+    for src, idx in ((chan, 0), (call, 1)):
+        for (a, b), rows in src.items():
+            if a not in member_uids and b not in member_uids:
+                continue
+            if a in member_uids and b in member_uids:
+                pair, bucket = (a, b), inside
+            else:
+                # one end is outside: draw it to the peer's BOX (its container, or itself)
+                pair = (uid_group.get(a, a), uid_group.get(b, b))
+                if pair[0] == pair[1]:
+                    continue
+                bucket = outside
+            slot = bucket.setdefault(pair, ([], []))
+            slot[idx].extend(rows)
+    for pair in sorted(outside):
+        for nid in pair:
+            if nid not in member_uids and nid != gid:
+                lines.append(f'  {nid}["{_safe_label(label_of.get(nid, nid))}"]:::cy-{nid}')
+                cls.append(f"  class {nid} process")
+    for bucket in (inside, outside):
+        for pair in sorted(bucket):
+            chans, calls = bucket[pair]
+            src, dst = pair
+            src = gid + "_box" if src == gid else src
+            dst = gid + "_box" if dst == gid else dst
+            lines.append(f"  {src} -->|{_edge_label(_process_edge_label(chans, calls))}| {dst}")
+    lines += sorted(set(cls))
+    lines.append(f"  classDef process {PROCESS_STYLE};")
+    return "\n".join(lines)
+
+
+def deployment_group_cards(graph: GraphDict) -> dict[str, str]:
+    """`{group_id: card mermaid}` for every capability container on the overview."""
+    groups, _ = deployment_groups(graph, _process_unit_names(graph))
+    return {gid: gen_deployment_group_card_mermaid(graph, gid) for gid in groups}
+
+
+def deployment_group_members(graph: GraphDict) -> dict[str, list[str]]:
+    """`{group_id: [unit names]}` — the frontend's list for a container's info pane."""
+    return deployment_groups(graph, _process_unit_names(graph))[0]
 
 
 def gen_deployment_unit_card_mermaid(graph: GraphDict, unit: str) -> str:
@@ -2489,6 +2681,8 @@ class ViewBundle(TypedDict):
     domainContainerEdges: dict[str, list[dict[str, str]]]
     mermaidDeployment: str
     deploymentCards: dict[str, str]
+    deploymentGroupCards: dict[str, str]      # capability container id -> its members' diagram
+    deploymentGroupMembers: dict[str, list[str]]  # container id -> the unit names inside it
     deploymentEdges: dict[str, list[dict[str, str]]]  # process→process arrow 'U_a>U_b' -> the async
                                      # channels it carries (the arrow's select panel)
     deploymentInfraEdges: dict[str, list[dict[str, str]]]  # process→infra arrow 'U_a>D_n' -> the
@@ -2583,6 +2777,8 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         domainContainerEdges=gen_domain_container_edges(graph) if subdomains else {},
         mermaidDeployment=gen_deployment_mermaid(graph) if deployment else "",
         deploymentCards=deployment_cards(graph) if deployment else {},
+        deploymentGroupCards=deployment_group_cards(graph) if deployment else {},
+        deploymentGroupMembers=deployment_group_members(graph) if deployment else {},
         deploymentEdges=gen_deployment_edges(graph) if deployment else {},
         deploymentInfraEdges=gen_deployment_infra_edges(graph) if deployment else {},
         deploymentCallEdges=gen_deployment_call_edges(graph) if deployment else {},

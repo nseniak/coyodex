@@ -19,6 +19,8 @@ let BRIDGE_EDGES;               // flat list of every component->entity edge (st
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
 let MERMAID_DEPLOYMENT;    // Deployment overview (the "All" view): processes + infra + derived `runs` edges
 let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of the subsystems it runs
+let DEPLOYMENT_GROUP_CARDS;   // capability container id -> its members' diagram (the container drill)
+let DEPLOYMENT_GROUP_MEMBERS; // capability container id -> the unit names inside it
 let DEPLOYMENT_EDGES;      // process->process arrow 'U_a>U_b' -> [async channels it carries]
 let DEPLOYMENT_INFRA_EDGES;  // process->infra arrow 'U_a>Dn' -> [component->dep calls behind it]
 let DEPLOYMENT_CALL_EDGES;   // process->process arrow 'U_a>U_b' -> [synchronous cross-process calls]
@@ -68,6 +70,7 @@ function applyBundle(b) {
   MERMAID_DOMAIN_SUB = b.mermaidDomainSub; MERMAID_DOMAIN_EDGE_CARD = b.mermaidDomainEdgeCard;
   MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; BRIDGE_EDGES = b.bridgeEdges; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
   MERMAID_DEPLOYMENT = b.mermaidDeployment; DEPLOYMENT_CARDS = b.deploymentCards; HAS_DEPLOYMENT = b.hasDeployment;
+  DEPLOYMENT_GROUP_CARDS = b.deploymentGroupCards || {}; DEPLOYMENT_GROUP_MEMBERS = b.deploymentGroupMembers || {};
   DEPLOY_ENVS = b.deploymentEnvironments || [];
   DEPLOYMENT_EDGES = b.deploymentEdges || {}; DEPLOYMENT_INFRA_EDGES = b.deploymentInfraEdges || {};
   DEPLOYMENT_CALL_EDGES = b.deploymentCallEdges || {};
@@ -573,7 +576,11 @@ function styleDeploymentLanes(root) {
 // SAME icon (via ACTION_ICONS) so all three routes teach the one visual language. Hidden until the box
 // is hovered (see viewer.css) — keeps a busy diagram uncluttered; double-click-anywhere-on-the-box
 // stays the reliably-discoverable path regardless of whether anyone ever notices the icon.
+function isDeploymentGroup(id) { return !!(DEPLOYMENT_GROUP_MEMBERS && DEPLOYMENT_GROUP_MEMBERS[id]); }
 function primaryActionFor(id) {
+  // A capability container is drawn by the deployment renderer, not the model, so it has no GRAPH
+  // node — match it by id before the node lookup below bails out.
+  if (isDeploymentGroup(id)) return { kind: 'drill', run: () => go({ kind: 'deploymentGroup', gid: id }) };
   if (id === 'SYS') { const t = sysDrillTarget(); return t ? { kind: 'drill', run: () => go(t) } : null; }
   if (id === LIBS_ID) return { kind: 'drill', run: () => go({ kind: 'libs' }) };
   const n = GRAPH.nodes[id];
@@ -3204,6 +3211,17 @@ function threadHostUnits(ep) {
   const c = ep.component && GRAPH.nodes[ep.component];
   return (c && Array.isArray(c.runs_in)) ? c.runs_in : [];
 }
+// The capability container a unit belongs to (null when it is drawn as its own box).
+function groupOfUnit(unit) {
+  for (const gid in (DEPLOYMENT_GROUP_MEMBERS || {}))
+    if ((DEPLOYMENT_GROUP_MEMBERS[gid] || []).indexOf(unit) >= 0) return gid;
+  return null;
+}
+// A container's display text, read off the overview's own box label so the two never disagree.
+function groupTitle(gid) {
+  const m = new RegExp('\\b' + gid + '\\["([^"]+)"\\]').exec(MERMAID_DEPLOYMENT || '');
+  return m ? m[1] : gid;
+}
 function unitProcessNodeId(unit) {
   for (const id in (GRAPH.nodes || {})) if (GRAPH.nodes[id].kind === 'process' && GRAPH.nodes[id].unit === unit) return id;
   return null;
@@ -3730,6 +3748,7 @@ function mermaidFor(s) {
   if (s.kind === 'domedge') return MERMAID_DOMAIN_EDGE_CARD[s.a + '>' + s.b];
   if (s.kind === 'bridge') return MERMAID_BRIDGE_CARD[s.sid + '>' + s.sd];
   if (s.kind === 'deployment') return MERMAID_DEPLOYMENT;  // one diagram; the env dims, never filters
+  if (s.kind === 'deploymentGroup') return DEPLOYMENT_GROUP_CARDS[s.gid];
   if (s.kind === 'deploymentUnit') return DEPLOYMENT_CARDS[s.unit];
   if (s.kind === 'hp') return MERMAID_HP;
   if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
@@ -3805,7 +3824,7 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
   if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog (incl. a Happy Path drill)
-  if (kind === 'deployment' || kind === 'deploymentUnit') return 'deployment';  // a process card lives under the Deployment tab
+  if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup') return 'deployment';  // a process/container card lives under the Deployment tab
   if (kind === 'hp') return 'hp';
   if (kind === 'libs' || kind === 'bucketfold') return 'context';  // the Context folds drill out of Context
   return 'container';
@@ -3821,6 +3840,7 @@ function stateTitle(s) {
   if (s.kind === 'tests') return 'Tests';
   if (s.kind === 'usecases') return 'Use Cases';
   if (s.kind === 'deployment') return 'Deployment';
+  if (s.kind === 'deploymentGroup') return groupTitle(s.gid);
   if (s.kind === 'deploymentUnit') return s.unit;
   if (s.kind === 'domsub') return (GRAPH.nodes[s.sd] ? GRAPH.nodes[s.sd].name : s.sd);
   if (s.kind === 'domedge') { const nm = (id) => (GRAPH.nodes[id] ? GRAPH.nodes[id].name : id); return nm(s.a) + ' → ' + nm(s.b); }
@@ -3854,7 +3874,15 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   if (s.kind === 'usecase') return [{ kind: 'usecases' }, { kind: 'usecase', uc: s.uc }];  // a use case's flow, under the Use Cases catalog
   if (s.kind === 'deployment') return [{ kind: 'deployment' }];
-  if (s.kind === 'deploymentUnit') return [{ kind: 'deployment' }, { kind: 'deploymentUnit', unit: s.unit }];  // process card under Deployment
+  if (s.kind === 'deploymentGroup') return [{ kind: 'deployment' }, { kind: 'deploymentGroup', gid: s.gid }];
+  if (s.kind === 'deploymentUnit') {
+    // A member's card sits under its container, so the trail reads overview -> capability -> process.
+    const gid = groupOfUnit(s.unit);
+    const trail = [{ kind: 'deployment' }];
+    if (gid) trail.push({ kind: 'deploymentGroup', gid });
+    trail.push({ kind: 'deploymentUnit', unit: s.unit });
+    return trail;
+  }
   if (s.kind === 'libs') return [{ kind: 'context' }, { kind: 'libs' }];  // the fold is a drill-down out of Context
   if (s.kind === 'bucketfold') return bucketFoldParent(s.bkid) === 'libs'   // library bucket: Context › Libraries › <bucket>
     ? [{ kind: 'context' }, { kind: 'libs' }, { kind: 'bucketfold', bkid: s.bkid }]
