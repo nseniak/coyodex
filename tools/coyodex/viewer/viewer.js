@@ -2656,14 +2656,14 @@ function pushContentPoint(content) {
   hi = history.length - 1;
   renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
-function go(state) {
+function go(state, instant) {
   if (hi >= 0 && stateKey(history[hi]) === stateKey(state)) return;  // already here
   const from = history[hi];
   captureViewState();
   history = history.slice(0, hi + 1);  // a new branch drops any forward history
   history.push(state);
   hi = history.length - 1;
-  driveTransition(from);
+  driveTransition(from, instant);
 }
 function back() { if (hi > 0) { const from = history[hi]; captureViewState(); hi -= 1; driveTransition(from); } }
 function fwd() { if (hi < history.length - 1) { const from = history[hi]; captureViewState(); hi += 1; driveTransition(from); } }
@@ -2674,17 +2674,17 @@ function goTab(view) {
   const cur = hi >= 0 ? topView(history[hi].kind) : null;
   if (view === cur) { resetTab(view); return; }
   const saved = tabLast[view];
-  go(saved ? { ...saved } : { kind: view });
+  go(saved ? { ...saved } : { kind: view }, true);  // instant: a tab switch never plays the drill zoom
 }
 // Reset the current tab to its overview: fresh fit, nothing selected, default panel. Drop the remembered
-// camera for the overview so it re-fits instead of reopening at an old zoom. From a drill-down this rides
-// go()'s normal (animated) zoom-out; already sitting on the overview, go() would no-op, so re-render in
-// place after stripping this entry's camera/selection/pane.
+// camera for the overview so it re-fits instead of reopening at an old zoom. A tab click never animates,
+// so a reset from a drill-down cuts straight to the overview (instant); already sitting on the overview,
+// go() would no-op, so re-render in place after stripping this entry's camera/selection/pane.
 function resetTab(view) {
   const root = { kind: view };
   delete vpByView[stateKey(root)];
   if (hi >= 0 && stateKey(history[hi]) === stateKey(root)) { history[hi] = root; render(); }
-  else go(root);
+  else go(root, true);
 }
 
 // --- drill "dive" transition ----------------------------------------------------
@@ -2765,7 +2765,7 @@ function selectLeftContainer(fromF) {
   }
 }
 // Decide whether a navigation is a container drill and, if so, animate it; otherwise render straight.
-function driveTransition(from) {
+function driveTransition(from, instant) {
   const to = history[hi];
   // A content-only step (same diagram view — a file switch, or a browser open/close): leave the diagram
   // untouched and just restore the right pane (+ any selection change) and refresh the chrome.
@@ -2777,6 +2777,9 @@ function driveTransition(from) {
   }
   const my = ++navSeq;
   clearDiveStyle();
+  // A tab switch is not a drill — render the target straight (its remembered camera restored inside
+  // render), never the zoom-in/out dive, regardless of how the two views nest.
+  if (instant) { render(); return; }
   const fromF = from ? focusOf(from) : null, toF = focusOf(to);
   const inChain = (from && toF) ? drillChain(fromF, toF) : null;
   // drill OUT: leaving a container UP to an ancestor container's card, or to the overview tab it belongs to
