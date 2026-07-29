@@ -1,0 +1,206 @@
+{"grounding": [
+  {"claim": "C30 calls C31",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:99",
+   "note": "The `dump` branch returns dump.main(rest), a direct invocation of C31's module entry."},
+
+  {"claim": "C30 calls C13",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:102",
+   "note": "The `balance` branch returns balance.main(rest) — a direct call into C13's balance.py."},
+
+  {"claim": "C30 calls C7",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:108",
+   "note": "The `lint-fragment` branch returns lint_fragment.main(rest), C7's entry function."},
+
+  {"claim": "C40 reads C3",
+   "grounded": true,
+   "evidence": "tools/coyodex/impact_lib.py:212",
+   "note": "anchor_index walks the typed ProjectModel's fields (components, deps, entities, edges, flows) that model.py defines — a genuine read of C3's data model."},
+
+  {"claim": "C40 calls C5",
+   "grounded": true,
+   "evidence": "tools/coyodex/impact_lib.py:189",
+   "note": "`loc = parse_anchor(raw)` invokes anchors.parse_anchor, imported at impact_lib.py:25."},
+
+  {"claim": "C40 reads C9",
+   "grounded": true,
+   "evidence": "tools/coyodex/impact_git.py:202",
+   "note": "load_extents reads the `symbols.extents` table out of the pre-index document C9 produces (the file itself is opened by the server and handed in as a dict)."},
+
+  {"claim": "C31 calls C3",
+   "grounded": true,
+   "evidence": "tools/coyodex/dump.py:158",
+   "note": "The whole-map dump is written through model.to_canonical_json(m); load_model at dump.py:153 is a second call into C3."},
+
+  {"claim": "C32 calls C24",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:6851",
+   "note": "loadImpact fetches API_BASE + 'impact?…' from the local map server — a real request to C24's route."},
+
+  {"claim": "C32 calls C23",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:6867",
+   "note": "After arming a diff, loadImpact calls go({kind:'container'}) and, on the else branch (6868), render() — the canvas/drill entry points."},
+
+  {"claim": "C32 writes C37",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:6805",
+   "note": "The impact summary assigns panel.innerHTML directly, taking over the info pane's element rather than calling C37 — 'writes' is the honest verb."},
+
+  {"claim": "C32 calls C38",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:6866",
+   "note": "`if (cvPath) loadCode(cvPath, cvLine)` invokes the code viewer's loader defined at viewer.js:5783; syncTreeDiff() on 6865 is a second C38 call."},
+
+  {"claim": "C45 calls C3",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/profile.py:122",
+   "note": "build_profile passes map text through coyodex.model.load_model before profiling."},
+
+  {"claim": "C45 calls C10",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/profile.py:154",
+   "note": "The stored anchor (profile.py:129) actually calls validate_model.validate_model, the orchestrator at validate_model.py:2296 which the map assigns to C15 — but profile.py:154/155/159 do call C10-region helpers (external_entry_points at validate_model.py:472) directly, so the edge survives with a corrected anchor."},
+
+  {"claim": "C45 calls C12",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/profile.py:131",
+   "note": "`findings = audit_model.audit_model(m)` — a direct call into C12, plus l2_worklist_model at 135."},
+
+  {"claim": "C45 calls C11",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/profile.py:141",
+   "note": "Calls compression_coverage_from_refs, imported from coyodex.validate_analysis at profile.py:32."},
+
+  {"claim": "C45 calls C9",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/profile.py:143",
+   "note": "`expected_components(root)` is preindex_lib's granularity expectation, imported at profile.py:30."},
+
+  {"claim": "C45 calls C13",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/profile.py:149",
+   "note": "`balance_lib.fanout_summary(m)` invokes C13's balance_lib directly."},
+
+  {"claim": "C45 calls C20",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:158",
+   "note": "write_run renders the archived md view with views.model_to_markdown (views.py:236, C20's own source line)."},
+
+  {"claim": "C45 calls C22",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:131",
+   "note": "archive_view_bundle calls gen_viewer.build_view_bundle, defined at gen_viewer.py:2766 — C22's source line."},
+
+  {"claim": "C45 calls C46",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:67",
+   "note": "run_eval calls compare(), defined at compare.py:227 (C46's source line); build_judge_report at run.py:63 is a second C46 call."},
+
+  {"claim": "C46 calls C12",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/judge.py:234",
+   "note": "build_judge_report calls audit_model.l2_worklist_model to get the risk-ranked worklist."},
+
+  {"claim": "C46 calls C3",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/judge.py:234",
+   "note": "The same statement wraps load_model(map_text) — coyodex.model, imported at judge.py:33."},
+
+  {"claim": "C46 calls C5",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/judge.py:250",
+   "note": "`anchor_drift(item.anchor, evidence, DRIFT_TOLERANCE)` calls coyodex.anchors.anchor_drift (anchors.py:135), not the same-named C8 module."},
+
+  {"claim": "C2 routes-to C1",
+   "grounded": true,
+   "evidence": "skill/coyodex/SKILL.md:28",
+   "note": "The manifest ends by sending the agent to COYODEX_HOME/method/dispatch.md, a C1 file — a real dispatch, so 'routes-to' fits."},
+
+  {"claim": "C2 uses C30",
+   "grounded": true,
+   "evidence": "skill/coyodex/SKILL.md:24",
+   "note": "The manifest points every tool run at the clone's `.venv/bin/coyodex` command; it is a doc reference, not an invocation, which is why 'uses' rather than 'calls' is honest."},
+
+  {"claim": "C30 calls C8",
+   "grounded": true,
+   "evidence": "tools/coyodex/cli.py:105",
+   "note": "The `reconcile` branch returns reconcile_build.main(rest); the anchor-drift and fix branches (111, 114) route into C8's other modules."},
+
+  {"claim": "C25 calls C9",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/filetree.py:218",
+   "note": "build_file_tree calls preindex_lib.iter_source_files, lazily imported one line earlier."},
+
+  {"claim": "C23 calls C24",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:107",
+   "note": "The module-load `await fetch(API_BASE + 'view')` really requests the server's view route; the line is boot code far above C23's source line, but the map itself declares it C23's entry point."},
+
+  {"claim": "C23 routes-to C37",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:4611",
+   "note": "The stored anchor (2266, nodeDesc) sits in C37's own selection machinery — a self-edge — but render() at 4537 does call selectNode/showNodeDetailSynced at 4611 and 4960, so the edge holds from C23's code; the verb is really 'calls', not 'routes-to'."},
+
+  {"claim": "C23 routes-to C38",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:152",
+   "note": "The delegated .srclink handler calls openInCodeViewer (defined at 5852, C38), but it is bound to BOTH the diagram and the info pane (line 148), so the same line equally supports a C37→C38 edge."},
+
+  {"claim": "C24 calls C20",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:397",
+   "note": "project_view calls views.model_to_graph (views.py:676) on the loaded map."},
+
+  {"claim": "C24 calls C22",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:399",
+   "note": "project_view calls gen_viewer.build_view_bundle to build the per-project bundle it caches and serves."},
+
+  {"claim": "C24 calls C25",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:384",
+   "note": "project_tree calls filetree.build_tree (filetree.py:186, C25's source line) with node_path_index/resolved_path_index."},
+
+  {"claim": "C22 calls C26",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:2778",
+   "note": "build_view_bundle calls gen_context_mermaid, defined at gen_viewer.py:1325 — exactly C26's source line."},
+
+  {"claim": "C22 calls C27",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:2821",
+   "note": "The bundle's mermaidDomain field calls gen_domain_mermaid, defined at gen_viewer.py:455 — C27's source line."},
+
+  {"claim": "C22 calls C28",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:2828",
+   "note": "mermaidDeployment calls gen_deployment_mermaid, defined at gen_viewer.py:1943 — C28's source line."},
+
+  {"claim": "C22 calls C29",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:2840",
+   "note": "flowsMm calls flow_mermaids (gen_viewer.py:2594), inside C29's 2392+ region."},
+
+  {"claim": "C22 calls C21",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:2775",
+   "note": "`build_diff(report)` invokes build_graph.build_diff (build_graph.py:237), C21's module."},
+
+  {"claim": "C38 calls C24",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:5806",
+   "note": "loadCode (5783) awaits fetch of API_BASE + 'src'/'srcdiff' — a real request to the map server."},
+
+  {"claim": "C39 calls C24",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:6325",
+   "note": "sbEnsureSymbols fetches API_BASE + 'symbols' from the server the first time search opens."},
+
+  {"claim": "C39 calls C38",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:6345",
+   "note": "Each symbol row's run handler invokes openInCodeViewer (viewer.js:5852); the file rows at 6354 do the same."}
+]}

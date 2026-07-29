@@ -1,0 +1,88 @@
+{
+  "grounding": [
+    {
+      "claim": "Auth surface 'Local map server HTTP listener' is protected by: tools/coyodex/viewer/serve.py:734",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:734",
+      "note": "serve() binds ThreadingHTTPServer to the literal '127.0.0.1' and main() only lets the user change the port, so every request must arrive on the loopback socket before any handler runs."
+    },
+    {
+      "claim": "Auth surface 'DNS-rebinding guard on every request' is protected by: tools/coyodex/viewer/serve.py:512",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:512",
+      "note": "do_GET line 512 rejects a non-loopback Host before routing and do_POST repeats it at line 532; BaseHTTPRequestHandler answers every other verb with 501 without entering our code, so no request path skips the guard."
+    },
+    {
+      "claim": "Auth surface 'State-changing POST endpoints (add / forget / reorder a project)' is protected by: tools/coyodex/viewer/serve.py:535",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:535",
+      "note": "do_POST checks X-Coyodex before the line-538 dispatch, so /api/open, /api/forget and /api/reorder are all behind it, and no GET route performs those mutations."
+    },
+    {
+      "claim": "Auth surface 'Source file read at the pinned commit (/p/<slug>/api/src)' is protected by: tools/coyodex/viewer/serve.py:631",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:631",
+      "note": "do_GET -> _project -> _project_api -> rest==['src'] hits _safe_rel at 631 before both the WORKTREE branch and the git branch, and git_blob_size/git_show re-check it at 202/221."
+    },
+    {
+      "claim": "Auth surface 'Working-tree file read (/p/<slug>/api/src?at=WORKTREE)' is protected by: tools/coyodex/viewer/serve.py:275",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:275",
+      "note": "src?at=WORKTREE calls worktree_read at line 637, whose realpath-containment plus .git-exclusion at 275 (and the tracked-or-untracked-not-ignored check at 279-283) runs before read_bytes; the only other worktree-facing route, impactsrcdiff, goes through git diff and never reads an untracked file."
+    },
+    {
+      "claim": "Auth surface 'Git argument injection through a commit value' is protected by: tools/coyodex/viewer/serve.py:643",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:643",
+      "note": "The user-supplied at= reaches _valid_commit at 643 (400 on anything but bare hex) before git_blob_size/git_show, and those helpers re-validate at 202/221."
+    },
+    {
+      "claim": "Auth surface 'Git argument injection through a user-supplied ref' is protected by: tools/coyodex/viewer/serve.py:254",
+      "grounded": false,
+      "evidence": "tools/coyodex/impact_git.py:59",
+      "note": "serve.py:254 sits in serve.py's own resolve_ref, whose only caller (line 293) passes proj.commit from the map file, never a request value; the user-supplied base=/target= refs on /api/impact and /api/impactsrcdiff go through impact_git.resolve_ref, so the guard actually on the request path is impact_git.py:59."
+    },
+    {
+      "claim": "Auth surface 'Filesystem browser used to pick a project folder (/api/browse)' is protected by: tools/coyodex/viewer/serve.py:565",
+      "grounded": false,
+      "evidence": "tools/coyodex/viewer/serve.py:512",
+      "note": "serve.py:565 is the response call (self._json(list_dirs(base))), not a check: /api/browse deliberately lists ANY directory the local user can read (list_dirs' own docstring says there is no privilege boundary), so the only protection on that route is the loopback Host guard at 512 plus the loopback bind at 734."
+    },
+    {
+      "claim": "Auth surface 'Adding a project folder to the served set (/api/open)' is protected by: tools/coyodex/viewer/serve.py:574",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:574",
+      "note": "do_POST -> _open reaches _has_coyodex at 574 before store.add at 577, and the alternate way into the recents list, /api/reorder, cannot inject a new folder because RecentsStore.set_order keeps only paths already in the store (recents.py set_order)."
+    },
+    {
+      "claim": "Auth surface 'Shared frontend asset route (/static/<name>)' is protected by: tools/coyodex/viewer/serve.py:702",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:702",
+      "note": "do_GET line 521 routes /static/<name> to _static, where the exact-name whitelist lookup 404s anything not viewer.js/viewer.css before _send_file, so a percent-encoded traversal name simply misses the dict."
+    },
+    {
+      "claim": "Auth surface 'Editor hand-off URI built from a user-supplied template' is protected by: tools/coyodex/viewer/viewer.js:5976",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:5976",
+      "note": "Every open goes openSource -> doOpenSource -> editorUri, and the ALLOWED_OPEN_SCHEMES test at 5976 gates the value handed to the single fireUri call site at 6021, with a second gate when the custom template is saved at 6099."
+    },
+    {
+      "claim": "Auth surface 'Third-party scripts executed inside the viewer page' is protected by: tools/coyodex/viewer/viewer.html:17",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.html:17",
+      "note": "viewer.html loads exactly two remote scripts, svg-pan-zoom (integrity at 17) and mermaid (integrity at 20), both with crossorigin=anonymous; the only other script tag is same-origin /static/viewer.js."
+    },
+    {
+      "claim": "Auth surface 'Map-supplied text rendered into diagram labels' is protected by: tools/coyodex/viewer/gen_viewer.py:97",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:97",
+      "note": "Every diagram-label emission in gen_viewer.py interpolates through _safe_label (or _edge_label for pipe labels) and the frontend renders only the server-built mermaid text from the bundle, so with securityLevel:'loose' this is the single chokepoint for map-supplied label text."
+    },
+    {
+      "claim": "Auth surface 'Request body size on the POST endpoints' is protected by: tools/coyodex/viewer/serve.py:689",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:689",
+      "note": "do_POST calls _read_json at line 539 for all three endpoints, and the Content-Length cap at 689 refuses anything over 64 kB before rfile.read."
+    }
+  ]
+}

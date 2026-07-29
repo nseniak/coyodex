@@ -1,0 +1,1240 @@
+{
+  "grounding": [
+    {
+      "claim": "C6 writes D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:474",
+      "note": "C6's own file writes the assembled map to disk with `(out_dir / \"project-map.json\").write_text(...)` — a direct filesystem write, no helper in between."
+    },
+    {
+      "claim": "C8 writes D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/fix.py:42",
+      "note": "fix.py (a C8 file) writes the edited map in place via `map_path.write_text(to_canonical_json(m))`."
+    },
+    {
+      "claim": "C9 reads D1",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex_lib.py:172",
+      "note": "C9's own code runs `subprocess.run([\"git\", \"-C\", root, \"ls-files\", \"-z\"])` (and `git log --numstat` at line 230) and consumes stdout — a real read of git."
+    },
+    {
+      "claim": "C9 reads D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex_lib.py:197",
+      "note": "`os.walk(root)` enumerates the source tree in C9's own fallback walker, and `count_loc` reads each file's bytes at line 212."
+    },
+    {
+      "claim": "C9 writes D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex.py:432",
+      "note": "`out_path.write_text(json.dumps(doc, indent=2))` writes the pre-index JSON — a direct filesystem write in C9's own file."
+    },
+    {
+      "claim": "C14 reads D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2113",
+      "note": "The operative-line check reads each anchored source file with `src.read_text(...)` inside C14's own function."
+    },
+    {
+      "claim": "C40 reads D1",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_git.py:49",
+      "note": "C40's `_git` helper runs `subprocess.run([\"git\", \"-C\", repo, *args])` and returns stdout; callers read name-status, blobs and `show` output from it."
+    },
+    {
+      "claim": "C40 reads D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_git.py:128",
+      "note": "The WORKTREE branch reads the on-disk file directly with `(repo / path).read_text(...)`."
+    },
+    {
+      "claim": "C45 persists D2",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:161",
+      "note": "`write_run` in C45's own file writes the run archive (project-map.json, profile.json, judge.json, delta.md) to disk — C45 is the writer, not a caller of one."
+    },
+    {
+      "claim": "C46 reads D2",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:436",
+      "note": "The comparator's CLI reads the baseline/candidate profile files with `base_path.read_text(...)` (and thresholds at line 374) in C46's own file."
+    },
+    {
+      "claim": "C41 reads D3",
+      "grounded": true,
+      "evidence": "tools/map_backup.py:232",
+      "note": "C41 globs `~/.claude/projects/*/<session>.jsonl` (line 217) and then opens and parses the transcript file itself — a real read of the Claude Code transcript store."
+    },
+    {
+      "claim": "C41 persists D2",
+      "grounded": true,
+      "evidence": "tools/map_backup.py:409",
+      "note": "`prov_path.write_text(prov.to_json())` writes .coyodex/provenance.json — C41 owns that file."
+    },
+    {
+      "claim": "C41 calls D1",
+      "grounded": true,
+      "evidence": "tools/map_backup.py:145",
+      "note": "`_run_git` invokes the git binary via `subprocess.run([\"git\", \"-C\", repo, *args])` for rev-parse / show at stamp time."
+    },
+    {
+      "claim": "C25 persists D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/recents.py:44",
+      "note": "`RecentsStore.save` writes ~/.coyodex/serve-recents.json itself; serve.py only calls into this component, so C25 really is the writer."
+    },
+    {
+      "claim": "C24 calls D6",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:740",
+      "note": "`webbrowser.open(url)` in C24's own `serve()` launches the user's browser on the landing page — an outbound invocation, not just serving responses."
+    },
+    {
+      "claim": "C24 reads D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:121",
+      "note": "`load_project` reads the map file from disk with `map_json.read_text(...)` (and stats it at line 128)."
+    },
+    {
+      "claim": "C23 reads D4",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.html:16",
+      "note": "viewer.html is a C23 file and its <script src=\"https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/...\"> (plus mermaid at line 19) fetches the libraries from jsDelivr."
+    },
+    {
+      "claim": "C24 reads D1",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:180",
+      "note": "C24's `_git` runs read-only git commands via subprocess (ls-tree, cat-file, show) to serve files pinned at the map's commit."
+    },
+    {
+      "claim": "C22 reads D1",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:57",
+      "note": "`_git` in C22's own file runs `git rev-parse --show-toplevel` / `git remote get-url origin` via subprocess and reads stdout."
+    },
+    {
+      "claim": "C21 reads D2",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/build_graph.py:239",
+      "note": "`build_diff` reads the change-impact report from disk with `md_path.read_text(...)`."
+    },
+    {
+      "claim": "C38 reads D5",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:5407",
+      "note": "`ensureHljs` appends a <script>/<link> whose src is 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/...' (constants at lines 5390-5392) — the append is the statement that triggers the CDN fetch."
+    },
+    {
+      "claim": "C38 calls D7",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6024",
+      "note": "`doOpenSource` calls `window.open(gh, '_blank', 'noopener')` on the github.com blob URL built by `ghUrl` in the same file."
+    },
+    {
+      "claim": "C38 calls D8",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6021",
+      "note": "`doOpenSource` fires the editor scheme URI (vscode://, cursor://, …) via `fireUri(uri)`, whose anchor click at line 6004 is in the same component."
+    },
+    {
+      "claim": "C1 uses C30",
+      "grounded": true,
+      "evidence": "method.md:573",
+      "note": "The method doc's pre-index step instructs running `.venv/bin/coyodex preindex --root <repo>`, a real invocation of the CLI dispatcher — 'uses' is the right weak verb for a doc-to-tool edge (it is not a code call)."
+    },
+    {
+      "claim": "C3 uses C4",
+      "grounded": true,
+      "evidence": "tools/coyodex/model.py:529",
+      "note": "`_remap_str_ids` calls `grammar.ID_TOKEN.sub(...)` on the grammar module's regex — a real use of C4 from C3's own code."
+    },
+    {
+      "claim": "C5 reads C3",
+      "grounded": true,
+      "evidence": "tools/coyodex/json_schema.py:271",
+      "note": "`generate_schema` passes C3's `ProjectModel` dataclass into `_ensure_def`, which introspects its fields to emit the schema — a genuine read of the model's shape."
+    },
+    {
+      "claim": "C5 uses C4",
+      "grounded": true,
+      "evidence": "tools/coyodex/json_schema.py:81",
+      "note": "The Dep `kind` schema entry inlines `grammar.DEP_KINDS` from C4."
+    },
+    {
+      "claim": "C6 calls C3",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:139",
+      "note": "`load_fragment` calls `_build(data, ProjectModel, label)`, both imported from `coyodex.model` (C3)."
+    },
+    {
+      "claim": "C6 calls C10",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:103",
+      "note": "`_derive_entity_edges` calls `unbacked_entity_steps` (validate_model.py:1645), which sits in C10's span — C10's own evidence cites 1684 and 1846, so the rulebook extends past C16's 552 anchor."
+    },
+    {
+      "claim": "C6 calls C8",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:456",
+      "note": "assemble's main calls `apply_reconcile(model, rec, rec_stats)`, defined in reconcile.py:238 (C8)."
+    },
+    {
+      "claim": "C6 calls C20",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:475",
+      "note": "Writes the markdown view via `model_to_markdown(model)` imported from `coyodex.views` (C20)."
+    },
+    {
+      "claim": "C7 calls C6",
+      "grounded": true,
+      "evidence": "tools/coyodex/lint_fragment.py:238",
+      "note": "The lint loop calls `load_fragment` (assemble.py:122); assemble.py is owned wholly by C6, so the parse-and-validate call really crosses into the assembler."
+    },
+    {
+      "claim": "C7 calls C10",
+      "grounded": true,
+      "evidence": "tools/coyodex/lint_fragment.py:117",
+      "note": "`lint_fragment_problems` calls `_check_anchor_format` (validate_model.py:1840), a C10 rulebook check (C10 evidence cites 1846)."
+    },
+    {
+      "claim": "C7 calls C14",
+      "grounded": true,
+      "evidence": "tools/coyodex/lint_fragment.py:150",
+      "note": "The `--repo` branch calls `check_anchor_existence_model` (validate_model.py:2046), inside C14's 1966-2295 range."
+    },
+    {
+      "claim": "C7 uses C4",
+      "grounded": true,
+      "evidence": "tools/coyodex/lint_fragment.py:91",
+      "note": "The actor-endpoint gate calls `grammar.is_role_id(k)` from C4; 'calls' would be sharper than 'uses'."
+    },
+    {
+      "claim": "C8 calls C12",
+      "grounded": true,
+      "evidence": "tools/coyodex/fix.py:85",
+      "note": "`fix apply-drift` calls `l2_worklist_model(m)` from audit_model.py (C12) to build the worklist it matches drift records against."
+    },
+    {
+      "claim": "C8 calls C5",
+      "grounded": true,
+      "evidence": "tools/coyodex/anchor_drift.py:64",
+      "note": "`_confirmed_drifts` calls `anchor_drift(...)` imported from `coyodex.anchors` (C5) — not the same-named local module."
+    },
+    {
+      "claim": "C8 calls C14",
+      "grounded": true,
+      "evidence": "tools/coyodex/anchor_drift.py:110",
+      "note": "`shape_findings` returns `check_operative_lines_model(m, roots)` (validate_model.py:2092), squarely in C14's range."
+    },
+    {
+      "claim": "C8 calls C3",
+      "grounded": true,
+      "evidence": "tools/coyodex/fix.py:42",
+      "note": "`_write` serializes through `to_canonical_json(m)` imported from `coyodex.model` (C3)."
+    },
+    {
+      "claim": "C8 calls C11",
+      "grounded": true,
+      "evidence": "tools/coyodex/reconcile.py:227",
+      "note": "`validate_reconcile` calls `check_hierarchy(hier_parents, defined)` from validate_analysis.py (C11)."
+    },
+    {
+      "claim": "C9 calls C5",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex_lib.py:271",
+      "note": "`py_symbols` calls `parse_python(...)` imported from `coyodex.pysrc`, one of C5's files."
+    },
+    {
+      "claim": "C10 calls C16",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:522",
+      "note": "`unclaimed_surface_components` (line 514, before C16's 552 anchor) calls the adjudication reader `_recorded_ids` at 552 and `_recorded_coverage_dirs` at 523 — direction and split both hold."
+    },
+    {
+      "claim": "C10 uses C4",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:208",
+      "note": "`_referenced_ids` (184-248, inside C10) calls `grammar.is_step_id` / `grammar.is_role_id` from C4."
+    },
+    {
+      "claim": "C11 calls C5",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_analysis.py:322",
+      "note": "`_resolve_source_file` calls `strip_anchor(source)` imported from `coyodex.anchors` (C5)."
+    },
+    {
+      "claim": "C11 uses C4",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_analysis.py:66",
+      "note": "The nesting-depth walk compares against `DEEP_NEST_WARN` imported from `coyodex.grammar` (C4) — a constant read, so 'uses' fits."
+    },
+    {
+      "claim": "C12 calls C3",
+      "grounded": true,
+      "evidence": "tools/coyodex/audit_model.py:124",
+      "note": "`_flow_component_ids` calls `expanded_flow_steps(m, f)` imported from `coyodex.model` (C3)."
+    },
+    {
+      "claim": "C12 uses C4",
+      "grounded": true,
+      "evidence": "tools/coyodex/audit_model.py:372",
+      "note": "The dep legend line calls `grammar.classify_dep(d.kind or '', d.type)`; 'calls' would be sharper than 'uses'."
+    },
+    {
+      "claim": "C12 uses C5",
+      "grounded": true,
+      "evidence": "tools/coyodex/audit_model.py:56",
+      "note": "`_anchor` matches with `_FILEREF`, which is `FILEREF` imported from `coyodex.anchors` (C5)."
+    },
+    {
+      "claim": "C13 calls C3",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance.py:193",
+      "note": "balance's main calls `load_model(...)` imported from `coyodex.model` (C3)."
+    },
+    {
+      "claim": "C14 calls C5",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2119",
+      "note": "`check_operative_lines_model` calls `non_operative_reason(...)` imported from `coyodex.anchors` (C5)."
+    },
+    {
+      "claim": "C14 calls C11",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2105",
+      "note": "The same function calls `_resolve_source_file(anchor, roots)`, imported from validate_analysis.py (C11) at validate_model.py:61."
+    },
+    {
+      "claim": "C14 calls C20",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2288",
+      "note": "`_check_view_fresh` (2280-2291) compares against `model_to_markdown(m)` from `coyodex.views` (C20); the line sits in C14's 1966-2295 range, though C15's purpose text also claims view-freshness — C15 only calls this helper from 2483."
+    },
+    {
+      "claim": "C15 calls C10",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2307",
+      "note": "The orchestrator `validate_model` (2296) calls `_check_ids(m)` at validate_model.py:133, C10's own anchor."
+    },
+    {
+      "claim": "C15 calls C14",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2364",
+      "note": "The `--check-sources` branch calls `check_entity_sources_model(m, roots)` (2160), inside C14."
+    },
+    {
+      "claim": "C15 calls C11",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2376",
+      "note": "The orchestrator calls `check_hierarchy(parents, defined)` from validate_analysis.py (C11)."
+    },
+    {
+      "claim": "C15 calls C13",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2415",
+      "note": "The orchestrator calls `balance_lib.balance_warnings(m)`; balance_lib.py is one of C13's files."
+    },
+    {
+      "claim": "C15 calls C3",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2532",
+      "note": "The `coyodex validate` main calls `load_model(...)` imported from `coyodex.model` (C3)."
+    },
+    {
+      "claim": "C16 calls C13",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:555",
+      "note": "Anchor drifted by two lines: 557 is a local regex match; the real C13 call is `balance_lib.extras_bodies(m, heading)` at 555, inside `_recorded_ids` (C16's own function)."
+    },
+    {
+      "claim": "C30 calls C9",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:81",
+      "note": "The dispatcher's `preindex` branch returns `preindex.main(rest)` (preindex.py:379, C9)."
+    },
+    {
+      "claim": "C30 calls C15",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:84",
+      "note": "The `validate` branch returns `validate_model.main(_default_map(rest))`; `main` is at validate_model.py:2496, inside C15."
+    },
+    {
+      "claim": "C30 calls C12",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:87",
+      "note": "The `audit` branch returns `audit_model.main(...)` (audit_model.py:560, C12)."
+    },
+    {
+      "claim": "C30 calls C20",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:90",
+      "note": "The `render` branch returns `render.main(rest)`; viewer/render.py is one of C20's files."
+    },
+    {
+      "claim": "C30 calls C24",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:93",
+      "note": "The `serve` branch returns `serve.main(rest)` (viewer/serve.py:763, C24)."
+    },
+    {
+      "claim": "C30 calls C6",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:96",
+      "note": "The `assemble` branch returns `assemble.main(rest)` (assemble.py:343, C6)."
+    },
+    {
+      "claim": "C30 calls C31",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:99",
+      "note": "The `dump` branch returns dump.main(rest), a direct invocation of C31's module entry."
+    },
+    {
+      "claim": "C30 calls C13",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:102",
+      "note": "The `balance` branch returns balance.main(rest) — a direct call into C13's balance.py."
+    },
+    {
+      "claim": "C30 calls C7",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:108",
+      "note": "The `lint-fragment` branch returns lint_fragment.main(rest), C7's entry function."
+    },
+    {
+      "claim": "C40 reads C3",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_lib.py:212",
+      "note": "anchor_index walks the typed ProjectModel's fields (components, deps, entities, edges, flows) that model.py defines — a genuine read of C3's data model."
+    },
+    {
+      "claim": "C40 calls C5",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_lib.py:189",
+      "note": "`loc = parse_anchor(raw)` invokes anchors.parse_anchor, imported at impact_lib.py:25."
+    },
+    {
+      "claim": "C40 reads C9",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_git.py:202",
+      "note": "load_extents reads the `symbols.extents` table out of the pre-index document C9 produces (the file itself is opened by the server and handed in as a dict)."
+    },
+    {
+      "claim": "C31 calls C3",
+      "grounded": true,
+      "evidence": "tools/coyodex/dump.py:158",
+      "note": "The whole-map dump is written through model.to_canonical_json(m); load_model at dump.py:153 is a second call into C3."
+    },
+    {
+      "claim": "C32 calls C24",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6851",
+      "note": "loadImpact fetches API_BASE + 'impact?…' from the local map server — a real request to C24's route."
+    },
+    {
+      "claim": "C32 calls C23",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6867",
+      "note": "After arming a diff, loadImpact calls go({kind:'container'}) and, on the else branch (6868), render() — the canvas/drill entry points."
+    },
+    {
+      "claim": "C32 writes C37",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6805",
+      "note": "The impact summary assigns panel.innerHTML directly, taking over the info pane's element rather than calling C37 — 'writes' is the honest verb."
+    },
+    {
+      "claim": "C32 calls C38",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6866",
+      "note": "`if (cvPath) loadCode(cvPath, cvLine)` invokes the code viewer's loader defined at viewer.js:5783; syncTreeDiff() on 6865 is a second C38 call."
+    },
+    {
+      "claim": "C45 calls C3",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:122",
+      "note": "build_profile passes map text through coyodex.model.load_model before profiling."
+    },
+    {
+      "claim": "C45 calls C10",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:154",
+      "note": "The stored anchor (profile.py:129) actually calls validate_model.validate_model, the orchestrator at validate_model.py:2296 which the map assigns to C15 — but profile.py:154/155/159 do call C10-region helpers (external_entry_points at validate_model.py:472) directly, so the edge survives with a corrected anchor."
+    },
+    {
+      "claim": "C45 calls C12",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:131",
+      "note": "`findings = audit_model.audit_model(m)` — a direct call into C12, plus l2_worklist_model at 135."
+    },
+    {
+      "claim": "C45 calls C11",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:141",
+      "note": "Calls compression_coverage_from_refs, imported from coyodex.validate_analysis at profile.py:32."
+    },
+    {
+      "claim": "C45 calls C9",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:143",
+      "note": "`expected_components(root)` is preindex_lib's granularity expectation, imported at profile.py:30."
+    },
+    {
+      "claim": "C45 calls C13",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:149",
+      "note": "`balance_lib.fanout_summary(m)` invokes C13's balance_lib directly."
+    },
+    {
+      "claim": "C45 calls C20",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:158",
+      "note": "write_run renders the archived md view with views.model_to_markdown (views.py:236, C20's own source line)."
+    },
+    {
+      "claim": "C45 calls C22",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:131",
+      "note": "archive_view_bundle calls gen_viewer.build_view_bundle, defined at gen_viewer.py:2766 — C22's source line."
+    },
+    {
+      "claim": "C45 calls C46",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:67",
+      "note": "run_eval calls compare(), defined at compare.py:227 (C46's source line); build_judge_report at run.py:63 is a second C46 call."
+    },
+    {
+      "claim": "C46 calls C12",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/judge.py:234",
+      "note": "build_judge_report calls audit_model.l2_worklist_model to get the risk-ranked worklist."
+    },
+    {
+      "claim": "C46 calls C3",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/judge.py:234",
+      "note": "The same statement wraps load_model(map_text) — coyodex.model, imported at judge.py:33."
+    },
+    {
+      "claim": "C46 calls C5",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/judge.py:250",
+      "note": "`anchor_drift(item.anchor, evidence, DRIFT_TOLERANCE)` calls coyodex.anchors.anchor_drift (anchors.py:135), not the same-named C8 module."
+    },
+    {
+      "claim": "C2 routes-to C1",
+      "grounded": true,
+      "evidence": "skill/coyodex/SKILL.md:28",
+      "note": "The manifest ends by sending the agent to COYODEX_HOME/method/dispatch.md, a C1 file — a real dispatch, so 'routes-to' fits."
+    },
+    {
+      "claim": "C2 uses C30",
+      "grounded": true,
+      "evidence": "skill/coyodex/SKILL.md:24",
+      "note": "The manifest points every tool run at the clone's `.venv/bin/coyodex` command; it is a doc reference, not an invocation, which is why 'uses' rather than 'calls' is honest."
+    },
+    {
+      "claim": "C30 calls C8",
+      "grounded": true,
+      "evidence": "tools/coyodex/cli.py:105",
+      "note": "The `reconcile` branch returns reconcile_build.main(rest); the anchor-drift and fix branches (111, 114) route into C8's other modules."
+    },
+    {
+      "claim": "C25 calls C9",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/filetree.py:218",
+      "note": "build_file_tree calls preindex_lib.iter_source_files, lazily imported one line earlier."
+    },
+    {
+      "claim": "C23 calls C24",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:107",
+      "note": "The module-load `await fetch(API_BASE + 'view')` really requests the server's view route; the line is boot code far above C23's source line, but the map itself declares it C23's entry point."
+    },
+    {
+      "claim": "C23 routes-to C37",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:4611",
+      "note": "The stored anchor (2266, nodeDesc) sits in C37's own selection machinery — a self-edge — but render() at 4537 does call selectNode/showNodeDetailSynced at 4611 and 4960, so the edge holds from C23's code; the verb is really 'calls', not 'routes-to'."
+    },
+    {
+      "claim": "C23 routes-to C38",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:152",
+      "note": "The delegated .srclink handler calls openInCodeViewer (defined at 5852, C38), but it is bound to BOTH the diagram and the info pane (line 148), so the same line equally supports a C37→C38 edge."
+    },
+    {
+      "claim": "C24 calls C20",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:397",
+      "note": "project_view calls views.model_to_graph (views.py:676) on the loaded map."
+    },
+    {
+      "claim": "C24 calls C22",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:399",
+      "note": "project_view calls gen_viewer.build_view_bundle to build the per-project bundle it caches and serves."
+    },
+    {
+      "claim": "C24 calls C25",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:384",
+      "note": "project_tree calls filetree.build_tree (filetree.py:186, C25's source line) with node_path_index/resolved_path_index."
+    },
+    {
+      "claim": "C22 calls C26",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2778",
+      "note": "build_view_bundle calls gen_context_mermaid, defined at gen_viewer.py:1325 — exactly C26's source line."
+    },
+    {
+      "claim": "C22 calls C27",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2821",
+      "note": "The bundle's mermaidDomain field calls gen_domain_mermaid, defined at gen_viewer.py:455 — C27's source line."
+    },
+    {
+      "claim": "C22 calls C28",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2828",
+      "note": "mermaidDeployment calls gen_deployment_mermaid, defined at gen_viewer.py:1943 — C28's source line."
+    },
+    {
+      "claim": "C22 calls C29",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2840",
+      "note": "flowsMm calls flow_mermaids (gen_viewer.py:2594), inside C29's 2392+ region."
+    },
+    {
+      "claim": "C22 calls C21",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2775",
+      "note": "`build_diff(report)` invokes build_graph.build_diff (build_graph.py:237), C21's module."
+    },
+    {
+      "claim": "C38 calls C24",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:5806",
+      "note": "loadCode (5783) awaits fetch of API_BASE + 'src'/'srcdiff' — a real request to the map server."
+    },
+    {
+      "claim": "C39 calls C24",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6325",
+      "note": "sbEnsureSymbols fetches API_BASE + 'symbols' from the server the first time search opens."
+    },
+    {
+      "claim": "C39 calls C38",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6345",
+      "note": "Each symbol row's run handler invokes openInCodeViewer (viewer.js:5852); the file rows at 6354 do the same."
+    },
+    {
+      "claim": "C3 persists E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/model.py:612",
+      "note": "to_canonical_json is the ONE place a ProjectModel becomes its stored JSON bytes (C3 also defines and loads the type); the file-write call sites live in C6/C8, but the serialization C3 owns is what makes it the format's system of record."
+    },
+    {
+      "claim": "C6 writes E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:474",
+      "note": "assemble builds the model itself (ProjectModel() at assemble.py:159) and writes project-map.json at the anchored line."
+    },
+    {
+      "claim": "C6 writes E12",
+      "grounded": true,
+      "evidence": "tools/coyodex/assemble.py:115",
+      "note": "the anchored line constructs Edge(...) and appends it to m.edges — a real creation of the Edge type in C6's own code."
+    },
+    {
+      "claim": "C8 writes E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/fix.py:42",
+      "note": "fix.py (a C8 file) mutates the loaded ProjectModel tree and writes the map back to disk at the anchored line."
+    },
+    {
+      "claim": "C8 persists E32",
+      "grounded": true,
+      "evidence": "tools/coyodex/reconcile_build.py:234",
+      "note": "C8 writes reconcile.json here and is also the only reader (load_reconcile → Reconcile in reconcile.py), so it owns the record; caveat: the payload written is a plain dict, the Reconcile dataclass is built only on the load side."
+    },
+    {
+      "claim": "C9 emits E36",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex_lib.py:191",
+      "note": "iter_source_files constructs and returns WalkResult at the anchored line — 'emits' here means produce-and-return to callers, not a bus publish."
+    },
+    {
+      "claim": "C9 persists E37",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex.py:146",
+      "note": "the anchor (preindex_lib.py:277) only constructs Symbol; the real persistence is C9's build_symbols serializing every Symbol field into the symbols/by_name+extents block written to preindex.json at preindex.py:432, and read back by --report, serve and the impact engine."
+    },
+    {
+      "claim": "C9 persists E38",
+      "grounded": true,
+      "evidence": "tools/coyodex/preindex.py:219",
+      "note": "the anchor (preindex_lib.py:294) only constructs ImportRef; C9 serializes its file/line/module into the imports block written to preindex.json at preindex.py:432."
+    },
+    {
+      "claim": "C9 persists E39",
+      "grounded": false,
+      "evidence": "tools/coyodex/preindex_lib.py:541",
+      "note": "DirExpectation is only built in memory here and never stored as a record — build_granularity (preindex.py:246) decomposes the tree into a derived summary (counts + a flat path→E map) and the code comment states consumers RE-COMPUTE it from the tree rather than read the JSON, so the honest verb is writes/creates, not persists."
+    },
+    {
+      "claim": "C12 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/audit_model.py:578",
+      "note": "audit's main loads the map into a ProjectModel and feeds the typed object to audit_model/l2_worklist_model — the entity type itself is consumed, not a pre-extracted field."
+    },
+    {
+      "claim": "C13 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance.py:193",
+      "note": "balance's main loads a ProjectModel and passes the typed object to the report/proposal functions."
+    },
+    {
+      "claim": "C13 emits E35",
+      "grounded": true,
+      "evidence": "tools/coyodex/balance_lib.py:499",
+      "note": "the anchored line constructs the Proposal list that the split report returns/prints; 'emits' = produced as advisory output, nothing is stored."
+    },
+    {
+      "claim": "C15 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/validate_model.py:2532",
+      "note": "validate's main loads a ProjectModel and passes the typed object to validate_model()."
+    },
+    {
+      "claim": "C40 writes E54",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_git.py:82",
+      "note": "_parse_name_status constructs Change records from git name-status output at the anchored line (in-memory creation; nothing persisted)."
+    },
+    {
+      "claim": "C40 writes E57",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_lib.py:58",
+      "note": "parse_u0 constructs the ParsedDiff it fills and returns at the anchored line."
+    },
+    {
+      "claim": "C40 writes E56",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_lib.py:66",
+      "note": "the flush() closure constructs Hunk(...) and appends it to the ParsedDiff at the anchored line."
+    },
+    {
+      "claim": "C40 writes E55",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_lib.py:135",
+      "note": "frame_from_two_diffs constructs the FileFrame and mutates its fields (affected/insertions/whitespace_only/fully_deleted) before returning it."
+    },
+    {
+      "claim": "C40 writes E58",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_lib.py:196",
+      "note": "_ref constructs AnchorRef (also at 188 for dir anchors) — the seed set anchor_index builds from the map."
+    },
+    {
+      "claim": "C40 writes E59",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_lib.py:353",
+      "note": "resolve_hits constructs DirectHit and appends it to the returned list at the anchored line."
+    },
+    {
+      "claim": "C40 writes E53",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_git.py:244",
+      "note": "compute_impact constructs ImpactFile per change and then sets its frame/hits fields."
+    },
+    {
+      "claim": "C40 writes E52",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_git.py:228",
+      "note": "compute_impact constructs the ImpactCore it fills (files/warnings) and returns."
+    },
+    {
+      "claim": "C40 reads E60",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_ripple.py:276",
+      "note": "build_impact_result holds the RippleOptions object itself (typed param at :161, defaulted at :166) and branches on opts.reads/opts.callgraph/opts.callgraph_depth."
+    },
+    {
+      "claim": "C40 reads E12",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_ripple.py:138",
+      "note": "_Maps iterates model.edges — the Edge dataclass instances themselves — and classifies each by ed.src/ed.verb/ed.dst into the ownership/read/adjacency tables."
+    },
+    {
+      "claim": "C40 reads E6",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_ripple.py:102",
+      "note": "_Maps iterates model.flows (Flow objects), expanding each flow's steps and its uc into the ucs_of/pair_ucs tables."
+    },
+    {
+      "claim": "C40 writes E61",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_ripple.py:174",
+      "note": "register_ripple constructs _Impact records into the impacts table (also at :191 for direct hits)."
+    },
+    {
+      "claim": "C31 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/dump.py:153",
+      "note": "load_model() parses the map file into a ProjectModel that the dump slices then consume."
+    },
+    {
+      "claim": "C32 reads E61",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6720",
+      "note": "impactProjection reads whole IMPACT.impacts[id] records (cause/change/strength) — the serialized _Impact emitted at impact_ripple.py:330."
+    },
+    {
+      "claim": "C45 writes E63",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:162",
+      "note": "build_profile returns a constructed MapProfile, and profile.py is one of C45's own files."
+    },
+    {
+      "claim": "C45 writes E62",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:69",
+      "note": "run_eval constructs and returns the RunResult."
+    },
+    {
+      "claim": "C45 reads E64",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:228",
+      "note": "the run CLI deserializes a JudgeReport from --judge and feeds it into run_eval."
+    },
+    {
+      "claim": "C46 writes E64",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/judge.py:257",
+      "note": "build_judge_report constructs and returns the JudgeReport; judge.py is one of C46's own files."
+    },
+    {
+      "claim": "C46 writes E69",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:332",
+      "note": "compare() constructs and returns the DeltaReport."
+    },
+    {
+      "claim": "C46 reads E63",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:238",
+      "note": "compare() takes baseline/candidate typed as MapProfile and reads their fields for the gates."
+    },
+    {
+      "claim": "C46 reads E74",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:374",
+      "note": "load_thresholds builds a Thresholds from the config file, and compare() reads its flags/bands."
+    },
+    {
+      "claim": "C41 persists E1",
+      "grounded": false,
+      "evidence": "tools/map_backup.py:507",
+      "note": "the anchor is a bare shutil.copytree of the .coyodex/ directory; map_backup.py is stdlib-only and never imports, parses or serializes ProjectModel — the system of record is assemble.py:474."
+    },
+    {
+      "claim": "C25 persists E51",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/recents.py:44",
+      "note": "RecentsStore.save writes the folder list to ~/.coyodex/serve-recents.json — the actual system of record."
+    },
+    {
+      "claim": "C25 writes E50",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/filetree.py:147",
+      "note": "_to_node returns a constructed FileTreeNode TypedDict literal."
+    },
+    {
+      "claim": "C24 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:397",
+      "note": "project_view calls load_model on the map file and hands the resulting ProjectModel to model_to_graph (stored anchor pointed one line early at the cache return)."
+    },
+    {
+      "claim": "C20 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:684",
+      "note": "model_to_graph takes m: ProjectModel (line 676) and walks its collections from here."
+    },
+    {
+      "claim": "C20 writes E41",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:472",
+      "note": "_node constructs and returns a build_graph.Node."
+    },
+    {
+      "claim": "C20 writes E42",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:791",
+      "note": "GraphEdge is build_graph.Edge (aliased at views.py:38) and is constructed here."
+    },
+    {
+      "claim": "C20 writes E40",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:850",
+      "note": "model_to_graph (-> GraphDict) returns the GraphDict literal starting on this line."
+    },
+    {
+      "claim": "C22 reads E40",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2785",
+      "note": "build_view_bundle(graph: GraphDict, ...) at 2766 subscripts the GraphDict here and throughout."
+    },
+    {
+      "claim": "C21 writes E48",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/build_graph.py:277",
+      "note": "build_diff constructs and returns the DiffDict."
+    },
+    {
+      "claim": "C21 writes E49",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/build_graph.py:255",
+      "note": "one report row is turned into a constructed DiffChange (the stored anchor points at the enclosing append on 254)."
+    },
+    {
+      "claim": "C29 reads E44",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2597",
+      "note": "flow_mermaids iterates graph['flows'] — records serialized from grammar.Flow at views.py:861 — and passes each whole record to gen_flow_mermaid."
+    },
+    {
+      "claim": "C37 reads E41",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:1072",
+      "note": "nodeDetailHtml pulls the whole node record out of GRAPH.nodes and reads its kind/fields/line/name — the serialized build_graph.Node."
+    },
+    {
+      "claim": "C38 reads E41",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:5496",
+      "note": "codeItemsForPath pulls the whole node record out of GRAPH.nodes and reads its line/name/kind."
+    },
+    {
+      "claim": "E13 (EntryPoint) has states [self, external]",
+      "grounded": true,
+      "evidence": "tools/coyodex/grammar.py:223",
+      "note": "ACTIVATIONS = ('self', 'external') — both claimed names are in the declared tuple."
+    },
+    {
+      "claim": "E20 (Store) has states [collection, embedded, transient, cache, in-code, enum]",
+      "grounded": true,
+      "evidence": "tools/coyodex/grammar.py:243",
+      "note": "STORE_MODES declares exactly collection/embedded/transient/cache/in-code/enum."
+    },
+    {
+      "claim": "E59 (DirectHit) has states [deleted, added, modified, drifted]",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_ripple.py:42",
+      "note": "_CHANGE_ORDER = ['deleted','added','modified','drifted'] — a real declared list holding all four, matching DirectHit.change (impact_lib.py:282)."
+    },
+    {
+      "claim": "E62 (RunResult) has states [PASS, DRIFT, REGRESSED, BASELINE]",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:34",
+      "note": "_EXIT = {'PASS':0,'REGRESSED':1,'DRIFT':2, BASELINE:0} declares all four verdicts (BASELINE is the constant on line 33)."
+    },
+    {
+      "claim": "E69 (DeltaReport) has states [PASS, DRIFT, REGRESSED]",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:41",
+      "note": "the constants block on 38-41 declares PASS/DRIFT/REGRESSED and the _EXIT dispatch table lists all three."
+    },
+    {
+      "claim": "Entry point [startup-hook] the serve command finishes loading the projects and the HTTP server starts accepting connections on 127.0.0.1, handing each one to its own worker thread runs on cadence 'continuous'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:742",
+      "note": "httpd.serve_forever() is the unbounded accept loop — the continuous cadence, with the thread-per-connection server bound at 734."
+    },
+    {
+      "claim": "Entry point [startup-hook] with `coyodex serve --open`, the server opens the landing page in the developer's browser by itself as it starts listening runs on cadence 'on-boot'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:740",
+      "note": "webbrowser.open(url) runs once inside serve() just before serve_forever, guarded by the --open flag at 739 — a start-time action."
+    },
+    {
+      "claim": "Entry point [startup-hook] the landing page's script runs itself as soon as the page loads, fetching the home folder and the recents list runs on cadence 'on-boot'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:1040",
+      "note": "the landing page's trailing self-invoking async IIFE fetches /api/browse then loadRecents() as soon as the page script parses."
+    },
+    {
+      "claim": "Entry point [startup-hook] the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it runs on cadence 'on-boot'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:107",
+      "note": "a top-level await fetch of the view bundle, executed at module load before any statement below it."
+    },
+    {
+      "claim": "Entry point [startup-hook] the browser app probes the server once at load and, on success, reveals and wires the file browser and code viewer runs on cadence 'on-boot'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6659",
+      "note": "initServerMode() is called from module top-level scope, so the probe runs once at page load."
+    },
+    {
+      "claim": "Auth surface 'Local map server HTTP listener' is protected by: tools/coyodex/viewer/serve.py:734",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:734",
+      "note": "The listener is constructed with a hardcoded 127.0.0.1 bind address (no host option anywhere in serve()/main()), so the socket is genuinely loopback-only."
+    },
+    {
+      "claim": "Auth surface 'DNS-rebinding guard on every request' is protected by: tools/coyodex/viewer/serve.py:512",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:512",
+      "note": "Line 512 is the first statement of do_GET and rejects any non-loopback Host with 403 (do_POST repeats it at line 532, and no other verb is implemented, so every served request passes it) — an absent Host is deliberately allowed, which is a non-browser bypass only."
+    },
+    {
+      "claim": "Auth surface 'State-changing POST endpoints (add / forget / reorder a project)' is protected by: tools/coyodex/viewer/serve.py:535",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:535",
+      "note": "The custom-header CSRF check runs before any routing in do_POST, and since the server implements no OPTIONS handler a cross-origin preflight for X-Coyodex cannot succeed."
+    },
+    {
+      "claim": "Auth surface 'Source file read at the pinned commit (/p/<slug>/api/src)' is protected by: tools/coyodex/viewer/serve.py:631",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:631",
+      "note": "The src route rejects the query path with 400 before any git call when _safe_rel fails (no leading '/', no backslash, no NUL, no '..' component), and git_show/git_blob_size re-check it at lines 202 and 221."
+    },
+    {
+      "claim": "Auth surface 'Working-tree file read (/p/<slug>/api/src?at=WORKTREE)' is protected by: tools/coyodex/viewer/serve.py:275",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:275",
+      "note": "worktree_read (reached from the src route at line 637) resolves the path with strict realpath and returns None unless it stays inside the resolved repo root and contains no .git component, so a symlink escape is caught after resolution, not before."
+    },
+    {
+      "claim": "Auth surface 'Git argument injection through a commit value' is protected by: tools/coyodex/viewer/serve.py:643",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:643",
+      "note": "The at= value is rejected with 400 unless it fullmatches a bare 7-64 hex SHA, so a leading dash can never reach git's argv on this route."
+    },
+    {
+      "claim": "Auth surface 'Git argument injection through a user-supplied ref' is protected by: tools/coyodex/viewer/serve.py:254",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_git.py:59",
+      "note": "The protection is real but NOT at the anchored line: serve.py's _safe_ref/resolve_ref is only ever called with the map's own commit (serve.py:293), while the user-supplied base/target refs of /api/impact and /api/impactsrcdiff are gated by impact_git.resolve_ref, whose regex forces a leading alphanumeric and which passes --end-of-options."
+    },
+    {
+      "claim": "Auth surface 'Filesystem browser used to pick a project folder (/api/browse)' is protected by: tools/coyodex/viewer/serve.py:565",
+      "grounded": false,
+      "evidence": "tools/coyodex/viewer/serve.py:565",
+      "note": "The anchored line is the listing itself (return self._json(list_dirs(base))) and there is no containment check anywhere on this route — any path the user types is expanduser()/resolve()d and listed, the only preceding test being 'is it a directory'; the code even states there is no privilege boundary here (line 441)."
+    },
+    {
+      "claim": "Auth surface 'Adding a project folder to the served set (/api/open)' is protected by: tools/coyodex/viewer/serve.py:574",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:574",
+      "note": "_open rejects with 400 unless the folder actually contains a .coyodex/ directory (after absolute-path and is_dir checks at 571-573), so an arbitrary folder cannot be added to the served set."
+    },
+    {
+      "claim": "Auth surface 'Shared frontend asset route (/static/<name>)' is protected by: tools/coyodex/viewer/serve.py:702",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:702",
+      "note": "The route serves only names present in the exact-name _STATIC_FILES dict and 404s otherwise, and the name is a single already-unquoted path segment, so '../serve.py' simply misses the dict."
+    },
+    {
+      "claim": "Auth surface 'Editor hand-off URI built from a user-supplied template' is protected by: tools/coyodex/viewer/viewer.js:5976",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:5976",
+      "note": "editorUri returns null unless the scheme of the fully-built URI is in ALLOWED_OPEN_SCHEMES (line 5914), and the only caller of fireUri (line 6021) fires exclusively that checked value, so a javascript:/data: custom template cannot reach the <a href>."
+    },
+    {
+      "claim": "Auth surface 'Third-party scripts executed inside the viewer page' is protected by: tools/coyodex/viewer/viewer.html:17",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.html:17",
+      "note": "Both CDN <script> tags are version-pinned and carry a real sha384 integrity attribute plus crossorigin=anonymous (line 17 for svg-pan-zoom, line 20 for mermaid), which the browser enforces; there is no CSP, so SRI is the whole protection."
+    },
+    {
+      "claim": "Auth surface 'Map-supplied text rendered into diagram labels' is protected by: tools/coyodex/viewer/gen_viewer.py:97",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:97",
+      "note": "_safe_label's replacement chain (97-107) neutralises quote/backtick/brackets/braces/pipe and, crucially, < and > — which matters because the viewer initialises mermaid with securityLevel 'loose' (viewer.js:131) — and it is applied at ~25 label call sites, with _edge_label covering pipe labels."
+    },
+    {
+      "claim": "Auth surface 'Request body size on the POST endpoints' is protected by: tools/coyodex/viewer/serve.py:689",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:689",
+      "note": "_read_json refuses to read anything with a non-positive or >64 KB Content-Length before touching rfile, and it is the single body reader for all three POST endpoints (line 539)."
+    },
+    {
+      "claim": "Auth surface 'Local map server HTTP listener' is protected by: tools/coyodex/viewer/serve.py:734",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:734",
+      "note": "I ran the server and opened a TCP connection to it on the machine's LAN address 192.168.1.34:18765 — refused (ECONNREFUSED), because line 734 binds ThreadingHTTPServer to 127.0.0.1 only, so nothing off-host can reach the listener."
+    },
+    {
+      "claim": "Auth surface 'DNS-rebinding guard on every request' is protected by: tools/coyodex/viewer/serve.py:512",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:512",
+      "note": "I sent GET / and GET /api/browse?path=/etc with a forged 'Host: evil.com' (and with 'Host: coyodex.localhost') — all 403 'host not allowed' at line 512, and the same guard on POST at line 532 covers the only other implemented verb (any other method gets the base 501), so the rebinding attack is stopped; an absent Host is deliberately allowed, which is safe since browsers always send one."
+    },
+    {
+      "claim": "Auth surface 'State-changing POST endpoints (add / forget / reorder a project)' is protected by: tools/coyodex/viewer/serve.py:535",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:535",
+      "note": "I POSTed to /api/open with a JSON body and no custom header (the shape a cross-origin form or simple fetch can produce) — 403 'missing X-Coyodex header' at line 535, and the CORS preflight a scripted cross-origin fetch would need (OPTIONS with Access-Control-Request-Headers: x-coyodex) returns 501 with no CORS headers, so the browser blocks the real request."
+    },
+    {
+      "claim": "Auth surface 'Source file read at the pinned commit (/p/<slug>/api/src)' is protected by: tools/coyodex/viewer/serve.py:631",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:631",
+      "note": "Against a live server I requested path=../../../../etc/passwd, path=/etc/passwd, the percent-encoded forms (..%2F..%2F.. and %2e%2e/%2e%2e/) and path=sub/../secret.txt — every one returned 400 'bad path' at line 631, and git show reads from the commit tree so even a bypass could not leave the repo."
+    },
+    {
+      "claim": "Auth surface 'Working-tree file read (/p/<slug>/api/src?at=WORKTREE)' is protected by: tools/coyodex/viewer/serve.py:275",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:275",
+      "note": "I committed a symlink escape.txt -> /etc/passwd into a test repo and requested it with at=WORKTREE: 404, and a step-by-step trace proves line 275 is the sole blocker (_safe_rel passes, the file is git-tracked, and the resolved target is a real file) — the same route also refused a gitignored secrets file and .git/config."
+    },
+    {
+      "claim": "Auth surface 'Git argument injection through a commit value' is protected by: tools/coyodex/viewer/serve.py:643",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:643",
+      "note": "I sent at=--output=/tmp/pwn and at=--upload-pack=id on /api/src — both 400 'bad at= commit' at line 643 (and no /tmp/pwn was created), because _valid_commit accepts only a bare 7-64 char hex SHA, so a leading dash never reaches git's argv."
+    },
+    {
+      "claim": "Auth surface 'Git argument injection through a user-supplied ref' is protected by: tools/coyodex/viewer/serve.py:254",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_git.py:59",
+      "note": "The attack (base=--output=/tmp/pwn and base=-x on /api/impact and /api/impactsrcdiff) is blocked — 400 'unsafe ref: ...' — but the guard that fired is impact_git.py:59, NOT the cited serve.py:254, which is only ever called with the map's own already-validated pin and never sees a user-supplied ref."
+    },
+    {
+      "claim": "Auth surface 'Filesystem browser used to pick a project folder (/api/browse)' is protected by: tools/coyodex/viewer/serve.py:565",
+      "grounded": false,
+      "evidence": "tools/coyodex/viewer/serve.py:734",
+      "note": "GET /api/browse?path=/ , ?path=/Users and ?path=~/.ssh all returned 200 with real directory listings — line 565 is just the JSON response and the route applies no containment at all (any local directory is enumerable by design, per the docstring at line 441); the only actual access control is the loopback bind at line 734 plus the Host guard at 512 and the absence of CORS headers, which stop a remote or cross-origin reader."
+    },
+    {
+      "claim": "Auth surface 'Adding a project folder to the served set (/api/open)' is protected by: tools/coyodex/viewer/serve.py:574",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:574",
+      "note": "POSTing path=/ and path=/tmp with a valid X-Coyodex header both returned 400 'that folder has no .coyodex/ folder' at line 574, so an arbitrary folder cannot be added to the served set — though the barrier against a cross-origin attacker is really the CSRF header at line 535, and any folder that contains a .coyodex/ directory is still addable."
+    },
+    {
+      "claim": "Auth surface 'Shared frontend asset route (/static/<name>)' is protected by: tools/coyodex/viewer/serve.py:702",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:702",
+      "note": "I requested /static/..%2F..%2F..%2F..%2Fetc%2Fpasswd, /static/..%2Fserve.py and /static/viewer.html (the encoded slashes survive routing as one path segment) — all 404 at line 702, because only the exact names viewer.js and viewer.css are in the whitelist dict."
+    },
+    {
+      "claim": "Auth surface 'Editor hand-off URI built from a user-supplied template' is protected by: tools/coyodex/viewer/viewer.js:5976",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:5976",
+      "note": "I ran the actual scheme extractor and allowlist over hostile custom templates — javascript:, mixed-case JaVaScRiPt:, tab- and newline-obfuscated java(tab)script: (which browsers would normalize back to javascript:), data:, file:, https:, //evil.com and vbscript: — every one returns null at line 5976 before the value can reach an <a href>, and the same check also gates the Settings save at line 6099."
+    },
+    {
+      "claim": "Auth surface 'Third-party scripts executed inside the viewer page' is protected by: tools/coyodex/viewer/viewer.html:17",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.html:17",
+      "note": "I downloaded both CDN bundles and recomputed their SHA-384 digests: they match the integrity attributes byte for byte (line 17 for svg-pan-zoom, line 20 for mermaid), and both tags carry crossorigin=anonymous with an exact pinned version — so a tampered or swapped CDN file would be refused by the browser; the only other script in the page is the local /static/viewer.js."
+    },
+    {
+      "claim": "Auth surface 'Map-supplied text rendered into diagram labels' is protected by: tools/coyodex/viewer/gen_viewer.py:97",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:97",
+      "note": "I injected '<img src=x onerror=alert(1)>' into 1446 name/title/verb/used-for/actor fields of the real map and built the whole view bundle: across all 97 generated Mermaid diagrams not a single raw '<' survived (every one rewritten to a look-alike by _safe_label at line 97, or by its siblings _edge_label, _safe_msg and _dep_caption), so the payload cannot become markup even under mermaid's securityLevel 'loose'."
+    },
+    {
+      "claim": "Auth surface 'Request body size on the POST endpoints' is protected by: tools/coyodex/viewer/serve.py:689",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:689",
+      "note": "I POSTed a real 200 KB body and, separately, a body with a lying Content-Length of 999999999 — both were rejected at line 689 without the socket being drained or the JSON parsed (the handler saw no body and answered 400), and Content-Length values of 0 and -5 fall into the same branch."
+    },
+    {
+      "claim": "Auth surface 'Local map server HTTP listener' is protected by: tools/coyodex/viewer/serve.py:734",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:734",
+      "note": "serve() binds ThreadingHTTPServer to the literal '127.0.0.1' and main() only lets the user change the port, so every request must arrive on the loopback socket before any handler runs."
+    },
+    {
+      "claim": "Auth surface 'DNS-rebinding guard on every request' is protected by: tools/coyodex/viewer/serve.py:512",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:512",
+      "note": "do_GET line 512 rejects a non-loopback Host before routing and do_POST repeats it at line 532; BaseHTTPRequestHandler answers every other verb with 501 without entering our code, so no request path skips the guard."
+    },
+    {
+      "claim": "Auth surface 'State-changing POST endpoints (add / forget / reorder a project)' is protected by: tools/coyodex/viewer/serve.py:535",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:535",
+      "note": "do_POST checks X-Coyodex before the line-538 dispatch, so /api/open, /api/forget and /api/reorder are all behind it, and no GET route performs those mutations."
+    },
+    {
+      "claim": "Auth surface 'Source file read at the pinned commit (/p/<slug>/api/src)' is protected by: tools/coyodex/viewer/serve.py:631",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:631",
+      "note": "do_GET -> _project -> _project_api -> rest==['src'] hits _safe_rel at 631 before both the WORKTREE branch and the git branch, and git_blob_size/git_show re-check it at 202/221."
+    },
+    {
+      "claim": "Auth surface 'Working-tree file read (/p/<slug>/api/src?at=WORKTREE)' is protected by: tools/coyodex/viewer/serve.py:275",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:275",
+      "note": "src?at=WORKTREE calls worktree_read at line 637, whose realpath-containment plus .git-exclusion at 275 (and the tracked-or-untracked-not-ignored check at 279-283) runs before read_bytes; the only other worktree-facing route, impactsrcdiff, goes through git diff and never reads an untracked file."
+    },
+    {
+      "claim": "Auth surface 'Git argument injection through a commit value' is protected by: tools/coyodex/viewer/serve.py:643",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:643",
+      "note": "The user-supplied at= reaches _valid_commit at 643 (400 on anything but bare hex) before git_blob_size/git_show, and those helpers re-validate at 202/221."
+    },
+    {
+      "claim": "Auth surface 'Git argument injection through a user-supplied ref' is protected by: tools/coyodex/viewer/serve.py:254",
+      "grounded": false,
+      "evidence": "tools/coyodex/impact_git.py:59",
+      "note": "serve.py:254 sits in serve.py's own resolve_ref, whose only caller (line 293) passes proj.commit from the map file, never a request value; the user-supplied base=/target= refs on /api/impact and /api/impactsrcdiff go through impact_git.resolve_ref, so the guard actually on the request path is impact_git.py:59."
+    },
+    {
+      "claim": "Auth surface 'Filesystem browser used to pick a project folder (/api/browse)' is protected by: tools/coyodex/viewer/serve.py:565",
+      "grounded": false,
+      "evidence": "tools/coyodex/viewer/serve.py:512",
+      "note": "serve.py:565 is the response call (self._json(list_dirs(base))), not a check: /api/browse deliberately lists ANY directory the local user can read (list_dirs' own docstring says there is no privilege boundary), so the only protection on that route is the loopback Host guard at 512 plus the loopback bind at 734."
+    },
+    {
+      "claim": "Auth surface 'Adding a project folder to the served set (/api/open)' is protected by: tools/coyodex/viewer/serve.py:574",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:574",
+      "note": "do_POST -> _open reaches _has_coyodex at 574 before store.add at 577, and the alternate way into the recents list, /api/reorder, cannot inject a new folder because RecentsStore.set_order keeps only paths already in the store (recents.py set_order)."
+    },
+    {
+      "claim": "Auth surface 'Shared frontend asset route (/static/<name>)' is protected by: tools/coyodex/viewer/serve.py:702",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:702",
+      "note": "do_GET line 521 routes /static/<name> to _static, where the exact-name whitelist lookup 404s anything not viewer.js/viewer.css before _send_file, so a percent-encoded traversal name simply misses the dict."
+    },
+    {
+      "claim": "Auth surface 'Editor hand-off URI built from a user-supplied template' is protected by: tools/coyodex/viewer/viewer.js:5976",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:5976",
+      "note": "Every open goes openSource -> doOpenSource -> editorUri, and the ALLOWED_OPEN_SCHEMES test at 5976 gates the value handed to the single fireUri call site at 6021, with a second gate when the custom template is saved at 6099."
+    },
+    {
+      "claim": "Auth surface 'Third-party scripts executed inside the viewer page' is protected by: tools/coyodex/viewer/viewer.html:17",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.html:17",
+      "note": "viewer.html loads exactly two remote scripts, svg-pan-zoom (integrity at 17) and mermaid (integrity at 20), both with crossorigin=anonymous; the only other script tag is same-origin /static/viewer.js."
+    },
+    {
+      "claim": "Auth surface 'Map-supplied text rendered into diagram labels' is protected by: tools/coyodex/viewer/gen_viewer.py:97",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:97",
+      "note": "Every diagram-label emission in gen_viewer.py interpolates through _safe_label (or _edge_label for pipe labels) and the frontend renders only the server-built mermaid text from the bundle, so with securityLevel:'loose' this is the single chokepoint for map-supplied label text."
+    },
+    {
+      "claim": "Auth surface 'Request body size on the POST endpoints' is protected by: tools/coyodex/viewer/serve.py:689",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:689",
+      "note": "do_POST calls _read_json at line 539 for all three endpoints, and the Content-Length cap at 689 refuses anything over 64 kB before rfile.read."
+    },
+    {
+      "claim": "C23 calls C37",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:4611",
+      "note": "the stored anchor sat inside C37's own selection machinery (a self-edge); the real C23-side call is in render()"
+    }
+  ]
+}

@@ -1,0 +1,202 @@
+{
+  "grounding": [
+    {
+      "claim": "C31 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/dump.py:153",
+      "note": "load_model() parses the map file into a ProjectModel that the dump slices then consume."
+    },
+    {
+      "claim": "C32 reads E61",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6720",
+      "note": "impactProjection reads whole IMPACT.impacts[id] records (cause/change/strength) — the serialized _Impact emitted at impact_ripple.py:330."
+    },
+    {
+      "claim": "C45 writes E63",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/profile.py:162",
+      "note": "build_profile returns a constructed MapProfile, and profile.py is one of C45's own files."
+    },
+    {
+      "claim": "C45 writes E62",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:69",
+      "note": "run_eval constructs and returns the RunResult."
+    },
+    {
+      "claim": "C45 reads E64",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:228",
+      "note": "the run CLI deserializes a JudgeReport from --judge and feeds it into run_eval."
+    },
+    {
+      "claim": "C46 writes E64",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/judge.py:257",
+      "note": "build_judge_report constructs and returns the JudgeReport; judge.py is one of C46's own files."
+    },
+    {
+      "claim": "C46 writes E69",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:332",
+      "note": "compare() constructs and returns the DeltaReport."
+    },
+    {
+      "claim": "C46 reads E63",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:238",
+      "note": "compare() takes baseline/candidate typed as MapProfile and reads their fields for the gates."
+    },
+    {
+      "claim": "C46 reads E74",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:374",
+      "note": "load_thresholds builds a Thresholds from the config file, and compare() reads its flags/bands."
+    },
+    {
+      "claim": "C41 persists E1",
+      "grounded": false,
+      "evidence": "tools/map_backup.py:507",
+      "note": "the anchor is a bare shutil.copytree of the .coyodex/ directory; map_backup.py is stdlib-only and never imports, parses or serializes ProjectModel — the system of record is assemble.py:474."
+    },
+    {
+      "claim": "C25 persists E51",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/recents.py:44",
+      "note": "RecentsStore.save writes the folder list to ~/.coyodex/serve-recents.json — the actual system of record."
+    },
+    {
+      "claim": "C25 writes E50",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/filetree.py:147",
+      "note": "_to_node returns a constructed FileTreeNode TypedDict literal."
+    },
+    {
+      "claim": "C24 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:397",
+      "note": "project_view calls load_model on the map file and hands the resulting ProjectModel to model_to_graph (stored anchor pointed one line early at the cache return)."
+    },
+    {
+      "claim": "C20 reads E1",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:684",
+      "note": "model_to_graph takes m: ProjectModel (line 676) and walks its collections from here."
+    },
+    {
+      "claim": "C20 writes E41",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:472",
+      "note": "_node constructs and returns a build_graph.Node."
+    },
+    {
+      "claim": "C20 writes E42",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:791",
+      "note": "GraphEdge is build_graph.Edge (aliased at views.py:38) and is constructed here."
+    },
+    {
+      "claim": "C20 writes E40",
+      "grounded": true,
+      "evidence": "tools/coyodex/views.py:850",
+      "note": "model_to_graph (-> GraphDict) returns the GraphDict literal starting on this line."
+    },
+    {
+      "claim": "C22 reads E40",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2785",
+      "note": "build_view_bundle(graph: GraphDict, ...) at 2766 subscripts the GraphDict here and throughout."
+    },
+    {
+      "claim": "C21 writes E48",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/build_graph.py:277",
+      "note": "build_diff constructs and returns the DiffDict."
+    },
+    {
+      "claim": "C21 writes E49",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/build_graph.py:255",
+      "note": "one report row is turned into a constructed DiffChange (the stored anchor points at the enclosing append on 254)."
+    },
+    {
+      "claim": "C29 reads E44",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/gen_viewer.py:2597",
+      "note": "flow_mermaids iterates graph['flows'] — records serialized from grammar.Flow at views.py:861 — and passes each whole record to gen_flow_mermaid."
+    },
+    {
+      "claim": "C37 reads E41",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:1072",
+      "note": "nodeDetailHtml pulls the whole node record out of GRAPH.nodes and reads its kind/fields/line/name — the serialized build_graph.Node."
+    },
+    {
+      "claim": "C38 reads E41",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:5496",
+      "note": "codeItemsForPath pulls the whole node record out of GRAPH.nodes and reads its line/name/kind."
+    },
+    {
+      "claim": "E13 (EntryPoint) has states [self, external]",
+      "grounded": true,
+      "evidence": "tools/coyodex/grammar.py:223",
+      "note": "ACTIVATIONS = ('self', 'external') — both claimed names are in the declared tuple."
+    },
+    {
+      "claim": "E20 (Store) has states [collection, embedded, transient, cache, in-code, enum]",
+      "grounded": true,
+      "evidence": "tools/coyodex/grammar.py:243",
+      "note": "STORE_MODES declares exactly collection/embedded/transient/cache/in-code/enum."
+    },
+    {
+      "claim": "E59 (DirectHit) has states [deleted, added, modified, drifted]",
+      "grounded": true,
+      "evidence": "tools/coyodex/impact_ripple.py:42",
+      "note": "_CHANGE_ORDER = ['deleted','added','modified','drifted'] — a real declared list holding all four, matching DirectHit.change (impact_lib.py:282)."
+    },
+    {
+      "claim": "E62 (RunResult) has states [PASS, DRIFT, REGRESSED, BASELINE]",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/run.py:34",
+      "note": "_EXIT = {'PASS':0,'REGRESSED':1,'DRIFT':2, BASELINE:0} declares all four verdicts (BASELINE is the constant on line 33)."
+    },
+    {
+      "claim": "E69 (DeltaReport) has states [PASS, DRIFT, REGRESSED]",
+      "grounded": true,
+      "evidence": "eval/tools/coyodex_eval/compare.py:41",
+      "note": "the constants block on 38-41 declares PASS/DRIFT/REGRESSED and the _EXIT dispatch table lists all three."
+    },
+    {
+      "claim": "Entry point [startup-hook] the serve command finishes loading the projects and the HTTP server starts accepting connections on 127.0.0.1, handing each one to its own worker thread runs on cadence 'continuous'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:742",
+      "note": "httpd.serve_forever() is the unbounded accept loop — the continuous cadence, with the thread-per-connection server bound at 734."
+    },
+    {
+      "claim": "Entry point [startup-hook] with `coyodex serve --open`, the server opens the landing page in the developer's browser by itself as it starts listening runs on cadence 'on-boot'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:740",
+      "note": "webbrowser.open(url) runs once inside serve() just before serve_forever, guarded by the --open flag at 739 — a start-time action."
+    },
+    {
+      "claim": "Entry point [startup-hook] the landing page's script runs itself as soon as the page loads, fetching the home folder and the recents list runs on cadence 'on-boot'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/serve.py:1040",
+      "note": "the landing page's trailing self-invoking async IIFE fetches /api/browse then loadRecents() as soon as the page script parses."
+    },
+    {
+      "claim": "Entry point [startup-hook] the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it runs on cadence 'on-boot'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:107",
+      "note": "a top-level await fetch of the view bundle, executed at module load before any statement below it."
+    },
+    {
+      "claim": "Entry point [startup-hook] the browser app probes the server once at load and, on success, reveals and wires the file browser and code viewer runs on cadence 'on-boot'",
+      "grounded": true,
+      "evidence": "tools/coyodex/viewer/viewer.js:6659",
+      "note": "initServerMode() is called from module top-level scope, so the probe runs once at page load."
+    }
+  ]
+}

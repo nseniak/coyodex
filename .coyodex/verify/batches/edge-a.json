@@ -1,0 +1,248 @@
+[
+  {
+    "claim": "C1 uses C30",
+    "anchor": "method.md:573",
+    "detail": "From: C1 = Method docs (method.md:1); To: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more",
+    "why_risky": "backbone edge — no deterministic gate confirms C1's code 'uses' C30; ground the call site against the code."
+  },
+  {
+    "claim": "C3 uses C4",
+    "anchor": "tools/coyodex/model.py:529",
+    "detail": "From: C3 = Map model & serializer (tools/coyodex/model.py:1); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+    "why_risky": "backbone edge — no deterministic gate confirms C3's code 'uses' C4; ground the call site against the code."
+  },
+  {
+    "claim": "C5 reads C3",
+    "anchor": "tools/coyodex/json_schema.py:271",
+    "detail": "From: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+    "why_risky": "backbone edge — no deterministic gate confirms C5's code 'reads' C3; ground the call site against the code."
+  },
+  {
+    "claim": "C5 uses C4",
+    "anchor": "tools/coyodex/json_schema.py:81",
+    "detail": "From: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+    "why_risky": "backbone edge — no deterministic gate confirms C5's code 'uses' C4; ground the call site against the code."
+  },
+  {
+    "claim": "C6 calls C3",
+    "anchor": "tools/coyodex/assemble.py:139",
+    "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+    "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C3; ground the call site against the code."
+  },
+  {
+    "claim": "C6 calls C10",
+    "anchor": "tools/coyodex/assemble.py:103",
+    "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: C10 = Map validator (tools/coyodex/validate_model.py:133)",
+    "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C10; ground the call site against the code."
+  },
+  {
+    "claim": "C6 calls C8",
+    "anchor": "tools/coyodex/assemble.py:456",
+    "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281)",
+    "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C8; ground the call site against the code."
+  },
+  {
+    "claim": "C6 calls C20",
+    "anchor": "tools/coyodex/assemble.py:475",
+    "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: C20 = Map views builder (tools/coyodex/views.py:236)",
+    "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C20; ground the call site against the code."
+  },
+  {
+    "claim": "C7 calls C6",
+    "anchor": "tools/coyodex/lint_fragment.py:238",
+    "detail": "From: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108); To: C6 = Fragment assembler (tools/coyodex/assemble.py:150)",
+    "why_risky": "backbone edge — no deterministic gate confirms C7's code 'calls' C6; ground the call site against the code."
+  },
+  {
+    "claim": "C7 calls C10",
+    "anchor": "tools/coyodex/lint_fragment.py:117",
+    "detail": "From: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108); To: C10 = Map validator (tools/coyodex/validate_model.py:133)",
+    "why_risky": "backbone edge — no deterministic gate confirms C7's code 'calls' C10; ground the call site against the code."
+  },
+  {
+    "claim": "C7 calls C14",
+    "anchor": "tools/coyodex/lint_fragment.py:150",
+    "detail": "From: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108); To: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966)",
+    "why_risky": "backbone edge — no deterministic gate confirms C7's code 'calls' C14; ground the call site against the code."
+  },
+  {
+    "claim": "C7 uses C4",
+    "anchor": "tools/coyodex/lint_fragment.py:91",
+    "detail": "From: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+    "why_risky": "backbone edge — no deterministic gate confirms C7's code 'uses' C4; ground the call site against the code."
+  },
+  {
+    "claim": "C8 calls C12",
+    "anchor": "tools/coyodex/fix.py:85",
+    "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C12 = Map auditor (tools/coyodex/audit_model.py:331)",
+    "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C12; ground the call site against the code."
+  },
+  {
+    "claim": "C8 calls C5",
+    "anchor": "tools/coyodex/anchor_drift.py:64",
+    "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+    "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C5; ground the call site against the code."
+  },
+  {
+    "claim": "C8 calls C14",
+    "anchor": "tools/coyodex/anchor_drift.py:110",
+    "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966)",
+    "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C14; ground the call site against the code."
+  },
+  {
+    "claim": "C8 calls C3",
+    "anchor": "tools/coyodex/fix.py:42",
+    "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+    "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C3; ground the call site against the code."
+  },
+  {
+    "claim": "C8 calls C11",
+    "anchor": "tools/coyodex/reconcile.py:227",
+    "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37)",
+    "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C11; ground the call site against the code."
+  },
+  {
+    "claim": "C9 calls C5",
+    "anchor": "tools/coyodex/preindex_lib.py:271",
+    "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+    "why_risky": "backbone edge — no deterministic gate confirms C9's code 'calls' C5; ground the call site against the code."
+  },
+  {
+    "claim": "C10 calls C16",
+    "anchor": "tools/coyodex/validate_model.py:522",
+    "detail": "From: C10 = Map validator (tools/coyodex/validate_model.py:133); To: C16 = Advisory adjudication readers (tools/coyodex/validate_model.py:552)",
+    "why_risky": "backbone edge — no deterministic gate confirms C10's code 'calls' C16; ground the call site against the code."
+  },
+  {
+    "claim": "C10 uses C4",
+    "anchor": "tools/coyodex/validate_model.py:208",
+    "detail": "From: C10 = Map validator (tools/coyodex/validate_model.py:133); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+    "why_risky": "backbone edge — no deterministic gate confirms C10's code 'uses' C4; ground the call site against the code."
+  },
+  {
+    "claim": "C11 calls C5",
+    "anchor": "tools/coyodex/validate_analysis.py:322",
+    "detail": "From: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+    "why_risky": "backbone edge — no deterministic gate confirms C11's code 'calls' C5; ground the call site against the code."
+  },
+  {
+    "claim": "C11 uses C4",
+    "anchor": "tools/coyodex/validate_analysis.py:66",
+    "detail": "From: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+    "why_risky": "backbone edge — no deterministic gate confirms C11's code 'uses' C4; ground the call site against the code."
+  },
+  {
+    "claim": "C12 calls C3",
+    "anchor": "tools/coyodex/audit_model.py:124",
+    "detail": "From: C12 = Map auditor (tools/coyodex/audit_model.py:331); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+    "why_risky": "backbone edge — no deterministic gate confirms C12's code 'calls' C3; ground the call site against the code."
+  },
+  {
+    "claim": "C12 uses C4",
+    "anchor": "tools/coyodex/audit_model.py:372",
+    "detail": "From: C12 = Map auditor (tools/coyodex/audit_model.py:331); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+    "why_risky": "backbone edge — no deterministic gate confirms C12's code 'uses' C4; ground the call site against the code."
+  },
+  {
+    "claim": "C12 uses C5",
+    "anchor": "tools/coyodex/audit_model.py:56",
+    "detail": "From: C12 = Map auditor (tools/coyodex/audit_model.py:331); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+    "why_risky": "backbone edge — no deterministic gate confirms C12's code 'uses' C5; ground the call site against the code."
+  },
+  {
+    "claim": "C13 calls C3",
+    "anchor": "tools/coyodex/balance.py:193",
+    "detail": "From: C13 = Balance reporter (tools/coyodex/balance.py:103); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+    "why_risky": "backbone edge — no deterministic gate confirms C13's code 'calls' C3; ground the call site against the code."
+  },
+  {
+    "claim": "C14 calls C5",
+    "anchor": "tools/coyodex/validate_model.py:2119",
+    "detail": "From: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+    "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C5; ground the call site against the code."
+  },
+  {
+    "claim": "C14 calls C11",
+    "anchor": "tools/coyodex/validate_model.py:2105",
+    "detail": "From: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966); To: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37)",
+    "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C11; ground the call site against the code."
+  },
+  {
+    "claim": "C14 calls C20",
+    "anchor": "tools/coyodex/validate_model.py:2288",
+    "detail": "From: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966); To: C20 = Map views builder (tools/coyodex/views.py:236)",
+    "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C20; ground the call site against the code."
+  },
+  {
+    "claim": "C15 calls C10",
+    "anchor": "tools/coyodex/validate_model.py:2307",
+    "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C10 = Map validator (tools/coyodex/validate_model.py:133)",
+    "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C10; ground the call site against the code."
+  },
+  {
+    "claim": "C15 calls C14",
+    "anchor": "tools/coyodex/validate_model.py:2364",
+    "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966)",
+    "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C14; ground the call site against the code."
+  },
+  {
+    "claim": "C15 calls C11",
+    "anchor": "tools/coyodex/validate_model.py:2376",
+    "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37)",
+    "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C11; ground the call site against the code."
+  },
+  {
+    "claim": "C15 calls C13",
+    "anchor": "tools/coyodex/validate_model.py:2415",
+    "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C13 = Balance reporter (tools/coyodex/balance.py:103)",
+    "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C13; ground the call site against the code."
+  },
+  {
+    "claim": "C15 calls C3",
+    "anchor": "tools/coyodex/validate_model.py:2532",
+    "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+    "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C3; ground the call site against the code."
+  },
+  {
+    "claim": "C16 calls C13",
+    "anchor": "tools/coyodex/validate_model.py:557",
+    "detail": "From: C16 = Advisory adjudication readers (tools/coyodex/validate_model.py:552); To: C13 = Balance reporter (tools/coyodex/balance.py:103)",
+    "why_risky": "backbone edge — no deterministic gate confirms C16's code 'calls' C13; ground the call site against the code."
+  },
+  {
+    "claim": "C30 calls C9",
+    "anchor": "tools/coyodex/cli.py:81",
+    "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C9 = Code pre-index (tools/coyodex/preindex.py:1)",
+    "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C9; ground the call site against the code."
+  },
+  {
+    "claim": "C30 calls C15",
+    "anchor": "tools/coyodex/cli.py:84",
+    "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296)",
+    "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C15; ground the call site against the code."
+  },
+  {
+    "claim": "C30 calls C12",
+    "anchor": "tools/coyodex/cli.py:87",
+    "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C12 = Map auditor (tools/coyodex/audit_model.py:331)",
+    "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C12; ground the call site against the code."
+  },
+  {
+    "claim": "C30 calls C20",
+    "anchor": "tools/coyodex/cli.py:90",
+    "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C20 = Map views builder (tools/coyodex/views.py:236)",
+    "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C20; ground the call site against the code."
+  },
+  {
+    "claim": "C30 calls C24",
+    "anchor": "tools/coyodex/cli.py:93",
+    "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more",
+    "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C24; ground the call site against the code."
+  },
+  {
+    "claim": "C30 calls C6",
+    "anchor": "tools/coyodex/cli.py:96",
+    "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C6 = Fragment assembler (tools/coyodex/assemble.py:150)",
+    "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C6; ground the call site against the code."
+  }
+]

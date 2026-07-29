@@ -1,0 +1,1140 @@
+{
+ "findings": [
+  {
+   "check": "read-never-created",
+   "severity": "ADVISORY",
+   "location": "HP11 (UC9) — Method maintainer checks whether the method improved",
+   "message": "reads E74 (Thresholds) but no Happy-Path step writes or creates it — external / config data, or a coverage gap."
+  },
+  {
+   "check": "read-never-created",
+   "severity": "ADVISORY",
+   "location": "HP4 (UC4) — Developer explores the new map top-down",
+   "message": "reads E44 (Flow (view)) but no Happy-Path step writes or creates it — external / config data, or a coverage gap."
+  },
+  {
+   "check": "read-never-created",
+   "severity": "ADVISORY",
+   "location": "HP7 (UC11) — Developer sees what that change ripples to in the viewer",
+   "message": "reads E6 (Flow) but no Happy-Path step writes or creates it — external / config data, or a coverage gap."
+  },
+  {
+   "check": "read-never-created",
+   "severity": "ADVISORY",
+   "location": "HP7 (UC11) — Developer sees what that change ripples to in the viewer",
+   "message": "reads E60 (RippleOptions) but no Happy-Path step writes or creates it — external / config data, or a coverage gap."
+  }
+ ],
+ "worklist": [
+  {
+   "claim": "Auth surface 'Local map server HTTP listener' is protected by: tools/coyodex/viewer/serve.py:734",
+   "anchor": "tools/coyodex/viewer/serve.py:734",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'DNS-rebinding guard on every request' is protected by: tools/coyodex/viewer/serve.py:512",
+   "anchor": "tools/coyodex/viewer/serve.py:512",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'State-changing POST endpoints (add / forget / reorder a project)' is protected by: tools/coyodex/viewer/serve.py:535",
+   "anchor": "tools/coyodex/viewer/serve.py:535",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Source file read at the pinned commit (/p/<slug>/api/src)' is protected by: tools/coyodex/viewer/serve.py:631",
+   "anchor": "tools/coyodex/viewer/serve.py:631",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Working-tree file read (/p/<slug>/api/src?at=WORKTREE)' is protected by: tools/coyodex/viewer/serve.py:275",
+   "anchor": "tools/coyodex/viewer/serve.py:275",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Git argument injection through a commit value' is protected by: tools/coyodex/viewer/serve.py:643",
+   "anchor": "tools/coyodex/viewer/serve.py:643",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Git argument injection through a user-supplied ref' is protected by: tools/coyodex/viewer/serve.py:254",
+   "anchor": "tools/coyodex/viewer/serve.py:254",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Filesystem browser used to pick a project folder (/api/browse)' is protected by: tools/coyodex/viewer/serve.py:565",
+   "anchor": "tools/coyodex/viewer/serve.py:565",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Adding a project folder to the served set (/api/open)' is protected by: tools/coyodex/viewer/serve.py:574",
+   "anchor": "tools/coyodex/viewer/serve.py:574",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Shared frontend asset route (/static/<name>)' is protected by: tools/coyodex/viewer/serve.py:702",
+   "anchor": "tools/coyodex/viewer/serve.py:702",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Editor hand-off URI built from a user-supplied template' is protected by: tools/coyodex/viewer/viewer.js:5976",
+   "anchor": "tools/coyodex/viewer/viewer.js:5976",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Third-party scripts executed inside the viewer page' is protected by: tools/coyodex/viewer/viewer.html:17",
+   "anchor": "tools/coyodex/viewer/viewer.html:17",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Map-supplied text rendered into diagram labels' is protected by: tools/coyodex/viewer/gen_viewer.py:97",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:97",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "Auth surface 'Request body size on the POST endpoints' is protected by: tools/coyodex/viewer/serve.py:689",
+   "anchor": "tools/coyodex/viewer/serve.py:689",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+   "claim": "C6 writes D2",
+   "anchor": "tools/coyodex/assemble.py:474",
+   "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C6's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C8 writes D2",
+   "anchor": "tools/coyodex/fix.py:42",
+   "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C8's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C9 reads D1",
+   "anchor": "tools/coyodex/preindex_lib.py:172",
+   "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C9's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C9 reads D2",
+   "anchor": "tools/coyodex/preindex_lib.py:197",
+   "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C9's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C9 writes D2",
+   "anchor": "tools/coyodex/preindex.py:432",
+   "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C9's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C14 reads D2",
+   "anchor": "tools/coyodex/validate_model.py:2113",
+   "detail": "From: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C14's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C40 reads D1",
+   "anchor": "tools/coyodex/impact_git.py:49",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C40's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C40 reads D2",
+   "anchor": "tools/coyodex/impact_git.py:128",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C40's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C45 persists D2",
+   "anchor": "eval/tools/coyodex_eval/run.py:161",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C45's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C46 reads D2",
+   "anchor": "eval/tools/coyodex_eval/compare.py:436",
+   "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C46's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C41 reads D3",
+   "anchor": "tools/map_backup.py:217",
+   "detail": "From: C41 = Map backup & provenance (tools/map_backup.py:2); entry points: a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance (tools/map_backup.py:568); a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ (tools/map_backup.py:594); To: D3 = Claude Code transcript store (datastore: another tool's live on-disk session log (`~/.claude/projects/*/<session>.jsonl`) — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C41's code to confirm it reaches D3; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C41 persists D2",
+   "anchor": "tools/map_backup.py:409",
+   "detail": "From: C41 = Map backup & provenance (tools/map_backup.py:2); entry points: a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance (tools/map_backup.py:568); a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ (tools/map_backup.py:594); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C41's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C41 calls D1",
+   "anchor": "tools/map_backup.py:145",
+   "detail": "From: C41 = Map backup & provenance (tools/map_backup.py:2); entry points: a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance (tools/map_backup.py:568); a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ (tools/map_backup.py:594); To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C41's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C25 persists D2",
+   "anchor": "tools/coyodex/viewer/recents.py:44",
+   "detail": "From: C25 = File browser, recents & diff rows (tools/coyodex/viewer/filetree.py:186); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C25's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C24 calls D6",
+   "anchor": "tools/coyodex/viewer/serve.py:740",
+   "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: D6 = Web browser (platform: the user's browser — the runtime that hosts the whole viewer UI — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C24's code to confirm it reaches D6; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C24 reads D2",
+   "anchor": "tools/coyodex/viewer/serve.py:121",
+   "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C24's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C23 reads D4",
+   "anchor": "tools/coyodex/viewer/viewer.html:16",
+   "detail": "From: C23 = Diagram canvas & drill navigation (tools/coyodex/viewer/viewer.js:4537); entry points: the reader clicks a top-bar tab to switch view — Happy Path, Use Cases, Subsystems, Entities, Dependencies, Data, Deployment, System, Glossary, Tests (each hidden when the map has nothing for it) (tools/coyodex/viewer/viewer.js:6674); the reader opens the search overlay (the magnifier button, or the `/` key) to jump to any map element, file, or code symbol (tools/coyodex/viewer/viewer.js:6641); the reader opens the Impact popover to pick two commits and project that diff onto the map (tools/coyodex/viewer/viewer.js:6906); the reader switches the side pane between the file browser and the code viewer (tools/coyodex/viewer/viewer.js:6178); the reader clicks the page title to go back to the server's landing page listing all maps (tools/coyodex/viewer/viewer.js:5234); the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it (tools/coyodex/viewer/viewer.js:107); +1 more; To: D4 = jsDelivr CDN (platform: public CDN host (cdn.jsdelivr.net) the viewer page loads scripts from — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C23's code to confirm it reaches D4; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C24 reads D1",
+   "anchor": "tools/coyodex/viewer/serve.py:180",
+   "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C24's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C22 reads D1",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:57",
+   "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C22's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C21 reads D2",
+   "anchor": "tools/coyodex/viewer/build_graph.py:239",
+   "detail": "From: C21 = Viewer graph builder (tools/coyodex/viewer/build_graph.py:111); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C21's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C38 reads D5",
+   "anchor": "tools/coyodex/viewer/viewer.js:5407",
+   "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: D5 = cdnjs (platform: public CDN host (cdnjs.cloudflare.com) the viewer page lazy-loads from — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C38's code to confirm it reaches D5; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C38 calls D7",
+   "anchor": "tools/coyodex/viewer/viewer.js:6024",
+   "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: D7 = GitHub (service: hosted git service — a blob-URL hand-off target for source links — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C38's code to confirm it reaches D7; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C38 calls D8",
+   "anchor": "tools/coyodex/viewer/viewer.js:6021",
+   "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: D8 = Local code editor (service: desktop application invoked through an OS URL scheme (vscode://, cursor://, idea://, zed://, …) — an external system, not a code module)",
+   "why_risky": "external-dependency data-flow edge — no deterministic gate reads C38's code to confirm it reaches D8; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+   "claim": "C3 persists E1",
+   "anchor": "tools/coyodex/model.py:612",
+   "detail": "From: C3 = Map model & serializer (tools/coyodex/model.py:1); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C3's code actually 'persists' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C6 writes E1",
+   "anchor": "tools/coyodex/assemble.py:474",
+   "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C6's code actually 'writes' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C6 writes E12",
+   "anchor": "tools/coyodex/assemble.py:115",
+   "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: E12 = Edge (tools/coyodex/model.py:313)",
+   "why_risky": "domain-model ownership edge — verify C6's code actually 'writes' E12; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C8 writes E1",
+   "anchor": "tools/coyodex/fix.py:42",
+   "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C8's code actually 'writes' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C8 persists E32",
+   "anchor": "tools/coyodex/reconcile_build.py:234",
+   "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: E32 = Reconcile (tools/coyodex/reconcile.py:76)",
+   "why_risky": "domain-model ownership edge — verify C8's code actually 'persists' E32; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C9 emits E36",
+   "anchor": "tools/coyodex/preindex_lib.py:191",
+   "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: E36 = WalkResult (tools/coyodex/preindex_lib.py:154)",
+   "why_risky": "domain-model ownership edge — verify C9's code actually 'emits' E36; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C9 persists E37",
+   "anchor": "tools/coyodex/preindex_lib.py:277",
+   "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: E37 = Symbol (tools/coyodex/preindex_lib.py:253)",
+   "why_risky": "domain-model ownership edge — verify C9's code actually 'persists' E37; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C9 persists E38",
+   "anchor": "tools/coyodex/preindex_lib.py:294",
+   "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: E38 = ImportRef (tools/coyodex/preindex_lib.py:262)",
+   "why_risky": "domain-model ownership edge — verify C9's code actually 'persists' E38; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C9 persists E39",
+   "anchor": "tools/coyodex/preindex_lib.py:541",
+   "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: E39 = DirExpectation (tools/coyodex/preindex_lib.py:474)",
+   "why_risky": "domain-model ownership edge — verify C9's code actually 'persists' E39; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C12 reads E1",
+   "anchor": "tools/coyodex/audit_model.py:578",
+   "detail": "From: C12 = Map auditor (tools/coyodex/audit_model.py:331); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C12's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C13 reads E1",
+   "anchor": "tools/coyodex/balance.py:193",
+   "detail": "From: C13 = Balance reporter (tools/coyodex/balance.py:103); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C13's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C13 emits E35",
+   "anchor": "tools/coyodex/balance_lib.py:499",
+   "detail": "From: C13 = Balance reporter (tools/coyodex/balance.py:103); To: E35 = Proposal (tools/coyodex/balance_lib.py:382)",
+   "why_risky": "domain-model ownership edge — verify C13's code actually 'emits' E35; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C15 reads E1",
+   "anchor": "tools/coyodex/validate_model.py:2532",
+   "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C15's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E54",
+   "anchor": "tools/coyodex/impact_git.py:82",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E54 = Change (tools/coyodex/impact_git.py:68)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E54; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E57",
+   "anchor": "tools/coyodex/impact_lib.py:58",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E57 = ParsedDiff (tools/coyodex/impact_lib.py:51)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E57; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E56",
+   "anchor": "tools/coyodex/impact_lib.py:66",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E56 = Hunk (tools/coyodex/impact_lib.py:36)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E56; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E55",
+   "anchor": "tools/coyodex/impact_lib.py:135",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E55 = FileFrame (tools/coyodex/impact_lib.py:94)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E55; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E58",
+   "anchor": "tools/coyodex/impact_lib.py:196",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E58 = AnchorRef (tools/coyodex/impact_lib.py:170)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E58; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E59",
+   "anchor": "tools/coyodex/impact_lib.py:353",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E59 = DirectHit (tools/coyodex/impact_lib.py:278)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E59; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E53",
+   "anchor": "tools/coyodex/impact_git.py:244",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E53 = ImpactFile (tools/coyodex/impact_git.py:175)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E53; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E52",
+   "anchor": "tools/coyodex/impact_git.py:228",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E52 = ImpactCore (tools/coyodex/impact_git.py:184)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E52; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 reads E60",
+   "anchor": "tools/coyodex/impact_ripple.py:276",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E60 = RippleOptions (tools/coyodex/impact_ripple.py:56)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'reads' E60; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 reads E12",
+   "anchor": "tools/coyodex/impact_ripple.py:138",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E12 = Edge (tools/coyodex/model.py:313)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'reads' E12; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 reads E6",
+   "anchor": "tools/coyodex/impact_ripple.py:102",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E6 = Flow (tools/coyodex/model.py:293)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'reads' E6; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C40 writes E61",
+   "anchor": "tools/coyodex/impact_ripple.py:174",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E61 = _Impact (tools/coyodex/impact_ripple.py:64)",
+   "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E61; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C31 reads E1",
+   "anchor": "tools/coyodex/dump.py:153",
+   "detail": "From: C31 = Model dump (tools/coyodex/dump.py:122); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C31's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C32 reads E61",
+   "anchor": "tools/coyodex/viewer/viewer.js:6720",
+   "detail": "From: C32 = Change-impact overlay (tools/coyodex/viewer/viewer.js:6716); To: E61 = _Impact (tools/coyodex/impact_ripple.py:64)",
+   "why_risky": "domain-model ownership edge — verify C32's code actually 'reads' E61; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C45 writes E63",
+   "anchor": "eval/tools/coyodex_eval/profile.py:162",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: E63 = MapProfile (eval/tools/coyodex_eval/profile.py:37)",
+   "why_risky": "domain-model ownership edge — verify C45's code actually 'writes' E63; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C45 writes E62",
+   "anchor": "eval/tools/coyodex_eval/run.py:69",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: E62 = RunResult (eval/tools/coyodex_eval/run.py:45)",
+   "why_risky": "domain-model ownership edge — verify C45's code actually 'writes' E62; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C45 reads E64",
+   "anchor": "eval/tools/coyodex_eval/run.py:228",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: E64 = JudgeReport (eval/tools/coyodex_eval/judge.py:101)",
+   "why_risky": "domain-model ownership edge — verify C45's code actually 'reads' E64; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C46 writes E64",
+   "anchor": "eval/tools/coyodex_eval/judge.py:257",
+   "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: E64 = JudgeReport (eval/tools/coyodex_eval/judge.py:101)",
+   "why_risky": "domain-model ownership edge — verify C46's code actually 'writes' E64; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C46 writes E69",
+   "anchor": "eval/tools/coyodex_eval/compare.py:332",
+   "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: E69 = DeltaReport (eval/tools/coyodex_eval/compare.py:173)",
+   "why_risky": "domain-model ownership edge — verify C46's code actually 'writes' E69; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C46 reads E63",
+   "anchor": "eval/tools/coyodex_eval/compare.py:238",
+   "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: E63 = MapProfile (eval/tools/coyodex_eval/profile.py:37)",
+   "why_risky": "domain-model ownership edge — verify C46's code actually 'reads' E63; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C46 reads E74",
+   "anchor": "eval/tools/coyodex_eval/compare.py:374",
+   "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: E74 = Thresholds (eval/tools/coyodex_eval/compare.py:91)",
+   "why_risky": "domain-model ownership edge — verify C46's code actually 'reads' E74; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C41 persists E1",
+   "anchor": "tools/map_backup.py:507",
+   "detail": "From: C41 = Map backup & provenance (tools/map_backup.py:2); entry points: a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance (tools/map_backup.py:568); a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ (tools/map_backup.py:594); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C41's code actually 'persists' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 persists E51",
+   "anchor": "tools/coyodex/viewer/recents.py:44",
+   "detail": "From: C25 = File browser, recents & diff rows (tools/coyodex/viewer/filetree.py:186); To: E51 = RecentsStore (tools/coyodex/viewer/recents.py:22)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'persists' E51; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C25 writes E50",
+   "anchor": "tools/coyodex/viewer/filetree.py:147",
+   "detail": "From: C25 = File browser, recents & diff rows (tools/coyodex/viewer/filetree.py:186); To: E50 = FileTreeNode (tools/coyodex/viewer/filetree.py:38)",
+   "why_risky": "domain-model ownership edge — verify C25's code actually 'writes' E50; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C24 reads E1",
+   "anchor": "tools/coyodex/viewer/serve.py:397",
+   "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C24's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C20 reads E1",
+   "anchor": "tools/coyodex/views.py:684",
+   "detail": "From: C20 = Map views builder (tools/coyodex/views.py:236); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+   "why_risky": "domain-model ownership edge — verify C20's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C20 writes E41",
+   "anchor": "tools/coyodex/views.py:472",
+   "detail": "From: C20 = Map views builder (tools/coyodex/views.py:236); To: E41 = Node (tools/coyodex/viewer/build_graph.py:28)",
+   "why_risky": "domain-model ownership edge — verify C20's code actually 'writes' E41; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C20 writes E42",
+   "anchor": "tools/coyodex/views.py:791",
+   "detail": "From: C20 = Map views builder (tools/coyodex/views.py:236); To: E42 = Edge (graph) (tools/coyodex/viewer/build_graph.py:67)",
+   "why_risky": "domain-model ownership edge — verify C20's code actually 'writes' E42; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C20 writes E40",
+   "anchor": "tools/coyodex/views.py:850",
+   "detail": "From: C20 = Map views builder (tools/coyodex/views.py:236); To: E40 = GraphDict (tools/coyodex/viewer/build_graph.py:111)",
+   "why_risky": "domain-model ownership edge — verify C20's code actually 'writes' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C22 reads E40",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:2785",
+   "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: E40 = GraphDict (tools/coyodex/viewer/build_graph.py:111)",
+   "why_risky": "domain-model ownership edge — verify C22's code actually 'reads' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C21 writes E48",
+   "anchor": "tools/coyodex/viewer/build_graph.py:277",
+   "detail": "From: C21 = Viewer graph builder (tools/coyodex/viewer/build_graph.py:111); To: E48 = DiffDict (tools/coyodex/viewer/build_graph.py:161)",
+   "why_risky": "domain-model ownership edge — verify C21's code actually 'writes' E48; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C21 writes E49",
+   "anchor": "tools/coyodex/viewer/build_graph.py:254",
+   "detail": "From: C21 = Viewer graph builder (tools/coyodex/viewer/build_graph.py:111); To: E49 = DiffChange (tools/coyodex/viewer/build_graph.py:153)",
+   "why_risky": "domain-model ownership edge — verify C21's code actually 'writes' E49; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C29 reads E44",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:2597",
+   "detail": "From: C29 = Behavioural flow generator (tools/coyodex/viewer/gen_viewer.py:2392); To: E44 = Flow (view) (tools/coyodex/grammar.py:533)",
+   "why_risky": "domain-model ownership edge — verify C29's code actually 'reads' E44; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C37 reads E41",
+   "anchor": "tools/coyodex/viewer/viewer.js:1072",
+   "detail": "From: C37 = Element info pane & selection (tools/coyodex/viewer/viewer.js:1119); To: E41 = Node (tools/coyodex/viewer/build_graph.py:28)",
+   "why_risky": "domain-model ownership edge — verify C37's code actually 'reads' E41; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C38 reads E41",
+   "anchor": "tools/coyodex/viewer/viewer.js:5496",
+   "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: E41 = Node (tools/coyodex/viewer/build_graph.py:28)",
+   "why_risky": "domain-model ownership edge — verify C38's code actually 'reads' E41; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+   "claim": "C1 uses C30",
+   "anchor": "method.md:573",
+   "detail": "From: C1 = Method docs (method.md:1); To: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C1's code 'uses' C30; ground the call site against the code."
+  },
+  {
+   "claim": "C3 uses C4",
+   "anchor": "tools/coyodex/model.py:529",
+   "detail": "From: C3 = Map model & serializer (tools/coyodex/model.py:1); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+   "why_risky": "backbone edge — no deterministic gate confirms C3's code 'uses' C4; ground the call site against the code."
+  },
+  {
+   "claim": "C5 reads C3",
+   "anchor": "tools/coyodex/json_schema.py:271",
+   "detail": "From: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C5's code 'reads' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C5 uses C4",
+   "anchor": "tools/coyodex/json_schema.py:81",
+   "detail": "From: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+   "why_risky": "backbone edge — no deterministic gate confirms C5's code 'uses' C4; ground the call site against the code."
+  },
+  {
+   "claim": "C6 calls C3",
+   "anchor": "tools/coyodex/assemble.py:139",
+   "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C6 calls C10",
+   "anchor": "tools/coyodex/assemble.py:103",
+   "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: C10 = Map validator (tools/coyodex/validate_model.py:133)",
+   "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C10; ground the call site against the code."
+  },
+  {
+   "claim": "C6 calls C8",
+   "anchor": "tools/coyodex/assemble.py:456",
+   "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281)",
+   "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C8; ground the call site against the code."
+  },
+  {
+   "claim": "C6 calls C20",
+   "anchor": "tools/coyodex/assemble.py:475",
+   "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: C20 = Map views builder (tools/coyodex/views.py:236)",
+   "why_risky": "backbone edge — no deterministic gate confirms C6's code 'calls' C20; ground the call site against the code."
+  },
+  {
+   "claim": "C7 calls C6",
+   "anchor": "tools/coyodex/lint_fragment.py:238",
+   "detail": "From: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108); To: C6 = Fragment assembler (tools/coyodex/assemble.py:150)",
+   "why_risky": "backbone edge — no deterministic gate confirms C7's code 'calls' C6; ground the call site against the code."
+  },
+  {
+   "claim": "C7 calls C10",
+   "anchor": "tools/coyodex/lint_fragment.py:117",
+   "detail": "From: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108); To: C10 = Map validator (tools/coyodex/validate_model.py:133)",
+   "why_risky": "backbone edge — no deterministic gate confirms C7's code 'calls' C10; ground the call site against the code."
+  },
+  {
+   "claim": "C7 calls C14",
+   "anchor": "tools/coyodex/lint_fragment.py:150",
+   "detail": "From: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108); To: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966)",
+   "why_risky": "backbone edge — no deterministic gate confirms C7's code 'calls' C14; ground the call site against the code."
+  },
+  {
+   "claim": "C7 uses C4",
+   "anchor": "tools/coyodex/lint_fragment.py:91",
+   "detail": "From: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+   "why_risky": "backbone edge — no deterministic gate confirms C7's code 'uses' C4; ground the call site against the code."
+  },
+  {
+   "claim": "C8 calls C12",
+   "anchor": "tools/coyodex/fix.py:85",
+   "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C12 = Map auditor (tools/coyodex/audit_model.py:331)",
+   "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C12; ground the call site against the code."
+  },
+  {
+   "claim": "C8 calls C5",
+   "anchor": "tools/coyodex/anchor_drift.py:64",
+   "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+   "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C5; ground the call site against the code."
+  },
+  {
+   "claim": "C8 calls C14",
+   "anchor": "tools/coyodex/anchor_drift.py:110",
+   "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966)",
+   "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C14; ground the call site against the code."
+  },
+  {
+   "claim": "C8 calls C3",
+   "anchor": "tools/coyodex/fix.py:42",
+   "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C8 calls C11",
+   "anchor": "tools/coyodex/reconcile.py:227",
+   "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37)",
+   "why_risky": "backbone edge — no deterministic gate confirms C8's code 'calls' C11; ground the call site against the code."
+  },
+  {
+   "claim": "C9 calls C5",
+   "anchor": "tools/coyodex/preindex_lib.py:271",
+   "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+   "why_risky": "backbone edge — no deterministic gate confirms C9's code 'calls' C5; ground the call site against the code."
+  },
+  {
+   "claim": "C10 calls C16",
+   "anchor": "tools/coyodex/validate_model.py:522",
+   "detail": "From: C10 = Map validator (tools/coyodex/validate_model.py:133); To: C16 = Advisory adjudication readers (tools/coyodex/validate_model.py:552)",
+   "why_risky": "backbone edge — no deterministic gate confirms C10's code 'calls' C16; ground the call site against the code."
+  },
+  {
+   "claim": "C10 uses C4",
+   "anchor": "tools/coyodex/validate_model.py:208",
+   "detail": "From: C10 = Map validator (tools/coyodex/validate_model.py:133); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+   "why_risky": "backbone edge — no deterministic gate confirms C10's code 'uses' C4; ground the call site against the code."
+  },
+  {
+   "claim": "C11 calls C5",
+   "anchor": "tools/coyodex/validate_analysis.py:322",
+   "detail": "From: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+   "why_risky": "backbone edge — no deterministic gate confirms C11's code 'calls' C5; ground the call site against the code."
+  },
+  {
+   "claim": "C11 uses C4",
+   "anchor": "tools/coyodex/validate_analysis.py:66",
+   "detail": "From: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+   "why_risky": "backbone edge — no deterministic gate confirms C11's code 'uses' C4; ground the call site against the code."
+  },
+  {
+   "claim": "C12 calls C3",
+   "anchor": "tools/coyodex/audit_model.py:124",
+   "detail": "From: C12 = Map auditor (tools/coyodex/audit_model.py:331); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C12's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C12 uses C4",
+   "anchor": "tools/coyodex/audit_model.py:372",
+   "detail": "From: C12 = Map auditor (tools/coyodex/audit_model.py:331); To: C4 = Map grammar & vocabularies (tools/coyodex/grammar.py:15)",
+   "why_risky": "backbone edge — no deterministic gate confirms C12's code 'uses' C4; ground the call site against the code."
+  },
+  {
+   "claim": "C12 uses C5",
+   "anchor": "tools/coyodex/audit_model.py:56",
+   "detail": "From: C12 = Map auditor (tools/coyodex/audit_model.py:331); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+   "why_risky": "backbone edge — no deterministic gate confirms C12's code 'uses' C5; ground the call site against the code."
+  },
+  {
+   "claim": "C13 calls C3",
+   "anchor": "tools/coyodex/balance.py:193",
+   "detail": "From: C13 = Balance reporter (tools/coyodex/balance.py:103); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C13's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C14 calls C5",
+   "anchor": "tools/coyodex/validate_model.py:2119",
+   "detail": "From: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+   "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C5; ground the call site against the code."
+  },
+  {
+   "claim": "C14 calls C11",
+   "anchor": "tools/coyodex/validate_model.py:2105",
+   "detail": "From: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966); To: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37)",
+   "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C11; ground the call site against the code."
+  },
+  {
+   "claim": "C14 calls C20",
+   "anchor": "tools/coyodex/validate_model.py:2288",
+   "detail": "From: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966); To: C20 = Map views builder (tools/coyodex/views.py:236)",
+   "why_risky": "backbone edge — no deterministic gate confirms C14's code 'calls' C20; ground the call site against the code."
+  },
+  {
+   "claim": "C15 calls C10",
+   "anchor": "tools/coyodex/validate_model.py:2307",
+   "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C10 = Map validator (tools/coyodex/validate_model.py:133)",
+   "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C10; ground the call site against the code."
+  },
+  {
+   "claim": "C15 calls C14",
+   "anchor": "tools/coyodex/validate_model.py:2364",
+   "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966)",
+   "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C14; ground the call site against the code."
+  },
+  {
+   "claim": "C15 calls C11",
+   "anchor": "tools/coyodex/validate_model.py:2376",
+   "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37)",
+   "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C11; ground the call site against the code."
+  },
+  {
+   "claim": "C15 calls C13",
+   "anchor": "tools/coyodex/validate_model.py:2415",
+   "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C13 = Balance reporter (tools/coyodex/balance.py:103)",
+   "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C13; ground the call site against the code."
+  },
+  {
+   "claim": "C15 calls C3",
+   "anchor": "tools/coyodex/validate_model.py:2532",
+   "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C15's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C16 calls C13",
+   "anchor": "tools/coyodex/validate_model.py:557",
+   "detail": "From: C16 = Advisory adjudication readers (tools/coyodex/validate_model.py:552); To: C13 = Balance reporter (tools/coyodex/balance.py:103)",
+   "why_risky": "backbone edge — no deterministic gate confirms C16's code 'calls' C13; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C9",
+   "anchor": "tools/coyodex/cli.py:81",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C9 = Code pre-index (tools/coyodex/preindex.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C9; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C15",
+   "anchor": "tools/coyodex/cli.py:84",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C15; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C12",
+   "anchor": "tools/coyodex/cli.py:87",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C12 = Map auditor (tools/coyodex/audit_model.py:331)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C12; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C20",
+   "anchor": "tools/coyodex/cli.py:90",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C20 = Map views builder (tools/coyodex/views.py:236)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C20; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C24",
+   "anchor": "tools/coyodex/cli.py:93",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C24; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C6",
+   "anchor": "tools/coyodex/cli.py:96",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C6 = Fragment assembler (tools/coyodex/assemble.py:150)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C6; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C31",
+   "anchor": "tools/coyodex/cli.py:99",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C31 = Model dump (tools/coyodex/dump.py:122)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C31; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C13",
+   "anchor": "tools/coyodex/cli.py:102",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C13 = Balance reporter (tools/coyodex/balance.py:103)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C13; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C7",
+   "anchor": "tools/coyodex/cli.py:108",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C7 = Fragment linter (tools/coyodex/lint_fragment.py:108)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C7; ground the call site against the code."
+  },
+  {
+   "claim": "C40 reads C3",
+   "anchor": "tools/coyodex/impact_lib.py:212",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C40's code 'reads' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C40 calls C5",
+   "anchor": "tools/coyodex/impact_lib.py:189",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+   "why_risky": "backbone edge — no deterministic gate confirms C40's code 'calls' C5; ground the call site against the code."
+  },
+  {
+   "claim": "C40 reads C9",
+   "anchor": "tools/coyodex/impact_git.py:202",
+   "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: C9 = Code pre-index (tools/coyodex/preindex.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C40's code 'reads' C9; ground the call site against the code."
+  },
+  {
+   "claim": "C31 calls C3",
+   "anchor": "tools/coyodex/dump.py:158",
+   "detail": "From: C31 = Model dump (tools/coyodex/dump.py:122); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C31's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C32 calls C24",
+   "anchor": "tools/coyodex/viewer/viewer.js:6851",
+   "detail": "From: C32 = Change-impact overlay (tools/coyodex/viewer/viewer.js:6716); To: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C32's code 'calls' C24; ground the call site against the code."
+  },
+  {
+   "claim": "C32 calls C23",
+   "anchor": "tools/coyodex/viewer/viewer.js:6867",
+   "detail": "From: C32 = Change-impact overlay (tools/coyodex/viewer/viewer.js:6716); To: C23 = Diagram canvas & drill navigation (tools/coyodex/viewer/viewer.js:4537); entry points: the reader clicks a top-bar tab to switch view — Happy Path, Use Cases, Subsystems, Entities, Dependencies, Data, Deployment, System, Glossary, Tests (each hidden when the map has nothing for it) (tools/coyodex/viewer/viewer.js:6674); the reader opens the search overlay (the magnifier button, or the `/` key) to jump to any map element, file, or code symbol (tools/coyodex/viewer/viewer.js:6641); the reader opens the Impact popover to pick two commits and project that diff onto the map (tools/coyodex/viewer/viewer.js:6906); the reader switches the side pane between the file browser and the code viewer (tools/coyodex/viewer/viewer.js:6178); the reader clicks the page title to go back to the server's landing page listing all maps (tools/coyodex/viewer/viewer.js:5234); the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it (tools/coyodex/viewer/viewer.js:107); +1 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C32's code 'calls' C23; ground the call site against the code."
+  },
+  {
+   "claim": "C32 writes C37",
+   "anchor": "tools/coyodex/viewer/viewer.js:6805",
+   "detail": "From: C32 = Change-impact overlay (tools/coyodex/viewer/viewer.js:6716); To: C37 = Element info pane & selection (tools/coyodex/viewer/viewer.js:1119)",
+   "why_risky": "backbone edge — no deterministic gate confirms C32's code 'writes' C37; ground the call site against the code."
+  },
+  {
+   "claim": "C32 calls C38",
+   "anchor": "tools/coyodex/viewer/viewer.js:6866",
+   "detail": "From: C32 = Change-impact overlay (tools/coyodex/viewer/viewer.js:6716); To: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250)",
+   "why_risky": "backbone edge — no deterministic gate confirms C32's code 'calls' C38; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C3",
+   "anchor": "eval/tools/coyodex_eval/profile.py:122",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C10",
+   "anchor": "eval/tools/coyodex_eval/profile.py:129",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C10 = Map validator (tools/coyodex/validate_model.py:133)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C10; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C12",
+   "anchor": "eval/tools/coyodex_eval/profile.py:131",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C12 = Map auditor (tools/coyodex/audit_model.py:331)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C12; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C11",
+   "anchor": "eval/tools/coyodex_eval/profile.py:141",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C11 = Validate semantic-check helpers (tools/coyodex/validate_analysis.py:37)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C11; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C9",
+   "anchor": "eval/tools/coyodex_eval/profile.py:143",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C9 = Code pre-index (tools/coyodex/preindex.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C9; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C13",
+   "anchor": "eval/tools/coyodex_eval/profile.py:149",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C13 = Balance reporter (tools/coyodex/balance.py:103)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C13; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C20",
+   "anchor": "eval/tools/coyodex_eval/run.py:158",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C20 = Map views builder (tools/coyodex/views.py:236)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C20; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C22",
+   "anchor": "eval/tools/coyodex_eval/run.py:131",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C22; ground the call site against the code."
+  },
+  {
+   "claim": "C45 calls C46",
+   "anchor": "eval/tools/coyodex_eval/run.py:67",
+   "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227)",
+   "why_risky": "backbone edge — no deterministic gate confirms C45's code 'calls' C46; ground the call site against the code."
+  },
+  {
+   "claim": "C46 calls C12",
+   "anchor": "eval/tools/coyodex_eval/judge.py:234",
+   "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: C12 = Map auditor (tools/coyodex/audit_model.py:331)",
+   "why_risky": "backbone edge — no deterministic gate confirms C46's code 'calls' C12; ground the call site against the code."
+  },
+  {
+   "claim": "C46 calls C3",
+   "anchor": "eval/tools/coyodex_eval/judge.py:234",
+   "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: C3 = Map model & serializer (tools/coyodex/model.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C46's code 'calls' C3; ground the call site against the code."
+  },
+  {
+   "claim": "C46 calls C5",
+   "anchor": "eval/tools/coyodex_eval/judge.py:250",
+   "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: C5 = Anchor & schema utilities (tools/coyodex/anchors.py:1); entry points: a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it) (tools/coyodex/json_schema.py:291)",
+   "why_risky": "backbone edge — no deterministic gate confirms C46's code 'calls' C5; ground the call site against the code."
+  },
+  {
+   "claim": "C2 routes-to C1",
+   "anchor": "skill/coyodex/SKILL.md:28",
+   "detail": "From: C2 = Agent skill manifest (skill/coyodex/SKILL.md:1); entry points: a coding agent picks up the `/coyodex` skill (or matches its triggers, e.g. \"map this repo\") and starts reading the method from the manifest (skill/coyodex/SKILL.md:2); To: C1 = Method docs (method.md:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C2's code 'routes-to' C1; ground the call site against the code."
+  },
+  {
+   "claim": "C2 uses C30",
+   "anchor": "skill/coyodex/SKILL.md:24",
+   "detail": "From: C2 = Agent skill manifest (skill/coyodex/SKILL.md:1); entry points: a coding agent picks up the `/coyodex` skill (or matches its triggers, e.g. \"map this repo\") and starts reading the method from the manifest (skill/coyodex/SKILL.md:2); To: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C2's code 'uses' C30; ground the call site against the code."
+  },
+  {
+   "claim": "C30 calls C8",
+   "anchor": "tools/coyodex/cli.py:105",
+   "detail": "From: C30 = CLI dispatcher (tools/coyodex/cli.py:69); entry points: a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map (tools/coyodex/cli.py:79); a developer or coding agent runs `coyodex validate` to check a map is well-formed (tools/coyodex/cli.py:82); a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map (tools/coyodex/cli.py:85); a developer or coding agent runs `coyodex render` to write the map's committed markdown view (tools/coyodex/cli.py:88); a developer runs `coyodex serve` to start the local map server (tools/coyodex/cli.py:91); a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map (tools/coyodex/cli.py:94); +7 more; To: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281)",
+   "why_risky": "backbone edge — no deterministic gate confirms C30's code 'calls' C8; ground the call site against the code."
+  },
+  {
+   "claim": "C25 calls C9",
+   "anchor": "tools/coyodex/viewer/filetree.py:218",
+   "detail": "From: C25 = File browser, recents & diff rows (tools/coyodex/viewer/filetree.py:186); To: C9 = Code pre-index (tools/coyodex/preindex.py:1)",
+   "why_risky": "backbone edge — no deterministic gate confirms C25's code 'calls' C9; ground the call site against the code."
+  },
+  {
+   "claim": "C23 calls C24",
+   "anchor": "tools/coyodex/viewer/viewer.js:107",
+   "detail": "From: C23 = Diagram canvas & drill navigation (tools/coyodex/viewer/viewer.js:4537); entry points: the reader clicks a top-bar tab to switch view — Happy Path, Use Cases, Subsystems, Entities, Dependencies, Data, Deployment, System, Glossary, Tests (each hidden when the map has nothing for it) (tools/coyodex/viewer/viewer.js:6674); the reader opens the search overlay (the magnifier button, or the `/` key) to jump to any map element, file, or code symbol (tools/coyodex/viewer/viewer.js:6641); the reader opens the Impact popover to pick two commits and project that diff onto the map (tools/coyodex/viewer/viewer.js:6906); the reader switches the side pane between the file browser and the code viewer (tools/coyodex/viewer/viewer.js:6178); the reader clicks the page title to go back to the server's landing page listing all maps (tools/coyodex/viewer/viewer.js:5234); the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it (tools/coyodex/viewer/viewer.js:107); +1 more; To: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C23's code 'calls' C24; ground the call site against the code."
+  },
+  {
+   "claim": "C23 routes-to C37",
+   "anchor": "tools/coyodex/viewer/viewer.js:2266",
+   "detail": "From: C23 = Diagram canvas & drill navigation (tools/coyodex/viewer/viewer.js:4537); entry points: the reader clicks a top-bar tab to switch view — Happy Path, Use Cases, Subsystems, Entities, Dependencies, Data, Deployment, System, Glossary, Tests (each hidden when the map has nothing for it) (tools/coyodex/viewer/viewer.js:6674); the reader opens the search overlay (the magnifier button, or the `/` key) to jump to any map element, file, or code symbol (tools/coyodex/viewer/viewer.js:6641); the reader opens the Impact popover to pick two commits and project that diff onto the map (tools/coyodex/viewer/viewer.js:6906); the reader switches the side pane between the file browser and the code viewer (tools/coyodex/viewer/viewer.js:6178); the reader clicks the page title to go back to the server's landing page listing all maps (tools/coyodex/viewer/viewer.js:5234); the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it (tools/coyodex/viewer/viewer.js:107); +1 more; To: C37 = Element info pane & selection (tools/coyodex/viewer/viewer.js:1119)",
+   "why_risky": "backbone edge — no deterministic gate confirms C23's code 'routes-to' C37; ground the call site against the code."
+  },
+  {
+   "claim": "C23 routes-to C38",
+   "anchor": "tools/coyodex/viewer/viewer.js:152",
+   "detail": "From: C23 = Diagram canvas & drill navigation (tools/coyodex/viewer/viewer.js:4537); entry points: the reader clicks a top-bar tab to switch view — Happy Path, Use Cases, Subsystems, Entities, Dependencies, Data, Deployment, System, Glossary, Tests (each hidden when the map has nothing for it) (tools/coyodex/viewer/viewer.js:6674); the reader opens the search overlay (the magnifier button, or the `/` key) to jump to any map element, file, or code symbol (tools/coyodex/viewer/viewer.js:6641); the reader opens the Impact popover to pick two commits and project that diff onto the map (tools/coyodex/viewer/viewer.js:6906); the reader switches the side pane between the file browser and the code viewer (tools/coyodex/viewer/viewer.js:6178); the reader clicks the page title to go back to the server's landing page listing all maps (tools/coyodex/viewer/viewer.js:5234); the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it (tools/coyodex/viewer/viewer.js:107); +1 more; To: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250)",
+   "why_risky": "backbone edge — no deterministic gate confirms C23's code 'routes-to' C38; ground the call site against the code."
+  },
+  {
+   "claim": "C24 calls C20",
+   "anchor": "tools/coyodex/viewer/serve.py:397",
+   "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: C20 = Map views builder (tools/coyodex/views.py:236)",
+   "why_risky": "backbone edge — no deterministic gate confirms C24's code 'calls' C20; ground the call site against the code."
+  },
+  {
+   "claim": "C24 calls C22",
+   "anchor": "tools/coyodex/viewer/serve.py:399",
+   "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877)",
+   "why_risky": "backbone edge — no deterministic gate confirms C24's code 'calls' C22; ground the call site against the code."
+  },
+  {
+   "claim": "C24 calls C25",
+   "anchor": "tools/coyodex/viewer/serve.py:384",
+   "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: C25 = File browser, recents & diff rows (tools/coyodex/viewer/filetree.py:186)",
+   "why_risky": "backbone edge — no deterministic gate confirms C24's code 'calls' C25; ground the call site against the code."
+  },
+  {
+   "claim": "C22 calls C26",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:2778",
+   "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: C26 = Context & subsystem diagram generator (tools/coyodex/viewer/gen_viewer.py:1325)",
+   "why_risky": "backbone edge — no deterministic gate confirms C22's code 'calls' C26; ground the call site against the code."
+  },
+  {
+   "claim": "C22 calls C27",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:2821",
+   "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: C27 = Domain diagram generator (tools/coyodex/viewer/gen_viewer.py:455)",
+   "why_risky": "backbone edge — no deterministic gate confirms C22's code 'calls' C27; ground the call site against the code."
+  },
+  {
+   "claim": "C22 calls C28",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:2828",
+   "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: C28 = Deployment & messaging diagram generator (tools/coyodex/viewer/gen_viewer.py:1943)",
+   "why_risky": "backbone edge — no deterministic gate confirms C22's code 'calls' C28; ground the call site against the code."
+  },
+  {
+   "claim": "C22 calls C29",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:2840",
+   "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: C29 = Behavioural flow generator (tools/coyodex/viewer/gen_viewer.py:2392)",
+   "why_risky": "backbone edge — no deterministic gate confirms C22's code 'calls' C29; ground the call site against the code."
+  },
+  {
+   "claim": "C22 calls C21",
+   "anchor": "tools/coyodex/viewer/gen_viewer.py:2775",
+   "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: C21 = Viewer graph builder (tools/coyodex/viewer/build_graph.py:111)",
+   "why_risky": "backbone edge — no deterministic gate confirms C22's code 'calls' C21; ground the call site against the code."
+  },
+  {
+   "claim": "C38 calls C24",
+   "anchor": "tools/coyodex/viewer/viewer.js:5806",
+   "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C38's code 'calls' C24; ground the call site against the code."
+  },
+  {
+   "claim": "C39 calls C24",
+   "anchor": "tools/coyodex/viewer/viewer.js:6325",
+   "detail": "From: C39 = Map search sidebar (tools/coyodex/viewer/viewer.js:6217); To: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more",
+   "why_risky": "backbone edge — no deterministic gate confirms C39's code 'calls' C24; ground the call site against the code."
+  },
+  {
+   "claim": "C39 calls C38",
+   "anchor": "tools/coyodex/viewer/viewer.js:6345",
+   "detail": "From: C39 = Map search sidebar (tools/coyodex/viewer/viewer.js:6217); To: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250)",
+   "why_risky": "backbone edge — no deterministic gate confirms C39's code 'calls' C38; ground the call site against the code."
+  },
+  {
+   "claim": "E1 (ProjectModel) is stored in D2 container '.coyodex/project-map.json' (collection)",
+   "anchor": "tools/coyodex/model.py:418",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E37 (Symbol) is stored in D2 container '.coyodex/preindex.json' (collection)",
+   "anchor": "tools/coyodex/preindex_lib.py:253",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E38 (ImportRef) is stored in D2 container '.coyodex/preindex.json' (collection)",
+   "anchor": "tools/coyodex/preindex_lib.py:262",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E39 (DirExpectation) is stored in D2 container '.coyodex/preindex.json' (collection)",
+   "anchor": "tools/coyodex/preindex_lib.py:474",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E51 (RecentsStore) is stored in D2 container '~/.coyodex/serve-recents.json' (collection)",
+   "anchor": "tools/coyodex/viewer/recents.py:22",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E63 (MapProfile) is stored in D2 container 'profile.json' (collection)",
+   "anchor": "eval/tools/coyodex_eval/profile.py:37",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E64 (JudgeReport) is stored in D2 container 'judge.json' (collection)",
+   "anchor": "eval/tools/coyodex_eval/judge.py:101",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E74 (Thresholds) is stored in D2 container 'thresholds.json' (collection)",
+   "anchor": "eval/tools/coyodex_eval/compare.py:91",
+   "detail": null,
+   "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+   "claim": "E13 (EntryPoint) has states [self, external]",
+   "anchor": "tools/coyodex/grammar.py:223",
+   "detail": null,
+   "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+   "claim": "E20 (Store) has states [collection, embedded, transient, cache, in-code, enum]",
+   "anchor": "tools/coyodex/grammar.py:243",
+   "detail": null,
+   "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+   "claim": "E59 (DirectHit) has states [deleted, added, modified, drifted]",
+   "anchor": "tools/coyodex/impact_ripple.py:42",
+   "detail": null,
+   "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+   "claim": "E62 (RunResult) has states [PASS, DRIFT, REGRESSED, BASELINE]",
+   "anchor": "eval/tools/coyodex_eval/run.py:34",
+   "detail": null,
+   "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+   "claim": "E69 (DeltaReport) has states [PASS, DRIFT, REGRESSED]",
+   "anchor": "eval/tools/coyodex_eval/compare.py:41",
+   "detail": null,
+   "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+   "claim": "Entry point [startup-hook] the serve command finishes loading the projects and the HTTP server starts accepting connections on 127.0.0.1, handing each one to its own worker thread runs on cadence 'continuous'",
+   "anchor": "tools/coyodex/viewer/serve.py:742",
+   "detail": null,
+   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  },
+  {
+   "claim": "Entry point [startup-hook] with `coyodex serve --open`, the server opens the landing page in the developer's browser by itself as it starts listening runs on cadence 'on-boot'",
+   "anchor": "tools/coyodex/viewer/serve.py:739",
+   "detail": null,
+   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  },
+  {
+   "claim": "Entry point [startup-hook] the landing page's script runs itself as soon as the page loads, fetching the home folder and the recents list runs on cadence 'on-boot'",
+   "anchor": "tools/coyodex/viewer/serve.py:1040",
+   "detail": null,
+   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  },
+  {
+   "claim": "Entry point [startup-hook] the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it runs on cadence 'on-boot'",
+   "anchor": "tools/coyodex/viewer/viewer.js:107",
+   "detail": null,
+   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  },
+  {
+   "claim": "Entry point [startup-hook] the browser app probes the server once at load and, on success, reveals and wires the file browser and code viewer runs on cadence 'on-boot'",
+   "anchor": "tools/coyodex/viewer/viewer.js:6659",
+   "detail": null,
+   "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  }
+ ]
+}

@@ -1,0 +1,86 @@
+[
+  {
+    "claim": "Auth surface 'Local map server HTTP listener' is protected by: tools/coyodex/viewer/serve.py:734",
+    "anchor": "tools/coyodex/viewer/serve.py:734",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'DNS-rebinding guard on every request' is protected by: tools/coyodex/viewer/serve.py:512",
+    "anchor": "tools/coyodex/viewer/serve.py:512",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'State-changing POST endpoints (add / forget / reorder a project)' is protected by: tools/coyodex/viewer/serve.py:535",
+    "anchor": "tools/coyodex/viewer/serve.py:535",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Source file read at the pinned commit (/p/<slug>/api/src)' is protected by: tools/coyodex/viewer/serve.py:631",
+    "anchor": "tools/coyodex/viewer/serve.py:631",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Working-tree file read (/p/<slug>/api/src?at=WORKTREE)' is protected by: tools/coyodex/viewer/serve.py:275",
+    "anchor": "tools/coyodex/viewer/serve.py:275",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Git argument injection through a commit value' is protected by: tools/coyodex/viewer/serve.py:643",
+    "anchor": "tools/coyodex/viewer/serve.py:643",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Git argument injection through a user-supplied ref' is protected by: tools/coyodex/viewer/serve.py:254",
+    "anchor": "tools/coyodex/viewer/serve.py:254",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Filesystem browser used to pick a project folder (/api/browse)' is protected by: tools/coyodex/viewer/serve.py:565",
+    "anchor": "tools/coyodex/viewer/serve.py:565",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Adding a project folder to the served set (/api/open)' is protected by: tools/coyodex/viewer/serve.py:574",
+    "anchor": "tools/coyodex/viewer/serve.py:574",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Shared frontend asset route (/static/<name>)' is protected by: tools/coyodex/viewer/serve.py:702",
+    "anchor": "tools/coyodex/viewer/serve.py:702",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Editor hand-off URI built from a user-supplied template' is protected by: tools/coyodex/viewer/viewer.js:5976",
+    "anchor": "tools/coyodex/viewer/viewer.js:5976",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Third-party scripts executed inside the viewer page' is protected by: tools/coyodex/viewer/viewer.html:17",
+    "anchor": "tools/coyodex/viewer/viewer.html:17",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Map-supplied text rendered into diagram labels' is protected by: tools/coyodex/viewer/gen_viewer.py:97",
+    "anchor": "tools/coyodex/viewer/gen_viewer.py:97",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  },
+  {
+    "claim": "Auth surface 'Request body size on the POST endpoints' is protected by: tools/coyodex/viewer/serve.py:689",
+    "anchor": "tools/coyodex/viewer/serve.py:689",
+    "detail": null,
+    "why_risky": "security boundary — a false claim here is an access-control hole."
+  }
+]

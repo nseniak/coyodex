@@ -1,0 +1,71 @@
+{"grounding": [
+  {"claim": "Auth surface 'Local map server HTTP listener' is protected by: tools/coyodex/viewer/serve.py:734",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:734",
+   "note": "I ran the server and opened a TCP connection to it on the machine's LAN address 192.168.1.34:18765 — refused (ECONNREFUSED), because line 734 binds ThreadingHTTPServer to 127.0.0.1 only, so nothing off-host can reach the listener."},
+
+  {"claim": "Auth surface 'DNS-rebinding guard on every request' is protected by: tools/coyodex/viewer/serve.py:512",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:512",
+   "note": "I sent GET / and GET /api/browse?path=/etc with a forged 'Host: evil.com' (and with 'Host: coyodex.localhost') — all 403 'host not allowed' at line 512, and the same guard on POST at line 532 covers the only other implemented verb (any other method gets the base 501), so the rebinding attack is stopped; an absent Host is deliberately allowed, which is safe since browsers always send one."},
+
+  {"claim": "Auth surface 'State-changing POST endpoints (add / forget / reorder a project)' is protected by: tools/coyodex/viewer/serve.py:535",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:535",
+   "note": "I POSTed to /api/open with a JSON body and no custom header (the shape a cross-origin form or simple fetch can produce) — 403 'missing X-Coyodex header' at line 535, and the CORS preflight a scripted cross-origin fetch would need (OPTIONS with Access-Control-Request-Headers: x-coyodex) returns 501 with no CORS headers, so the browser blocks the real request."},
+
+  {"claim": "Auth surface 'Source file read at the pinned commit (/p/<slug>/api/src)' is protected by: tools/coyodex/viewer/serve.py:631",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:631",
+   "note": "Against a live server I requested path=../../../../etc/passwd, path=/etc/passwd, the percent-encoded forms (..%2F..%2F.. and %2e%2e/%2e%2e/) and path=sub/../secret.txt — every one returned 400 'bad path' at line 631, and git show reads from the commit tree so even a bypass could not leave the repo."},
+
+  {"claim": "Auth surface 'Working-tree file read (/p/<slug>/api/src?at=WORKTREE)' is protected by: tools/coyodex/viewer/serve.py:275",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:275",
+   "note": "I committed a symlink escape.txt -> /etc/passwd into a test repo and requested it with at=WORKTREE: 404, and a step-by-step trace proves line 275 is the sole blocker (_safe_rel passes, the file is git-tracked, and the resolved target is a real file) — the same route also refused a gitignored secrets file and .git/config."},
+
+  {"claim": "Auth surface 'Git argument injection through a commit value' is protected by: tools/coyodex/viewer/serve.py:643",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:643",
+   "note": "I sent at=--output=/tmp/pwn and at=--upload-pack=id on /api/src — both 400 'bad at= commit' at line 643 (and no /tmp/pwn was created), because _valid_commit accepts only a bare 7-64 char hex SHA, so a leading dash never reaches git's argv."},
+
+  {"claim": "Auth surface 'Git argument injection through a user-supplied ref' is protected by: tools/coyodex/viewer/serve.py:254",
+   "grounded": true,
+   "evidence": "tools/coyodex/impact_git.py:59",
+   "note": "The attack (base=--output=/tmp/pwn and base=-x on /api/impact and /api/impactsrcdiff) is blocked — 400 'unsafe ref: ...' — but the guard that fired is impact_git.py:59, NOT the cited serve.py:254, which is only ever called with the map's own already-validated pin and never sees a user-supplied ref."},
+
+  {"claim": "Auth surface 'Filesystem browser used to pick a project folder (/api/browse)' is protected by: tools/coyodex/viewer/serve.py:565",
+   "grounded": false,
+   "evidence": "tools/coyodex/viewer/serve.py:734",
+   "note": "GET /api/browse?path=/ , ?path=/Users and ?path=~/.ssh all returned 200 with real directory listings — line 565 is just the JSON response and the route applies no containment at all (any local directory is enumerable by design, per the docstring at line 441); the only actual access control is the loopback bind at line 734 plus the Host guard at 512 and the absence of CORS headers, which stop a remote or cross-origin reader."},
+
+  {"claim": "Auth surface 'Adding a project folder to the served set (/api/open)' is protected by: tools/coyodex/viewer/serve.py:574",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:574",
+   "note": "POSTing path=/ and path=/tmp with a valid X-Coyodex header both returned 400 'that folder has no .coyodex/ folder' at line 574, so an arbitrary folder cannot be added to the served set — though the barrier against a cross-origin attacker is really the CSRF header at line 535, and any folder that contains a .coyodex/ directory is still addable."},
+
+  {"claim": "Auth surface 'Shared frontend asset route (/static/<name>)' is protected by: tools/coyodex/viewer/serve.py:702",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:702",
+   "note": "I requested /static/..%2F..%2F..%2F..%2Fetc%2Fpasswd, /static/..%2Fserve.py and /static/viewer.html (the encoded slashes survive routing as one path segment) — all 404 at line 702, because only the exact names viewer.js and viewer.css are in the whitelist dict."},
+
+  {"claim": "Auth surface 'Editor hand-off URI built from a user-supplied template' is protected by: tools/coyodex/viewer/viewer.js:5976",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:5976",
+   "note": "I ran the actual scheme extractor and allowlist over hostile custom templates — javascript:, mixed-case JaVaScRiPt:, tab- and newline-obfuscated java(tab)script: (which browsers would normalize back to javascript:), data:, file:, https:, //evil.com and vbscript: — every one returns null at line 5976 before the value can reach an <a href>, and the same check also gates the Settings save at line 6099."},
+
+  {"claim": "Auth surface 'Third-party scripts executed inside the viewer page' is protected by: tools/coyodex/viewer/viewer.html:17",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.html:17",
+   "note": "I downloaded both CDN bundles and recomputed their SHA-384 digests: they match the integrity attributes byte for byte (line 17 for svg-pan-zoom, line 20 for mermaid), and both tags carry crossorigin=anonymous with an exact pinned version — so a tampered or swapped CDN file would be refused by the browser; the only other script in the page is the local /static/viewer.js."},
+
+  {"claim": "Auth surface 'Map-supplied text rendered into diagram labels' is protected by: tools/coyodex/viewer/gen_viewer.py:97",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:97",
+   "note": "I injected '<img src=x onerror=alert(1)>' into 1446 name/title/verb/used-for/actor fields of the real map and built the whole view bundle: across all 97 generated Mermaid diagrams not a single raw '<' survived (every one rewritten to a look-alike by _safe_label at line 97, or by its siblings _edge_label, _safe_msg and _dep_caption), so the payload cannot become markup even under mermaid's securityLevel 'loose'."},
+
+  {"claim": "Auth surface 'Request body size on the POST endpoints' is protected by: tools/coyodex/viewer/serve.py:689",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:689",
+   "note": "I POSTed a real 200 KB body and, separately, a body with a lying Content-Length of 999999999 — both were rejected at line 689 without the socket being drained or the JSON parsed (the handler saw no body and answered 400), and Content-Length values of 0 and -5 fall into the same branch."}
+]}

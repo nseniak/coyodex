@@ -1,0 +1,31 @@
+{
+  "set": [
+    { "ids": ["C1", "C2"], "subsystem": "S1" },
+    { "ids": ["C9"], "subsystem": "S2" },
+    { "ids": ["C3", "C4", "C5"], "subsystem": "S3" },
+    { "ids": ["C6", "C7", "C8"], "subsystem": "S4" },
+    { "ids": ["C10", "C11", "C12", "C13", "C14", "C15", "C16"], "subsystem": "S6" },
+    { "ids": ["C20"], "subsystem": "S7" },
+    { "ids": ["C21", "C22", "C26", "C27", "C28", "C29"], "subsystem": "S11" },
+    { "ids": ["C23", "C32", "C37", "C38", "C39"], "subsystem": "S12" },
+    { "ids": ["C24", "C25"], "subsystem": "S13" },
+    { "ids": ["C30", "C31"], "subsystem": "S10" },
+    { "ids": ["C40", "C41"], "subsystem": "S8" },
+    { "ids": ["C45", "C46"], "subsystem": "S9" },
+
+    { "ids": ["C6", "C7", "C8", "C31"], "runs_in": ["coyodex CLI"] },
+    { "ids": ["C21", "C24", "C26", "C27", "C28", "C29", "C40"], "runs_in": ["Map server"] },
+    { "ids": ["C23", "C32", "C37", "C38", "C39"], "runs_in": ["Browser viewer page"] },
+    { "ids": ["C45", "C46"], "runs_in": ["coyodex-eval CLI"] },
+    { "ids": ["C41"], "runs_in": ["Map backup script"] },
+    { "ids": ["C25"], "runs_in": ["Map server", "coyodex CLI"] },
+    { "ids": ["C30"], "runs_in": ["coyodex CLI", "Map server"] },
+    { "ids": ["C22"], "runs_in": ["Map server", "coyodex-eval CLI"] },
+    { "ids": ["C20"], "runs_in": ["coyodex CLI", "Map server", "coyodex-eval CLI"] },
+    { "ids": ["C9", "C10", "C11", "C12", "C13", "C14", "C15", "C16"],
+      "runs_in": ["coyodex CLI", "coyodex-eval CLI"] },
+    { "ids": ["C3", "C5"],
+      "runs_in": ["coyodex CLI", "Map server", "coyodex-eval CLI"] },
+    { "ids": ["C4"], "runs_in": ["coyodex CLI", "Map server"] }
+  ]
+}

@@ -1,0 +1,152 @@
+[
+  {
+    "claim": "C3 persists E1",
+    "anchor": "tools/coyodex/model.py:612",
+    "detail": "From: C3 = Map model & serializer (tools/coyodex/model.py:1); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C3's code actually 'persists' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C6 writes E1",
+    "anchor": "tools/coyodex/assemble.py:474",
+    "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C6's code actually 'writes' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C6 writes E12",
+    "anchor": "tools/coyodex/assemble.py:115",
+    "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: E12 = Edge (tools/coyodex/model.py:313)",
+    "why_risky": "domain-model ownership edge — verify C6's code actually 'writes' E12; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C8 writes E1",
+    "anchor": "tools/coyodex/fix.py:42",
+    "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C8's code actually 'writes' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C8 persists E32",
+    "anchor": "tools/coyodex/reconcile_build.py:234",
+    "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: E32 = Reconcile (tools/coyodex/reconcile.py:76)",
+    "why_risky": "domain-model ownership edge — verify C8's code actually 'persists' E32; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C9 emits E36",
+    "anchor": "tools/coyodex/preindex_lib.py:191",
+    "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: E36 = WalkResult (tools/coyodex/preindex_lib.py:154)",
+    "why_risky": "domain-model ownership edge — verify C9's code actually 'emits' E36; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C9 persists E37",
+    "anchor": "tools/coyodex/preindex_lib.py:277",
+    "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: E37 = Symbol (tools/coyodex/preindex_lib.py:253)",
+    "why_risky": "domain-model ownership edge — verify C9's code actually 'persists' E37; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C9 persists E38",
+    "anchor": "tools/coyodex/preindex_lib.py:294",
+    "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: E38 = ImportRef (tools/coyodex/preindex_lib.py:262)",
+    "why_risky": "domain-model ownership edge — verify C9's code actually 'persists' E38; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C9 persists E39",
+    "anchor": "tools/coyodex/preindex_lib.py:541",
+    "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: E39 = DirExpectation (tools/coyodex/preindex_lib.py:474)",
+    "why_risky": "domain-model ownership edge — verify C9's code actually 'persists' E39; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C12 reads E1",
+    "anchor": "tools/coyodex/audit_model.py:578",
+    "detail": "From: C12 = Map auditor (tools/coyodex/audit_model.py:331); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C12's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C13 reads E1",
+    "anchor": "tools/coyodex/balance.py:193",
+    "detail": "From: C13 = Balance reporter (tools/coyodex/balance.py:103); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C13's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C13 emits E35",
+    "anchor": "tools/coyodex/balance_lib.py:499",
+    "detail": "From: C13 = Balance reporter (tools/coyodex/balance.py:103); To: E35 = Proposal (tools/coyodex/balance_lib.py:382)",
+    "why_risky": "domain-model ownership edge — verify C13's code actually 'emits' E35; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C15 reads E1",
+    "anchor": "tools/coyodex/validate_model.py:2532",
+    "detail": "From: C15 = Validation run & CLI (tools/coyodex/validate_model.py:2296); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C15's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E54",
+    "anchor": "tools/coyodex/impact_git.py:82",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E54 = Change (tools/coyodex/impact_git.py:68)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E54; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E57",
+    "anchor": "tools/coyodex/impact_lib.py:58",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E57 = ParsedDiff (tools/coyodex/impact_lib.py:51)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E57; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E56",
+    "anchor": "tools/coyodex/impact_lib.py:66",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E56 = Hunk (tools/coyodex/impact_lib.py:36)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E56; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E55",
+    "anchor": "tools/coyodex/impact_lib.py:135",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E55 = FileFrame (tools/coyodex/impact_lib.py:94)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E55; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E58",
+    "anchor": "tools/coyodex/impact_lib.py:196",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E58 = AnchorRef (tools/coyodex/impact_lib.py:170)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E58; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E59",
+    "anchor": "tools/coyodex/impact_lib.py:353",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E59 = DirectHit (tools/coyodex/impact_lib.py:278)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E59; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E53",
+    "anchor": "tools/coyodex/impact_git.py:244",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E53 = ImpactFile (tools/coyodex/impact_git.py:175)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E53; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E52",
+    "anchor": "tools/coyodex/impact_git.py:228",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E52 = ImpactCore (tools/coyodex/impact_git.py:184)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E52; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 reads E60",
+    "anchor": "tools/coyodex/impact_ripple.py:276",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E60 = RippleOptions (tools/coyodex/impact_ripple.py:56)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'reads' E60; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 reads E12",
+    "anchor": "tools/coyodex/impact_ripple.py:138",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E12 = Edge (tools/coyodex/model.py:313)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'reads' E12; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 reads E6",
+    "anchor": "tools/coyodex/impact_ripple.py:102",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E6 = Flow (tools/coyodex/model.py:293)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'reads' E6; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C40 writes E61",
+    "anchor": "tools/coyodex/impact_ripple.py:174",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: E61 = _Impact (tools/coyodex/impact_ripple.py:64)",
+    "why_risky": "domain-model ownership edge — verify C40's code actually 'writes' E61; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  }
+]

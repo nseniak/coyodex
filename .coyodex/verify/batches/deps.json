@@ -1,0 +1,188 @@
+[
+  {
+    "claim": "C6 writes D2",
+    "anchor": "tools/coyodex/assemble.py:474",
+    "detail": "From: C6 = Fragment assembler (tools/coyodex/assemble.py:150); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C6's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C8 writes D2",
+    "anchor": "tools/coyodex/fix.py:42",
+    "detail": "From: C8 = Reconcile & post-assemble fixes (tools/coyodex/reconcile.py:238); entry points: a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map (tools/coyodex/fix.py:281); a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations (tools/coyodex/fix.py:281); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C8's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C9 reads D1",
+    "anchor": "tools/coyodex/preindex_lib.py:172",
+    "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C9's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C9 reads D2",
+    "anchor": "tools/coyodex/preindex_lib.py:197",
+    "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C9's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C9 writes D2",
+    "anchor": "tools/coyodex/preindex.py:432",
+    "detail": "From: C9 = Code pre-index (tools/coyodex/preindex.py:1); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C9's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C14 reads D2",
+    "anchor": "tools/coyodex/validate_model.py:2113",
+    "detail": "From: C14 = Source & coverage grounding checks (tools/coyodex/validate_model.py:1966); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C14's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C40 reads D1",
+    "anchor": "tools/coyodex/impact_git.py:49",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C40's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C40 reads D2",
+    "anchor": "tools/coyodex/impact_git.py:128",
+    "detail": "From: C40 = Change-impact engine (tools/coyodex/impact_git.py:207); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C40's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C45 persists D2",
+    "anchor": "eval/tools/coyodex_eval/run.py:161",
+    "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C45's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C46 reads D2",
+    "anchor": "eval/tools/coyodex_eval/compare.py:436",
+    "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C46's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C41 reads D3",
+    "anchor": "tools/map_backup.py:217",
+    "detail": "From: C41 = Map backup & provenance (tools/map_backup.py:2); entry points: a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance (tools/map_backup.py:568); a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ (tools/map_backup.py:594); To: D3 = Claude Code transcript store (datastore: another tool's live on-disk session log (`~/.claude/projects/*/<session>.jsonl`) — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C41's code to confirm it reaches D3; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C41 persists D2",
+    "anchor": "tools/map_backup.py:409",
+    "detail": "From: C41 = Map backup & provenance (tools/map_backup.py:2); entry points: a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance (tools/map_backup.py:568); a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ (tools/map_backup.py:594); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C41's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C41 calls D1",
+    "anchor": "tools/map_backup.py:145",
+    "detail": "From: C41 = Map backup & provenance (tools/map_backup.py:2); entry points: a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance (tools/map_backup.py:568); a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ (tools/map_backup.py:594); To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C41's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C25 persists D2",
+    "anchor": "tools/coyodex/viewer/recents.py:44",
+    "detail": "From: C25 = File browser, recents & diff rows (tools/coyodex/viewer/filetree.py:186); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C25's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C24 calls D6",
+    "anchor": "tools/coyodex/viewer/serve.py:740",
+    "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: D6 = Web browser (platform: the user's browser — the runtime that hosts the whole viewer UI — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C24's code to confirm it reaches D6; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C24 reads D2",
+    "anchor": "tools/coyodex/viewer/serve.py:121",
+    "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C24's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C23 reads D4",
+    "anchor": "tools/coyodex/viewer/viewer.html:16",
+    "detail": "From: C23 = Diagram canvas & drill navigation (tools/coyodex/viewer/viewer.js:4537); entry points: the reader clicks a top-bar tab to switch view — Happy Path, Use Cases, Subsystems, Entities, Dependencies, Data, Deployment, System, Glossary, Tests (each hidden when the map has nothing for it) (tools/coyodex/viewer/viewer.js:6674); the reader opens the search overlay (the magnifier button, or the `/` key) to jump to any map element, file, or code symbol (tools/coyodex/viewer/viewer.js:6641); the reader opens the Impact popover to pick two commits and project that diff onto the map (tools/coyodex/viewer/viewer.js:6906); the reader switches the side pane between the file browser and the code viewer (tools/coyodex/viewer/viewer.js:6178); the reader clicks the page title to go back to the server's landing page listing all maps (tools/coyodex/viewer/viewer.js:5234); the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it (tools/coyodex/viewer/viewer.js:107); +1 more; To: D4 = jsDelivr CDN (platform: public CDN host (cdn.jsdelivr.net) the viewer page loads scripts from — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C23's code to confirm it reaches D4; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C24 reads D1",
+    "anchor": "tools/coyodex/viewer/serve.py:180",
+    "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C24's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C22 reads D1",
+    "anchor": "tools/coyodex/viewer/gen_viewer.py:57",
+    "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: D1 = git (datastore: version-control system, driven as a local CLI binary via subprocess — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C22's code to confirm it reaches D1; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C21 reads D2",
+    "anchor": "tools/coyodex/viewer/build_graph.py:239",
+    "detail": "From: C21 = Viewer graph builder (tools/coyodex/viewer/build_graph.py:111); To: D2 = Local filesystem (datastore: the user's disk — plain JSON/markdown files, no database — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C21's code to confirm it reaches D2; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C38 reads D5",
+    "anchor": "tools/coyodex/viewer/viewer.js:5407",
+    "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: D5 = cdnjs (platform: public CDN host (cdnjs.cloudflare.com) the viewer page lazy-loads from — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C38's code to confirm it reaches D5; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C38 calls D7",
+    "anchor": "tools/coyodex/viewer/viewer.js:6024",
+    "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: D7 = GitHub (service: hosted git service — a blob-URL hand-off target for source links — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C38's code to confirm it reaches D7; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "C38 calls D8",
+    "anchor": "tools/coyodex/viewer/viewer.js:6021",
+    "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: D8 = Local code editor (service: desktop application invoked through an OS URL scheme (vscode://, cursor://, idea://, zed://, …) — an external system, not a code module)",
+    "why_risky": "external-dependency data-flow edge — no deterministic gate reads C38's code to confirm it reaches D8; ground the call site against the code (the audit→Elastic false-edge class)."
+  },
+  {
+    "claim": "E1 (ProjectModel) is stored in D2 container '.coyodex/project-map.json' (collection)",
+    "anchor": "tools/coyodex/model.py:418",
+    "detail": null,
+    "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+    "claim": "E37 (Symbol) is stored in D2 container '.coyodex/preindex.json' (collection)",
+    "anchor": "tools/coyodex/preindex_lib.py:253",
+    "detail": null,
+    "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+    "claim": "E38 (ImportRef) is stored in D2 container '.coyodex/preindex.json' (collection)",
+    "anchor": "tools/coyodex/preindex_lib.py:262",
+    "detail": null,
+    "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+    "claim": "E39 (DirExpectation) is stored in D2 container '.coyodex/preindex.json' (collection)",
+    "anchor": "tools/coyodex/preindex_lib.py:474",
+    "detail": null,
+    "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+    "claim": "E51 (RecentsStore) is stored in D2 container '~/.coyodex/serve-recents.json' (collection)",
+    "anchor": "tools/coyodex/viewer/recents.py:22",
+    "detail": null,
+    "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+    "claim": "E63 (MapProfile) is stored in D2 container 'profile.json' (collection)",
+    "anchor": "eval/tools/coyodex_eval/profile.py:37",
+    "detail": null,
+    "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+    "claim": "E64 (JudgeReport) is stored in D2 container 'judge.json' (collection)",
+    "anchor": "eval/tools/coyodex_eval/judge.py:101",
+    "detail": null,
+    "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  },
+  {
+    "claim": "E74 (Thresholds) is stored in D2 container 'thresholds.json' (collection)",
+    "anchor": "eval/tools/coyodex_eval/compare.py:91",
+    "detail": null,
+    "why_risky": "the persistence inventory hangs on this row — a wrong dep/container mis-answers 'what is persisted where?' for every reader."
+  }
+]

@@ -1,0 +1,200 @@
+[
+  {
+    "claim": "C31 reads E1",
+    "anchor": "tools/coyodex/dump.py:153",
+    "detail": "From: C31 = Model dump (tools/coyodex/dump.py:122); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C31's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C32 reads E61",
+    "anchor": "tools/coyodex/viewer/viewer.js:6720",
+    "detail": "From: C32 = Change-impact overlay (tools/coyodex/viewer/viewer.js:6716); To: E61 = _Impact (tools/coyodex/impact_ripple.py:64)",
+    "why_risky": "domain-model ownership edge — verify C32's code actually 'reads' E61; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C45 writes E63",
+    "anchor": "eval/tools/coyodex_eval/profile.py:162",
+    "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: E63 = MapProfile (eval/tools/coyodex_eval/profile.py:37)",
+    "why_risky": "domain-model ownership edge — verify C45's code actually 'writes' E63; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C45 writes E62",
+    "anchor": "eval/tools/coyodex_eval/run.py:69",
+    "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: E62 = RunResult (eval/tools/coyodex_eval/run.py:45)",
+    "why_risky": "domain-model ownership edge — verify C45's code actually 'writes' E62; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C45 reads E64",
+    "anchor": "eval/tools/coyodex_eval/run.py:228",
+    "detail": "From: C45 = Eval runner (eval/tools/coyodex_eval/run.py:53); entry points: a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile (eval/tools/coyodex_eval/cli.py:32); a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run (eval/tools/coyodex_eval/cli.py:35); a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash (eval/tools/coyodex_eval/cli.py:38); a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores (eval/tools/coyodex_eval/cli.py:41); a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file (eval/tools/coyodex_eval/cli.py:44); a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint (eval/tools/coyodex_eval/cli.py:47); +4 more; To: E64 = JudgeReport (eval/tools/coyodex_eval/judge.py:101)",
+    "why_risky": "domain-model ownership edge — verify C45's code actually 'reads' E64; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C46 writes E64",
+    "anchor": "eval/tools/coyodex_eval/judge.py:257",
+    "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: E64 = JudgeReport (eval/tools/coyodex_eval/judge.py:101)",
+    "why_risky": "domain-model ownership edge — verify C46's code actually 'writes' E64; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C46 writes E69",
+    "anchor": "eval/tools/coyodex_eval/compare.py:332",
+    "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: E69 = DeltaReport (eval/tools/coyodex_eval/compare.py:173)",
+    "why_risky": "domain-model ownership edge — verify C46's code actually 'writes' E69; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C46 reads E63",
+    "anchor": "eval/tools/coyodex_eval/compare.py:238",
+    "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: E63 = MapProfile (eval/tools/coyodex_eval/profile.py:37)",
+    "why_risky": "domain-model ownership edge — verify C46's code actually 'reads' E63; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C46 reads E74",
+    "anchor": "eval/tools/coyodex_eval/compare.py:374",
+    "detail": "From: C46 = Eval scoring (eval/tools/coyodex_eval/compare.py:227); To: E74 = Thresholds (eval/tools/coyodex_eval/compare.py:91)",
+    "why_risky": "domain-model ownership edge — verify C46's code actually 'reads' E74; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C41 persists E1",
+    "anchor": "tools/map_backup.py:507",
+    "detail": "From: C41 = Map backup & provenance (tools/map_backup.py:2); entry points: a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance (tools/map_backup.py:568); a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/ (tools/map_backup.py:594); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C41's code actually 'persists' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C25 persists E51",
+    "anchor": "tools/coyodex/viewer/recents.py:44",
+    "detail": "From: C25 = File browser, recents & diff rows (tools/coyodex/viewer/filetree.py:186); To: E51 = RecentsStore (tools/coyodex/viewer/recents.py:22)",
+    "why_risky": "domain-model ownership edge — verify C25's code actually 'persists' E51; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C25 writes E50",
+    "anchor": "tools/coyodex/viewer/filetree.py:147",
+    "detail": "From: C25 = File browser, recents & diff rows (tools/coyodex/viewer/filetree.py:186); To: E50 = FileTreeNode (tools/coyodex/viewer/filetree.py:38)",
+    "why_risky": "domain-model ownership edge — verify C25's code actually 'writes' E50; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C24 reads E1",
+    "anchor": "tools/coyodex/viewer/serve.py:397",
+    "detail": "From: C24 = Map server (tools/coyodex/viewer/serve.py:502); entry points: a browser requests the server root and gets the landing page listing the recent projects (tools/coyodex/viewer/serve.py:518); the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart (tools/coyodex/viewer/serve.py:548); the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map (tools/coyodex/viewer/serve.py:556); the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist (tools/coyodex/viewer/serve.py:521); a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell (tools/coyodex/viewer/serve.py:605); the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes (tools/coyodex/viewer/serve.py:609); +17 more; To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C24's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C20 reads E1",
+    "anchor": "tools/coyodex/views.py:684",
+    "detail": "From: C20 = Map views builder (tools/coyodex/views.py:236); To: E1 = ProjectModel (tools/coyodex/model.py:418)",
+    "why_risky": "domain-model ownership edge — verify C20's code actually 'reads' E1; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C20 writes E41",
+    "anchor": "tools/coyodex/views.py:472",
+    "detail": "From: C20 = Map views builder (tools/coyodex/views.py:236); To: E41 = Node (tools/coyodex/viewer/build_graph.py:28)",
+    "why_risky": "domain-model ownership edge — verify C20's code actually 'writes' E41; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C20 writes E42",
+    "anchor": "tools/coyodex/views.py:791",
+    "detail": "From: C20 = Map views builder (tools/coyodex/views.py:236); To: E42 = Edge (graph) (tools/coyodex/viewer/build_graph.py:67)",
+    "why_risky": "domain-model ownership edge — verify C20's code actually 'writes' E42; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C20 writes E40",
+    "anchor": "tools/coyodex/views.py:850",
+    "detail": "From: C20 = Map views builder (tools/coyodex/views.py:236); To: E40 = GraphDict (tools/coyodex/viewer/build_graph.py:111)",
+    "why_risky": "domain-model ownership edge — verify C20's code actually 'writes' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C22 reads E40",
+    "anchor": "tools/coyodex/viewer/gen_viewer.py:2785",
+    "detail": "From: C22 = View bundle assembler (tools/coyodex/viewer/gen_viewer.py:2766); entry points: a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging (tools/coyodex/viewer/gen_viewer.py:2877); To: E40 = GraphDict (tools/coyodex/viewer/build_graph.py:111)",
+    "why_risky": "domain-model ownership edge — verify C22's code actually 'reads' E40; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C21 writes E48",
+    "anchor": "tools/coyodex/viewer/build_graph.py:277",
+    "detail": "From: C21 = Viewer graph builder (tools/coyodex/viewer/build_graph.py:111); To: E48 = DiffDict (tools/coyodex/viewer/build_graph.py:161)",
+    "why_risky": "domain-model ownership edge — verify C21's code actually 'writes' E48; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C21 writes E49",
+    "anchor": "tools/coyodex/viewer/build_graph.py:254",
+    "detail": "From: C21 = Viewer graph builder (tools/coyodex/viewer/build_graph.py:111); To: E49 = DiffChange (tools/coyodex/viewer/build_graph.py:153)",
+    "why_risky": "domain-model ownership edge — verify C21's code actually 'writes' E49; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C29 reads E44",
+    "anchor": "tools/coyodex/viewer/gen_viewer.py:2597",
+    "detail": "From: C29 = Behavioural flow generator (tools/coyodex/viewer/gen_viewer.py:2392); To: E44 = Flow (view) (tools/coyodex/grammar.py:533)",
+    "why_risky": "domain-model ownership edge — verify C29's code actually 'reads' E44; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C37 reads E41",
+    "anchor": "tools/coyodex/viewer/viewer.js:1072",
+    "detail": "From: C37 = Element info pane & selection (tools/coyodex/viewer/viewer.js:1119); To: E41 = Node (tools/coyodex/viewer/build_graph.py:28)",
+    "why_risky": "domain-model ownership edge — verify C37's code actually 'reads' E41; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "C38 reads E41",
+    "anchor": "tools/coyodex/viewer/viewer.js:5496",
+    "detail": "From: C38 = File browser & code viewer (tools/coyodex/viewer/viewer.js:5250); To: E41 = Node (tools/coyodex/viewer/build_graph.py:28)",
+    "why_risky": "domain-model ownership edge — verify C38's code actually 'reads' E41; a wrong persists/writes/reads mis-wires the subsystem→subdomain bridge."
+  },
+  {
+    "claim": "E13 (EntryPoint) has states [self, external]",
+    "anchor": "tools/coyodex/grammar.py:223",
+    "detail": null,
+    "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+    "claim": "E20 (Store) has states [collection, embedded, transient, cache, in-code, enum]",
+    "anchor": "tools/coyodex/grammar.py:243",
+    "detail": null,
+    "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+    "claim": "E59 (DirectHit) has states [deleted, added, modified, drifted]",
+    "anchor": "tools/coyodex/impact_ripple.py:42",
+    "detail": null,
+    "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+    "claim": "E62 (RunResult) has states [PASS, DRIFT, REGRESSED, BASELINE]",
+    "anchor": "eval/tools/coyodex_eval/run.py:34",
+    "detail": null,
+    "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+    "claim": "E69 (DeltaReport) has states [PASS, DRIFT, REGRESSED]",
+    "anchor": "eval/tools/coyodex_eval/compare.py:41",
+    "detail": null,
+    "why_risky": "lifecycles rot first — verify the declaring enum/constants still list exactly these states and transitions."
+  },
+  {
+    "claim": "Entry point [startup-hook] the serve command finishes loading the projects and the HTTP server starts accepting connections on 127.0.0.1, handing each one to its own worker thread runs on cadence 'continuous'",
+    "anchor": "tools/coyodex/viewer/serve.py:742",
+    "detail": null,
+    "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  },
+  {
+    "claim": "Entry point [startup-hook] with `coyodex serve --open`, the server opens the landing page in the developer's browser by itself as it starts listening runs on cadence 'on-boot'",
+    "anchor": "tools/coyodex/viewer/serve.py:739",
+    "detail": null,
+    "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  },
+  {
+    "claim": "Entry point [startup-hook] the landing page's script runs itself as soon as the page loads, fetching the home folder and the recents list runs on cadence 'on-boot'",
+    "anchor": "tools/coyodex/viewer/serve.py:1040",
+    "detail": null,
+    "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  },
+  {
+    "claim": "Entry point [startup-hook] the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it runs on cadence 'on-boot'",
+    "anchor": "tools/coyodex/viewer/viewer.js:107",
+    "detail": null,
+    "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  },
+  {
+    "claim": "Entry point [startup-hook] the browser app probes the server once at load and, on success, reveals and wires the file browser and code viewer runs on cadence 'on-boot'",
+    "anchor": "tools/coyodex/viewer/viewer.js:6659",
+    "detail": null,
+    "why_risky": "a schedule is config-tuned and drifts silently — verify the declaring line still says this cadence."
+  }
+]

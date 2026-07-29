@@ -1,0 +1,156 @@
+{"grounding": [
+  {"claim": "C6 writes D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/assemble.py:474",
+   "note": "C6's own file writes the assembled map to disk with `(out_dir / \"project-map.json\").write_text(...)` — a direct filesystem write, no helper in between."},
+
+  {"claim": "C8 writes D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/fix.py:42",
+   "note": "fix.py (a C8 file) writes the edited map in place via `map_path.write_text(to_canonical_json(m))`."},
+
+  {"claim": "C9 reads D1",
+   "grounded": true,
+   "evidence": "tools/coyodex/preindex_lib.py:172",
+   "note": "C9's own code runs `subprocess.run([\"git\", \"-C\", root, \"ls-files\", \"-z\"])` (and `git log --numstat` at line 230) and consumes stdout — a real read of git."},
+
+  {"claim": "C9 reads D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/preindex_lib.py:197",
+   "note": "`os.walk(root)` enumerates the source tree in C9's own fallback walker, and `count_loc` reads each file's bytes at line 212."},
+
+  {"claim": "C9 writes D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/preindex.py:432",
+   "note": "`out_path.write_text(json.dumps(doc, indent=2))` writes the pre-index JSON — a direct filesystem write in C9's own file."},
+
+  {"claim": "C14 reads D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/validate_model.py:2113",
+   "note": "The operative-line check reads each anchored source file with `src.read_text(...)` inside C14's own function."},
+
+  {"claim": "C40 reads D1",
+   "grounded": true,
+   "evidence": "tools/coyodex/impact_git.py:49",
+   "note": "C40's `_git` helper runs `subprocess.run([\"git\", \"-C\", repo, *args])` and returns stdout; callers read name-status, blobs and `show` output from it."},
+
+  {"claim": "C40 reads D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/impact_git.py:128",
+   "note": "The WORKTREE branch reads the on-disk file directly with `(repo / path).read_text(...)`."},
+
+  {"claim": "C45 persists D2",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:161",
+   "note": "`write_run` in C45's own file writes the run archive (project-map.json, profile.json, judge.json, delta.md) to disk — C45 is the writer, not a caller of one."},
+
+  {"claim": "C46 reads D2",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:436",
+   "note": "The comparator's CLI reads the baseline/candidate profile files with `base_path.read_text(...)` (and thresholds at line 374) in C46's own file."},
+
+  {"claim": "C41 reads D3",
+   "grounded": true,
+   "evidence": "tools/map_backup.py:232",
+   "note": "C41 globs `~/.claude/projects/*/<session>.jsonl` (line 217) and then opens and parses the transcript file itself — a real read of the Claude Code transcript store."},
+
+  {"claim": "C41 persists D2",
+   "grounded": true,
+   "evidence": "tools/map_backup.py:409",
+   "note": "`prov_path.write_text(prov.to_json())` writes .coyodex/provenance.json — C41 owns that file."},
+
+  {"claim": "C41 calls D1",
+   "grounded": true,
+   "evidence": "tools/map_backup.py:145",
+   "note": "`_run_git` invokes the git binary via `subprocess.run([\"git\", \"-C\", repo, *args])` for rev-parse / show at stamp time."},
+
+  {"claim": "C25 persists D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/recents.py:44",
+   "note": "`RecentsStore.save` writes ~/.coyodex/serve-recents.json itself; serve.py only calls into this component, so C25 really is the writer."},
+
+  {"claim": "C24 calls D6",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:740",
+   "note": "`webbrowser.open(url)` in C24's own `serve()` launches the user's browser on the landing page — an outbound invocation, not just serving responses."},
+
+  {"claim": "C24 reads D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:121",
+   "note": "`load_project` reads the map file from disk with `map_json.read_text(...)` (and stats it at line 128)."},
+
+  {"claim": "C23 reads D4",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.html:16",
+   "note": "viewer.html is a C23 file and its <script src=\"https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/...\"> (plus mermaid at line 19) fetches the libraries from jsDelivr."},
+
+  {"claim": "C24 reads D1",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/serve.py:180",
+   "note": "C24's `_git` runs read-only git commands via subprocess (ls-tree, cat-file, show) to serve files pinned at the map's commit."},
+
+  {"claim": "C22 reads D1",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/gen_viewer.py:57",
+   "note": "`_git` in C22's own file runs `git rev-parse --show-toplevel` / `git remote get-url origin` via subprocess and reads stdout."},
+
+  {"claim": "C21 reads D2",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/build_graph.py:239",
+   "note": "`build_diff` reads the change-impact report from disk with `md_path.read_text(...)`."},
+
+  {"claim": "C38 reads D5",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:5407",
+   "note": "`ensureHljs` appends a <script>/<link> whose src is 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/...' (constants at lines 5390-5392) — the append is the statement that triggers the CDN fetch."},
+
+  {"claim": "C38 calls D7",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:6024",
+   "note": "`doOpenSource` calls `window.open(gh, '_blank', 'noopener')` on the github.com blob URL built by `ghUrl` in the same file."},
+
+  {"claim": "C38 calls D8",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/viewer.js:6021",
+   "note": "`doOpenSource` fires the editor scheme URI (vscode://, cursor://, …) via `fireUri(uri)`, whose anchor click at line 6004 is in the same component."},
+
+  {"claim": "E1 (ProjectModel) is stored in D2 container '.coyodex/project-map.json' (collection)",
+   "grounded": true,
+   "evidence": "tools/coyodex/assemble.py:474",
+   "note": "The whole ProjectModel is serialized to a file literally named project-map.json inside the .coyodex dir (the same literal path is reconstructed on read at tools/coyodex/viewer/serve.py:117)."},
+
+  {"claim": "E37 (Symbol) is stored in D2 container '.coyodex/preindex.json' (collection)",
+   "grounded": true,
+   "evidence": "tools/coyodex/preindex.py:432",
+   "note": "Symbol's name/kind/file/line/end are serialized into the doc's `symbols.by_name` and `symbols.extents` (built at lines 146-148) and written to the default `.coyodex/preindex.json` (line 389)."},
+
+  {"claim": "E38 (ImportRef) is stored in D2 container '.coyodex/preindex.json' (collection)",
+   "grounded": true,
+   "evidence": "tools/coyodex/preindex.py:432",
+   "note": "ImportRef's file/line/module land in `imports.pairs[].import_edges` (built at line 219) and are written to the same preindex.json — but only when `--pairs` is supplied, and capped at 25 edges per pair (this repo's own artifact has an empty `pairs`)."},
+
+  {"claim": "E39 (DirExpectation) is stored in D2 container '.coyodex/preindex.json' (collection)",
+   "grounded": true,
+   "evidence": "tools/coyodex/preindex.py:432",
+   "note": "Every DirExpectation node reaches preindex.json, but only as a flattened `granularity.per_dir` {path: expected} projection (preindex_lib.py:576) plus root-level scalars — the `files`, `loc` and `children` fields and the tree shape are NOT persisted."},
+
+  {"claim": "E51 (RecentsStore) is stored in D2 container '~/.coyodex/serve-recents.json' (collection)",
+   "grounded": true,
+   "evidence": "tools/coyodex/viewer/recents.py:44",
+   "note": "`save()` writes the folder list to RECENTS_PATH, defined literally as `Path.home() / \".coyodex\" / \"serve-recents.json\"` at line 18."},
+
+  {"claim": "E63 (MapProfile) is stored in D2 container 'profile.json' (collection)",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:161",
+   "note": "`write_run` writes `result.profile.to_json()` to a file literally named profile.json in the run dir; the class docstring says the same."},
+
+  {"claim": "E64 (JudgeReport) is stored in D2 container 'judge.json' (collection)",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/run.py:163",
+   "note": "`write_run` writes `result.judge.to_json()` to a file literally named judge.json in the run dir (read back at compare.py:439)."},
+
+  {"claim": "E74 (Thresholds) is stored in D2 container 'thresholds.json' (collection)",
+   "grounded": true,
+   "evidence": "eval/tools/coyodex_eval/compare.py:374",
+   "note": "Thresholds is built from a parsed thresholds.json (the committed eval/thresholds.json) — but it is READ-ONLY config: no code path writes this file, so nothing in the product persists the entity."}
+]}
