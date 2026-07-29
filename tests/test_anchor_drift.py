@@ -171,10 +171,10 @@ def test_refuted_report_only_claim_produces_no_drift_either():
     assert ad.drift_records(wl, grounding, tolerance=0) == []
 
 
-def test_report_only_flag_suppresses_drift_for_every_declaration_anchored_tier():
-    # messaging / state-machine / cadence claims carry the same contract as the store claim: the
-    # anchor is the DECLARING line, not the acting line. Same bug class, same suppression.
-    doc = {
+def make_declaration_anchored_doc() -> dict:
+    """A map carrying one of each declaration-anchored claim kind, every one CITING its own
+    declaring line (`messaging.source`, `states.source`, `cadence_source`)."""
+    return {
         "format": FORMAT, "title": "t", "goal": "g",
         "components": [{"id": "C1", "name": "Worker", "source": "w.py:1"},
                        {"id": "C2", "name": "Consumer", "source": "c.py:1"}],
@@ -182,14 +182,53 @@ def test_report_only_flag_suppresses_drift_for_every_declaration_anchored_tier()
         "messaging": [{"name": "JOB_QUEUE", "kind": "job-queue", "broker": "D1",
                        "publishers": ["C1"], "consumers": ["C2"], "source": "queues.py:3"}],
         "entities": [{"id": "E1", "name": "Job", "source": "job.py:2",
+                      "store": {"dep": "D1", "container": "jobs", "mode": "collection"},
                       "states": {"states": ["NEW", "DONE"], "source": "job.py:20"}}],
         "entry_points": [{"kind": "cron", "trigger": "nightly", "component": "C1",
                           "cadence": "0 3 * * *", "cadence_source": "cron.py:7"}],
     }
-    wl = l2_worklist_model(load_model(json.dumps(doc)))
-    for needle in ("Channel '", "has states [", "runs on cadence"):
-        row = next(w for w in wl if needle in w.claim)
+
+
+def _row(wl: list, needle: str):
+    return next(w for w in wl if needle in w.claim)
+
+
+def test_a_claim_sent_to_a_different_kind_of_line_than_its_anchor_is_not_drift_evaluated():
+    # Store and messaging anchors point at a DECLARATION while the skeptic is sent to a CALL SITE
+    # (the write site, the enqueue/consume site). A difference between two different kinds of line
+    # is not evidence of anything, so it must not be reported as drift.
+    wl = l2_worklist_model(load_model(json.dumps(make_declaration_anchored_doc())))
+    for needle in ("is stored in", "Channel '"):
+        row = _row(wl, needle)
         assert row.drift_eligible is False, row.claim
-        grounding = [make_vote(row.claim, True, "elsewhere.py:900"),
-                     make_vote(row.claim, True, "elsewhere.py:900")]
-        assert ad.drift_findings(wl, grounding, tolerance=0) == []
+        votes = [make_vote(row.claim, True, "elsewhere.py:900")] * 2
+        assert ad.drift_findings(wl, votes, tolerance=0) == []
+
+
+def test_a_claim_sent_to_the_SAME_line_its_anchor_cites_IS_drift_evaluated():
+    # The opposite case, and the one an over-broad sweep silently broke. A state machine citing its
+    # own `source` sends the skeptic to *the declaring enum* — the very line the anchor points at —
+    # so a difference IS drift. Same for a cadence that cites `cadence_source`. This is the ONLY
+    # line-level check these anchors have: `check_state_sources_model` reads the whole file text, so
+    # a declaration that MOVES INSIDE its file is invisible to it.
+    wl = l2_worklist_model(load_model(json.dumps(make_declaration_anchored_doc())))
+    for needle in ("has states [", "runs on cadence"):
+        row = _row(wl, needle)
+        assert row.drift_eligible is True, row.claim
+        votes = [make_vote(row.claim, True, "job.py:46")] * 2
+        assert any(needle in w.claim for w, _d in ad.drift_findings(wl, votes, tolerance=0)), \
+            f"a moved declaration must be reported for {needle!r}"
+        assert any(needle in r["claim"] for r in ad.drift_records(wl, votes, tolerance=0)), \
+            f"and must reach the apply-drift record for {needle!r}"
+
+
+def test_an_UNCITED_declaration_anchor_falls_back_to_a_different_line_and_is_not_evaluated():
+    # Without its own `source`, a state machine anchors the ENTITY's line and an inferred cadence
+    # anchors the ENTRY POINT's line — neither ever declared the thing being claimed, so the
+    # same different-kind-of-line reasoning applies and drift there is noise.
+    doc = make_declaration_anchored_doc()
+    doc["entities"][0]["states"].pop("source")
+    doc["entry_points"][0].pop("cadence_source")
+    wl = l2_worklist_model(load_model(json.dumps(doc)))
+    for needle in ("has states [", "runs on cadence"):
+        assert _row(wl, needle).drift_eligible is False, needle

@@ -458,8 +458,14 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     # the canonical "what is persisted where?" question. Anchor = the entity's own source (the type
     # definition is where the storage wiring is discoverable from). Drift is REPORT-ONLY: a refuted
     # store claim is re-authored, never anchor-nudged — `drift_eligible=False` makes that contract
-    # a property of the claim, so `anchor-drift` cannot mistake the skeptics' WRITE site for drift
-    # and `fix apply-drift` cannot move the entity's anchor off its type definition.
+    # a property of the claim, so `anchor-drift` cannot mistake the skeptics' WRITE site for drift.
+    # The reason is that the skeptic is sent to a DIFFERENT KIND OF LINE than the anchor (the write
+    # site vs the type definition), so a difference is not evidence of anything.
+    # NOT because `fix apply-drift` would rewrite it: an earlier version of this comment claimed
+    # that and it was false. `fix._EDGE_CLAIM` only matches `<Id> <verb> <Id>`, so a store claim
+    # falls through to the security branch, matches 0 surfaces and writes nothing — verified
+    # byte-for-byte. The harm this prevents is report noise drowning the true drifts, which is
+    # real (8 of 8 findings on a live map) but narrower than "corruption".
     for en in m.entities:
         st = en.store
         if st is not None and st.dep:
@@ -487,7 +493,15 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                        "sites actually name this channel.")))
     # State-machine claims (WS-A3): states rot fast — the enum gains a member, the dispatch grows
     # a branch, and the map's lifecycle silently lies. Each recorded machine is a prime skeptic
-    # target, anchored at its declaring line (else the element's own source). Drift REPORT-ONLY.
+    # target, anchored at its declaring line (else the element's own source).
+    # Drift-eligible WHEN the machine cites its own `source`. This one is NOT the store/messaging
+    # case: there the skeptic is sent to a call site, a different kind of line from the anchor, so a
+    # difference is not drift. Here the skeptic is sent to *the declaring enum/constants* — the same
+    # line the anchor points at — so a difference IS drift, and it is the ONLY line-level check these
+    # anchors have: `check_state_sources_model` reads the whole file text, so a declaration that
+    # moves WITHIN its file is invisible to it. Suppressing this hid a real 26-line move.
+    # Without `sm.source` the anchor falls back to the element's own line, which never declared the
+    # states — that fallback stays ineligible, on the same different-kind-of-line reasoning.
     for el in (*m.entities, *m.components):
         sm = getattr(el, "states", None)
         if sm is not None and sm.states:
@@ -496,14 +510,18 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                 claim=f"{el.id} ({el.name}) has states [{', '.join(sm.states)}]"
                       + (f" with {len(sm.transitions)} transition(s)" if sm.transitions else ""),
                 anchor=_anchor(src),
-                drift_eligible=False,
+                drift_eligible=bool((sm.source or "").strip()),
                 why_risky=("lifecycles rot first — verify the declaring enum/constants still "
                            "list exactly these states and transitions.")))
     # Cadence claims (WS-A2): a recorded schedule is a claim about WHEN code runs, and schedules
     # drift in real life (an interval tuned in config, a cron moved) — so each anchored cadence is
     # a skeptic target. Anchor = the declaring line (`cadence_source`), falling back to the entry
-    # point's own source. Drift here is REPORT-ONLY for now: `fix apply-drift` has no cadence
-    # writer, so a refuted/moved cadence is re-authored, not auto-nudged.
+    # point's own source. Drift-eligible only when `cadence_source` is CITED: the skeptic is then
+    # sent to the declaring line, the same kind of line the anchor points at, so a difference is
+    # real drift (a cron moved inside its file). An INFERRED cadence anchors the EP's own line,
+    # which never declared the schedule — different kind of line, so drift there is noise.
+    # (`fix apply-drift` has no cadence writer either way, so a confirmed drift is re-authored by
+    # hand; that limits the REMEDY, it does not make the REPORT wrong.)
     for ep in m.entry_points:
         if (ep.cadence or "").strip():
             # An INFERRED cadence (no declaring anchor) still deserves a skeptic, but the honest
@@ -513,7 +531,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             items.append(WorkItem(
                 claim=f"Entry point [{ep.kind}] {ep.trigger} runs on cadence '{ep.cadence}'",
                 anchor=_anchor(ep.cadence_source if cited else ep.source),
-                drift_eligible=False,
+                drift_eligible=cited,
                 why_risky=("a schedule is config-tuned and drifts silently — verify the declaring "
                            "line still says this cadence." if cited else
                            "cadence is INFERRED (no declaring anchor) — find the line that "
