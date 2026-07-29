@@ -42,6 +42,42 @@ SUBSYSTEMS_RECOMMENDED_ABOVE = 15  # mirrors method.md "recommended above ~15 co
 _EXCEPTIONS_HEADING = "balance exceptions"
 _ROOT = "<root>"
 
+# The LITERAL escapes recordable under 'Balance exceptions' — the whole non-id vocabulary. Every
+# one of them is an ordinary English word (or a hyphenated word pair) that a justification sentence
+# naturally uses in passing — "the runs-in tagging was audited separately", "we reviewed
+# granularity and entity-flows during the walkthrough" — so an anywhere-in-body scan lets unrelated
+# prose silently switch off a whole advisory family. `cadence`/`store`/`messaging`/`isolated` were
+# put on the line-leading discipline by adversarial-review finding #2; `runs-in`, `granularity` and
+# `entity-flows` were left behind on the old scan and joined them for the same reason (finding #3),
+# `runs-in` most urgently of all — it now silences the entire deployment family, so one stray prose
+# mention would blank a dozen checks at once. ALL of them are now read LINE-LEADING, the same
+# `_RECORD_LINE` discipline `validate_model` uses for its recorded-id headings.
+_LITERAL_ESCAPES: tuple[str, ...] = (
+    "cadence", "channel-ends", "channel-payload", "entity-flows", "entity-relations",
+    "granularity", "isolated", "messaging", "runs-in", "store",
+)
+
+# Line-leading literal + terminator. Longest-first alternation so a shorter bare alternative can
+# never swallow the prefix of a longer one (a bare `messaging` would otherwise record the
+# `messaging`-prefixed shape of a future token and silence the empty-catalog canary as a side
+# effect). The terminator is `:`, `(`, an em/en dash, a SPACED ascii hyphen, or the end of the line
+# (a line that is nothing but the literal is a record — prose sentences are never one word long).
+# A BARE hyphen is deliberately NOT a separator: it is word-internal in half the vocabulary above,
+# so the old `[:(—–-]` class read `store-front redesign: see ticket 44` as a `store` record,
+# `isolated-network deploys: nothing to do` as an `isolated` one, and `channel-payload-review-2026:`
+# as a `channel-payload` one (adversarial-review finding #8). Requiring the space around the hyphen
+# keeps the legible `cadence - <why>` dash form working while closing the compound-word hole.
+_LITERAL_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?\**\s*("
+    + "|".join(re.escape(lit) for lit in sorted(_LITERAL_ESCAPES, key=len, reverse=True))
+    + r")\**(?:\s*[:(—–]|\s+-\s|\s*$)")
+
+# Diagram / element ids ('root', 'S7', 'UC5', 'C18', …) stay an anywhere-in-body scan. They are not
+# words, so prose cannot mint one by accident, and live maps rely on it: a real map records five
+# sub-flows as one comma-separated line (`SF40, SF41, SF52, SF70, SF71: each is referenced once`),
+# of which only the first is line-leading.
+_EXCEPTION_IDS = re.compile(r"\b(?:root|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b")
+
 _STOPWORDS = frozenset(
     "the a an and or of for to in on with via per by from into over its their our this that "
     "component components service services module modules code file files".split())
@@ -181,27 +217,17 @@ def _exceptions(m: ProjectModel) -> set[str]:
     untyped); the literal `entity-relations` silences the isolated-entities advisory (a domain
     whose cards legitimately carry no E↔E relation). `runs-in` additionally silences the two
     placement advisories that live outside the deployment-quality family — an unplaced self-started
-    entry point, and a messaging channel no participant's `runs_in` can place. `cadence`, `store`,
-    `messaging` and `isolated` are ordinary prose words, so unlike the first group they record
-    LINE-LEADING + separator only (`cadence: <why>`) — a sentence merely using the word never
-    silences; the three hyphenated newcomers record the same way, because line-leading is the
-    discipline every escape added since adversarial-review finding #2 follows. All consumed only as
+    entry point, and a messaging channel no participant's `runs_in` can place. EVERY literal is
+    read LINE-LEADING (`_LITERAL_LINE`: `granularity: <why>`), because every one of them is an
+    ordinary prose word — a sentence merely using the word never silences anything. Ids keep the
+    anywhere-in-body scan (`_EXCEPTION_IDS`), which prose cannot trip. All consumed only as
     skip-sets, so the families can't cross-silence anything. Without a machine-readable escape a
     justified advisory re-fires forever — and worse, invites rewording prose to dodge a heuristic."""
     out: set[str] = set()
     for body in extras_bodies(m, _EXCEPTIONS_HEADING):
-        out.update(re.findall(
-            r"\b(?:root|granularity|entity-flows|runs-in|SD\d+|SF\d+|UC\d+|C\d+|S\d+)\b", body))
-        # `cadence` and `store` are ordinary English words a justification sentence naturally uses
-        # ("its cadence lives in ops config") — an anywhere-in-body scan would let unrelated prose
-        # silently disable a whole advisory family (adversarial-review finding #2). They record
-        # LINE-LEADING + separator only, the `_RECORD_LINE` discipline: `cadence: <why>`.
-        # The hyphenated newcomers are matched BEFORE `messaging`/`isolated`: a bare `messaging`
-        # alternative would otherwise swallow the `messaging`-prefixed shape of a future token and
-        # silence the empty-catalog canary as a side effect of recording something else.
+        out.update(_EXCEPTION_IDS.findall(body))
         for line in body.splitlines():
-            hit = re.match(r"^\s*(?:[-*]\s+)?\**\s*(channel-ends|channel-payload|entity-relations"
-                           r"|cadence|store|messaging|isolated)\**\s*[:(—–-]", line)
+            hit = _LITERAL_LINE.match(line)
             if hit:
                 out.add(hit.group(1))
     return out

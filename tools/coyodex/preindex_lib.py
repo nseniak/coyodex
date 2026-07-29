@@ -163,6 +163,11 @@ class WalkResult:
     # hide a real gap from the coverage check whose job is to find gaps. Callers report it.
     skipped_ignored: int = 0
     ignore: IgnoreSpec = field(default_factory=lambda: IgnoreSpec())
+    # Per-rule DECIDING-match count, index-aligned with `ignore.rules`: how many files each pattern
+    # actually removed (or, for a `!` rule, put back). The total alone cannot show a pattern that
+    # matched nothing — and a dead pattern reads as coverage the author never got, so every
+    # disclosing surface reports these through `ignorefile.ignore_report`.
+    ignore_hits: tuple[int, ...] = ()
 
 
 def iter_source_files(root: Path) -> WalkResult:
@@ -192,18 +197,26 @@ def iter_source_files(root: Path) -> WalkResult:
     files: list[Path] = []
     skipped = 0
     ignored = 0
+    # Per-rule tally, filled as we go. Kept HERE and not on the (frozen, process-CACHED) IgnoreSpec:
+    # a counter living on the shared spec would accumulate across every walk in a session and report
+    # numbers belonging to some other tree.
+    hits = [0] * len(ignore.rules)
     for rel in rels:
         if _excluded(rel):
             skipped += 1
             continue
         # The repo's own declaration, applied last so it is always visible as its own count rather
-        # than blended into the built-in excludes.
-        if ignore and ignore.match(rel.as_posix()):
-            ignored += 1
-            continue
+        # than blended into the built-in excludes. The DECIDING rule (last match wins) is recorded,
+        # so a pattern that never decides anything is detectable as unused.
+        idx = ignore.match_index(rel.as_posix()) if ignore else None
+        if idx is not None:
+            hits[idx] += 1
+            if not ignore.rules[idx][0]:   # a positive rule decided -> the file leaves the tree
+                ignored += 1
+                continue
         files.append(root / rel)
     return WalkResult(files=files, root=root, used_git=used_git, skipped_excluded=skipped,
-                      skipped_ignored=ignored, ignore=ignore)
+                      skipped_ignored=ignored, ignore=ignore, ignore_hits=tuple(hits))
 
 
 def _walk_rels(root: Path) -> list[Path]:

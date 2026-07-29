@@ -22,6 +22,7 @@ from __future__ import annotations
 import ast
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from coyodex import balance_lib, grammar
@@ -39,6 +40,7 @@ from coyodex.model import (
     Entity,
     EntryPoint,
     FlowStep,
+    MessagingRow,
     ModelError,
     ProjectModel,
     all_elements,
@@ -428,38 +430,63 @@ def _accepted_duplications(m: ProjectModel) -> set[frozenset[str]]:
 def _granularity_warnings(m: ProjectModel) -> list[str]:
     """Advisory use-case-granularity signals: the flow-length band (authored steps — a sub-flow
     reference counts as 1, the reward for extracting), the fused-goal name smell, and the
-    literal-duplication detector. A flow/sub-flow id recorded under the 'Balance exceptions'
-    extras heading is exempt from the WHOLE family — the band AND the fused-goal name smell (same
-    escape valve the fan-out rule uses; both signals ask the same question about the same element,
-    so one adjudication answers both)."""
+    literal-duplication detector.
+
+    A flow/sub-flow id recorded under the 'Balance exceptions' extras heading is exempt from the
+    WHOLE granularity family — the step band AND the fused-goal name smell (same escape valve the
+    fan-out rule uses). That is a deliberate design assertion, not an accident: both signals are
+    readings of ONE question about ONE element ("is this one goal, at the right size?"), and an
+    operator who has adjudicated the element has adjudicated the question.
+
+    But it IS an assertion, so it is made visible twice over — the same discipline the `runs-in`
+    family follows. Each message says what recording the id will silence, and one summary line
+    names every (element, signal) pair the recorded ids actually swallowed. On a live map
+    `SF20: three steps is the whole session handshake` — a BAND justification — silently removed an
+    unrelated `SF20 name … joins two clauses with 'and'`, and nothing on screen said so. The band
+    advisory was not even firing there, so a "only when it silenced two" rule would still have shown
+    nothing: the visible line therefore reports every suppression, not just the multi-signal ones.
+    A silence you cannot see reads exactly like having no findings."""
     warnings: list[str] = []
     excepted = balance_lib._exceptions(m)
+    # (element id, short signal name, message) in emission order: bands first, then name smells.
+    family: list[tuple[str, str, str]] = []
     for fid, name, steps in ([(f.uc, f.title, f.steps) for f in m.flows]
                              + [(sf.id, sf.name, sf.steps) for sf in m.subflows]):
         n = len(steps)
-        if fid in excepted:
-            continue
         if n > FLOW_STEPS_HI:
-            warnings.append(
+            family.append((fid, "the step-count band", (
                 f"{fid} ({name}): {n} steps — over the ≤{FLOW_STEPS_HI} band. Split a fused goal, "
-                "compress step altitude, extract shared machinery into a sub-flow, or record the "
-                "exception under a 'Balance exceptions' extras heading")
+                "compress step altitude, extract shared machinery into a sub-flow, or record "
+                f"'{fid}: <why>' under a 'Balance exceptions' extras heading — which exempts "
+                f"{fid} from the WHOLE granularity family, this band AND the fused-goal name smell")))
         elif n < FLOW_STEPS_LO:  # includes n == 0: an empty flow/sub-flow is a silent no-op everywhere
-            warnings.append(f"{fid} ({name}): only {n} step(s) — under the ≥{FLOW_STEPS_LO} band; "
-                            "is the flow traced to its outcome? If it genuinely ends there, record "
-                            f"'{fid}: <why>' under a 'Balance exceptions' extras heading")
+            family.append((fid, "the step-count band", (
+                f"{fid} ({name}): only {n} step(s) — under the ≥{FLOW_STEPS_LO} band; is the flow "
+                f"traced to its outcome? If it genuinely ends there, record '{fid}: <why>' under a "
+                "'Balance exceptions' extras heading — which exempts "
+                f"{fid} from the WHOLE granularity family, this band AND the fused-goal name smell")))
     for eid, name in ([(u.id, u.name) for u in m.use_cases]
                       + [(sf.id, sf.name) for sf in m.subflows]):
-        # The recorded id exempts the element from the WHOLE granularity family, band and name
-        # smell alike: both are judgements about the same thing (is this one goal?), and an
-        # operator who has adjudicated the element has adjudicated the question. "Ignore knowingly"
-        # used to be the only answer available here, and an answer nothing records re-fires forever.
-        if eid in excepted:
-            continue
         if " and " in name.lower():
-            warnings.append(f"{eid} name '{name}' joins two clauses with 'and' — two goals in one? "
-                            f"Split it, rename it, or record '{eid}: <why>' under a 'Balance "
-                            "exceptions' extras heading (never reword to dodge the heuristic)")
+            family.append((eid, "the fused-goal name smell", (
+                f"{eid} name '{name}' joins two clauses with 'and' — two goals in one? Split it, "
+                f"rename it, or record '{eid}: <why>' under a 'Balance exceptions' extras heading "
+                f"— which exempts {eid} from the WHOLE granularity family, this name smell AND its "
+                "step-count band (never reword to dodge the heuristic)")))
+    silenced: list[str] = []
+    for eid, signal, msg in family:
+        if eid in excepted:
+            silenced.append(f"{eid} ({signal})")
+        else:
+            warnings.append(msg)
+    if silenced:
+        warnings.append(
+            f"{len(silenced)} granularity advisory/advisories suppressed by recorded flow/sub-flow "
+            f"id(s): {', '.join(silenced)}. A recorded id exempts its element from the WHOLE "
+            f"granularity family — the step-count band AND the fused-goal name smell — so a why "
+            f"written about one of them silences the other too; if that is not what was meant, "
+            f"re-read the rest by validating a copy with the id removed from the 'Balance "
+            f"exceptions' extras heading.")
     accepted = _accepted_duplications(m)
     hops = ([(f.uc, [_step_hop(st, k) for k, st in enumerate(f.steps)]) for f in m.flows]
             + [(sf.id, [_step_hop(st, k) for k, st in enumerate(sf.steps)]) for sf in m.subflows])
@@ -1008,10 +1035,11 @@ def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
         `unbacked_entity_steps` rule, applied to messaging); author the edge;
       * a channel with no consumers — a dead letter (or an external consumer worth a dep); escape =
         the literal `channel-ends` under a 'Balance exceptions' extras heading, for a catalog whose
-        far ends genuinely live outside the mapped repo;
-      * a channel no participant's `runs_in` can place — a runs_in-tagging gap wearing a messaging
-        hat, so it answers to the SAME `runs-in` literal the deployment family does rather than to
-        a token of its own (one decision about this map's tagging, recorded once)."""
+        far ends genuinely live outside the mapped repo.
+
+    The fourth messaging advisory — a channel no participant's `runs_in` can place — is NOT here:
+    it answers to the `runs-in` literal, so it lives in `_messaging_placement_warnings` with the
+    rest of that family and is silenced (and counted) at the family's one exit."""
     problems: list[str] = []
     warnings: list[str] = []
     excepted = balance_lib._exceptions(m)
@@ -1060,32 +1088,52 @@ def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
         # Advisory, not blocking: a channel whose other end lives OUTSIDE the mapped repo (an
         # external publisher, a third-party consumer) is legitimately one-sided — it just has to be
         # a decision rather than an omission.
-        missing = [r for r, ids in (("publishers", mr.publishers), ("consumers", mr.consumers))
-                   if not ids]
-        if missing:
-            if "channel-ends" not in excepted:
-                warnings.append(
-                    f"{label}: no {' and no '.join(missing)} recorded — the Deployment view "
-                    "composes process→process arrows from publishers × consumers, so this channel "
-                    "draws none and its traffic shows only as a link to the broker. Record the "
-                    "missing side, model an out-of-repo end as a dep, or record the literal "
-                    "`channel-ends` under a 'Balance exceptions' extras heading when the far ends "
-                    "genuinely live outside the mapped repo")
-        elif m.deployment:
-            # Both sides named, but the view still cannot place the channel: no participant says
-            # which process runs it. Same invisible outcome, different cause — so a different fix
-            # (tag `runs_in`) than the one above.
-            placed = {r: [c for c in ids if _runs_in_of(m, c)]
-                      for r, ids in (("publisher", mr.publishers), ("consumer", mr.consumers))}
-            unplaced = [r for r, ids in placed.items() if not ids]
-            if unplaced and "runs-in" not in excepted:
-                warnings.append(
-                    f"{label}: no {' and no '.join(unplaced)} sets `runs_in`, so the Deployment "
-                    "view cannot place this channel and draws no process→process arrow — tag the "
-                    "participating component(s) with the unit whose process runs them, or record "
-                    "the literal `runs-in` under a 'Balance exceptions' extras heading (the same "
-                    "literal that adjudicates the rest of this map's `runs_in` tagging)")
+        missing = _messaging_missing_sides(mr)
+        if missing and "channel-ends" not in excepted:
+            warnings.append(
+                f"{label}: no {' and no '.join(missing)} recorded — the Deployment view "
+                "composes process→process arrows from publishers × consumers, so this channel "
+                "draws none and its traffic shows only as a link to the broker. Record the "
+                "missing side, model an out-of-repo end as a dep, or record the literal "
+                "`channel-ends` under a 'Balance exceptions' extras heading when the far ends "
+                "genuinely live outside the mapped repo")
     return problems, warnings
+
+
+def _messaging_missing_sides(mr: MessagingRow) -> list[str]:
+    """The participant side(s) a channel row leaves empty. Shared by the one-sided-channel advisory
+    (which OWNS that shape) and by `_messaging_placement_warnings` (which must skip it): a row with
+    a hole on one side has no placement question to answer yet, and reporting both would bill one
+    gap twice under two different escapes."""
+    return [r for r, ids in (("publishers", mr.publishers), ("consumers", mr.consumers)) if not ids]
+
+
+def _messaging_placement_warnings(m: ProjectModel) -> list[str]:
+    """Advisory: both channel sides are named, but the Deployment view still cannot place the
+    channel — no participant says which process runs it, so the row draws no process→process arrow.
+    Same invisible outcome as a one-sided row, different cause, so a different fix (tag `runs_in`)
+    and a different owner than `_check_messaging`.
+
+    A `runs_in`-tagging gap wearing a messaging hat: it answers to the recorded `runs-in` literal
+    like every other `runs_in` advisory, which is why it is produced RAW here and routed through
+    `_runs_in_family_warnings` — the one place that applies (and counts) that literal."""
+    if not m.deployment:
+        return []                        # no process boxes at all → no topology to be missing
+    out: list[str] = []
+    for i, mr in enumerate(m.messaging):
+        if _messaging_missing_sides(mr):
+            continue                     # one-sided → `_check_messaging` owns it
+        placed = {r: [c for c in ids if _runs_in_of(m, c)]
+                  for r, ids in (("publisher", mr.publishers), ("consumer", mr.consumers))}
+        unplaced = [r for r, ids in placed.items() if not ids]
+        if unplaced:
+            out.append(
+                f"messaging[{i}] ('{mr.name}'): no {' and no '.join(unplaced)} sets `runs_in`, so "
+                "the Deployment view cannot place this channel and draws no process→process arrow "
+                "— tag the participating component(s) with the unit whose process runs them, or "
+                "record the literal `runs-in` under a 'Balance exceptions' extras heading (the "
+                "same literal that adjudicates the rest of this map's `runs_in` tagging)")
+    return out
 
 
 def _runs_in_of(m: ProjectModel, cid: str) -> list[str]:
@@ -1537,17 +1585,17 @@ def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
     Surface it (the same no-silent-no-op spirit as the completeness canaries), don't drop it. Silent
     when the map has no deployment units, or when `runs_in` is nowhere used yet (un-adopted, not a gap).
 
-    It is a `runs_in` advisory that happens to sit outside `_deployment_quality_warnings`' family,
-    so it honours the SAME recorded `runs-in` literal: an operator who has decided this map's
-    background threads are not worth placing has decided it once, and should not have to keep
-    re-reading the consequence. (Unlike the quality family it needs no suppressed-count line — this
-    is one advisory, so the recorded literal cannot hide unrelated findings behind it.)"""
+    It is a `runs_in` advisory that happens to sit outside `_deployment_quality_warnings_raw`'
+    family, so it honours the SAME recorded `runs-in` literal: an operator who has decided this
+    map's background threads are not worth placing has decided it once, and should not have to keep
+    re-reading the consequence. It is produced RAW here — the literal is applied (and counted)
+    exactly once, in `_runs_in_family_warnings`. It used to be applied here with a silent `return []`,
+    which is how a `runs-in` record written about something else swallowed this finding invisibly
+    on two live maps."""
     if not m.deployment:
         return []
     used = any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)
     if not used:
-        return []
-    if "runs-in" in balance_lib._exceptions(m):
         return []
     comp_units = {c.id: set(c.runs_in) for c in m.components}
     unplaced: list[str] = []
@@ -1572,13 +1620,14 @@ def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
     mapping (its whole point). `_deployment_placement_warnings` stays silent on this case ('un-adopted,
     not a gap'), so without this canary a build ships an empty Deployment view with no signal at all —
     exactly what happened on both fresh builds this check was added for. Fires only when units exist:
-    no `deployment[]` means the dimension was legitimately not harvested (a different, coarser choice)."""
+    no `deployment[]` means the dimension was legitimately not harvested (a different, coarser choice).
+
+    Raw, like its siblings: the recorded `runs-in` literal (deliberately unmapped — everything runs
+    in one unit) is applied and COUNTED once, in `_runs_in_family_warnings`."""
     if not m.deployment:
         return []
     if any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points):
         return []
-    if "runs-in" in balance_lib._exceptions(m):
-        return []  # deliberately unmapped (e.g. everything runs in one unit) — recorded, so quiet
     return [f"{len(m.deployment)} deployment unit(s) enumerated but no component or entry point sets "
             f"`runs_in` — the Deployment view will have no code↔process mapping. On each component, "
             f"name the deployment unit(s) whose process runs it (method.md 'Deployment & topology'); "
@@ -1705,24 +1754,53 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
     return warnings
 
 
-def _deployment_quality_warnings(m: ProjectModel) -> list[str]:
-    """The deployment-quality family, with the recorded `runs-in` exception applied ONCE, at the only
-    exit (the worker above has several).
+#: EVERY advisory group the recorded `runs-in` literal silences, paired with the short label the
+#: count line uses to name it. This tuple is the ONLY place that mapping exists: each producer is
+#: raw (it never reads the literal itself), and `_runs_in_family_warnings` below is the single exit
+#: that applies the literal and reports what it swallowed. A FIFTH group is added by appending a row
+#: here — there is no other wiring, so it cannot arrive with a private, uncounted `return []`.
+#:
+#: Why that matters: the literal used to be honoured at four separate sites and counted at ONE.
+#: On two live maps a `runs-in` record written about something else ("the Mongo units run no
+#: first-party code"; environment tags on one unit) silently swallowed unrelated placement
+#: findings, while the count line named a smaller number — and when the counted group happened to
+#: be empty the suppression was invisible entirely. `tests/test_validate_model.py` pins the
+#: invariant by AST: no other function in this module may read the `runs-in` literal.
+_RUNS_IN_FAMILY: tuple[tuple[str, Callable[[ProjectModel], list[str]]], ...] = (
+    ("deployment quality (unit naming, formula-filled `runs_in`, unlinked units, thread hosts, "
+     "variant tagging)", _deployment_quality_warnings_raw),
+    ("deployment units enumerated but nothing links code to them", _deployment_unlinked_warning),
+    ("self-started entry points with no host unit", _deployment_placement_warnings),
+    ("messaging channels no participant's `runs_in` can place", _messaging_placement_warnings),
+)
 
-    The escape hatch is honoured but NOT silently. That one literal switches off the whole family —
-    unit naming, formula-fill, unlinked units, thread hosts, variant tagging — while the
-    justification behind it is usually about a single member. A live map recorded `runs-in` for
-    exactly one reason ("two test-profile units run no product code") and thereby hid two unrelated
-    findings, including a real variant-tagging gap. Suppression you cannot see is indistinguishable
-    from having no findings, so the COUNT stays visible even when the detail does not."""
-    warnings = _deployment_quality_warnings_raw(m)
-    if warnings and "runs-in" in balance_lib._exceptions(m):
-        return [f"{len(warnings)} deployment advisory/advisories suppressed by the recorded "
-                f"`runs-in` exception. That literal silences the WHOLE deployment family (unit "
-                f"naming, formula-filled `runs_in`, unlinked units, thread hosts, variant tagging) "
-                f"— if the justification only covered one of them, re-read the rest by validating a "
-                f"copy with the exception removed."]
-    return warnings
+
+def _runs_in_family_warnings(m: ProjectModel) -> list[str]:
+    """Every `runs_in` advisory in the map, with the recorded `runs-in` exception applied ONCE — at
+    this single exit, across ALL the groups in `_RUNS_IN_FAMILY`.
+
+    The escape hatch is honoured but NOT silently. That one literal switches off every `runs_in`
+    finding the map has, while the justification behind it is usually about a single one. A live map
+    recorded `runs-in` for exactly one reason ("two test-profile units run no product code") and
+    thereby hid two unrelated findings, including a real variant-tagging gap. Suppression you cannot
+    see is indistinguishable from having no findings, so the COUNT — and the name of every group it
+    covered — stays visible even when the detail does not."""
+    found: list[tuple[str, list[str]]] = []
+    for label, produce in _RUNS_IN_FAMILY:
+        group = produce(m)
+        if group:
+            found.append((label, group))
+    if not found:
+        return []
+    if "runs-in" not in balance_lib._exceptions(m):
+        return [w for _, ws in found for w in ws]
+    total = sum(len(ws) for _, ws in found)
+    detail = "; ".join(f"{len(ws)} × {label}" for label, ws in found)
+    return [f"{total} deployment advisory/advisories suppressed by the recorded `runs-in` exception, "
+            f"across {len(found)} finding group(s) — {detail}. That one literal silences EVERY "
+            f"`runs_in` advisory in the map, not just the one it was written about; if the recorded "
+            f"justification only covered some of them, re-read the rest by validating a copy with "
+            f"the exception removed."]
 
 
 def unbacked_entity_steps(m: ProjectModel) -> list[tuple[str, FlowStep, str, str]]:
@@ -2424,9 +2502,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(tech_warnings)
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
-    warnings.extend(_deployment_placement_warnings(m))
-    warnings.extend(_deployment_unlinked_warning(m))
-    warnings.extend(_deployment_quality_warnings(m))
+    warnings.extend(_runs_in_family_warnings(m))   # the whole `runs_in` family, through ONE counted exit
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
     warnings.extend(edge_warnings)
@@ -2472,15 +2548,19 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(hier_problems)
     warnings.extend(hier_warnings)
     warnings.extend(_check_altitude(m))
+    walk_root = repo_root if repo_root is not None else (
+        model_path.resolve().parent.parent if model_path is not None else None)
+    # UNCONDITIONAL, and BEFORE the `check_coverage` block: `.coyodex/.ignore` narrows the tree every
+    # check below measures, and the cheap `validate --check-sources` pass (the one method.md tells a
+    # lead to run first) is the invocation a coverage-gated disclosure would hide it from. Emitted
+    # first, so the reader learns the tree was narrowed before reading any "no gaps here" result
+    # computed over the narrowed tree.
+    if walk_root is not None:
+        warnings.extend(ignore_disclosure(walk_root))
     if check_coverage:
         cov_dirs = frozenset(_recorded_coverage_dirs(m))  # 'Coverage exceptions': conscious coarse-fold
-        walk_root = repo_root if repo_root is not None else (
-            model_path.resolve().parent.parent if model_path is not None else None)
         if walk_root is not None:
             refs = referenced_paths(m, walk_root.resolve())
-            # FIRST, so the reader learns the tree was narrowed before reading any "no gaps here"
-            # result computed over the narrowed tree.
-            warnings.extend(ignore_disclosure(walk_root))
             warnings.extend(compression_coverage_from_refs(refs, walk_root, cov_dirs))
             # File-level coverage: the loose-file slice-seam gap the directory-granular check above
             # misses (a component-less .py inside an otherwise-covered dir). Same refs + recorded dirs.

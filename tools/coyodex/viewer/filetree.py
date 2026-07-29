@@ -20,6 +20,15 @@ node id (set only when cov == 'self'); `others` carries any further node ids tha
 exact path (e.g. a component and an entity sharing one file), so a path collision surfaces every
 match instead of only the tie-break winner. The viewer wires this both ways: focusing a graph node
 highlights its row; clicking a mapped row navigates to and selects the node (+ its `others`, if any).
+
+A NARROWED TREE ANNOUNCES ITSELF. The disk-walk variant inherits `.coyodex/.ignore` from
+``iter_source_files``, so the browser it feeds is not the whole repo — and the browser is exactly
+where a human eyeballs "what code isn't covered", the one place a silent removal is worst. So
+``build_file_tree`` attaches an ``ignored`` note (``IgnoreNote``) to the ROOT node whenever the file
+is in effect: file count, each pattern with what it decided, and any pattern that decided nothing. A
+renderer therefore always has the disclosure in hand. (``serve.py``'s tree is built from
+``git ls-tree`` at the map's commit and applies no ignore file at all, so it lists every tracked
+path — nothing hidden there either, by a different route.)
 """
 from __future__ import annotations
 
@@ -27,6 +36,7 @@ import re
 from pathlib import Path
 from typing import TypedDict
 
+from coyodex.ignorefile import ignore_report
 from coyodex.viewer.build_graph import GraphDict
 
 # Group kinds collapse their children into one box; a leaf node (component/entity/dep) is "finer
@@ -35,7 +45,25 @@ _GROUP_KINDS = {"subsystem", "subdomain"}
 _URL_RE = re.compile(r"^[a-z][a-z0-9+.-]*://", re.I)
 
 
-class FileTreeNode(TypedDict):
+class IgnoreNote(TypedDict):
+    """What `.coyodex/.ignore` removed from THIS tree. Carried on the root node of
+    ``build_file_tree``'s result so a file browser can never present a narrowed tree as the whole
+    repo — the ignore file is the one input able to hide a real gap from the checks that find gaps,
+    and a coverage view that quietly drops rows is that failure at its most convincing."""
+
+    files: int            # how many files the ignore file removed from this tree
+    patterns: list[str]   # each authored pattern with what it decided ('gen/** (removed 2 file(s))')
+    unused: list[str]     # patterns that decided nothing — a typo, or a tree that moved
+
+
+class _FileTreeOptional(TypedDict, total=False):
+    """Keys only the ROOT node carries. Split out because a TypedDict cannot mix required and
+    optional keys in one class body (and `typing.NotRequired` is 3.11+, above this package's floor)."""
+
+    ignored: IgnoreNote
+
+
+class FileTreeNode(_FileTreeOptional):
     name: str
     path: str            # repo-relative, posix; "" for the root
     dir: bool
@@ -208,6 +236,13 @@ def build_file_tree(graph: GraphDict, repo_root: str) -> FileTreeNode | None:
     """Walk the mapped repo and overlay map coverage. None when the root has no walkable files
     (not a repo / empty) — the viewer then simply omits the browser pane.
 
+    The walk honours `.coyodex/.ignore`, so the returned tree can be NARROWER than the repo. That is
+    never left implicit: when the file is in effect the root node carries an ``ignored``
+    (`IgnoreNote`) with the count, each pattern and what it decided, and any pattern that decided
+    nothing — the same per-rule story `validate` and the pre-index tell, from the same
+    `ignore_report`. Without it the browser would show `gen/` holding one hand-written file and read
+    as the truth about the tree.
+
     The git walk is imported lazily here (not at module load), the same way the validator pulls it,
     so importing this module never drags in the pre-index code path."""
     from coyodex.preindex_lib import iter_source_files  # lazy: keep render free of the pre-index path
@@ -219,5 +254,10 @@ def build_file_tree(graph: GraphDict, repo_root: str) -> FileTreeNode | None:
     rels = sorted(p.relative_to(walk.root).as_posix() for p in walk.files)
     if not rels:
         return None
-    return build_tree(rels, node_path_index(graph), resolved_path_index(graph),
+    tree = build_tree(rels, node_path_index(graph), resolved_path_index(graph),
                       root_name=walk.root.name or repo_root)
+    if walk.ignore:
+        rep = ignore_report(walk.ignore, walk.ignore_hits)
+        tree["ignored"] = IgnoreNote(files=walk.skipped_ignored, patterns=list(rep.per_rule),
+                                     unused=list(rep.unused))
+    return tree

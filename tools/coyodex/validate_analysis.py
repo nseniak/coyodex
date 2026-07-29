@@ -7,6 +7,9 @@
     code-derived expectation E), plus the domain-coverage building blocks (`_is_non_entity_type`,
     `_type_covered`, the `_ISOLATED_*`/`_UNCOVERED_*` thresholds) and the altitude-hint building
     blocks (`_LIST_ITEM`, `_ALTITUDE_MIN`) `validate_model.py` runs against `ProjectModel` fields.
+  - `ignore_disclosure` — the UNCONDITIONAL advisory naming what `.coyodex/.ignore` removed, per
+    pattern (the one input able to hide a gap from the checks above, so it runs on every validate,
+    not only under `--check-coverage`).
 Stdlib-only.
 """
 from __future__ import annotations
@@ -18,6 +21,10 @@ from pathlib import Path
 # Grammar (regexes, membership rule) lives in grammar, shared with the parser — one grammar.
 from coyodex.anchors import FILE_ANCHOR as _BARE_PATH, LINE_ANCHOR, strip_anchor
 from coyodex.grammar import DEEP_NEST_WARN
+# Stdlib-only, and free of the pre-index code path, so importing it at module load keeps the core
+# gate's dependency firewall intact (tests/test_cli.py). The per-rule wording lives there so
+# validate, the pre-index and the viewer tell the SAME story about one ignore file.
+from coyodex.ignorefile import ignore_report, load_ignore
 
 
 def _is_subsystem_id(i: str) -> bool:  # an `S` id, never a subdomain (`SD1` also starts with "S")
@@ -245,7 +252,8 @@ def file_level_coverage(refs: set[str], root: Path,
 
 
 def ignore_disclosure(root: Path) -> list[str]:
-    """Advisory (non-blocking): say out loud that `.coyodex/.ignore` narrowed the tree.
+    """Advisory (non-blocking, and UNCONDITIONAL — not gated on `--check-coverage`): say out loud
+    that `.coyodex/.ignore` narrowed the tree.
 
     Every other coverage check here re-measures the repo INDEPENDENTLY of the pre-index (GR4), so a
     map cannot look complete just because generation said it was. An ignore file is the one input
@@ -255,26 +263,42 @@ def ignore_disclosure(root: Path) -> list[str]:
     it becomes the "advisory waved through" failure one level down: the map reads complete because
     the evidence of incompleteness was excluded before anyone looked.
 
-    So this fires whenever the file is in effect, names the patterns, and says how many files went.
-    An unused pattern is called out separately: it is either a typo or a tree that moved, and either
-    way the author believes something is excluded that is not."""
+    Its caller therefore runs it on EVERY validate, including the cheap `--check-sources` pass the
+    method tells a lead to run first: a disclosure only the expensive pass emits is a disclosure the
+    common invocation does not have.
+
+    So this fires whenever the file is in effect and names each pattern with what it actually did.
+    Two failure shapes are called out separately, because both mean the author believes something is
+    excluded that is not: a pattern that DECIDED NOTHING on this tree (a typo, a tree that moved, or
+    a path a built-in exclusion already covered), and a line that parsed to nothing at all."""
     from coyodex.preindex_lib import iter_source_files
 
     root = root.resolve()
+    # Cheap gate FIRST (a stat, then a cached parse): this now runs on every validate, including the
+    # bare gate, and the overwhelmingly common case is no ignore file at all. Walking the tree only
+    # to discover there was nothing to disclose would tax every run for a repo that declared nothing.
+    if not load_ignore(root):
+        return []
     walk = iter_source_files(root)
     spec = walk.ignore
-    if not spec:
+    if not spec:      # raced away between the two reads — nothing to disclose
         return []
+    rep = ignore_report(spec, walk.ignore_hits)
     out: list[str] = [
         f"`.coyodex/.ignore` is in effect: {walk.skipped_ignored} file(s) removed from the analysed "
-        f"tree by {len(spec.rules)} pattern(s) — {', '.join(spec.patterns)}. These are out of the "
-        f"weight tree, out of the component expectation E, and out of every coverage check above, "
-        f"so those checks cannot report a gap inside them. Confirm the patterns still describe code "
-        f"the map is not meant to cover."
+        f"tree by {len(spec.rules)} pattern(s) — {', '.join(rep.per_rule)}. These are out of the "
+        f"weight tree, out of the component expectation E, and out of every coverage check, so those "
+        f"checks cannot report a gap inside them. Confirm the patterns still describe code the map "
+        f"is not meant to cover."
     ]
-    if spec.bad_lines:
-        out.append(f"`.coyodex/.ignore` has {len(spec.bad_lines)} line(s) that match nothing and "
-                   f"were dropped: {', '.join(repr(b) for b in spec.bad_lines)} — a pattern that "
+    if rep.unused:
+        out.append(f"`.coyodex/.ignore` has {len(rep.unused)} pattern(s) that decided nothing on "
+                   f"this tree: {', '.join(rep.unused)} — nothing removed (and for a `!` line, "
+                   f"nothing put back). A typo, a tree that moved, or a path already covered by a "
+                   f"built-in exclusion; either way it reads as coverage the author never got.")
+    if rep.bad_lines:
+        out.append(f"`.coyodex/.ignore` has {len(rep.bad_lines)} line(s) that match nothing and "
+                   f"were dropped: {', '.join(repr(b) for b in rep.bad_lines)} — a pattern that "
                    f"cannot fire reads as coverage the author never got.")
     return out
 

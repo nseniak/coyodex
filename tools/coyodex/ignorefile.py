@@ -2,9 +2,10 @@
 """`.coyodex/.ignore` — the analysis ignore file.
 
 A repo may hold code that is deliberately NOT part of what the map describes: a fixture tree built
-to trip the tooling's own advisories, a vendored copy git tracks, a scratch area. Left in, it
-inflates the weight tree, skews the component expectation E, and shows up forever as an unreferenced
-directory. `.gitignore` cannot express it (the files are meant to be committed), and a "Coverage
+to trip the tooling's own advisories, a vendored copy git tracks under a name `DEFAULT_EXCLUDE_DIRS`
+does not already cover (`vendor/`, `third_party/`, `dist/`, … never reach here), a scratch area. Left
+in, it inflates the weight tree, skews the component expectation E, and shows up forever as an
+unreferenced directory. `.gitignore` cannot express it (the files are meant to be committed), and a "Coverage
 exceptions" extras heading is a different statement — that one says *mapped coarsely, stop warning*,
 while this one says *not part of the analysed tree at all*.
 
@@ -23,12 +24,25 @@ Semantics (a deliberate SUBSET of gitignore, matched by `coyodex.pathmatch`):
   * patterns are always repo-relative; a trailing `/` is accepted and ignored (only files are
     ever tested, so "the directory" and "everything under it" are the same statement here)
 
-**It is never silent.** Every surface that walks the tree reports how many files it removed, and
-`preindex --report` prints the patterns — because an ignore file is the one input that can hide a
-real gap from the coverage check that exists to find gaps.
+**It is never silent.** Every surface that walks the tree carries the narrowing out with it, per
+pattern — because an ignore file is the one input that can hide a real gap from the coverage check
+that exists to find gaps. Concretely:
+
+  * `coyodex validate` ALWAYS warns (`validate_analysis.ignore_disclosure`) — not only under
+    `--check-coverage`, since the cheap `--check-sources` pass is the one a lead runs most and a
+    disclosure it skips is a disclosure that does not exist;
+  * `coyodex preindex` records the counts in `preindex.json` and prints them on stderr;
+    `preindex --report` prints the patterns;
+  * the viewer's file-browser tree (`viewer.filetree.build_file_tree`) carries an `ignored` note on
+    its root node, so a renderer can never present a narrowed tree as the whole repo.
+
+Each of those reports PER RULE (`ignore_report` below), so a pattern that decided nothing — a typo,
+a tree that moved, a path a built-in exclusion already covers — is named instead of blending into a
+reassuring total.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -56,14 +70,65 @@ class IgnoreSpec:
         """The pattern lines as authored (with `!` restored), for the report."""
         return [("!" if neg else "") + pat for neg, pat in self.rules]
 
+    def match_index(self, rel: str) -> int | None:
+        """Index of the rule that DECIDES this repo-relative path — the LAST one that matches, since
+        later rules override earlier ones. None when no rule matches (or the spec is empty).
+
+        `match` is this plus the rule's polarity. The walk wants the index rather than the boolean so
+        it can count hits PER RULE: a rule that decides nothing on a whole tree is the unused-pattern
+        signal, and it is invisible in a yes/no answer."""
+        hit: int | None = None
+        for i, (_negated, pattern) in enumerate(self.rules):
+            if matches(pattern, rel):
+                hit = i
+        return hit
+
     def match(self, rel: str) -> bool:
         """Is this repo-relative path ignored? LAST matching rule wins, so `!` can carve an
         exception out of a broad ignore. Returns False when the spec is empty."""
-        hit = False
-        for negated, pattern in self.rules:
-            if matches(pattern, rel):
-                hit = not negated
-        return hit
+        i = self.match_index(rel)
+        return i is not None and not self.rules[i][0]
+
+
+@dataclass(frozen=True)
+class IgnoreReport:
+    """What an ignore file actually DID on ONE walk — per rule, so nothing hides in the total.
+
+    Built by `ignore_report` from a spec plus the walk's per-rule hit counts. Every disclosing
+    surface (validate's advisory, the pre-index artifact + its report, the viewer's file tree) reads
+    this one object, so the three of them cannot drift into three different stories.
+    """
+
+    removed: int                    # files the walk dropped (sum over the non-negated rules)
+    restored: int                   # files a `!` rule put BACK (sum over the negated rules)
+    per_rule: tuple[str, ...]       # one authored pattern per rule, with what it decided
+    unused: tuple[str, ...]         # patterns that decided nothing — the typo / moved-tree signal
+    bad_lines: tuple[str, ...]      # lines that parsed to nothing at all (carried from the spec)
+
+
+def ignore_report(spec: IgnoreSpec, hits: Sequence[int]) -> IgnoreReport:
+    """Summarise one walk's use of `spec`. `hits[i]` is how many paths rule `i` DECIDED — pass
+    `WalkResult.ignore_hits`, which the walk keeps aligned with `spec.rules` by construction (a
+    short/long sequence is padded/truncated rather than raising inside a reporting path).
+
+    A NEGATION rule's hit is not a removal: it means the rule RE-INCLUDED a file another rule had
+    excluded. So it is counted, and worded, as a restore — `removed` covers only the positive rules,
+    which is exactly `WalkResult.skipped_ignored`. `unused` spans both kinds: a `!` line that put
+    nothing back is as misleading as a positive line that took nothing out, because in both cases the
+    author believes the file is describing the tree and it is not.
+    """
+    n = len(spec.rules)
+    counts = [hits[i] if i < len(hits) else 0 for i in range(n)]
+    removed = sum(c for (neg, _pat), c in zip(spec.rules, counts) if not neg)
+    restored = sum(c for (neg, _pat), c in zip(spec.rules, counts) if neg)
+    per_rule = tuple(
+        f"{'!' if neg else ''}{pat} ({'put back' if neg else 'removed'} {c} file(s))"
+        for (neg, pat), c in zip(spec.rules, counts)
+    )
+    unused = tuple(("!" if neg else "") + pat
+                   for (neg, pat), c in zip(spec.rules, counts) if c == 0)
+    return IgnoreReport(removed=removed, restored=restored, per_rule=per_rule, unused=unused,
+                        bad_lines=spec.bad_lines)
 
 
 _EMPTY = IgnoreSpec()

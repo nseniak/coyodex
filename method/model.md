@@ -230,9 +230,12 @@ Semantics, stated on the fields:
   and an unplaceable messaging channel), the literal `isolated` (components wired to nothing), the
   literal `channel-ends` (a channel whose far end lives outside the mapped repo), the literal
   `channel-payload` (channels that really carry no domain type), and the literal `entity-relations`
-  (a domain whose cards legitimately carry no E↔E relation). Literals are read **line-leading with
-  a separator** (`channel-ends: <why>`), so prose that merely uses the word silences nothing, and
-  each is scoped to its own advisory — none cross-silences another.
+  (a domain whose cards legitimately carry no E↔E relation). Literals are read **line-leading**,
+  followed by a separator (`:`, `(`, an em/en dash, or a spaced ` - `) or nothing else on the line
+  (`channel-ends: <why>`), so prose that merely uses the word silences nothing and a compound that
+  only starts with a literal (`store-front redesign: …`) is not a record; ids stay readable
+  anywhere in the body (`SF40, SF41: <why>` records both). Each literal is scoped to its own
+  advisory — none cross-silences another.
   A deliberately-kept flow duplication is
   recorded under an **"Accepted duplications"** heading as `UCa & UCb: <why>`. Two more machine-read
   headings serve the **use-case & Happy-Path completeness** advisories: **"Unclaimed surfaces"**

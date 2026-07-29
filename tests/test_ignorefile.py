@@ -15,10 +15,13 @@ from __future__ import annotations
 import sys
 import tempfile
 from pathlib import Path
+from typing import cast
 
 from coyodex import validate_analysis
-from coyodex.ignorefile import IGNORE_REL, load_ignore, parse_ignore
+from coyodex.ignorefile import IGNORE_REL, ignore_report, load_ignore, parse_ignore
 from coyodex.preindex_lib import expected_components, iter_source_files
+from coyodex.viewer.build_graph import GraphDict
+from coyodex.viewer.filetree import build_file_tree
 
 
 # --- builders -------------------------------------------------------------------
@@ -45,6 +48,15 @@ def make_repo(tmp: Path, *, ignore: str | None = None, n_src: int = 3, n_trap: i
 def rel_names(root: Path) -> set[str]:
     root = root.resolve()
     return {p.relative_to(root).as_posix() for p in iter_source_files(root).files}
+
+
+def make_empty_graph() -> GraphDict:
+    """The smallest graph the file-browser builder accepts: no nodes, so every row is unmapped and
+    only the WALK decides what the tree contains."""
+    return cast(GraphDict, {
+        "commit": None, "committed": None, "title": None, "goal": None,
+        "nodes": {}, "edges": [], "happy_path": [], "roles": [],
+    })
 
 
 # --- parsing --------------------------------------------------------------------
@@ -160,11 +172,86 @@ def test_validate_says_nothing_when_there_is_no_ignore_file():
         assert validate_analysis.ignore_disclosure(make_repo(Path(td))) == []
 
 
-def test_validate_calls_out_a_pattern_that_matched_nothing():
+def test_validate_calls_out_a_line_that_parsed_to_nothing():
     with tempfile.TemporaryDirectory() as td:
         root = make_repo(Path(td), ignore="trapdoor/\n/\n")
         out = validate_analysis.ignore_disclosure(root)
         assert len(out) == 2 and "match nothing" in out[1]
+
+
+# --- per-rule hits: an unused pattern is the one that can lie -------------------
+def test_the_walk_counts_hits_per_rule_and_a_negation_counts_as_a_restore():
+    # The DECIDING rule (last match wins) is the one credited, so the two counts read as the story
+    # they are: the broad rule took files out, the `!` rule put one back.
+    with tempfile.TemporaryDirectory() as td:
+        root = make_repo(Path(td), ignore="trapdoor/\n!trapdoor/keep_me.py\ntypo_dir/\n")
+        walk = iter_source_files(root)
+        assert walk.ignore_hits == (6, 1, 0)      # 5 traps + deep/d.py | keep_me.py | nothing
+        rep = ignore_report(walk.ignore, walk.ignore_hits)
+        assert rep.removed == walk.skipped_ignored == 6   # only the POSITIVE rules remove
+        assert rep.restored == 1                          # the `!` rule re-included, it did not remove
+        assert rep.unused == ("typo_dir/",)
+
+
+def test_a_typod_but_valid_pattern_is_reported_as_deciding_nothing():
+    # The gap the old code had: `bad_lines` only caught a pattern that stripped to nothing, so a
+    # syntactically fine typo matched zero files and was counted in the reassuring "3 pattern(s)".
+    with tempfile.TemporaryDirectory() as td:
+        root = make_repo(Path(td), ignore="trapdoor/\n!trapdoor/keep_me.py\ntypo_dir/\n")
+        out = validate_analysis.ignore_disclosure(root)
+        assert len(out) == 2
+        assert "trapdoor/ (removed 6 file(s))" in out[0]
+        assert "!trapdoor/keep_me.py (put back 1 file(s))" in out[0]
+        assert "decided nothing" in out[1] and "typo_dir/" in out[1]
+
+
+def test_a_pattern_a_builtin_exclusion_already_covers_is_reported_as_unused():
+    # A doc example that does nothing teaches the wrong thing: `vendor/` is already in
+    # DEFAULT_EXCLUDE_DIRS, so the walk never offers those paths to the ignore file at all.
+    with tempfile.TemporaryDirectory() as td:
+        root = make_repo(Path(td), ignore="vendor/\n")
+        (root / "vendor").mkdir()
+        (root / "vendor" / "lib.py").write_text("def lib():\n    return 1\n")
+        out = validate_analysis.ignore_disclosure(root)
+        assert len(out) == 2 and "decided nothing" in out[1] and "vendor/" in out[1]
+
+
+def test_every_used_pattern_stays_out_of_the_unused_report():
+    with tempfile.TemporaryDirectory() as td:
+        root = make_repo(Path(td), ignore="trapdoor/\n")
+        out = validate_analysis.ignore_disclosure(root)
+        assert len(out) == 1 and "trapdoor/ (removed 7 file(s))" in out[0]
+
+
+def test_the_hit_counts_are_not_shared_between_two_walks_of_the_same_tree():
+    # The spec is process-cached; a counter living on it would accumulate and report a number
+    # belonging to some earlier walk.
+    with tempfile.TemporaryDirectory() as td:
+        root = make_repo(Path(td), ignore="trapdoor/\n")
+        first = iter_source_files(root).ignore_hits
+        second = iter_source_files(root).ignore_hits
+        assert first == second == (7,)
+
+
+# --- the viewer's file browser (F4a) --------------------------------------------
+def test_the_file_browser_tree_carries_what_the_ignore_file_removed():
+    # The browser is where a human eyeballs "what code isn't covered" — a narrowed tree with no note
+    # is the excluded evidence hiding exactly where someone went looking for it.
+    with tempfile.TemporaryDirectory() as td:
+        root = make_repo(Path(td), ignore="trapdoor/\n!trapdoor/keep_me.py\ntypo_dir/\n")
+        tree = build_file_tree(make_empty_graph(), str(root))
+        assert tree is not None
+        note = tree.get("ignored")
+        assert note is not None
+        assert note["files"] == 6
+        assert note["patterns"][0] == "trapdoor/ (removed 6 file(s))"
+        assert note["unused"] == ["typo_dir/"]
+
+
+def test_the_file_browser_tree_says_nothing_when_no_ignore_file_exists():
+    with tempfile.TemporaryDirectory() as td:
+        tree = build_file_tree(make_empty_graph(), str(make_repo(Path(td))))
+        assert tree is not None and "ignored" not in tree
 
 
 def _main() -> int:

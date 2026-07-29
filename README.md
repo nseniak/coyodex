@@ -91,20 +91,23 @@ in `.coyodex/.ignore` instead:
 
 ```
 # .coyodex/.ignore — one pattern per line, gitignore-style
-vendor/                      # a plain name covers everything under it
+fixtures/broken_repo/        # a plain name covers everything under it
 generated/**                 # * stays inside one folder level, ** goes deeper
 !generated/hand_written.py   # ! puts something back; the last matching line wins
 ```
 
 Anything listed here is left out of the map's sizing and out of its coverage checks.
 
-Two things to know:
+Three things to know:
 
 - **It's not the same as mapping something coarsely.** If a folder is a real part of your product and
   you just want it drawn as one box, that's a different setting the map records for you — don't put it
   here. This file is for code the map isn't meant to describe at all.
+- **Some folders are already left out.** coyodex never walks `node_modules/`, `vendor/`,
+  `third_party/`, `dist/`, `build/`, `target/`, `.venv/` and friends, so naming one of those here does
+  nothing. If you do, coyodex says so (see the next point) rather than letting you believe it worked.
 - **coyodex tells you it's on.** Every time it measures your code it reports how many files this file
-  removed and on which patterns, and it flags a pattern that matched nothing. That's deliberate: the
+  removed, pattern by pattern, and it flags a pattern that removed nothing. That's deliberate: the
   checks that find gaps can't see inside what you exclude, so excluding too much would quietly make
   the map look more complete than it is.
 

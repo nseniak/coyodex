@@ -10,6 +10,7 @@ Run either way (needs an editable install: `make deps`):
 from __future__ import annotations
 
 from coyodex.balance_lib import (
+    _exceptions,
     balance_warnings,
     cc_pairs,
     fanout_summary,
@@ -175,6 +176,74 @@ def test_balance_exceptions_extras_silences_named_diagrams() -> None:
     m.extras = [ExtraSection(heading="Balance exceptions",
                              body="root: two-part product by design. S1: legacy family.")]
     assert balance_warnings(m) == []
+
+
+def make_exceptions_model(body: str) -> ProjectModel:
+    """A bare model carrying one 'Balance exceptions' extras block with the given body."""
+    m = ProjectModel(title="Demo", goal="A demo.")
+    m.extras = [ExtraSection(heading="Balance exceptions", body=body)]
+    return m
+
+
+def test_a_literal_named_mid_prose_never_silences_its_advisory() -> None:
+    """Adversarial-review finding #3: `runs-in`, `granularity` and `entity-flows` used to be read
+    by an anywhere-in-body scan, so a justification that merely MENTIONED one switched off a whole
+    advisory family. `runs-in` was the worst case — it now silences every deployment check."""
+    assert sorted(_exceptions(make_exceptions_model(
+        "C5: grouped by capability. The runs-in tagging was audited separately..."))) == ["C5"]
+    assert sorted(_exceptions(make_exceptions_model(
+        "S1: fine. We reviewed granularity and entity-flows during the walkthrough."))) == ["S1"]
+    # the literals already on the line-leading discipline behaved correctly and still do
+    assert sorted(_exceptions(make_exceptions_model(
+        "C7: this is fine; the channel-payload question was answered offline."))) == ["C7"]
+
+
+def test_every_literal_records_when_it_leads_its_line() -> None:
+    for literal in ("cadence", "channel-ends", "channel-payload", "entity-flows",
+                    "entity-relations", "granularity", "isolated", "messaging", "runs-in",
+                    "store"):
+        m = make_exceptions_model(f"{literal}: the operator's reason.")
+        assert _exceptions(m) == {literal}, literal
+
+
+def test_the_recording_forms_a_live_map_uses_all_read() -> None:
+    assert _exceptions(make_exceptions_model("granularity: 36 components against ~11.")) \
+        == {"granularity"}
+    assert _exceptions(make_exceptions_model("- runs-in: the Mongo units run no first-party code.")) \
+        == {"runs-in"}
+    assert _exceptions(make_exceptions_model("* entity-flows: a pure proxy, no domain layer.")) \
+        == {"entity-flows"}
+    assert _exceptions(make_exceptions_model("**store** — this project has no database.")) \
+        == {"store"}
+    assert _exceptions(make_exceptions_model("cadence - the loops are genuinely continuous")) \
+        == {"cadence"}
+    assert _exceptions(make_exceptions_model("isolated (developer CLIs that drive from outside)")) \
+        == {"isolated"}
+    assert _exceptions(make_exceptions_model("runs-in")) == {"runs-in"}   # alone on its line
+
+
+def test_a_hyphenated_compound_at_line_start_is_not_a_record() -> None:
+    """Adversarial-review finding #8: a bare `-` counted as a separator, so a compound word
+    starting with a literal recorded that literal — and hyphenated literals made it plausible."""
+    assert _exceptions(make_exceptions_model("store-front redesign: see ticket 44")) == set()
+    assert _exceptions(make_exceptions_model("isolated-network deploys: nothing to do")) == set()
+    assert _exceptions(make_exceptions_model("channel-payload-review-2026: ...")) == set()
+
+
+def test_a_literal_buried_in_a_multi_line_justification_stays_quiet() -> None:
+    body = ("granularity: 36 components against a code-derived expectation of ~11.\n"
+            "The runs-in tagging and the entity-flows question were both settled offline,\n"
+            "and the store layout is unchanged.")
+    assert _exceptions(make_exceptions_model(body)) == {"granularity"}
+
+
+def test_ids_still_read_anywhere_in_the_body() -> None:
+    """Ids are not words, so prose cannot mint one by accident — and a live map records five
+    sub-flows on one comma-separated line, of which only the first leads the line."""
+    m = make_exceptions_model("SF40, SF41, SF52, SF70, SF71: each is referenced once.")
+    assert _exceptions(m) == {"SF40", "SF41", "SF52", "SF70", "SF71"}
+    assert _exceptions(make_exceptions_model("C93: one flat catalog file. S6: two members.")) \
+        == {"C93", "S6"}
 
 
 # --- SD forest mirror ----------------------------------------------------------------------

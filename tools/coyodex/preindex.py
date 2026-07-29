@@ -28,6 +28,7 @@ import json
 import sys
 from pathlib import Path
 
+from coyodex.ignorefile import ignore_report
 from coyodex.preindex_lib import (
     GRANULARITY_BAND_PCT,
     GRANULARITY_FILE_CAP,
@@ -393,11 +394,16 @@ def report(argv: list[str]) -> int:
     # see immediately whether the tree or the ignore file is the reason.
     ignored_n = cov.get("files_skipped_ignored") or 0
     ignore_pats = list(cov.get("ignore_patterns") or [])
+    ignore_unused = list(cov.get("ignore_patterns_unused") or [])
     if ignore_pats:
         out += ["", f"IGNORED BY .coyodex/.ignore — {_fmt_int(ignored_n)} file(s), "
                     f"{len(ignore_pats)} pattern(s). These are OUT of the weight tree, out of E, "
                     f"and out of the coverage check."]
         out += [f"    {p}" for p in ignore_pats]
+        if ignore_unused:
+            out += [f"    ^ {len(ignore_unused)} pattern(s) decided NOTHING: "
+                    f"{', '.join(ignore_unused)} — a typo, a moved tree, or already covered by a "
+                    f"built-in exclusion."]
     out += ["", "Reconcile every item — this is advisory INPUT, never rows for the map (GR2);",
             "weight sets attention, your judgement sets altitude (GR5)."]
     print("\n".join(out))
@@ -439,6 +445,9 @@ def main(argv: list[str] | None = None) -> int:
     max_depth = int(md) if md else None
 
     walk = iter_source_files(root)
+    # Per-pattern, shared with validate's advisory and the viewer's tree so one ignore file cannot
+    # be described three different ways. None when no ignore file is in effect.
+    ignore_rep = ignore_report(walk.ignore, walk.ignore_hits) if walk.ignore else None
     churn, git_ok = git_churn(root, since)
     weight, lang_counts = build_weight(walk.files, root, churn, max_depth)
     symbols, sym_meta = build_symbols(walk.files, root)
@@ -451,9 +460,12 @@ def main(argv: list[str] | None = None) -> int:
         "files_counted": len(walk.files),
         "files_skipped_excluded": walk.skipped_excluded,
         # The repo's own `.coyodex/.ignore`, recorded in the artifact so a reader of the map can
-        # always see what the tree measurement was told to leave out, and on what patterns.
+        # always see what the tree measurement was told to leave out, and on what patterns. Per
+        # PATTERN, not just the total: a pattern that removed nothing is a typo or a moved tree, and
+        # the total is exactly where that disappears.
         "files_skipped_ignored": walk.skipped_ignored,
-        "ignore_patterns": walk.ignore.patterns,
+        "ignore_patterns": list(ignore_rep.per_rule) if ignore_rep else [],
+        "ignore_patterns_unused": list(ignore_rep.unused) if ignore_rep else [],
         "languages_seen": dict(sorted(lang_counts.items(), key=lambda kv: -kv[1])),
         "languages_with_symbols": sym_meta["languages_with_symbols"],
         "languages_seen_without_extractor": sym_meta["languages_seen_without_extractor"],
@@ -488,6 +500,8 @@ def main(argv: list[str] | None = None) -> int:
         + (f"  .coyodex/.ignore: {walk.skipped_ignored} file(s) excluded by "
            f"{len(walk.ignore.rules)} pattern(s) — this narrows the tree the coverage check "
            f"re-measures too\n" if walk.ignore else "")
+        + (f"  .coyodex/.ignore: {len(ignore_rep.unused)} pattern(s) decided NOTHING — "
+           f"{', '.join(ignore_rep.unused)}\n" if ignore_rep and ignore_rep.unused else "")
         + f"  {coverage['files_counted']} files, {weight['loc']} LOC; "
         f"git={'yes' if git_ok else 'NO'}, tree-sitter={'yes' if ts_ok else 'NO'}\n"
         f"  heaviest top-level: " + ", ".join(f"{c['path']}({c['loc']})" for c in top) + "\n"

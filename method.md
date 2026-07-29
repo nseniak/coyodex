@@ -670,13 +670,26 @@ are untyped); the literal **`entity-relations`** silences the isolated-entities 
 whose cards legitimately relate to nothing — an event log, a settings bag).
 Never reword prose to dodge a heuristic — record the exception instead.
 
-Every literal is read **line-leading with a separator** — `channel-ends: the consumers are all
-third-party` — so a sentence that merely uses the word never silences anything. And every literal
-is scoped to its own advisory: recording `isolated` (components) does not quiet `entity-relations`
+Every literal is read **line-leading**, followed by a separator (`:`, `(`, an em/en dash, or a
+spaced ` - `) or nothing else on the line — `channel-ends: the consumers are all third-party` — so
+a sentence that merely uses the word never silences anything, and a compound that only *starts*
+with a literal (`store-front redesign: …`) is not a record either. Element **ids** (`S7`, `UC5`,
+`C18`, `root`) are not words, so those still read anywhere in the body: `SF40, SF41: <why>` records
+both. And every literal is scoped to its own advisory: recording `isolated` (components) does not quiet `entity-relations`
 (entity cards), and `messaging` (no nameable channels at all) does not quiet `channel-payload`
-(nameable channels carrying no domain type). Where a `runs-in` record suppresses more than one
-deployment finding, `validate` still prints the **count** of what it suppressed — a silence you
-cannot see is indistinguishable from having no findings.
+(nameable channels carrying no domain type).
+
+**Two escapes are deliberately family-wide, and both report what they swallowed.** `runs-in` covers
+every `runs_in` finding in the map and a `UCn`/`SFn` id covers both granularity signals for its
+element — one decision, recorded once. The risk is that the recorded *why* is usually about a single
+finding while the literal silences the rest, so in both cases `validate` prints a line naming the
+**count** and the **groups** it suppressed: `4 deployment advisory/advisories suppressed by the
+recorded 'runs-in' exception, across 2 finding group(s) — 3 × deployment quality …; 1 × self-started
+entry points with no host unit`, and `1 granularity advisory/advisories suppressed by recorded
+flow/sub-flow id(s): SF20 (the fused-goal name smell)`. The line fires on the FIRST suppression, not
+only on the second — a silence you cannot see is indistinguishable from having no findings. Neither
+line can itself be silenced. Read it: if the why you wrote covered only one of the listed groups,
+re-read the rest by validating a copy with the record removed.
 
 **Wire what the prose claims.** `validate` emits one aggregated advisory for components carrying **no
 backbone edge and no `messaging` role** — code the model shows connected to nothing. Every view walks

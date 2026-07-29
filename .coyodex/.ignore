@@ -5,7 +5,10 @@
 # analysed tree it would inflate the weight map, skew the component expectation E, and show up
 # forever as an unreferenced directory in coyodex's self-map. It is not part of the product.
 #
-# The trailing entries cover the artifacts a build OVER the fixture writes back into it
-# (`.coyodex/` is already a built-in exclusion, but the fixture's own map/eval dirs are named
-# here so a reader of this file can see the whole story in one place).
+# ONE entry is the whole file, and it is deliberately the only one. A wildcard-free pattern covers
+# everything beneath it, so the artifacts a build OVER the fixture writes back into it
+# (`eval/fixtures/trapdoor/.coyodex/`, `.coyodex-eval/`) are already inside this line — and both of
+# those names are built-in exclusions besides. Naming them again would add patterns that remove
+# nothing, which `validate` now reports as patterns that decided nothing. If you add a line here,
+# check the count it reports: a zero means the line is not doing what you think.
 eval/fixtures/trapdoor/
