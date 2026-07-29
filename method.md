@@ -679,7 +679,7 @@ summary carries only the top-5 dirs and the whole-repo E — while the harvest p
 tree** and the **per-slice E**, which live only inside the JSON. So there is a read command:
 
 ```
-.venv/bin/coyodex preindex --report [--depth N] [--top N]   # weight tree + per-dir E + coverage
+.venv/bin/coyodex preindex --report --root <repo> [--depth N] [--top N]   # weight tree + per-dir E + coverage
 ```
 
 Use it instead of hand-parsing. (All four measured builds wrote throwaway
@@ -855,6 +855,25 @@ synthesis → parallel trace.**
   `deployment[]` units exist but no component sets `runs_in`, and flags a formula-filled `runs_in`.
   Keep fragment argument order stable and author the reconcile ids against the assembled ids (dedup
   survivors are first-occurrence-in-argument-order, so reordering fragments can shift surviving ids).
+  - **Above ~30 assignments, generate the file — `coyodex reconcile`.** Authoring the JSON by hand is
+    fine for a small map, but it wants explicit id LISTS, and on a large map that is hundreds of ids
+    nobody types correctly. Write RULES against the fact you actually know — the source path — and let
+    the tool resolve them into ids against the real map:
+    ```
+    .venv/bin/coyodex reconcile --rules rules.json --map .coyodex/project-map.json \
+                                --out .coyodex/reconcile.json [--dry-run]
+    ```
+    ```json
+    { "rules": [ {"source_glob": "mee6/plugins/*",     "subsystem": "S12"},
+                 {"source_glob": "gateway/**",         "runs_in": ["gateway"]},
+                 {"ids": ["E7","E8"],                  "subdomain": "SD2"} ] }
+    ```
+    It reports **every rule that matched nothing** instead of silently emitting an empty assignment —
+    which is the whole point: a live 429-component build wrote a throwaway generator for this and the
+    script reported 429 assignments while resolving **zero** components, because nothing checked the
+    ids it emitted against the map. Output is an ordinary reconcile file, so `assemble --reconcile`
+    stays the one code path that writes. Later rules win on the same (element, field), so a broad rule
+    can be followed by a narrow override.
 - Phase 3 Trace (fan out, one agent per use case; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
   Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps —
@@ -960,7 +979,11 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   runs (fix any blocking `why:`-ref contradiction; reconcile the read-before-create / actor advisories),
   take the audit's **L2 grounding worklist** and disprove it against the code (read it with
   `coyodex audit --json` — the machine-readable `{findings, worklist}` payload built for this
-  batching step; never regex-parse the human report). **Batch by theme/risk,
+  batching step; never regex-parse the human report; the same rule covers the model itself — look an
+  id up with **`coyodex dump`** (`--id` resolves kind/name/source/members, `--record` the full stored
+  record, `--edges` a node's in/out backbone edges, `--members` a subsystem's members) rather than
+  hand-parsing `project-map.json`, which is how a build ends up with a throwaway script that reads a
+  field the schema renamed). **Batch by theme/risk,
   don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group the claims into
   themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage), one
   fresh-context skeptic per batch, and for the riskiest claims (auth, scoping, encryption) run **N
@@ -1030,6 +1053,16 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
     drop that must survive a rebuild → reconcile file; a terminal anchor fix after the last assemble →
     `fix`. `--reconcile drop_edges` runs after the entity-edge derivation and heals the riding flow
     steps exactly like `fix drop-edge`, so a dropped `C→E` edge is not silently re-derived.
+  - **A duplicated domain relation BLOCKS validate — resolve it with `coyodex fix dedup-relation`.**
+    The same `E→E` relation declared on both entity cards (or twice on one) is a hard validate error,
+    not an advisory, so the build cannot finish until you pick a survivor. Run it with no `--drop` to
+    LIST each duplicate with the token that resolves it, then re-run naming the occurrence to remove:
+    ```
+    .venv/bin/coyodex fix dedup-relation --map .coyodex/project-map.json
+    .venv/bin/coyodex fix dedup-relation --map .coyodex/project-map.json --drop <En:verb:Em>
+    ```
+    Same ordering rule as the other `fix` verbs: it edits the assembled map, so run it AFTER the last
+    assemble, or fix the duplicate in the fragment and re-assemble instead.
 - Guardrails: all agents share the same schema + edge-verb vocabulary; Phase 1 produces
   the canonical node inventory FIRST (nodes before edges, agents reference nodes and
   never invent them); every agent keeps inferred-vs-verified labels + returns `file:line`;
