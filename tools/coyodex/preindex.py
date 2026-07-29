@@ -357,6 +357,16 @@ def report(argv: list[str]) -> int:
     fails = cov.get("symbol_parse_failure_count") or 0
     if fails:
         out.append(f"  symbol parse failures: {fails}")
+    # The one input that can hide a real gap from the check built to find gaps — so the report
+    # NAMES the patterns, never just the count. A reader who disagrees with the map's coverage can
+    # see immediately whether the tree or the ignore file is the reason.
+    ignored_n = cov.get("files_skipped_ignored") or 0
+    ignore_pats = list(cov.get("ignore_patterns") or [])
+    if ignore_pats:
+        out += ["", f"IGNORED BY .coyodex/.ignore — {_fmt_int(ignored_n)} file(s), "
+                    f"{len(ignore_pats)} pattern(s). These are OUT of the weight tree, out of E, "
+                    f"and out of the coverage check."]
+        out += [f"    {p}" for p in ignore_pats]
     out += ["", "Reconcile every item — this is advisory INPUT, never rows for the map (GR2);",
             "weight sets attention, your judgement sets altitude (GR5)."]
     print("\n".join(out))
@@ -401,9 +411,13 @@ def main(argv: list[str] | None = None) -> int:
 
     ts_ok = ts_available()
     coverage = {
-        "files_total_walked": len(walk.files) + walk.skipped_excluded,
+        "files_total_walked": len(walk.files) + walk.skipped_excluded + walk.skipped_ignored,
         "files_counted": len(walk.files),
         "files_skipped_excluded": walk.skipped_excluded,
+        # The repo's own `.coyodex/.ignore`, recorded in the artifact so a reader of the map can
+        # always see what the tree measurement was told to leave out, and on what patterns.
+        "files_skipped_ignored": walk.skipped_ignored,
+        "ignore_patterns": walk.ignore.patterns,
         "languages_seen": dict(sorted(lang_counts.items(), key=lambda kv: -kv[1])),
         "languages_with_symbols": sym_meta["languages_with_symbols"],
         "languages_seen_without_extractor": sym_meta["languages_seen_without_extractor"],
@@ -435,7 +449,10 @@ def main(argv: list[str] | None = None) -> int:
     top = weight["children"][:5]
     sys.stderr.write(
         f"preindex -> {out_path}\n"
-        f"  {coverage['files_counted']} files, {weight['loc']} LOC; "
+        + (f"  .coyodex/.ignore: {walk.skipped_ignored} file(s) excluded by "
+           f"{len(walk.ignore.rules)} pattern(s) — this narrows the tree the coverage check "
+           f"re-measures too\n" if walk.ignore else "")
+        + f"  {coverage['files_counted']} files, {weight['loc']} LOC; "
         f"git={'yes' if git_ok else 'NO'}, tree-sitter={'yes' if ts_ok else 'NO'}\n"
         f"  heaviest top-level: " + ", ".join(f"{c['path']}({c['loc']})" for c in top) + "\n"
         f"  symbols: {sym_meta['files_parsed']} files parsed, "

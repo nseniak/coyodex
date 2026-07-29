@@ -83,6 +83,31 @@ make start
 It serves a landing page at `http://127.0.0.1:8765/`. Every project you map shows up there as a card;
 click it to open the map. Leave the server running.
 
+### Leaving code out of the map
+
+Some committed code isn't part of what the map should describe — a vendored copy, generated output
+your build checks in, a fixture tree. Since it *is* committed, `.gitignore` can't say that. List it
+in `.coyodex/.ignore` instead:
+
+```
+# .coyodex/.ignore — one pattern per line, gitignore-style
+vendor/                      # a plain name covers everything under it
+generated/**                 # * stays inside one folder level, ** goes deeper
+!generated/hand_written.py   # ! puts something back; the last matching line wins
+```
+
+Anything listed here is left out of the map's sizing and out of its coverage checks.
+
+Two things to know:
+
+- **It's not the same as mapping something coarsely.** If a folder is a real part of your product and
+  you just want it drawn as one box, that's a different setting the map records for you — don't put it
+  here. This file is for code the map isn't meant to describe at all.
+- **coyodex tells you it's on.** Every time it measures your code it reports how many files this file
+  removed and on which patterns, and it flags a pattern that matched nothing. That's deliberate: the
+  checks that find gaps can't see inside what you exclude, so excluding too much would quietly make
+  the map look more complete than it is.
+
 ### Analyzing changes
 
 **1. Edit your code.** Work as usual.

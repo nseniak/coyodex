@@ -20,9 +20,11 @@ from __future__ import annotations
 import ast
 import math
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from coyodex.ignorefile import IgnoreSpec, load_ignore
 
 from coyodex.pysrc import parse_python
 
@@ -156,6 +158,11 @@ class WalkResult:
     root: Path
     used_git: bool               # True if the tracked-file set came from `git ls-files`
     skipped_excluded: int        # files dropped by the exclude rules
+    # `.coyodex/.ignore` — counted SEPARATELY from the built-in excludes on purpose. The built-ins
+    # are conventions nobody chose; these are a repo's own declaration, and the one input that can
+    # hide a real gap from the coverage check whose job is to find gaps. Callers report it.
+    skipped_ignored: int = 0
+    ignore: IgnoreSpec = field(default_factory=lambda: IgnoreSpec())
 
 
 def iter_source_files(root: Path) -> WalkResult:
@@ -181,14 +188,22 @@ def iter_source_files(root: Path) -> WalkResult:
     except (OSError, subprocess.SubprocessError):
         rels = _walk_rels(root)
 
+    ignore = load_ignore(root)
     files: list[Path] = []
     skipped = 0
+    ignored = 0
     for rel in rels:
         if _excluded(rel):
             skipped += 1
             continue
+        # The repo's own declaration, applied last so it is always visible as its own count rather
+        # than blended into the built-in excludes.
+        if ignore and ignore.match(rel.as_posix()):
+            ignored += 1
+            continue
         files.append(root / rel)
-    return WalkResult(files=files, root=root, used_git=used_git, skipped_excluded=skipped)
+    return WalkResult(files=files, root=root, used_git=used_git, skipped_excluded=skipped,
+                      skipped_ignored=ignored, ignore=ignore)
 
 
 def _walk_rels(root: Path) -> list[Path]:

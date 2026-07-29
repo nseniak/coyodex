@@ -244,6 +244,41 @@ def file_level_coverage(refs: set[str], root: Path,
             "'Coverage exceptions' heading."]
 
 
+def ignore_disclosure(root: Path) -> list[str]:
+    """Advisory (non-blocking): say out loud that `.coyodex/.ignore` narrowed the tree.
+
+    Every other coverage check here re-measures the repo INDEPENDENTLY of the pre-index (GR4), so a
+    map cannot look complete just because generation said it was. An ignore file is the one input
+    that breaks that: the checker and the checked now read the same declaration, so an over-broad
+    pattern hides a real gap from BOTH. The feature is still worth having — a trap fixture or a
+    vendored tree genuinely is not part of what the map describes — but it must never be silent, or
+    it becomes the "advisory waved through" failure one level down: the map reads complete because
+    the evidence of incompleteness was excluded before anyone looked.
+
+    So this fires whenever the file is in effect, names the patterns, and says how many files went.
+    An unused pattern is called out separately: it is either a typo or a tree that moved, and either
+    way the author believes something is excluded that is not."""
+    from coyodex.preindex_lib import iter_source_files
+
+    root = root.resolve()
+    walk = iter_source_files(root)
+    spec = walk.ignore
+    if not spec:
+        return []
+    out: list[str] = [
+        f"`.coyodex/.ignore` is in effect: {walk.skipped_ignored} file(s) removed from the analysed "
+        f"tree by {len(spec.rules)} pattern(s) — {', '.join(spec.patterns)}. These are out of the "
+        f"weight tree, out of the component expectation E, and out of every coverage check above, "
+        f"so those checks cannot report a gap inside them. Confirm the patterns still describe code "
+        f"the map is not meant to cover."
+    ]
+    if spec.bad_lines:
+        out.append(f"`.coyodex/.ignore` has {len(spec.bad_lines)} line(s) that match nothing and "
+                   f"were dropped: {', '.join(repr(b) for b in spec.bad_lines)} — a pattern that "
+                   f"cannot fire reads as coverage the author never got.")
+    return out
+
+
 def granularity_advisory(n_components: int, root: Path) -> list[str]:
     """Advisory (non-blocking, opt-in via --check-coverage): the map's COMPONENT (leaf) count vs the
     code-derived granularity expectation E — the leaf anchor (one component ≈ one ≤10-file/≤3-kLOC

@@ -590,6 +590,36 @@ in several places), and — when you pass `--pairs` a `{component: [paths]}` map
   it skipped and the languages without symbol data (symbols are deep for Python; other languages
   need the tree-sitter pack). An unparsed region is a region you still owe a read.
 
+**Code the map is not meant to describe — `.coyodex/.ignore`.** A repo may commit code that is
+genuinely outside the product: a fixture tree built to exercise the tooling, a vendored copy git
+tracks, a scratch area. `.gitignore` cannot say it (the files are meant to be committed), so the repo
+declares it once next to the map, in gitignore-like patterns:
+
+```
+.coyodex/.ignore
+trapdoor/                 # a wildcard-free pattern covers everything beneath it
+generated/**              # * stays inside one segment; ** spans segments
+!generated/hand_written.py   # ! negates; the LAST matching line wins
+```
+
+Everything that measures the tree honours it — the weight tree, the component expectation E, and
+`validate --check-coverage`. **Do not confuse it with a `Coverage exceptions` heading.** They answer
+different questions and are not interchangeable:
+
+| | says | use when |
+|---|---|---|
+| `Coverage exceptions` (extras) | *mapped, deliberately coarse — stop warning* | a real part of the product folded into one box |
+| `.coyodex/.ignore` | *not part of the analysed tree at all* | code the map is not meant to describe |
+
+**Read the disclosure it prints; do not write patterns to quiet a warning.** Every coverage check
+here re-measures the repo independently of the pre-index (GR4) precisely so a map cannot look
+complete just because generation said so. An ignore file is the ONE input both sides read, so an
+over-broad pattern hides a real gap from the very check that exists to find gaps — the
+"advisory waved through" failure, one level down. That is why `preindex --report` names the patterns
+and `validate` always emits an advisory saying how many files went and on what rules. When you did
+not author the file, reconcile that advisory like any other: confirm the patterns still describe code
+the map is not meant to cover.
+
 **Component granularity — the leaf rule (what "one component" means).** One component ≈ one
 module-/folder-/deployable-sized unit — roughly a directory of **≤ ~10 source files / ≤ ~3 kLOC**
 with one purpose. At each source folder decide: **component-shaped → stop** (it is a leaf; its

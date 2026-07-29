@@ -66,6 +66,7 @@ from coyodex.validate_analysis import (
     compression_coverage_from_refs,
     file_level_coverage,
     granularity_advisory,
+    ignore_disclosure,
     strip_anchor,
 )
 
@@ -2383,6 +2384,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
             model_path.resolve().parent.parent if model_path is not None else None)
         if walk_root is not None:
             refs = referenced_paths(m, walk_root.resolve())
+            # FIRST, so the reader learns the tree was narrowed before reading any "no gaps here"
+            # result computed over the narrowed tree.
+            warnings.extend(ignore_disclosure(walk_root))
             warnings.extend(compression_coverage_from_refs(refs, walk_root, cov_dirs))
             # File-level coverage: the loose-file slice-seam gap the directory-granular check above
             # misses (a component-less .py inside an otherwise-covered dir). Same refs + recorded dirs.

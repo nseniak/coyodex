@@ -29,13 +29,13 @@ Stdlib-only (the cli.py firewall).
 """
 from __future__ import annotations
 
-import fnmatch
 import json
 import sys
 from pathlib import Path
 
 from coyodex.anchors import strip_anchor
 from coyodex.model import Component, Dep, Entity, ProjectModel, load_model_path
+from coyodex.pathmatch import matches
 
 # field → the element type it may be set on (mirrors reconcile._SET_FIELD_OWNER, which validates
 # the emitted file again at assemble time — this is the early, friendlier report).
@@ -61,44 +61,10 @@ def _source_of(el: object) -> str:
     return strip_anchor(raw).rstrip("/") if raw else ""
 
 
-def _match_segments(pat: list[str], path: list[str]) -> bool:
-    """Segment-wise glob match. `**` consumes zero or more whole segments; every other segment is
-    matched by `fnmatch` against ONE path segment (a segment contains no `/`, so `*` cannot cross a
-    directory boundary — the shell/.gitignore distinction).
-
-    Written as an explicit walk rather than a translated pattern because the string-surgery version
-    of this was wrong in four separate ways at once: `a/*/b` never matched (the tail was measured
-    from the FIRST star, so any later segment read as "crossing a boundary"), `a/**/nope` matched
-    everything under `a/` (everything after `**` was discarded), a leading `**` matched every path
-    in the map, and a trailing `/` matched nothing."""
-    if not pat:
-        return not path
-    head, rest = pat[0], pat[1:]
-    if head == "**":
-        if not rest:
-            return True                                   # trailing ** — everything at/below here
-        return any(_match_segments(rest, path[k:]) for k in range(len(path) + 1))
-    if not path or not fnmatch.fnmatchcase(path[0], head):
-        return False
-    return _match_segments(rest, path[1:])
-
-
-def _matches(pattern: str, path: str) -> bool:
-    """Does this element's source path satisfy the rule's glob?
-
-    A wildcard-free pattern additionally matches everything BENEATH it, so `mee6/plugins` and
-    `mee6/plugins/` both behave like the directory the author obviously meant."""
-    if not path:
-        return False
-    pat = [s for s in pattern.strip().strip("/").split("/") if s]
-    parts = [s for s in path.strip("/").split("/") if s]
-    if not pat:
-        return False
-    if _match_segments(pat, parts):
-        return True
-    if not any(ch in pattern for ch in "*?"):             # a plain directory prefix
-        return len(parts) > len(pat) and parts[:len(pat)] == pat
-    return False
+# The glob matcher moved to `coyodex.pathmatch` when `.coyodex/.ignore` grew the second caller —
+# one implementation, so the two path-rule surfaces can never drift apart. Re-exported under the
+# old private name: it is this module's matching contract, and tests reach for it here.
+_matches = matches
 
 
 def load_rules(path: Path) -> list[dict]:
