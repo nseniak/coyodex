@@ -605,7 +605,14 @@ def _recorded_ids(m: ProjectModel, heading: str, prefixes: tuple[str, ...]) -> s
 # A recorded coverage-exception line names a repo-relative DIRECTORY at the line start followed by a
 # separator — "mee6/plugins/: coarse whole-monorepo altitude". Line-leading + separator, one per line
 # (the same discipline as `_RECORD_LINE`), so prose naming another path mid-sentence can't pre-exempt it.
-_COVERAGE_DIR_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*([\w./\-]+?)/?\**\s*[:(—–-]")
+# The separator excludes a BARE hyphen and accepts a SPACED one. A hyphen is legal inside a
+# directory name, and the path token is non-greedy, so a bare hyphen used to end the match at the
+# first one: `third-party/: vendored` recorded `third`, and `mee6-legacy/plugins/: coarse` recorded
+# `mee6`. That silences coverage findings across every sibling sharing the truncated prefix — this
+# escape OVER-exempts when it misreads, which is the dangerous direction. A spaced hyphen can never
+# sit inside a path segment, so `docs - kept deliberately coarse` still records.
+# (Same treatment as `balance_lib._LITERAL_LINE`; see its note.)
+_COVERAGE_DIR_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*([\w./\-]+?)/?\**(?:\s*[:(—–]|\s+-\s)")
 
 
 def _recorded_coverage_dirs(m: ProjectModel) -> set[str]:
@@ -1500,25 +1507,33 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
     #    without the deps legend, wrote `dep: null` on every row, and the coverage rule above
     #    (adoption-gated on `dep`) silently never engaged. Modes that legitimately have no dep
     #    (embedded rides its parent; transient/in-code/enum live nowhere) are exempt.
-    if "store" not in balance_lib._exceptions(m):
-        unstructured = [e.id for e in m.entities
-                        if e.store is not None and not e.store.dep and not e.store.mode]
-        if unstructured:
-            warnings.append(
-                f"{len(unstructured)} entity store(s) are unstructured (notes-only: "
-                f"{', '.join(unstructured[:8])}{', …' if len(unstructured) > 8 else ''}) — set "
-                "`store.dep`/`container`/`mode` so persistence is queryable, or record the literal "
-                "`store` under a 'Balance exceptions' extras heading")
-        deplinkable = [e.id for e in m.entities
-                       if e.store is not None and not e.store.dep and e.store.container
-                       and e.store.mode in ("collection", "cache")]
-        if deplinkable:
-            warnings.append(
-                f"{len(deplinkable)} entity store(s) name a container but link no `dep` "
-                f"({', '.join(deplinkable[:8])}{', …' if len(deplinkable) > 8 else ''}) — the "
-                "persistence-coverage rule can't engage without the D-id; link `store.dep` to the "
-                "datastore dep (give the domain agent the deps legend, or backfill at synthesis), "
-                "or record the literal `store` under a 'Balance exceptions' extras heading")
+    # The `store` literal guards THREE distinct findings, so — exactly like `runs-in` — they are
+    # gathered RAW and the escape is applied once, with a count. A record written about one of them
+    # silences the other two, and a suppression you cannot see is indistinguishable from having no
+    # findings (the failure this codebase keeps re-learning: see `_runs_in_family_warnings`).
+    hygiene: list[tuple[str, str]] = []   # (group label for the count line, warning text)
+    unstructured = [e.id for e in m.entities
+                    if e.store is not None and not e.store.dep and not e.store.mode]
+    if unstructured:
+        hygiene.append((
+            "unstructured (notes-only) stores",
+            f"{len(unstructured)} entity store(s) are unstructured (notes-only: "
+            f"{', '.join(unstructured[:8])}{', …' if len(unstructured) > 8 else ''}) — set "
+            "`store.dep`/`container`/`mode` so persistence is queryable, or record the literal "
+            "`store` under a 'Balance exceptions' extras heading (which silences the WHOLE store "
+            "family, not just this one)"))
+    deplinkable = [e.id for e in m.entities
+                   if e.store is not None and not e.store.dep and e.store.container
+                   and e.store.mode in ("collection", "cache")]
+    if deplinkable:
+        hygiene.append((
+            "a container named but no `dep` linked",
+            f"{len(deplinkable)} entity store(s) name a container but link no `dep` "
+            f"({', '.join(deplinkable[:8])}{', …' if len(deplinkable) > 8 else ''}) — the "
+            "persistence-coverage rule can't engage without the D-id; link `store.dep` to the "
+            "datastore dep (give the domain agent the deps legend, or backfill at synthesis), "
+            "or record the literal `store` under a 'Balance exceptions' extras heading (which "
+            "silences the WHOLE store family, not just this one)"))
         #  * a container that reads as PROSE, not a name — the live-map failure this caught: a map
         #    recorded `memberships subscriptions` where the code says
         #    `__collection__ = "memberships_subscriptions"`, and `character features` / `rank card
@@ -1528,18 +1543,29 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
         #    tables, buckets, key prefixes) don't carry one. Only the modes whose container IS a
         #    physical name are checked: `transient`/`in-code`/`enum` legitimately describe ("derived",
         #    "Chargebee API") and `embedded` rides its parent, so none of them can trip this.
-        prose = [e.id for e in m.entities
-                 if e.store is not None and e.store.mode in ("collection", "cache")
-                 and " " in (e.store.container or "").strip()]
-        if prose:
-            warnings.append(
-                f"{len(prose)} entity store(s) name a container that reads as prose, not a name "
-                f"({', '.join(prose[:8])}{', …' if len(prose) > 8 else ''}) — `container` is the "
-                "LITERAL compartment name (`memberships_subscriptions`), not a description of it "
-                "('memberships subscriptions'); a name with a space in it is almost never the real "
-                "one, and a reader can't find the collection from a paraphrase. Correct the rows "
-                "against the code, or record the literal `store` under a 'Balance exceptions' "
-                "extras heading")
+    prose = [e.id for e in m.entities
+             if e.store is not None and e.store.mode in ("collection", "cache")
+             and " " in (e.store.container or "").strip()]
+    if prose:
+        hygiene.append((
+            "a container that reads as prose, not a name",
+            f"{len(prose)} entity store(s) name a container that reads as prose, not a name "
+            f"({', '.join(prose[:8])}{', …' if len(prose) > 8 else ''}) — `container` is the "
+            "LITERAL compartment name (`memberships_subscriptions`), not a description of it "
+            "('memberships subscriptions'); a name with a space in it is almost never the real "
+            "one, and a reader can't find the collection from a paraphrase. Correct the rows "
+            "against the code, or record the literal `store` under a 'Balance exceptions' "
+            "extras heading (which silences the WHOLE store family, not just this one)"))
+    if "store" not in balance_lib._exceptions(m):
+        warnings.extend(text for _label, text in hygiene)
+    elif hygiene:
+        # Suppressed, but never silently — name every group the one literal swallowed, so a record
+        # written about one of them cannot hide the other two.
+        warnings.append(
+            f"{len(hygiene)} store-hygiene advisory/advisories suppressed by the recorded `store` "
+            f"exception — {'; '.join(label for label, _t in hygiene)}. That one literal silences "
+            "EVERY store-hygiene finding, not just the one it was written about; if the "
+            "justification only covered one, re-read the rest by validating a copy without it.")
     return warnings
 
 

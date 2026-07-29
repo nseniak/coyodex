@@ -16,22 +16,37 @@ So this file checks the SEAM, not the behaviour:
 
   (a) every command (and `fix` verb) the CLI offers is named somewhere in the method docs
   (b) every CLI flag the method tells a build to pass is accepted by that command
-  (b2) …and is actually READ by the code path that runs for that command form
-  (c) every advisory the validator prints names a way to record the decision, or is allowlisted
+  (b2) …and is actually READ — not merely parsed and thrown away — by the code path that runs
+       for that command form
+  (c) every advisory the validator prints names a way to record the decision, or is allowlisted,
+      and every escape a message NAMES is actually read by the check that prints it
   (d) every extras heading the method tells a lead to write is read by some tool
 
 Pure text + AST. No fixture, no LLM, ~1 second. This is the cheapest layer and it would have
 caught the worst defect in the study.
 
-**Three of these FAIL on today's code, and that is the deliverable** — the failures are the
-finding, not a bug in the test. Do not "fix" them by editing method.md, the CLI, or the
-validator; that is a separate decision for the maintainer.
+**What a static layer can and cannot prove.** Every assertion here is about the SHAPE of the
+code — a literal in a parser, a call in a check, a name in a doc. That is enough to catch a
+seam that was never wired, and it is NOT enough to catch a seam that is wired to the wrong
+thing. Where the difference matters the claim is stated narrowly in the test's own docstring
+and the behavioural half is named: `tests/test_trapdoor_tools.py` runs the real tools against a
+real tree and is the layer that proves the wiring WORKS. A static test that oversold itself is
+the same prose-vs-reality gap this layer exists to close, so the docstrings below say only what
+they check.
+
+**History.** Three of these tests failed when the layer landed; the failures were the
+deliverable. All three findings have since been fixed in the CLI, the method docs and the
+validator (`coyodex dump` / `reconcile` / `fix dedup-relation` are named in the method,
+`preindex --report` honours `--root`, and the unowned-entity advisory carries a real escape),
+so the suite is green and each test is now a standing regression gate on the fix.
 """
 from __future__ import annotations
 
 import ast
 import re
 import sys
+import textwrap
+from dataclasses import dataclass
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -117,6 +132,118 @@ def make_module_source(command: str) -> str:
     return (TOOLS / f"{COMMAND_MODULE[command]}.py").read_text(encoding="utf-8")
 
 
+def make_code_flag_literals(command: str) -> frozenset[str]:
+    """Every `--flag` literal that appears in EXECUTABLE code in a command's module.
+
+    Deliberately not a text search over the file: every command module carries a `USAGE` string
+    that spells out its whole flag vocabulary, so "the flag appears in the source" is satisfied by
+    the help text alone — a flag that was documented and then never wired would pass. Counting
+    only literals inside a function body is what makes the check about the parser."""
+    src = make_module_source(command)
+    found: set[str] = set()
+    for fn in ast.walk(ast.parse(src)):
+        if not isinstance(fn, ast.FunctionDef):
+            continue
+        found.update(n.value for n in ast.walk(fn)
+                     if isinstance(n, ast.Constant) and isinstance(n.value, str)
+                     and n.value.startswith("--"))
+    return frozenset(found)
+
+
+# --- the tools' own shape, shared by the flag audit and the escape audit ----------------
+
+_BLOCKS = (ast.If, ast.For, ast.While, ast.With, ast.Try)
+
+#: The one function that is a 200-line ORCHESTRATOR rather than a focused check. Escape wiring
+#: found anywhere inside it belongs to some other rule, so an advisory it prints is credited only
+#: with the wiring in its own enclosing block. Without this, deleting the escape a message
+#: advertises would still "pass" against an unrelated escape 200 lines away.
+ORCHESTRATOR = "validate_model"
+
+
+@dataclass(frozen=True)
+class ToolFunction:
+    """One function defined in the tools: its source and the names it calls."""
+
+    name: str
+    src: str
+    calls: frozenset[str]
+
+
+def _src_of(node: ast.AST, src_lines: list[str]) -> str:
+    start = getattr(node, "lineno", 0)
+    end = getattr(node, "end_lineno", None) or start
+    return "\n".join(src_lines[start - 1:end])
+
+
+def _called_names(node: ast.AST) -> frozenset[str]:
+    """Every name invoked under `node` — `f(...)` as `f`, `x.f(...)` as `f`."""
+    names: set[str] = set()
+    for n in ast.walk(node):
+        if isinstance(n, ast.Call):
+            if isinstance(n.func, ast.Name):
+                names.add(n.func.id)
+            elif isinstance(n.func, ast.Attribute):
+                names.add(n.func.attr)
+    return frozenset(names)
+
+
+def make_tool_functions(*files: str) -> dict[str, ToolFunction]:
+    """name -> the function's source and call targets, across the named tool modules.
+
+    Keyed by bare name because the checks below follow calls the way a reader does (`_exceptions(m)`
+    reads the same whether it was imported or defined here). The tools define no two functions
+    under one name; a collision keeps the first and is a fixture bug, not a silent merge."""
+    out: dict[str, ToolFunction] = {}
+    for f in files:
+        src = (TOOLS / f).read_text(encoding="utf-8")
+        lines = src.splitlines()
+        for fn in ast.walk(ast.parse(src)):
+            if isinstance(fn, ast.FunctionDef) and fn.name not in out:
+                out[fn.name] = ToolFunction(name=fn.name, src=_src_of(fn, lines),
+                                            calls=_called_names(fn))
+    return out
+
+
+def make_dispatch_tables(src: str) -> dict[str, frozenset[str]]:
+    """table name -> the tool functions it names as values.
+
+    A producer reached through a module-level DISPATCH TABLE is not an `ast.Call` anywhere, so the
+    call graph alone cannot see it. `_RUNS_IN_FAMILY` is the live case: it pairs each `runs-in`
+    producer with a label, and one wrapper walks the table and applies the escape once — which is
+    precisely the fix that made the suppression countable. Without this, every producer in such a
+    table reads as "advertises a heading nothing reads"."""
+    out: dict[str, set[str]] = {}
+    for node in ast.parse(src).body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)) or node.value is None:
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        names = [t.id for t in targets if isinstance(t, ast.Name)]
+        if not names:
+            continue
+        referenced = {n.id for n in ast.walk(node.value) if isinstance(n, ast.Name)}
+        for name in names:
+            out.setdefault(name, set()).update(referenced)
+    return {k: frozenset(v) for k, v in out.items() if v}
+
+
+def make_tool_callers(fns: dict[str, ToolFunction], tables: dict[str, frozenset[str]] | None = None
+                      ) -> dict[str, frozenset[str]]:
+    """callee name -> the functions that call it. The inverse of the call table above.
+
+    A function that walks a dispatch table counts as a caller of every tool function that table
+    names — otherwise table-driven wiring reads as no wiring at all."""
+    out: dict[str, set[str]] = {}
+    for fn in fns.values():
+        for callee in fn.calls:
+            out.setdefault(callee, set()).add(fn.name)
+        for table, members in (tables or {}).items():
+            if re.search(rf"\b{re.escape(table)}\b", fn.src):
+                for member in members & fns.keys():
+                    out.setdefault(member, set()).add(fn.name)
+    return {k: frozenset(v) for k, v in out.items()}
+
+
 def _render_str(node: ast.AST) -> str:
     """The literal skeleton of a message expression — f-string holes become `{}`."""
     if isinstance(node, ast.Constant) and isinstance(node.value, str):
@@ -136,25 +263,42 @@ _ESCAPE_MACHINERY = ("_exceptions(", "_recorded_ids(", "cov_dirs", "deployment_l
                      "_deployment_quality_warnings")
 
 
-def make_advisory_sites() -> tuple[tuple[int, str, str, bool], ...]:
-    """(line, function, message-skeleton, function_has_escape_machinery) for every advisory the
-    validator can PRINT.
+@dataclass(frozen=True)
+class AdvisorySite:
+    """One advisory the validator can PRINT, with everything the audits below need."""
+
+    line: int
+    function: str
+    message: str
+    #: some escape machinery is present in the check's own source (see `_ESCAPE_MACHINERY`).
+    wired: bool
+    #: The region that must hold the wiring for an escape this message NAMES. For a focused check
+    #: that is the whole function; inside the ORCHESTRATOR it is the advisory's own enclosing
+    #: block, so an unrelated escape elsewhere in the orchestrator cannot stand in for it.
+    scope_src: str
+    #: The names called inside `scope_src` — the roots of the transitive "does this read the
+    #: heading?" walk.
+    scope_calls: frozenset[str]
+
+
+def make_advisory_sites() -> tuple[AdvisorySite, ...]:
+    """Every advisory the validator can PRINT.
 
     An advisory is a string appended to a warnings list, or returned as the first element of a
     warning function's literal list. Read by AST rather than by regex so a reformatted call
-    still counts. The fourth field separates two different failures: a check with NO escape at
-    all, and a check that HAS one whose message never tells the reader about it."""
+    still counts. `wired` separates two different failures: a check with NO escape at all, and a
+    check that HAS one whose message never tells the reader about it."""
     src = (TOOLS / "validate_model.py").read_text(encoding="utf-8")
     src_lines = src.splitlines()
-    sites: list[tuple[int, str, str, bool]] = []
+    sites: list[AdvisorySite] = []
     for fn in ast.walk(ast.parse(src)):
         if not isinstance(fn, ast.FunctionDef):
             continue
-        fn_src = "\n".join(src_lines[fn.lineno - 1:(fn.end_lineno or fn.lineno)])
+        fn_src = _src_of(fn, src_lines)
         # `validate_model` is the 200-line ORCHESTRATOR, not a check: escape machinery anywhere
         # inside it belongs to some other rule, so crediting its warnings with it would label a
         # real gap as a wording problem. Every focused check is its own function.
-        wired = fn.name != "validate_model" and any(tok in fn_src for tok in _ESCAPE_MACHINERY)
+        wired = fn.name != ORCHESTRATOR and any(tok in fn_src for tok in _ESCAPE_MACHINERY)
         for node in ast.walk(fn):
             msg = ""
             if (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
@@ -169,32 +313,97 @@ def make_advisory_sites() -> tuple[tuple[int, str, str, bool], ...]:
                   and isinstance(node.value, ast.List) and node.value.elts):
                 msg = _render_str(node.value.elts[0])
             if len(msg) > 25:
-                sites.append((getattr(node, "lineno", fn.lineno), fn.name, msg, wired))
-    return tuple(sorted(set(sites)))
+                scope = _escape_scope(fn, node, src_lines)
+                sites.append(AdvisorySite(line=getattr(node, "lineno", fn.lineno),
+                                          function=fn.name, message=msg, wired=wired,
+                                          scope_src=scope[0], scope_calls=scope[1]))
+    return tuple(sorted(set(sites), key=lambda s: (s.line, s.function, s.message)))
 
 
-def make_flags_read_by(module: str, function: str) -> frozenset[str]:
-    """Every `--flag` literal that appears inside one function of a command module.
+def _escape_scope(fn: ast.FunctionDef, node: ast.AST,
+                  src_lines: list[str]) -> tuple[str, frozenset[str]]:
+    """The region an escape named by `node`'s message has to be wired in.
 
-    coyodex parses argv by hand (no argparse anywhere — see `cli.py`'s dependency firewall), so
-    "the parser accepts it" is "the flag literal is in the code that runs". Scoping to ONE
-    function is what makes the difference between accepted-and-used and accepted-and-ignored
-    visible."""
+    A focused check is small enough that the whole function is the honest scope. The ORCHESTRATOR
+    is not: it prints a handful of advisories of its own and also reads escapes on behalf of other
+    rules, so an advisory inside it is scoped to its own top-level block. That is the difference
+    between "this heading is read SOMEWHERE in a 200-line function" (which deleting the wiring
+    would survive) and "this heading is read by the code that decides THIS advisory"."""
+    if fn.name != ORCHESTRATOR:
+        return _src_of(fn, src_lines), _called_names(fn)
+    line = getattr(node, "lineno", 0)
+    for stmt in fn.body:
+        if isinstance(stmt, _BLOCKS) and stmt.lineno <= line <= (stmt.end_lineno or stmt.lineno):
+            return _src_of(stmt, src_lines), _called_names(stmt)
+    return _src_of(fn, src_lines), _called_names(fn)
+
+
+def _function_node(module: str, function: str) -> ast.FunctionDef:
     src = (TOOLS / f"{module}.py").read_text(encoding="utf-8")
     for fn in ast.walk(ast.parse(src)):
         if isinstance(fn, ast.FunctionDef) and fn.name == function:
-            found = {n.value for n in ast.walk(fn)
-                     if isinstance(n, ast.Constant) and isinstance(n.value, str)
-                     and n.value.startswith("--")}
-            return frozenset(found)
+            return fn
     raise AssertionError(f"{module}.py has no function {function}()")
+
+
+def _loaded_names(fn: ast.FunctionDef) -> frozenset[str]:
+    """Every name READ inside `fn` — assignment targets do not count."""
+    return frozenset(n.id for n in ast.walk(fn)
+                     if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load))
+
+
+def _flag_sites(fn: ast.FunctionDef) -> tuple[tuple[str, bool], ...]:
+    """(flag, the value this occurrence produces is consumed) for every `--flag` literal in `fn`.
+
+    coyodex parses argv by hand (no argparse anywhere — see `cli.py`'s dependency firewall), so
+    "the parser accepts it" is "the flag literal is in the code that runs". The literal alone is
+    not enough: `_ignored_root = _arg(argv, "--root")` mentions the flag and throws the answer
+    away, which is EXACTLY the measured defect. So an occurrence sitting in an assignment whose
+    targets are plain names that the function never reads back is marked discarded."""
+    live = _loaded_names(fn)
+    dead_lines: set[int] = set()
+    for stmt in ast.walk(fn):
+        targets: list[ast.expr] = []
+        if isinstance(stmt, ast.Assign):
+            targets = list(stmt.targets)
+        elif isinstance(stmt, ast.AnnAssign) and stmt.value is not None:
+            targets = [stmt.target]
+        else:
+            continue
+        if targets and all(isinstance(t, ast.Name) and t.id not in live for t in targets):
+            value = stmt.value
+            if value is not None:
+                dead_lines.update(range(value.lineno, (value.end_lineno or value.lineno) + 1))
+    sites: list[tuple[str, bool]] = []
+    for n in ast.walk(fn):
+        if isinstance(n, ast.Constant) and isinstance(n.value, str) and n.value.startswith("--"):
+            sites.append((n.value, n.lineno not in dead_lines))
+    return tuple(sites)
+
+
+def make_flags_read_by(module: str, function: str) -> frozenset[str]:
+    """Every `--flag` one function both names AND consumes.
+
+    Scoping to ONE function is what makes the difference between accepted-and-used and
+    accepted-and-ignored visible; scoping to a CONSUMED occurrence is what stops the original
+    defect from passing its own regression test."""
+    sites = _flag_sites(_function_node(module, function))
+    return frozenset(flag for flag, used in sites if used)
+
+
+def make_flags_discarded_by(module: str, function: str) -> frozenset[str]:
+    """Flags this function parses and then throws away — named nowhere else in it. A strictly
+    worse state than not accepting the flag: the code LOOKS like it honours it."""
+    sites = _flag_sites(_function_node(module, function))
+    return frozenset(flag for flag, _ in sites) - make_flags_read_by(module, function)
 
 
 # --- (a) every command the CLI offers is reachable from the method --------------------
 
 def test_every_cli_command_is_named_in_the_method():
     """A command the method never names cannot be reached: the build agent reads the method,
-    not `--help`. FAILS TODAY on `dump` and `reconcile`."""
+    not `--help`. Failed when this layer landed, on `dump` and `reconcile`; both are named in the
+    method now, so this is the standing gate on the next command that forgets to be."""
     text = make_method_text()
     missing = [c for c in make_cli_commands() if f"coyodex {c}" not in text]
     assert not missing, (
@@ -206,9 +415,9 @@ def test_every_cli_command_is_named_in_the_method():
 
 
 def test_every_fix_verb_is_named_in_the_method():
-    """`coyodex fix` dispatches three verbs; the method names two. FAILS TODAY on
-    `dedup-relation` — which resolves a BLOCKING validate error, so a lead who hits that error
-    has no documented way out and hand-edits the model instead."""
+    """`coyodex fix` dispatches three verbs and the method must name every one. Failed when this
+    layer landed, on `dedup-relation` — which resolves a BLOCKING validate error, so a lead who
+    hit that error had no documented way out and hand-edited the model instead. Now documented."""
     text = make_method_text()
     missing = [v for v in make_fix_verbs() if v not in text]
     assert not missing, (
@@ -218,15 +427,21 @@ def test_every_fix_verb_is_named_in_the_method():
 # --- (b) every flag the method tells a build to pass is accepted ----------------------
 
 def test_every_flag_the_method_prescribes_is_accepted_by_that_command():
-    """The doc must not tell a build to pass a flag the command rejects. This one PASSES today:
-    the flag vocabulary in the method is in sync with the parsers. Kept as a standing gate —
-    it is the cheap half of the contract, and it is the half that silently rots when a flag is
-    renamed."""
+    """The doc must not tell a build to pass a flag the command rejects. Passes today: the flag
+    vocabulary in the method is in sync with the parsers. Kept as a standing gate — it is the
+    cheap half of the contract, and it is the half that silently rots when a flag is renamed.
+
+    The flag must appear in EXECUTABLE code, not merely somewhere in the file. This used to be a
+    text search for the quoted literal anywhere in the module, which a comment or a docstring
+    quoting the flag would have answered just as well as a parser. No module does that today, so
+    this is a tightening with no finding behind it — taken because it is the same weakness as the
+    mode-flag test below (a string standing in for behaviour), one step earlier in the chain."""
     bad: list[str] = []
     for cmd, flag, loc in make_doc_flag_pairs():
-        src = make_module_source(cmd)
-        if f'"{flag}"' not in src and f"'{flag}'" not in src:
-            bad.append(f"{loc}: `coyodex {cmd} {flag}` — {COMMAND_MODULE[cmd]}.py never reads it")
+        if flag not in make_code_flag_literals(cmd):
+            bad.append(f"{loc}: `coyodex {cmd} {flag}` — no executable code in "
+                       f"{COMMAND_MODULE[cmd]}.py names it (a comment, a docstring or the USAGE "
+                       "text does not count)")
     assert not bad, "Flags the method prescribes that the command does not accept:\n  " + "\n  ".join(bad)
 
 
@@ -235,26 +450,36 @@ def test_a_mode_flag_does_not_silently_swallow_the_flags_its_mode_ignores():
     and *ignored* by the mode.
 
     `coyodex preindex --report --root <other-repo>` is the measured case. `preindex.py` reads
-    `--root` in `main()`, so the flag-existence check above passes — but `--report` branches
-    into `report()`, which reads only `--in`, so `--root` is silently dropped and the CWD's
-    pre-index is reported instead of the named repo's. Silently using the wrong repo is worse
-    than erroring: the output looks exactly right.
+    `--root` in `main()`, so the flag-existence check above passes — but `--report` branched into
+    `report()`, which read only `--in`, so `--root` was silently dropped and the CWD's pre-index
+    was reported instead of the named repo's. Silently using the wrong repo is worse than
+    erroring: the output looks exactly right.
 
-    FAILS TODAY. See tools/coyodex/preindex.py:302 (`report()` reads `--in`) against
-    tools/coyodex/preindex.py:398 (`main()` reads `--root`), and the dispatch at
-    tools/coyodex/preindex.py:396."""
+    FIXED, and this pins the fix. Two shapes are caught, and both are the original defect:
+      ABSENT    — the mode's function never names the flag at all.
+      DISCARDED — it parses the flag and throws the value away (`_ignored = _arg(argv, "--root")`).
+                  The first version of this test looked only for the literal, so re-introducing
+                  the measured bug in exactly this shape passed it. It does not any more.
+
+    WHAT THIS DOES NOT PROVE. It is a static check: it proves the value is consumed, never that it
+    is consumed CORRECTLY. `root_arg` read and then used to build the wrong path would pass here.
+    The behavioural half is
+    `tests/test_trapdoor_tools.py::test_preindex_report_honours_root_over_the_cwd_repo`, which
+    runs the command against two real repos and reads the output."""
     main_flags = make_flags_read_by("preindex", "main")
     report_flags = make_flags_read_by("preindex", "report")
+    discarded = make_flags_discarded_by("preindex", "report")
     # `--report` itself and the help flags are the mode switch, not mode input.
     switches = {"--report", "--help", "--in", "--depth", "--top"}
     ignored = sorted((main_flags - report_flags) - switches)
     assert not ignored, (
         "`coyodex preindex --report` accepts these flags and silently ignores them: "
-        + ", ".join(ignored)
-        + " — `--root` is the one that matters: --report reads `--in` (a CWD-relative path) and "
-          "never looks at --root, so `preindex --report --root <other-repo>` reports the CURRENT "
-          "repo's pre-index under the other repo's name. Either make report() honour --root, or "
-          "reject the flag; accepting-and-ignoring is the failure mode with no visible symptom.")
+        + ", ".join(f"{f} (parsed, then discarded)" if f in discarded else f"{f} (never read)"
+                    for f in ignored)
+        + " — `--root` is the one that matters: if --report reads only `--in` (a CWD-relative "
+          "path), `preindex --report --root <other-repo>` reports the CURRENT repo's pre-index "
+          "under the other repo's name. Either make report() honour --root, or reject the flag; "
+          "accepting-and-ignoring is the failure mode with no visible symptom.")
 
 
 # --- (c) every advisory offers a way to record the decision ---------------------------
@@ -340,6 +565,9 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     "Deps marked `deployment_linked` but which are a code call target": "drop the marker",
     "{} deployment advisory/advisories suppressed by the recorded `runs-in` exception":
         "this IS the escape being reported; it must never be silenceable itself",
+    "{} store-hygiene advisory/advisories suppressed by the recorded `store` exception":
+        "same shape as the `runs-in` count above — a suppression report that can itself be "
+        "suppressed reports nothing",
     # Deliberately un-escapable: the whole point is that a suppressed count stays visible.
     "{} {}: {} → {} claims entity use the backbone doesn't": "author the edge; the safety net derives it",
 }
@@ -360,34 +588,146 @@ def test_every_validator_advisory_names_a_way_to_record_the_decision():
     validate forever and gets waved through — the "advisory waved through" failure the method
     names in its own words.
 
-    FAILS TODAY. The residue below is the finding: each one is a judgement an operator can
-    legitimately make and has nowhere to write down. The headline is trap P1 — "Entities with no
-    owning component" (tools/coyodex/validate_model.py:2459) — where three separate live leads
-    independently invented a `Persistence exceptions` heading. That heading now exists, but it
-    is read by the persistence-COVERAGE rule (validate_model.py:1331, which filters `Cn` ids)
-    and does not silence this advisory at all.
+    Failed when this layer landed. The headline was trap P1 — "Entities with no owning component"
+    — where three separate live leads independently invented a `Persistence exceptions` heading
+    that existed but was read only by the persistence-COVERAGE rule (which filters `Cn` ids) and
+    silenced nothing here. Every residue has since been answered or allowlisted.
+
+    SCOPE. This reads the MESSAGE TEXT only: it proves an operator is TOLD where to record the
+    decision. Whether the escape the message names is wired to anything is the next test's job,
+    and whether recording it actually silences the advisory is proven at runtime by
+    `tests/test_trapdoor_tools.py` (traps P1 and P2) against the real fixture map.
 
     The report separates two failure shapes, because they need different fixes:
       NO-ESCAPE   — nothing anywhere can silence it; the fix is to add an escape token.
       UNNAMED     — an escape IS wired to the check, but its message never says so; the fix is
                     one sentence in the message. Cheap, and the difference between an operator
                     recording a decision and an operator ignoring a line forever."""
-    orphans = [(line, fn, msg, wired) for line, fn, msg, wired in make_advisory_sites()
-               if not _has_escape(msg) and not _allowlisted(msg)]
+    orphans = [s for s in make_advisory_sites()
+               if not _has_escape(s.message) and not _allowlisted(s.message)]
     detail = "\n  ".join(
-        f"{'UNNAMED  ' if wired else 'NO-ESCAPE'} validate_model.py:{line} ({fn}): {msg[:105]}"
-        for line, fn, msg, wired in sorted(orphans))
+        f"{'UNNAMED  ' if s.wired else 'NO-ESCAPE'} validate_model.py:{s.line} ({s.function}): "
+        f"{s.message[:105]}" for s in orphans)
     assert not orphans, (
         f"{len(orphans)} validator advisory/advisories offer no recordable escape in their text "
         "and are not allowlisted — an operator who decides the finding is acceptable has nowhere "
         "to say so:\n  " + detail)
 
 
+def _reads_heading(src: str, heading: str) -> bool:
+    """Does this source READ the extras heading — not merely mention it in a message?
+
+    A read is a call into the two readers the tools own (`_recorded_ids` / `extras_bodies`) with
+    the heading as its literal argument. 'Balance exceptions' is also reachable through
+    `balance_lib`'s own `_exceptions()`, which carries the heading in a module constant."""
+    reader = re.compile(r"(?:_recorded_ids|extras_bodies)\(\s*\w+\s*,\s*[\"']"
+                        + re.escape(heading) + r"[\"']", re.I)
+    if reader.search(src):
+        return True
+    return heading == "balance exceptions" and "_exceptions(" in src
+
+
+def _reads_heading_via_calls(names: frozenset[str], heading: str,
+                             fns: dict[str, ToolFunction], seen: set[str]) -> bool:
+    """The same question, followed through the tools' own calls — a check that delegates its
+    filtering to a helper (`unexplained_persistence_pairs`) is wired just as truly as one that
+    inlines it."""
+    for name in sorted(names):
+        fn = fns.get(name)
+        if fn is None or name in seen:
+            continue
+        seen.add(name)
+        if _reads_heading(fn.src, heading) or _reads_heading_via_calls(fn.calls, heading, fns, seen):
+            return True
+    return False
+
+
+def _passes_a_reader_result_into(caller: ToolFunction, callee: str, heading: str,
+                                 fns: dict[str, ToolFunction]) -> bool:
+    """Does `caller` read the heading and hand the RESULT to `callee` as an argument?
+
+    The escape for a check that takes its exceptions as a parameter lives at the call site, not
+    inside the check — `validate_model` reads the recorded 'Coverage exceptions' dirs and passes
+    them into `check_domain_coverage_model`. Matching on the argument NAME (bound from a reader)
+    keeps that legitimate shape from reading as a gap."""
+    tree = ast.parse(textwrap.dedent(caller.src))
+    passed: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == callee:
+            passed.update(a.id for a in node.args if isinstance(a, ast.Name))
+            passed.update(k.value.id for k in node.keywords if isinstance(k.value, ast.Name))
+    if not passed:
+        return False
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or node.value is None:
+            continue
+        if not any(isinstance(t, ast.Name) and t.id in passed for t in node.targets):
+            continue
+        if (_reads_heading(ast.unparse(node.value), heading)
+                or _reads_heading_via_calls(_called_names(node.value), heading, fns, set())):
+            return True
+    return False
+
+
+def _escape_is_wired(site: AdvisorySite, heading: str, fns: dict[str, ToolFunction],
+                     callers: dict[str, frozenset[str]]) -> bool:
+    if _reads_heading(site.scope_src, heading):
+        return True
+    if _reads_heading_via_calls(site.scope_calls, heading, fns, set()):
+        return True
+    # A wrapper that applies the escape to this check's OUTPUT, or a caller that supplies it as
+    # input. `_deployment_quality_warnings` is the first shape (it collapses its `_raw` twin's
+    # findings once `runs-in` is recorded); the orchestrator passing `cov_dirs` is the second.
+    for name in sorted(callers.get(site.function, frozenset())):
+        caller = fns.get(name)
+        if caller is None:
+            continue
+        if name != ORCHESTRATOR and _reads_heading(caller.src, heading):
+            return True
+        if _passes_a_reader_result_into(caller, site.function, heading, fns):
+            return True
+    return False
+
+
+def test_every_advertised_escape_is_wired_to_the_check_that_prints_it():
+    """An advisory whose message NAMES an extras heading is making a promise: record this and I
+    will go quiet. Nothing generic used to hold that promise to the code — the message text and
+    the wiring were two independent facts, and the check above only ever read the text. Deleting
+    the `_recorded_ids(m, "persistence exceptions", ("E",))` line behind the unowned-entity
+    advisory, while leaving the sentence that advertises it, passed the whole suite.
+
+    This closes it generically: for every advisory that names a heading, the code that DECIDES
+    that advisory must actually read it — directly, through a helper it calls, through the
+    wrapper that filters its output, or from a caller that hands it the recorded ids. A new
+    advisory that advertises an escape it does not have fails here on the day it is written.
+
+    SCOPE. Static: it proves the reader is called, not that the answer changes. The behavioural
+    proof for the two measured cases is `tests/test_trapdoor_tools.py` traps P1 and P2, which
+    record the heading on a real map and assert the advisory actually goes quiet."""
+    fns = make_tool_functions("validate_model.py", "balance_lib.py")
+    tables: dict[str, frozenset[str]] = {}
+    for mod in ("validate_model.py", "balance_lib.py"):
+        tables.update(make_dispatch_tables((TOOLS / mod).read_text(encoding="utf-8")))
+    callers = make_tool_callers(fns, tables)
+    gaps: list[str] = []
+    for site in make_advisory_sites():
+        low = site.message.lower()
+        for heading in MACHINE_READ_HEADINGS:
+            if heading in low and not _escape_is_wired(site, heading, fns, callers):
+                gaps.append(f"validate_model.py:{site.line} ({site.function}) tells the operator "
+                            f"to record '{heading}' — nothing in the code that decides this "
+                            f"advisory reads that heading: {site.message[:90]}")
+    assert not gaps, (
+        f"{len(gaps)} advisory/advisories advertise an extras heading that does not silence "
+        "them — prose promising a tool that is not there, which is the exact class this layer "
+        "exists to catch:\n  " + "\n  ".join(gaps))
+
+
 def test_the_no_escape_allowlist_has_no_dead_entries():
     """An allowlist entry that matches nothing is a claim about code that no longer exists —
     it hides the next advisory that grows into that shape. This one PASSES today and is the
     guard that keeps the list above honest."""
-    messages = [msg for _line, _fn, msg, _wired in make_advisory_sites()]
+    messages = [s.message for s in make_advisory_sites()]
     dead = [p for p in KNOWN_NO_ESCAPE if not any(m.startswith(p) for m in messages)]
     assert not dead, "KNOWN_NO_ESCAPE entries matching no advisory today:\n  " + "\n  ".join(dead)
 

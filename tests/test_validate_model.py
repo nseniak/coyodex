@@ -322,7 +322,12 @@ def test_unstructured_stores_draw_one_aggregated_nudge_with_store_literal_escape
     ws = [w for w in warnings_of(m) if "unstructured" in w]
     assert len(ws) == 1 and "2 entity store(s)" in ws[0]
     m.extras = [ExtraSection(heading="Balance exceptions", body="store: notes-only by choice")]
-    assert not any("unstructured" in w for w in warnings_of(m))
+    after = warnings_of(m)
+    # The DETAIL goes; the COUNT stays and names the group, because that one literal silences the
+    # whole store family and a suppression nobody can see reads as "no findings".
+    assert not any("2 entity store(s) are unstructured" in w for w in after)
+    counts = [w for w in after if "store-hygiene advisory" in w]
+    assert len(counts) == 1 and "unstructured (notes-only) stores" in counts[0]
 
 
 def test_prose_container_is_nudged_and_descriptive_modes_stay_quiet() -> None:
@@ -345,7 +350,43 @@ def test_prose_container_is_nudged_and_descriptive_modes_stay_quiet() -> None:
     assert len(ws) == 1 and "1 entity store(s)" in ws[0] and "E1" in ws[0]
     assert "E2" not in ws[0] and "E3" not in ws[0]
     m.extras = [ExtraSection(heading="Balance exceptions", body="store: names verified against code")]
-    assert not any("reads as prose" in w for w in warnings_of(m))
+    after = warnings_of(m)
+    assert not any("1 entity store(s) name a container that reads as prose" in w for w in after)
+    counts = [w for w in after if "store-hygiene advisory" in w]
+    assert len(counts) == 1 and "reads as prose, not a name" in counts[0]
+
+
+def test_the_store_literal_count_names_every_group_it_swallowed() -> None:
+    # The reason this count exists: one record, written about one of the three store-hygiene
+    # findings, silences all three. `runs-in` had the identical bug and the same remedy.
+    m = make_valid_model()
+    m.entities = [Entity(id="E1", name="A", meaning="x", source="src/a.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         store=Store(notes="mdb: a")),                       # unstructured
+                  Entity(id="E2", name="B", meaning="x", source="src/b.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         # dep linked, so ONLY the prose-container group fires for this one
+                         store=Store(dep="D1", container="rank card configs", mode="collection"))]
+    m.edges = [e for e in m.edges if not e.dst.startswith("E")]
+    assert len([w for w in warnings_of(m) if "store-hygiene advisory" in w]) == 0
+    m.extras = [ExtraSection(heading="Balance exceptions", body="store: notes-only is deliberate")]
+    counts = [w for w in warnings_of(m) if "store-hygiene advisory" in w]
+    assert len(counts) == 1
+    assert counts[0].startswith("2 store-hygiene advisory")
+    assert "unstructured (notes-only) stores" in counts[0] and "reads as prose" in counts[0]
+
+
+def test_the_store_literal_count_stays_quiet_when_it_silenced_nothing() -> None:
+    # A record on a clean map must not manufacture a line — the count reports suppression, not the
+    # existence of the record.
+    m = make_valid_model()
+    m.entities = [Entity(id="E1", name="A", meaning="x", source="src/a.py:1",
+                         fields=[EntityField(name="id", type="str")],
+                         store=Store(dep="D1", container="widgets", mode="collection"))]
+    m.edges = [e for e in m.edges if not e.dst.startswith("E")]
+    assert not any("store-hygiene advisory" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Balance exceptions", body="store: nothing to hide")]
+    assert not any("store-hygiene advisory" in w for w in warnings_of(m))
 
 
 # --- messaging catalog (WS-A5) -----------------------------------------------------
