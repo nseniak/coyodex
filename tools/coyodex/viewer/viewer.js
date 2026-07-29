@@ -3226,7 +3226,9 @@ function groupOfUnit(unit) {
 // A container's display text, read off the overview's own box label so the two never disagree.
 function groupTitle(gid) {
   const m = new RegExp('\\b' + gid + '\\["([^"]+)"\\]').exec(MERMAID_DEPLOYMENT || '');
-  return m ? m[1] : gid;
+  // Never fall back to the raw id: a container id is internal plumbing, and "PG_3" on screen tells
+  // a reader nothing. A generic label is a worse title but an honest one.
+  return m ? m[1] : 'Grouped processes';
 }
 function unitProcessNodeId(unit) {
   for (const id in (GRAPH.nodes || {})) if (GRAPH.nodes[id].kind === 'process' && GRAPH.nodes[id].unit === unit) return id;
@@ -3243,8 +3245,8 @@ function showDeployment() {
   const unplaced = (GRAPH.entry_points || []).filter((e) => e.activation === 'self' && threadHostUnits(e).length === 0);
   if (unplaced.length) {
     panel.innerHTML = `<section class="uc-group"><h3 class="uc-actor">Unplaced (${unplaced.length})</h3>`
-      + `<div class="gloss-plain">Self-started, but no <code>runs_in</code> — not shown on any process. `
-      + `Tag <code>runs_in</code> on the entry point or its component.</div>${threadRowsHtml(unplaced)}</section>`;
+      + `<div class="gloss-plain">These start themselves, but nothing records which process runs `
+      + `them — so they appear on no process box below.</div>${threadRowsHtml(unplaced)}</section>`;
     wireSrcLinks(panel);
   } else if (GRAPH.nodes['SYS']) { showNode('SYS'); } else { panel.innerHTML = EMPTY_PANEL; }
 }
@@ -4392,8 +4394,8 @@ function renderData(s) {
       body += `<div class="dv-tablewrap"><table class="dv-table"><thead><tr><th>Collection</th><th>Entity</th>`
         + `<th>Meaning</th><th>Notes</th><th>Written by</th><th>Read by</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     } else if (!st.channels.length) {
-      body += `<p class="dv-derived">No entity in the domain model declares this store — it exists as a `
-        + `dependency with edges, but nothing structured names it as its <code>store</code>.</p>`;
+      body += `<p class="dv-derived">No entity in the domain model is recorded as living here — this `
+        + `store is reached by code, but nothing says which data it holds.</p>`;
     }
     if (st.channels.length) {
       body += `<h3 class="dv-subhead">Async channels</h3>`;

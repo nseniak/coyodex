@@ -1852,8 +1852,10 @@ def deployment_group_label(graph: GraphDict, members: list[str]) -> str:
     """A container's display text: the capability names its processes run, plus the member count."""
     caps = _unit_capabilities(graph)
     sig = caps.get(members[0], frozenset())
-    names = sorted(str(graph["nodes"].get(s, {}).get("name") or s) for s in sig)
-    return f"{' + '.join(names)} ({len(members)})"
+    # Names only — an id that leaked into a box label would be meaningless on screen (the same rule
+    # the info pane and every other view follow: ids are navigation, never display).
+    names = sorted(n for n in (str(graph["nodes"].get(s, {}).get("name") or "") for s in sig) if n)
+    return f"{' + '.join(names) or 'Grouped processes'} ({len(members)})"
 
 
 def _call_edge_label(rows: list[dict[str, str]]) -> str:

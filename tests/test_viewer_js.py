@@ -32,3 +32,27 @@ def _node_check(js_path: Path) -> None:
 
 def test_viewer_js_parses() -> None:
     _node_check(VIEWER_DIR / "viewer.js")
+
+
+def test_the_ui_does_not_name_internal_model_fields():
+    """The viewer speaks the reader's language, not the model's.
+
+    A panel that says "no `runs_in`" names a JSON field the reader never sees and cannot act on from
+    the UI. Naming the field is right in `validate` — that output is FOR editing the map, and the
+    codebase already draws this line ("Completeness is validate's job, where it comes with the
+    specific ids to fix"). It is wrong on screen.
+
+    Checks the rendered STRINGS only: reading `ep.runs_in` in code is how the data is used, and
+    backtick-to-<code> markdown of AUTHORED map text is the map's own words, not ours."""
+    js = (Path(__file__).resolve().parents[1] / "tools/coyodex/viewer/viewer.js").read_text()
+    fields = ("runs_in", "no_call_site", "non_entity_types", "tests_note", "where_configured",
+              "cadence_source", "tech_source", "subflow", "why_refs")
+    offenders = []
+    for i, line in enumerate(js.splitlines(), 1):
+        code = line.split("//", 1)[0] if not line.lstrip().startswith("//") else ""
+        if "<code>" not in code:
+            continue
+        for f in fields:
+            if f"<code>{f}</code>" in code:
+                offenders.append(f"{i}: {line.strip()[:90]}")
+    assert offenders == [], "internal field name rendered in the UI:\n" + "\n".join(offenders)
