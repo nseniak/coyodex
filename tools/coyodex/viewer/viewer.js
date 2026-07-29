@@ -139,6 +139,18 @@ const stage = document.getElementById('stage');
 // `let`, not `const`. PANEL_HOST is the stable real element (never reassigned) for direct host writes.
 let panel = document.getElementById('panel');
 const PANEL_HOST = panel;
+// SOURCE LINKS ARE DELEGATED, not bound per render. Every `.srclink` button carries its own
+// `data-where`, so one listener per container serves them all — including markup written after this
+// runs. The previous approach called `wireSrcLinks(root)` after each render, which works only if
+// every one of ~28 panel writers remembers: `showNode`, the most-used one of the lot, did not, so
+// the Environments row rendered its manifest anchors as buttons that did nothing. Delegation makes
+// forgetting impossible rather than catchable.
+[PANEL_HOST, diagram].forEach((root) => root && root.addEventListener('click', (ev) => {
+  const btn = ev.target && ev.target.closest && ev.target.closest('.srclink');
+  if (!btn || !root.contains(btn)) return;
+  const wn = whereNode(btn.getAttribute('data-where'));
+  openInCodeViewer(wn.file, wn.line);
+}));
 const legend = document.getElementById('legend');
 const legendbtn = document.getElementById('legendbtn');
 const envpicker = document.getElementById('envpicker');
@@ -1108,6 +1120,10 @@ function showNode(id) {
   if (!GRAPH.nodes[id]) return;
   panel.innerHTML = nodeDetailHtml(id);
   bindNodeDetailHandlers(panel);
+  // Source buttons in the pane need binding too. `bindNodeDetailHandlers` wires the navigation
+  // links (use case / process / data chips) but not `.srclink`, and this is the ONE panel builder
+  // that never made the second call — so the Environments row rendered its manifest anchors as
+  // buttons that did nothing. Every other srclink in the app sits on a path that wires them.
   // Mirror into the file browser here (not just in selectNode) — showNode is also how a subsystem's/
   // subdomain's OWN card lands on its default panel (applyDefaultPanel) and how a bridge arrow shows its
   // collapsed box (bindBridgeEdge), neither of which went through selectNode before.
@@ -3183,7 +3199,6 @@ function showDeploymentEdge(a, b, chans, calls) {
     + n(calls.length, 'call') + '</div><ul class="xlist">' + callRows + '</ul>';
   panel.innerHTML = '<div class="pane-title"><h2>' + esc(nm(a)) + ' &rarr; ' + esc(nm(b)) + '</h2>'
     + '<span class="badge edge">' + badge + '</span></div>' + body;
-  wireSrcLinks(panel);
 }
 // Selecting a coupling-point arrow (process → shared infrastructure): list the components INSIDE that
 // process which actually reach the store/broker — each with its verb, its reason and its call site — so
@@ -3200,7 +3215,6 @@ function showDeploymentInfraEdge(a, b, calls) {
     + '<div class="xcount">' + calls.length + ' connection' + (calls.length === 1 ? '' : 's')
     + ' from the code this process runs</div>'
     + '<ul class="xlist">' + items + '</ul>';
-  wireSrcLinks(panel);
 }
 // `focalUnit` (set on a process card) is the process you're already zoomed into: it drills nowhere
 // further, so it gets no drill affordance/icon — only the OTHER boxes (subsystems it runs) drill.
@@ -3247,7 +3261,6 @@ function showDeployment() {
     panel.innerHTML = `<section class="uc-group"><h3 class="uc-actor">Unplaced (${unplaced.length})</h3>`
       + `<div class="gloss-plain">These start themselves, but nothing records which process runs `
       + `them — so they appear on no process box below.</div>${threadRowsHtml(unplaced)}</section>`;
-    wireSrcLinks(panel);
   } else if (GRAPH.nodes['SYS']) { showNode('SYS'); } else { panel.innerHTML = EMPTY_PANEL; }
 }
 // The environment picker (deployment variants). Present only when the map declares `environments`;
@@ -3315,7 +3328,6 @@ function showDeploymentGroup(gid) {
     + `process for its real ones.</div>`
     + `<table class="glossary"><tbody>${rows}</tbody></table></section>`;
   bindNodeDetailHandlers(panel);
-  wireSrcLinks(panel);
 }
 function showDeploymentUnit(unit) {
   const uid = unitProcessNodeId(unit);
@@ -3326,7 +3338,6 @@ function showDeploymentUnit(unit) {
   if (eps.length) html += `<section class="uc-group" style="margin-top:20px"><h3 class="uc-actor">Threads / loops (${eps.length})</h3>${threadRowsHtml(eps)}</section>`;
   panel.innerHTML = html;
   bindNodeDetailHandlers(panel);
-  wireSrcLinks(panel);
   if (uid) syncTreeToNode(uid);
 }
 // The Domain Subdomains overview: a subdomain box ⌘-drills to its per-subdomain card; an
@@ -4025,7 +4036,7 @@ function resizeStagePreserve() {
 // node's ⌘-click), an off-repo/absent one stays plain text.
 // A `path:line`/`path/` code anchor as a table cell: a clickable code-viewer link for an in-repo
 // ref, plain text for an off-repo ref, an em-dash when absent. Every button carries `srclink` +
-// `data-where`, so one `wireSrcLinks(container)` pass after the table is written wires them all.
+// `data-where`, which the delegated container listener (see PANEL_HOST) reads on click.
 // Shared by the Glossary, System and Tests reference tables (the one source-link contract).
 function srcCell(where) {
   where = where || '';
@@ -4039,12 +4050,6 @@ function srcCell(where) {
   if (where) return `<span class="gloss-plain">${esc(cleanPath(file, line))}</span>`;
   return '<span class="gloss-none">—</span>';
 }
-function wireSrcLinks(root) {
-  root.querySelectorAll('.srclink').forEach((btn) => {
-    const wn = whereNode(btn.getAttribute('data-where'));
-    btn.addEventListener('click', () => openInCodeViewer(wn.file, wn.line));
-  });
-}
 function renderGlossary() {
   const rows = (GRAPH.glossary || []).map((g) =>
     `<tr data-term="${esc(g.term)}"><th scope="row">${esc(g.term)}</th><td>${mdInline(g.meaning || '')}</td><td>${srcCell(g.source || '')}</td></tr>`
@@ -4052,7 +4057,6 @@ function renderGlossary() {
   diagram.innerHTML = '<div class="glossary-wrap" style="padding-top:20px">'
     + '<table class="glossary"><thead><tr><th>Term</th><th>Meaning</th><th>Defined in</th></tr></thead>'
     + `<tbody>${rows}</tbody></table></div>`;
-  wireSrcLinks(diagram);
 }
 
 // The Use Cases tab: the full catalog, GROUPED BY ACTOR — each actor section header IS the Role (the
@@ -4134,7 +4138,7 @@ function refTable(rows, cols) {
 // A deployment unit's variant tags, each with its grounding: `env · <anchor link>` when the tag cites a
 // manifest source, `env · inferred` when it doesn't (no manifest witness — a soft claim). Empty = the
 // unit is ungated (shared across every environment). The src buttons are wired by the enclosing
-// renderSystem's wireSrcLinks pass.
+// the delegated source-link listener.
 function variantsCell(variants) {
   if (!variants || !variants.length) return '<span class="gloss-none">— (all envs)</span>';
   return variants.map((v) => {
@@ -4231,7 +4235,6 @@ function renderSystem() {
         `<button type="button" class="sys-index-chip" data-target="${s.id}">${esc(s.title)}</button>`).join('')}</nav>`
     : '';
   diagram.innerHTML = `<div class="usecases-wrap system-wrap">${body ? nav + body : '<p class="empty">No system facts recorded.</p>'}</div>`;
-  wireSrcLinks(diagram);
   // A System-tab entry-point Component link navigates to that component AND selects the exact entry
   // point in its "Triggered by" pane list (same as a search hit).
   diagram.querySelectorAll('.sys-node').forEach((btn) => {
@@ -4467,7 +4470,6 @@ function renderData(s) {
 
   diagram.innerHTML = `<div class="dv-wrap"><nav class="dv-rail" aria-label="Physical stores">${rail.join('')}</nav>`
     + `<section class="dv-content">${panes.join('')}</section></div>`;
-  wireSrcLinks(diagram);
   diagram.querySelectorAll('.dv-store').forEach((b) => b.addEventListener('click', () => dvShow(b.dataset.pane)));
   diagram.querySelectorAll('.dv-chip[data-id]').forEach((b) =>
     b.addEventListener('click', () => selectFromTree(b.getAttribute('data-id'))));
@@ -4524,7 +4526,6 @@ function renderTests() {
       + `<tbody>${rows}</tbody></table>`
     : '<p class="empty">No test-completeness rows recorded.</p>';
   diagram.innerHTML = `<div class="usecases-wrap system-wrap">${noteHtml}${table}</div>`;
-  wireSrcLinks(diagram);
   diagram.querySelectorAll('a.tstref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); selectFromTree(a.getAttribute('data-id'));
   }));

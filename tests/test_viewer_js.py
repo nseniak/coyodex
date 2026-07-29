@@ -56,3 +56,21 @@ def test_the_ui_does_not_name_internal_model_fields():
             if f"<code>{f}</code>" in code:
                 offenders.append(f"{i}: {line.strip()[:90]}")
     assert offenders == [], "internal field name rendered in the UI:\n" + "\n".join(offenders)
+
+
+def test_source_links_are_bound_by_delegation_not_per_render():
+    """One listener per container, so a new panel writer cannot ship dead source buttons.
+
+    Source buttons used to be wired by calling `wireSrcLinks(root)` after each render, which works
+    only if every panel writer remembers. `showNode` — the pane shown for any selected element — did
+    not, so a deployment unit's Environments row rendered its manifest anchors as buttons that did
+    nothing when clicked. Delegation makes forgetting impossible rather than merely catchable."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    code = [ln for ln in js.splitlines() if not ln.lstrip().startswith("//")]
+    stale = [ln.strip() for ln in code if "wireSrcLinks" in ln]
+    assert stale == [], ("per-render source-link wiring is back — it double-binds against the "
+                         "delegated listener:\n" + "\n".join(stale))
+    assert "closest('.srclink')" in js, "the delegated source-link listener is missing"
+    # it must be attached to the STABLE panel host, not the `panel` binding, which is temporarily
+    # re-pointed at individual cards while a multi-selection renders.
+    assert "[PANEL_HOST, diagram].forEach" in js
