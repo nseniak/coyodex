@@ -201,7 +201,9 @@ def test_overview_infra_is_only_the_coupling_points_and_they_get_real_arrows():
     # it stays on worker's card. A catalog here would just restate the Dependencies view.
     mm = G.gen_deployment_mermaid(model_to_graph(make_deploy_model()))
     assert 'subgraph L_infra["Shared infrastructure"]' in mm
-    assert 'subgraph L_infra_bus["Message bus"]' in mm and "class D1 infraBus" in mm    # Redis = bus
+    # The band title states the QUESTION it answers ("used as"), not an identity claim: the band is
+    # verb-derived, so two deps of one `kind` can legitimately land in different bands.
+    assert 'subgraph L_infra_bus["Used as a message bus"]' in mm and "class D1 infraBus" in mm
     assert "U_0 --> D1" in mm and "U_1 --> D1" in mm      # real arrows, one per process that uses it
     assert "class D2" not in mm and "--> D2" not in mm    # single-process infra is not drawn here…
     assert "U_1 --> D2" in G.deployment_cards(model_to_graph(make_deploy_model()))["worker"]  # …only on its card

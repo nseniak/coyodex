@@ -505,11 +505,22 @@ INFRA_SVC_STYLE   = "fill:#ccfbf1,stroke:#0f766e,color:#134e4a"  # teal   — se
 INFRA_SEC_STYLE   = "fill:#ffe4e6,stroke:#be123c,color:#881337"  # rose   — security (encrypt)
 # (band_role, subgraph id, lane title, mermaid classDef name) — fixed display order; a dual-role dep
 # lands in the FIRST band it qualifies for (messaging beats datastore, per the redesign).
+#
+# The titles say "Used as …" because that is what the band actually measures: `_infra_band_of`
+# reads the dep's VERB-DERIVED role first and only falls back to its declared `kind`. So two deps
+# of the same kind can land in different bands — on a live map Mixpanel (`kind: service`, reached
+# by `emits`) sat under the bus band while Sentry (`kind: service`, reached by `calls`) sat under
+# the service band, and a reader scanning for queues found an analytics SaaS. That grouping is
+# deliberate and useful — "how does the code talk to this?" is a question no other view answers —
+# but a bare "Message bus" states it as an identity claim the map never made. The label now says
+# which question it is answering, so the same picture reads correctly.
 _INFRA_BANDS: tuple[tuple[str, str, str, str], ...] = (
-    ("messaging", "L_infra_bus", "Message bus", "infraBus"),
-    ("datastore", "L_infra_store", "Data store", "infraStore"),
-    ("service", "L_infra_svc", "Service", "infraSvc"),
-    ("security", "L_infra_sec", "Security", "infraSec"),
+    ("messaging", "L_infra_bus", "Used as a message bus", "infraBus"),
+    ("datastore", "L_infra_store", "Used as a data store", "infraStore"),
+    ("service", "L_infra_svc", "Used as a service", "infraSvc"),
+    ("security", "L_infra_sec", "Used for security", "infraSec"),
+    # The roleless fallback — no verb-derived role AND no infra `kind` to fall back to, so there is
+    # no usage to state. It stays a plain "Other" rather than claiming one.
     ("other", "L_infra_other", "Other", "infra"),
 )
 DOMAIN_SUBDOMAIN_CLASSDEF = f"  classDef subdomain {SUBDOMAIN_STYLE};"

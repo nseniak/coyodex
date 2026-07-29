@@ -336,6 +336,13 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   the components inside that process that reach it, with their verb, reason and call site. Infra a single
   process touches stays on that process's card; the full inventory is the Dependencies view's job (and
   the Data view's, for stores), so repeating it here would only restate them less completely.
+  That lane's sub-bands read **"Used as a message bus / data store / service"** because they group by
+  the VERB the code reaches the dependency with, not by what the dependency is. So two deps of the same
+  `kind` can sit in different bands — a live map put Mixpanel (`kind: service`, reached by `emits`) in
+  the bus band and Sentry (`kind: service`, reached by `calls`) in the service band. That is the useful
+  question here ("how does the code talk to this?", which no other view answers), so the grouping stands
+  and the LABEL says which question it is answering. Do not re-word an edge verb to move a box between
+  bands: the verb records what the call site does, and the band follows it.
   Selecting an **environment** never removes a box: units the environment excludes are **dimmed in
   place and made inert**, so "not deployed there" is visible instead of being a silent absence, and the
   layout does not move when you switch. (One diagram serves every environment; the `variants` tags ride
