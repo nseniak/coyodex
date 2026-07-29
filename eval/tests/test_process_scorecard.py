@@ -1,0 +1,452 @@
+#!/usr/bin/env python3
+"""L3 unit tests — the reader and the ten assertions, over SYNTHETIC turn sequences.
+
+Run either way (needs an editable install: `make deps`):
+    python3 eval/tests/test_process_scorecard.py
+    pytest eval/tests/test_process_scorecard.py
+
+Fast, deterministic, and part of the default suite. The CORPUS run — the eight real build
+transcripts these detectors were calibrated against — lives in `test_process_corpus.py` and is
+opt-in, because those files live outside the repo.
+
+Note what is under test here: the assertion LOGIC, not any transcript. Every turn below is built by
+a `make_*` helper, so a detector that only works on one build's shell style fails loudly.
+
+The reader tests earn their keep on one point in particular. A JSONL record is not a turn: this
+harness writes each content block of one API response as its own record, interleaved with the tool
+results, so a message that emitted ten `Agent` calls looks like ten one-call turns. That was a real
+bug in this module, and it produced exactly the wrong answer for the assertion that matters most.
+`test_reader_groups_one_message_across_interleaved_tool_results` is the pin.
+"""
+from __future__ import annotations
+
+import json
+import sys
+import tempfile
+from pathlib import Path
+
+from coyodex_eval import process_scorecard as P
+from coyodex_eval.transcript import ToolCall, Turn, read_turns
+
+
+# --- builders -------------------------------------------------------------------------
+
+def make_turn(index: int, *calls: ToolCall, results: tuple[tuple[str, str], ...] = ()) -> Turn:
+    """One assistant turn. `results` is (tool_use_id, text) pairs carried on the same Turn for
+    brevity — the assertions read them through `results_by_tool_use_id`, which does not care which
+    turn a result arrived on."""
+    from coyodex_eval.transcript import ToolResult
+    return Turn(index=index, role="assistant", tool_calls=calls,
+                tool_results=tuple(ToolResult(tool_use_id=i, content=t) for i, t in results))
+
+
+def make_bash(command: str, uid: str = "") -> ToolCall:
+    return ToolCall(name="Bash", input={"command": command}, id=uid)
+
+
+def make_agent(prompt: str = "harvest the entry points", description: str = "Harvest") -> ToolCall:
+    return ToolCall(name="Agent", input={"prompt": prompt, "description": description})
+
+
+def make_write(path: str, content: str = "") -> ToolCall:
+    return ToolCall(name="Write", input={"file_path": path, "content": content})
+
+
+def make_record(kind: str, *, message_id: str = "", blocks: list[dict[str, object]] | None = None,
+                usage: dict[str, int] | None = None) -> str:
+    """One raw JSONL record, as the harness writes it: ONE content block per record."""
+    message: dict[str, object] = {"content": blocks or []}
+    if message_id:
+        message["id"] = message_id
+    if usage is not None:
+        message["usage"] = usage
+    return json.dumps({"type": kind, "message": message, "isSidechain": False})
+
+
+def make_transcript_file(tmp: Path, records: list[str]) -> Path:
+    p = tmp / "transcript.jsonl"
+    p.write_text("\n".join(records) + "\n", encoding="utf-8")
+    return p
+
+
+def score(*turns: Turn) -> dict[int, P.Assertion]:
+    return P.score_turns(turns).by_id()
+
+
+# --- the reader -----------------------------------------------------------------------
+
+def test_reader_groups_one_message_across_interleaved_tool_results():
+    """THE PIN. Ten `Agent` calls in one API response arrive as ten records with the tool results
+    between them. They must come back as ONE turn with ten calls, or assertion 3 reports the exact
+    opposite of the truth."""
+    usage = {"output_tokens": 22617, "input_tokens": 2}
+    records = [make_record("assistant", message_id="m1", usage=usage,
+                           blocks=[{"type": "thinking", "thinking": "plan the fan-out"}])]
+    for n in range(10):
+        records.append(make_record("assistant", message_id="m1", usage=usage, blocks=[
+            {"type": "tool_use", "id": f"t{n}", "name": "Agent", "input": {"prompt": "harvest"}}]))
+        records.append(make_record("user", blocks=[
+            {"type": "tool_result", "tool_use_id": f"t{n}", "content": "launched"}]))
+    with tempfile.TemporaryDirectory() as td:
+        turns = read_turns(make_transcript_file(Path(td), records))
+    assistant = [t for t in turns if t.role == "assistant"]
+    assert len(assistant) == 1, f"one API response must be one turn, got {len(assistant)}"
+    assert len(assistant[0].agent_calls) == 10
+
+
+def test_reader_starts_a_new_turn_on_a_new_message_id():
+    """The mirror: genuinely separate responses stay separate, so a one-agent-per-turn build is not
+    silently merged into a batched one."""
+    records = []
+    for n in range(3):
+        records.append(make_record("assistant", message_id=f"m{n}", usage={"output_tokens": n},
+                                   blocks=[{"type": "tool_use", "id": f"t{n}", "name": "Agent",
+                                            "input": {}}]))
+        records.append(make_record("user", blocks=[{"type": "tool_result", "tool_use_id": f"t{n}",
+                                                    "content": "ok"}]))
+    with tempfile.TemporaryDirectory() as td:
+        turns = read_turns(make_transcript_file(Path(td), records))
+    assistant = [t for t in turns if t.role == "assistant"]
+    assert len(assistant) == 3 and all(len(t.agent_calls) == 1 for t in assistant)
+
+
+def test_reader_skips_malformed_lines_instead_of_failing():
+    """These files are appended to live; a truncated last line is ordinary. Refusing to read a 3 MB
+    transcript because of it would break the scorecard exactly when a run was interrupted."""
+    def rec(mid: str) -> str:
+        return make_record("assistant", message_id=mid,
+                           blocks=[{"type": "tool_use", "id": "t", "name": "Bash",
+                                    "input": {"command": "ls"}}])
+    with tempfile.TemporaryDirectory() as td:
+        p = make_transcript_file(Path(td), [rec("m1"), "{not json", "", rec("m2")])
+        turns = read_turns(p)
+    assert len([t for t in turns if t.role == "assistant"]) == 2
+
+
+def test_reader_omits_sidechain_turns_by_default():
+    """`isSidechain: true` marks a SUB-AGENT's own turns. L3 measures the LEAD's behaviour, so a
+    sub-agent's Bash calls must not count as the lead running a command."""
+    lead = make_record("assistant", message_id="m1",
+                       blocks=[{"type": "tool_use", "id": "a", "name": "Bash",
+                                "input": {"command": "coyodex validate"}}])
+    sub = json.dumps({"type": "assistant", "isSidechain": True,
+                      "message": {"id": "m2", "content": [
+                          {"type": "tool_use", "id": "b", "name": "Bash",
+                           "input": {"command": "coyodex validate"}}]}})
+    with tempfile.TemporaryDirectory() as td:
+        p = make_transcript_file(Path(td), [lead, sub])
+        assert len(read_turns(p)) == 1
+        assert len(read_turns(p, include_sidechains=True)) == 2
+
+
+def test_grouping_consistency_flags_a_reused_message_id():
+    """The turn grouping rests on 'one message id == one API response'. If a harness change broke
+    that, the scorecard must say so rather than quietly reporting wrong fan-out numbers."""
+    a = make_record("assistant", message_id="m1", usage={"output_tokens": 1}, blocks=[])
+    b = make_record("assistant", message_id="m1", usage={"output_tokens": 999}, blocks=[])
+    with tempfile.TemporaryDirectory() as td:
+        from coyodex_eval.transcript import grouping_is_consistent
+        assert grouping_is_consistent(make_transcript_file(Path(td), [a, a])) is True
+        assert grouping_is_consistent(make_transcript_file(Path(td), [a, b])) is False
+
+
+# --- invocation detection (shared by six assertions) ----------------------------------
+
+def test_invokes_ignores_a_command_that_is_only_mentioned():
+    """`grep 'coyodex anchor-drift' method.md` mentions the command; it does not run it. Counting
+    mentions over-reported shape-only anchor-drift runs across the real corpus."""
+    assert not P._invokes("grep -n 'coyodex anchor-drift' method.md", "anchor-drift")
+    assert not P._invokes("echo 'run coyodex validate next'", "validate")
+    assert P._invokes(".venv/bin/coyodex anchor-drift --map m.json", "anchor-drift")
+
+
+def test_invokes_ignores_heredoc_and_multiline_string_bodies():
+    """A python heredoc that PRINTS the command name is data, not shell."""
+    heredoc = "python3 - <<'PY'\n# coyodex anchor-drift is what we are emulating\nprint(1)\nPY"
+    assert not P._invokes(heredoc, "anchor-drift")
+    inline = 'python3 -c "\nimport json\n# coyodex validate output\nprint(1)\n"'
+    assert not P._invokes(inline, "validate")
+
+
+def test_invokes_accepts_the_binary_behind_a_shell_variable():
+    """Every measured build aliases the binary. Requiring the literal token hid every `audit` call
+    one build made."""
+    assert P._invokes("C=/path/coyodex; $C audit --json", "audit")
+    assert P._invokes('CX=/path/coyodex\n"$CX" validate map.json', "validate")
+    assert not P._invokes("$PY somethingelse --json", "audit")
+
+
+def test_invokes_finds_the_command_after_a_pipe_or_conjunction():
+    assert P._invokes("cd /repo && /x/coyodex assemble a.json --out .coyodex", "assemble")
+    assert P._invokes("echo hi | /x/coyodex validate m.json", "validate")
+
+
+# --- assertion 1 / 2: the pre-index hand-off ------------------------------------------
+
+def test_a1_counts_only_a_real_report_invocation():
+    good = score(make_turn(0, make_bash(".venv/bin/coyodex preindex --report --depth 3")))[1]
+    assert (good.observed, good.of, good.score) == (1, 1, 1.0)
+    bad = score(make_turn(0, make_bash("grep -n 'preindex --report' method.md")))[1]
+    assert (bad.observed, bad.score) == (0, 0.0)
+
+
+def test_a2_hand_parsing_the_artifact_is_the_defect_and_report_is_not():
+    hand = score(make_turn(0, make_bash(
+        "python3 -c \"import json; d=json.load(open('.coyodex/preindex.json')); print(d)\"")))[2]
+    assert (hand.observed, hand.of) == (0, 1)
+    tool = score(make_turn(0, make_bash("coyodex preindex --report --in .coyodex/preindex.json")))[2]
+    assert (tool.observed, tool.of) == (1, 1)
+
+
+def test_a2_does_not_count_housekeeping_that_merely_names_the_file():
+    """`git add …/preindex.json` moves the artifact without parsing a byte of it. Counting it was a
+    real false positive against the corpus."""
+    a = score(make_turn(0, make_bash("git add .coyodex/project-map.json .coyodex/preindex.json")))[2]
+    assert (a.observed, a.of) == (1, 1)
+
+
+def test_a2_catches_a_hand_parse_inside_a_heredoc():
+    """Unlike `_invokes`, this assertion MUST look inside the heredoc — that is where the
+    hand-parsing lives."""
+    a = score(make_turn(0, make_bash(
+        "python3 - <<'PY'\nimport json\nd = json.load(open('.coyodex/preindex.json'))\nPY")))[2]
+    assert (a.observed, a.of) == (0, 1)
+
+
+# --- assertion 3: the headline --------------------------------------------------------
+
+def test_a3_scores_batched_fanouts_against_all_fanouts():
+    """`of` is every turn that launched an agent; `observed` is those that launched two or more."""
+    turns = (make_turn(0, make_agent(), make_agent(), make_agent()),   # batched
+             make_turn(1, make_agent()),                              # one per turn
+             make_turn(2, make_bash("ls")))                           # not a fan-out
+    a = score(*turns)[3]
+    assert (a.observed, a.of, a.score) == (1, 2, 0.5)
+    assert [e.detail["agents"] for e in a.evidence] == [3, 1]
+
+
+def test_a3_is_not_applicable_when_nothing_fanned_out():
+    """A serial build launched no agents. That is `n/a`, NOT 0.0 — the opportunity never existed,
+    and averaging it in with a build that missed the opportunity would hide the difference."""
+    a = score(make_turn(0, make_bash("coyodex validate m.json")))[3]
+    assert (a.observed, a.of, a.score) == (0, 0, None)
+
+
+def test_a3_accepts_the_older_task_tool_spelling():
+    a = score(make_turn(0, ToolCall(name="Task", input={}), ToolCall(name="Task", input={})))[3]
+    assert (a.observed, a.of) == (1, 1)
+
+
+# --- assertions 4-8 -------------------------------------------------------------------
+
+def test_a4_wants_the_shape_only_pass_not_the_verdicts_one():
+    shape = score(make_turn(0, make_bash("coyodex anchor-drift --map m.json | head -40")))[4]
+    assert (shape.observed, shape.score) == (1, 1.0)
+    verdicts = score(make_turn(0, make_bash("coyodex anchor-drift --map m.json --verdicts v.json")))[4]
+    assert (verdicts.observed, verdicts.score) == (0, 0.0)
+
+
+def test_a5_scores_a_batched_skeptic_fanout_and_zero_when_none_launched():
+    batched = score(make_turn(0, make_agent("You are a fresh-context SKEPTIC. Disprove:", "Skeptic 1"),
+                              make_agent("You are a fresh-context SKEPTIC. Disprove:", "Skeptic 2")))[5]
+    assert (batched.observed, batched.of, batched.score) == (1, 1, 1.0)
+    assert "2 skeptic agent(s)" in batched.note
+    none = score(make_turn(0, make_agent("harvest the deps", "Harvest deps")))[5]
+    assert (none.observed, none.of, none.score) == (0, 1, 0.0), "no skeptics must score 0, not n/a"
+
+
+def test_a6_counts_only_a_write_not_a_prompt_that_discusses_grounding():
+    written = score(make_turn(0, make_write("/r/.coyodex/build-fragments/header.json",
+                                            '{"grounding": {"claims_total": 42, '
+                                            '"claims_grounded": 42}}')))[6]
+    assert (written.observed, written.score) == (1, 1.0)
+    talked = score(make_turn(0, make_agent("report claims_total when you finish grounding")))[6]
+    assert (talked.observed, talked.score) == (0, 0.0)
+
+
+def test_a7_separates_the_command_from_a_hand_written_reconcile_file():
+    by_tool = score(make_turn(0, make_bash("coyodex reconcile --rules r.json --out "
+                                           ".coyodex/reconcile.json")))[7]
+    assert (by_tool.observed, by_tool.of, by_tool.score) == (1, 1, 1.0)
+    by_hand = score(make_turn(0, make_write("/r/.coyodex/reconcile.json", '{"set": []}')))[7]
+    assert (by_hand.observed, by_hand.of, by_hand.score) == (0, 1, 0.0)
+    assert "hand-written" in str(by_hand.evidence[0].detail["how"])
+
+
+def test_a7_sees_a_reconcile_file_produced_by_a_generator_script():
+    """The measured builds did not redirect into the file — they wrote a script that opens it.
+    A detector that only understood `>` reported that the largest build produced none at all."""
+    a = score(make_turn(0, make_write("/tmp/synth.py",
+                                      "import json\n"
+                                      "json.dump(out, open('.coyodex/reconcile.json', 'w'))\n")))[7]
+    assert (a.observed, a.of) == (0, 1)
+
+
+def test_a7_is_not_applicable_when_no_reconcile_file_was_produced():
+    a = score(make_turn(0, make_bash("coyodex validate m.json")))[7]
+    assert (a.observed, a.of, a.score) == (0, 0, None)
+
+
+def test_a8_wants_json_and_penalises_paging_the_human_report():
+    good = score(make_turn(0, make_bash("coyodex audit m.json --json > claims.json")))[8]
+    assert (good.observed, good.of, good.score) == (1, 1, 1.0)
+    paged = score(make_turn(0, make_bash("coyodex audit m.json --json | head -40")))[8]
+    assert (paged.observed, paged.of) == (0, 1)
+    human = score(make_turn(0, make_bash("coyodex audit m.json | sed -n '1,50p'")))[8]
+    assert (human.observed, human.of) == (0, 1)
+
+
+# --- assertion 9 ----------------------------------------------------------------------
+
+_ESCAPABLE = ("Entities with no SUBDOMAIN (ungrouped / top-level): E4 — record 'E4: <why>' under a "
+              "'Happy Path coverage' extras heading")
+_PLAIN = "SF60 step 7: a sub-flow's step may not reference a sub-flow (one level only)"
+
+
+def make_validate_turn(index: int, uid: str, lines: tuple[str, ...]) -> Turn:
+    body = "VALIDATION WARNINGS (non-blocking):\n" + "\n".join(f"  - {ln}" for ln in lines)
+    return make_turn(index, make_bash("coyodex validate m.json --check-sources", uid),
+                     results=((uid, body),))
+
+
+def test_a9_counts_only_recordable_advisories():
+    """An advisory naming no escape token cannot be 'recorded', so counting it as a missed
+    reconciliation would be unfair to the build."""
+    a = score(make_validate_turn(0, "v1", (_ESCAPABLE, _PLAIN)),
+              make_validate_turn(1, "v2", (_PLAIN,)))[9]
+    assert (a.observed, a.of, a.score) == (1, 1, 1.0), "the escapable one went; the plain one is not counted"
+
+
+def test_a9_reports_an_advisory_still_standing_at_the_end():
+    a = score(make_validate_turn(0, "v1", (_ESCAPABLE,)),
+              make_validate_turn(1, "v2", (_ESCAPABLE,)))[9]
+    assert (a.observed, a.of, a.score) == (0, 1, 0.0)
+    assert "Entities with no SUBDOMAIN" in str(a.evidence[0].detail["unresolved"])
+
+
+def test_a9_says_so_when_the_final_view_was_narrowed():
+    """A build that ends on `validate | grep -E 'something narrow'` shows one line, against which
+    almost anything looks resolved. The score cannot be fixed from a transcript — but it can be
+    labelled, and an unlabelled optimistic number is the worse failure."""
+    wide = tuple(f"{n}: use a role-revealing verb — record it under a 'Balance exceptions' "
+                 f"extras heading" for n in range(10))
+    a = score(make_validate_turn(0, "v1", wide), make_validate_turn(1, "v2", (_PLAIN,)))[9]
+    assert "FINAL VIEW WAS NARROWED" in a.note
+
+
+def test_a9_is_not_applicable_without_captured_validate_output():
+    a = score(make_turn(0, make_bash("coyodex validate m.json > /dev/null", "v1")))[9]
+    assert (a.observed, a.of, a.score) == (0, 0, None)
+
+
+# --- assertion 10 ---------------------------------------------------------------------
+
+def test_a10_counts_fanouts_that_stayed_under_the_poll_threshold():
+    polls = tuple(make_turn(n, make_bash("ls .coyodex/build-fragments/"))
+                  for n in range(1, P.POLL_THRESHOLD + 2))
+    a = score(make_turn(0, make_agent(), make_agent()), *polls)[10]
+    assert (a.observed, a.of, a.score) == (0, 1, 0.0)
+    quiet = score(make_turn(0, make_agent(), make_agent()),
+                  make_turn(1, make_bash("ls .coyodex/build-fragments/")))[10]
+    assert (quiet.observed, quiet.of, quiet.score) == (1, 1, 1.0)
+
+
+def test_a10_attributes_each_poll_to_the_fanout_it_followed():
+    a = score(make_turn(0, make_agent()),
+              make_turn(1, make_bash("ls .coyodex/build-fragments/")),
+              make_turn(2, make_agent()),
+              make_turn(3, make_bash("find .coyodex/build-fragments -name '*.json'")))[10]
+    assert (a.observed, a.of) == (2, 2)
+    assert [e.detail["after_fanout"] for e in a.evidence] == [0, 2]
+
+
+def test_a10_is_not_applicable_without_a_fanout():
+    a = score(make_turn(0, make_bash("ls .coyodex/build-fragments/")))[10]
+    assert (a.observed, a.of, a.score) == (0, 0, None)
+
+
+# --- the scorecard and its diff -------------------------------------------------------
+
+def test_a_scorecard_round_trips_through_json():
+    card = P.score_turns((make_turn(0, make_agent(), make_agent()),), transcript="t.jsonl",
+                         label="demo")
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "card.json"
+        p.write_text(json.dumps(card.as_json(), indent=2), encoding="utf-8")
+        back = P.load_scorecard(p)
+    assert back.label == "demo" and len(back.assertions) == len(P.ASSERTIONS)
+    assert back.by_id()[3].observed == card.by_id()[3].observed
+
+
+def test_loading_a_foreign_json_is_refused():
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "x.json"
+        p.write_text('{"kind": "something-else"}', encoding="utf-8")
+        try:
+            P.load_scorecard(p)
+        except ValueError:
+            return
+    raise AssertionError("a non-scorecard JSON must be refused, not silently scored")
+
+
+def test_the_diff_reports_direction_relative_to_the_previous_run():
+    """Relative like `coyodex-eval`'s gates: which way each number moved. No threshold, no verdict."""
+    before = P.score_turns((make_turn(0, make_agent()),), label="before")
+    after = P.score_turns((make_turn(0, make_agent(), make_agent()),), label="after")
+    rows = {d.id: d for d in P.diff(before, after)}
+    assert rows[3].before == 0.0 and rows[3].after == 1.0 and rows[3].direction == "up"
+    assert rows[1].direction == "flat"
+
+
+def test_the_diff_marks_an_assertion_that_became_not_applicable():
+    before = P.score_turns((make_turn(0, make_agent()),), label="before")
+    after = P.score_turns((make_turn(0, make_bash("ls")),), label="after")
+    rows = {d.id: d for d in P.diff(before, after)}
+    assert rows[3].after is None and rows[3].direction == "gone"
+
+
+def test_the_cli_writes_a_scorecard_next_to_the_transcript_and_never_gates():
+    """A scorecard, not a gate: exit 0 whatever the numbers say."""
+    records = [make_record("assistant", message_id="m1",
+                           blocks=[{"type": "tool_use", "id": "t", "name": "Agent", "input": {}}])]
+    with tempfile.TemporaryDirectory() as td:
+        src = make_transcript_file(Path(td), records)
+        assert P.main([str(src)]) == 0
+        out = src.with_suffix(".l3-scorecard.json")
+        assert out.is_file()
+        card = P.load_scorecard(out)
+        assert card.by_id()[3].score == 0.0        # a missed opportunity…
+        assert P.main([str(src)]) == 0             # …and still exit 0
+
+
+def test_the_cli_diff_mode_exits_zero_and_the_missing_file_case_does_not():
+    with tempfile.TemporaryDirectory() as td:
+        a = Path(td) / "a.json"
+        b = Path(td) / "b.json"
+        for p, label in ((a, "before"), (b, "after")):
+            card = P.score_turns((make_turn(0, make_agent()),), label=label)
+            p.write_text(json.dumps(card.as_json()), encoding="utf-8")
+        assert P.main(["--diff", str(a), str(b)]) == 0
+        assert P.main([str(Path(td) / "nope.jsonl")]) == 2
+
+
+def test_every_assertion_id_is_unique_and_covers_one_to_ten():
+    ids = [a.id for a in P.score_turns(()).assertions]
+    assert ids == list(range(1, 11)), ids
+
+
+def _main() -> int:
+    fns = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
+    failed = 0
+    for fn in fns:
+        try:
+            fn()
+        except AssertionError as exc:
+            failed += 1
+            print(f"FAIL {fn.__name__}\n  {str(exc)[:500]}\n")
+    print(f"{len(fns) - failed} passed, {failed} failed")
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(_main())

@@ -1,10 +1,38 @@
-# L3 — process assertions over a build transcript (DESIGN ONLY, not implemented)
+# L3 — process assertions over a build transcript
+
+**Status: assertions 1–10 are IMPLEMENTED.** The reader is
+[eval/tools/coyodex_eval/transcript.py](../../tools/coyodex_eval/transcript.py), the assertions and
+the scorecard/diff CLI are
+[eval/tools/coyodex_eval/process_scorecard.py](../../tools/coyodex_eval/process_scorecard.py)
+(`coyodex-eval process`), the logic tests are
+[eval/tests/test_process_scorecard.py](../../tests/test_process_scorecard.py) and the opt-in corpus
+run is [eval/tests/test_process_corpus.py](../../tests/test_process_corpus.py). **Assertion 11 is
+still design only** — it compares a built map against the trapdoor golden map, and that golden map
+was assembled from an authored fragment rather than produced by a live agent build.
 
 L1 asks *does the method name the tool*. L2 asks *does the tool say the right thing*. Neither
-can see the third defect class: **the agent does not behave as the method says**. method.md
-requires a fan-out to be emitted as ONE message; measured across 26 fan-outs in 8 builds, 26 of
-26 launched exactly one agent per turn. The rule was rewritten and the behaviour did not move at
-all. Nothing in a static check or a tool test can observe that — only the transcript can.
+can see the third defect class: **the agent does not behave as the method says**. Nothing in a
+static check or a tool test can observe that — only the transcript can.
+
+> ## Correction: the "26 of 26" measurement was wrong
+>
+> This design opened by saying method.md requires a fan-out to be emitted as ONE message and that
+> 26 of 26 measured fan-outs launched exactly one agent per turn — the rule rewritten, the
+> behaviour unmoved. **Running the implemented checker over the same eight transcripts says the
+> opposite.** Seven of the eight builds contain at least one assistant message carrying two or more
+> `Agent` calls; the eighth launched no agents at all.
+>
+> The earlier measurement counted JSONL **records** as turns. This harness writes one content block
+> per record and stamps each with the time the tool *executed*, so a message that emitted ten
+> `Agent` calls appears as ten records minutes apart with the tool results interleaved — which reads
+> exactly like one agent per turn. What settles it: those records share one `message.id`, one
+> `requestId` and one byte-identical `usage` block, and there is exactly **one** `thinking` block
+> among all ten. A model does not emit ten tool-calling responses of which nine contain no
+> reasoning.
+>
+> The lesson generalises past this number: **the reader is the measurement.** Any future assertion
+> over a transcript is only as true as its turn reconstruction, which is why
+> `transcript.grouping_is_consistent()` exists and why the corpus test asserts it first.
 
 ## Say this first: L3 is a scorecard, not a gate
 
@@ -25,8 +53,15 @@ prove the rule is not landing.
 ```sh
 cd eval/fixtures/trapdoor
 claude -p "/coyodex from scratch"                       # ~10 minutes on this fixture, by design
-.venv/bin/python -m pytest eval/tests/test_build_process.py \
-    --transcript "$(ls -t ~/.claude/projects/*trapdoor*/*.jsonl | head -1)"
+cd -
+.venv/bin/coyodex-eval process "$(ls -t ~/.claude/projects/*trapdoor*/*.jsonl | head -1)"
+.venv/bin/coyodex-eval process --diff <previous>.l3-scorecard.json <new>.l3-scorecard.json
+```
+
+No live build is needed to exercise the checker itself — any existing build transcript scores:
+
+```sh
+COYODEX_L3_CORPUS=1 .venv/bin/python -m pytest eval/tests/test_process_corpus.py -q -s
 ```
 
 Three things make that possible and each is already true:
@@ -59,8 +94,27 @@ counting.
 | 10 | `ls`/`find` polling of `build-fragments/` stays under a threshold (propose **3** per fan-out) | the method says wait on completion notifications, never poll; a not-ready file reads as an error and burns turns |
 | 11 | *(fixture-specific, free)* the run's own `traps.yaml` outcomes: did the build fall for A1/O1/O2/G2/G5? | the fixture's whole reason to exist — compare the built map against the golden one |
 
-Assertions 1–10 are project-agnostic and would run against any build transcript. 11 is what
-makes the trapdoor fixture worth building a map of rather than just testing tools against.
+Assertions 1–10 are project-agnostic and run against any build transcript — that is why they could
+be validated against eight real builds of four different repos instead of waiting for a fixture run.
+11 is what makes the trapdoor fixture worth building a map of rather than just testing tools
+against, and it is the one still unimplemented.
+
+### What building them taught
+
+Four detectors were wrong on first writing, and every one was found by the corpus rather than by a
+synthetic test — the author of a synthetic test is the author of its blind spot:
+
+| the bug | what it did |
+|---|---|
+| substring matching for `coyodex <cmd>` | a `python3 - <<'PY'` body that merely *printed* the command name counted as running it — three shape-only `anchor-drift` runs reported where one had happened |
+| requiring the literal token `coyodex` | every build aliases the binary (`C=…/coyodex; $C audit …`); requiring the literal hid every `audit` invocation one build made |
+| "names `preindex.json` + contains a parsing tool" | `git add …/preindex.json` counted as hand-parsing an artifact it never opened |
+| "written by a `>` redirect or `Write`" | the largest `reconcile.json` in the corpus (24 KB, 139 rules, 882 id assignments) came out of a generator script, so the detector reported it was never produced at all |
+
+Assertion 9 has a limit no transcript can remove: "the final validate output" is only a complete
+view when the build did not narrow it, and every measured build pipes validate through `grep`. The
+scorecard therefore reports the run sizes and says plainly when the last view was a fraction of the
+widest one. An unlabelled optimistic number would be the worse failure.
 
 ## What each assertion emits
 

@@ -19,6 +19,8 @@ Commands:
   protocol Print the current judge-protocol fingerprint; --against guards the baseline cache.
   bless    Promote a run to the baseline (map + rendered view + profile + judge).
   compare  Compare a candidate MapProfile against a baseline; apply the relative regression gates.
+  process  L3 PROCESS scorecard over a build TRANSCRIPT (did the agent behave as the method says?)
+           — `--diff a.json b.json` compares two scorecards. A scorecard, never a gate.
 
 Run `coyodex-eval <command> --help` for command-specific options."""
 
@@ -53,6 +55,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "compare":
         from coyodex_eval import compare
         return compare.main(rest)
+    if cmd == "process":
+        from coyodex_eval import process_scorecard
+        return process_scorecard.main(rest)
     print(f"coyodex-eval: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)
     return 2
