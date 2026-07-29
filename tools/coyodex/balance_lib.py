@@ -175,9 +175,17 @@ def _exceptions(m: ProjectModel) -> set[str]:
     stores advisory (a map deliberately keeping notes-only stores); the literal `messaging`
     silences the bus-edges-but-empty-catalog canary (a bus used only through an abstraction with
     no nameable channels); the literal `isolated` silences the components-wired-to-nothing canary
-    (code that genuinely stands alone). `cadence`, `store`, `messaging` and `isolated` are
-    ordinary prose words, so unlike the other tokens they record LINE-LEADING + separator only
-    (`cadence: <why>`) — a sentence merely using the word never silences. All consumed only as
+    (code that genuinely stands alone); the literal `channel-ends` silences the one-sided-channel
+    advisory (a channel whose other end lives outside the mapped repo); the literal
+    `channel-payload` silences the no-channel-names-a-payload canary (channels that really are
+    untyped); the literal `entity-relations` silences the isolated-entities advisory (a domain
+    whose cards legitimately carry no E↔E relation). `runs-in` additionally silences the two
+    placement advisories that live outside the deployment-quality family — an unplaced self-started
+    entry point, and a messaging channel no participant's `runs_in` can place. `cadence`, `store`,
+    `messaging` and `isolated` are ordinary prose words, so unlike the first group they record
+    LINE-LEADING + separator only (`cadence: <why>`) — a sentence merely using the word never
+    silences; the three hyphenated newcomers record the same way, because line-leading is the
+    discipline every escape added since adversarial-review finding #2 follows. All consumed only as
     skip-sets, so the families can't cross-silence anything. Without a machine-readable escape a
     justified advisory re-fires forever — and worse, invites rewording prose to dodge a heuristic."""
     out: set[str] = set()
@@ -188,8 +196,12 @@ def _exceptions(m: ProjectModel) -> set[str]:
         # ("its cadence lives in ops config") — an anywhere-in-body scan would let unrelated prose
         # silently disable a whole advisory family (adversarial-review finding #2). They record
         # LINE-LEADING + separator only, the `_RECORD_LINE` discipline: `cadence: <why>`.
+        # The hyphenated newcomers are matched BEFORE `messaging`/`isolated`: a bare `messaging`
+        # alternative would otherwise swallow the `messaging`-prefixed shape of a future token and
+        # silence the empty-catalog canary as a side effect of recording something else.
         for line in body.splitlines():
-            hit = re.match(r"^\s*(?:[-*]\s+)?\**\s*(cadence|store|messaging|isolated)\**\s*[:(—–-]", line)
+            hit = re.match(r"^\s*(?:[-*]\s+)?\**\s*(channel-ends|channel-payload|entity-relations"
+                           r"|cadence|store|messaging|isolated)\**\s*[:(—–-]", line)
             if hit:
                 out.add(hit.group(1))
     return out

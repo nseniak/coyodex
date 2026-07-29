@@ -222,9 +222,18 @@ Semantics, stated on the fields:
   and (advisory, never blocking) when a diagram's immediate-children count leaves the fan-out band —
   the balance guidance in [method.md](../method.md) ("Diagram balance — the fan-out rule"); a
   justified exception is recorded in `extras` under a **"Balance exceptions"** heading — which
-  accepts diagram ids (fan-out), `UCn`/`SFn` (flow step band), `Cn` (altitude nudge), the
-  literal `granularity` (component-count-vs-E advisory), and the literal `entity-flows` (the
-  no-entity-in-any-flow canary — for a map whose flows legitimately touch no entity). A deliberately-kept flow duplication is
+  accepts diagram ids (fan-out), `UCn`/`SFn` (that element's whole granularity family: the flow
+  step band, over and under, plus the fused-goal name smell), `Cn` (altitude nudge), the
+  literal `granularity` (component-count-vs-E advisory), the literal `entity-flows` (the
+  no-entity-in-any-flow canary — for a map whose flows legitimately touch no entity), the literal
+  `runs-in` (every `runs_in` placement advisory, including an 'Unplaced' self-started entry point
+  and an unplaceable messaging channel), the literal `isolated` (components wired to nothing), the
+  literal `channel-ends` (a channel whose far end lives outside the mapped repo), the literal
+  `channel-payload` (channels that really carry no domain type), and the literal `entity-relations`
+  (a domain whose cards legitimately carry no E↔E relation). Literals are read **line-leading with
+  a separator** (`channel-ends: <why>`), so prose that merely uses the word silences nothing, and
+  each is scoped to its own advisory — none cross-silences another.
+  A deliberately-kept flow duplication is
   recorded under an **"Accepted duplications"** heading as `UCa & UCb: <why>`. Two more machine-read
   headings serve the **use-case & Happy-Path completeness** advisories: **"Unclaimed surfaces"**
   (`Cn: <why>` lines — this component's externally-activated entry points are a deliberate
@@ -236,8 +245,12 @@ Semantics, stated on the fields:
   (`C713 & C714: <why>`) records only the first id — give each its own line. Two more machine-read
   headings: **"Entry-point coverage"** carries the per-kind T4 completeness contract (`<kind>:
   complete|sampled|partial — <how>`, line-leading kind + separator — see the `entry_points[].kind`
-  bullet above), and **"Persistence exceptions"** (`Cn: <why>` lines) adjudicates a write-family
-  `C→D` edge no entity's structured store explains (see the `entities[].store` bullet below). All
+  bullet above), and **"Persistence exceptions"** adjudicates **both sides of ownership** — a
+  `Cn: <why>` line for a write-family `C→D` edge no entity's structured store explains (see the
+  `entities[].store` bullet below), and an `En: <why>` line for an entity **no component owns**
+  (no `persists`/`writes` `C→E` edge): a read-only projection, an external type, a value object.
+  The two never collide — each rule filters the heading by its own id prefix, so a `Cn` line can
+  never quiet an ownership gap and an `En` line can never quiet a writer gap. All
   six headings are machine-read by `validate`,
   so an adjudicated advisory goes quiet instead of re-firing forever.
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).

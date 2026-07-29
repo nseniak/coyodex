@@ -429,7 +429,9 @@ def _granularity_warnings(m: ProjectModel) -> list[str]:
     """Advisory use-case-granularity signals: the flow-length band (authored steps — a sub-flow
     reference counts as 1, the reward for extracting), the fused-goal name smell, and the
     literal-duplication detector. A flow/sub-flow id recorded under the 'Balance exceptions'
-    extras heading is exempt from the band (same escape valve the fan-out rule uses)."""
+    extras heading is exempt from the WHOLE family — the band AND the fused-goal name smell (same
+    escape valve the fan-out rule uses; both signals ask the same question about the same element,
+    so one adjudication answers both)."""
     warnings: list[str] = []
     excepted = balance_lib._exceptions(m)
     for fid, name, steps in ([(f.uc, f.title, f.steps) for f in m.flows]
@@ -444,12 +446,20 @@ def _granularity_warnings(m: ProjectModel) -> list[str]:
                 "exception under a 'Balance exceptions' extras heading")
         elif n < FLOW_STEPS_LO:  # includes n == 0: an empty flow/sub-flow is a silent no-op everywhere
             warnings.append(f"{fid} ({name}): only {n} step(s) — under the ≥{FLOW_STEPS_LO} band; "
-                            "is the flow traced to its outcome?")
+                            "is the flow traced to its outcome? If it genuinely ends there, record "
+                            f"'{fid}: <why>' under a 'Balance exceptions' extras heading")
     for eid, name in ([(u.id, u.name) for u in m.use_cases]
                       + [(sf.id, sf.name) for sf in m.subflows]):
+        # The recorded id exempts the element from the WHOLE granularity family, band and name
+        # smell alike: both are judgements about the same thing (is this one goal?), and an
+        # operator who has adjudicated the element has adjudicated the question. "Ignore knowingly"
+        # used to be the only answer available here, and an answer nothing records re-fires forever.
+        if eid in excepted:
+            continue
         if " and " in name.lower():
             warnings.append(f"{eid} name '{name}' joins two clauses with 'and' — two goals in one? "
-                            "Split it, rename it, or ignore knowingly")
+                            f"Split it, rename it, or record '{eid}: <why>' under a 'Balance "
+                            "exceptions' extras heading (never reword to dodge the heuristic)")
     accepted = _accepted_duplications(m)
     hops = ([(f.uc, [_step_hop(st, k) for k, st in enumerate(f.steps)]) for f in m.flows]
             + [(sf.id, [_step_hop(st, k) for k, st in enumerate(sf.steps)]) for sf in m.subflows])
@@ -547,7 +557,11 @@ def unclaimed_surface_components(m: ProjectModel) -> list[tuple[str, list[EntryP
 # anywhere-in-body scan: these bodies carry multi-paragraph prose that names OTHER ids mid-sentence
 # — an id mentioned in an explanation, or a prose sentence merely STARTING with an id and running
 # on with no separator ("C9 handles this"), must not silently pre-exempt that element.
-_RECORD_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*((?:UC|R|C)\d+)\**\s*[:(—–-]")
+# `En` joined the vocabulary for 'Persistence exceptions', which now carries BOTH sides of the same
+# question: a `Cn` line adjudicates a writer no entity explains, an `En` line adjudicates an entity
+# no writer owns. Mixing them under one heading is unambiguous because every reader passes its own
+# `prefixes` filter — a C line can never satisfy an E lookup, and vice versa.
+_RECORD_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*((?:UC|R|C|E)\d+)\**\s*[:(—–-]")
 
 
 def _recorded_ids(m: ProjectModel, heading: str, prefixes: tuple[str, ...]) -> set[str]:
@@ -992,9 +1006,15 @@ def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
       * a publisher/consumer with NO backbone `C→broker` edge — the diagrams and the change-impact
         ripple only walk edges, so an edge-less participation is INVISIBLE to both (the
         `unbacked_entity_steps` rule, applied to messaging); author the edge;
-      * a channel with no consumers — a dead letter (or an external consumer worth a dep)."""
+      * a channel with no consumers — a dead letter (or an external consumer worth a dep); escape =
+        the literal `channel-ends` under a 'Balance exceptions' extras heading, for a catalog whose
+        far ends genuinely live outside the mapped repo;
+      * a channel no participant's `runs_in` can place — a runs_in-tagging gap wearing a messaging
+        hat, so it answers to the SAME `runs-in` literal the deployment family does rather than to
+        a token of its own (one decision about this map's tagging, recorded once)."""
     problems: list[str] = []
     warnings: list[str] = []
+    excepted = balance_lib._exceptions(m)
     deps_by_id = {d.id: d for d in m.deps}
     counts: dict[str, int] = {}
     for mr in m.messaging:
@@ -1043,11 +1063,14 @@ def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
         missing = [r for r, ids in (("publishers", mr.publishers), ("consumers", mr.consumers))
                    if not ids]
         if missing:
-            warnings.append(
-                f"{label}: no {' and no '.join(missing)} recorded — the Deployment view composes "
-                "process→process arrows from publishers × consumers, so this channel draws none "
-                "and its traffic shows only as a link to the broker. Record the missing side, or "
-                "model an out-of-repo end as a dep")
+            if "channel-ends" not in excepted:
+                warnings.append(
+                    f"{label}: no {' and no '.join(missing)} recorded — the Deployment view "
+                    "composes process→process arrows from publishers × consumers, so this channel "
+                    "draws none and its traffic shows only as a link to the broker. Record the "
+                    "missing side, model an out-of-repo end as a dep, or record the literal "
+                    "`channel-ends` under a 'Balance exceptions' extras heading when the far ends "
+                    "genuinely live outside the mapped repo")
         elif m.deployment:
             # Both sides named, but the view still cannot place the channel: no participant says
             # which process runs it. Same invisible outcome, different cause — so a different fix
@@ -1055,11 +1078,13 @@ def _check_messaging(m: ProjectModel) -> tuple[list[str], list[str]]:
             placed = {r: [c for c in ids if _runs_in_of(m, c)]
                       for r, ids in (("publisher", mr.publishers), ("consumer", mr.consumers))}
             unplaced = [r for r, ids in placed.items() if not ids]
-            if unplaced:
+            if unplaced and "runs-in" not in excepted:
                 warnings.append(
                     f"{label}: no {' and no '.join(unplaced)} sets `runs_in`, so the Deployment "
                     "view cannot place this channel and draws no process→process arrow — tag the "
-                    "participating component(s) with the unit whose process runs them")
+                    "participating component(s) with the unit whose process runs them, or record "
+                    "the literal `runs-in` under a 'Balance exceptions' extras heading (the same "
+                    "literal that adjudicates the rest of this map's `runs_in` tagging)")
     return problems, warnings
 
 
@@ -1084,15 +1109,24 @@ def _messaging_payload_warnings(m: ProjectModel) -> list[str]:
     entity, silently disabling the persistence-coverage rule). Measured on a live map: 25 of 25
     channels claimed no payload — including `shard.events`, `job_queue` and `analytics_events` —
     with 134 entities available to reference. Deliberately fires only on the ALL-empty case, so a
-    map that types most of its channels and leaves a couple genuinely untyped stays quiet."""
+    map that types most of its channels and leaves a couple genuinely untyped stays quiet.
+
+    "Confirm they really are untyped" is a judgement, and a judgement with nowhere to live re-fires
+    at every validate — so the confirmation is recordable: the literal `channel-payload`,
+    line-leading under a 'Balance exceptions' extras heading. Its own literal rather than the
+    catalog-level `messaging` one, because the two say different things (`messaging` = there are no
+    nameable channels at all; `channel-payload` = the channels exist and carry no domain type)."""
     if len(m.messaging) < _PAYLOAD_CANARY_MIN or not m.entities:
         return []
     if any(c.payload for c in m.messaging):
         return []
+    if "channel-payload" in balance_lib._exceptions(m):
+        return []
     return [f"None of the {len(m.messaging)} messaging channel(s) names a `payload`, on a map with "
             f"{len(m.entities)} entities — an empty payload CLAIMS the channel carries no domain "
             f"type, so an unfilled column reads as {len(m.messaging)} untyped channels. Name the "
-            f"entity each message carries (or confirm they really are untyped)"]
+            f"entity each message carries, or record the literal `channel-payload` under a "
+            f"'Balance exceptions' extras heading if they really are untyped"]
 
 
 def _messaging_gap_warnings(m: ProjectModel) -> list[str]:
@@ -1347,8 +1381,10 @@ def unexplained_persistence_pairs(m: ProjectModel) -> list[tuple[str, str, Dep]]
 
     Returns `(component_id, lowercased_verb, dep)` triples in first-seen edge order, one per unique
     `(src, dst)` pair. Empty when no entity has structured its store (`store.dep` set) — the
-    adoption gate. Ids recorded under a 'Persistence exceptions' extras heading are filtered out
-    (the operator's escape for an infra-only writer). The verb is lowercased and the `Dep` object is
+    adoption gate. `Cn` ids recorded under a 'Persistence exceptions' extras heading are filtered out
+    (the operator's escape for an infra-only writer); the same heading's `En` lines answer the
+    mirror advisory in `validate_model` (an entity no component owns), and the two never collide —
+    each reader filters by its own id prefix. The verb is lowercased and the `Dep` object is
     returned (its `.id == component's edge dst`) so the validator's warning stays byte-identical."""
     pairs: list[tuple[str, str, Dep]] = []
     write_verbs = grammar.PERSIST_VERBS | grammar.WRITE_VERBS
@@ -1499,11 +1535,19 @@ def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
     """Advisory: once the map USES `runs_in` (the Deployment view is in play), a self-activated entry
     point with no host unit — neither its own `runs_in` nor its component's — is invisible in that view.
     Surface it (the same no-silent-no-op spirit as the completeness canaries), don't drop it. Silent
-    when the map has no deployment units, or when `runs_in` is nowhere used yet (un-adopted, not a gap)."""
+    when the map has no deployment units, or when `runs_in` is nowhere used yet (un-adopted, not a gap).
+
+    It is a `runs_in` advisory that happens to sit outside `_deployment_quality_warnings`' family,
+    so it honours the SAME recorded `runs-in` literal: an operator who has decided this map's
+    background threads are not worth placing has decided it once, and should not have to keep
+    re-reading the consequence. (Unlike the quality family it needs no suppressed-count line — this
+    is one advisory, so the recorded literal cannot hide unrelated findings behind it.)"""
     if not m.deployment:
         return []
     used = any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)
     if not used:
+        return []
+    if "runs-in" in balance_lib._exceptions(m):
         return []
     comp_units = {c.id: set(c.runs_in) for c in m.components}
     unplaced: list[str] = []
@@ -1517,7 +1561,9 @@ def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
         return []
     shown = ", ".join(unplaced[:8]) + (f", +{len(unplaced) - 8} more" if len(unplaced) > 8 else "")
     return [f"{len(unplaced)} self-started entry point(s) have no deployment unit and will be "
-            f"'Unplaced' in the Deployment view — tag `runs_in` on them or their component: {shown}"]
+            f"'Unplaced' in the Deployment view — tag `runs_in` on them or their component, or "
+            f"record the literal `runs-in` under a 'Balance exceptions' extras heading if these "
+            f"threads are deliberately unplaced: {shown}"]
 
 
 def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
@@ -1571,7 +1617,9 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
     if m.environments and not any(d.variants for d in m.deployment):
         warnings.append(f"{len(m.environments)} environment(s) declared but no deployment unit is tagged "
                         f"with a `variants` value — the Deployment view can't split by environment "
-                        f"(every unit shows in all). Tag each unit with the environment(s) it runs in.")
+                        f"(every unit shows in all). Tag each unit with the environment(s) it runs in. "
+                        f"Record the literal `runs-in` under a 'Balance exceptions' extras heading to "
+                        f"silence this.")
     elif m.environments:
         # THE MIXED STATE, which the all-or-nothing check above cannot see. An empty `variants` means
         # "ungated — runs in EVERY environment", so on a partly-tagged map a FORGOTTEN unit does not
@@ -1586,7 +1634,8 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
                 f"{len(untagged)} of {len(m.deployment)} deployment unit(s) carry no `variants` while "
                 f"others do: {shown} — an untagged unit reads as 'runs in every environment' "
                 f"({', '.join(m.environments)}), so a forgotten tag becomes a claim rather than a gap. "
-                f"Tag the environment(s) each really runs in, or confirm it is genuinely ungated.")
+                f"Tag the environment(s) each really runs in, or confirm it is genuinely ungated by "
+                f"recording the literal `runs-in` under a 'Balance exceptions' extras heading.")
     # a real unit name may contain spaces ('api worker'); only a SEPARATOR (shared with the dep-match
     # guard) signals two units crammed into one row (S5)
     non_atomic = [d.unit for d in m.deployment
@@ -1594,7 +1643,9 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
     if non_atomic:
         warnings.append(f"Deployment unit name(s) look non-atomic (contain a separator): "
                         f"{', '.join(non_atomic)} — a unit is ONE process; split each '<a> / <b>' into "
-                        f"separate `deployment[]` rows so a `runs_in` value resolves to exactly one host.")
+                        f"separate `deployment[]` rows so a `runs_in` value resolves to exactly one host. "
+                        f"Record the literal `runs-in` under a 'Balance exceptions' extras heading if the "
+                        f"name really is one process.")
     used = any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)
     if not used:
         return warnings                        # fully un-adopted → `_deployment_unlinked_warning` owns it
@@ -1612,7 +1663,8 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         warnings.append(f"Deployment unit(s) run no traced component or entry point and match no known "
                         f"system dependency: {', '.join(orphan_units)} — is each infra (add it as a "
                         f"dependency), or an un-traced `runs_in` (tag the component/entry point that runs "
-                        f"there)?")
+                        f"there)? Record the literal `runs-in` under a 'Balance exceptions' extras heading "
+                        f"if each is deliberately code-less.")
     # Formula-fill smell: every component crammed into ONE unit with NO real spread, while a REAL
     # (non-infra) process unit sits empty and no entry point is placed. Two guards keep a legitimately
     # grounded map quiet: (a) an empty INFRA unit (mongo/redis) is EXPECTED — it hosts no code by
@@ -1647,7 +1699,9 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         shown = ", ".join(ambiguous[:8]) + (f", +{len(ambiguous) - 8} more" if len(ambiguous) > 8 else "")
         warnings.append(f"{len(ambiguous)} self-started entry point(s) whose owning component runs in >1 "
                         f"unit but which set no `runs_in` — the host process is ambiguous (the view picks "
-                        f"one). Set `runs_in` on the entry point to pin its exact process: {shown}")
+                        f"one). Set `runs_in` on the entry point to pin its exact process, or record the "
+                        f"literal `runs-in` under a 'Balance exceptions' extras heading if the ambiguity "
+                        f"is accepted: {shown}")
     return warnings
 
 
@@ -2248,7 +2302,14 @@ def check_domain_coverage_model(m: ProjectModel, roots: list[Path],
     """The under-harvest advisory, ported: (a) relation-isolated entities (model-only), (b) named
     Python types in the entities' source dirs with no entity card (stdlib `ast` re-measurement).
     v2 refinement: a type explicitly listed in `non_entity_types` is excluded by NAME — the model's
-    plumbing marker — with the v1 suffix/base heuristic kept as the fallback."""
+    plumbing marker — with the v1 suffix/base heuristic kept as the fallback.
+
+    Each half is answerable. (a) is a whole-map judgement with nothing per-row to mark, so it gets
+    a literal: `entity-relations`, line-leading under a 'Balance exceptions' extras heading, for a
+    domain whose cards legitimately relate to nothing (an event log, a settings bag). (b) already
+    had two escapes and named neither: a 'Coverage exceptions' dir drops a whole folded area from
+    BOTH the uncovered list and the denominator, and `non_entity_types` drops a single type by name
+    — the better record of the two, because it travels with the type it describes."""
     if not m.entities:
         return []
     out: list[str] = []
@@ -2261,12 +2322,15 @@ def check_domain_coverage_model(m: ProjectModel, roots: list[Path],
     isolated = [i for i in ids if i not in related]
     n = len(ids)
     if (n >= _ISOLATED_MIN_ENTITIES and len(isolated) >= _ISOLATED_MIN
-            and len(isolated) > _ISOLATED_FRACTION * n):
+            and len(isolated) > _ISOLATED_FRACTION * n
+            and "entity-relations" not in balance_lib._exceptions(m)):
         out.append(
             f"Isolated entities: {len(isolated)} of {n} entity cards have NO E↔E relation "
             f"({round(100 * len(isolated) / n)}% of the domain model) — a sparse class graph is the "
             f"signature of an under-harvested domain model (did one T5 harvest agent author "
-            f"per-entity RELATIONS?): {', '.join(isolated[:_COVERAGE_SAMPLE])}"
+            f"per-entity RELATIONS?); author the relations, or record the literal `entity-relations` "
+            f"under a 'Balance exceptions' extras heading for a genuinely flat domain: "
+            f"{', '.join(isolated[:_COVERAGE_SAMPLE])}"
             + (f", +{len(isolated) - _COVERAGE_SAMPLE} more" if len(isolated) > _COVERAGE_SAMPLE else "")
         )
     domain_dirs: dict[Path, str] = {}       # absolute source dir → its repo-relative path
@@ -2301,7 +2365,9 @@ def check_domain_coverage_model(m: ProjectModel, roots: list[Path],
             out.append(
                 f"Under-harvested domain model: {len(uncovered)} of {len(types)} named types in the "
                 f"entities' source dirs have no entity card (possible under-harvested domain model; "
-                f"Python types only, measured at validate time): {shown}"
+                f"Python types only, measured at validate time) — add the missing cards, mark a "
+                f"plumbing type by name in `non_entity_types`, or record a deliberately folded "
+                f"directory under a 'Coverage exceptions' extras heading: {shown}"
             )
     return out
 
@@ -2480,11 +2546,21 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     if owned and m.entities:
         embedded = {r.target for ent in m.entities for r in ent.relations
                     if grammar.REL_KIND.get(r.verb.lower()) in ("composition", "aggregation")}
-        unowned = sorted(e.id for e in m.entities if e.id not in owned and e.id not in embedded)
+        # The escape is the E id under a 'Persistence exceptions' heading — the SAME heading the
+        # coverage rule reads `Cn` lines from, because this is the same question from the other
+        # side (there, a writer no entity explains; here, an entity no writer owns). Three separate
+        # live leads independently invented exactly this heading for exactly this advisory before
+        # it read anything: the vocabulary was already obvious, only the wiring was missing.
+        adjudicated = _recorded_ids(m, "persistence exceptions", ("E",))
+        unowned = sorted(e.id for e in m.entities
+                         if e.id not in owned and e.id not in embedded and e.id not in adjudicated)
         if unowned:
             shown = ", ".join(unowned[:12]) + (f", +{len(unowned) - 12} more"
                                                if len(unowned) > 12 else "")
-            warnings.append(f"Entities with no owning component (no persists/writes C→E edge): {shown}")
+            warnings.append(f"Entities with no owning component (no persists/writes C→E edge): "
+                            f"{shown} — author the owning component's persists/writes edge, or "
+                            f"record '<En>: <why>' under a 'Persistence exceptions' extras heading "
+                            f"(a read-only projection, an external type, a value object)")
     if m.edges:
         targets = {e.dst for e in m.edges}
         # v2: a dep marked deployment_linked has no code call site BY DECLARATION — the nudge must

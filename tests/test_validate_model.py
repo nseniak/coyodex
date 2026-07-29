@@ -870,10 +870,40 @@ def test_under_band_flow_warns():
     assert any("only 1 step(s)" in w for w in warnings_of(m))
 
 
+def test_under_band_flow_names_its_escape_and_the_record_silences_it():
+    # The OVER-band half always named the escape; the under-band half asked a question ("is the
+    # flow traced to its outcome?") an operator could answer only by ignoring the line forever.
+    m = make_valid_model()
+    assert any("only 1 step(s)" in w and "Balance exceptions" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="UC1: a one-hop read; the outcome IS the read.")]
+    assert not any("only 1 step(s)" in w for w in warnings_of(m))
+    # an unrelated id under the same heading leaves it firing
+    m.extras = [ExtraSection(heading="Balance exceptions", body="UC9: some other flow.")]
+    assert any("only 1 step(s)" in w for w in warnings_of(m))
+
+
 def test_fused_use_case_name_warns():
     m = make_valid_model()
     m.use_cases[0].name = "Sign in and create an organization"
     assert any("joins two clauses with 'and'" in w for w in warnings_of(m))
+
+
+def test_fused_name_is_silenced_by_the_elements_own_recorded_exception():
+    # "Split it, rename it, or ignore knowingly" offered no record, and rewording prose to dodge a
+    # heuristic is exactly what the exceptions mechanism exists to prevent.
+    m = make_valid_model()
+    m.use_cases[0].name = "Sign in and create an organization"
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="UC1: the signup flow really is one goal for this product.")]
+    assert not any("joins two clauses with 'and'" in w for w in warnings_of(m))
+    # a DIFFERENT element's record does not cross-silence this one
+    m.subflows = [SubFlow(id="SF1", name="Fetch and cache the profile",
+                          steps=[FlowStep(n=1, src="C1", dst="E1", phrase="reads",
+                                          where="src/v.py:2")])]
+    ws = warnings_of(m)
+    assert any("SF1 name" in w and "joins two clauses" in w for w in ws)
+    assert not any("UC1 name" in w for w in ws)
 
 
 def test_shared_run_detector_finds_literal_duplication():
@@ -1379,6 +1409,73 @@ def test_non_entity_marker_quiets_under_harvest():
         assert not any("Under-harvested" in w for w in check_domain_coverage_model(m, roots))
 
 
+def make_flat_domain_model() -> ProjectModel:
+    """Six entity cards, none of which relates to another — the isolated-entities shape."""
+    m = make_valid_model()
+    m.entities = [make_entity(eid=f"E{i}", name=f"Thing{i}", source=None) for i in range(1, 7)]
+    m.edges = [e for e in m.edges if not e.dst.startswith("E")]
+    m.flows = []
+    return m
+
+
+def test_isolated_entities_advisory_is_recordable_with_the_entity_relations_literal():
+    # "Did one T5 harvest agent author per-entity RELATIONS?" is a question, and a map whose domain
+    # really is flat (an event log, a settings bag) had no way to answer it.
+    m = make_flat_domain_model()
+    ws = check_domain_coverage_model(m, [])
+    assert any("Isolated entities" in w and "entity-relations" in w for w in ws)
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="entity-relations: an event log; the cards are genuinely flat.")]
+    assert not any("Isolated entities" in w for w in check_domain_coverage_model(m, []))
+    # a neighbouring literal about COMPONENTS standing alone must not silence the ENTITY side
+    m.extras = [ExtraSection(heading="Balance exceptions", body="isolated: leaf plugins.")]
+    assert any("Isolated entities" in w for w in check_domain_coverage_model(m, []))
+
+
+def make_unowned_entity_model() -> ProjectModel:
+    """One entity a component writes and one nothing writes — the trap-P1 shape."""
+    m = make_valid_model()
+    m.entities = [make_entity(eid="E1", name="Order"), make_entity(eid="E2", name="Snapshot")]
+    m.edges = [Edge(src="C1", verb="persists", dst="E1", why="owns", where="src/v.py:5")]
+    m.flows = []
+    return m
+
+
+def test_an_unowned_entity_is_adjudicated_by_an_E_line_under_persistence_exceptions():
+    """Trap P1: three separate live leads independently invented a 'Persistence exceptions'
+    heading for this advisory. The heading existed and read `Cn` lines for the coverage rule from
+    the other side of the same question; it now reads `En` lines for this one."""
+    m = make_unowned_entity_model()
+    assert any("no owning component" in w and "E2" in w and "Persistence exceptions" in w
+               for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Persistence exceptions",
+                             body="E2: a read-only projection built at query time.")]
+    assert not any("no owning component" in w for w in warnings_of(m))
+    # an unrelated id under the same heading leaves it firing
+    m.extras = [ExtraSection(heading="Persistence exceptions", body="E9: some other card.")]
+    assert any("no owning component" in w and "E2" in w for w in warnings_of(m))
+
+
+def test_the_two_sides_of_persistence_exceptions_do_not_cross_silence():
+    # C lines and E lines share the heading; each reader filters by its own prefix, so a writer
+    # adjudication can never quiet an ownership gap (or the reverse).
+    m = make_unowned_entity_model()
+    m.entities[0].store = Store(dep="D1", container="orders", mode="collection")
+    m.edges.append(Edge(src="C1", verb="writes", dst="D1", why="rows", where="src/v.py:9"))
+    m.components.append(Component(id="C2", name="Locks", purpose="infra", entry_point="src/l.py:1"))
+    m.edges.append(Edge(src="C2", verb="writes", dst="D1", why="locks", where="src/l.py:4"))
+    m.extras = [ExtraSection(heading="Persistence exceptions",
+                             body="C2: lock rows only — infra, not domain.")]
+    ws = warnings_of(m)
+    assert not any("C2 writes into D1" in w for w in ws)       # the C line did its own job…
+    assert any("no owning component" in w and "E2" in w for w in ws)   # …and only its own job
+    m.extras = [ExtraSection(heading="Persistence exceptions",
+                             body="E2: a read-only projection built at query time.")]
+    ws = warnings_of(m)
+    assert not any("no owning component" in w for w in ws)     # the E line did its own job…
+    assert any("C2 writes into D1" in w for w in ws)           # …and only its own job
+
+
 def test_stale_view_warns_and_fresh_view_does_not():
     m = make_valid_model()
     with tempfile.TemporaryDirectory() as td:
@@ -1731,6 +1828,24 @@ def test_unplaced_self_thread_is_advised_only_once_runs_in_is_used():
     assert any("Unplaced" in w and "self-started" in w for w in warnings_of(m))
 
 
+def test_the_unplaced_self_thread_answers_to_the_runs_in_literal():
+    # It is a `runs_in` advisory that happens to live outside `_deployment_quality_warnings`'
+    # family, so it took the same literal rather than a token of its own. An operator who has
+    # decided the background threads are not worth placing decides it once.
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="worker"), DeploymentRow(unit="bot")]
+    m.components[0].runs_in = ["bot"]
+    m.entry_points = [EntryPoint(kind="cron", trigger="orphan loop", source="o.py:1",
+                                 component="C99", activation="self")]
+    assert any("Unplaced" in w and "runs-in" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="runs-in: the maintenance threads float by design.")]
+    assert not any("Unplaced" in w for w in warnings_of(m))
+    # an unrelated literal under the same heading leaves it firing
+    m.extras = [ExtraSection(heading="Balance exceptions", body="isolated: leaf plugins.")]
+    assert any("Unplaced" in w for w in warnings_of(m))
+
+
 # --- Deployment quality warnings (WS2) -----------------------------------------
 
 def test_formula_filled_runs_in_is_flagged_but_a_true_monolith_is_not():
@@ -2016,6 +2131,18 @@ def test_untagged_participants_warn_separately():
     assert len(hits) == 1 and "runs_in" in hits[0]
 
 
+def test_the_unplaced_channel_answers_to_the_runs_in_literal():
+    # It is a `runs_in` gap wearing a messaging hat, so it takes the SAME literal the rest of the
+    # deployment family takes — one decision about this map's tagging, recorded once.
+    m = make_channel_map(["C1"], ["C2"], runs_in=[])
+    assert any("cannot place this channel" in w and "runs-in" in w for w in validate_model(m)[1])
+    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: one process, no split.")]
+    assert not any("cannot place this channel" in w for w in validate_model(m)[1])
+    # an unrelated literal leaves it firing
+    m.extras = [ExtraSection(heading="Balance exceptions", body="channel-ends: far ends external.")]
+    assert any("cannot place this channel" in w for w in validate_model(m)[1])
+
+
 def test_placement_warning_is_silent_without_deployment_units():
     # No deployment[] means no process boxes at all, so there is no topology to be missing.
     m = make_channel_map(["C1"], ["C2"], runs_in=[])
@@ -2028,6 +2155,19 @@ def test_the_one_sided_warning_is_advisory_not_blocking():
     # A channel whose other end lives outside the mapped repo is legitimately one-sided.
     problems, _ = validate_model(make_channel_map(["C1"], []))[:2]
     assert not [p for p in problems if "JOB_QUEUE" in p]
+
+
+def test_the_one_sided_decision_is_recordable_with_the_channel_ends_literal():
+    # "Legitimately one-sided" was the code's OWN justification for keeping this advisory, and
+    # there was nowhere to write that judgement down — so it re-fired at every validate.
+    m = make_channel_map(["C1"], [])
+    assert any("no consumers recorded" in w and "channel-ends" in w for w in validate_model(m)[1])
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="channel-ends: every consumer is a third-party service.")]
+    assert not any("no consumers recorded" in w for w in validate_model(m)[1])
+    # a neighbouring literal under the same heading must not stand in for it
+    m.extras = [ExtraSection(heading="Balance exceptions", body="messaging: nothing nameable.")]
+    assert any("no consumers recorded" in w for w in validate_model(m)[1])
 
 
 def test_base_class_must_run_where_its_subclass_runs():
@@ -2152,6 +2292,19 @@ def test_an_entirely_unfilled_payload_column_is_flagged():
     and `job_queue` — with 134 entities available to reference."""
     ws = warnings_of(make_channel_catalog(["", "", ""]))
     assert any("names a `payload`" in w for w in ws)
+
+
+def test_the_untyped_confirmation_is_recordable_with_the_channel_payload_literal():
+    # The message asked the operator to "confirm they really are untyped" and gave them nowhere to
+    # put the confirmation — the shape that trains people to skim past validate output.
+    m = make_channel_catalog(["", "", ""])
+    assert any("names a `payload`" in w and "channel-payload" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="channel-payload: all three carry raw strings, no domain type.")]
+    assert not any("names a `payload`" in w for w in warnings_of(m))
+    # the catalog-level literal says something else and must not silence this one
+    m.extras = [ExtraSection(heading="Balance exceptions", body="messaging: no nameable channels.")]
+    assert any("names a `payload`" in w for w in warnings_of(m))
 
 
 def test_a_partly_typed_catalog_stays_quiet():

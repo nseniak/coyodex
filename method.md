@@ -653,13 +653,30 @@ are **starting points for judgment, not ready-to-apply** (on list-shaped or star
 says so instead of proposing noise). A durably justified exception is recorded in the model's
 `extras` under the heading **"Balance exceptions"** and silences the matching advisory — the
 heading accepts four id families, each scoping one advisory: a diagram id (`root`, `S7`, …)
-silences its fan-out warning; a `UCn`/`SFn` id silences that flow's step-count band; a `Cn` id
-silences its promote-to-subsystem altitude nudge; the literal **`granularity`** silences the
-component-count-vs-E advisory (record it with the why when the altitude decision is conscious); the
-literal **`entity-flows`** silences the no-entity-in-any-flow canary; the literal **`runs-in`**
-silences the deployment-units-enumerated-but-nothing-links advisory (code that truly runs as one
-unit); the literal **`isolated`** silences the components-wired-to-nothing canary (see below).
+silences its fan-out warning; a `UCn`/`SFn` id silences that flow's **granularity family** — both
+the step-count band (over AND under) and the fused-goal name smell, which are two readings of one
+question about one element; a `Cn` id silences its promote-to-subsystem altitude nudge; the literal
+**`granularity`** silences the component-count-vs-E advisory (record it with the why when the
+altitude decision is conscious); the literal **`entity-flows`** silences the no-entity-in-any-flow
+canary; the literal **`runs-in`** silences the whole **`runs_in` placement family** — the
+deployment-units-enumerated-but-nothing-links advisory (code that truly runs as one unit), the
+deployment-quality canaries (unit naming, formula-filled `runs_in`, unlinked units, ambiguous
+thread hosts, variant tagging), *self-started entry points left 'Unplaced'*, and *a messaging
+channel no participant's `runs_in` can place*; the literal **`isolated`** silences the
+components-wired-to-nothing canary (see below); the literal **`channel-ends`** silences the
+one-sided-channel advisory (a channel whose far end genuinely lives outside the mapped repo); the
+literal **`channel-payload`** silences the no-channel-names-a-payload canary (channels that really
+are untyped); the literal **`entity-relations`** silences the isolated-entities advisory (a domain
+whose cards legitimately relate to nothing — an event log, a settings bag).
 Never reword prose to dodge a heuristic — record the exception instead.
+
+Every literal is read **line-leading with a separator** — `channel-ends: the consumers are all
+third-party` — so a sentence that merely uses the word never silences anything. And every literal
+is scoped to its own advisory: recording `isolated` (components) does not quiet `entity-relations`
+(entity cards), and `messaging` (no nameable channels at all) does not quiet `channel-payload`
+(nameable channels carrying no domain type). Where a `runs-in` record suppresses more than one
+deployment finding, `validate` still prints the **count** of what it suppressed — a silence you
+cannot see is indistinguishable from having no findings.
 
 **Wire what the prose claims.** `validate` emits one aggregated advisory for components carrying **no
 backbone edge and no `messaging` role** — code the model shows connected to nothing. Every view walks

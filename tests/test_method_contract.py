@@ -281,7 +281,35 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     "{} state machine(s) cite no `source`":
         "cite the declaring line, or drop the machine — the method forbids an uncited one",
     "{} ({}) is {}ed by {} ({}), which runs in {}":
-        "a hard invariant of the code: a base cannot be absent from a process loading its subclass",
+        "a hard invariant of the code: a base cannot be absent from a process loading its subclass. "
+        "Re-examined when the check grew its wholly-untagged-base arm: still no judgement. The rule "
+        "only fires once the SUBCLASS is already placed, so the map itself determines the base's "
+        "correct tag — the remedy is to copy it, not to decide anything. Escaping it via `runs-in` "
+        "would let a map hide the exact defect it exists for (a missing base tag drew eight false "
+        "process arrows on a live map)",
+    # Row-completeness on a T4 row: an entry point runs INSIDE some component the map already
+    # traces, so the owning C id exists to be named. Until it is, the row is invisible to the
+    # entry-surface coverage check — an unrecordable state, not a recordable decision.
+    "entry_points[{}] [{}] {}: externally activated but owned by no component":
+        "name the owning C id; the row is incomplete, not adjudicable",
+    # An element with nothing behind it — the same class as 'Subsystems with no members' below:
+    # back it or delete it, and DELETING IT is the record.
+    "{} ({}) has no T6 flow":
+        "trace it or drop it — an untraced use case is a claim with nothing behind it",
+    "{} ({}) drives no use case and appears in no flow":
+        "trace it or drop it — a role nothing exercises is a claim with nothing behind it",
+    # The messaging twin of the allowlisted `unbacked_entity_steps` rule below: the component IS a
+    # publisher/consumer, so the C→broker edge is a fact of the code, always authorable.
+    "{}: {}(s) {} carry no backbone edge to {}":
+        "author the C→broker edge; a recorded participant provably talks to the broker",
+    # The honesty record. Both are FACTS about how much of the claim surface was challenged, and an
+    # escape would be a switch for making an unverified map look verified — the one thing the
+    # grounding feature exists to prevent. Authoring the `grounding` block is the only answer, and
+    # it is a structured one (like `deployment_linked`), not an extras token.
+    "No `grounding` record":
+        "record `grounding` (the block itself IS the escape); an extras token would defeat the feature",
+    "Grounding is partial":
+        "a measured share of the claim surface — ground more claims; nothing else can honestly quiet it",
     # Vocabulary nudges: reuse the seed spelling or mint deliberately; the map records the choice.
     "{} bucket '{}' is long (>40 chars)": "shorten the label",
     "Library bucket '{}' is minted (not a seed)": "the minted name IS the record",
