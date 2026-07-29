@@ -1211,7 +1211,24 @@ def _inheritance_runs_in_warnings(m: ProjectModel) -> list[str]:
     which is not cosmetic, because the Deployment view composes process topology from `runs_in`
     differences. A live map tagged a shared connector framework with eight scraper units but omitted
     a ninth whose plugin extends it, and that one missing tag drew eight false arrows from that
-    plugin's process to all its siblings."""
+    plugin's process to all its siblings.
+
+    THE SUBCLASS'S OWN PLACEMENT IS THE ONLY GUARD. The check fires when the subclass runs
+    somewhere and the base is not tagged there — INCLUDING the base tagged nowhere at all, which
+    is the state a real build actually produces: the subclass owns a directory and gets tagged,
+    the abstract base sits in a shared module and is forgotten. Requiring the base to be tagged
+    somewhere before checking it (the earlier `if not src or not dst`) inverted the rule — it
+    reported the half-done job and stayed silent on the un-started one.
+
+    That single guard is also what keeps the two no-op maps quiet, with no separate special case:
+    a map with no `deployment[]` units has no unit any `runs_in` can resolve against (returned
+    empty above), and a map that uses `runs_in` NOWHERE gives every subclass an empty host set, so
+    no pair is ever reached. Placement is only checkable against a map that places things.
+
+    The two states get DIFFERENT text because the remedy differs. A partially-tagged base needs a
+    unit ADDED; a wholly-untagged base needs to be tagged at all, and until it is, it belongs to no
+    process box in the Deployment view — the unit that runs the subclass is drawn holding half the
+    code it loads."""
     units = {d.unit for d in m.deployment}
     if not units:
         return []
@@ -1222,15 +1239,26 @@ def _inheritance_runs_in_warnings(m: ProjectModel) -> list[str]:
         if e.verb not in ("extends", "implements"):
             continue
         src, dst = host.get(e.src), host.get(e.dst)
-        if not src or not dst:
+        if src is None or dst is None:      # an endpoint that is not a component: no `runs_in`
+            continue
+        if not src:                         # the SUBCLASS runs nowhere — nothing to place it under
             continue
         missing = src - dst
-        if missing:
+        if not missing:
+            continue
+        if dst:
             out.append(
                 f"{e.dst} ({names.get(e.dst, e.dst)}) is {e.verb.rstrip('s')}ed by {e.src} "
                 f"({names.get(e.src, e.src)}), which runs in {', '.join(sorted(missing))} — but "
                 f"{e.dst} is not tagged to run there. A base cannot be absent from a process that "
                 f"loads its subclass: add the unit(s) to {e.dst}'s `runs_in`")
+        else:
+            out.append(
+                f"{e.dst} ({names.get(e.dst, e.dst)}) is {e.verb.rstrip('s')}ed by {e.src} "
+                f"({names.get(e.src, e.src)}), which runs in {', '.join(sorted(missing))} — but "
+                f"{e.dst} sets no `runs_in` at all, so it lands in no process box while its "
+                f"subclass lands in one. A base cannot be absent from a process that loads its "
+                f"subclass: give {e.dst} a `runs_in` — those unit(s) at minimum")
     return out
 
 

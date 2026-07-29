@@ -44,6 +44,7 @@ from coyodex.model import (
 )
 from coyodex.validate_model import (
     _anchor_pairs,
+    _inheritance_runs_in_warnings,
     check_anchor_existence_model,
     check_domain_coverage_model,
     check_domain_relations,
@@ -2036,7 +2037,6 @@ def test_base_class_must_run_where_its_subclass_runs():
     reading — and a gap is not cosmetic: the Deployment view composes process topology from `runs_in`
     differences, so one missing tag on a shared connector framework drew eight false process arrows
     from the plugin that extends it to all its siblings."""
-    from coyodex.validate_model import _inheritance_runs_in_warnings
     m = ProjectModel(
         components=[Component(id="C1", name="Plugin", purpose="p", source="a.py:1",
                               runs_in=["bluesky"]),
@@ -2053,6 +2053,62 @@ def test_base_class_must_run_where_its_subclass_runs():
     m.edges = [Edge(src="C1", verb="calls", dst="C2", why="w", where="a.py:1")]
     m.components[1].runs_in = ["rss"]
     assert _inheritance_runs_in_warnings(m) == []           # a plain call may legitimately cross
+
+
+def make_inheritance_model(base_runs_in: list[str], sub_runs_in: list[str],
+                           units: list[str] | None = None) -> ProjectModel:
+    """`C1` (subclass) extends `C2` (base), each placed by `runs_in` over `units`.
+
+    `units=[]` builds a map with NO `deployment[]` rows — the state where nothing can be placed
+    at all, as distinct from a map whose units exist but which tags no component into them."""
+    return ProjectModel(
+        components=[Component(id="C1", name="Report worker", purpose="p", source="sub.py:1",
+                              runs_in=list(sub_runs_in)),
+                    Component(id="C2", name="Worker template", purpose="p", source="base.py:1",
+                              runs_in=list(base_runs_in))],
+        deployment=[DeploymentRow(unit=u) for u in (["worker", "api"] if units is None else units)],
+        edges=[Edge(src="C1", verb="extends", dst="C2", why="w", where="sub.py:1")])
+
+
+def test_a_base_tagged_nowhere_at_all_warns_where_its_subclass_runs():
+    """The state a real build produces: the subclass owns a directory and gets tagged, the
+    abstract base sits in a shared module and is forgotten.
+
+    The check used to require the base to be tagged SOMEWHERE before comparing, which inverted
+    the rule — it reported the half-done job and stayed silent on the un-started one."""
+    out = _inheritance_runs_in_warnings(make_inheritance_model(base_runs_in=[],
+                                                               sub_runs_in=["worker"]))
+    assert len(out) == 1, out
+    assert "C2" in out[0] and "worker" in out[0] and "sets no `runs_in` at all" in out[0], out[0]
+
+
+def test_a_partially_tagged_base_keeps_the_add_the_unit_remedy():
+    """A base tagged somewhere-but-not-there needs a unit ADDED, so it keeps the older text —
+    a different remedy from the untagged base, which needs tagging at all."""
+    out = _inheritance_runs_in_warnings(make_inheritance_model(base_runs_in=["api"],
+                                                               sub_runs_in=["worker"]))
+    assert len(out) == 1, out
+    assert "not tagged to run there" in out[0] and "sets no `runs_in` at all" not in out[0], out[0]
+
+
+def test_a_base_tagged_everywhere_its_subclass_runs_is_silent():
+    assert _inheritance_runs_in_warnings(
+        make_inheritance_model(base_runs_in=["worker", "api"], sub_runs_in=["worker"])) == []
+
+
+def test_a_map_that_uses_runs_in_nowhere_is_silent():
+    """Units exist, but no component is tagged into any of them: the map does not place code, so
+    there is no placement to be missing. The subclass's own placement is the only guard, and it
+    is what keeps this state quiet without a special case."""
+    assert _inheritance_runs_in_warnings(
+        make_inheritance_model(base_runs_in=[], sub_runs_in=[])) == []
+
+
+def test_a_map_with_no_deployment_units_is_silent():
+    """No `deployment[]` rows means no process boxes at all — a `runs_in` value would resolve
+    against nothing, so an untagged base claims nothing."""
+    assert _inheritance_runs_in_warnings(
+        make_inheritance_model(base_runs_in=[], sub_runs_in=["worker"], units=[])) == []
 
 
 def test_mixed_variant_tagging_is_flagged():

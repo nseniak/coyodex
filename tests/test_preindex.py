@@ -10,7 +10,10 @@ Non-Python symbol tests are gated on the tree-sitter grammar pack being installe
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -326,6 +329,106 @@ def test_compression_skips_non_product_dirs() -> None:
     assert not any("tests/" in w for w in ws), ws
     assert not any("internal/" in w for w in ws), ws
     assert any("billing/" in w for w in ws), ws
+
+
+# --- --report: WHICH pre-index does it read? ------------------------------------
+# The method has build agents run the CLI from the coyodex clone, so the CWD is routinely not
+# the analysed repo. `--report` used to read only `--in` (a CWD-relative default) while
+# accepting-and-dropping `--root`, so it printed the CURRENT repo's pre-index under the other
+# repo's name — right-looking output, wrong repo, no visible symptom.
+
+def make_report_artifact(root: Path, marker: str, expected: int) -> Path:
+    """A minimal but real-shaped `<root>/.coyodex/preindex.json`, tagged with a distinctive
+    `root` marker and E so any report can be traced back to the file it actually read."""
+    out = root / ".coyodex" / "preindex.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({
+        "tool": "coyodex preindex", "root": marker,
+        "weight": {"path": ".", "loc": 1, "file_count": 1, "churn": 0,
+                   "lang": "python", "children": []},
+        "granularity": {"expected_components": expected, "band": [1, 2], "per_dir": {}},
+        "symbols": {}, "coverage": {}}))
+    return out
+
+
+def run_report(args: list[str], cwd: Path | None = None) -> tuple[int, str]:
+    """Run `preindex --report` and return (exit code, everything it printed to stdout+stderr).
+    Stdlib only and no pytest fixture (house style), so the redirect and the chdir are explicit
+    and local; the chdir is always undone, since a leaked CWD would corrupt every later test."""
+    buf = io.StringIO()
+    here = Path.cwd()
+    try:
+        if cwd is not None:
+            os.chdir(cwd)
+        with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+            code = preindex.main(["--report", *args])
+    finally:
+        os.chdir(here)
+    return code, buf.getvalue()
+
+
+def test_report_root_reads_the_named_repos_preindex_not_the_cwds() -> None:
+    """THE DEFECT. Run from repo A, `--report --root B` must report B. The hard case is a CWD
+    that HAS its own pre-index, because then the wrong answer looks completely right."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        make_report_artifact(tmp / "other-repo", "/other-repo", 999)
+        make_report_artifact(tmp / "cwd-repo", "/cwd-repo", 7)
+        code, out = run_report(["--root", str(tmp / "other-repo")], cwd=tmp / "cwd-repo")
+    assert code == 0, out
+    assert "/other-repo" in out and "E=999" in out, out[:400]
+    assert "/cwd-repo" not in out and "E=7" not in out, (
+        "--report fell back to the CWD's pre-index while --root named another repo")
+
+
+def test_report_in_wins_over_root() -> None:
+    """Precedence: an explicit `--in` names the file outright, so it beats `--root`."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        named = make_report_artifact(tmp / "named-repo", "/named-repo", 3)
+        make_report_artifact(tmp / "root-repo", "/root-repo", 999)
+        code, out = run_report(["--in", str(named), "--root", str(tmp / "root-repo")])
+    assert code == 0, out
+    assert "/named-repo" in out and "E=3" in out, out[:400]
+    assert "/root-repo" not in out and "E=999" not in out, out[:400]
+
+
+def test_report_without_in_or_root_still_reads_the_cwd() -> None:
+    """The fallback is unchanged: neither flag means `./.coyodex/preindex.json`, so every
+    existing invocation from inside the analysed repo keeps working exactly as before."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        make_report_artifact(tmp / "cwd-repo", "/cwd-repo", 5)
+        code, out = run_report([], cwd=tmp / "cwd-repo")
+    assert code == 0, out
+    assert "/cwd-repo" in out and "E=5" in out, out[:400]
+
+
+def test_report_rejects_every_build_only_flag() -> None:
+    """`--report` reads an artifact and writes nothing, so there is no honest reading of
+    "report, but with --max-depth 3". Each build-only flag must ERROR and name itself —
+    accepting-and-ignoring is the failure mode with no visible symptom."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        artifact = make_report_artifact(tmp / "repo", "/repo", 4)
+        for flag, value in (("--out", str(tmp / "x.json")), ("--since", "HEAD~1"),
+                            ("--pairs", str(tmp / "pairs.json")), ("--max-depth", "3")):
+            code, out = run_report(["--in", str(artifact), flag, value])
+            assert code != 0, f"{flag} was silently accepted by --report:\n{out}"
+            assert flag in out, f"the error for {flag} does not name the flag:\n{out}"
+            assert "BUILD" in out, f"the error for {flag} does not say it is a build flag:\n{out}"
+            assert "WEIGHT TREE" not in out, f"{flag} errored but the report still ran:\n{out}"
+
+
+def test_report_missing_preindex_names_the_path_it_looked_for() -> None:
+    """A "no pre-index" error that does not say WHERE it looked is unactionable — and under
+    `--root` the path is derived, so the user cannot infer it."""
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        (tmp / "empty-repo").mkdir()
+        code, out = run_report(["--root", str(tmp / "empty-repo")])
+    assert code == 2, out
+    assert str(tmp / "empty-repo" / ".coyodex" / "preindex.json") in out, out
 
 
 if __name__ == "__main__":

@@ -12,8 +12,9 @@ right shape for logic, and it leaves three holes this file closes:
   1. `coyodex preindex --report` had ZERO tests among the 894 — not one invocation. The
      `--root`-is-ignored defect lived there undisturbed.
   2. No test fed an "E is stored in D" claim into `anchor-drift`. That claim shape is exactly
-     where the store false-positive lives: on one live map 9 of 13 drift findings were it, and
-     the lead hand-wrote a filter script to strip them.
+     where the store false-positive lived: on one live map 9 of 13 drift findings were it, and
+     the lead hand-wrote a filter script to strip them. A3 now pins the fixed behaviour — the
+     claim is report-only and never anchor-nudged.
   3. Every fixture was a toy. Here the input is a REAL tree (`eval/fixtures/trapdoor/`) and a
      REAL assembled map of it (`golden/project-map.json`), so a check that only works on
      three hand-made rows fails honestly.
@@ -178,15 +179,14 @@ def test_preindex_report_rejects_a_non_integer_depth():
         assert preindex.main(["--report", "--in", str(artifact), "--depth", "deep"]) == 2
 
 
-def test_preindex_report_ignores_root_and_reports_the_cwd_repo():
-    """THE DEFECT, pinned. `--report` reads `--in` (default `.coyodex/preindex.json`, resolved
-    against the CWD) and never looks at `--root`, so pointing it at another repo silently
-    reports the current one under the other repo's name.
+def test_preindex_report_honours_root_over_the_cwd_repo():
+    """THE DEFECT, now fixed and pinned the other way round. `--report` used to read only `--in`
+    (default `.coyodex/preindex.json`, resolved against the CWD) and never look at `--root`, so
+    pointing it at another repo silently reported the CURRENT one under the other repo's name.
 
-    This test asserts TODAY'S behaviour so the bug is visible and cannot regress unnoticed; the
-    static twin in test_method_contract.py states it as a contract violation. The fix belongs to
-    the maintainer, not to this suite — see tools/coyodex/preindex.py:302 (`report()` reads
-    `--in`) against tools/coyodex/preindex.py:398 (`main()` reads `--root`)."""
+    The hard case is exactly this one: a CWD that HAS its own pre-index, so the wrong answer
+    looks completely right. `--root` must win over it. The static twin in
+    test_method_contract.py states the same thing as a contract."""
     with tempfile.TemporaryDirectory() as td:
         tmp = Path(td)
         other = tmp / "other-repo" / ".coyodex"
@@ -211,11 +211,11 @@ def test_preindex_report_ignores_root_and_reports_the_cwd_repo():
         finally:
             import os
             os.chdir(here)
-    assert "/cwd-repo" in out, out[:400]
-    assert "E=7" in out, "the CWD's own pre-index was reported"
-    assert "/other-repo" not in out and "E=999" not in out, (
-        "if this now fails, --report has learned to honour --root — good; delete this test and "
-        "flip the contract assertion in test_method_contract.py")
+    assert "/other-repo" in out, out[:400]
+    assert "E=999" in out, "the named repo's pre-index must be the one reported"
+    assert "/cwd-repo" not in out and "E=7" not in out, (
+        "--report fell back to the CWD's own pre-index while --root named another repo — the "
+        "wrong repo reported under the right repo's name, with no visible symptom")
 
 
 def test_preindex_report_names_the_ignore_patterns_when_a_tree_was_narrowed():
@@ -300,18 +300,20 @@ def test_a2_a_prose_lifecycle_passes_the_state_source_check_because_the_names_ar
     assert has_warning(fabricated, "do not appear in the cited source"), fabricated
 
 
-def test_a3_a_store_claim_grounded_at_the_class_definition_reads_as_drift():
-    """A3 — THE STORE FALSE POSITIVE, and the claim shape no test had ever exercised.
+def test_a3_a_store_claim_is_report_only_and_is_never_anchor_nudged():
+    """A3 — THE STORE FALSE POSITIVE. This trap now pins the FIX, not the gap.
 
     The entity is DEFINED in `src/domain/models.py` and WRITTEN in `src/store/ticket_repo.py`.
-    A skeptic asked "where is Ticket stored?" reports the definition (the only place the type
-    appears by name), so `anchor-drift` compares a definition line against a write line and
-    calls it drift — even though nothing about the map is wrong. On one live map 9 of 13 drift
-    findings were this class, and the lead hand-wrote a filter script to strip them.
+    A store claim is anchored at the TYPE DEFINITION by the domain-card contract, so when the
+    Phase-4 skeptics answer "where is Ticket stored?" with the WRITE site, the gap between the
+    two is the contract working — not drift. `anchor-drift` used to call it drift anyway: on one
+    live map 9 of 13 findings were this class, and the lead hand-wrote a filter script to strip
+    them before `fix apply-drift` — the hand-scripting method.md forbids.
 
-    Note what the drift record says: `same_file` is False. Different files is the tell that
-    separates this class from a real intra-file anchor slip, and it is the discriminator any
-    future filter should key on rather than being re-derived by hand."""
+    The suppression is STRUCTURAL: the worklist marks the claim `drift_eligible=False`, and
+    `anchor-drift` skips it. Nothing matches on the words " is stored in ", so a reworded claim
+    cannot silently re-open the hole. Only the anchor NUDGE is suppressed — the claim is still
+    farmed to the skeptics and a refutation still lands exactly as before."""
     trap("A3")
     model = make_golden_model()
     claim, stored = make_store_claim(model, "E1")
@@ -319,28 +321,39 @@ def test_a3_a_store_claim_grounded_at_the_class_definition_reads_as_drift():
 
     write_line = line_of("src/store/ticket_repo.py", "self._tickets.replace_one(")
     def_line = line_of("src/domain/models.py", "class Ticket:")
+    worklist = l2_worklist_model(model)
+    item = next(w for w in worklist if w.claim == claim)
+    assert item.drift_eligible is False, (
+        "the store claim must carry the report-only flag — the fix is a property of the claim, "
+        "never a substring test on its wording")
 
-    # The skeptics report the DEFINITION — the honest answer to "where is this type?".
-    verdicts = [make_vote(claim, True, f"src/domain/models.py:{def_line}")] * 2
-    assert ad.drift_findings(l2_worklist_model(model), verdicts, tolerance=2) == [], (
-        "a claim anchored at the definition and grounded at the definition is NOT drift")
+    # The skeptics report the DEFINITION — no drift, as it always was.
+    same = [make_vote(claim, True, f"src/domain/models.py:{def_line}")] * 2
+    assert ad.drift_findings(worklist, same, tolerance=2) == []
 
-    # Now the same claim with the write site stored — the shape a map gets when the store
-    # claim is anchored at the operative write instead of the type.
-    doc = json.loads(GOLDEN_MAP.read_text(encoding="utf-8"))
-    for ent in doc["entities"]:
-        if ent["id"] == "E1":
-            ent["source"] = f"src/store/ticket_repo.py:{write_line}"
-    moved = load_model(json.dumps(doc))
-    claim2, _ = make_store_claim(moved, "E1")
-    records = ad.drift_records(l2_worklist_model(moved),
-                              [make_vote(claim2, True, f"src/domain/models.py:{def_line}")] * 2,
-                              tolerance=2)
-    assert len(records) == 1, records
-    assert records[0]["same_file"] is False, (
-        "the store false positive is a CROSS-FILE drift; `same_file` is the discriminator a "
-        "filter should use instead of being re-derived per map")
-    assert records[0]["corrected"] == f"src/domain/models.py:{def_line}"
+    # The skeptics report the WRITE site, in another file. THIS is the false positive. It must
+    # produce no finding and — critically — no `fix apply-drift` record, so nothing can try to
+    # pull E1's anchor off `class Ticket`.
+    elsewhere = [make_vote(claim, True, f"src/store/ticket_repo.py:{write_line}")] * 2
+    assert ad.drift_findings(worklist, elsewhere, tolerance=2) == []
+    assert ad.drift_records(worklist, elsewhere, tolerance=2) == []
+
+    # Per-claim, not a global off switch: a real backbone edge in the SAME worklist, confirmed by
+    # the SAME verdicts file, still drifts and still reaches `fix apply-drift`.
+    edge = next(w for w in worklist if w.drift_eligible and w.claim == "C4 writes D1")
+    edge_file, edge_line = (edge.anchor or "").rsplit(":", 1)
+    mixed = elsewhere + [make_vote(edge.claim, True, f"{edge_file}:{int(edge_line) + 9}")] * 2
+    assert [w.claim for w, _d in ad.drift_findings(worklist, mixed, tolerance=2)] == [edge.claim]
+    recs = ad.drift_records(worklist, mixed, tolerance=2)
+    assert [r["claim"] for r in recs] == [edge.claim]
+    assert recs[0]["corrected"] == f"{edge_file}:{int(edge_line) + 9}"
+
+    # REFUTATION is untouched: the store claim is still in the worklist the skeptics are farmed
+    # from, so a skeptic can still disprove the dep/container and the lead still re-authors the
+    # row. Suppressing the nudge must not hide the claim.
+    assert claim in [w.claim for w in worklist]
+    refuted = [make_vote(claim, False, f"src/store/ticket_repo.py:{write_line}")] * 2
+    assert ad.drift_findings(worklist, refuted, tolerance=2) == []
 
 
 def test_a4_an_edge_anchored_at_an_import_is_flagged():
@@ -445,24 +458,26 @@ def test_m4_a_publisher_with_no_backbone_edge_to_the_broker_is_reported():
 
 # --- D: deployment ---------------------------------------------------------------------
 
-def test_d1_a_base_class_untagged_where_its_subclass_runs_is_not_reported_today():
+def test_d1_a_base_class_untagged_where_its_subclass_runs_is_reported():
     """D1 — a base class not tagged to run where its subclass runs.
 
-    A DESIGN GAP, flagged not fixed. `_inheritance_runs_in_warnings` skips the pair when the
-    BASE has no `runs_in` at all (tools/coyodex/validate_model.py:1224 — `if not src or not dst:
-    continue`), so it fires on a partially-tagged base and stays silent on a completely untagged
-    one. The completely-untagged case is the one a build actually produces: the subclass owns a
-    directory and gets tagged, the abstract base sits in a shared module and is forgotten.
+    FIXED, and this pins the fix. The check used to require the base to be tagged SOMEWHERE
+    before comparing (`if not src or not dst: continue`), which inverted the rule: it reported
+    the half-done job and stayed silent on the un-started one. The un-started one is what a build
+    actually produces — the subclass owns a directory and gets tagged, the abstract base sits in
+    a shared module and is forgotten — so the fixture plants exactly that: `C10` tagged nowhere,
+    its subclass `C11` running in `worker`.
 
-    This test asserts BOTH: today's silence on the untagged base, and the warning on the
-    partially-tagged one — so the gap is visible and the working half cannot regress."""
+    Both states are asserted, and they carry DIFFERENT text because the remedy differs: a
+    partially-tagged base needs a unit added, a wholly-untagged one needs tagging at all."""
     trap("D1")
     model = make_golden_model()
     base = next(c for c in model.components if c.id == "C10")
     child = next(c for c in model.components if c.id == "C11")
     assert base.runs_in == [] and child.runs_in == ["worker"]
-    assert not has_warning(warnings_of(model), "is extended by"), (
-        "if this now fails the gap is closed — good; update the docstring and drop this half")
+    untagged = warnings_of(model)
+    assert has_warning(untagged, "C10", "is extended by", "sets no `runs_in` at all"), untagged
+    assert has_warning(untagged, "which runs in worker"), untagged
 
     doc = json.loads(GOLDEN_MAP.read_text(encoding="utf-8"))
     for c in doc["components"]:
@@ -470,6 +485,7 @@ def test_d1_a_base_class_untagged_where_its_subclass_runs_is_not_reported_today(
             c["runs_in"] = ["api"]        # tagged somewhere, but not where the subclass runs
     partial = warnings_of(load_model(json.dumps(doc)))
     assert has_warning(partial, "C10", "not tagged to run there"), partial
+    assert not has_warning(partial, "sets no `runs_in` at all"), partial
 
 
 def test_d2_untagged_units_alongside_tagged_ones_are_reported_as_a_claim():

@@ -56,9 +56,9 @@ traps:
     plants: 'Ticket is DEFINED in src/domain/models.py and WRITTEN in src/store/ticket_repo.py; the two are different files.'
     where: 'src/domain/models.py, src/store/ticket_repo.py'
     layer: L2
-    expect: 'An "En is stored in Dn" claim fed into anchor-drift with skeptic evidence pointing at the class DEFINITION reports drift against the stored write anchor — the store false-positive class.'
+    expect: 'An "En is stored in Dn" claim is REPORT-ONLY: whatever line the skeptics report, anchor-drift emits no finding and no `fix apply-drift` record for it, while an edge claim in the same worklist and the same verdicts file still drifts. Refutation is untouched — the store claim stays in the audit worklist the skeptics are farmed from.'
     covered: true
-    note: 'On one live map 9 of 13 drift findings were this class and the lead hand-wrote a filter script. No test in the 894 fed a store claim into anchor-drift before this one.'
+    note: 'Pins the FIX, not the gap. The store anchor is the entity TYPE DEFINITION by the domain-card contract, so the write site a skeptic reports is not drift. On one live map 9 of 13 drift findings were this false-positive class and the lead hand-wrote a filter script — the hand-scripting method.md forbids. The suppression is a property of the claim (`WorkItem.drift_eligible`), never a text match on " is stored in ".'
 
   - id: A4
     group: anchors
@@ -142,9 +142,9 @@ traps:
     plants: 'WorkerBase is subclassed by ReportWorker, which runs in the `worker` unit; the base itself is tagged nowhere.'
     where: 'src/base/worker_base.py, src/base/report_worker.py'
     layer: L2
-    expect: 'DESIGN GAP, pinned not fixed: the check skips the pair when the BASE has no runs_in at all (validate_model.py:1224), so a completely untagged base is silent and only a partially-tagged one warns. The untagged case is the one a real build produces.'
+    expect: 'validate warns whenever the subclass runs somewhere the base is not tagged, INCLUDING a base tagged nowhere at all — the wholly-untagged base gets its own text ("sets no `runs_in` at all") because the remedy is to tag it at all, not to add one unit. The only guard is the subclass being placed, so a map that uses runs_in nowhere, or declares no deployment units, stays silent.'
     covered: true
-    note: 'The subclass owns a directory and gets tagged; the abstract base sits in a shared module and is forgotten.'
+    note: 'The subclass owns a directory and gets tagged; the abstract base sits in a shared module and is forgotten. Was a pinned design gap: the check required the base to be tagged somewhere before comparing, so it reported the half-done job and missed the un-started one.'
 
   - id: D2
     group: deployment

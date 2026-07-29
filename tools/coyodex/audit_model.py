@@ -88,6 +88,14 @@ class WorkItem:
     # from the model — so a fresh-context skeptic given only this item can find the code with NO
     # map file. The short `claim` stays the stable key; `detail` is additive.
     detail: str | None = None
+    # Whether `anchor-drift` may NUDGE this item's anchor when the skeptics report a different line.
+    # Default True: for a call-site claim (an edge) the anchor IS meant to be the acting line, so a
+    # reported line that differs is drift to correct. FALSE for claims whose anchor deliberately
+    # points somewhere the operation does NOT happen — a store claim is anchored at the entity's
+    # TYPE DEFINITION by contract, so the skeptics' WRITE site is not drift, and moving the anchor
+    # there would corrupt the domain card. Such claims are still grounded and still refutable;
+    # only the anchor nudge (`anchor-drift` → `fix apply-drift`) is suppressed. Report-only.
+    drift_eligible: bool = True
 
 
 _ENTRY_POINTS_SHOWN = 6  # cap the member entry points listed in a component's claim detail
@@ -449,7 +457,9 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     # refute by reading the entity's repository/type — a wrong dep or container silently mis-answers
     # the canonical "what is persisted where?" question. Anchor = the entity's own source (the type
     # definition is where the storage wiring is discoverable from). Drift is REPORT-ONLY: a refuted
-    # store claim is re-authored, never anchor-nudged.
+    # store claim is re-authored, never anchor-nudged — `drift_eligible=False` makes that contract
+    # a property of the claim, so `anchor-drift` cannot mistake the skeptics' WRITE site for drift
+    # and `fix apply-drift` cannot move the entity's anchor off its type definition.
     for en in m.entities:
         st = en.store
         if st is not None and st.dep:
@@ -458,6 +468,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             items.append(WorkItem(
                 claim=f"{en.id} ({en.name}) is stored in {where}{mode}",
                 anchor=_anchor(en.source or ""),
+                drift_eligible=False,
                 why_risky=("the persistence inventory hangs on this row — a wrong dep/container "
                            "mis-answers 'what is persisted where?' for every reader.")))
     # Messaging-channel claims (WS-A5): "C12 publishes to 'JOB_QUEUE' on D3; C30 consumes" is a
@@ -471,6 +482,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
         items.append(WorkItem(
             claim=f"Channel '{mr.name}'{on}: {pubs} publish(es); {cons} consume(s)",
             anchor=_anchor(mr.source),
+            drift_eligible=False,
             why_risky=("the async catalog hangs on this row — verify the enqueue/consume call "
                        "sites actually name this channel.")))
     # State-machine claims (WS-A3): states rot fast — the enum gains a member, the dispatch grows
@@ -484,6 +496,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                 claim=f"{el.id} ({el.name}) has states [{', '.join(sm.states)}]"
                       + (f" with {len(sm.transitions)} transition(s)" if sm.transitions else ""),
                 anchor=_anchor(src),
+                drift_eligible=False,
                 why_risky=("lifecycles rot first — verify the declaring enum/constants still "
                            "list exactly these states and transitions.")))
     # Cadence claims (WS-A2): a recorded schedule is a claim about WHEN code runs, and schedules
@@ -500,6 +513,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             items.append(WorkItem(
                 claim=f"Entry point [{ep.kind}] {ep.trigger} runs on cadence '{ep.cadence}'",
                 anchor=_anchor(ep.cadence_source if cited else ep.source),
+                drift_eligible=False,
                 why_risky=("a schedule is config-tuned and drifts silently — verify the declaring "
                            "line still says this cadence." if cited else
                            "cadence is INFERRED (no declaring anchor) — find the line that "

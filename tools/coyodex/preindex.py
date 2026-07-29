@@ -20,6 +20,7 @@ validator never reads this file; it re-measures (GR4).
 Usage:
   coyodex preindex [--root .] [--out .coyodex/preindex.json] [--since <rev|date>]
                    [--pairs pairs.json] [--max-depth N]
+  coyodex preindex --report [--root <repo> | --in <path>] [--depth N] [--top N]
 """
 from __future__ import annotations
 
@@ -298,8 +299,37 @@ def report(argv: list[str]) -> int:
     The stderr summary of a BUILD run carries only the top-5 dirs and the whole-repo E, but the
     harvest plan needs the weight tree and the PER-SLICE E (`granularity.per_dir`) — which live
     only inside the JSON. Without this, every build hand-writes throwaway JSON-parsing code, which
-    is exactly what method.md's "don't reverse-engineer the JSON" tells it not to do."""
-    in_path = Path(_arg(argv, "--in", ".coyodex/preindex.json") or "")
+    is exactly what method.md's "don't reverse-engineer the JSON" tells it not to do.
+
+    WHICH PRE-INDEX. The method tells build agents to run the CLI from the coyodex clone, so the
+    CWD is routinely NOT the analysed repo. `--report` therefore honours `--root` exactly as the
+    build path does: `<root>/.coyodex/preindex.json`. Precedence is explicit `--in` > `--root` >
+    the CWD default, so a bare `--report` behaves as it always did. Before this, `--root` was
+    accepted and dropped, and the current repo's pre-index was printed under the other repo's
+    name — measured on two of four real builds, which burned 2-4 calls recovering."""
+    # Build-only flags are REJECTED, never silently swallowed: `--report` reads an artifact and
+    # writes nothing, so there is no honest reading of "report, but with --max-depth 3". Accepting
+    # and ignoring is the failure mode with no visible symptom (tests/test_method_contract.py).
+    for flag in ("--out", "--since", "--pairs", "--max-depth"):
+        if flag in argv:
+            sys.stderr.write(
+                f"preindex --report: {flag} applies to the BUILD, not the report.\n"
+                "  --report only READS an existing pre-index; it writes nothing and re-measures "
+                "nothing.\n"
+                f"  build with it:   coyodex preindex --root <repo> {flag} <value>\n"
+                "  then report it:  coyodex preindex --report --root <repo>\n")
+            return 2
+
+    # Precedence: an explicit --in wins (it names the file outright), else --root names the repo
+    # whose pre-index to read, else the CWD default (unchanged behaviour when neither is passed).
+    explicit_in = _arg(argv, "--in")
+    root_arg = _arg(argv, "--root")
+    if explicit_in is not None:
+        in_path = Path(explicit_in)
+    elif root_arg is not None:
+        in_path = Path(root_arg) / ".coyodex" / "preindex.json"
+    else:
+        in_path = Path(".coyodex") / "preindex.json"
     try:
         depth = int(_arg(argv, "--depth", "2") or 2)
         top = int(_arg(argv, "--top", "40") or 40)
@@ -308,7 +338,8 @@ def report(argv: list[str]) -> int:
         return 2
     if not in_path.is_file():
         sys.stderr.write(f"preindex --report: no pre-index at {in_path}\n"
-                         "  build one first: coyodex preindex --root <repo>\n")
+                         "  build one first: coyodex preindex --root <repo>\n"
+                         "  then report it:  coyodex preindex --report --root <repo>\n")
         return 2
     try:
         doc = json.loads(in_path.read_text())
@@ -379,11 +410,16 @@ def report(argv: list[str]) -> int:
 
 USAGE = """usage: coyodex preindex [--root .] [--out .coyodex/preindex.json] [--since <rev|date>]
                         [--pairs pairs.json] [--max-depth N]
-       coyodex preindex --report [--in .coyodex/preindex.json] [--depth N]
+       coyodex preindex --report [--root <repo> | --in <path>] [--depth N] [--top N]
 
 Build the structural pre-index, or (--report) print an existing one as a readable summary:
 the weight tree, the per-directory component expectation E, and the coverage block.
---report READS the JSON and writes nothing."""
+--report READS the JSON and writes nothing.
+
+--report picks the file to read as: --in <path> if given, else <root>/.coyodex/preindex.json
+if --root is given, else ./.coyodex/preindex.json. Pass --root (or --in) whenever you run the
+CLI from somewhere other than the analysed repo — otherwise you read the CWD repo's pre-index.
+The build-only flags (--out, --since, --pairs, --max-depth) are rejected under --report."""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -461,7 +497,11 @@ def main(argv: list[str] | None = None) -> int:
         f"  granularity: expect ~{granularity['expected_components']} components "
         f"(band {granularity['band'][0]}–{granularity['band'][1]}, bound by "
         f"{granularity['bound_by']}, median file {granularity['median_file_loc']} LOC)\n"
-        f"  READ IT: coyodex preindex --report   "
+        # Name the artifact this run just wrote. A bare `coyodex preindex --report` reads the
+        # CWD's pre-index, and the method has builds run the CLI from the coyodex clone — so a
+        # pathless hint is a copy-paste that silently reads the wrong repo whenever the CWD is
+        # not the analysed one. Echoing the path makes the suggested command always correct.
+        f"  READ IT: coyodex preindex --report --in {out_path}   "
         f"(weight tree + per-slice E + coverage — do NOT hand-parse the JSON)\n"
         "  NOTE: draft the behavioral layer BEFORE using this (GR1); reconcile every item, "
         "never copy verbatim (GR2).\n"

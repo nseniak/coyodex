@@ -48,7 +48,14 @@ def _confirmed_drifts(worklist: list[WorkItem], grounding: list[dict],
     """(work-item, drift, grounded-evidence) for every CONFIRMED claim whose stored anchor drifts from
     the skeptics' reported line. Confirmed = a strict majority of that claim's votes have
     `grounded=True`. The grounded-evidence list is carried out so a consumer can recover the corrected
-    `path:line` without re-tallying votes."""
+    `path:line` without re-tallying votes.
+
+    Claims the worklist marks `drift_eligible=False` are skipped outright. Their anchor deliberately
+    points where the operation does NOT happen — a store claim is anchored at the entity's TYPE
+    DEFINITION by the domain-card contract, so the WRITE line a skeptic reports is not drift, and
+    nudging the anchor onto it would corrupt the card. Those rows are REPORT-ONLY: a refuted one is
+    re-authored by hand, never auto-moved. This is a property of the claim, never a text match on
+    its wording. REFUTATION is untouched — only the anchor nudge is suppressed."""
     votes: dict[str, list[dict]] = defaultdict(list)
     for v in grounding:
         claim = v.get("claim")
@@ -56,6 +63,8 @@ def _confirmed_drifts(worklist: list[WorkItem], grounding: list[dict],
             votes[claim].append(v)
     out: list[tuple[WorkItem, DriftResult, list[str]]] = []
     for w in worklist:
+        if not w.drift_eligible:   # report-only claim: grounded/refuted still counts, drift does not
+            continue
         vs = votes.get(w.claim, [])
         grounded = [v for v in vs if v.get("grounded") is True]
         if not vs or len(grounded) * 2 <= len(vs):   # no votes, or not a strict majority confirmed
