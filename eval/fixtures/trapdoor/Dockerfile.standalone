@@ -1,0 +1,20 @@
+# The single-container variant: one process serving both the API and the built frontend.
+#
+# TRAP D4 — the `npm run build` + `COPY --from=web /app/web/dist` pair below BAKES the frontend
+# into this image. The bundle is SERVED BY this unit; it is not a process of its own here. A map
+# that gives the frontend its own deployment unit in `standalone` (or in `cloud`) has invented a
+# process. The frontend is a live process in `dev` alone, as the compose `web-dev` service.
+FROM node:20-alpine AS web
+WORKDIR /app/web
+COPY web/package.json ./package.json
+COPY web/src ./src
+RUN npm run build
+
+FROM python:3.11-slim
+WORKDIR /app
+COPY src ./src
+COPY config.default.env ./config.default.env
+# The baked artifact — served by this unit, never run as one.
+COPY --from=web /app/web/dist ./static
+EXPOSE 80
+CMD ["python", "-m", "src.entrypoints.standalone"]

@@ -1,0 +1,276 @@
+# traps.yaml — THE single source of truth for the trapdoor fixture.
+#
+# Every regression layer reads this one file, so a trap is never asserted twice under two
+# spellings and never drifts between the code that plants it and the test that checks it.
+#
+#   L1  tests/test_method_contract.py   static text/AST over method.md + CLI + validator
+#   L2  tests/test_trapdoor_tools.py    the CLI run against this fixture + its golden map
+#   L3  (designed, not implemented)     process assertions over a build transcript
+#
+# FORMAT: a deliberately small YAML subset, parsed by `tests/trapdoor.py` with the stdlib
+# only — coyodex core carries no runtime dependencies and PyYAML is not installed. Supported:
+# comments, `key: value` scalars (bare / 'single' / "double" quoted, true/false/ints), nested
+# mappings, and lists of mappings (`- key: value` + indented continuation). Nothing else.
+# Values must fit on ONE line; no block scalars, no anchors, no flow mappings.
+#
+# FIELDS per trap:
+#   id       the inventory id (A1, O3, …) — stable, referenced by test names
+#   group    anchors | overclaims | messaging | deployment | altitude | domain | environment
+#   plants   what the fixture puts in the tree
+#   where    repo-relative path(s) inside this fixture, comma-separated
+#   layer    the layer that ASSERTS it: L1 | L2 | L3 | none
+#   expect   the outcome the asserting layer pins
+#   covered  true when a test actually asserts it today; false = a declared gap
+#   note     why, when the answer is not obvious
+
+meta:
+  name: trapdoor
+  purpose: 'A synthetic codebase that plants every defect class four real coyodex builds produced.'
+  ignored_by: '.coyodex/.ignore at the coyodex repo root — this tree is never part of the self-map.'
+  golden_map: 'golden/project-map.json — a map of THIS fixture, written by `coyodex assemble`.'
+  size_note: 'Hand-written trap code is ~1.5 kLOC. src/flatpack, src/generated and web/ add mechanical filler because traps G1-G3 are about SIZE; the filler is repetitive so an agent skims it.'
+
+traps:
+
+  # ---- anchors -----------------------------------------------------------------------
+  - id: A1
+    group: anchors
+    plants: 'An auth check whose enforcing `raise` sits ~30 lines below the `def` header, with long preparation between them.'
+    where: 'src/auth/gate.py'
+    layer: L2
+    expect: 'validate --check-sources / anchor-drift (shape-only) flag a security anchor placed on the `def` line; the same anchor on the `raise` line is clean.'
+    covered: true
+    note: 'require_read in the same file is the negative control: its enforcing line IS near the header.'
+
+  - id: A2
+    group: anchors
+    plants: 'A lifecycle declared as a real enum (TicketState) AND a second, five-phase lifecycle that exists only in a docstring paragraph.'
+    where: 'src/lifecycle/states.py, src/lifecycle/escalation.py'
+    layer: L2
+    expect: 'DESIGN GAP, pinned not fixed: --check-sources only verifies each state NAME APPEARS in the cited file, so the docstring paragraph — which contains all five names — passes clean. Only a name absent from the file entirely is caught. The *declares, not mentions* half of the rule is unenforced.'
+    covered: true
+    note: 'A live build had 5 of ~11 state machines refuted, all invented from prose — and the deterministic pass did not catch any of them. This fixture shows why.'
+
+  - id: A3
+    group: anchors
+    plants: 'Ticket is DEFINED in src/domain/models.py and WRITTEN in src/store/ticket_repo.py; the two are different files.'
+    where: 'src/domain/models.py, src/store/ticket_repo.py'
+    layer: L2
+    expect: 'An "En is stored in Dn" claim fed into anchor-drift with skeptic evidence pointing at the class DEFINITION reports drift against the stored write anchor — the store false-positive class.'
+    covered: true
+    note: 'On one live map 9 of 13 drift findings were this class and the lead hand-wrote a filter script. No test in the 894 fed a store claim into anchor-drift before this one.'
+
+  - id: A4
+    group: anchors
+    plants: 'An import line that reads like a call site (build_analytics imported into the read controller, never called there).'
+    where: 'src/api/passthrough_controller.py, src/clients/dead_import.py'
+    layer: L2
+    expect: 'An edge `where` anchored at the import line is flagged by the operative-line classifier; an import can never be the acting statement.'
+    covered: true
+
+  # ---- overclaims --------------------------------------------------------------------
+  - id: O1
+    group: overclaims
+    plants: 'A read controller that only forwards to TicketService; the datastore call is two hops away inside TicketRepository.'
+    where: 'src/api/passthrough_controller.py, src/services/ticket_service.py'
+    layer: L2
+    expect: 'The golden map attributes the datastore edge to the repository, not the controller; a variant map that credits the controller is the transitive-attribution overclaim.'
+    covered: true
+    note: 'Transitive attribution was 5 of 40 refuted dependency claims on one live build.'
+
+  - id: O2
+    group: overclaims
+    plants: 'A write controller that calls .save() and so LOOKS like the system of record, while the operative replace_one lives in the repository.'
+    where: 'src/api/record_controller.py, src/store/ticket_repo.py'
+    layer: L2
+    expect: 'The persists C->E edge for Ticket belongs to TicketRepository; the controller carries reads at most.'
+    covered: true
+
+  - id: O3
+    group: overclaims
+    plants: 'A factory that CONSTRUCTS analytics/error clients and never sends anything; the emit happens in the plugin handlers.'
+    where: 'src/clients/analytics_factory.py, src/plugins/p01/handler.py'
+    layer: L2
+    expect: 'No C->D emit edge originates at the factory; the emit edges originate at the plugin handlers whose code holds the enqueue line.'
+    covered: true
+
+  - id: O4
+    group: overclaims
+    plants: 'A module whose only mention of two types is an unused import.'
+    where: 'src/clients/dead_import.py'
+    layer: L2
+    expect: 'An edge justified by the import alone has no operative line; anchoring it at the import trips the shape-only drift pass.'
+    covered: true
+
+  # ---- messaging ---------------------------------------------------------------------
+  - id: M1
+    group: messaging
+    plants: 'ticket.state.changed and escalation.paged are published and consumed by nobody; ticket.comment.added is consumed.'
+    where: 'src/messaging/publisher.py, src/messaging/consumer.py'
+    layer: L2
+    expect: 'validate warns on catalogued channels with publishers and no consumers, and stays quiet for the consumed one.'
+    covered: true
+
+  - id: M2
+    group: messaging
+    plants: 'The same channel under two spellings: TICKET_STATE_CHANGED = "ticket.state.changed" and the literal "ticket-state-changed" in the audit plugin.'
+    where: 'src/messaging/publisher.py, src/plugins/p03/handler.py'
+    layer: L2
+    expect: 'A catalog carrying both spellings as separate rows is the duplicated-row defect; the fixture asserts the tree really contains both literals so the trap cannot silently disappear.'
+    covered: true
+    note: 'One live build filled the catalog and its messaging skeptic returned 11 refutations — the most of any batch.'
+
+  - id: M3
+    group: messaging
+    plants: 'Every channel body is an ad-hoc dict; no wire payload is a modelled entity.'
+    where: 'src/messaging/publisher.py'
+    layer: L2
+    expect: 'validate emits its no-payload advisory for the catalog; filling `payload` with an En here would be invention.'
+    covered: true
+
+  - id: M4
+    group: messaging
+    plants: 'EventPublisher reaches the broker only through an injected Transport, so it names no broker library.'
+    where: 'src/messaging/publisher.py'
+    layer: L2
+    expect: 'A map with the channel rows but no C->broker backbone edge draws the publisher isolated; validate warns (the `isolated` canary / the messaging-gap warning).'
+    covered: true
+
+  # ---- deployment --------------------------------------------------------------------
+  - id: D1
+    group: deployment
+    plants: 'WorkerBase is subclassed by ReportWorker, which runs in the `worker` unit; the base itself is tagged nowhere.'
+    where: 'src/base/worker_base.py, src/base/report_worker.py'
+    layer: L2
+    expect: 'DESIGN GAP, pinned not fixed: the check skips the pair when the BASE has no runs_in at all (validate_model.py:1224), so a completely untagged base is silent and only a partially-tagged one warns. The untagged case is the one a real build produces.'
+    covered: true
+    note: 'The subclass owns a directory and gets tagged; the abstract base sits in a shared module and is forgotten.'
+
+  - id: D2
+    group: deployment
+    plants: 'api and worker carry NO compose `profiles:` key while broker, primary, web-dev, standalone and search do.'
+    where: 'docker-compose.yml'
+    layer: L2
+    expect: 'An untagged unit claims EVERY environment by omission; validate surfaces the mixed tagged/untagged state rather than reading it as complete.'
+    covered: true
+
+  - id: D3
+    group: deployment
+    plants: 'Three compose profiles — dev / cloud / standalone — forming a real environment axis.'
+    where: 'docker-compose.yml, docs/runbook.md'
+    layer: L2
+    expect: 'The golden map declares all three in `environments` and tags units with anchored `variants`; a map that flattens the axis loses real information.'
+    covered: true
+    note: 'A live build dropped a dev/prod/standalone split as "over-modeling".'
+
+  - id: D4
+    group: deployment
+    plants: 'Dockerfile.standalone runs `npm run build` then COPYs web/dist into the runtime image.'
+    where: 'Dockerfile.standalone, web/package.json'
+    layer: L2
+    expect: 'The frontend is a unit in `dev` ONLY (the Vite process); the baked bundle is served by standalone/cloud and must not be its own unit there.'
+    covered: true
+
+  - id: D5
+    group: deployment
+    plants: 'A compose service named `search` alongside a dependency named `search` (the OpenSearch server the repository indexes into).'
+    where: 'docker-compose.yml, src/store/ticket_repo.py'
+    layer: L2
+    expect: 'The infra unit hosts no code, so it renders through its dependency box, not as a process box; validate does not report it as an unlinked unit.'
+    covered: true
+
+  - id: D6
+    group: deployment
+    plants: 'A map state in which three separate deployment advisories fire at once (inferred variant tags, an unlinked unit, an ambiguous thread host).'
+    where: 'golden/project-map.json'
+    layer: L2
+    expect: 'Recording the literal `runs-in` under Balance exceptions collapses the whole family to ONE line that still states the suppressed COUNT — suppression stays visible.'
+    covered: true
+    note: 'A live map recorded `runs-in` for one reason and thereby hid two unrelated findings, including a real variant-tagging gap.'
+
+  # ---- altitude ----------------------------------------------------------------------
+  - id: G1
+    group: altitude
+    plants: 'web/src/components/ — 14 tiny .tsx files, ~21 lines each.'
+    where: 'web/src/components/'
+    layer: L2
+    expect: 'preindex reports `bound_by: file-count` with a small median file size, and --report prints the explicit note that the honest altitude sits BELOW E here.'
+    covered: true
+    note: 'A live monorepo hit E~994 vs a built 429 with a 48-LOC median file, and had no way to see why.'
+
+  - id: G2
+    group: altitude
+    plants: 'src/flatpack/ — 12 files, ~3.2 kLOC, no subdirectories.'
+    where: 'src/flatpack/'
+    layer: L2
+    expect: 'The per-directory E for this dir is >1, so the leaf rule says SPLIT into cohesive file groups rather than making it one box.'
+    covered: true
+
+  - id: G3
+    group: altitude
+    plants: 'src/generated/ — ~900 LOC of machine-emitted message classes carrying an @generated banner.'
+    where: 'src/generated/'
+    layer: L2
+    expect: 'Collapsing it to one box is correct AND must be recorded: with the dir under a Coverage exceptions heading the folded-subdir / unreferenced-dir warnings go quiet; without it they fire.'
+    covered: true
+
+  - id: G4
+    group: altitude
+    plants: 'src/plugins/p01..p08 — eight identically-shaped dirs, each __init__.py + handler.py.'
+    where: 'src/plugins/'
+    layer: L2
+    expect: 'Eight same-kind siblings on one screen are inside the homogeneous-family exemption; validate emits no fan-out warning for that diagram.'
+    covered: true
+
+  - id: G5
+    group: altitude
+    plants: 'Exactly two top-level source dirs, src/ and web/, which tempt a two-box Backend/Frontend root.'
+    where: 'src/, web/'
+    layer: L2
+    expect: 'A root of two tech-tier subsystems is the sparse-root anti-pattern; validate warns at the root diagram. Grouping by capability instead keeps the root inside the band.'
+    covered: true
+
+  # ---- domain ------------------------------------------------------------------------
+  - id: P1
+    group: domain
+    plants: 'AuditEntry — an entity nothing in the fixture persists or writes.'
+    where: 'src/domain/models.py'
+    layer: L1
+    expect: 'validate emits "Entities with no owning component" and that advisory names NO recordable escape token, so a lead who decides the gap is intentional has nowhere to record it.'
+    covered: true
+    note: 'Three separate live leads independently invented a `Persistence exceptions` heading. That heading now EXISTS but is read by a different rule (the persistence-coverage one, which filters Cn ids) and does not silence this advisory. The L1 escape-token audit is what pins the gap.'
+
+  - id: P2
+    group: domain
+    plants: 'TicketRepository writes a `search_index` container that no entity records as its store.'
+    where: 'src/store/ticket_repo.py'
+    layer: L2
+    expect: 'Once any entity structures store.dep, the unexplained write-family C->D pair is reported; recording the component under Persistence exceptions silences it.'
+    covered: true
+
+  - id: P3
+    group: domain
+    plants: 'Ticket composes Comment composes Attachment — relations that only an E<->E authoring pass produces.'
+    where: 'src/domain/models.py'
+    layer: L2
+    expect: 'A map with C->E edges but no authored E<->E relations leaves entities isolated; validate counts isolated entities.'
+    covered: true
+
+  # ---- environment -------------------------------------------------------------------
+  - id: E1
+    group: environment
+    plants: 'config.default.env — checked in, non-secret, the source of truth for the key list.'
+    where: 'config.default.env'
+    layer: L2
+    expect: 'The file is ordinary tracked source: it appears in `git ls-files` and in the pre-index walk, so nothing structurally prevents a build from reading it.'
+    covered: true
+    note: 'A live build refused it as a "secret file" on the filename alone and shipped a thin Config table.'
+
+  - id: E2
+    group: environment
+    plants: 'A doc paragraph that MENTIONS the filename `.env.production` while asking nobody to open it.'
+    where: 'docs/runbook.md'
+    layer: L2
+    expect: 'No such file exists in the tree — the mention is text, not access. A guard matching command TEXT rather than file access trips here.'
+    covered: true
+    note: 'Self-inflicted during the study: a grep pattern containing the filename tripped the guard.'

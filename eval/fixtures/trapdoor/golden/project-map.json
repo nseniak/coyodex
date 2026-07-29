@@ -1,0 +1,2111 @@
+{
+  "format": "coyodex-map",
+  "title": "trapdoor",
+  "goal": "trapdoor is a synthetic ticketing service that exists to be MAPPED WRONG. Every directory in it plants a defect class that four real coyodex builds produced, so a regression suite can assert what the map tooling says about a real tree rather than about a toy in-memory object. Support agents move tickets through a declared lifecycle, reporters comment on them, and a background worker rolls resolved tickets up; that product story is only realistic enough to hang the traps on.",
+  "commit": "fixture",
+  "committed": "2026-07-29",
+  "built": "2026-07-29 15:00",
+  "roles": [
+    {
+      "id": "R1",
+      "name": "Reporter",
+      "kind": "human",
+      "wants": "to add context to a ticket they raised and see what happened to it",
+      "drives": "UC2, UC4"
+    },
+    {
+      "id": "R2",
+      "name": "Support agent",
+      "kind": "human",
+      "wants": "to work a tenant's queue: find tickets, read them, and move them along the lifecycle",
+      "drives": "UC1, UC2, UC3, UC5"
+    }
+  ],
+  "glossary": [
+    {
+      "term": "Tenant",
+      "meaning": "the customer account a ticket belongs to; every read and write is scoped to one",
+      "source": "src/auth/gate.py:32"
+    },
+    {
+      "term": "Lifecycle",
+      "meaning": "the five declared ticket states and the transitions between them",
+      "source": "src/lifecycle/states.py:14"
+    },
+    {
+      "term": "Channel",
+      "meaning": "a named pub/sub topic the publisher writes and (sometimes) a consumer drains",
+      "source": "src/messaging/publisher.py:29"
+    },
+    {
+      "term": "Trap",
+      "meaning": "a defect deliberately planted in this tree, declared in traps.yaml, asserted by one regression layer",
+      "source": "traps.yaml:1"
+    }
+  ],
+  "use_cases": [
+    {
+      "id": "UC1",
+      "name": "Browse a tenant's tickets",
+      "actors": [
+        "R2"
+      ],
+      "trigger_outcome": "An agent asks for a tenant's queue, optionally filtered by state -> they get the list of tickets they are allowed to see, each with its state and comment count."
+    },
+    {
+      "id": "UC2",
+      "name": "Read one ticket",
+      "actors": [
+        "R2"
+      ],
+      "trigger_outcome": "Someone opens a ticket by id -> they see its title, state, assignee and its comment thread, or a 404 when the ticket belongs to another tenant."
+    },
+    {
+      "id": "UC3",
+      "name": "Move a ticket along its lifecycle",
+      "actors": [
+        "R2"
+      ],
+      "trigger_outcome": "An agent posts a target state -> the transition is checked against the declared table, the ticket is stored in its new state, re-indexed, and a state-change event is published."
+    },
+    {
+      "id": "UC4",
+      "name": "Comment on a ticket",
+      "actors": [
+        "R1"
+      ],
+      "trigger_outcome": "A reporter posts text on a ticket they may write -> the comment is appended to the ticket document and the thread comes back one longer."
+    },
+    {
+      "id": "UC5",
+      "name": "Take an advisory lock",
+      "actors": [
+        "R2"
+      ],
+      "trigger_outcome": "An operator claims a named lock before a bulk job -> the lock row records the holder, so a second claim can see who holds it."
+    }
+  ],
+  "happy_path": [
+    {
+      "id": "HP1",
+      "title": "Support agent browses the tenant queue",
+      "uc": "UC1",
+      "why": null
+    },
+    {
+      "id": "HP2",
+      "title": "Support agent opens one ticket",
+      "uc": "UC2",
+      "why": "needs a ticket id from the queue listed in HP1"
+    },
+    {
+      "id": "HP3",
+      "title": "Reporter adds context as a comment",
+      "uc": "UC4",
+      "why": "the ticket opened in HP2 is the one being commented on"
+    },
+    {
+      "id": "HP4",
+      "title": "Support agent moves the ticket to resolved",
+      "uc": "UC3",
+      "why": "the comment thread from HP3 is what the agent read before deciding"
+    }
+  ],
+  "subsystems": [
+    {
+      "id": "S1",
+      "name": "Ticket workflow",
+      "purpose": "Everything that answers a ticket request end to end: the HTTP handlers, the application service that orchestrates them, and the repository that is the system of record. This is where traps O1 and O2 live: the handlers look like they own the datastore and do not.",
+      "parent": null,
+      "source": "src/api/",
+      "confidence": "verified",
+      "tech": "Python",
+      "tech_source": "Dockerfile.api:4"
+    },
+    {
+      "id": "S2",
+      "name": "Eventing",
+      "purpose": "The asynchronous half: the publisher that names three channels, the one consumer that drains a channel, and the plugin family that reacts. Traps M1-M4 are all here.",
+      "parent": null,
+      "source": "src/messaging/",
+      "confidence": "verified",
+      "tech": "",
+      "tech_source": ""
+    },
+    {
+      "id": "S3",
+      "name": "Notification plugins",
+      "purpose": "Eight identically-shaped plugin directories, each listening on one channel and forwarding a shaped payload to the analytics sink. A homogeneous family: it reads as a list, not as eight decisions.",
+      "parent": "S2",
+      "source": "src/plugins/",
+      "confidence": "verified",
+      "tech": "",
+      "tech_source": ""
+    },
+    {
+      "id": "S4",
+      "name": "Platform runtime",
+      "purpose": "The cross-cutting machinery every request and every worker pass runs through: authorisation, the lifecycle table, escalation policy, the worker template and its one concrete worker, the client factory, and the two process entry points.",
+      "parent": null,
+      "source": "src/auth/",
+      "confidence": "inferred",
+      "tech": "",
+      "tech_source": ""
+    },
+    {
+      "id": "S5",
+      "name": "Shared validation",
+      "purpose": "A flat toolkit of value validators. Past both leaf caps with no subdirectory to recurse into, so it is split into two cohesive components rather than folded into one box (trap G2).",
+      "parent": null,
+      "source": "src/flatpack/",
+      "confidence": "verified",
+      "tech": "",
+      "tech_source": ""
+    },
+    {
+      "id": "S6",
+      "name": "Web UI",
+      "purpose": "The browser half: a file-per-component presentational tree plus its hyperscript runtime. The FILE cap binds here, so the code-derived expectation E lands far above the honest altitude (trap G1).",
+      "parent": null,
+      "source": "web/src/",
+      "confidence": "verified",
+      "tech": "TypeScript",
+      "tech_source": "web/package.json:2"
+    }
+  ],
+  "components": [
+    {
+      "id": "C1",
+      "name": "Ticket read handlers",
+      "subsystem": "S1",
+      "purpose": "The read side of the HTTP surface: fetch one ticket, list a tenant's queue, list a thread. Every handler authorises, then forwards to the ticket service and renders the result. It owns no collection and issues no store call of its own.",
+      "entry_point": "src/api/passthrough_controller.py:24",
+      "depends_on": "",
+      "source": "src/api/passthrough_controller.py:21",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C2",
+      "name": "Ticket write handlers",
+      "subsystem": "S1",
+      "purpose": "The mutating HTTP surface: transition a ticket, append a comment, claim a lock. It calls .save() through the service, which is exactly why it reads like the system of record without being one.",
+      "entry_point": "src/api/record_controller.py:23",
+      "depends_on": "",
+      "source": "src/api/record_controller.py:20",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C3",
+      "name": "Ticket service",
+      "subsystem": "S1",
+      "purpose": "Application logic for the ticket lifecycle: tenant-scoped fetch, listing, transition-and-announce, comment append, and lock acquisition. The component that really holds the repository and the publisher.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/services/ticket_service.py:14",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C4",
+      "name": "Ticket repository",
+      "subsystem": "S1",
+      "purpose": "The system of record for tickets, comments and attachments. It issues every document-store call in the fixture: the ticket upsert, the secondary search-index write, and the advisory lock rows.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/store/ticket_repo.py:28",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C5",
+      "name": "Authorisation gate",
+      "subsystem": "S4",
+      "purpose": "Decides whether a principal may read or write a tenant's tickets. The write check composes scope, tenant and lifecycle state into one predicate and raises far below its own header.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/auth/gate.py:34",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C6",
+      "name": "Lifecycle table",
+      "subsystem": "S4",
+      "purpose": "The declared ticket states and the transition table between them, plus the guard that refuses an illegal move. The one lifecycle in this tree that a states machine may cite.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/lifecycle/states.py:14",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C7",
+      "name": "Escalation policy",
+      "subsystem": "S4",
+      "purpose": "Counts breaches against a retry budget and decides whether to page. Its docstring describes a five-phase lifecycle that no code implements.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/lifecycle/escalation.py:29",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C8",
+      "name": "Event publisher",
+      "subsystem": "S2",
+      "purpose": "Publishes three named channels through an injected transport. Because the transport is a seam, this component names no broker library anywhere in its own code.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/messaging/publisher.py:36",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C9",
+      "name": "Comment consumer",
+      "subsystem": "S2",
+      "purpose": "The only consumer in the tree: a continuous loop that drains the comment channel and fans each message out to registered handlers.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/messaging/consumer.py:15",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C10",
+      "name": "Worker template",
+      "subsystem": "S4",
+      "purpose": "The abstract template method every background worker follows: prepare, do the subclass work, record. It is never deployed on its own.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/base/worker_base.py:24",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C11",
+      "name": "Report worker",
+      "subsystem": "S4",
+      "purpose": "The one concrete worker: sweeps each tenant's tickets on a cron schedule and produces a resolved-ticket rollup.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/base/report_worker.py:15",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C12",
+      "name": "Client factory",
+      "subsystem": "S4",
+      "purpose": "Reads configuration and hands back configured analytics and error-sink handles. Constructing a client opens no socket and sends nothing.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/clients/analytics_factory.py:44",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C13",
+      "name": "Retry policy",
+      "subsystem": "S4",
+      "purpose": "Exponential backoff with a ceiling, plus the retry header it produces. Imports two types it never uses.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/clients/dead_import.py:16",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C14",
+      "name": "HTTP process entry",
+      "subsystem": "S4",
+      "purpose": "The api unit's process entry point: a minimal route table whose six registrations are the whole external HTTP surface.",
+      "entry_point": "src/entrypoints/http.py:34",
+      "depends_on": "",
+      "source": "src/entrypoints/http.py:20",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C15",
+      "name": "Worker process entry",
+      "subsystem": "S4",
+      "purpose": "The worker unit's process entry point: builds the consumer, reads the cron schedule and supervises worker passes. Self-activated only.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/entrypoints/worker.py:15",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C16",
+      "name": "Slack plugin",
+      "subsystem": "S3",
+      "purpose": "Reacts to the Slack notification channel and forwards a shaped payload to the analytics sink.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/plugins/p01/handler.py:19",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C17",
+      "name": "Teams plugin",
+      "subsystem": "S3",
+      "purpose": "Reacts to the Microsoft Teams notification channel and forwards a shaped payload to the analytics sink.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/plugins/p02/handler.py:19",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C18",
+      "name": "Audit plugin",
+      "subsystem": "S3",
+      "purpose": "Reacts to the ticket state-change channel, under the hyphenated spelling of the same channel name the publisher declares with dots.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/plugins/p03/handler.py:19",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C19",
+      "name": "Email digest plugin",
+      "subsystem": "S3",
+      "purpose": "Reacts to the email notification channel and forwards a shaped payload to the analytics sink.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/plugins/p04/handler.py:19",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C20",
+      "name": "Outbound webhook plugin",
+      "subsystem": "S3",
+      "purpose": "Reacts to the webhook notification channel and forwards a shaped payload to the analytics sink.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/plugins/p05/handler.py:19",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C21",
+      "name": "Pager rota plugin",
+      "subsystem": "S3",
+      "purpose": "Reacts to the pager notification channel and forwards a shaped payload to the analytics sink.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/plugins/p06/handler.py:19",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C22",
+      "name": "Metrics rollup plugin",
+      "subsystem": "S3",
+      "purpose": "Reacts to the metrics notification channel and forwards a shaped payload to the analytics sink.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/plugins/p07/handler.py:19",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C23",
+      "name": "Cold archive plugin",
+      "subsystem": "S3",
+      "purpose": "Reacts to the archive notification channel and forwards a shaped payload to the analytics sink.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/plugins/p08/handler.py:19",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "worker"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C24",
+      "name": "Scalar validators",
+      "subsystem": "S5",
+      "purpose": "Validation and normalisation for quantitative value types: currency amounts, durations, percentages and version strings. One of the two cohesive groups the oversized flat folder splits into.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/flatpack/currency.py:1",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C25",
+      "name": "Text validators",
+      "subsystem": "S5",
+      "purpose": "Validation and normalisation for textual value types: email addresses, host names, identifiers, markdown, phone numbers, postcodes, timezones and urls. The second group the flat folder splits into.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/flatpack/emailaddr.py:1",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C26",
+      "name": "Generated wire types",
+      "subsystem": "S4",
+      "purpose": "Machine-emitted message classes carrying an @generated banner. Heavy by weight, one box by judgement: the whole directory is regenerated from a schema and holds no decision a reader needs.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "src/generated/",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "api",
+        "worker",
+        "standalone"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C27",
+      "name": "Ticket UI components",
+      "subsystem": "S6",
+      "purpose": "Fourteen tiny presentational components — one file each — rendering the ticket list, a ticket row, the comment thread and the surrounding chrome.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "web/src/components/",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "web-dev"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    },
+    {
+      "id": "C28",
+      "name": "Web runtime",
+      "subsystem": "S6",
+      "purpose": "The minimal hyperscript helper every UI component builds its tree with.",
+      "entry_point": null,
+      "depends_on": "",
+      "source": "web/src/runtime.ts:1",
+      "confidence": "verified",
+      "files": [],
+      "runs_in": [
+        "web-dev"
+      ],
+      "evidence": [],
+      "states": null,
+      "extra": {}
+    }
+  ],
+  "deps": [
+    {
+      "id": "D1",
+      "name": "MongoDB",
+      "kind": "datastore",
+      "type": "document database",
+      "used_for": "Stores the ticket documents, their embedded comment threads, and the advisory lock rows. The system of record for everything the product remembers.",
+      "bucket": "Data & storage",
+      "where_configured": "config.default.env:16",
+      "confidence": "verified",
+      "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
+      "extra": {}
+    },
+    {
+      "id": "D2",
+      "name": "Redis",
+      "kind": "messaging",
+      "type": "pub/sub broker",
+      "used_for": "Carries the three named channels the publisher writes and the one the consumer drains.",
+      "bucket": "Messaging & delivery",
+      "where_configured": "config.default.env:20",
+      "confidence": "verified",
+      "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
+      "extra": {}
+    },
+    {
+      "id": "D3",
+      "name": "OpenSearch",
+      "kind": "datastore",
+      "type": "search index",
+      "used_for": "Holds a denormalised copy of each ticket's title, body and tenant so the queue can be searched. Shares its name with the compose service that runs it.",
+      "bucket": "Data & storage",
+      "where_configured": "config.default.env:24",
+      "confidence": "verified",
+      "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
+      "extra": {}
+    },
+    {
+      "id": "D4",
+      "name": "Analytics SaaS",
+      "kind": "service",
+      "type": "hosted product-analytics service",
+      "used_for": "Receives one event per plugin reaction. The client is built centrally and used by the eight plugins.",
+      "bucket": "Observability",
+      "where_configured": "config.default.env:28",
+      "confidence": "verified",
+      "deployment_linked": false,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
+      "extra": {}
+    },
+    {
+      "id": "D5",
+      "name": "Error reporting SaaS",
+      "kind": "service",
+      "type": "hosted error tracker",
+      "used_for": "Receives unhandled exceptions. Its client is constructed by the factory and, in this fixture, wired to nothing else.",
+      "bucket": "Observability",
+      "where_configured": "config.default.env:30",
+      "confidence": "inferred",
+      "deployment_linked": true,
+      "package": "",
+      "alternative": "",
+      "evidence": [],
+      "extra": {}
+    }
+  ],
+  "run_commands": [
+    {
+      "action": "Run the whole stack for local development",
+      "command": "docker compose --profile dev up",
+      "source": "docker-compose.yml:16"
+    },
+    {
+      "action": "Run the single-container variant",
+      "command": "docker compose --profile standalone up",
+      "source": "docker-compose.yml:52"
+    },
+    {
+      "action": "Build the frontend bundle baked into the standalone image",
+      "command": "npm run build",
+      "source": "web/package.json:5"
+    }
+  ],
+  "entry_points": [
+    {
+      "kind": "http-route",
+      "trigger": "GET /tickets/{id} — an agent opens one ticket",
+      "source": "src/entrypoints/http.py:37",
+      "component": "C1",
+      "activation": "external",
+      "runs_in": [
+        "api"
+      ],
+      "cadence": "",
+      "cadence_source": ""
+    },
+    {
+      "kind": "http-route",
+      "trigger": "GET /tickets — an agent lists a tenant's queue",
+      "source": "src/entrypoints/http.py:38",
+      "component": "C1",
+      "activation": "external",
+      "runs_in": [
+        "api"
+      ],
+      "cadence": "",
+      "cadence_source": ""
+    },
+    {
+      "kind": "http-route",
+      "trigger": "GET /tickets/{id}/comments — an agent reads a thread",
+      "source": "src/entrypoints/http.py:39",
+      "component": "C1",
+      "activation": "external",
+      "runs_in": [
+        "api"
+      ],
+      "cadence": "",
+      "cadence_source": ""
+    },
+    {
+      "kind": "http-route",
+      "trigger": "POST /tickets/{id}/transition — an agent moves a ticket",
+      "source": "src/entrypoints/http.py:40",
+      "component": "C2",
+      "activation": "external",
+      "runs_in": [
+        "api"
+      ],
+      "cadence": "",
+      "cadence_source": ""
+    },
+    {
+      "kind": "http-route",
+      "trigger": "POST /tickets/{id}/comments — a reporter appends a comment",
+      "source": "src/entrypoints/http.py:41",
+      "component": "C2",
+      "activation": "external",
+      "runs_in": [
+        "api"
+      ],
+      "cadence": "",
+      "cadence_source": ""
+    },
+    {
+      "kind": "http-route",
+      "trigger": "POST /locks/{key} — an operator claims an advisory lock",
+      "source": "src/entrypoints/http.py:42",
+      "component": "C2",
+      "activation": "external",
+      "runs_in": [
+        "api"
+      ],
+      "cadence": "",
+      "cadence_source": ""
+    },
+    {
+      "kind": "event-consumer",
+      "trigger": "the comment channel delivers a message to the continuous drain loop",
+      "source": "src/messaging/consumer.py:33",
+      "component": "C9",
+      "activation": "self",
+      "runs_in": [
+        "worker"
+      ],
+      "cadence": "continuous",
+      "cadence_source": "src/messaging/consumer.py:36"
+    },
+    {
+      "kind": "job",
+      "trigger": "the supervisor fires the report rollup on its cron schedule",
+      "source": "src/base/report_worker.py:18",
+      "component": "C11",
+      "activation": "self",
+      "runs_in": [
+        "worker"
+      ],
+      "cadence": "*/15 * * * *",
+      "cadence_source": "src/base/report_worker.py:13"
+    }
+  ],
+  "subdomains": [
+    {
+      "id": "SD1",
+      "name": "Ticket thread",
+      "purpose": "The ticket and everything embedded in it — the comment thread and the attachments hanging off each comment.",
+      "parent": null,
+      "source": "src/domain/models.py:21",
+      "confidence": "verified",
+      "tech": "",
+      "tech_source": ""
+    },
+    {
+      "id": "SD2",
+      "name": "Operational records",
+      "purpose": "Rows the product writes for its own operation rather than for a user: the audit trail and the advisory locks.",
+      "parent": null,
+      "source": "src/domain/models.py:66",
+      "confidence": "verified",
+      "tech": "",
+      "tech_source": ""
+    }
+  ],
+  "entities": [
+    {
+      "id": "E1",
+      "name": "Ticket",
+      "store": {
+        "dep": "D1",
+        "container": "tickets",
+        "mode": "collection",
+        "notes": "one document per ticket, with the comment thread embedded"
+      },
+      "meaning": "A unit of work raised by a reporter and worked by an assignee, carrying its position in the declared lifecycle.",
+      "subdomain": "SD1",
+      "source": "src/domain/models.py:21",
+      "fields": [
+        {
+          "name": "id",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "tenant",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "title",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "state",
+          "type": "TicketState",
+          "markers": []
+        },
+        {
+          "name": "reporter",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "assignee",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "comments",
+          "type": "E2",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E2",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "",
+          "how": null,
+          "keyed_by": []
+        }
+      ],
+      "states": {
+        "states": [
+          "TRIAGE",
+          "ACCEPTED",
+          "IN_PROGRESS",
+          "RESOLVED",
+          "ARCHIVED"
+        ],
+        "transitions": [
+          {
+            "src": "TRIAGE",
+            "dst": "ACCEPTED",
+            "on": ""
+          },
+          {
+            "src": "TRIAGE",
+            "dst": "ARCHIVED",
+            "on": ""
+          },
+          {
+            "src": "ACCEPTED",
+            "dst": "IN_PROGRESS",
+            "on": ""
+          },
+          {
+            "src": "ACCEPTED",
+            "dst": "ARCHIVED",
+            "on": ""
+          },
+          {
+            "src": "IN_PROGRESS",
+            "dst": "RESOLVED",
+            "on": ""
+          },
+          {
+            "src": "RESOLVED",
+            "dst": "ARCHIVED",
+            "on": ""
+          }
+        ],
+        "source": "src/lifecycle/states.py:14"
+      }
+    },
+    {
+      "id": "E2",
+      "name": "Comment",
+      "store": {
+        "dep": "D1",
+        "container": "tickets",
+        "mode": "embedded",
+        "notes": "rides its parent ticket document"
+      },
+      "meaning": "A note appended to a ticket. Embedded in its ticket document rather than stored as its own row.",
+      "subdomain": "SD1",
+      "source": "src/domain/models.py:41",
+      "fields": [
+        {
+          "name": "id",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "ticket_id",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "author",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "text",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "attachments",
+          "type": "E3",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "contains",
+          "target": "E3",
+          "src_card": "1",
+          "dst_card": "*",
+          "display": "",
+          "how": null,
+          "keyed_by": []
+        }
+      ],
+      "states": null
+    },
+    {
+      "id": "E3",
+      "name": "Attachment",
+      "store": {
+        "dep": "D1",
+        "container": "tickets",
+        "mode": "embedded",
+        "notes": "rides the comment that rides the ticket"
+      },
+      "meaning": "A file hung off a comment. Only the pointer is stored here; the bytes live in object storage.",
+      "subdomain": "SD1",
+      "source": "src/domain/models.py:50",
+      "fields": [
+        {
+          "name": "id",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "comment_id",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "filename",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "object_key",
+          "type": "str",
+          "markers": []
+        }
+      ],
+      "relations": [],
+      "states": null
+    },
+    {
+      "id": "E4",
+      "name": "AuditEntry",
+      "store": {
+        "dep": "D1",
+        "container": "audit_entries",
+        "mode": "collection",
+        "notes": "appended through the generic plugin bus, so no component carries a write edge to it"
+      },
+      "meaning": "An immutable record of one ticket state change. TRAP P1: nothing in this fixture persists it, so it lands in the no-owning-component advisory, which offers no recordable escape.",
+      "subdomain": "SD2",
+      "source": "src/domain/models.py:60",
+      "fields": [
+        {
+          "name": "id",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "ticket_id",
+          "type": "str",
+          "markers": [
+            "FK→E1"
+          ]
+        },
+        {
+          "name": "actor",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "from_state",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "to_state",
+          "type": "str",
+          "markers": []
+        }
+      ],
+      "relations": [
+        {
+          "verb": "references",
+          "target": "E1",
+          "src_card": "*",
+          "dst_card": "1",
+          "display": "",
+          "how": null,
+          "keyed_by": []
+        }
+      ],
+      "states": null
+    },
+    {
+      "id": "E5",
+      "name": "LockDoc",
+      "store": {
+        "dep": "D1",
+        "container": "locks",
+        "mode": "collection",
+        "notes": "infra-only; named by no use case narrative"
+      },
+      "meaning": "An advisory lock row recording who holds a named lock and until when.",
+      "subdomain": "SD2",
+      "source": "src/domain/models.py:78",
+      "fields": [
+        {
+          "name": "key",
+          "type": "str",
+          "markers": []
+        },
+        {
+          "name": "holder",
+          "type": "str",
+          "markers": []
+        }
+      ],
+      "relations": [],
+      "states": null
+    }
+  ],
+  "non_entity_types": [
+    {
+      "name": "Principal",
+      "source": "src/auth/gate.py:18",
+      "why": "the request-scoped caller identity, not a stored concept the map describes"
+    },
+    {
+      "name": "WorkerResult",
+      "source": "src/base/worker_base.py:16",
+      "why": "the return shape of one worker pass, never persisted"
+    },
+    {
+      "name": "ClientConfig",
+      "source": "src/clients/analytics_factory.py:16",
+      "why": "connection settings read from the environment, not a domain concept"
+    },
+    {
+      "name": "Escalation",
+      "source": "src/lifecycle/escalation.py:29",
+      "why": "in-memory breach counting; nothing stores it"
+    }
+  ],
+  "flows": [
+    {
+      "uc": "UC1",
+      "title": "Browse a tenant's tickets",
+      "steps": [
+        {
+          "n": 1,
+          "src": "R2",
+          "dst": "C1",
+          "phrase": "asks for the tenant's queue, optionally filtered by state",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 2,
+          "src": "C1",
+          "dst": "C5",
+          "phrase": "checks the caller may read this tenant",
+          "note": "",
+          "where": "src/api/passthrough_controller.py:36",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 3,
+          "src": "C1",
+          "dst": "C3",
+          "phrase": "asks the service for the tenant's tickets",
+          "note": "",
+          "where": "src/api/passthrough_controller.py:37",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 4,
+          "src": "C3",
+          "dst": "C4",
+          "phrase": "loads each candidate ticket document",
+          "note": "",
+          "where": "src/services/ticket_service.py:34",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 5,
+          "src": "C3",
+          "dst": "E1",
+          "phrase": "reads each Ticket to filter the list by state",
+          "note": "",
+          "where": "src/services/ticket_service.py:36",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 6,
+          "src": "C1",
+          "dst": "R2",
+          "phrase": "returns the rendered queue",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        }
+      ]
+    },
+    {
+      "uc": "UC2",
+      "title": "Read one ticket",
+      "steps": [
+        {
+          "n": 1,
+          "src": "R2",
+          "dst": "C1",
+          "phrase": "opens a ticket by id",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 2,
+          "src": "C1",
+          "dst": "C5",
+          "phrase": "checks the caller may read this tenant",
+          "note": "",
+          "where": "src/api/passthrough_controller.py:29",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 3,
+          "src": "C1",
+          "dst": "C3",
+          "phrase": "asks the service for the ticket",
+          "note": "",
+          "where": "src/api/passthrough_controller.py:30",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 4,
+          "src": "C3",
+          "dst": "C4",
+          "phrase": "loads the ticket document by id",
+          "note": "",
+          "where": "src/services/ticket_service.py:24",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 5,
+          "src": "C3",
+          "dst": "E1",
+          "phrase": "reads the Ticket and rejects it when the tenant does not match",
+          "note": "",
+          "where": "src/services/ticket_service.py:25",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 6,
+          "src": "C1",
+          "dst": "R2",
+          "phrase": "returns the ticket with its comment thread",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        }
+      ]
+    },
+    {
+      "uc": "UC3",
+      "title": "Move a ticket along its lifecycle",
+      "steps": [
+        {
+          "n": 1,
+          "src": "R2",
+          "dst": "C2",
+          "phrase": "posts the target state for a ticket",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 2,
+          "src": "C2",
+          "dst": "C3",
+          "phrase": "fetches the ticket the transition applies to",
+          "note": "",
+          "where": "src/api/record_controller.py:26",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 3,
+          "src": "C2",
+          "dst": "C5",
+          "phrase": "checks the caller may write in the ticket's current state",
+          "note": "",
+          "where": "src/api/record_controller.py:30",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 4,
+          "src": "C3",
+          "dst": "C6",
+          "phrase": "checks the move against the declared transition table",
+          "note": "",
+          "where": "src/services/ticket_service.py:43",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 5,
+          "src": "C3",
+          "dst": "E1",
+          "phrase": "writes the Ticket in its new state",
+          "note": "",
+          "where": "src/services/ticket_service.py:44",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 6,
+          "src": "C4",
+          "dst": "D1",
+          "phrase": "upserts the ticket document",
+          "note": "",
+          "where": "src/store/ticket_repo.py:46",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 7,
+          "src": "C4",
+          "dst": "D3",
+          "phrase": "re-indexes the ticket's searchable fields",
+          "note": "",
+          "where": "src/store/ticket_repo.py:50",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 8,
+          "src": "C3",
+          "dst": "C8",
+          "phrase": "announces the state change on its channel",
+          "note": "",
+          "where": "src/services/ticket_service.py:46",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 9,
+          "src": "C8",
+          "dst": "D2",
+          "phrase": "sends the state-change body to the broker",
+          "note": "",
+          "where": "src/messaging/publisher.py:41",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 10,
+          "src": "C2",
+          "dst": "R2",
+          "phrase": "returns the ticket's new state",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        }
+      ]
+    },
+    {
+      "uc": "UC4",
+      "title": "Comment on a ticket",
+      "steps": [
+        {
+          "n": 1,
+          "src": "R1",
+          "dst": "C2",
+          "phrase": "posts comment text on a ticket",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 2,
+          "src": "C2",
+          "dst": "C3",
+          "phrase": "fetches the ticket being commented on",
+          "note": "",
+          "where": "src/api/record_controller.py:35",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 3,
+          "src": "C2",
+          "dst": "C5",
+          "phrase": "checks the reporter may write in this state",
+          "note": "",
+          "where": "src/api/record_controller.py:38",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 4,
+          "src": "C3",
+          "dst": "E2",
+          "phrase": "appends the new Comment to the ticket's thread",
+          "note": "",
+          "where": "src/services/ticket_service.py:50",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 5,
+          "src": "C4",
+          "dst": "D1",
+          "phrase": "upserts the ticket document carrying the new comment",
+          "note": "",
+          "where": "src/store/ticket_repo.py:46",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 6,
+          "src": "C2",
+          "dst": "R1",
+          "phrase": "returns the new thread length",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        }
+      ]
+    },
+    {
+      "uc": "UC5",
+      "title": "Take an advisory lock",
+      "steps": [
+        {
+          "n": 1,
+          "src": "R2",
+          "dst": "C2",
+          "phrase": "claims a named lock before a bulk job",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 2,
+          "src": "C2",
+          "dst": "C5",
+          "phrase": "checks the caller may write in this tenant",
+          "note": "",
+          "where": "src/api/record_controller.py:51",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 3,
+          "src": "C2",
+          "dst": "C3",
+          "phrase": "asks the service to take the lock",
+          "note": "",
+          "where": "src/api/record_controller.py:52",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 4,
+          "src": "C3",
+          "dst": "E5",
+          "phrase": "writes the LockDoc recording the holder",
+          "note": "",
+          "where": "src/services/ticket_service.py:56",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 5,
+          "src": "C4",
+          "dst": "D1",
+          "phrase": "upserts the lock row",
+          "note": "",
+          "where": "src/store/ticket_repo.py:58",
+          "no_call_site": false,
+          "subflow": null
+        },
+        {
+          "n": 6,
+          "src": "C2",
+          "dst": "R2",
+          "phrase": "returns the key and its holder",
+          "note": "",
+          "where": null,
+          "no_call_site": false,
+          "subflow": null
+        }
+      ]
+    }
+  ],
+  "subflows": [],
+  "edges": [
+    {
+      "src": "C14",
+      "verb": "routes-to",
+      "dst": "C1",
+      "why": "mounts the three read routes on the read handlers",
+      "where": "src/entrypoints/http.py:37",
+      "no_call_site": false
+    },
+    {
+      "src": "C14",
+      "verb": "routes-to",
+      "dst": "C2",
+      "why": "mounts the three mutating routes on the write handlers",
+      "where": "src/entrypoints/http.py:40",
+      "no_call_site": false
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "C3",
+      "why": "forwards every read to the ticket service and renders what comes back",
+      "where": "src/api/passthrough_controller.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C2",
+      "verb": "uses",
+      "dst": "C3",
+      "why": "forwards every mutation to the ticket service",
+      "where": "src/api/record_controller.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C1",
+      "verb": "enforces",
+      "dst": "C5",
+      "why": "authorises each read against the caller's tenant before touching the service",
+      "where": "src/api/passthrough_controller.py:29",
+      "no_call_site": false
+    },
+    {
+      "src": "C2",
+      "verb": "enforces",
+      "dst": "C5",
+      "why": "authorises each mutation against scope, tenant and lifecycle state",
+      "where": "src/api/record_controller.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C3",
+      "verb": "uses",
+      "dst": "C4",
+      "why": "loads and stores every ticket, comment and lock through the repository",
+      "where": "src/services/ticket_service.py:24",
+      "no_call_site": false
+    },
+    {
+      "src": "C3",
+      "verb": "uses",
+      "dst": "C6",
+      "why": "checks each requested move against the declared transition table",
+      "where": "src/services/ticket_service.py:43",
+      "no_call_site": false
+    },
+    {
+      "src": "C3",
+      "verb": "uses",
+      "dst": "C8",
+      "why": "announces state changes on the event channel after a successful transition",
+      "where": "src/services/ticket_service.py:46",
+      "no_call_site": false
+    },
+    {
+      "src": "C3",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "filters tickets by tenant and state before returning them",
+      "where": "src/services/ticket_service.py:25",
+      "no_call_site": false
+    },
+    {
+      "src": "C3",
+      "verb": "writes",
+      "dst": "E2",
+      "why": "appends new comments to a ticket's thread",
+      "where": "src/services/ticket_service.py:50",
+      "no_call_site": false
+    },
+    {
+      "src": "C3",
+      "verb": "writes",
+      "dst": "E5",
+      "why": "records the holder of a claimed advisory lock",
+      "where": "src/services/ticket_service.py:56",
+      "no_call_site": false
+    },
+    {
+      "src": "C4",
+      "verb": "persists",
+      "dst": "E1",
+      "why": "upserts the ticket document, which is the system of record for the ticket",
+      "where": "src/store/ticket_repo.py:46",
+      "no_call_site": false
+    },
+    {
+      "src": "C4",
+      "verb": "persists",
+      "dst": "E2",
+      "why": "writes the embedded comment thread as part of the ticket document",
+      "where": "src/store/ticket_repo.py:46",
+      "no_call_site": false
+    },
+    {
+      "src": "C4",
+      "verb": "persists",
+      "dst": "E3",
+      "why": "writes the embedded attachment pointers as part of the ticket document",
+      "where": "src/store/ticket_repo.py:46",
+      "no_call_site": false
+    },
+    {
+      "src": "C4",
+      "verb": "persists",
+      "dst": "E5",
+      "why": "upserts the advisory lock rows",
+      "where": "src/store/ticket_repo.py:58",
+      "no_call_site": false
+    },
+    {
+      "src": "C4",
+      "verb": "writes",
+      "dst": "D1",
+      "why": "upserts ticket and lock documents into the document store",
+      "where": "src/store/ticket_repo.py:46",
+      "no_call_site": false
+    },
+    {
+      "src": "C4",
+      "verb": "writes",
+      "dst": "D3",
+      "why": "re-indexes each ticket's searchable fields into the search index",
+      "where": "src/store/ticket_repo.py:50",
+      "no_call_site": false
+    },
+    {
+      "src": "C8",
+      "verb": "emits",
+      "dst": "D2",
+      "why": "publishes the three named channels through the injected transport",
+      "where": "src/messaging/publisher.py:41",
+      "no_call_site": false
+    },
+    {
+      "src": "C9",
+      "verb": "listens-to",
+      "dst": "D2",
+      "why": "drains the comment channel in a continuous loop",
+      "where": "src/messaging/consumer.py:32",
+      "no_call_site": false
+    },
+    {
+      "src": "C11",
+      "verb": "extends",
+      "dst": "C10",
+      "why": "implements the template's work step as a resolved-ticket rollup",
+      "where": "src/base/report_worker.py:15",
+      "no_call_site": false
+    },
+    {
+      "src": "C11",
+      "verb": "uses",
+      "dst": "C4",
+      "why": "loads each tenant's tickets to build the rollup",
+      "where": "src/base/report_worker.py:31",
+      "no_call_site": false
+    },
+    {
+      "src": "C11",
+      "verb": "reads",
+      "dst": "E1",
+      "why": "counts resolved tickets per tenant",
+      "where": "src/base/report_worker.py:36",
+      "no_call_site": false
+    },
+    {
+      "src": "C15",
+      "verb": "uses",
+      "dst": "C9",
+      "why": "builds the consumer the worker process drains its channel with",
+      "where": "src/entrypoints/worker.py:15",
+      "no_call_site": false
+    },
+    {
+      "src": "C15",
+      "verb": "uses",
+      "dst": "C11",
+      "why": "supervises the report worker's passes and stops the consumer when it fails repeatedly",
+      "where": "src/entrypoints/worker.py:27",
+      "no_call_site": false
+    },
+    {
+      "src": "C7",
+      "verb": "uses",
+      "dst": "C11",
+      "why": "the rollup pass consults the breach budget before paging",
+      "where": null,
+      "no_call_site": true
+    },
+    {
+      "src": "C16",
+      "verb": "emits",
+      "dst": "D4",
+      "why": "queues one analytics event per Slack reaction",
+      "where": "src/plugins/p01/handler.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C17",
+      "verb": "emits",
+      "dst": "D4",
+      "why": "queues one analytics event per Teams reaction",
+      "where": "src/plugins/p02/handler.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C18",
+      "verb": "emits",
+      "dst": "D4",
+      "why": "queues one analytics event per audit reaction",
+      "where": "src/plugins/p03/handler.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C19",
+      "verb": "emits",
+      "dst": "D4",
+      "why": "queues one analytics event per email-digest reaction",
+      "where": "src/plugins/p04/handler.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C20",
+      "verb": "emits",
+      "dst": "D4",
+      "why": "queues one analytics event per webhook reaction",
+      "where": "src/plugins/p05/handler.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C21",
+      "verb": "emits",
+      "dst": "D4",
+      "why": "queues one analytics event per pager reaction",
+      "where": "src/plugins/p06/handler.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C22",
+      "verb": "emits",
+      "dst": "D4",
+      "why": "queues one analytics event per metrics reaction",
+      "where": "src/plugins/p07/handler.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C23",
+      "verb": "emits",
+      "dst": "D4",
+      "why": "queues one analytics event per archive reaction",
+      "where": "src/plugins/p08/handler.py:30",
+      "no_call_site": false
+    },
+    {
+      "src": "C16",
+      "verb": "uses",
+      "dst": "C12",
+      "why": "takes the configured analytics handle the factory built",
+      "where": "src/plugins/p01/handler.py:21",
+      "no_call_site": false
+    },
+    {
+      "src": "C9",
+      "verb": "uses",
+      "dst": "C16",
+      "why": "fans each drained message out to the registered plugin handlers",
+      "where": "src/messaging/consumer.py:32",
+      "no_call_site": false
+    },
+    {
+      "src": "C1",
+      "verb": "uses",
+      "dst": "C27",
+      "why": "the browser tree renders the queue and thread payloads these handlers return",
+      "where": null,
+      "no_call_site": true
+    },
+    {
+      "src": "C27",
+      "verb": "uses",
+      "dst": "C28",
+      "why": "builds every element through the hyperscript helper",
+      "where": "web/src/components/TicketRow.tsx:18",
+      "no_call_site": false
+    },
+    {
+      "src": "C13",
+      "verb": "uses",
+      "dst": "C12",
+      "why": "the backoff header rides the client calls the factory configures",
+      "where": null,
+      "no_call_site": true
+    },
+    {
+      "src": "C24",
+      "verb": "uses",
+      "dst": "C25",
+      "why": "quantitative validators reuse the shared trimming and length rules the text validators declare first",
+      "where": null,
+      "no_call_site": true
+    },
+    {
+      "src": "C3",
+      "verb": "uses",
+      "dst": "C24",
+      "why": "normalises the state and tenant strings a request carries before storing them",
+      "where": null,
+      "no_call_site": true
+    },
+    {
+      "src": "C4",
+      "verb": "uses",
+      "dst": "C26",
+      "why": "maps ticket documents through the generated wire types on the way in and out",
+      "where": null,
+      "no_call_site": true
+    }
+  ],
+  "messaging": [
+    {
+      "name": "ticket.state.changed",
+      "kind": "topic",
+      "broker": "D2",
+      "publishers": [
+        "C8"
+      ],
+      "consumers": [],
+      "payload": "",
+      "source": "src/messaging/publisher.py:29"
+    },
+    {
+      "name": "ticket.comment.added",
+      "kind": "topic",
+      "broker": "D2",
+      "publishers": [
+        "C8"
+      ],
+      "consumers": [
+        "C9"
+      ],
+      "payload": "",
+      "source": "src/messaging/publisher.py:30"
+    },
+    {
+      "name": "escalation.paged",
+      "kind": "topic",
+      "broker": "D2",
+      "publishers": [
+        "C8"
+      ],
+      "consumers": [],
+      "payload": "",
+      "source": "src/messaging/publisher.py:31"
+    }
+  ],
+  "deployment": [
+    {
+      "unit": "api",
+      "runs_on": "A Python 3.11 container built from Dockerfile.api, started with the http entry module.",
+      "exposed_as": "HTTP on port 8080",
+      "config_source": "config.default.env, injected by the compose env_file directive",
+      "variants": []
+    },
+    {
+      "unit": "worker",
+      "runs_on": "The same Dockerfile.api image, started with the worker entry module instead.",
+      "exposed_as": "No listener — self-activated work only",
+      "config_source": "config.default.env, injected by the compose env_file directive",
+      "variants": []
+    },
+    {
+      "unit": "web-dev",
+      "runs_on": "A node:20-alpine container running the Vite dev server. This is the ONLY environment in which the frontend is a live process; elsewhere it is a bundle baked into another image.",
+      "exposed_as": "HTTP on port 5173",
+      "config_source": "web/package.json scripts",
+      "variants": [
+        {
+          "env": "dev",
+          "source": "docker-compose.yml:48"
+        }
+      ]
+    },
+    {
+      "unit": "standalone",
+      "runs_on": "A single container built from Dockerfile.standalone, serving both the API and the baked frontend bundle.",
+      "exposed_as": "HTTP on port 80",
+      "config_source": "config.default.env, copied into the image",
+      "variants": [
+        {
+          "env": "standalone",
+          "source": "docker-compose.yml:55"
+        }
+      ]
+    }
+  ],
+  "environments": [
+    "dev",
+    "cloud",
+    "standalone"
+  ],
+  "observability": [
+    {
+      "signal": "Analytics events, one per plugin reaction",
+      "where_emitted": "Each plugin handler queues an event on the analytics client the factory built; the queue is in-process and flushed by the client.",
+      "where_viewed": "The hosted analytics product configured by ANALYTICS_URL.",
+      "alerts": "None configured in this fixture."
+    },
+    {
+      "signal": "Unhandled exceptions",
+      "where_emitted": "The error client the factory constructs. In this fixture nothing installs it as a handler, so nothing is actually reported — a deliberate gap.",
+      "where_viewed": "The hosted error tracker configured by ERRORS_URL.",
+      "alerts": "None configured in this fixture."
+    }
+  ],
+  "security": [
+    {
+      "surface": "Ticket write routes (transition, comment, lock)",
+      "who": "Any caller the router reaches, carrying a principal with scopes and a tenant.",
+      "source": "src/auth/gate.py:62",
+      "risk": "The check composes scope, tenant and lifecycle state and raises about thirty lines below its own header. Anchoring it at the header is trap A1: the header cannot act, so a header anchor claims enforcement at a line that never enforces."
+    },
+    {
+      "surface": "Ticket read routes",
+      "who": "Any caller the router reaches; the only gate is the tenant comparison.",
+      "source": "src/auth/gate.py:72",
+      "risk": "Tenant-only. No scope is required to read, so any authenticated principal of a tenant sees every ticket in it."
+    }
+  ],
+  "config": [
+    {
+      "key": "PRIMARY_URI",
+      "purpose": "Document-store connection string.",
+      "default": "mongodb://primary:27017/trapdoor",
+      "per_env": "Per environment; credentials are injected by the platform, never stored in the file."
+    },
+    {
+      "key": "BROKER_URL",
+      "purpose": "Broker connection string for the pub/sub channels.",
+      "default": "redis://broker:6379/0",
+      "per_env": "Per environment."
+    },
+    {
+      "key": "SEARCH_URL",
+      "purpose": "Search-index endpoint the repository re-indexes into.",
+      "default": "http://search:9200",
+      "per_env": "Present in the cloud profile only."
+    },
+    {
+      "key": "ANALYTICS_TOKEN",
+      "purpose": "Credential for the hosted analytics service.",
+      "default": "__injected_at_deploy__",
+      "per_env": "SECRET — the committed file carries a placeholder; the real value is injected at deploy time."
+    },
+    {
+      "key": "ESCALATION_GRACE_SECONDS",
+      "purpose": "How long an escalation waits before it may page.",
+      "default": "900",
+      "per_env": "Same everywhere."
+    }
+  ],
+  "tests_note": "The suite was NOT run to build this table — the fixture ships no test suite of its own, by design: what exercises this tree is the coyodex regression suite in tests/, not tests inside the fixture. Every row below is inferred from that outside suite, and the gaps are the deliverable.",
+  "tests": [
+    {
+      "targets": [
+        "C5"
+      ],
+      "tested": "no",
+      "label": "Authorisation gate — the composed write predicate",
+      "tests": [],
+      "gap": "Nothing exercises the scope/tenant/state composition. Its value to the regression suite is as an ANCHOR trap, not as behaviour under test.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": [
+        "C4"
+      ],
+      "tested": "partial",
+      "label": "Ticket repository — the upsert that makes it the system of record",
+      "tests": [
+        {
+          "file": "tests/test_trapdoor_tools.py",
+          "why": "feeds the repository's write anchor and the entity's definition line into anchor-drift as an 'is stored in' claim (trap A3)"
+        }
+      ],
+      "gap": "The repository's own behaviour is never run; only the map's claims about it are checked.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": [
+        "C8",
+        "C9"
+      ],
+      "tested": "no",
+      "label": "Publisher and consumer — channel naming and the drain loop",
+      "tests": [],
+      "gap": "No test drives a message end to end. The messaging traps are asserted against the map and the tree, not against a running broker.",
+      "confidence": "inferred"
+    },
+    {
+      "targets": [
+        "UC3"
+      ],
+      "tested": "no",
+      "label": "The transition use case end to end",
+      "tests": [],
+      "gap": "No integration test walks route to store to channel.",
+      "confidence": "inferred"
+    }
+  ],
+  "grounding": {
+    "claims_total": 42,
+    "claims_grounded": 42,
+    "claims_refuted": 0,
+    "note": "Every backbone edge in this map was authored directly against the fixture's own source, which is 1.5 kLOC of hand-written code the author of the map also wrote. That makes the grounding complete but NOT independent — there was no fresh-context skeptic pass, and this map has not been through Phase 4. Treat the number as a statement about coverage, not about adversarial confidence."
+  },
+  "extras": [
+    {
+      "heading": "Coverage exceptions",
+      "body": "- src/generated/: machine-emitted wire types regenerated from a schema; ~900 LOC folded into one component on purpose (trap G3). Reading it line by line buys nothing a reader needs.\n- src/flatpack/: split into two cohesive components rather than one box (trap G2), so its individual files are deliberately not one-component-each."
+    },
+    {
+      "heading": "Happy Path coverage",
+      "body": "- UC5: taking an advisory lock is an operator action before a bulk job, not part of the product story the spine tells. It keeps its own flow and stays off the walk."
+    },
+    {
+      "heading": "Balance exceptions",
+      "body": "- granularity: 28 components against a code-derived expectation of ~23 (band 13-33) — inside the band, recorded here only because the FILE cap binds on web/src/components (median file 24 LOC), which is trap G1 and would otherwise read as an unexplained agreement.\n- entity-flows: not recorded — the flows DO touch entities, deliberately, so this token stays absent as the control."
+    },
+    {
+      "heading": "Entry-point coverage",
+      "body": "- http-route: complete — walked the six router.add registrations in build_router (src/entrypoints/http.py:34).\n- event-consumer: complete — the fixture has exactly one consumer, CommentConsumer.run_forever.\n- job: complete — the fixture has exactly one scheduled worker, ReportWorker on the SCHEDULE constant."
+    }
+  ]
+}

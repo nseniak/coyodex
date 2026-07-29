@@ -1,0 +1,86 @@
+# The deployment manifest — the authoritative "what runs where" axis for this fixture.
+#
+# TRAP D2 — `api` and `worker` carry NO `profiles:` key. Untagged means ungated/shared, so they
+#           silently claim EVERY environment. `broker` and `web-dev` are variant-tagged. A map
+#           that tags only the tagged ones and leaves api/worker bare has recorded a claim it
+#           never checked.
+# TRAP D3 — three profiles (dev / cloud / standalone) form a real axis. A build that flattens it
+#           to "one deployment" loses information (a live build did exactly that as
+#           "over-modeling").
+# TRAP D4 — `web-dev` is a live Vite process in `dev` only. In `standalone` and `cloud` the same
+#           frontend is a STATIC BUNDLE baked in by `Dockerfile.standalone` (see its COPY line).
+#           A baked asset is served BY a unit, never run AS its own unit there.
+# TRAP D5 — the unit named `search` collides with the dependency named `search` (the OpenSearch
+#           service the repository indexes into). One is a process box, the other is infra.
+version: "3.9"
+
+services:
+
+  # --- untagged: claims every environment by omission (TRAP D2) ------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: ["python", "-m", "src.entrypoints.http"]
+    environment:
+      - TRAPDOOR_ROLE=api
+    env_file:
+      - config.default.env
+    ports:
+      - "8080:8080"
+    depends_on:
+      - primary
+      - broker
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: ["python", "-m", "src.entrypoints.worker"]
+    environment:
+      - TRAPDOOR_ROLE=worker
+    env_file:
+      - config.default.env
+    depends_on:
+      - primary
+      - broker
+
+  # --- variant-tagged units (TRAP D3: the axis that must not be flattened) --------------
+  web-dev:
+    image: node:20-alpine
+    working_dir: /app/web
+    command: ["npm", "run", "dev"]
+    profiles: ["dev"]
+    ports:
+      - "5173:5173"
+
+  standalone:
+    build:
+      context: .
+      dockerfile: Dockerfile.standalone
+    profiles: ["standalone"]
+    ports:
+      - "80:80"
+
+  # --- infrastructure the app talks to: dependencies, not process boxes ------------------
+  primary:
+    image: mongo:7
+    profiles: ["dev", "cloud"]
+    volumes:
+      - primary-data:/data/db
+
+  broker:
+    image: redis:7
+    profiles: ["dev", "cloud"]
+
+  # TRAP D5 — a unit whose name matches a dependency. `search` here is the OpenSearch server
+  # the repository indexes into (`_search_index`), i.e. INFRA. It hosts no fixture code, so it
+  # must not become a process box; the dependency of the same name is what carries its facts.
+  search:
+    image: opensearchproject/opensearch:2
+    profiles: ["cloud"]
+    environment:
+      - discovery.type=single-node
+
+volumes:
+  primary-data:

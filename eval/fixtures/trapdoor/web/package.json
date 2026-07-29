@@ -1,0 +1,6 @@
+{
+  "name": "trapdoor-web",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": { "dev": "vite", "build": "vite build" }
+}

@@ -1,0 +1,9 @@
+# The image behind both the `api` and `worker` compose services. One image, two commands —
+# which is why `runs_in` must be derived by reading the compose `command:` lines, not by
+# assuming one Dockerfile means one unit.
+FROM python:3.11-slim
+WORKDIR /app
+COPY src ./src
+COPY config.default.env ./config.default.env
+EXPOSE 8080
+CMD ["python", "-m", "src.entrypoints.http"]
