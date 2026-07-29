@@ -60,9 +60,29 @@ def test_numbering_is_not_lexicographic():
         assert dest is not None and dest.name == ".old-ignore-11"
 
 
-def test_a_gap_in_the_sequence_is_reused():
+def test_a_gap_is_left_alone_so_the_number_still_means_recency():
+    """Always highest + 1 — filling a gap would make the number lie about age.
+
+    With `.old-ignore` and `-3` present, reusing `-2` would file the NEWEST map between two older
+    ones. The common cleanup is worse: prune the oldest archives and the next map lands in
+    `.old-ignore`, the name that reads as "the first one", so the sequence reads backwards."""
     with tempfile.TemporaryDirectory() as tmp:
         root = make_repo(tmp, archives=(".old-ignore", ".old-ignore-3"))
+        dest, _ = archive_map.archive(root)
+        assert dest is not None and dest.name == ".old-ignore-4"
+
+
+def test_pruning_the_oldest_archives_never_recycles_their_names():
+    # deleting the two oldest must not hand their names to the newest map
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_repo(tmp, archives=(".old-ignore-3", ".old-ignore-4"))
+        dest, _ = archive_map.archive(root)
+        assert dest is not None and dest.name == ".old-ignore-5"
+
+
+def test_a_hand_named_sibling_does_not_break_the_numbering():
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_repo(tmp, archives=(".old-ignore", ".old-ignore-broken"))
         dest, _ = archive_map.archive(root)
         assert dest is not None and dest.name == ".old-ignore-2"
 
