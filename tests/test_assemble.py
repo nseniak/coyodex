@@ -13,6 +13,7 @@ import sys
 import tempfile
 from pathlib import Path
 
+from coyodex import assemble
 from coyodex.assemble import _infer_ce_verb, ensure_fragments_ignored, load_fragment, merge_fragments
 from coyodex.model import ModelError, load_model, to_canonical_json
 
@@ -310,7 +311,8 @@ def test_ensure_fragments_ignored_creates_appends_and_is_idempotent():
     with tempfile.TemporaryDirectory() as td:
         out = Path(td)
         assert ensure_fragments_ignored(out) is True
-        assert (out / ".gitignore").read_text(encoding="utf-8") == "build-fragments/\n"
+        body = (out / ".gitignore").read_text(encoding="utf-8")
+        assert body.splitlines() == list(assemble._GITIGNORE_KEEP)
         assert ensure_fragments_ignored(out) is False  # idempotent
 
 
@@ -321,11 +323,15 @@ def test_ensure_fragments_ignored_strips_stray_preindex_ignore():
         out = Path(td)
         (out / ".gitignore").write_text("preindex.json", encoding="utf-8")  # no trailing newline
         assert ensure_fragments_ignored(out) is True
-        assert (out / ".gitignore").read_text(encoding="utf-8") == "build-fragments/\n"
-        # a fuller stray gitignore: preindex stripped, build-fragments kept, other lines preserved
+        assert (out / ".gitignore").read_text(encoding="utf-8").splitlines() == \
+            list(assemble._GITIGNORE_KEEP)
+        # a fuller stray gitignore: preindex stripped, every per-run entry present, others preserved
         (out / ".gitignore").write_text("*.log\nbuild-fragments/\npreindex.json\n", encoding="utf-8")
         assert ensure_fragments_ignored(out) is True
-        assert (out / ".gitignore").read_text(encoding="utf-8") == "*.log\nbuild-fragments/\n"
+        lines = (out / ".gitignore").read_text(encoding="utf-8").splitlines()
+        assert lines[0] == "*.log"                                   # unrelated line preserved
+        assert set(assemble._GITIGNORE_KEEP) <= set(lines)           # every per-run artifact ignored
+        assert "preindex.json" not in lines                          # the committed artifact is not
         assert ensure_fragments_ignored(out) is False  # now stable
 
 

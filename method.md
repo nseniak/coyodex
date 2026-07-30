@@ -1367,6 +1367,29 @@ never your build reasoning — and tries to *disprove* the claim; **reconcile ev
 or blocking — (fix the map, or justify and note why)** before rendering. So the invariant after every
 write is **validate --check-sources → audit → render** (`--check-sources` is not optional — it is the
 deterministic backstop that a nonexistent-file anchor / wrong repo-root prefix can never slip through).
+
+**Run `coyodex finalize` as the pre-commit read.** It runs that sequence plus two things a build kept
+skipping, and writes every finding to `.coyodex/finalize-report.{json,md}` with whole lists:
+
+```
+.venv/bin/coyodex finalize .coyodex/project-map.json --repo <repo> [--verdicts <file>]...
+```
+
+- it compares the map against the **previous** one (the committed `HEAD` version, else a
+  `.old-ignore*` archive). On a live build the security table went from 103 rows to 19 and *every*
+  gate passed — validate, audit and balance were all clean. The comparison caught it and nobody had
+  run it, because it is an eval command and the sequence above does not include it.
+- it runs both anchor-drift passes, so confirmed drift is in front of you before you commit.
+
+**Read the report FILE, and quote finalize's verdict line when you report the gates.** Its stdout can
+be piped away — in a shell pipeline the exit status is the last command's, so `finalize | grep …`
+returns grep's `0`, and a live build wrote exactly that shape here (`validate … | grep -E …;
+audit … > /dev/null 2>&1`, then told the operator "gates clean" with four warnings and two advisories
+open). The file is the thing that survives. **ADVISORIES is not a pass**: fix each one, or record it
+under the extras heading its message names. `finalize` exits non-zero only for what validate and audit
+already block on — the comparison verdict and unapplied drift are reported, never gating, because a
+deliberate granularity change and an unfixable cadence anchor would otherwise wall out a build that
+has no remedy. It is a convenience wrapper and a durable record, not a gate that can force anything.
 **Then render the markdown view** — once the
 map validates and the adversarial pass has no blocking contradiction (advisories reconciled),
 regenerate the committed markdown view next to the model (assemble already wrote it; re-run after any patch):

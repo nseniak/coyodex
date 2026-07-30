@@ -39,6 +39,10 @@ Commands:
   reconcile  Expand path RULES into an explicit `reconcile.json` (the synthesis
              assignment pass), resolving ids against a real map and reporting every
              rule that matched nothing. Feed the result to `assemble --reconcile`.
+  finalize   The pre-commit read: validate + audit + anchor-drift + a comparison
+             against the previous map, written to .coyodex/finalize-report.{json,md}
+             with whole lists. A convenience wrapper, not an enforcement point —
+             exit 1 only for what validate/audit already block on.
   balance    Report per-diagram fan-out (target 5±2), the inter-subsystem edge
              matrix, and advisory split proposals for over-dense diagrams —
              apply accepted proposals via a Direct map change.
@@ -109,6 +113,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "anchor-drift":
         from coyodex import anchor_drift  # stdlib-only
         return anchor_drift.main(rest)
+    if cmd == "finalize":
+        from coyodex import finalize  # stdlib-only; shells out to coyodex-eval for the compare leg
+        return finalize.main(_default_map(rest))
     if cmd == "fix":
         from coyodex import fix  # stdlib-only; owns its own second-level (verb) dispatch
         return fix.main(rest)

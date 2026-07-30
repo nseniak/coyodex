@@ -65,6 +65,7 @@ COMMAND_MODULE: dict[str, str] = {
     "render": "viewer/render", "serve": "viewer/serve", "assemble": "assemble",
     "lint-fragment": "lint_fragment", "anchor-drift": "anchor_drift", "fix": "fix",
     "dump": "dump", "reconcile": "reconcile_build", "balance": "balance",
+    "finalize": "finalize",
 }
 
 #: The extras headings some tool actually READS (the escape tokens that silence an advisory).
@@ -796,3 +797,14 @@ def _main() -> int:
 
 if __name__ == "__main__":
     sys.exit(_main())
+
+
+def test_every_advertised_command_has_a_module_in_the_flag_audit_table():
+    """COMMAND_MODULE parity with `coyodex --help`.
+
+    `finalize` shipped absent from this table, so the flag audit below silently skipped the two flags
+    method.md prescribes for it. A missing row does not fail anything — it just stops auditing — which
+    is the quietest way for this layer to lose coverage."""
+    advertised = set(make_cli_commands())
+    missing = sorted(advertised - set(COMMAND_MODULE))
+    assert not missing, f"command(s) advertised by --help but absent from COMMAND_MODULE: {missing}"
