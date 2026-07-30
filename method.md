@@ -414,6 +414,16 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   ENFORCES — the `if`/`raise`/`require_*`/decorator call — **never its docstring, comment, or `def`
   header** (the same operative-line rule as an edge `Where`, below). It is an L2 grounding claim, so
   `--check-sources` now verifies the linked file/line exists.
+  **STATE THE GRANULARITY, and record it.** One row per surface FAMILY ("the dashboard API's session
+  auth") and one row per endpoint-and-condition ("`/mcp/{slug}` with a service token for another
+  org", "replay of a logged-out session cookie") are both defensible — and they differ by 5x in row
+  count on the same codebase. Pick one, say which under a `Security granularity` line in your reply,
+  and record it in the map: `security-granularity: <family | endpoint-and-condition> — <why>` under a
+  'Balance exceptions' extras heading. Nothing else in the pipeline can see this choice. Two maps of
+  one repo, weeks apart, went from 103 rows to 19 while `validate`, `audit` and `balance` were all
+  clean — `--check-sources` only proves each row's anchor resolves, and `audit` turns each row into
+  exactly one claim, so neither can tell 19 rows from 103. A 5x change in what the map says about
+  access control has to be a decision somebody wrote down, not a drift nobody noticed.
 - **Config & environments**: `Key | Purpose | Default | Per-env / secret?` (secrets =
   where they live, never values).
 - On-demand extras: state machines/lifecycles, event/message catalog, error/failure

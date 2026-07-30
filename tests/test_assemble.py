@@ -543,3 +543,64 @@ def test_conflicting_grounding_records_are_reported():
     b = ProjectModel(grounding=Grounding(claims_total=99))
     _, problems = merge_fragments([("a.json", a), ("b.json", b)])
     assert any("grounding" in p for p in problems)
+
+
+def test_two_agents_writing_the_same_channel_merge_instead_of_failing_the_build():
+    """The live failure: two trace prompts embedded the SAME literal example messaging row, both agents
+    wrote it, and `assemble` failed the whole build on `Duplicate messaging channel name(s)`. The lead
+    hand-scripted the merge and DROPPED three real publishers, because a hand merge picks a survivor
+    where a union keeps what both agents actually found."""
+    a = ('{"messaging":[{"name":"jobs","broker":"D1","publishers":["C6","C21"],'
+         '"consumers":["C96"],"source":"q.py:1"}]}')
+    b = '{"messaging":[{"name":"jobs","publishers":["C45"],"consumers":["C45"],"kind":"job-queue"}]}'
+    stats: dict[str, int] = {}
+    m, problems = merge_fragments([("a.json", load_fragment(a, "a.json")),
+                                   ("b.json", load_fragment(b, "b.json"))], stats)
+    assert problems == []                              # no CONFLICT: the second row states no broker
+    assert len(m.messaging) == 1
+    row = m.messaging[0]
+    assert row.publishers == ["C6", "C21", "C45"]      # nothing dropped — the hand merge lost these
+    assert row.consumers == ["C96", "C45"]
+    assert row.broker == "D1" and row.kind == "job-queue"   # each empty field filled from the sibling
+    assert stats["messaging_rows_collapsed"] == 1
+
+
+def test_two_channels_that_merely_share_a_name_are_NOT_collapsed():
+    """Identity is `(name, broker)`, not the name alone. Two rows named `jobs` on brokers `D1` and `D9`
+    are two channels, and collapsing them would resolve a real conflict by fragment-filename order.
+    They stay separate — and `validate` then blocks on the duplicate name, which is correct: the author
+    has to rename one."""
+    a = '{"messaging":[{"name":"jobs","broker":"D1","publishers":["C1"],"consumers":["C2"]}]}'
+    b = '{"messaging":[{"name":"jobs","broker":"D9","publishers":["C3"],"consumers":["C4"]}]}'
+    stats: dict[str, int] = {}
+    m, _ = merge_fragments([("a.json", load_fragment(a, "a.json")),
+                            ("b.json", load_fragment(b, "b.json"))], stats)
+    assert len(m.messaging) == 2, [r.broker for r in m.messaging]
+    assert stats.get("messaging_rows_collapsed", 0) == 0
+
+
+def test_a_conflicting_scalar_is_reported_not_guessed():
+    """Filling an EMPTY field from a sibling row is a merge; choosing between two different non-empty
+    values is a guess decided by filename order. `merge_fragments` already blocks on a singleton stated
+    twice with different values; this follows that precedent."""
+    a = '{"messaging":[{"name":"jobs","publishers":["C1"],"consumers":["C2"],"payload":"E1"}]}'
+    b = '{"messaging":[{"name":"jobs","publishers":["C3"],"consumers":["C4"],"payload":"E9"}]}'
+    m, problems = merge_fragments([("a.json", load_fragment(a, "a.json")),
+                                   ("b.json", load_fragment(b, "b.json"))], {})
+    assert any("different `payload` values" in p for p in problems), problems
+    assert m.messaging[0].publishers == ["C1", "C3"]      # participants still union
+
+
+def test_merging_does_not_mutate_the_input_fragments():
+    """`merge_fragments` extends the FRAGMENTS' own lists into the output, so writing through a
+    survivor row would edit the caller's objects — and a second merge of the same parts would then
+    produce a different map. `_derive_entity_edges` advertises idempotency as a property of this
+    module; the merge must not break it."""
+    a = '{"messaging":[{"name":"jobs","broker":"D1","publishers":["C1"],"consumers":["C2"]}]}'
+    b = '{"messaging":[{"name":"jobs","publishers":["C3"],"consumers":["C4"]}]}'
+    parts = [("a.json", load_fragment(a, "a.json")), ("b.json", load_fragment(b, "b.json"))]
+    first, _ = merge_fragments(parts, {})
+    pubs_first = list(first.messaging[0].publishers)
+    assert parts[0][1].messaging[0].publishers == ["C1"], "the input fragment was mutated"
+    second, _ = merge_fragments(parts, {})
+    assert second.messaging[0].publishers == pubs_first

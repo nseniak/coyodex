@@ -31,7 +31,9 @@ from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
     Edge,
+    Flow,
     FlowStep,
+    MessagingRow,
     ModelError,
     ProjectModel,
     _build,
@@ -278,13 +280,94 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
     _merge_duplicate_deps(out)
     actor_stripped = _strip_actor_edges(out)          # actors are never backbone endpoints
     comp_merged = _merge_duplicate_components(out)     # same module harvested by two slices → one
+    chan_merged = _merge_duplicate_messaging(out, problems)   # two agents, same example row
     edges_before_dup = len(out.edges)
     _merge_duplicate_edges(out)  # LAST: dep-merge / actor-strip / component re-point can create exact dups
     if stats is not None:
         stats["actor_edges_stripped"] = actor_stripped
         stats["components_merged"] = comp_merged
+        stats["messaging_rows_collapsed"] = chan_merged
         stats["duplicate_edges_collapsed"] = edges_before_dup - len(out.edges)
     return out, problems
+
+
+def _merge_duplicate_messaging(m: ProjectModel, problems: list[str]) -> int:
+    """Collapse `messaging` rows that are unambiguously the SAME channel, unioning their participants.
+
+    Two agents writing the same channel is correct input, not an error: the trace prompts for two
+    different slices embedded the same literal example row, both agents dutifully wrote it, and
+    `validate` then BLOCKED the build on `Duplicate messaging channel name(s)`. (`assemble` itself
+    exits 0 — it is validate that blocks.) The lead hand-merged, and a hand merge picks a survivor
+    where a union keeps what both agents actually found.
+
+    IDENTITY IS `(name, broker)`, not the name alone. Two rows named `jobs` on brokers `D1` and `D9`
+    are almost certainly two channels, and silently collapsing them would resolve a real conflict by
+    fragment-filename order. A row with no broker is compatible with a named one (in-process is the
+    default, so an unset field is "not stated" rather than "different"). Anything genuinely
+    contradictory — two different non-empty `kind`, `payload` or `source` — is reported as a merge
+    PROBLEM, the same way a singleton stated twice with different values already is, rather than
+    guessed at. `_merge_duplicate_components` refuses an ambiguous identity for the same reason.
+
+    Rows are rebuilt rather than mutated: `merge_fragments` extends the FRAGMENTS' own lists into the
+    output, so writing through a survivor would edit the caller's fragment objects and make a second
+    merge of the same parts produce a different map."""
+    order: list[tuple[str, str]] = []
+    groups: dict[tuple[str, str], list[MessagingRow]] = {}
+    for row in m.messaging:
+        name = row.name.strip()
+        key = (name, row.broker.strip())
+        # A broker-less row joins a named-broker group for the same channel when there is exactly one.
+        if not key[1]:
+            candidates = [k for k in groups if k[0] == name]
+            if len(candidates) == 1:
+                key = candidates[0]
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        groups[key].append(row)
+    merged: list[MessagingRow] = []
+    collapsed = 0
+    for key in order:
+        rows = groups[key]
+        first = rows[0]
+        if len(rows) == 1:
+            merged.append(first)
+            continue
+        collapsed += len(rows) - 1
+        pubs: list[str] = []
+        cons: list[str] = []
+        scalars: dict[str, str] = {}
+        for row in rows:
+            pubs = _union_ids(pubs, row.publishers)
+            cons = _union_ids(cons, row.consumers)
+            for fname in ("kind", "broker", "payload", "source"):
+                val = (getattr(row, fname, "") or "").strip()
+                if not val:
+                    continue
+                prev = scalars.get(fname)
+                if prev is None:
+                    scalars[fname] = val
+                elif prev != val:
+                    problems.append(
+                        f"messaging channel '{key[0]}' is declared more than once with different "
+                        f"`{fname}` values ({prev!r} vs {val!r}) — either these are two different "
+                        f"channels (give them different names) or one row is wrong. `assemble` unions "
+                        f"participants for the same channel but will not choose between conflicting "
+                        f"{fname} values.")
+        merged.append(MessagingRow(name=key[0], publishers=pubs, consumers=cons,
+                                   **{f: scalars.get(f, "") for f in
+                                      ("kind", "broker", "payload", "source")}))
+    m.messaging = merged
+    return collapsed
+
+
+def _union_ids(first: list[str], second: list[str]) -> list[str]:
+    """First-seen order, no duplicates — a participant list is a set with a stable reading order."""
+    out = list(first)
+    for x in second:
+        if x not in out:
+            out.append(x)
+    return out
 
 
 def _dep_identity(d) -> tuple[str, str]:
@@ -633,6 +716,8 @@ def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict
         ops.append(f"dup-edges collapsed {stats['duplicate_edges_collapsed']}")
     if stats.get("entity_edges_derived"):
         ops.append(f"C→E edges derived {stats['entity_edges_derived']}")
+    if stats.get("messaging_rows_collapsed"):
+        ops.append(f"messaging rows collapsed {stats['messaging_rows_collapsed']}")
     sc = rec_stats.get("reconcile_set", {})
     if isinstance(sc, dict) and any(sc.values()):
         ops.append("reconcile set " + "/".join(f"{k}:{v}" for k, v in sc.items() if v))

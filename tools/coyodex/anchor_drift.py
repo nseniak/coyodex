@@ -56,6 +56,24 @@ def _confirmed_drifts(worklist: list[WorkItem], grounding: list[dict],
     nudging the anchor onto it would corrupt the card. Those rows are REPORT-ONLY: a refuted one is
     re-authored by hand, never auto-moved. This is a property of the claim, never a text match on
     its wording. REFUTATION is untouched — only the anchor nudge is suppressed."""
+    # NO DEDUPE, deliberately, and the reasoning is worth keeping because a plausible fix was tried
+    # and reverted. The tally is a STRICT MAJORITY and always was: a review claimed a split vote was
+    # "decided by file-sort order", which is false — 1-grounded/1-refuted is a tie and is not
+    # confirmed, in either order (brute-forced over every permutation up to 3-3).
+    #
+    # The narrow risk that remains is real: a build passes both an aggregate verdicts file and the
+    # per-batch ones, so one skeptic's row can arrive twice, and duplicating ONE side of a tie would
+    # manufacture a majority. Collapsing identical `(claim, grounded, evidence)` triples looks like the
+    # fix and is worse in two ways. Refutations carry NO evidence line by convention, so every
+    # refutation of a claim collapses to a single vote — turning a genuine 2-2 tie into 2-1 CONFIRMED,
+    # which is exactly the failure it was meant to prevent, running the other way. And two independent
+    # skeptics that agree on the same line are indistinguishable from one row seen twice: on this
+    # repo's own recorded build, `verdicts1.json` and `verdicts1b.json` are two independent reads of
+    # the security batch that agree exactly on 37 of 40 claims, and deduping left 396 of 399 claims
+    # with a single vote — gutting the majority this function exists to compute.
+    #
+    # A correct fix needs a per-VOTE identity (which skeptic/batch produced the row) that the verdicts
+    # format does not carry. That is a format change, not a tally change.
     votes: dict[str, list[dict]] = defaultdict(list)
     for v in grounding:
         claim = v.get("claim")

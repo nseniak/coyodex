@@ -49,6 +49,8 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
+from coyodex import balance_lib
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOLS = REPO_ROOT / "tools" / "coyodex"
 
@@ -814,3 +816,52 @@ def test_every_advertised_command_has_a_module_in_the_flag_audit_table():
     advertised = set(make_cli_commands())
     missing = sorted(advertised - set(COMMAND_MODULE))
     assert not missing, f"command(s) advertised by --help but absent from COMMAND_MODULE: {missing}"
+
+
+def make_prescribed_balance_literals() -> tuple[str, ...]:
+    """Every literal the method tells a lead to record under a 'Balance exceptions' heading.
+
+    Read out of the prose, so a new instruction joins this audit automatically."""
+    text = make_method_text()
+    near = re.compile(r"balance exceptions", re.IGNORECASE)
+    # Two shapes the method actually uses, and the first version of this test caught only one — so it
+    # did not detect `security-granularity`, the literal it was written for. That is the same
+    # near-vacuous-test failure this layer keeps finding elsewhere.
+    #   (a) "the literal `runs-in`" / "record the literal `store`"  — a silencing escape
+    #   (b) "`security-granularity: <value>`"                        — a declaration
+    escape_form = re.compile(r"literal\s+\*{0,2}`([a-z][a-z-]+)`", re.IGNORECASE)
+    # The declaration form requires a HYPHEN: every literal in this vocabulary is hyphenated
+    # (`security-granularity`, `channel-ends`, `entity-flows`, `runs-in`), while the un-hyphenated
+    # backtick-plus-colon hits nearby are field names and prose (`dep:`, `path:`, `why:`, `step:`).
+    declare_form = re.compile(r"`([a-z]+(?:-[a-z]+)+)\s*:")
+    found: set[str] = set()
+    for para in re.split(r"\n\s*\n", text):
+        if not near.search(para):
+            continue
+        found |= set(escape_form.findall(para))
+        found |= set(declare_form.findall(para))
+    return tuple(sorted(found))
+
+
+def test_every_balance_exceptions_literal_the_method_prescribes_is_read_by_a_tool():
+    """The heading-level twin of this already exists; this is the LITERAL level, and it was missing.
+
+    `security-granularity` shipped as the first literal the method told a build to record under a
+    machine-read heading that no tool read — so a build would have written a line nothing consumed,
+    and a typo in it would have been undetectable. That is the `coyodex reconcile` failure class (a
+    working, tested, unreachable thing) one rung down, and the heading-level test could not see it
+    because the HEADING was read; only this literal was not.
+
+    A literal counts as read if `balance_lib._LITERAL_ESCAPES` silences an advisory with it, or some
+    tool reads it by name for another purpose (the granularity DECLARATION silences nothing — it is
+    echoed beside the security-row count it explains)."""
+    src = "\n".join((TOOLS / f).read_text(encoding="utf-8")
+                    for f in ("validate_model.py", "balance_lib.py", "audit_model.py",
+                              "assemble.py", "balance.py"))
+    escapes = set(balance_lib._LITERAL_ESCAPES)
+    unread = [lit for lit in make_prescribed_balance_literals()
+              if lit not in escapes and lit not in src]
+    assert not unread, (
+        "literal(s) the method tells a build to record under 'Balance exceptions' that no tool reads: "
+        + ", ".join(unread) + " — a record nothing consumes is a decision the build cannot act on, "
+        "and a typo in it is undetectable")

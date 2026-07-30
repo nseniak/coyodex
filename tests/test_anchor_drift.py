@@ -236,3 +236,33 @@ def test_an_UNCITED_declaration_anchor_falls_back_to_a_different_line_and_is_not
     wl = l2_worklist_model(load_model(json.dumps(doc)))
     for needle in ("has states [", "runs on cadence"):
         assert _row(wl, needle).drift_eligible is False, needle
+
+
+def test_a_split_vote_is_a_tie_in_either_order_and_votes_are_never_deduped():
+    """Two facts, one of which cost a reverted change.
+
+    First: a review claimed a split vote was "decided by file-sort order". That is FALSE — the tally
+    has always been a strict majority, so 1-grounded/1-refuted is a tie whichever order the rows
+    arrive in.
+
+    Second, and the reason there is NO dedupe here: collapsing identical `(claim, grounded, evidence)`
+    triples looks like a fix for double-counted verdicts files and is worse in both directions.
+    Refutations carry no evidence line by convention, so every refutation of a claim would collapse to
+    ONE vote — turning a genuine 2-2 tie into 2-1 confirmed, exactly the failure it was meant to
+    prevent. And two independent skeptics that agree on the same line are indistinguishable from one
+    row seen twice: on this repo's own recorded build, two independent reads of the security batch
+    agree exactly on 37 of 40 claims. A correct fix needs a per-vote identity the verdicts format does
+    not carry."""
+    from coyodex.anchor_drift import _confirmed_drifts
+    from coyodex.audit_model import WorkItem
+    w = WorkItem(claim="C1 reads E1", anchor="a.py:10", why_risky="x", theme="ownership")
+    yes = {"claim": "C1 reads E1", "grounded": True, "evidence": "a.py:40"}
+    no = {"claim": "C1 reads E1", "grounded": False, "evidence": ""}
+
+    assert not _confirmed_drifts([w], [yes, no], 2)                 # a tie is not a majority
+    assert not _confirmed_drifts([w], [no, yes], 2)                 # …in either order
+    assert not _confirmed_drifts([w], [yes, no, dict(no)], 2)       # 1-2 against
+    # Two independent agreeing skeptics outvote one dissenter — the case a dedupe would have broken.
+    assert _confirmed_drifts([w], [yes, dict(yes), no], 2)
+    # …and N refutations are N votes, not one: a real 2-2 tie stays a tie.
+    assert not _confirmed_drifts([w], [yes, {**yes, "evidence": "a.py:41"}, no, dict(no)], 2)

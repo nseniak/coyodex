@@ -2867,11 +2867,37 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 
+#: The recorded security-table granularity: `security-granularity: <family | endpoint-and-condition>`
+#: under a 'Balance exceptions' heading. NOT one of `balance_lib._LITERAL_ESCAPES` — it silences
+#: nothing, it DECLARES a choice. It is read here so the choice is visible in every validate run and
+#: in `finalize`'s report, beside the row count it explains: two maps of one repo went from 103
+#: security rows to 19 while validate, audit and balance were all clean, because one row per surface
+#: FAMILY and one row per endpoint-and-condition are both defensible and differ 5x on the same code.
+#: Echoing it is what makes a change in that choice legible instead of silent. An absent record is not
+#: nagged — the method asks for it, and a validate that scolds every pre-existing map is noise.
+_SECURITY_GRANULARITY = re.compile(r"^\s*-?\s*security-granularity\s*[:—–]\s*(\S[^—–\n]*)",
+                                   re.IGNORECASE | re.MULTILINE)
+
+
+def recorded_security_granularity(m: ProjectModel) -> str | None:
+    """The declared granularity, or None. Read from the same heading every other record uses."""
+    for body in balance_lib.extras_bodies(m, "Balance exceptions"):
+        hit = _SECURITY_GRANULARITY.search(body)
+        if hit:
+            return hit.group(1).strip().rstrip(".").strip()
+    return None
+
+
 def _inventory(m: ProjectModel) -> str:
     counts = {"UC": len(m.use_cases), "HP": len(m.happy_path), "S": len(m.subsystems),
               "C": len(m.components), "D": len(m.deps), "SD": len(m.subdomains),
               "E": len(m.entities)}
-    return ", ".join(f"{k}:{v}" for k, v in sorted(counts.items()) if v)
+    out = ", ".join(f"{k}:{v}" for k, v in sorted(counts.items()) if v)
+    if m.security:
+        gran = recorded_security_granularity(m)
+        out += f", security:{len(m.security)}"
+        out += f" (granularity: {gran})" if gran else " (granularity NOT recorded)"
+    return out
 
 
 def _checked_summary(stats: dict[str, int], check_sources: bool, check_coverage: bool) -> str:
