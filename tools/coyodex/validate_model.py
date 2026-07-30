@@ -20,13 +20,15 @@ Stdlib-only.
 from __future__ import annotations
 
 import ast
+import json
 import re
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 from coyodex import balance_lib, grammar
 from coyodex.audit_model import l2_worklist_model
+from coyodex.reporting import clip as _clip, reset_full_lists, set_full_lists, shown as _shown
 from coyodex.anchors import (
     DIR_ANCHOR as _DIR_ANCHOR,
     FILE_ANCHOR as _ANCHOR_LINE,
@@ -638,12 +640,6 @@ def _under_recorded(path: str, dirs: frozenset[str] | set[str]) -> bool:
     return any(path == d or path.startswith(d + "/") for d in dirs)
 
 
-def _clip(text: str, n: int = 60) -> str:
-    """Trigger text is free prose — clip it so one row can't flood the warning report."""
-    text = " ".join(text.split())
-    return text if len(text) <= n else text[:n].rstrip() + "…"
-
-
 def _completeness_warnings(m: ProjectModel) -> list[str]:
     """Advisory use-case & Happy-Path completeness signals (see the family comment above):
 
@@ -994,7 +990,7 @@ def _cadence_warnings(m: ProjectModel) -> list[str]:
                 and grammar.effective_activation(ep.activation, ep.kind) == "self"):
             missing.append(f"[{ep.kind}] {_clip(ep.trigger)}")
     if missing and "cadence" not in balance_lib._exceptions(m):
-        shown = "; ".join(missing[:6]) + ("; …" if len(missing) > 6 else "")
+        shown = _shown(missing, 6, sep="; ")
         warnings.append(
             f"{len(missing)} self-activated entry point(s) record no cadence ({shown}) — when does "
             "each run? Author `cadence` (a cron expr / 'every 30s' / 'on-boot' / 'continuous') "
@@ -1212,7 +1208,7 @@ def _messaging_gap_warnings(m: ProjectModel) -> list[str]:
         return []
     if "messaging" in balance_lib._exceptions(m):
         return []
-    shown = ", ".join(bus_edges[:6]) + (f", +{len(bus_edges) - 6} more" if len(bus_edges) > 6 else "")
+    shown = _shown(bus_edges, 6)
     return [f"{len(bus_edges)} emit/listen edge(s) touch a messaging dep ({shown}) but the "
             "`messaging` catalog is empty — name the channels/queues (one row each: name, broker, "
             "publishers, consumers, payload), or record the literal `messaging` under a "
@@ -1220,7 +1216,6 @@ def _messaging_gap_warnings(m: ProjectModel) -> list[str]:
 
 
 ISOLATED_COMPONENT_SHOWN = 8       # ids listed inline before the "+N more" tail
-
 
 def _isolated_component_warnings(m: ProjectModel) -> list[str]:
     """The disconnected-code canary (advisory, ONE aggregated line): components that appear in NO
@@ -1251,10 +1246,9 @@ def _isolated_component_warnings(m: ProjectModel) -> list[str]:
         return []
     if "isolated" in balance_lib._exceptions(m):
         return []
-    shown = ", ".join(f"{c.id} ({c.name})" for c in isolated[:ISOLATED_COMPONENT_SHOWN])
-    more = len(isolated) - ISOLATED_COMPONENT_SHOWN
+    shown = _shown([f"{c.id} ({c.name})" for c in isolated], ISOLATED_COMPONENT_SHOWN)
     return [f"{len(isolated)} of {len(m.components)} component(s) carry no backbone edge and no "
-            f"`messaging` role: {shown}{f', +{more} more' if more > 0 else ''} — every view walks "
+            f"`messaging` role: {shown} — every view walks "
             "edges and channels, so these are drawn connected to nothing (a relationship stated only "
             "in `Purpose` prose is invisible). Author the edge, or add the component as a channel "
             "publisher/consumer; record the literal `isolated` under a 'Balance exceptions' extras "
@@ -1397,8 +1391,8 @@ def _check_states(m: ProjectModel) -> tuple[list[str], list[str]]:
             inferred.append(el.id)
     if inferred:
         warnings.append(
-            f"{len(inferred)} state machine(s) cite no `source` ({', '.join(inferred[:8])}"
-            f"{', …' if len(inferred) > 8 else ''}) — inferred; anchor the line DECLARING the "
+            f"{len(inferred)} state machine(s) cite no `source` ({_shown(inferred, 8)}"
+            f") — inferred; anchor the line DECLARING the "
             "states (the enum / status constants / dispatch table)")
     return problems, warnings
 
@@ -1525,7 +1519,7 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
         hygiene.append((
             "unstructured (notes-only) stores",
             f"{len(unstructured)} entity store(s) are unstructured (notes-only: "
-            f"{', '.join(unstructured[:8])}{', …' if len(unstructured) > 8 else ''}) — set "
+            f"{_shown(unstructured, 8)}) — set "
             "`store.dep`/`container`/`mode` so persistence is queryable, or record the literal "
             "`store` under a 'Balance exceptions' extras heading (which silences the WHOLE store "
             "family, not just this one)"))
@@ -1536,7 +1530,7 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
         hygiene.append((
             "a container named but no `dep` linked",
             f"{len(deplinkable)} entity store(s) name a container but link no `dep` "
-            f"({', '.join(deplinkable[:8])}{', …' if len(deplinkable) > 8 else ''}) — the "
+            f"({_shown(deplinkable, 8)}) — the "
             "persistence-coverage rule can't engage without the D-id; link `store.dep` to the "
             "datastore dep (give the domain agent the deps legend, or backfill at synthesis), "
             "or record the literal `store` under a 'Balance exceptions' extras heading (which "
@@ -1557,7 +1551,7 @@ def _persistence_coverage_warnings(m: ProjectModel) -> list[str]:
         hygiene.append((
             "a container that reads as prose, not a name",
             f"{len(prose)} entity store(s) name a container that reads as prose, not a name "
-            f"({', '.join(prose[:8])}{', …' if len(prose) > 8 else ''}) — `container` is the "
+            f"({_shown(prose, 8)}) — `container` is the "
             "LITERAL compartment name (`memberships_subscriptions`), not a description of it "
             "('memberships subscriptions'); a name with a space in it is almost never the real "
             "one, and a reader can't find the collection from a paraphrase. Correct the rows "
@@ -1640,7 +1634,7 @@ def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
         unplaced.append(f"entry_points[{i}] [{ep.kind}] {_clip(ep.trigger)}")
     if not unplaced:
         return []
-    shown = ", ".join(unplaced[:8]) + (f", +{len(unplaced) - 8} more" if len(unplaced) > 8 else "")
+    shown = _shown(unplaced, 8)
     return [f"{len(unplaced)} self-started entry point(s) have no deployment unit and will be "
             f"'Unplaced' in the Deployment view — tag `runs_in` on them or their component, or "
             f"record the literal `runs-in` under a 'Balance exceptions' extras heading if these "
@@ -1739,7 +1733,7 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
     # `variants: ["cloud"]` map (all sources now empty) is a single nudge, not a wall (T8).
     inferred = [f"{d.unit}:{v.env}" for d in m.deployment for v in d.variants if not v.source]
     if inferred:
-        shown = ", ".join(inferred[:8]) + (f", +{len(inferred) - 8} more" if len(inferred) > 8 else "")
+        shown = _shown(inferred, 8)
         warnings.append(f"{len(inferred)} deployment variant tag(s) are inferred (no manifest anchor): "
                         f"{shown} — cite the compose profile / overlay / stage line that places each unit "
                         f"in that environment (else confirm it's a real inference). Record the literal "
@@ -1759,7 +1753,7 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         # look — being genuinely shared is possible, but it is now a decision rather than a default.
         untagged = [d.unit for d in m.deployment if not d.variants]
         if untagged:
-            shown = ", ".join(untagged[:6]) + (" …" if len(untagged) > 6 else "")
+            shown = _shown(untagged, 6)
             warnings.append(
                 f"{len(untagged)} of {len(m.deployment)} deployment unit(s) carry no `variants` while "
                 f"others do: {shown} — an untagged unit reads as 'runs in every environment' "
@@ -1826,7 +1820,7 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         if len(comp_units.get(ep.component.strip(), set())) > 1:
             ambiguous.append(f"entry_points[{i}] [{ep.kind}] {_clip(ep.trigger)}")
     if ambiguous:
-        shown = ", ".join(ambiguous[:8]) + (f", +{len(ambiguous) - 8} more" if len(ambiguous) > 8 else "")
+        shown = _shown(ambiguous, 8)
         warnings.append(f"{len(ambiguous)} self-started entry point(s) whose owning component runs in >1 "
                         f"unit but which set no `runs_in` — the host process is ambiguous (the view picks "
                         f"one). Set `runs_in` on the entry point to pin its exact process, or record the "
@@ -1967,7 +1961,7 @@ def roleless_cd_verb_warnings(m: ProjectModel) -> list[str]:
                 and grammar.edge_role(e.verb) is None]
     if not roleless:
         return []
-    shown = ", ".join(roleless[:8]) + (f", +{len(roleless) - 8} more" if len(roleless) > 8 else "")
+    shown = _shown(roleless, 8)
     return [f"{len(roleless)} C→D edge(s) name no role (generic verb): {shown} — use a role-revealing "
             f"verb so the dependency's role is legible: publishes/emits/listens-to (message bus), "
             f"reads/writes/persists/queries (data store), calls (service)."]
@@ -2392,8 +2386,8 @@ def check_state_sources_model(m: ProjectModel, roots: list[Path]) -> list[str]:
         if missing:
             out.append(
                 f"{el.id} states: {len(missing)} of {len(sm.states)} state name(s) do not appear in "
-                f"the cited source ({strip_anchor(sm.source)}): {', '.join(missing[:6])}"
-                f"{' …' if len(missing) > 6 else ''} — either the name is COINED for a state the "
+                f"the cited source ({strip_anchor(sm.source)}): {_shown(missing, 6)}"
+                f" — either the name is COINED for a state the "
                 "code expresses without naming (the false side of a boolean flag), in which case "
                 "keep the machine but use the code's own vocabulary; or the lifecycle was read off "
                 "prose rather than a declaration, in which case drop it")
@@ -2490,8 +2484,7 @@ def check_domain_coverage_model(m: ProjectModel, roots: list[Path],
             f"signature of an under-harvested domain model (did one T5 harvest agent author "
             f"per-entity RELATIONS?); author the relations, or record the literal `entity-relations` "
             f"under a 'Balance exceptions' extras heading for a genuinely flat domain: "
-            f"{', '.join(isolated[:_COVERAGE_SAMPLE])}"
-            + (f", +{len(isolated) - _COVERAGE_SAMPLE} more" if len(isolated) > _COVERAGE_SAMPLE else "")
+            f"{_shown(isolated, _COVERAGE_SAMPLE)}"
         )
     domain_dirs: dict[Path, str] = {}       # absolute source dir → its repo-relative path
     for e in m.entities:
@@ -2519,9 +2512,7 @@ def check_domain_coverage_model(m: ProjectModel, roots: list[Path],
         entity_names = [e.name for e in m.entities if e.name != e.id]
         uncovered = sorted(t for t in types if not _type_covered(t, entity_names))
         if len(uncovered) >= _UNCOVERED_MIN and len(uncovered) >= _UNCOVERED_FRACTION * len(types):
-            shown = ", ".join(uncovered[:_COVERAGE_SAMPLE]) + (
-                f", +{len(uncovered) - _COVERAGE_SAMPLE} more"
-                if len(uncovered) > _COVERAGE_SAMPLE else "")
+            shown = _shown(uncovered, _COVERAGE_SAMPLE)
             out.append(
                 f"Under-harvested domain model: {len(uncovered)} of {len(types)} named types in the "
                 f"entities' source dirs have no entity card (possible under-harvested domain model; "
@@ -2732,8 +2723,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         unowned = sorted(e.id for e in m.entities
                          if e.id not in owned and e.id not in embedded and e.id not in adjudicated)
         if unowned:
-            shown = ", ".join(unowned[:12]) + (f", +{len(unowned) - 12} more"
-                                               if len(unowned) > 12 else "")
+            shown = _shown(unowned, 12)
             warnings.append(f"Entities with no owning component (no persists/writes C→E edge): "
                             f"{shown} — author the owning component's persists/writes edge, or "
                             f"record '<En>: <why>' under a 'Persistence exceptions' extras heading "
@@ -2749,8 +2739,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
                              if d.id not in targets and not d.deployment_linked
                              and grammar.classify_dep(d.kind or "", d.type) not in grammar.DEP_KINDS_FOLDED)
         if orphan_deps:
-            shown = ", ".join(orphan_deps[:12]) + (f", +{len(orphan_deps) - 12} more"
-                                                   if len(orphan_deps) > 12 else "")
+            shown = _shown(orphan_deps, 12)
             warnings.append(f"External deps with no incoming edge (un-traced — which component "
                             f"uses each?): {shown}")
         # The mirror nudge: a dep marked `deployment_linked` (declares NO code call site) that is
@@ -2758,8 +2747,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         # over-marked it). Drop the marker (or, if the edge is `no_call_site`, drop that edge).
         mislabeled = sorted(d.id for d in m.deps if d.deployment_linked and d.id in targets)
         if mislabeled:
-            shown = ", ".join(mislabeled[:12]) + (f", +{len(mislabeled) - 12} more"
-                                                  if len(mislabeled) > 12 else "")
+            shown = _shown(mislabeled, 12)
             warnings.append(f"Deps marked `deployment_linked` but which are a code call target "
                             f"(they have a real call site — drop the marker, or drop the edge if it "
                             f"is `no_call_site`): {shown}")
@@ -2794,14 +2782,29 @@ def _checked_summary(stats: dict[str, int], check_sources: bool, check_coverage:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Thin wrapper: whole-list mode is process-wide, so it is reset on EVERY exit path.
+
+    Without this a `--json` run permanently widens every later list in the same process — harmless
+    for the one-subcommand-per-process CLI, and a silent cross-test contaminant the moment anything
+    calls `main([..., "--json"])` in-process."""
+    try:
+        return _run(argv)
+    finally:
+        reset_full_lists()
+
+
+def _run(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex validate [--check-sources] [--check-coverage] [--repo <root>] "
-              "[--emit-unclaimed] [.coyodex/project-map.json]\n\n"
+              "[--emit-unclaimed] [--json] [.coyodex/project-map.json]\n\n"
               "Validate a model: structural schema validation, then the semantic\n"
               "checks (IDs resolve, hierarchy sound, cards complete, view fresh, …).\n"
               "--emit-unclaimed: print a ready-to-paste 'Unclaimed surfaces' extras block for every\n"
-              "  externally-activated entry point no use case reaches (adjudicate the wall at once).")
+              "  externally-activated entry point no use case reaches (adjudicate the wall at once).\n"
+              "--json: {problems, warnings, inventory, checked, checked_counts} on stdout, with every\n""  finding list\n"
+              "  emitted WHOLE — no `+N more` tail, no clipped trigger text. Read this instead of\n"
+              "  regex-parsing the human report or re-deriving a hidden id list in a script.")
         return 0
 
     repo_root: Path | None = None
@@ -2818,10 +2821,20 @@ def main(argv: list[str] | None = None) -> int:
     check_sources = "--check-sources" in argv
     check_coverage = "--check-coverage" in argv
     emit_unclaimed = "--emit-unclaimed" in argv
+    as_json = "--json" in argv
+    if as_json:
+        # Set BEFORE any check runs: `shown`/`clip` read it while building their messages, so a JSON
+        # consumer gets whole lists and whole trigger text. Reset in a `finally` below so an
+        # in-process caller cannot inherit the mode from a previous JSON run.
+        set_full_lists(True)
     unknown = [a for a in argv if a.startswith("-")
-               and a not in ("--check-sources", "--check-coverage", "--emit-unclaimed")]
+               and a not in ("--check-sources", "--check-coverage", "--emit-unclaimed", "--json")]
     if unknown:
         print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
+        return 2
+    if as_json and emit_unclaimed:
+        print("ERROR: --json and --emit-unclaimed are different output contracts (a JSON report vs a "
+              "paste-ready extras block) — pass one", file=sys.stderr)
         return 2
     args = [a for a in argv if not a.startswith("-")]
     path = Path(args[0] if args else ".coyodex/project-map.json")
@@ -2851,11 +2864,17 @@ def main(argv: list[str] | None = None) -> int:
     problems, warnings = validate_model(m, path, check_sources=check_sources,
                                         check_coverage=check_coverage, repo_root=repo_root,
                                         stats=vstats)
-    print(f"Inventory — {_inventory(m)}")
     # What the repo-reading flags actually read. Without this, `validate` and
     # `validate --check-sources` print byte-identical output on a clean map, so passing the flag is
     # indistinguishable from forgetting it — and a lead cannot tell a silent pass from a no-op.
     checked = _checked_summary(vstats, check_sources, check_coverage)
+    if as_json:
+        json.dump({"problems": problems, "warnings": warnings,
+                   "inventory": _inventory(m), "checked": checked or None,
+                   "checked_counts": vstats}, sys.stdout, indent=2)
+        sys.stdout.write("\n")
+        return 1 if problems else 0
+    print(f"Inventory — {_inventory(m)}")
     if checked:
         print(f"Checked — {checked}")
     if warnings:

@@ -11,10 +11,13 @@ Stdlib-only — no pytest required. Run either way (needs an editable install: `
 """
 from __future__ import annotations
 
+import itertools
 import json
+import re
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
 
 from coyodex import audit_model
 from coyodex.model import (
@@ -27,6 +30,7 @@ from coyodex.model import (
     FlowStep,
     MessagingRow,
     ProjectModel,
+    SecurityRow,
     StateMachine,
     StateTransition,
     Store,
@@ -49,6 +53,34 @@ def l2(json_text: str) -> list[audit_model.WorkItem]:
 
 
 # --- builders (JSON model documents) -----------------------------------
+
+def make_all_theme_model() -> ProjectModel:
+    """A model exercising EVERY worklist tier, so the order assertion is not vacuous on a fixture that
+    emits one theme (the earlier version's fixture emitted only `ownership`)."""
+    m = ProjectModel(title="T", goal="G")
+    m.use_cases = [UseCase(id="UC1", name="Do it")]
+    m.components = [Component(id="C1", name="A", purpose="p", entry_point="src/a.py:1"),
+                    Component(id="C2", name="B", purpose="p", entry_point="src/b.py:1")]
+    m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL")]
+    m.entities = [Entity(id="E1", name="Order", source="src/o.py:1",
+                         store=Store(dep="D1", container="orders", mode="row")),
+                  Entity(id="E2", name="Audit", source="src/x.py:1")]
+    m.security = [SecurityRow(surface="API auth", who="signed-in", source="src/auth.py:9",
+                              risk="a hole")]
+    m.edges = [
+        Edge(src="C1", verb="enforces", dst="C2", why="gate", where="src/a.py:5"),   # security
+        Edge(src="C1", verb="uses", dst="D1", why="query", where="src/a.py:7"),      # dep-usage
+        Edge(src="C1", verb="persists", dst="E1", why="store", where="src/a.py:9"),  # ownership
+        Edge(src="C1", verb="calls", dst="C2", why="helper", where="src/a.py:11"),   # backbone
+    ]
+    m.messaging = [MessagingRow(name="jobs", broker="D1", publishers=["C1"], consumers=["C2"],
+                                source="src/q.py:1")]                               # messaging
+    m.components[1].states = StateMachine(states=["new", "done"], source="src/b.py:20")  # lifecycle
+    m.entry_points = [EntryPoint(kind="job", trigger="nightly sweep", component="C1",
+                                 source="src/a.py:30", cadence="every 24h",
+                                 cadence_source="src/a.py:31")]                     # cadence
+    return m
+
 def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
     """Two use cases over one entity E1: UC1 READS the order, UC2 CREATES it (`create_verb`).
     `bad=True` orders the Happy Path read-then-create (the read-before-create shape); `bad=False`
@@ -1369,7 +1401,12 @@ def test_audit_json_output_is_machine_readable() -> None:
     r = subprocess.run([*AUDIT, path, "--json"], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     payload = json.loads(r.stdout)
-    assert set(payload) == {"findings", "worklist"}
+    assert set(payload) == {"findings", "worklist", "themes", "theme_counts"}
+    # `themes` is the ordered (most-dangerous-first) vocabulary and `theme_counts` the per-theme
+    # sizes: what a Phase-4 batcher groups on, so it never has to string-match the prose.
+    assert payload["themes"][0] == "security"
+    assert set(payload["theme_counts"]) <= set(payload["themes"])
+    assert sum(payload["theme_counts"].values()) == len(payload["worklist"])
     assert all({"claim", "anchor", "detail", "why_risky"} <= set(w) for w in payload["worklist"])
     assert all({"check", "severity", "location", "message"} <= set(fi) for fi in payload["findings"])
 
@@ -1741,3 +1778,25 @@ def test_positional_why_ref_silently_retargets_when_the_walk_is_renumbered():
                   ("HP3", "UC2", "needs the org from UC1")])
     assert audit_model.check_why_refs(by_uc) == []
     assert audit_model.happy_path_steps(by_uc)[2].why_uc_refs == ["UC1"]
+
+
+def test_themes_are_closed_and_match_the_worklist_order():
+    """The pin an earlier comment CLAIMED existed and did not.
+
+    Two contracts, both previously false: (a) `_THEMES` is closed — a claim built with an unlisted
+    theme must fail here, and a bogus theme on 5 of the 8 sites left the whole suite green; (b) the
+    declared order IS the emission order, and `backbone` (194 of 398 claims on a live map, the lowest
+    risk) was emitted 4th of 8 while sitting 8th in the list, so a consumer batching in worklist order
+    spent its first batches on generic edges. Read from this module's own source, so a new claim kind
+    joins the test automatically."""
+    src = Path(str(audit_model.__file__)).read_text(encoding="utf-8")
+    emitted = set(re.findall(r'theme="([a-z-]+)"', src))
+    declared = set(audit_model._THEMES)
+    assert emitted <= declared, f"theme(s) emitted but not declared in _THEMES: {emitted - declared}"
+    assert len(audit_model._THEMES) == len(set(audit_model._THEMES))
+    # (b) declared order == emission order, on a model exercising every tier
+    m = make_all_theme_model()
+    seen = [k for k, _ in itertools.groupby(w.theme for w in audit_model.l2_worklist_model(m))]
+    assert seen == [t for t in audit_model._THEMES if t in seen], (
+        f"worklist order {seen} contradicts _THEMES {audit_model._THEMES}")
+    assert "backbone" in seen and seen[-1] == "backbone", "the largest, lowest-risk tier must be last"

@@ -25,7 +25,7 @@ from pathlib import Path
 
 from coyodex.anchor_drift import drift_records
 from coyodex.audit_model import _claim_text, l2_worklist_model
-from coyodex.model import ProjectModel, load_model_path, to_canonical_json
+from coyodex.model import ProjectModel
 from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
 
 _EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2` — excludes security claims
@@ -38,15 +38,57 @@ def _security_claim(surface: str, source: str) -> str:
     return f"Auth surface '{surface}' is protected by: {_claim_text(source)}"
 
 
-def _write(map_path: Path, m: ProjectModel) -> None:
-    map_path.write_text(to_canonical_json(m), encoding="utf-8")
-    # `fix` edits the ASSEMBLED map. During a build the source of truth is the fragments, and a later
+def _load(map_path: Path) -> tuple[ProjectModel, frozenset[str] | None]:
+    """Load the target, which may be an assembled map OR a build fragment. Returns the fragment's own
+    key set (None for a full map) so `_write` can keep a fragment a fragment."""
+    from coyodex.assemble import load_map_or_fragment
+    return load_map_or_fragment(map_path)
+
+
+def _write(map_path: Path, m: ProjectModel, present: frozenset[str] | None = None) -> None:
+    from coyodex.assemble import dump_preserving
+    map_path.write_text(dump_preserving(m, present), encoding="utf-8")
+    if present is not None:
+        # Deliberately NOT "this edit is durable". An anchor rewrite is — it changes a `where` string
+        # in this file, and the next assemble carries it through. A DROP is not, and `drop-edge` on a
+        # fragment is refused for that reason (see `_refuse_fragment_drop`): the riding flow step may
+        # live in a SIBLING fragment, where `riding_steps` cannot see it, so the tool reports a clean
+        # drop and the next assemble re-derives the edge from the surviving step — silently, and with
+        # a different verb. Verified: `C1 persists E1` dropped in one fragment came back as
+        # `C1 writes E1`. The `--reconcile drop_edges` path sees the whole merged model and warns.
+        print(f"note: edited the fragment {map_path.name} in place, preserving its "
+              f"{len(present)} top-level section(s). Re-run `lint-fragment` on it, then re-assemble.",
+              file=sys.stderr)
+        return
+    # `fix` edited the ASSEMBLED map. During a build the source of truth is the fragments, and a later
     # `assemble` regenerates the map from them — silently discarding this edit. Both fresh builds hit
     # exactly this (ran `fix drop-edge`, re-assembled, then hand-scripted the same drop into a
     # fragment). Say so: run `fix` only as the FINAL step, after the last assemble.
     print("note: this edited the assembled map in place — if you `assemble` again it is rebuilt from "
           "fragments and THIS edit is lost. Run `fix` as the final step (after the last assemble), or "
           "make structural changes in a fragment + re-assemble.", file=sys.stderr)
+
+
+def _refuse_fragment_drop(present: frozenset[str] | None, map_path: Path) -> bool:
+    """True (and explains) when a DROP was aimed at a fragment, which cannot be done safely here.
+
+    Dropping a `C→E` edge has to heal the flow steps that rode it, or the next `assemble` re-derives
+    the edge from the surviving step. `riding_steps` can only see the model it was handed, so in a
+    fragment holding edges but not flows it finds nothing, reports a clean drop, and the drop silently
+    does not stick. `--reconcile drop_edges` runs against the whole merged model and reports (or heals)
+    the riding steps — which is what `method.md` already prescribes for a build-time drop."""
+    if present is None:
+        return False
+    print(f"ERROR: refusing to drop an edge inside the fragment {map_path.name}. A dropped C→E edge "
+          f"must heal the flow steps that rode it, and those steps may live in a SIBLING fragment "
+          f"this file cannot see — the drop would look clean and then be undone by the next assemble, "
+          f"with the edge re-derived under a different verb. Put the drop in the reconcile file, which "
+          f"sees the whole merged model:\n"
+          f'  {{"drop_edges": [{{"src": "<Cn>", "verb": "<verb>", "dst": "<En>", "drop_steps": true}}]}}\n'
+          f"  coyodex assemble <fragments…> --out .coyodex --reconcile .coyodex/reconcile.json\n"
+          f"(method.md, 'Where each reconcile lives'.) Anchor fixes — `apply-drift` — ARE safe on a "
+          f"fragment and are not refused.", file=sys.stderr)
+    return True
 
 
 def _need(argv: list[str], i: int, flag: str) -> str:
@@ -80,7 +122,7 @@ def apply_drift(argv: list[str]) -> int:
     if not map_path or not verdicts_path:
         print("ERROR: --map and --verdicts are required", file=sys.stderr)
         return 2
-    m = load_model_path(map_path)
+    m, _present = _load(Path(map_path))
     grounding = json.loads(Path(verdicts_path).read_text(encoding="utf-8")).get("grounding", [])
     records = drift_records(l2_worklist_model(m), grounding, tolerance)
     edges_applied = 0
@@ -122,7 +164,7 @@ def apply_drift(argv: list[str]) -> int:
             s.source = corrected
             sec_applied += 1
     if edges_applied or sec_applied:
-        _write(Path(map_path), m)
+        _write(Path(map_path), m, _present)
         print(f"apply-drift: rewrote {edges_applied} edge `where` and {sec_applied} security anchor(s). "
               f"Re-run: validate --check-sources → audit → render.")
     else:
@@ -164,7 +206,9 @@ def drop_edge(argv: list[str]) -> int:
         print("ERROR: --drop-steps and --repoint are mutually exclusive", file=sys.stderr)
         return 2
     src, verb, dst = positionals[0], positionals[1].lower(), positionals[2]
-    m = load_model_path(map_path)
+    m, _present = _load(Path(map_path))
+    if _refuse_fragment_drop(_present, Path(map_path)):
+        return 2
     kept = [e for e in m.edges if not (e.src == src and e.verb.strip().lower() == verb and e.dst == dst)]
     removed = len(m.edges) - len(kept)
     if removed == 0:
@@ -187,7 +231,7 @@ def drop_edge(argv: list[str]) -> int:
             for owner, st in riding:
                 print(f"    {owner} step {st.n}: {st.src} → {st.dst}  ({st.phrase or '—'})")
             print("  Re-run with --repoint <newDst> or --drop-steps, or edit the steps by hand.")
-    _write(Path(map_path), m)
+    _write(Path(map_path), m, _present)
     print("Re-run: validate --check-sources → audit → render.")
     return 0
 
@@ -235,7 +279,7 @@ def dedup_relation(argv: list[str]) -> int:
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
         return 2
-    m = load_model_path(map_path)
+    m, _present = _load(Path(map_path))
     if not drops:
         same_card, reciprocal = _duplicate_relations(m)
         if not same_card and not reciprocal:
@@ -270,7 +314,7 @@ def dedup_relation(argv: list[str]) -> int:
         del ent.relations[idx]                       # ONE occurrence
         dropped += 1
         print(f"  dropped {eid}: {verb} → {target}")
-    _write(Path(map_path), m)
+    _write(Path(map_path), m, _present)
     print(f"dedup-relation: dropped {dropped} relation(s). "
           f"Re-run: validate --check-sources → audit → render.")
     return 0

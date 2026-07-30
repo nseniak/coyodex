@@ -150,7 +150,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
     try:
-        m = load_model(path.read_text(encoding="utf-8"))
+        # Accepts a build FRAGMENT as well as an assembled map — a fragment is exactly what a build
+        # needs to look inside during Phases 1-3, and having no read path for one is why a live build
+        # inspected its own fragments with `python3 - <<'EOF'` heredocs instead of this command.
+        from coyodex.assemble import load_map_or_fragment
+        m, _present = load_map_or_fragment(path)
     except ModelError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1

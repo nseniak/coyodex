@@ -26,6 +26,7 @@ from coyodex.grammar import DEEP_NEST_WARN
 # gate's dependency firewall intact (tests/test_cli.py). The per-rule wording lives there so
 # validate, the pre-index and the viewer tell the SAME story about one ignore file.
 from coyodex.ignorefile import ignore_report, load_ignore
+from coyodex.reporting import capped, shown
 
 
 def _is_subsystem_id(i: str) -> bool:  # an `S` id, never a subdomain (`SD1` also starts with "S")
@@ -85,6 +86,7 @@ _ALTITUDE_MIN = 6  # this many bare-identifier items in one cell reads as a list
 
 _COMPRESSION_MIN = 8      # this many sibling source subdirs folded into ~one box reads as lost signal
 _ABSENT_MIN_FILES = 25    # a top-level dir this large with nothing referenced is a likely unmapped module
+_ABSENT_DIR_CAP = 8       # unmapped-module findings emitted before the count-only disclosure below
 # The conventional NON-PRODUCT directory basenames (test trees, internal/docs) live in
 # `preindex_lib.NON_PRODUCT_DIRS` — one list shared with the granularity expectation E; pulled via
 # the same local import the coverage check already uses (the core gate stays import-independent).
@@ -174,12 +176,20 @@ def compression_coverage_from_refs(refs: set[str], root: Path,
         n_subs = len(dir_children.get(dpath, ()))
         if fc >= _ABSENT_MIN_FILES or n_subs >= _COMPRESSION_MIN:
             absent.append((fc, dpath))
-    for fc, dpath in sorted(absent, reverse=True)[:8]:
+    # A per-item cap cannot carry an inline `+N more`, so the dropped count is disclosed below —
+    # silently dropping four unmapped modules is worse than a visible tail, because neither a reader
+    # nor a `--json` consumer can tell it happened.
+    kept, dropped = capped(sorted(absent, reverse=True), _ABSENT_DIR_CAP)
+    for fc, dpath in kept:
         n_subs = len(dir_children.get(dpath, ()))
         out.append(
             f"Coverage: {dpath}/ ({fc} source files, {n_subs} subdirs) has no path referenced in the "
             f"map — likely an unmapped module (measured at validate time)"
         )
+    if dropped:
+        out.append(f"Coverage: {dropped} further directory/directories have no path referenced in the "
+                   f"map and are NOT listed above (only the {_ABSENT_DIR_CAP} largest are) — read them "
+                   f"all with `validate --check-coverage --json`.")
     return out
 
 
@@ -241,10 +251,12 @@ def file_level_coverage(refs: set[str], root: Path,
     if not by_dir:
         return []
     dirs = sorted(by_dir)
-    lines = [f"{dpath}/ ({len(by_dir[dpath])}): {', '.join(sorted(by_dir[dpath]))}"
-             for dpath in dirs[:_FILE_COVERAGE_DIR_CAP]]
-    if len(dirs) > _FILE_COVERAGE_DIR_CAP:
-        lines.append(f"+{len(dirs) - _FILE_COVERAGE_DIR_CAP} more dir(s)")
+    # Through the shared helper, so `--json` widens this too. It did NOT, and this is the site that
+    # made the JSON mode's completeness guarantee false: it is reached under `--check-coverage`, the
+    # flag the method tells every build to run right after synthesis, so a machine consumer read
+    # `+N more dir(s)` from a payload that had just promised whole lists.
+    lines = shown([f"{dpath}/ ({len(by_dir[dpath])}): {', '.join(sorted(by_dir[dpath]))}"
+                   for dpath in dirs], _FILE_COVERAGE_DIR_CAP, sep="\n    ", unit="dir(s)").split("\n    ")
     return [f"{total} code source file(s) no component references — a slice-seam gap (loose files inside "
             f"an otherwise-covered dir escape every harvest slice), by directory:\n    "
             + "\n    ".join(lines)

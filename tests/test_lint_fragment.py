@@ -214,3 +214,32 @@ def test_lint_cli_exit_codes():
                                                              "where_configured": None}]})
         assert lint_fragment.main([str(good)]) == 0
         assert lint_fragment.main([str(bad)]) == 1  # schema error → non-zero
+
+
+def test_expect_is_silent_inside_the_band_and_speaks_outside_it():
+    """`--expect N` is the dispatched component budget, checked at the AGENT's own lint.
+
+    Advisory and opt-in: it fires only when the lead passes a budget, so a fragment linted without
+    one is unaffected (`lint_fragment_warnings` is asserted empty for a correct harvest fragment
+    elsewhere, and this must not break that). The band is wide because the budget is a pre-read
+    estimate; what it catches is the systematic overshoot — on a live build nine slices dispatched
+    with budgets summing to ~55 delivered 86, every slice over, and nothing noticed until the lead's
+    granularity advisory after assembly."""
+    m = make_fragment({"components": [
+        {"id": f"C{i}", "name": f"C{i}", "purpose": "p", "entry_point": f"src/c{i}.py:1"}
+        for i in range(1, 13)]})
+    assert lint_fragment._budget_warnings(m, None) == []      # opt-in: no budget, no opinion
+    assert lint_fragment._budget_warnings(m, 10) == []        # 12 vs 10 is inside 0.5x-1.5x
+    assert lint_fragment._budget_warnings(m, 12) == []
+    over = lint_fragment._budget_warnings(m, 5)               # 2.4x
+    assert len(over) == 1 and "2.4x" in over[0] and "over" in over[0]
+    under = lint_fragment._budget_warnings(m, 40)             # 0.3x
+    assert len(under) == 1 and "under" in under[0]
+
+
+def test_expect_says_nothing_about_a_fragment_that_defines_no_component():
+    """A trace fragment carries flows and edges, not components. Comparing 0 against a budget would
+    fire on every one of them — the budget belongs to the harvest slices that were given one."""
+    m = make_fragment({"edges": [{"src": "C1", "verb": "calls", "dst": "C2", "why": "w",
+                                  "where": "src/a.py:1"}]})
+    assert lint_fragment._budget_warnings(m, 8) == []

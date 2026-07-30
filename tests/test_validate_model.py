@@ -10,10 +10,11 @@ Run either way (needs an editable install: `make deps`):
 from __future__ import annotations
 
 import ast
+import re
 import tempfile
 from pathlib import Path
 
-from coyodex import grammar, lint_fragment
+from coyodex import grammar, lint_fragment, reporting
 from coyodex import validate_model as validate_model_mod
 from coyodex.model import (
     Component,
@@ -2566,3 +2567,88 @@ def test_the_payload_canary_needs_entities_and_enough_channels():
     m = make_channel_catalog(["", "", ""])
     m.entities = []          # nothing to reference -> nothing to claim
     assert not any("names a `payload`" in w for w in warnings_of(m))
+
+
+def test_json_mode_emits_whole_lists_where_the_human_view_truncates():
+    """`--json`'s consumer is a program, so `+N more` is a defect there.
+
+    The truncation was silently forcing hand-written python: a live build hit `16 of 86 component(s)
+    carry no backbone edge: C1, C12, … +8 more`, needed the hidden eight to write its exceptions
+    block, and re-derived the whole list in a throwaway script. Every such list goes through one
+    helper so `--json` cannot cover nine sites and miss the tenth."""
+    m = make_valid_model()
+    m.components = [Component(id=f"C{i}", name=f"Comp{i}", purpose="does",
+                              entry_point=f"src/c{i}.py:1") for i in range(1, 21)]
+    m.edges = []
+    m.flows = []
+    try:
+        reporting.reset_full_lists()
+        human = [w for w in warnings_of(m) if "carry no backbone edge" in w][0]
+        reporting.set_full_lists(True)
+        full = [w for w in warnings_of(m) if "carry no backbone edge" in w][0]
+    finally:
+        reporting.reset_full_lists()
+    assert "+12 more" in human and human.count("Comp") == 8
+    assert "more" not in full and full.count("Comp") == 20
+
+
+def test_json_mode_does_not_clip_trigger_prose_either():
+    """A clipped trigger cannot be matched back to the entry point it names, so `--json` keeps it."""
+    long_trigger = "GET /a/very/long/route/that/keeps/going/and/going/past/sixty/characters/easily"
+    try:
+        reporting.reset_full_lists()
+        assert reporting.clip(long_trigger).endswith("…")
+        reporting.set_full_lists(True)
+        assert reporting.clip(long_trigger) == long_trigger
+    finally:
+        reporting.reset_full_lists()
+
+
+def test_no_hand_written_truncation_bypasses_the_helper():
+    """The structural guard: no finding-list truncation outside `coyodex.reporting`.
+
+    A hand-written tail is invisible to `--json`, which then reports a completeness it does not have.
+    The first version of this test sliced ONE file after `def _shown(` and grepped for one exact
+    literal; a review defeated it four ways and found a real bypass it had missed — `validate_analysis`
+    emitted `+N more dir(s)` inside the JSON payload.
+
+    SCOPE, stated rather than overclaimed: the modules whose findings reach a `--json` payload. The
+    viewer is deliberately out — a diagram label has a hard pixel budget and clips regardless of any
+    report mode, which is a different medium, not a findings list. The SHAPE is the `+<remainder> more`
+    tail computed from a length; a prose ellipsis is not truncation and is not flagged."""
+    pkg = Path(str(reporting.__file__)).parent
+    reporters = ("validate_model.py", "validate_analysis.py", "audit_model.py", "lint_fragment.py",
+                 "balance_lib.py", "balance.py", "anchor_drift.py", "assemble.py", "dump.py", "fix.py")
+    tail = re.compile(r"\+\s*\{[^}]*\}\s*more")      # f-string: `+{len(x) - N} more`
+    offenders: list[str] = []
+    for name in reporters:
+        mod = pkg / name
+        if not mod.is_file():
+            continue
+        for n, line in enumerate(mod.read_text(encoding="utf-8").splitlines(), 1):
+            if line.lstrip().startswith("#") or '"""' in line:
+                continue
+            code = line.split("  # ", 1)[0]
+            if tail.search(code) and not any(h in code for h in ("shown(", "capped(", "clip(")):
+                offenders.append(f"{name}:{n}: {code.strip()[:90]}")
+    assert not offenders, (
+        "hand-written truncation bypasses coyodex.reporting, so `--json` silently under-reports:\n"
+        + "\n".join(offenders))
+
+
+def test_the_guard_above_would_catch_a_reintroduced_truncation():
+    """The guard's own test — a guard nobody has seen fail is a guard nobody knows works.
+
+    The previous version passed all four re-introductions a review threw at it, so this asserts the
+    detector fires on the shape it exists to find."""
+    tail = re.compile(r"\+\s*\{[^}]*\}\s*more")
+    for bad in ('shown = ", ".join(x[:8]) + f", +{len(x) - 8} more"',
+                "msg = f'…, +{n} more'",
+                'lines.append(f"+{len(dirs) - CAP} more dir(s)")',
+                'out += f", +{extra} more"'):
+        assert tail.search(bad), bad
+    for ok in ('shown = _shown(items, 8)',
+               'kept, dropped = capped(rows, 8)',
+               'desc = clip(text)',
+               '# a comment mentioning +N more is prose'):
+        assert not (tail.search(ok) and not any(h in ok for h in ("shown(", "capped(", "clip("))), ok

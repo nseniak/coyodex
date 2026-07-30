@@ -867,7 +867,10 @@ synthesis → parallel trace.**
   `entity.subdomain`, and the `E↔E` `relation.target` / `FK→En` markers. Because collisions are resolved
   before any edge is traced, a range overlap between two harvest agents can never reach the backbone;
   `assemble`'s duplicate-id error remains the loud backstop if a stray collision slips through.
-  **Right after synthesis, run `coyodex validate --check-coverage`** — its unreferenced-files list is
+  **Right after synthesis, run `coyodex validate --check-coverage`** — add **`--json`** whenever you
+  need the FULL finding lists: the human report elides long id lists (`C1, C12, … +8 more`) and clips
+  trigger prose, and `--json` emits every list whole, so recovering a hidden id never needs a
+  throwaway script. Its unreferenced-files list is
   the mechanical harvest-completeness sweep (a source file no component claims = a slice-seam gap);
   an improvised spot-script covering one directory is how a live build nearly missed a component.
   **This is also the front-door verification moment** (the cross-check rule under *Use cases*): T4
@@ -1022,12 +1025,18 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
 - Phase 4 Adversarial verify (fan out, **fresh context**). After the map validates and `coyodex audit`
   runs (fix any blocking `why:`-ref contradiction; reconcile the read-before-create / actor advisories),
   take the audit's **L2 grounding worklist** and disprove it against the code (read it with
-  `coyodex audit --json` — the machine-readable `{findings, worklist}` payload built for this
-  batching step; never regex-parse the human report; the same rule covers the model itself — look an
-  id up with **`coyodex dump`** (`--id` resolves kind/name/source/members, `--record` the full stored
-  record, `--edges` a node's in/out backbone edges, `--members` a subsystem's members) rather than
-  hand-parsing `project-map.json`, which is how a build ends up with a throwaway script that reads a
-  field the schema renamed). **Batch by theme/risk,
+  `coyodex audit --json` — the machine-readable `{findings, worklist, themes, theme_counts}` payload
+  built for this batching step; never regex-parse the human report; the same rule covers the model
+  itself — look an id up with **`coyodex dump`** (`--id` resolves kind/name/source/members, `--record`
+  the full stored record, `--edges` a node's in/out backbone edges, `--members` a subsystem's members)
+  rather than hand-parsing `project-map.json`, which is how a build ends up with a throwaway script
+  that reads a field the schema renamed. **`dump` also reads a build FRAGMENT**, so use it during
+  Phases 1-3 too instead of scripting over `build-fragments/*.json`.) **Batch on the payload's own
+  `theme`** — every worklist item carries one from a closed, most-dangerous-first set (`security`,
+  `dep-usage`, `ownership`, `persistence`, `messaging`, `lifecycle`, `cadence`, `backbone`) and
+  `theme_counts` gives you each group's size, so the batches fall out of the data instead of being
+  guessed. A live build read this payload, found no field to group by, and fell back to sequential
+  chunks of 40 in worklist order. **Batch by theme/risk,
   don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group the claims into
   themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage), one
   fresh-context skeptic per batch, and for the riskiest claims (auth, scoping, encryption) run **N
@@ -1097,6 +1106,18 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
     drop that must survive a rebuild → reconcile file; a terminal anchor fix after the last assemble →
     `fix`. `--reconcile drop_edges` runs after the entity-edge derivation and heals the riding flow
     steps exactly like `fix drop-edge`, so a dropped `C→E` edge is not silently re-derived.
+    The directive shape (also in `assemble --help`; a live build had to read `reconcile.py`'s source
+    to find these field names, because nothing wrote them down):
+    ```json
+    { "drop_edges": [ {"src": "C21", "verb": "persists", "dst": "E33"},
+                      {"src": "C7",  "verb": "calls",    "dst": "C9", "drop_steps": true},
+                      {"src": "C4",  "verb": "reads",    "dst": "E2", "repoint": "E5"} ] }
+    ```
+    Each entry defaults to REPORTING the flow steps that rode the edge; `drop_steps` removes them,
+    `repoint` re-points them. **A report-only `C→E` drop leaves the step, and the next assemble
+    re-derives the edge from it** — so heal it, or the drop does not stick. `assemble` prints the
+    unhealed count in its final digest line for exactly this reason. Zero matches warns, never fails,
+    so a directive that outlives its edge does not rot the build.
   - **A duplicated domain relation BLOCKS validate — resolve it with `coyodex fix dedup-relation`.**
     The same `E→E` relation declared on both entity cards (or twice on one) is a hard validate error,
     not an advisory, so the build cannot finish until you pick a survivor. Run it with no `--drop` to
@@ -1169,9 +1190,13 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > is «absolute repo path» — prefix every path with it. Minimal valid fragment:
 > `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
 > **SELF-CHECK BEFORE RETURNING (required):** run
-> `«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «repo» «your-fragment».json` and fix every row
-> it reports until it exits clean — this catches schema / anchor-format / extra-key / missing-file
-> errors in YOUR context (in parallel), so nothing bounces back from the lead's `assemble`.
+> `«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «repo» --expect «N» «your-fragment».json` and
+> fix every row it reports until it exits clean — this catches schema / anchor-format / extra-key /
+> missing-file errors in YOUR context (in parallel), so nothing bounces back from the lead's
+> `assemble`. Pass `--expect «N»` with the component budget this slice was dispatched with: it is
+> advisory, and it puts the over/undershoot in front of the agent that can explain it. On a live build
+> nine slices dispatched with budgets summing to ~55 delivered 86 components, every slice over, and
+> nobody noticed until the lead's granularity advisory fired after assembly.
 > If the lint prints `warning:` lines (advisory), either FIX them or **repeat them verbatim in your
 > reply with one line of justification each** — never silently shrug an advisory off; the lead must
 > not rediscover a warning your own lint already showed you.

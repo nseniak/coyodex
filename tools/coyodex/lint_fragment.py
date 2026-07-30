@@ -179,20 +179,63 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
             + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m))
 
 
+# DELIBERATELY ABSENT: a per-fragment nudge about the entry-point per-kind COMPLETENESS statement.
+# The information loss it would chase is real — on a live build all twelve harvest agents stated their
+# per-kind completeness in their RETURN MESSAGE, no prompt asked for it in a fragment, and the lead's
+# validate then flagged 13 kinds with no statement. It still does not belong here. A canonical-kind T4
+# harvest fragment is CORRECT, `lint_fragment_warnings` is asserted EMPTY for one on purpose, and an
+# advisory that fires on every such fragment is a nag on correct work. The fragment also cannot know
+# whether the statement exists: the 'Entry-point coverage' heading is authored by the LEAD, in a
+# different fragment. The fix is in the harvest PROMPT — the fragment template must ask for the
+# statement — which is a method change, not a lint check. (Tried as a warning; reverted.)
+
+
+#: How far a slice may miss its dispatched component budget before `--expect` says so. Wide on
+#: purpose: the budget is a pre-read estimate, and a slice that finds 7 where 5 were guessed is
+#: normal. What it catches is the systematic overshoot — on a live build the nine code slices were
+#: dispatched with budgets summing to ~55 and delivered 86, every slice over, and nothing noticed
+#: until the lead's granularity advisory said "86 vs a code-derived ~59" after assembly.
+_BUDGET_LO, _BUDGET_HI = 0.5, 1.5
+
+
+def _budget_warnings(m: ProjectModel, expect: int | None) -> list[str]:
+    """Advisory: this fragment's component count against the budget its slice was dispatched with.
+
+    Never blocking. The budget is the lead's estimate, and the authoring agent is the one holding the
+    code — if it found more real components than the estimate, the estimate was wrong. The point is
+    that the delta becomes visible to the agent that can explain it, in its own turn, instead of
+    surfacing as an unattributable total after every fragment has been merged."""
+    if expect is None or expect <= 0:
+        return []
+    n = len(m.components)
+    if not n or _BUDGET_LO * expect <= n <= _BUDGET_HI * expect:
+        return []
+    direction = "over" if n > expect else "under"
+    return [f"{n} component(s) against a dispatched budget of ~{expect} ({n / expect:.1f}x, {direction} "
+            f"the {_BUDGET_LO:g}x-{_BUDGET_HI:g}x band) — if the slice really holds this many, say so "
+            f"in your reply so the lead can record the altitude decision under a 'Balance exceptions' "
+            f"extras heading; if it is drift, fold the near-duplicates into one component."]
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv or not argv:
-        print("usage: coyodex lint-fragment [--repo <root>] [--ids <legend-or-map>] <fragment.json>...\n\n"
+        print("usage: coyodex lint-fragment [--repo <root>] [--ids <legend-or-map>] [--expect N]\n"
+              "                             <fragment.json>...\n\n"
               "Self-check a build fragment BEFORE returning it: schema, anchor format, `extra`-key\n"
               "conventions, (with --repo) that every anchor's file exists, and (with --ids) that every\n"
               "cross-referenced id is defined in the fragment or the given id universe — pass the\n"
               "lead's legend (_legend.md) or the assembled project-map.json, so an INVENTED id dies\n"
               "here instead of at the lead's final validate. Reports all findings and exits non-zero\n"
               "on any, so an agent fixes its own rows in context instead of the lead hand-patching\n"
-              "them after assembly.")
+              "them after assembly.\n"
+              "--expect N: the component budget this slice was dispatched with. Advisory: warns when\n"
+              "  the fragment lands outside 0.5x-1.5x N, so the overshoot is visible to the agent that\n"
+              "  caused it rather than only in the lead's granularity advisory after assembly.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
     repo_root: Path | None = None
     known_ids: set[str] | None = None
+    expect: int | None = None
     frags: list[Path] = []
     i = 0
     while i < len(argv):
@@ -219,6 +262,12 @@ def main(argv: list[str] | None = None) -> int:
             known_ids = {t for src in sources
                          for t in re.findall(r"\b[A-Z]+\d+\b", src.read_text(encoding="utf-8"))
                          if ID_SHAPE.match(t)}
+        elif a == "--expect":
+            i += 1
+            if i >= len(argv) or not argv[i].lstrip("+").isdigit():
+                print("ERROR: --expect needs a component count (an integer)", file=sys.stderr)
+                return 2
+            expect = int(argv[i])
         elif a.startswith("-"):
             print(f"ERROR: unknown option '{a}'", file=sys.stderr)
             return 2
@@ -250,7 +299,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             print(f"{p.name}: OK")
         # advisory warnings never fail the lint — heuristic nudges the agent can act on or ignore
-        for w in lint_fragment_warnings(m):
+        for w in lint_fragment_warnings(m) + _budget_warnings(m, expect):
             print(f"{p.name}: warning: {w}", file=sys.stderr)
     if not clean:
         print("LINT FAILED: fix the rows above before returning this fragment. "

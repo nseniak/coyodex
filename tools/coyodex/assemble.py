@@ -21,8 +21,9 @@ from __future__ import annotations
 import json
 import re
 import sys
-from dataclasses import fields
+from dataclasses import MISSING, fields, is_dataclass
 from pathlib import Path
+from typing import get_args, get_origin, get_type_hints
 
 from coyodex import grammar
 from coyodex.model import (
@@ -35,9 +36,11 @@ from coyodex.model import (
     ProjectModel,
     _build,
     _normalize_subflow_title,
+    load_model,
     remap_element_ids,
     to_canonical_json,
 )
+from coyodex.reporting import shown as _shown
 from coyodex.reconcile import (
     ReconcileError,
     apply_reconcile,
@@ -145,6 +148,93 @@ def load_fragment(text: str, label: str) -> ProjectModel:
                 raise ModelError(f"{label}: $.{attr}[{i}].id: '{eid}' is not a valid {prefix}-id "
                                  f"(a schema id is the prefix + digits only, e.g. {prefix}3)")
     return m
+
+
+def load_map_or_fragment(path: Path) -> tuple[ProjectModel, frozenset[str] | None]:
+    """Load either an assembled map or a build FRAGMENT, and say which it was.
+
+    Returns `(model, present_keys)`; `present_keys` is the fragment's own top-level key set, or None
+    for a full map. Read-only tools (`dump`) can ignore it; a writer (`fix`) must pass it back to
+    `dump_preserving` — see why there.
+
+    A fragment is recognised by having no `format` key: `load_fragment` defaults it, which is the
+    whole reason an agent can author a partial file. This exists because there was NO read path for a
+    fragment at all: `dump` and `fix` both went through `load_model`, which requires `format`, so a
+    build inspecting or editing its own fragments had nothing to use and wrote `python3 - <<'EOF'`
+    heredocs instead — about fifteen times in one live build, against the method's own instruction to
+    use `dump`."""
+    text = path.read_text(encoding="utf-8")
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise ModelError(f"{path.name}: not valid JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise ModelError(f"{path.name}: top level: expected an object")
+    if "format" in data:
+        return load_model(text), None
+    return load_fragment(text, path.name), frozenset(data)
+
+
+def _element_types() -> dict[str, type]:
+    """`{"components": Component, "edges": Edge, …}` — derived from `ProjectModel`'s annotations, not
+    hard-coded, so a new section joins it automatically instead of silently falling back to "no
+    defaults known" (which would quietly stop pruning that section)."""
+    out: dict[str, type] = {}
+    for name, hint in get_type_hints(ProjectModel).items():
+        args = get_args(hint)
+        if get_origin(hint) is list and args and isinstance(args[0], type) and is_dataclass(args[0]):
+            out[name] = args[0]
+    return out
+
+
+def _prune_defaults(value: object, cls: type | None = None) -> object:
+    """Drop keys whose value is just the dataclass default, recursively.
+
+    Without this a fragment survives its own round-trip but every ELEMENT inside it fattens: a
+    four-key component comes back with all thirteen fields, nulls and empty lists included. No value
+    is lost, but a one-line `fix` then produces a diff across every row it touched, which buries the
+    actual edit — and an author reading the file afterwards cannot tell what the tool changed."""
+    if isinstance(value, list):
+        # `cls` describes the list's ELEMENTS, so it must be carried through the recursion — dropping
+        # it here silently disabled all pruning while every test but one still passed.
+        return [_prune_defaults(v, cls) for v in value]
+    if not isinstance(value, dict):
+        return value
+    defaults: dict[str, object] = {}
+    if cls is not None:
+        for f in fields(cls):                     # type: ignore[arg-type]
+            if f.default is not MISSING:
+                defaults[f.name] = f.default
+            elif f.default_factory is not MISSING:  # type: ignore[misc]
+                defaults[f.name] = f.default_factory()  # type: ignore[misc]
+    out: dict[str, object] = {}
+    for k, v in value.items():
+        if k in defaults and v == defaults[k]:
+            continue
+        out[k] = _prune_defaults(v)
+    return out
+
+
+def dump_preserving(m: ProjectModel, present_keys: frozenset[str] | None) -> str:
+    """Serialise `m`, keeping a fragment a FRAGMENT.
+
+    `to_canonical_json` writes the whole model shape, so round-tripping a one-section fragment
+    through it materialises all 29 sections as empty arrays. That is not cosmetic: a fragment's key
+    set IS its ownership claim, and an agent's file that suddenly declares every section can make the
+    merge attribute sections nobody authored. So for a fragment only the keys it already had are
+    written back, and only the fields that carry a non-default value (`_prune_defaults`) — a fragment
+    edit should read as the edit, not as a rewrite of every row it touched."""
+    text = to_canonical_json(m)
+    if present_keys is None:
+        return text
+    data = json.loads(text)
+    types = _element_types()
+    kept: dict[str, object] = {}
+    for k, v in data.items():
+        if k not in present_keys:
+            continue
+        kept[k] = _prune_defaults(v, types.get(k))
+    return json.dumps(kept, indent=2, ensure_ascii=False) + "\n"
 
 
 def merge_fragments(parts: list[tuple[str, ProjectModel]],
@@ -354,7 +444,23 @@ def main(argv: list[str] | None = None) -> int:
               "  entity-edge derivation), BEFORE the write — so a re-assemble always re-applies it.\n"
               "  `set` bulk-assigns subsystem/subdomain/runs_in/bucket; `drop_edges` removes refuted\n"
               "  edges and heals the flow steps that rode them. Keep this file OUTSIDE\n"
-              "  build-fragments/ (e.g. .coyodex/reconcile.json) so the fragment glob does not sweep it.\n\n"
+              "  build-fragments/ (e.g. .coyodex/reconcile.json) so the fragment glob does not sweep it.\n"
+              "  The shape, in full (generate the `set` half with `coyodex reconcile --rules`):\n"
+              "    {\n"
+              '      "set": [ {"ids": ["C1","C2"], "subsystem": "S3"},\n'
+              '               {"ids": ["C40"], "runs_in": ["worker"]},\n'
+              '               {"ids": ["E7"], "subdomain": "SD2"},\n'
+              '               {"ids": ["D5"], "bucket": "Data & storage"} ],\n'
+              '      "drop_edges": [ {"src": "C21", "verb": "persists", "dst": "E33"},\n'
+              '                      {"src": "C7", "verb": "calls", "dst": "C9",\n'
+              '                       "drop_steps": true},\n'
+              '                      {"src": "C4", "verb": "reads", "dst": "E2",\n'
+              '                       "repoint": "E5"} ]\n'
+              "    }\n"
+              "  A `drop_edges` entry defaults to REPORTING the flow steps that rode the edge; add\n"
+              "  `drop_steps: true` to remove them, or `repoint: <id>` to re-point them. A report-only\n"
+              "  C→E drop leaves the step behind, and the NEXT assemble re-derives the edge from it —\n"
+              "  so heal it, or the drop does not stick. Zero matches WARNS, never fails.\n\n"
               "<dir>/.gitignore gets a 'build-fragments/' entry so the scratch dir never\n"
               "dirties the tree. Then run the usual invariant: validate --check-sources → audit → render.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
@@ -430,7 +536,7 @@ def main(argv: list[str] | None = None) -> int:
               f"(same call site)")
     derived = _derive_entity_edges(model, stats)
     if derived:
-        shown = ", ".join(derived[:8]) + (f", +{len(derived) - 8} more" if len(derived) > 8 else "")
+        shown = _shown(derived, 8)   # via the shared helper, so a report mode can widen it
         print(f"note: derived {len(derived)} C→E backbone edge(s) from entity flow-steps that had "
               f"none (verb inferred from the step; ambiguous → reads): {shown}")
     # `--reconcile` is applied AFTER `_derive_entity_edges` (B1): a `drop_edges` on a C→E edge must run

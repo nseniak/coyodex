@@ -158,7 +158,11 @@ def test_refuted_store_claim_still_surfaces_to_the_skeptics():
     assert store in claims
     # `audit --json` keeps its published shape — the new flag is in-process only (anchor-drift
     # rebuilds the worklist from the map), so no Phase-4 consumer of this JSON has to change.
-    assert all(set(w) == {"claim", "anchor", "detail", "why_risky"} for w in payload["worklist"])
+    assert all(set(w) == {"claim", "anchor", "detail", "why_risky", "theme", "drift_eligible"}
+               for w in payload["worklist"])
+    # the store claim is report-only by contract, and the payload now says so out loud
+    assert all(w["theme"] == "persistence" and w["drift_eligible"] is False
+               for w in payload["worklist"] if w["claim"] == store)
 
 
 def test_refuted_report_only_claim_produces_no_drift_either():

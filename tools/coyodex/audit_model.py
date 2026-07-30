@@ -28,6 +28,7 @@ from pathlib import Path
 from coyodex import grammar
 from coyodex.anchors import FILEREF as _FILEREF
 from coyodex.model import ProjectModel, expanded_flow_steps, load_model
+from coyodex.reporting import reset_full_lists, set_full_lists, shown as _shown
 
 # ── the audit vocabulary (shared with the eval, which imports it from here) ──────────────────────
 
@@ -96,7 +97,32 @@ class WorkItem:
     # there would corrupt the domain card. Such claims are still grounded and still refutable;
     # only the anchor nudge (`anchor-drift` → `fix apply-drift`) is suppressed. Report-only.
     drift_eligible: bool = True
+    # Which KIND of claim this is, recorded at the site that builds it — never re-derived by parsing
+    # `claim` afterwards. method.md tells a lead to batch the Phase-4 skeptics "by theme/risk", and
+    # until now the payload carried no such field: a live build read `audit --json`, printed the keys,
+    # found nothing to group by, and fell back to sequential chunks of 40 in worklist order. The
+    # ranking saved its first batch (all security) but batches 2-10 were arbitrary slices of a list.
+    # Values are a closed set, `_THEMES`, so a consumer can group without string-matching prose.
+    theme: str = "backbone"
 
+
+#: The closed set of `WorkItem.theme` values, most-dangerous-first AND in the order
+#: `l2_worklist_model` emits them — so a consumer that batches in worklist order also batches by
+#: risk, and one that iterates `_THEMES` gets the same sequence. Both halves are pinned by
+#: `test_themes_are_closed_and_match_the_worklist_order`, which reads the `theme=` literals out of
+#: this module's own source: a new claim kind carrying an unlisted theme, or appended in the wrong
+#: tier, fails there. (An earlier version claimed a pin that did not exist, and `backbone` — the
+#: largest, lowest-risk bucket — really was emitted 4th of 8.)
+_THEMES: tuple[str, ...] = (
+    "security",       # auth surfaces + enforces/encrypts edges: a false claim is an access-control hole
+    "dep-usage",      # C→D: does this component really reach that external system
+    "ownership",      # C→E: persists/writes/reads — mis-wires the subsystem→subdomain bridge
+    "persistence",    # store rows: what is persisted where
+    "messaging",      # channel participant lists: the async half of the system
+    "lifecycle",      # state machines: rot fastest
+    "cadence",        # when code runs
+    "backbone",       # every other edge
+)
 
 _ENTRY_POINTS_SHOWN = 6  # cap the member entry points listed in a component's claim detail
 
@@ -372,9 +398,11 @@ def _endpoint_detail(m: ProjectModel) -> dict[str, str]:
             desc += f" ({home})"
         eps = members.get(c.id, [])
         if eps:
-            shown = "; ".join(eps[:_ENTRY_POINTS_SHOWN])
-            more = f"; +{len(eps) - _ENTRY_POINTS_SHOWN} more" if len(eps) > _ENTRY_POINTS_SHOWN else ""
-            desc += f"; entry points: {shown}{more}"
+            # Through the shared helper, so `audit --json` widens it. 73 of 398 worklist items on a
+            # live map carried a truncated `detail`, in the very payload the method tells a build to
+            # batch its skeptics from — and `detail` exists to let a fresh-context skeptic find the
+            # code with no map file, which a clipped member list defeats.
+            desc += f"; entry points: {_shown(eps, _ENTRY_POINTS_SHOWN, sep='; ')}"
         out[c.id] = desc
     for d in m.deps:
         kind = grammar.classify_dep(d.kind or "", d.type)
@@ -417,7 +445,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     for s in m.security:
         items.append(WorkItem(
             claim=f"Auth surface '{s.surface}' is protected by: {_claim_text(s.source)}",
-            anchor=_anchor(s.source),
+            anchor=_anchor(s.source), theme="security",
             why_risky="security boundary — a false claim here is an access-control hole."))
     dep_items: list[WorkItem] = []
     entity_items: list[WorkItem] = []
@@ -429,19 +457,19 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
         detail = _edge_detail(e.src, e.dst, described)
         if verb in ("enforces", "encrypts"):
             items.append(WorkItem(
-                claim=claim, anchor=anchor, detail=detail,
+                claim=claim, anchor=anchor, detail=detail, theme="security",
                 why_risky=f"'{verb}' is a security-critical relationship — verify the code actually does it."))
         elif e.dst.startswith("D"):
             if e.dst in folded:
                 continue  # explicit framework/library — a false 'uses <lib>' edge is benign
             dep_items.append(WorkItem(
-                claim=claim, anchor=anchor, detail=detail,
+                claim=claim, anchor=anchor, detail=detail, theme="dep-usage",
                 why_risky=(f"external-dependency data-flow edge — no deterministic gate reads "
                            f"{e.src}'s code to confirm it reaches {e.dst}; ground the call site "
                            f"against the code (the audit→Elastic false-edge class).")))
         elif e.dst.startswith("E"):
             entity_items.append(WorkItem(
-                claim=claim, anchor=anchor, detail=detail,
+                claim=claim, anchor=anchor, detail=detail, theme="ownership",
                 why_risky=(f"domain-model ownership edge — verify {e.src}'s code actually "
                            f"'{verb}' {e.dst}; a wrong persists/writes/reads mis-wires the "
                            f"subsystem→subdomain bridge.")))
@@ -452,7 +480,11 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                            f"'{verb}' {e.dst}; ground the call site against the code.")))
     items.extend(dep_items)
     items.extend(entity_items)
-    items.extend(other_items)
+    # `other_items` (theme "backbone") is appended LAST, at the end of this function — not here. It is
+    # the largest bucket (194 of 398 on a live map) and the lowest-risk one, and appending it here put
+    # it 4th in a worklist whose documented contract is most-dangerous-first, ahead of persistence,
+    # lifecycle and cadence. A consumer batching in worklist order then spent its first batches on
+    # generic backbone edges while the store rows waited.
     # Structured-store claims (WS-A1): "En is stored in Dn container 'x'" is a claim a skeptic can
     # refute by reading the entity's repository/type — a wrong dep or container silently mis-answers
     # the canonical "what is persisted where?" question. Anchor = the entity's own source (the type
@@ -474,7 +506,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             items.append(WorkItem(
                 claim=f"{en.id} ({en.name}) is stored in {where}{mode}",
                 anchor=_anchor(en.source or ""),
-                drift_eligible=False,
+                drift_eligible=False, theme="persistence",
                 why_risky=("the persistence inventory hangs on this row — a wrong dep/container "
                            "mis-answers 'what is persisted where?' for every reader.")))
     # Messaging-channel claims (WS-A5): "C12 publishes to 'JOB_QUEUE' on D3; C30 consumes" is a
@@ -488,7 +520,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
         items.append(WorkItem(
             claim=f"Channel '{mr.name}'{on}: {pubs} publish(es); {cons} consume(s)",
             anchor=_anchor(mr.source),
-            drift_eligible=False,
+            drift_eligible=False, theme="messaging",
             why_risky=("the async catalog hangs on this row — verify the enqueue/consume call "
                        "sites actually name this channel.")))
     # State-machine claims (WS-A3): states rot fast — the enum gains a member, the dispatch grows
@@ -510,7 +542,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                 claim=f"{el.id} ({el.name}) has states [{', '.join(sm.states)}]"
                       + (f" with {len(sm.transitions)} transition(s)" if sm.transitions else ""),
                 anchor=_anchor(src),
-                drift_eligible=bool((sm.source or "").strip()),
+                drift_eligible=bool((sm.source or "").strip()), theme="lifecycle",
                 why_risky=("lifecycles rot first — verify the declaring enum/constants still "
                            "list exactly these states and transitions.")))
     # Cadence claims (WS-A2): a recorded schedule is a claim about WHEN code runs, and schedules
@@ -531,11 +563,13 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             items.append(WorkItem(
                 claim=f"Entry point [{ep.kind}] {ep.trigger} runs on cadence '{ep.cadence}'",
                 anchor=_anchor(ep.cadence_source if cited else ep.source),
-                drift_eligible=cited,
+                drift_eligible=cited, theme="cadence",
                 why_risky=("a schedule is config-tuned and drifts silently — verify the declaring "
                            "line still says this cadence." if cited else
                            "cadence is INFERRED (no declaring anchor) — find the line that "
                            "actually declares the schedule and check the value.")))
+    # LAST, so the order matches `_THEMES` — see the note where the other tiers are extended.
+    items.extend(other_items)
     seen: set[str] = set()
     unique: list[WorkItem] = []
     for it in items:
@@ -567,7 +601,8 @@ def _format(findings: list[Finding], worklist: list[WorkItem], verbose: bool = F
         # `--json` and "never regex-parse the human report", but a live build still paged this text
         # with `head -45` + `sed -n '45,90p'` — the option is only discoverable in the method doc,
         # not where the list is actually read.
-        out.append(f"  (batching these? read `coyodex audit --json` — {{findings, worklist}} as "
+        out.append(f"  (batching these? read `coyodex audit --json` — {{findings, worklist, "
+                   f"themes, theme_counts}} as "
                    "JSON — never parse this text)")
         for i, w in enumerate(worklist, 1):
             anchor = f"  [{w.anchor}]" if w.anchor else ""
@@ -590,17 +625,30 @@ def _format(findings: list[Finding], worklist: list[WorkItem], verbose: bool = F
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Thin wrapper: whole-list mode is process-wide, so reset it on every exit path."""
+    try:
+        return _run(argv)
+    finally:
+        reset_full_lists()
+
+
+def _run(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex audit [.coyodex/project-map.json] [--verbose] [--json]\n\n"
               "The adversarial pass over a model map: L1 deterministic self-contradiction\n"
               "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.\n"
               "--verbose adds each worklist claim's `risk:` rationale (collapsed by default).\n"
-              "--json emits {findings, worklist} as machine-readable JSON — the shape the Phase-4\n"
+              "--json emits {findings, worklist, themes, theme_counts} as machine-readable JSON.\n"
+              "  Each worklist item carries `theme` (a closed, most-dangerous-first set) and\n"
+              "  `drift_eligible`; `theme_counts` sizes each group. Batch the Phase-4 skeptics\n"
+              "  BY THEME — the shape the Phase-4\n"
               "skeptic-batching workflow consumes (no more regex-parsing the human report).")
         return 0
     verbose = "--verbose" in argv
     as_json = "--json" in argv
+    if as_json:
+        set_full_lists(True)   # whole `detail` member lists; reset by main()'s finally
     args = [a for a in argv if not a.startswith("-")]
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():
@@ -617,8 +665,15 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps({
             "findings": [{"check": f.check, "severity": f.severity, "location": f.location,
                           "message": f.message} for f in findings],
+            # `theme` is what a Phase-4 batcher groups on (method.md: "group by theme/risk"); the
+            # ordered `themes` list saves the consumer from hard-coding the risk order, and the
+            # per-theme counts let it size batches without walking the worklist twice.
             "worklist": [{"claim": w.claim, "anchor": w.anchor, "detail": w.detail,
-                          "why_risky": w.why_risky} for w in worklist],
+                          "why_risky": w.why_risky, "theme": w.theme,
+                          "drift_eligible": w.drift_eligible} for w in worklist],
+            "themes": list(_THEMES),
+            "theme_counts": {t: sum(1 for w in worklist if w.theme == t) for t in _THEMES
+                             if any(w.theme == t for w in worklist)},
         }, indent=1, ensure_ascii=False))
     else:
         print(_format(findings, worklist, verbose=verbose))
