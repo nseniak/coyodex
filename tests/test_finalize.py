@@ -38,13 +38,14 @@ MAP = {
 }
 
 
-def make_git_repo_with_baseline() -> tuple[Path, Path]:
-    """A repo whose HEAD holds a PREVIOUS map, so the compare leg actually runs. Without this every
-    test returned early at the no-baseline branch, leaving the one novel leg untested."""
+def make_git_repo() -> tuple[Path, Path]:
+    """A repo with real git history. `finalize` reads no git state now (it compares nothing against a
+    previous map — that is the developer-only retro's job), so this exists only to prove the command
+    stays clean in a repo where a previous version of it used to materialise a baseline copy."""
     root, p = make_repo()
     subprocess.run(["git", "init", "-q", "."], cwd=root, check=True)
     subprocess.run(["git", "add", "-f", str(p.relative_to(root))], cwd=root, check=True)
-    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "baseline"],
+    subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "map"],
                    cwd=root, check=True)
     return root, p
 
@@ -111,17 +112,6 @@ def test_a_leg_that_did_not_run_can_never_produce_a_verdict_of_clean():
     assert "their silence is not a pass" in md
 
 
-def test_an_unavailable_leg_is_benign_and_still_permits_exit_zero():
-    """The other side of the same rule: no baseline on a first build is expected, not a failure. If
-    `unavailable` were treated like `failed`, every first build would exit non-zero."""
-    root, p = make_repo()                            # tmpdir: no git history, no archive
-    code = finalize.main([str(p), "--repo", str(root)])
-    r = json.loads((root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8"))
-    leg = next(l for l in r["legs"] if l["name"].startswith("compare"))
-    assert leg["status"] == "unavailable"
-    assert r["verdict"] != "INCOMPLETE" and code == 0
-
-
 def test_the_report_is_byte_identical_across_identical_runs():
     """Non-determinism in a pre-commit report is a defect: a build cannot tell a real change from
     noise, and a diff of the committed report becomes unreadable."""
@@ -132,33 +122,19 @@ def test_the_report_is_byte_identical_across_identical_runs():
     assert (root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8") == first
 
 
-def test_no_baseline_is_a_named_skip_not_a_silent_pass():
-    """The failure this command exists for was a check nobody ran. A baseline that cannot be found
-    must say so in the report, because 'no comparison happened' and 'the comparison was clean' are
-    the two states a build must never confuse."""
-    root, p = make_repo()                       # a temp dir: no git history, no .old-ignore archive
-    finalize.main([str(p), "--repo", str(root)])
-    r = json.loads((root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8"))
-    leg = next(l for l in r["legs"] if l["name"].startswith("compare"))
-    assert leg["status"] == "unavailable"
-    assert leg["note"] and "no baseline" in leg["note"]
-    assert r["baseline"] is None
-
-
-def test_it_leaves_no_scratch_files_even_when_a_baseline_was_materialised():
-    """The first version of this test used a tmpdir with no git, so `find_baseline` returned None and
-    the cleanup it claimed to pin never ran. With a real baseline the temp copy IS created — and it is
-    ~800 KB of the previous map, so leaking it beside the real one is not cosmetic."""
-    root, p = make_git_repo_with_baseline()
+def test_it_leaves_no_scratch_files_beside_the_map():
+    """An earlier version materialised a ~800 KB copy of the previous map next to the real one and
+    deleted it only on the success path. Nothing is materialised now; this holds that line."""
+    root, p = make_git_repo()
     finalize.main([str(p), "--repo", str(root)])
     strays = [f.name for f in (root / ".coyodex").iterdir()
               if f.name.startswith(f".{finalize.REPORT_STEM}")]
     assert strays == [], strays
 
 
-def test_a_crash_mid_run_still_cleans_up_the_baseline_copy():
-    """`build_report` materialises the baseline BEFORE the legs, so only a `finally` can hold this."""
-    root, p = make_git_repo_with_baseline()
+def test_a_crash_mid_run_leaves_no_scratch_behind():
+    """A malformed `--verdicts` file reaches the drift leg and raises. Nothing temporary may survive."""
+    root, p = make_git_repo()
     boom = root / ".coyodex" / "not-json.json"
     boom.write_text("{{{ not json", encoding="utf-8")
     try:
@@ -205,60 +181,6 @@ if __name__ == "__main__":
             fn()
             print(f"ok  {name}")
     print("all finalize tests passed")
-
-
-def test_the_compare_leg_runs_against_a_committed_baseline():
-    """The only genuinely new signal this command adds, and it had zero coverage: every earlier test
-    hit the no-baseline branch, so `_find_eval`, the score/compare subprocesses, the JSON parse and the
-    temp-file cleanup never executed once."""
-    root, p = make_git_repo_with_baseline()
-    finalize.main([str(p), "--repo", str(root)])
-    r = json.loads((root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8"))
-    leg = next(l for l in r["legs"] if l["name"].startswith("compare"))
-    assert leg["status"] == "ran", leg
-    assert r["baseline_source"] and r["baseline_source"].startswith("git HEAD:")
-    assert any(row.startswith("Comparison verdict: ") for row in leg["advisory"])
-    assert r["compare_verdict"] in ("PASS", "DRIFT", "REGRESSED")
-
-
-def test_a_crashed_compare_is_a_failure_not_nothing_found():
-    """It scraped stdout and returned `ran=True` regardless of the exit code, so a crashed `compare`
-    read as a comparison that ran and found nothing — for the one check the command exists to run."""
-    root, p = make_git_repo_with_baseline()
-    fake = Path(tempfile.mkdtemp()) / "coyodex-eval"
-    fake.write_text("#!/bin/sh\n"
-                    'case "$1" in\n'
-                    '  score) shift; exec "$@" ;;\n'   # never reached; replaced below
-                    "esac\n", encoding="utf-8")
-    # A stub whose `score` works (emits a real profile) and whose `compare` crashes.
-    real = Path(finalize.__file__).parent.parent.parent / ".venv" / "bin" / "coyodex-eval"
-    fake.write_text(f'#!/bin/sh\nif [ "$1" = "compare" ]; then echo boom >&2; exit 7; fi\n'
-                    f'exec "{real}" "$@"\n', encoding="utf-8")
-    fake.chmod(0o755)
-    orig = finalize._find_eval
-    finalize._find_eval = lambda: str(fake)          # type: ignore[assignment]
-    try:
-        code = finalize.main([str(p), "--repo", str(root)])
-    finally:
-        finalize._find_eval = orig                    # type: ignore[assignment]
-    r = json.loads((root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8"))
-    leg = next(l for l in r["legs"] if l["name"].startswith("compare"))
-    assert leg["status"] == "failed", leg
-    assert "crashed" in (leg["note"] or "")
-    assert r["verdict"] == "INCOMPLETE" and code != 0
-
-
-def test_the_archive_fallback_picks_the_NEWEST_archive():
-    """Sorting on the directory NAME LENGTH picked the wrong archive in 28 of 40 measured trials, and
-    `Path.glob` is unordered so same-length names resolved in filesystem order. A wrong baseline does
-    not fail loudly — it produces a confident verdict about the wrong comparison."""
-    root, p = make_repo()
-    for n in ("", "-2", "-9", "-10", "-11", "-12"):
-        d = root / ".coyodex" / f".old-ignore{n}"
-        d.mkdir()
-        (d / "project-map.json").write_text(p.read_text(encoding="utf-8"), encoding="utf-8")
-    chosen, source, note = finalize.find_baseline(p, root)
-    assert chosen is not None and chosen.parent.name == ".old-ignore-12", source
 
 
 def test_the_report_records_the_maps_hash_so_a_stale_one_is_detectable():
