@@ -39,10 +39,11 @@ Commands:
   reconcile  Expand path RULES into an explicit `reconcile.json` (the synthesis
              assignment pass), resolving ids against a real map and reporting every
              rule that matched nothing. Feed the result to `assemble --reconcile`.
-  finalize   The pre-commit read: validate + audit + anchor-drift + a comparison
-             against the previous map, written to .coyodex/finalize-report.{json,md}
-             with whole lists. A convenience wrapper, not an enforcement point —
-             exit 1 only for what validate/audit already block on.
+  finalize   The pre-commit read: validate + audit + both anchor-drift passes,
+             written to .coyodex/finalize-report.{json,md} with whole lists. Adds no
+             check of its own and compares nothing against a previous map. A
+             convenience wrapper, not an enforcement point — exit 1 for what
+             validate/audit already block on, or when a check did not run.
   balance    Report per-diagram fan-out (target 5±2), the inter-subsystem edge
              matrix, and advisory split proposals for over-dense diagrams —
              apply accepted proposals via a Direct map change.
