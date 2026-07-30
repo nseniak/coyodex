@@ -73,6 +73,17 @@ def score(*turns: Turn) -> dict[int, P.Assertion]:
     return P.score_turns(turns).by_id()
 
 
+def _capture_stdout(fn: object) -> str:
+    """Run a CLI `main()` and return what it printed. Stdlib only; no pytest fixture (the house
+    style forbids them), so the redirect is explicit and local."""
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        fn()  # type: ignore[operator]
+    return buf.getvalue()
+
+
 # --- the reader -----------------------------------------------------------------------
 
 def test_reader_groups_one_message_across_interleaved_tool_results():
@@ -428,6 +439,78 @@ def test_the_cli_diff_mode_exits_zero_and_the_missing_file_case_does_not():
             p.write_text(json.dumps(card.as_json()), encoding="utf-8")
         assert P.main(["--diff", str(a), str(b)]) == 0
         assert P.main([str(Path(td) / "nope.jsonl")]) == 2
+
+
+# --- the transcript slice command (what /coyodex-retro reads with) --------------------
+
+def make_slice_transcript(tmp: Path) -> Path:
+    """A transcript with a fan-out, a Bash call and its result — enough to exercise every mode."""
+    records = [
+        make_record("assistant", message_id="m1", blocks=[
+            {"type": "tool_use", "id": "t0", "name": "Bash",
+             "input": {"command": "coyodex preindex --report"}}]),
+        make_record("user", blocks=[
+            {"type": "tool_result", "tool_use_id": "t0", "content": "WEIGHT TREE\n  src loc=10"}]),
+        make_record("assistant", message_id="m2", blocks=[
+            {"type": "tool_use", "id": "t1", "name": "Agent",
+             "input": {"description": "Harvest deps", "prompt": "…"}}]),
+        make_record("assistant", message_id="m2", blocks=[
+            {"type": "tool_use", "id": "t2", "name": "Agent",
+             "input": {"description": "Harvest entry points", "prompt": "…"}}]),
+    ]
+    return make_transcript_file(tmp, records)
+
+
+def test_the_transcript_index_gives_one_line_per_tool_call_with_its_turn():
+    """The index is what a lead reads to choose a range. One line per call, turn number first —
+    a 3 MB JSONL is not readable any other way."""
+    from coyodex_eval import transcript as T
+    with tempfile.TemporaryDirectory() as td:
+        src = make_slice_transcript(Path(td))
+        out = _capture_stdout(lambda: T.main([str(src)]))
+    lines = [ln for ln in out.splitlines() if ln.strip()]
+    assert len(lines) == 3
+    assert "Bash" in lines[0] and "coyodex preindex --report" in lines[0]
+    assert lines[0].startswith("[   0]")
+    assert "Harvest deps" in lines[1] and "Harvest entry points" in lines[2]
+
+
+def test_the_full_mode_includes_what_the_command_printed():
+    """A sub-agent judging a phase needs the OUTPUT, not just the call — that is where a tool bug
+    shows itself."""
+    from coyodex_eval import transcript as T
+    with tempfile.TemporaryDirectory() as td:
+        src = make_slice_transcript(Path(td))
+        out = _capture_stdout(lambda: T.main([str(src), "--full"]))
+    assert "WEIGHT TREE" in out
+
+
+def test_the_slice_filters_by_range_tool_and_pattern():
+    from coyodex_eval import transcript as T
+    with tempfile.TemporaryDirectory() as td:
+        src = make_slice_transcript(Path(td))
+        by_tool = _capture_stdout(lambda: T.main([str(src), "--tool", "Agent"]))
+        assert "preindex" not in by_tool and "Harvest deps" in by_tool
+        by_grep = _capture_stdout(lambda: T.main([str(src), "--grep", "entry points"]))
+        assert "Harvest entry points" in by_grep and "Harvest deps" not in by_grep
+        by_range = _capture_stdout(lambda: T.main([str(src), "--from", "0", "--to", "0"]))
+        assert "preindex" in by_range and "Harvest" not in by_range
+
+
+def test_the_stats_mode_lists_tool_counts_and_fanout_sizes():
+    """The fan-out map is how the retro cuts the transcript into phases."""
+    from coyodex_eval import transcript as T
+    with tempfile.TemporaryDirectory() as td:
+        src = make_slice_transcript(Path(td))
+        out = _capture_stdout(lambda: T.main([str(src), "--stats"]))
+    assert "Bash" in out and "Agent" in out
+    assert "2 agent(s)" in out, out
+
+
+def test_the_transcript_command_reports_a_missing_file():
+    from coyodex_eval import transcript as T
+    with tempfile.TemporaryDirectory() as td:
+        assert T.main([str(Path(td) / "nope.jsonl")]) == 2
 
 
 def test_every_assertion_id_is_unique_and_covers_one_to_ten():

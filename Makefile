@@ -69,10 +69,28 @@ install-eval: deps
 		echo "Installed coyodex-eval skill -> $$dir/coyodex-eval (home: $(REPO))"; \
 	done
 
+# Install the coyodex-retro skill globally — SEPARATE again, and opt-in. The retro reviews a build
+# that has ALREADY finished (its map + its chat transcript) and reports bugs / friction / method
+# gaps; it builds nothing and changes nothing. Same COYODEX_HOME substitution so it reads its recipe
+# (eval/retro/method.md) and the method it audits from this clone.
+install-retro: deps
+	@for dir in $(SKILLS_DIRS); do \
+		rm -rf "$$dir/coyodex-retro"; \
+		mkdir -p "$$dir/coyodex-retro"; \
+		sed 's|__COYODEX_HOME__|$(REPO)|g' eval/retro/SKILL.md > "$$dir/coyodex-retro/SKILL.md"; \
+		echo "Installed coyodex-retro skill -> $$dir/coyodex-retro (home: $(REPO))"; \
+	done
+
 uninstall:
 	@for dir in $(SKILLS_DIRS); do \
 		rm -rf "$$dir/coyodex"; \
 		echo "Uninstalled coyodex skill from $$dir/coyodex"; \
+	done
+
+uninstall-retro:
+	@for dir in $(SKILLS_DIRS); do \
+		rm -rf "$$dir/coyodex-retro"; \
+		echo "Uninstalled coyodex-retro skill from $$dir/coyodex-retro"; \
 	done
 
 uninstall-eval:

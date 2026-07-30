@@ -45,7 +45,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 #: Roles a Turn can carry. Records of any other `type` (queue-operation, system, attachment,
@@ -313,6 +313,55 @@ def bash_commands(turns: Sequence[Turn]) -> tuple[tuple[int, str], ...]:
     return tuple((t.index, c.command) for t in turns for c in t.calls_named("Bash") if c.command)
 
 
+def summarise_call(call: ToolCall, width: int = 100) -> str:
+    """One line describing a tool call — the command for Bash, the description for an Agent, the
+    path for a file tool, the first field otherwise."""
+    if call.name == "Bash":
+        text = " ".join(call.command.split())
+    elif call.name in ("Agent", "Task"):
+        desc = call.input.get("description")
+        text = desc if isinstance(desc, str) else ""
+    else:
+        target = call.input.get("file_path") or call.input.get("path") or call.input.get("pattern")
+        text = target if isinstance(target, str) else ""
+    if not text:
+        text = " ".join(call.text().split())
+    return text[:width]
+
+
+def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str, str] | None = None,
+                 width: int = 100, result_chars: int = 600) -> str:
+    """Render turns as readable text.
+
+    Two densities, for two readers. The compact form is an INDEX — one line per tool call — so a
+    lead can see the whole run at a glance and pick the range worth reading. `full` adds the entire
+    command and a slice of what it printed, which is what a sub-agent needs to judge one phase.
+
+    This exists because a retrospective has to READ the transcript, and a 3 MB JSONL is not
+    readable: opening one whole is both useless and expensive."""
+    lines: list[str] = []
+    for turn in turns:
+        if turn.role != ASSISTANT or not turn.tool_calls:
+            continue
+        for call in turn.tool_calls:
+            head = f"[{turn.index:>4}] {call.name:<14}"
+            if full:
+                body = call.command if call.name == "Bash" else call.text()
+                lines.append(f"{head} {summarise_call(call, width)}")
+                if body and body != summarise_call(call, width):
+                    lines.append("        | " + "\n        | ".join(body.splitlines()[:40]))
+                out = (results or {}).get(call.id, "")
+                if out:
+                    snippet = out[:result_chars]
+                    lines.append("        > " + "\n        > ".join(snippet.splitlines()[:20]))
+                    if len(out) > result_chars:
+                        lines.append(f"        > … {len(out) - result_chars} more char(s)")
+                lines.append("")
+            else:
+                lines.append(f"{head} {summarise_call(call, width)}")
+    return "\n".join(lines)
+
+
 def results_by_tool_use_id(turns: Sequence[Turn]) -> dict[str, str]:
     """`tool_use_id -> result text` across the whole transcript.
 
@@ -325,3 +374,90 @@ def results_by_tool_use_id(turns: Sequence[Turn]) -> dict[str, str]:
             if result.tool_use_id:
                 out[result.tool_use_id] = result.content
     return out
+
+
+# --- CLI -------------------------------------------------------------------------------
+
+USAGE = """usage: coyodex-eval transcript <transcript.jsonl> [--from N] [--to N]
+                                 [--tool NAME] [--grep PATTERN] [--full] [--stats]
+
+READ a build transcript in slices — the retrospective's eye on what the agent actually did.
+A 3 MB JSONL cannot be opened whole, so this prints an INDEX by default (one line per tool
+call, with its turn number) and the FULL text of a range with --full.
+
+  --from/--to   turn range (inclusive), as printed in the index
+  --tool NAME   only turns using that tool (Bash, Agent, Write, …)
+  --grep PAT    only tool calls whose text matches (case-insensitive substring)
+  --full        include the whole command and a slice of what it printed
+  --stats       tool counts and fan-out sizes instead of a listing"""
+
+
+def _stats(turns: Sequence[Turn]) -> str:
+    from collections import Counter
+    tools: Counter[str] = Counter()
+    fanouts: list[tuple[int, int]] = []
+    for turn in turns:
+        for call in turn.tool_calls:
+            tools[call.name] += 1
+        if turn.agent_calls:
+            fanouts.append((turn.index, len(turn.agent_calls)))
+    lines = [f"{len(turns)} turn(s); {sum(tools.values())} tool call(s)", "", "TOOLS"]
+    lines += [f"  {n:>5}  {name}" for name, n in tools.most_common()]
+    lines += ["", f"FAN-OUTS ({len(fanouts)} turn(s) launching agents)"]
+    lines += [f"  turn {idx:>4}: {n} agent(s)" for idx, n in fanouts]
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    import sys
+    args = list(sys.argv[1:] if argv is None else argv)
+    if not args or args[0] in ("-h", "--help"):
+        print(USAGE)
+        return 0
+
+    def opt(flag: str) -> str | None:
+        return args[args.index(flag) + 1] if flag in args and args.index(flag) + 1 < len(args) else None
+
+    consumed = {opt(f) for f in ("--from", "--to", "--tool", "--grep")}
+    positional = [a for a in args if not a.startswith("--") and a not in consumed]
+    if not positional:
+        print("ERROR: give a transcript path\n", file=sys.stderr)
+        print(USAGE, file=sys.stderr)
+        return 2
+    src = Path(positional[0])
+    if not src.is_file():
+        print(f"ERROR: no transcript at {src}", file=sys.stderr)
+        return 2
+
+    turns = read_turns(src)
+    if "--stats" in args:
+        print(_stats(turns))
+        return 0
+    try:
+        lo = int(opt("--from") or 0)
+        hi = int(opt("--to") or 10**9)
+    except ValueError:
+        print("ERROR: --from and --to take an integer", file=sys.stderr)
+        return 2
+    tool, pattern = opt("--tool"), (opt("--grep") or "").lower()
+    # Filter the CALLS, not just the turns: one turn can carry a dozen calls, and keeping all of
+    # them because one matched is not what `--grep` promises. A turn left with no matching call
+    # drops out entirely.
+    picked: list[Turn] = []
+    for t in turns:
+        if not (lo <= t.index <= hi):
+            continue
+        calls = t.tool_calls
+        if tool:
+            calls = tuple(c for c in calls if c.name == tool)
+        if pattern:
+            calls = tuple(c for c in calls if pattern in c.text().lower())
+        if calls:
+            picked.append(replace(t, tool_calls=calls))
+    print(format_turns(picked, full="--full" in args,
+                       results=results_by_tool_use_id(turns) if "--full" in args else None))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

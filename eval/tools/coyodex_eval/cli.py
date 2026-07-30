@@ -21,6 +21,8 @@ Commands:
   compare  Compare a candidate MapProfile against a baseline; apply the relative regression gates.
   process  L3 PROCESS scorecard over a build TRANSCRIPT (did the agent behave as the method says?)
            — `--diff a.json b.json` compares two scorecards. A scorecard, never a gate.
+  transcript  READ a build transcript in slices — an index by default, `--full` for one range.
+           The retrospective's eye on what the agent actually did.
 
 Run `coyodex-eval <command> --help` for command-specific options."""
 
@@ -58,6 +60,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "process":
         from coyodex_eval import process_scorecard
         return process_scorecard.main(rest)
+    if cmd == "transcript":
+        from coyodex_eval import transcript
+        return transcript.main(rest)
     print(f"coyodex-eval: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)
     return 2
