@@ -22,7 +22,7 @@ memory.**
   audits (`method.md`, `method/`), and the CLI (`.venv/bin/coyodex`, `.venv/bin/coyodex-eval`) are
   all here.
 - **The project whose build you are reviewing** — your current working directory, a *different*
-  path. Its map is `.coyodex/`, its previous map is `.coyodex/.old-ignore*/`, and the retro's
+  path. Its map is `.coyodex/`, its previous maps are `.coyodex/dev-rebuilds/NNNN/`, and the retro's
   output goes in `.coyodex-eval/retro/` (git-ignored).
 
 So whenever the method doc says to read a doc or run `.venv/bin/coyodex ...`, that path is **under

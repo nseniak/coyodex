@@ -74,9 +74,9 @@ def test_numbering_is_numeric_and_zero_padding_makes_text_order_match():
 def test_a_gap_is_left_alone_so_the_number_still_means_recency():
     """Always highest + 1 — filling a gap would make the number lie about age.
 
-    With `.old-ignore` and `-3` present, reusing `-2` would file the NEWEST map between two older
+    With `0001` and `0003` present, reusing `0002` would file the NEWEST map between two older
     ones. The common cleanup is worse: prune the oldest archives and the next map lands in
-    `.old-ignore`, the name that reads as "the first one", so the sequence reads backwards."""
+    `0001`, the name that reads as "the first one", so the sequence reads backwards."""
     with tempfile.TemporaryDirectory() as tmp:
         root = make_repo(tmp, archives=("0001", "0003"))
         dest, _ = archive_map.archive(root)
