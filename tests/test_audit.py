@@ -21,6 +21,9 @@ from pathlib import Path
 
 from coyodex import audit_model
 from coyodex.model import (
+    ExtraSection,
+    HappyStep,
+    Role,
     Component,
     Dep,
     Edge,
@@ -1800,3 +1803,89 @@ def test_themes_are_closed_and_match_the_worklist_order():
     assert seen == [t for t in audit_model._THEMES if t in seen], (
         f"worklist order {seen} contradicts _THEMES {audit_model._THEMES}")
     assert "backbone" in seen and seen[-1] == "backbone", "the largest, lowest-risk tier must be last"
+
+
+def make_advisory_map() -> ProjectModel:
+    """A map with one `read-never-created` advisory: HP1 reads E1, nothing writes it."""
+    m = ProjectModel(title="T", goal="G")
+    m.roles = [Role(id="R1", name="A", kind="human", wants="x", drives="UC1")]
+    m.use_cases = [UseCase(id="UC1", name="Read it", actors=["R1"])]
+    m.happy_path = [HappyStep(id="HP1", title="Read", uc="UC1")]
+    m.components = [Component(id="C1", name="A", purpose="p", entry_point="a.py:1")]
+    m.entities = [Entity(id="E1", name="Thing", source="a.py:1")]
+    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="w", where="a.py:2")]
+    m.flows = [Flow(uc="UC1", title="Read it",
+                    steps=[FlowStep(n=1, src="R1", dst="C1", phrase="asks"),
+                           FlowStep(n=2, src="C1", dst="E1", phrase="reads the thing")])]
+    return m
+
+
+def test_an_audit_advisory_can_be_recorded_and_the_suppression_is_reported():
+    """Until this existed, `audit` read NO extras heading at all — every advisory family was
+    permanently unanswerable, so a finding an operator had judged acceptable re-fired forever and got
+    waved through. A live map carried two `read-never-created` advisories through its whole build.
+
+    The suppression is never silent: that is the `runs-in` lesson, where one recorded literal removed
+    findings with no trace and a justification written about one thing swallowed unrelated ones."""
+    m = make_advisory_map()
+    before = audit_model.audit_model(m)
+    assert any(f.check == "read-never-created" for f in before), before
+    m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
+                             body="read-never-created HP1: external config data, written off-path.")]
+    after = audit_model.audit_model(m)
+    assert not any(f.check == "read-never-created" for f in after)
+    note = [f for f in after if f.check == "recorded-exceptions"]
+    assert len(note) == 1 and "read-never-created HP1" in note[0].message
+
+
+def test_a_recorded_line_silences_one_pair_never_a_family():
+    """The `runs-in` over-suppression bug, designed out: two findings of the SAME check on different
+    ids, one recorded, and the other must survive."""
+    m = make_advisory_map()
+    # A SECOND component, not just a second entity: reads are attributed at component granularity, so
+    # two flows through one component both land on the first HP step and the ids would not differ.
+    m.use_cases.append(UseCase(id="UC2", name="Read again", actors=["R1"]))
+    m.happy_path.append(HappyStep(id="HP2", title="Again", uc="UC2"))
+    m.components.append(Component(id="C2", name="B", purpose="p", entry_point="b.py:1"))
+    m.entities.append(Entity(id="E2", name="Other", source="b.py:1"))
+    m.edges.append(Edge(src="C2", verb="reads", dst="E2", why="w", where="b.py:2"))
+    m.flows.append(Flow(uc="UC2", title="Read again",
+                        steps=[FlowStep(n=1, src="R1", dst="C2", phrase="asks"),
+                               FlowStep(n=2, src="C2", dst="E2", phrase="reads the other")]))
+    assert len([f for f in audit_model.audit_model(m) if f.check == "read-never-created"]) == 2
+    m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
+                             body="read-never-created HP1: deliberate.")]
+    left = [f for f in audit_model.audit_model(m) if f.check == "read-never-created"]
+    assert len(left) == 1 and left[0].location.startswith("HP2"), left
+
+
+def test_a_recorded_line_that_matches_nothing_is_reported():
+    """A line that silences nothing reads as a decision the operator never had to make — a stale id, a
+    fixed advisory, or a misspelled check name."""
+    m = make_advisory_map()
+    m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
+                             body="read-never-created HP99: stale.")]
+    notes = [f for f in audit_model.audit_model(m) if f.check == "recorded-exceptions"]
+    assert any("matched no finding" in f.message and "HP99" in f.message for f in notes), notes
+
+
+def test_a_contradiction_can_never_be_recorded_away():
+    """CONTRADICTIONS are self-inconsistencies in the map, not judgement calls. Only ADVISORY findings
+    are suppressible; a blocking finding with an escape hatch would be no gate at all."""
+    m = make_advisory_map()
+    m.happy_path[0].why = "after HP9"          # a dangling `why:` ref — CONTRADICTION
+    blocking = [f for f in audit_model.audit_model(m) if f.severity == audit_model.CONTRADICTION]
+    assert blocking, "expected a contradiction to record against"
+    eid = blocking[0].location.split()[0].strip("()")
+    m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
+                             body=f"{blocking[0].check} {eid}: try to wave this through.")]
+    still = [f for f in audit_model.audit_model(m) if f.severity == audit_model.CONTRADICTION]
+    assert len(still) == len(blocking), "a contradiction was suppressed"
+
+
+def test_a_line_with_no_why_is_not_a_recorded_decision():
+    """An id alone is a dismissal, not a decision — the record must carry the reasoning."""
+    m = make_advisory_map()
+    m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
+                             body="read-never-created HP1")]
+    assert any(f.check == "read-never-created" for f in audit_model.audit_model(m))

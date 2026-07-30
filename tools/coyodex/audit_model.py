@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from coyodex import grammar
+from coyodex import balance_lib, grammar
 from coyodex.anchors import FILEREF as _FILEREF
 from coyodex.model import ProjectModel, expanded_flow_steps, load_model
 from coyodex.reporting import reset_full_lists, set_full_lists, shown as _shown
@@ -230,13 +230,15 @@ def check_precedence(m: ProjectModel) -> list[Finding]:
                     "read-before-create", ADVISORY, loc,
                     f"reads {label(e)} but the Happy Path first WRITES it later, at {at(fw)}; if "
                     f"that write creates {e}, {at(fw)} should precede this step (if it only updates "
-                    f"an entity created off-path, ignore)."))
+                    f"an entity created off-path, ignore). "
+                    f"Record 'read-before-create <id>: <why>' under an 'Audit exceptions' extras heading if this is deliberate."))
             elif fw is None:
                 reported.add(e)
                 findings.append(Finding(
                     "read-never-created", ADVISORY, loc,
                     f"reads {label(e)} but no Happy-Path step writes or creates it — external / "
-                    f"config data, or a coverage gap."))
+                    f"config data, or a coverage gap. "
+                    f"Record 'read-never-created <id>: <why>' under an 'Audit exceptions' extras heading if this is deliberate."))
         written_so_far |= writes.get(uc, set())
     return findings
 
@@ -281,7 +283,8 @@ def check_why_refs(m: ProjectModel) -> list[Finding]:
                 findings.append(Finding(
                     "offspine-why-ref", ADVISORY, loc,
                     f"`why:` cites {uc_ref}, which has no Happy-Path position — confirm the "
-                    f"prerequisite is reachable off-spine, or give it a step."))
+                    f"prerequisite is reachable off-spine, or give it a step. "
+                    f"Record 'offspine-why-ref <id>: <why>' under an 'Audit exceptions' extras heading if this is deliberate."))
             elif min(uc_positions[uc_ref]) > st.pos:
                 # ADVISORY, unlike the `HPn` form. `HPn` in a `why:` can only be a position
                 # citation, but a use-case id appears in prose for other reasons ("the same guard
@@ -291,7 +294,8 @@ def check_why_refs(m: ProjectModel) -> list[Finding]:
                     "forward-uc-why-ref", ADVISORY, loc,
                     f"`why:` names {uc_ref}, whose every walk position comes AFTER this step — if "
                     "that is the prerequisite, the order is wrong; if the sentence merely mentions "
-                    "it, reword so the citation is unambiguous."))
+                    "it, reword so the citation is unambiguous. "
+                    "Record 'forward-uc-why-ref <id>: <why>' under an 'Audit exceptions' extras heading if this is deliberate."))
     return findings
 
 
@@ -315,7 +319,8 @@ def check_actor_attribution(m: ProjectModel) -> list[Finding]:
         findings.append(Finding(
             "actor-attribution", ADVISORY, f"{f.uc} — {f.title}",
             f"declared actors [{shown}] (Use-cases table) do not include the flow's opening actor "
-            f"{opening} ({role_name.get(opening, opening)})."))
+            f"{opening} ({role_name.get(opening, opening)}). "
+            f"Record 'actor-attribution <id>: <why>' under an 'Audit exceptions' extras heading if this is deliberate."))
     return findings
 
 
@@ -352,14 +357,60 @@ def check_dependency_phrasing(m: ProjectModel) -> list[Finding]:
                 findings.append(Finding(
                     "dependency-phrasing", ADVISORY, f"{label} {st.n}",
                     f"step text reads as a dependency, not an action: \"{st.phrase}\". "
-                    "Reword as what the source does (e.g. \"POSTs … through …\")."))
+                    "Reword as what the source does (e.g. \"POSTs … through …\"). "
+                    "Record 'dependency-phrasing <id>: <why>' under an 'Audit exceptions' extras heading if this is deliberate."))
     for e in m.edges:
         if e.why and _DEPENDENCY_PHRASING.search(e.why):
             findings.append(Finding(
                 "dependency-phrasing", ADVISORY, f"edge {e.src} → {e.dst}",
                 f"`Why` reads as a dependency, not an action: \"{e.why}\". "
-                "Reword as what the source does (e.g. \"POSTs … through …\")."))
+                "Reword as what the source does (e.g. \"POSTs … through …\"). "
+                "Record 'dependency-phrasing <id>: <why>' under an 'Audit exceptions' extras heading if this is deliberate."))
     return findings
+
+
+#: The extras heading that answers an audit advisory. Read through `balance_lib.extras_bodies`, the
+#: one heading reader every escape family shares, so matching can never drift between them.
+AUDIT_EXCEPTIONS_HEADING = "Audit exceptions"
+
+#: A recorded line: `<check-name> <Id>: <why>`. Line-leading and per-FINDING on purpose. Recording a
+#: whole family would repeat the `runs-in` mistake documented in `validate_model._RUNS_IN_FAMILY`,
+#: where one literal silenced every advisory in its family and the operator's justification covered
+#: exactly one of them. A `why` is required — an id alone is a dismissal, not a decision.
+_AUDIT_RECORD = re.compile(r"^\s*([a-z][a-z-]+)\s+([A-Z]+\d+)\s*[:—-]\s*\S")
+
+
+def audit_exceptions(m: ProjectModel) -> set[tuple[str, str]]:
+    """`(check-name, id)` pairs the operator has durably justified under 'Audit exceptions'.
+
+    This exists because `audit` read NO extras heading at all: every one of its advisory families —
+    `read-never-created`, `read-before-create`, `actor-attribution`, `dependency-phrasing`, the two
+    off-spine `why:`-ref families — was permanently unanswerable. An operator who judged a finding
+    acceptable had nowhere to say so, so it re-fired at every audit forever and got waved through:
+    the "advisory waved through" failure the method names in its own words. A live map carried two
+    `read-never-created` advisories through its whole build for exactly this reason."""
+    out: set[tuple[str, str]] = set()
+    for body in balance_lib.extras_bodies(m, AUDIT_EXCEPTIONS_HEADING):
+        for line in body.splitlines():
+            hit = _AUDIT_RECORD.match(line)
+            if hit:
+                out.add((hit.group(1).lower(), hit.group(2)))
+    return out
+
+
+def _recordable_id(location: str) -> str | None:
+    """The element id an operator records a finding against — the FIRST id in its `location`.
+
+    `search`, not `match`: most locations lead with the id (`UC3 — Place an order`), but the
+    dependency-phrasing edge form is `edge C1 → C2`, and anchoring on a leading id would have left
+    that family permanently unrecordable — the same gap this whole escape exists to close.
+
+    Where a location names two ids the first is used, so recording `dependency-phrasing C1` covers
+    that check on edges OUT of C1. That is broader than one finding and far narrower than a family;
+    the suppression count names every pair it dropped, so an over-broad line is visible rather than
+    silent."""
+    hit = re.search(r"\b([A-Z]+\d+)\b", location)
+    return hit.group(1) if hit else None
 
 
 def audit_model(m: ProjectModel) -> list[Finding]:
@@ -368,7 +419,44 @@ def audit_model(m: ProjectModel) -> list[Finding]:
                   check_dependency_phrasing):
         findings.extend(check(m))
     findings.sort(key=lambda f: (_SEV_RANK.get(f.severity, 9), f.check, f.location))
-    return findings
+    return _apply_audit_exceptions(m, findings)
+
+
+def _apply_audit_exceptions(m: ProjectModel, findings: list[Finding]) -> list[Finding]:
+    """Drop the ADVISORY findings the operator recorded — and say, in a finding, what was dropped.
+
+    Suppression is only ever applied here, at one exit, and it is never silent. That is the whole
+    lesson of `validate_model._RUNS_IN_FAMILY`: a recorded exception that removes findings without
+    leaving a trace is indistinguishable from having none, and on two live maps a record written about
+    one thing silently swallowed unrelated findings. CONTRADICTIONS are never suppressible — those are
+    self-inconsistencies in the map, not judgement calls."""
+    recorded = audit_exceptions(m)
+    if not recorded:
+        return findings
+    kept: list[Finding] = []
+    silenced: list[str] = []
+    for f in findings:
+        eid = _recordable_id(f.location)
+        if f.severity == ADVISORY and eid and (f.check, eid) in recorded:
+            silenced.append(f"{f.check} {eid}")
+            continue
+        kept.append(f)
+    if silenced:
+        kept.append(Finding(
+            "recorded-exceptions", WARNING, f"'{AUDIT_EXCEPTIONS_HEADING}' extras heading",
+            f"{len(silenced)} advisory/advisories suppressed by recorded exception(s): "
+            f"{', '.join(sorted(silenced))}. Each was judged acceptable by an operator and is NOT "
+            f"re-reported above; re-read them by validating a copy with the line removed. A recorded "
+            f"line silences exactly one (check, id) pair — never a whole family."))
+    unused = sorted(f"{c} {i}" for c, i in recorded
+                    if f"{c} {i}" not in silenced)
+    if unused:
+        kept.append(Finding(
+            "recorded-exceptions", WARNING, f"'{AUDIT_EXCEPTIONS_HEADING}' extras heading",
+            f"{len(unused)} recorded exception(s) matched no finding: {', '.join(unused)} — the "
+            f"advisory was fixed, the id moved, or the check name is misspelled. A line that silences "
+            f"nothing reads as a decision the operator never had to make."))
+    return kept
 
 
 # ── L2 worklist ──────────────────────────────────────────────────────────────────────────────────

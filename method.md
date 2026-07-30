@@ -1023,7 +1023,14 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   (upgrading rows to **verified**) is the opt-in upgrade described in that section — never run an
   unknown suite by default. The table is always produced; it must never ship empty.
 - Phase 4 Adversarial verify (fan out, **fresh context**). After the map validates and `coyodex audit`
-  runs (fix any blocking `why:`-ref contradiction; reconcile the read-before-create / actor advisories),
+  runs (fix any blocking `why:`-ref contradiction; reconcile the read-before-create / actor advisories
+  — **fix each, or record it under an `Audit exceptions` extras heading** as
+  `<check-name> <Id>: <why>`, e.g. `read-never-created HP12: the token is written off-path by the
+  OAuth provider; the Happy Path starts after sign-in`. Until this heading existed, `audit` read no
+  extras at all: every one of its advisory families was permanently unanswerable, so a finding an
+  operator had judged acceptable re-fired at every audit forever and got waved through. A recorded
+  line silences exactly one `(check, id)` pair — never a family — and `audit` REPORTS what it
+  silenced, plus any line that matched nothing),
   take the audit's **L2 grounding worklist** and disprove it against the code (read it with
   `coyodex audit --json` — the machine-readable `{findings, worklist, themes, theme_counts}` payload
   built for this batching step; never regex-parse the human report; the same rule covers the model

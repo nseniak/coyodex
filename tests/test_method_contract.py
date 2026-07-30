@@ -71,9 +71,9 @@ COMMAND_MODULE: dict[str, str] = {
 #: The extras headings some tool actually READS (the escape tokens that silence an advisory).
 #: Derived below from the source, never hard-coded into an assertion.
 MACHINE_READ_HEADINGS: tuple[str, ...] = (
-    "balance exceptions", "coverage exceptions", "accepted duplications",
-    "entry-point coverage", "happy path coverage", "persistence exceptions",
-    "unclaimed surfaces",
+    "audit exceptions", "balance exceptions", "coverage exceptions",
+    "accepted duplications", "entry-point coverage", "happy path coverage",
+    "persistence exceptions", "unclaimed surfaces",
 )
 
 
@@ -773,11 +773,17 @@ def test_every_machine_read_heading_is_documented_in_the_method():
 def test_the_machine_read_heading_list_matches_the_validator():
     """MACHINE_READ_HEADINGS is used by the escape-token audit above, so it must not drift from
     the source. Re-derived here from the tools' own call sites — including `balance_lib`, which
-    owns the 'Balance exceptions' constant that `validate_model` reaches through a helper."""
+    owns the 'Balance exceptions' constant that `validate_model` reaches through a helper, and
+    `audit_model`, which owns 'Audit exceptions'. `audit` read no extras heading at all until that
+    one landed, so every one of its six advisory families was permanently unanswerable; a file
+    missing from this list is a family whose escape nothing here audits."""
     src = "\n".join((TOOLS / f).read_text(encoding="utf-8")
-                    for f in ("validate_model.py", "balance_lib.py"))
-    found = set(re.findall(r'(?:extras_bodies\(m,|_recorded_ids\(m,)\s*"([^"]+)"', src))
-    found |= set(re.findall(r'_EXCEPTIONS_HEADING\s*=\s*"([^"]+)"', src))
+                    for f in ("validate_model.py", "balance_lib.py", "audit_model.py"))
+    # Case-folded: `extras_bodies` matches headings case-insensitively, so a constant written in
+    # title case ("Audit exceptions") and a call-site literal in lower case name the same heading.
+    found = {h.lower() for h in
+             re.findall(r'(?:extras_bodies\(m,|_recorded_ids\(m,)\s*"([^"]+)"', src)}
+    found |= {h.lower() for h in re.findall(r'_EXCEPTIONS_HEADING\s*=\s*"([^"]+)"', src)}
     assert found == set(MACHINE_READ_HEADINGS), (
         f"MACHINE_READ_HEADINGS is stale: the tools read {sorted(found)}")
 
