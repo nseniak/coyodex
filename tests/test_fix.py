@@ -174,3 +174,81 @@ if __name__ == "__main__":
         if name.startswith("test_") and callable(fn):
             fn()
             print(f"ok {name}")
+
+
+def test_a_claim_kind_apply_drift_cannot_write_is_named_not_mislabelled(capsys):
+    """The defect: `apply-drift` writes an edge `where` and a `security[].source`, and everything else
+    fell through to its security branch — so an entry-point CADENCE claim was reported as a security
+    surface that matched 0 rows, then the summary said "no drifted edge or security anchors to
+    rewrite". On one live map that was all 17 of its findings: two true statements that together told
+    the operator nothing about what was actually wrong."""
+    m = make_map([], entities=[{"id": "E1", "name": "Thing"}])
+    m["entry_points"] = [{"kind": "job", "trigger": "nightly sweep", "component": "C1",
+                          "source": "a.py:1", "cadence": "every 24h", "cadence_source": "a.py:2"}]
+    claim = "Entry point [job] nightly sweep runs on cadence 'every 24h'"
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:30")]})
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp]) == 0
+        out = capsys.readouterr()
+    combined = out.out + out.err
+    assert "matches 0 security surfaces" not in combined, combined
+    assert "[cadence]" in combined and "cadence: 1" in combined
+
+
+def test_the_not_applicable_count_rides_the_final_line(capsys):
+    """A live build read this output with `| tail -12`, so a total that is not on the last line is a
+    total the reader never sees — the same lesson as assemble's unhealed-riding-step count."""
+    m = make_map([], entities=[{"id": "E1", "name": "Thing"}])
+    m["entry_points"] = [{"kind": "job", "trigger": "sweep", "component": "C1", "source": "a.py:1",
+                          "cadence": "every 24h", "cadence_source": "a.py:2"}]
+    claim = "Entry point [job] sweep runs on cadence 'every 24h'"
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:30")]})
+        fix.main(["apply-drift", "--map", mp, "--verdicts", vp])
+        out = capsys.readouterr()
+    last = [ln for ln in out.out.splitlines() if ln.strip()][-1]
+    assert "NOT APPLICABLE" in last and "1 drift(s)" in last, last
+
+
+def test_an_edge_anchor_is_still_rewritten_and_says_so_on_the_last_line(capsys):
+    """The other half: the kinds it CAN write must keep working, and the summary stays truthful."""
+    m = make_map([{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"}])
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote("C1 reads E1", True, "a.py:30")]})
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp]) == 0
+        out = capsys.readouterr()
+        assert load_model_path(Path(mp)).edges[0].where == "a.py:30"
+    last = [ln for ln in out.out.splitlines() if ln.strip()][-1]
+    assert "rewrote 1 edge" in last and "NOT APPLICABLE" not in last, last
+
+
+def test_the_writable_theme_partition_covers_every_theme_the_audit_emits():
+    """F10's pin. `_WRITABLE_THEMES` partitions `audit_model._THEMES`, in a different module, with no
+    guard — so a new claim kind would silently become "not applicable", and if it were writable
+    `apply-drift` would quietly stop applying it. Same shape as the `_THEMES` closed-set test."""
+    from coyodex import audit_model
+    known = set(audit_model._THEMES)
+    assert fix._WRITABLE_THEMES <= known, fix._WRITABLE_THEMES - known
+    # Every theme is on exactly one side, and the split is the documented one.
+    unwritable = known - fix._WRITABLE_THEMES
+    assert unwritable == {"persistence", "messaging", "lifecycle", "cadence"}, unwritable
+
+
+def test_an_unparseable_edge_claim_is_not_reported_as_a_missing_security_row(capsys):
+    """`validate` accepts a multi-word verb, which `_EDGE_CLAIM`'s `(\\S+)` cannot match. Such a claim
+    is edge-THEMED, so the theme gate passes it — and it used to reach the security writer and be
+    reported as "matches 0 security surfaces", the very mislabelling this dispatch exists to kill."""
+    m = make_map([{"src": "C1", "verb": "writes to", "dst": "E1", "why": "w", "where": "a.py:1"}])
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote("C1 writes to E1", True, "a.py:30")]})
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp]) == 0
+        out = capsys.readouterr()
+    combined = out.out + out.err
+    assert "matches 0 security surfaces" not in combined, combined
+    assert "could not parse back to an edge" in combined
+    last = [ln for ln in out.out.splitlines() if ln.strip()][-1]
+    assert "NOT APPLICABLE" in last, last

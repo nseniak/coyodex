@@ -1049,8 +1049,15 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   not optional is saying how far you got. A live monorepo build grounded **319 of 1,608 claims (20%)
   with an 11% refutation rate among them** — i.e. the unchallenged remainder plausibly held ~140 more
   wrong claims — and reported that only in chat, where it evaporates. Record it in the model's
-  **`grounding`** object (`claims_total` / `claims_grounded` / `claims_refuted` + a `note` saying
-  which claims were prioritized). `validate` warns when coverage is thin, and warns when a map with a
+  **`grounding`** object: `claims_total` (the worklist size), `claims_challenged` (how many got a
+  verdict), then the SPLIT of those verdicts — `claims_confirmed` / `claims_refuted` /
+  `claims_unverifiable` — plus a `note` saying which claims were prioritized. Record the split even
+  when it is boring: without it "challenged" is the only number, and a reader cannot tell how many
+  claims actually HELD UP. A live map wrote `total 399, grounded 399, refuted 3`, which reads as
+  "399 held up AND 3 were refuted out of 399"; `validate` now BLOCKS on counts that do not add up
+  (`confirmed + refuted + unverifiable == challenged`). `claims_unverifiable` is for the honest third
+  outcome — the code could not settle the claim either way — and folding it into either of the others
+  is what makes the record lie. `validate` warns when coverage is thin, and warns when a map with a
   real claim surface carries no `grounding` record at all: an unchallenged map and a fully-verified
   one otherwise look identical in every view and pass every gate the same way.
   **First run the free pass:** `coyodex validate --check-sources` (and `coyodex anchor-drift --map …`

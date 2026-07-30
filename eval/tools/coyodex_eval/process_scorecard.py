@@ -388,7 +388,7 @@ def assert_6_grounding_recorded(turns: Sequence[Turn]) -> Assertion:
             if call.name not in ("Write", "Edit", "NotebookEdit", "Bash"):
                 continue
             blob = call.text()
-            if "claims_total" in blob or ('"grounding"' in blob and "claims_grounded" in blob):
+            if "claims_total" in blob or "claims_challenged" in blob or "claims_grounded" in blob:
                 hits.append(Evidence(turn.index, {"tool": call.name}))
                 break
     observed, of = _at_least_once(len(hits))

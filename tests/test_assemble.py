@@ -527,13 +527,13 @@ def test_grounding_survives_assemble():
     merge it was silently DROPPED by the only code path that writes a map, so `validate` then
     reported a fully-grounded map as never challenged — and a re-assemble wiped any hand-edit."""
     from coyodex.model import Grounding, ProjectModel
-    frag = ProjectModel(grounding=Grounding(claims_total=150, claims_grounded=40,
+    frag = ProjectModel(grounding=Grounding(claims_total=150, claims_challenged=40,
                                             claims_refuted=7, note="security first"))
     merged, problems = merge_fragments([("verify.json", frag)])
     assert problems == []
     assert merged.grounding is not None
     assert merged.grounding.claims_total == 150
-    assert merged.grounding.claims_grounded == 40
+    assert merged.grounding.claims_challenged == 40
     assert merged.grounding.note == "security first"
 
 

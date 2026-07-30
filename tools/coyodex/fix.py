@@ -30,6 +30,20 @@ from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
 
 _EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2` — excludes security claims
 
+#: The claim themes `apply-drift` has a writer for: an edge's `where` and a security row's `source`.
+#: `security` covers BOTH the auth-surface rows and the `enforces`/`encrypts` edges — `_EDGE_CLAIM`
+#: sorts those two apart, so this set alone does not choose the writer.
+#:
+#: What actually reaches the not-applicable branch is `cadence` and `lifecycle`: those claims are
+#: drift-ELIGIBLE (the skeptic is sent to the same declaring line the anchor holds) but have no writer
+#: here, so they are re-authored by hand. `persistence` and `messaging` never arrive at all —
+#: `anchor_drift._confirmed_drifts` filters them out upstream as report-only.
+#:
+#: A theme added to `audit_model._THEMES` and not classified here silently becomes "not applicable",
+#: which would stop `apply-drift` writing a kind it should write. `tests/test_fix.py` pins the
+#: partition against `_THEMES` for exactly that.
+_WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone"})
+
 
 def _security_claim(surface: str, source: str) -> str:
     """Rebuild a security row's L2 grounding claim EXACTLY as `l2_worklist_model` (audit_model.py) —
@@ -127,6 +141,8 @@ def apply_drift(argv: list[str]) -> int:
     records = drift_records(l2_worklist_model(m), grounding, tolerance)
     edges_applied = 0
     sec_applied = 0
+    not_applicable: list[tuple[str, str]] = []
+    unparseable: list[tuple[str, str]] = []
     for rec in records:
         corrected = rec.get("corrected")
         mo = _EDGE_CLAIM.match(rec["claim"])
@@ -147,6 +163,26 @@ def apply_drift(argv: list[str]) -> int:
                 e.where = corrected
                 edges_applied += 1
             continue
+        # NOT an edge claim. Before assuming it is a security surface, check whether this command can
+        # rewrite its kind AT ALL. `apply-drift` writes exactly two things — an edge `where` and a
+        # `security[].source` — so a cadence, store, messaging or lifecycle claim has no writer here.
+        # It used to fall straight through to the security branch and report "matches 0 security
+        # surfaces — skipped (resolve by hand)", which named the wrong kind and implied a row had
+        # vanished; on one map that was every single one of its 17 findings, while the summary line
+        # then said "no drifted edge or security anchors to rewrite". Both statements were true and
+        # together they were misleading.
+        theme = rec.get("theme") or "unknown"
+        if theme not in _WRITABLE_THEMES:
+            not_applicable.append((theme, rec["claim"]))
+            continue
+        if theme != "security":
+            # An EDGE-themed claim that `_EDGE_CLAIM` could not parse. Letting it reach the security
+            # writer below reproduces the bug this dispatch exists to kill: `validate` accepts a
+            # multi-word verb (`C1 writes to E1`), the regex's `(\S+)` cannot match it, and the
+            # operator was told the claim "matches 0 security surfaces". It is not a security claim
+            # and there is nothing to look for — say that instead.
+            unparseable.append((theme, rec["claim"]))
+            continue
         # a security-surface claim — rewrite the drifted `security[].source` anchor. Match by
         # recomputing each row's claim (never regex-parsing the drift record), same multiplicity guard
         # as the edge path: 0 (gone) or >1 (two rows can share a surface) → skip + warn.
@@ -163,12 +199,34 @@ def apply_drift(argv: list[str]) -> int:
             print(f"  {rec['claim']}: source {s.source!r} → {corrected!r}")
             s.source = corrected
             sec_applied += 1
+    if unparseable:
+        print(f"WARNING: {len(unparseable)} confirmed drift(s) are edge claims this command could not "
+              f"parse back to an edge — an edge claim must read `<Id> <verb> <Id>`, and a multi-word "
+              f"verb does not. Fix the edge's `where` by hand, or give the verb a single word:",
+              file=sys.stderr)
+        for kind, claim in unparseable:
+            print(f"    [{kind}] {claim}", file=sys.stderr)
+    if not_applicable:
+        by_kind: dict[str, int] = {}
+        for kind, _claim in not_applicable:
+            by_kind[kind] = by_kind.get(kind, 0) + 1
+        print(f"note: {len(not_applicable)} confirmed drift(s) are of a kind this command cannot "
+              f"rewrite ({', '.join(f'{k}: {n}' for k, n in sorted(by_kind.items()))}) — "
+              f"`apply-drift` writes only edge `where` and `security[].source`. Re-anchor each by "
+              f"hand, or record why it stands; they do NOT go away by re-running this:", file=sys.stderr)
+        for kind, claim in not_applicable:
+            print(f"    [{kind}] {claim}", file=sys.stderr)
+    # The counts ride the LAST line, including the not-applicable one. A live build read this output
+    # with `| tail -12`, so a total that is not on the final line is a total the reader never sees.
+    stuck = len(not_applicable) + len(unparseable)
+    tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (see above) and still unreconciled."
+            if stuck else "")
     if edges_applied or sec_applied:
         _write(Path(map_path), m, _present)
-        print(f"apply-drift: rewrote {edges_applied} edge `where` and {sec_applied} security anchor(s). "
-              f"Re-run: validate --check-sources → audit → render.")
+        print(f"apply-drift: rewrote {edges_applied} edge `where` and {sec_applied} security anchor(s)."
+              f"{tail} Re-run: validate --check-sources → audit → render.")
     else:
-        print("apply-drift: no drifted edge or security anchors to rewrite.")
+        print(f"apply-drift: rewrote nothing — no drifted edge or security anchor to fix.{tail}")
     return 0
 
 

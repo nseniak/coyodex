@@ -10,6 +10,7 @@ Run either way (needs an editable install: `make deps`):
 from __future__ import annotations
 
 import ast
+import json
 import re
 import tempfile
 from pathlib import Path
@@ -17,6 +18,10 @@ from pathlib import Path
 from coyodex import grammar, lint_fragment, reporting
 from coyodex import validate_model as validate_model_mod
 from coyodex.model import (
+    ModelError,
+    load_model,
+    FORMAT,
+    Grounding,
     Component,
     DeploymentRow,
     Dep,
@@ -2652,3 +2657,84 @@ def test_the_guard_above_would_catch_a_reintroduced_truncation():
                'desc = clip(text)',
                '# a comment mentioning +N more is prose'):
         assert not (tail.search(ok) and not any(h in ok for h in ("shown(", "capped(", "clip("))), ok
+
+
+def make_grounded_model(**counts: int) -> ProjectModel:
+    m = make_valid_model()
+    m.grounding = Grounding(**counts)
+    return m
+
+
+def test_grounding_counts_that_do_not_add_up_are_blocking():
+    """The lie the old field allowed, now caught.
+
+    A live map recorded `total 399, grounded 399, refuted 3` — read as "399 held up AND 3 were
+    refuted out of 399". The check that replaced it in an earlier draft asserted
+    `refuted <= challenged <= total`, which PASSES on that exact map (3 <= 399 <= 399) and therefore
+    checked nothing. Arithmetic on the map's own numbers is blocking: there is no judgement to defer
+    to and no repo to re-read."""
+    m = make_grounded_model(claims_total=399, claims_challenged=399, claims_confirmed=399,
+                            claims_refuted=3)
+    probs = problems_of(m)
+    assert any("do not add up" in p and "402" in p for p in probs), probs
+
+
+def test_the_honest_version_of_the_same_counts_passes_and_reports_the_right_coverage():
+    """Asserting only "no finding" made this pass with the whole check deleted. So it also pins the
+    number the advisory would have used: coverage is measured on CONFIRMED claims, and 396/399 is
+    above the thin threshold, so the map is quiet for a reason rather than by accident."""
+    m = make_grounded_model(claims_total=399, claims_challenged=399, claims_confirmed=396,
+                            claims_refuted=3)
+    assert not any("grounding" in p for p in problems_of(m))
+    assert not any("Grounding is partial" in w for w in warnings_of(m))
+    assert validate_model_mod._grounding_split_recorded(m.grounding) is True
+    # …and one confirmed claim fewer would NOT balance, which is what makes the silence meaningful
+    m.grounding.claims_confirmed = 395
+    assert any("do not add up" in p for p in problems_of(m))
+
+
+def test_an_unverifiable_verdict_is_a_first_class_outcome():
+    """`method.md` allows three verdicts (`true|false|"unverifiable"`). A two-term check would force a
+    build to fold the third into one of the others, which is what makes a grounding record lie.
+
+    Also pins that unverifiable does NOT count as coverage: an all-unverifiable map summed correctly,
+    read as 100% challenged, and produced no finding at all — a map where nothing was verified passing
+    in silence."""
+    m = make_grounded_model(claims_total=399, claims_challenged=399, claims_confirmed=390,
+                            claims_refuted=3, claims_unverifiable=6)
+    assert not any("grounding" in p for p in problems_of(m))
+    # drop the unverifiable count and the sum breaks — so the third term is load-bearing here
+    m.grounding.claims_unverifiable = 0
+    assert any("do not add up" in p for p in problems_of(m))
+    # and a map where NOTHING held up is reported, however tidy its arithmetic
+    none_held = make_grounded_model(claims_total=42, claims_challenged=42, claims_confirmed=0,
+                                    claims_unverifiable=42)
+    assert not any("grounding" in p for p in problems_of(none_held))
+    assert any("0 of 42 claims confirmed" in w and "42 unverifiable" in w
+               for w in warnings_of(none_held)), warnings_of(none_held)
+
+
+def test_challenging_more_claims_than_the_worklist_held_is_blocking():
+    m = make_grounded_model(claims_total=100, claims_challenged=120, claims_confirmed=120)
+    assert any("exceeds claims_total" in p for p in problems_of(m))
+
+
+def test_a_record_with_no_verdict_split_is_advisory_not_blocking():
+    """The graceful half: a map that records only "N challenged" cannot be checked, so it is told to
+    record the split — not failed. Blocking it would fail every map written before the split existed,
+    for a shape that is incomplete rather than wrong."""
+    m = make_grounded_model(claims_total=399, claims_challenged=399, claims_refuted=3)
+    assert not any("grounding" in p for p in problems_of(m))
+    assert any("no verdict SPLIT" in w for w in warnings_of(m))
+
+
+def test_the_renamed_grounding_field_tells_the_reader_what_to_do():
+    """An alpha format may break, but the break must be legible: a map written before the rename gets
+    the new name and the reason, not a bare "unknown field"."""
+    doc = json.dumps({"format": FORMAT, "title": "t", "goal": "g",
+                      "grounding": {"claims_total": 9, "claims_grounded": 9}})
+    try:
+        load_model(doc)
+        raise AssertionError("expected ModelError")
+    except ModelError as e:
+        assert "claims_challenged" in str(e) and "claims_confirmed" in str(e), str(e)

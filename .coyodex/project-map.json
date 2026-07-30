@@ -5195,23 +5195,27 @@
       "fields": [
         {
           "name": "claims_total",
-          "type": "int",
-          "markers": []
+          "type": "int"
         },
         {
-          "name": "claims_grounded",
-          "type": "int",
-          "markers": []
+          "name": "claims_challenged",
+          "type": "int"
+        },
+        {
+          "name": "claims_confirmed",
+          "type": "int"
         },
         {
           "name": "claims_refuted",
-          "type": "int",
-          "markers": []
+          "type": "int"
+        },
+        {
+          "name": "claims_unverifiable",
+          "type": "int"
         },
         {
           "name": "note",
-          "type": "string",
-          "markers": []
+          "type": "string"
         }
       ],
       "relations": [],
@@ -11698,8 +11702,10 @@
   ],
   "grounding": {
     "claims_total": 185,
-    "claims_grounded": 185,
+    "claims_challenged": 185,
+    "claims_confirmed": 182,
     "claims_refuted": 3,
+    "claims_unverifiable": 0,
     "note": "Full Phase-4 coverage: all 185 L2 claims from the audit worklist were challenged by 8 fresh-context skeptics that never saw the build reasoning, batched by theme (security, external dependencies + persistence, domain ownership x2, backbone edges x2) and told to default to refuted on doubt. The 14 security claims were judged three times independently with different lenses — read-the-check, attack-the-surface, and prove-the-call-chain — and decided by majority; one skeptic verified them against a live throwaway server rather than by reading. 3 claims were refuted and reconciled: the /api/browse route has no containment of its own (re-anchored to the loopback Host guard that is its real barrier, with the gap stated), the pre-index builds rather than owns its per-directory expectation record, and the backup script copies the map folder without owning the map document (edge dropped). The ref-injection guard was confirmed real but anchored at a copy that never sees user input; its anchor was repointed. All 5 state machines were checked against their declaring lines and none was invented."
   },
   "extras": [

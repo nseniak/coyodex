@@ -507,7 +507,7 @@ SOURCE: [model.py](tools/coyodex/model.py:391)
 **E31 — Grounding** *(grounding — embedded; one object on the map document; absent means no grounding pass ran)*
 SUBDOMAIN: SD5
 MEANING: How much of the map's risky claims were actually challenged and how many turned out wrong — the map's own confidence, travelling with it.
-FIELDS: claims_total:int · claims_grounded:int · claims_refuted:int · note:string
+FIELDS: claims_total:int · claims_challenged:int · claims_confirmed:int · claims_refuted:int · claims_unverifiable:int · note:string
 SOURCE: [model.py](tools/coyodex/model.py:398)
 
 **E32 — Reconcile** *(reconcile file — transient; parsed from the JSON file passed to `assemble --reconcile`; the tool never writes it)*

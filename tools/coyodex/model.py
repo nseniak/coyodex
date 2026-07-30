@@ -405,12 +405,29 @@ class Grounding:
     unchallenged remainder plausibly held ~140 more wrong claims. The lead reported that honestly in
     chat, where it is lost; recorded here it travels with the map.
 
-    `claims_total` is the size of the audit's L2 worklist at grounding time; `claims_grounded` how
-    many got a verdict; `claims_refuted` how many came back refuted (and were fixed). Leave the
-    whole object absent when no grounding pass ran — `validate` says so rather than assuming."""
+    THE COUNTS, and why there are four of them. `claims_total` is the size of the audit's L2 worklist
+    at grounding time. `claims_challenged` is how many got a verdict at all. The verdict then splits
+    three ways, because `method.md` allows three (`"grounded": true|false|"unverifiable"`):
+    `claims_confirmed` held up, `claims_refuted` came back refuted (and were fixed),
+    `claims_unverifiable` could not be settled from the code either way.
+
+    The field used to be called `claims_grounded`, and a live map recorded
+    `total 399, grounded 399, refuted 3` — which reads as "399 grounded AND 3 refuted out of 399".
+    The number was defensible under the old docstring ("how many got a verdict") and the NAME was a
+    lie, so a reader could not tell 396-held-up from 399-held-up. Renaming it is half the fix; the
+    other half is recording the split, because only then does the arithmetic
+    `confirmed + refuted + unverifiable == challenged` exist to be checked. `validate` checks it.
+
+    An unverifiable verdict is not a failure to report. It is the honest outcome when the code cannot
+    settle a claim, and folding it into either other bucket is what makes a grounding record lie.
+
+    Leave the whole object absent when no grounding pass ran — `validate` says so rather than
+    assuming."""
     claims_total: int = 0
-    claims_grounded: int = 0
+    claims_challenged: int = 0
+    claims_confirmed: int = 0
     claims_refuted: int = 0
+    claims_unverifiable: int = 0
     note: str = ""                   # how claims were triaged when coverage is partial
 
 
@@ -665,6 +682,20 @@ def _check_json_value(value: object, path: str) -> object:
     raise ModelError(f"{path}: not a JSON value ({type(value).__name__})")
 
 
+#: Fields this schema has RENAMED, so the error can say what to do instead of only what is wrong.
+#: NOT a compatibility shim — the old key is still rejected, the map still has to be edited (this is
+#: an alpha format, and CONTRIBUTING says treat generated maps as disposable). What this buys is that
+#: an operator holding a map written last week reads one line and knows the fix, instead of grepping
+#: the schema for a field that no longer exists.
+_RENAMED_FIELDS: dict[str, str] = {"claims_grounded": "claims_challenged"}
+_RENAME_NOTES: dict[str, str] = {
+    "claims_grounded": ("It counted claims that got a VERDICT, which read as 'held up' and let a map "
+                        "record total 399 / grounded 399 / refuted 3. Rename it, and add the verdict "
+                        "split `claims_confirmed` / `claims_unverifiable` — validate blocks unless "
+                        "confirmed + refuted + unverifiable == challenged."),
+}
+
+
 def _build(data: object, cls: type, path: str):
     if not isinstance(data, dict):
         raise ModelError(f"{path}: expected an object, got {type(data).__name__}")
@@ -673,7 +704,9 @@ def _build(data: object, cls: type, path: str):
     known = {f.name for f in fields(cls)}
     for key in data:
         if key not in known:
-            raise ModelError(f"{path}.{key}: unknown field")
+            hint = _RENAMED_FIELDS.get(key)
+            raise ModelError(f"{path}.{key}: unknown field"
+                             + (f" — renamed to `{hint}`. {_RENAME_NOTES[key]}" if hint else ""))
     for f in fields(cls):
         if f.name in data:
             kwargs[f.name] = _check(data[f.name], hints[f.name], f"{path}.{f.name}")

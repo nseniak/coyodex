@@ -89,6 +89,13 @@ def drift_records(worklist: list[WorkItem], grounding: list[dict], tolerance: in
     back to its edge and writes `corrected` into the map's `where`."""
     return [{
         "claim": w.claim,
+        # The claim KIND, carried through so a consumer does not have to guess it back out of the
+        # claim string. `fix apply-drift` can only rewrite two kinds; without this it fell through to
+        # its security branch for everything else and told the operator that an entry-point cadence
+        # claim "matches 0 security surfaces" — 17 times on one map.
+        # NOT `drift_eligible`: `_confirmed_drifts` filters ineligible claims out before records are
+        # built, so the field could only ever be `true` — dead payload on a public contract.
+        "theme": w.theme,
         "stored": d.stored,
         "corrected": consensus_evidence(d.stored, ev),
         "same_file": d.same_file,

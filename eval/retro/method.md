@@ -100,7 +100,8 @@ coyodex-eval compare prev-profile.json profile.json
 
 Record: blocking problems (should be zero), the advisory count and which advisories survived, the
 component count against the code-derived expectation E, the map's own `grounding` record
-(`claims_grounded / claims_total`, refutations), and every count that moved against the previous
+(`claims_challenged / claims_total` plus the confirmed/refuted/unverifiable split), and
+every count that moved against the previous
 map.
 
 **Read `compare`'s verdict as information, not judgement.** A DRIFT on a rebuild is expected — two

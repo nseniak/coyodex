@@ -43,6 +43,7 @@ from coyodex.model import (
     Entity,
     EntryPoint,
     FlowStep,
+    Grounding,
     MessagingRow,
     ModelError,
     ProjectModel,
@@ -1258,38 +1259,144 @@ def _isolated_component_warnings(m: ProjectModel) -> list[str]:
 _GROUNDING_THIN = 0.60   # below this share of the claim surface, say so out loud
 
 
+def _any_grounding_count(g: Grounding) -> bool:
+    """Whether the record carries any number at all — the gate for every check below.
+
+    Gating on `claims_challenged > 0` was wrong: a record of `total 42, challenged 0, confirmed 39,
+    refuted 3` — 42 verdicts against 0 challenges — slipped past the arithmetic entirely."""
+    return bool(g.claims_total or g.claims_challenged or g.claims_confirmed
+                or g.claims_refuted or g.claims_unverifiable)
+
+
+def _grounding_split_sum(g: Grounding) -> int:
+    return g.claims_confirmed + g.claims_refuted + g.claims_unverifiable
+
+
+def _grounding_split_recorded(g: Grounding) -> bool:
+    """The split is COMPLETE: every challenged claim is attributed to exactly one outcome.
+
+    Two earlier versions of this predicate were each wrong in one direction, and the shapes that
+    caught them are worth stating because they look alike on paper:
+
+      `challenged 5,   refuted 5`  → complete. Everything was refuted; nothing is missing.
+      `challenged 399, refuted 3`  → the PRE-SPLIT format (`total/grounded/refuted`), where the other
+                                     396 verdicts were simply never broken out.
+
+    Both have `confirmed == unverifiable == 0`, so keying on "is confirmed or unverifiable set" called
+    the first incomplete and nagged a correct record. Keying on "is the sum non-zero" called the second
+    complete and BLOCKED a map written in the older format. Only the sum-versus-challenged comparison
+    separates them."""
+    return g.claims_challenged > 0 and _grounding_split_sum(g) == g.claims_challenged
+
+
+def _grounding_split_attempted(g: Grounding) -> bool:
+    """A split was attempted but does NOT add up — the genuinely broken case, as against the older
+    format that simply never carried one. `confirmed`/`unverifiable` exist only in the new shape, and a
+    sum ABOVE `challenged` cannot be an under-filled record."""
+    return bool(g.claims_confirmed or g.claims_unverifiable
+                or _grounding_split_sum(g) > g.claims_challenged)
+
+
 def _grounding_warnings(m: ProjectModel) -> list[str]:
-    """ADVISORY: report how much of the L2 claim surface was challenged — including "none".
+    """ADVISORY: how much of the L2 claim surface was actually GROUNDED — including "none".
 
     A map that never ran the grounding pass and a fully-challenged one are indistinguishable in
     every view and pass every gate identically. Since the refutation rate on challenged claims runs
     3-11% on live builds, silence here is the difference between "verified" and "plausible". Only
     ever advisory: grounding is a judgement about effort, never a well-formedness property."""
     g = m.grounding
-    # The claim surface is whatever `audit` will actually put on the worklist, so call the same
-    # builder instead of estimating it. The old estimate `len(edges) + len(security)` under-counted by
-    # a third on a live map — 280 against a real worklist of 398, because the worklist also carries
-    # entry-point cadence, ownership and dep-usage claims — and a lead sizing the Phase-4 skeptic
-    # fan-out off this number under-provisioned by that third. No circular import: `audit_model` does
-    # not import this module, and both are stdlib-only (the cli.py dependency firewall).
     if g is None:
         claim_surface = len(l2_worklist_model(m))     # only needed for this message
         if claim_surface >= 20:
             return [f"No `grounding` record: this map's {claim_surface} L2 claims (the same worklist "
                     "`coyodex audit` builds) were never challenged by fresh-context skeptics, and "
                     "nothing in the map says so. Run the Phase-4 grounding pass, or record the "
-                    "decision in `grounding` (claims_total/claims_grounded/claims_refuted + note)"]
+                    "decision in `grounding` (claims_total/claims_challenged + the verdict split "
+                    "confirmed/refuted/unverifiable + note)"]
         return []
-    if g.claims_total <= 0:
+    out: list[str] = []
+    # The split check runs BEFORE (and independently of) the coverage share, which needs a non-zero
+    # `claims_total`. Ordering it after a `claims_total <= 0` early return meant a record of
+    # `{challenged: 42, refuted: 3}` with no total — the documented pre-split shape — produced NO
+    # output at all: not this advisory, not the blocking check. Silence on a half-written record.
+    out.extend(_grounding_split_findings(g))
+    if g.claims_total > 0:
+        # Coverage is measured on CONFIRMED claims once the split exists, never on "challenged". An
+        # unverifiable verdict means the claim is NOT grounded (`eval`'s judge counts it the same way),
+        # so counting it as coverage overstates by exactly the unverifiable count — and a map where
+        # NOTHING could be verified (`challenged 42, confirmed 0, unverifiable 42`) summed correctly,
+        # read as 100% coverage, and produced no finding at all.
+        split = _grounding_split_recorded(g)
+        grounded = g.claims_confirmed if split else g.claims_challenged
+        basis = "confirmed" if split else "challenged"
+        share = grounded / g.claims_total
+        if share < _GROUNDING_THIN:
+            unv = (f", {g.claims_unverifiable} unverifiable (NOT grounded — the code could not settle "
+                   f"them either way)" if g.claims_unverifiable else "")
+            out.append(f"Grounding is partial: {grounded} of {g.claims_total} claims {basis} "
+                       f"({share:.0%}), {g.claims_refuted} refuted{unv}. At that refutation rate the "
+                       f"{g.claims_total - grounded} remaining claims are good leads, not facts — say "
+                       "which claims were prioritized in `grounding.note`"
+                       + ("" if g.note else " (currently empty)"))
+    return out
+
+
+def _grounding_split_findings(g: Grounding) -> list[str]:
+    """ADVISORY: the verdict split is absent, so nothing can be checked against it.
+
+    Separate from the blocking arithmetic check (`_check_grounding_arithmetic`) because the two say
+    different things. This one fires when a map records only "N challenged" — the shape that let a
+    live map claim `total 399, grounded 399, refuted 3` and read as "399 held up AND 3 were refuted".
+    Without the split there is no sum to verify, so the record cannot be wrong and cannot be right."""
+    if (not _any_grounding_count(g) or _grounding_split_recorded(g)
+            or _grounding_split_attempted(g)):
+        return []       # complete, or broken-and-blocking — neither wants this nudge
+    return [f"`grounding` records {g.claims_challenged} challenged claim(s) but no verdict SPLIT — "
+            f"add `claims_confirmed` / `claims_refuted` / `claims_unverifiable`. Without them "
+            f"'challenged' is the only number, so a reader cannot tell how many claims actually HELD "
+            f"UP, and the arithmetic `confirmed + refuted + unverifiable == challenged` has nothing "
+            f"to check. An unverifiable verdict is a real outcome — record it rather than folding it "
+            f"into either of the others."]
+
+
+def _check_grounding_arithmetic(m: ProjectModel) -> list[str]:
+    """BLOCKING: the recorded grounding counts must add up, and must be counts.
+
+    Blocking, not advisory, because this is arithmetic on the map's own numbers — there is no judgement
+    to defer to and no repo to re-read. A record that does not add up is malformed, in the one field
+    whose entire job is telling a reader how much of the map was actually verified.
+
+    The version this replaces asserted `refuted <= challenged <= total`, an inequality that PASSED on
+    the very map that motivated it (3 <= 399 <= 399) and therefore checked nothing."""
+    g = m.grounding
+    if g is None or not _any_grounding_count(g):
         return []
-    share = g.claims_grounded / g.claims_total
-    if share < _GROUNDING_THIN:
-        return [f"Grounding is partial: {g.claims_grounded} of {g.claims_total} claims challenged "
-                f"({share:.0%}), {g.claims_refuted} refuted. At that refutation rate the "
-                f"{g.claims_total - g.claims_grounded} unchallenged claims are good leads, not "
-                "facts — say which claims were prioritized in `grounding.note`"
-                + ("" if g.note else " (currently empty)")]
-    return []
+    problems: list[str] = []
+    negatives = {name: val for name, val in (
+        ("claims_total", g.claims_total), ("claims_challenged", g.claims_challenged),
+        ("claims_confirmed", g.claims_confirmed), ("claims_refuted", g.claims_refuted),
+        ("claims_unverifiable", g.claims_unverifiable)) if val < 0}
+    if negatives:
+        # A negative count can BALANCE the equality below (confirmed 13 + refuted -3 == challenged 10),
+        # so the sum check alone does not make the record meaningful.
+        problems.append(f"`grounding` has negative count(s): "
+                        f"{', '.join(f'{k}={v}' for k, v in sorted(negatives.items()))} — these are "
+                        f"tallies of claims, so every one is zero or more.")
+    if _grounding_split_attempted(g):
+        split = _grounding_split_sum(g)
+        if split != g.claims_challenged:
+            problems.append(f"`grounding` counts do not add up: confirmed {g.claims_confirmed} + "
+                            f"refuted {g.claims_refuted} + unverifiable {g.claims_unverifiable} = "
+                            f"{split}, but claims_challenged is {g.claims_challenged}. Every "
+                            f"challenged claim came back as exactly one of the three, so the split "
+                            f"must equal it — correct whichever count is wrong (a verdict silently "
+                            f"dropped from the tally is the usual cause).")
+    if g.claims_total > 0 and g.claims_challenged > g.claims_total:
+        problems.append(f"`grounding` claims_challenged ({g.claims_challenged}) exceeds claims_total "
+                        f"({g.claims_total}) — you cannot challenge more claims than the worklist "
+                        f"held. `claims_total` is the audit worklist size at grounding time; re-read "
+                        f"it with `coyodex audit --json`.")
+    return problems
 
 
 def _inheritance_runs_in_warnings(m: ProjectModel) -> list[str]:
@@ -2606,6 +2713,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(_inheritance_runs_in_warnings(m))
     problems.extend(_check_anchor_format(m))
     problems.extend(_check_evidence(m))
+    problems.extend(_check_grounding_arithmetic(m))
     extra_problems, extra_warnings = _check_extra_conventions(m)
     problems.extend(extra_problems)
     warnings.extend(extra_warnings)

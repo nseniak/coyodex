@@ -1130,10 +1130,16 @@
         "claims_total": {
           "type": "integer"
         },
-        "claims_grounded": {
+        "claims_challenged": {
+          "type": "integer"
+        },
+        "claims_confirmed": {
           "type": "integer"
         },
         "claims_refuted": {
+          "type": "integer"
+        },
+        "claims_unverifiable": {
           "type": "integer"
         },
         "note": {
