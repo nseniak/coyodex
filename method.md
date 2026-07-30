@@ -786,11 +786,16 @@ synthesis → parallel trace.**
   disjoint and use pre-allocated ID ranges, so no agent needs another's output first, and they
   return compact rows (not file dumps) so reading them together is cheap.
   - **"One batch" means one MESSAGE: emit all N agent calls as N tool calls in a SINGLE assistant
-    turn.** Stated as a property of the fan-out this rule reads as satisfied by launching agents
-    back-to-back, and every measured build did exactly that — one agent per turn: 9 agents over
-    3m35s (argus harvest), 10 over 4m26s (mcpolis), 9 over 3m55s (mee6). Repeated across the
-    harvest, trace and skeptic fan-outs that is **~9–11 minutes of pure launch latency per build**,
-    before any agent has finished. The same rule applies to every fan-out below, not just harvest.
+    turn.** One message keeps the batch atomic: the slices are dispatched from one decision, so a
+    late edit cannot reach half of them. The same rule applies to every fan-out below, not just
+    harvest.
+    **What it does NOT buy is speed, and the earlier claim here was wrong.** This paragraph used to
+    blame "~9–11 minutes of pure launch latency per build" on launching one agent per turn. A build
+    that batched every fan-out into a single message paid **9.1 minutes anyway** — the cost is the
+    model EMITTING the prompt text, at roughly 230-320 bytes/s, so it scales with prompt BYTES and not
+    with agent count (the 13-agent skeptic fan-out was the FASTEST of the three, at 14.9 KB against
+    the 12-agent harvest's 73.8 KB). The lever is shorter dispatch prompts — put the invariant block
+    in a file the agents read, as the skeptic fan-out already does — not turn count.
   - **Pre-size the slices from the pre-index so no slice becomes the critical path.** The whole
     phase ends when the SLOWEST agent does: a live build's entrypoints+security slice ran 23
     minutes while every sibling finished in 4–8, stalling the barrier by a quarter hour. The
@@ -813,11 +818,20 @@ synthesis → parallel trace.**
     post-hoc shrug when validate warns. (That recorded token also silences the E advisory; an
     overridden-but-unrecorded expectation was how a live build drifted to 2× E with the warning
     waved through at every validate.)
+  - **Never delete draft fragments with a glob while any agent is still running.** `rm -f
+    build-fragments/*.draft.json` mid-fan-out destroys the crash-resilience artifact of every agent
+    that has not finished — a live build ran exactly that three times, once with three agents still
+    working (one for another seven minutes), and was saved only because those three had not yet
+    written a draft. Delete
+    a draft by NAME, after its final fragment exists.
   - **Waiting for the batch (every fan-out phase):** after launching, **wait on the agents' completion
     notifications** — do NOT poll the filesystem with `ls` (a not-ready file reads as an error and
-    burns turns). If you must block on a condition, use the **`Monitor` tool with an until-condition**
-    (or a `run_in_background` waiter) — **not** a foreground `sleep` / `until … sleep …` loop, which the
-    harness blocks. (`Monitor` is a deferred tool — run `ToolSearch select:Monitor` once to load its
+    burns turns). If you must block on a condition, use the **`Monitor` tool with an until-condition** — **not** a
+    `sleep` / `until … sleep …` loop, foreground OR backgrounded. The parenthetical that used to
+    sanction "a `run_in_background` waiter" was the loophole: a backgrounded `until ls …; sleep 45`
+    satisfies that clause while breaking the `ls` ban in the same sentence, and a build that had
+    loaded `Monitor` in its second minute went on to launch **34** backgrounded polling waiters — 21
+    of them `until ls …`, the rest `until [ -f … ]`, thirteen alive at once — never calling `Monitor`. (`Monitor` is a deferred tool — run `ToolSearch select:Monitor` once to load its
     schema before the first call, or that first call fails with an `InputValidationError`.) Hand every
     agent an **absolute** fragment output path
     (`<repo-root>/.coyodex/build-fragments/<id>.json`) so it can never land in a subdirectory; `assemble`
@@ -1041,7 +1055,12 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   operator had judged acceptable re-fired at every audit forever and got waved through. A recorded
   line silences exactly one `(check, id)` pair — never a family — and `audit` REPORTS what it
   silenced, plus any line that matched nothing),
-  take the audit's **L2 grounding worklist** and disprove it against the code (read it with
+  take the audit's **L2 grounding worklist** and disprove it against the code. **Write the
+  per-theme batches with the tool, not a hand script:** `coyodex audit <map> --batches
+  .coyodex/verify --cap 40` emits one claims file per theme, most-dangerous-first, each claim
+  carrying its `anchor` and `detail`. A hand-rolled batcher wrote only the claim string, so
+  360 of 408 dispatched claims reached the skeptics as a bare `C140 calls C78` while the
+  prompt promised them a `path:line` in brackets. (read it with
   `coyodex audit --json` — the machine-readable `{findings, worklist, themes, theme_counts}` payload
   built for this batching step; never regex-parse the human report; the same rule covers the model
   itself — look an id up with **`coyodex dump`** (`--id` resolves kind/name/source/members, `--record`
@@ -1081,7 +1100,7 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   with NO `--verdicts`) flags every call-site anchor pointing at a line that cannot act — a `def`
   header, an import, a comment. That is deterministic, needs no skeptics, and on live maps it
   reproduced what the skeptics found by reading; spend the skeptics on what it cannot decide. Keep
-  the split WITHIN a theme (related claims still travel together). Each is told to *disprove* the claim (default to *refuted* on doubt). This
+  the split WITHIN a theme (related claims still travel together). Each is told to *disprove* the claim, and to use the THREE-WAY verdict honestly: **refuted when the code contradicts the claim; `unverifiable` when the code cannot settle it either way**. Do not tell a skeptic to "default to refuted on doubt" — that sentence and the `unverifiable` bucket are the same instruction pulling opposite ways, and on a live build every one of 13 batch prompts ended with it: the result was **0 unverifiable out of 408** across 13 independent agents, 1.7% refutation against the ~11% these paragraphs were written from, and not one of 396 confirmed notes containing a word of hedging. A third verdict nobody can reach is a record that cannot be honest. This
   is the *breaking* twin of the parallel *build*, aimed at falsification. **Fresh context is the whole
   point** — a verifier that sees the build reasoning inherits its blind spots. Each skeptic also reports
   the ONE `file:line` where the operation **actually** happens (the true call site); a drifted anchor
@@ -1089,8 +1108,26 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   the **verdicts file** `anchor-drift` consumes: `{"grounding": [{"claim": <the worklist claim
   string>, "grounded": true|false|"unverifiable", "evidence": "path:line"}]}` — one row per claim
   (or per vote when N skeptics run), `claim` matching the worklist text verbatim so the tool can pair
-  it, `evidence` the true call site. **Then run
-  `coyodex anchor-drift --map … --verdicts …`** — a deterministic check that flags any CONFIRMED claim
+  it, `evidence` the true call site. **Write the record with `coyodex grounding write`, never a hand
+  tally:**
+
+  ```
+  # CAPTURE the worklist BEFORE any refutation is applied, and keep the file — the record is
+  # written last, by which point a fresh audit no longer matches the verdicts.
+  .venv/bin/coyodex audit .coyodex/project-map.json --json > .coyodex/verify/worklist.json
+  # …skeptics run, refutations get applied, THEN:
+  .venv/bin/coyodex grounding write --worklist .coyodex/verify/worklist.json \
+      $(for f in .coyodex/verify/verdicts-*.json; do printf ' --verdicts %s' "$f"; done) \
+      --out .coyodex/build-fragments/grounding.json
+  ```
+
+  It derives all four counts and REFUSES two things a hand tally cannot see: a verdict whose claim is
+  not in the pinned worklist (the snapshot is wrong), and a worklist claim with no verdict at all (the
+  pass did not challenge everything). Pin the worklist — re-deriving it after the refutations land
+  makes `claims_challenged` exceed `claims_total`, which `validate` blocks on. A hand-written record
+  shipped on a live build asserting anchors had been "corrected" 29 seconds before the tool that
+  corrects them first ran. `--verdicts` is REPEATABLE: pass the per-batch files, do not hand-merge.
+  **Then run `coyodex anchor-drift --map … --verdicts …`** — a deterministic check that flags any CONFIRMED claim
   whose stored `where` drifts from the line the skeptics found; reconcile each by **fixing the map's
   `where`** (the check flags, you apply — the LLM only observed the line). **Apply the drift fixes with
   the tool, never a hand script:** `coyodex anchor-drift … --json` emits the corrected anchors and
@@ -1210,7 +1247,7 @@ barrier synthesis clean. Fill the «angle-bracket» parts:
 > **required** field is present and non-null; for an **optional** field with no value **omit the key**
 > entirely — do NOT emit `null` (rejected on defaulted-string fields) and do NOT emit a placeholder like
 > `(none)` (fails the anchor gate). (b) Use **only** each array's exact field names — no stray keys
-> (`confidence`, `notes`, `slice`, `loc`, …). (c) Every anchor is **repo-root-relative**: the repo root
+> (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`); it was listed here as a stray key while the same template demanded it. (c) Every anchor is **repo-root-relative**: the repo root
 > is «absolute repo path» — prefix every path with it. Minimal valid fragment:
 > `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
 > **SELF-CHECK BEFORE RETURNING (required):** run
@@ -1409,10 +1446,32 @@ It adds no check of its own. What it adds is a record and an answer:
   looks exactly like a clean one. A leg that should have run and did not makes the verdict
   `INCOMPLETE`, which exits non-zero — "the gate did not run" must never read as "the gate passed".
 
-**Read the report file, and quote finalize's verdict line when you report the gates.** Its stdout can
-be piped away: in a shell pipeline the exit status is the last command's, so `finalize | grep …`
-returns grep's `0`. **ADVISORIES is not a pass** — fix each one, or record it under the extras heading
-its message names. `finalize` exits non-zero for what validate and audit already block on, and for
+**Read the report file, and quote finalize's verdict line when you report the gates — in the COMMIT
+MESSAGE too, not only in chat.** Its stdout can be piped away: in a shell pipeline the exit status is
+the last command's, so `finalize | grep …` returns grep's `0` — and so does `finalize | tail -3`. A
+live build quoted the verdict honestly in chat ("that is not a clean pass") and then wrote
+`validate … clean … anchor-drift clean … each reconciled or recorded` into its commit: three false
+clauses against its own report, with an anchor count copied from a validate run 32 minutes earlier.
+The commit is the only record a future reader sees. `finalize --emit-gate-block <file>` writes the
+block to paste, so the durable record is generated rather than remembered.
+
+**ADVISORIES is not a pass** — fix each one, or record it under the extras heading its message names.
+**Some advisories deliberately name no heading.** `tests/test_method_contract.py`'s
+`KNOWN_NO_ESCAPE` is that list, each entry with its own reason, and the reasons are not one kind:
+some are mechanical and local ("contradictory row; drop one field"), some say the record already
+exists ("the minted name IS the record"), and some are deliberately un-escapable because a
+suppressed count staying visible IS the feature. So the honest answer differs per entry — fix it,
+or carry it and say which. **Never call one "recorded"**: on a live map two `C→broker` advisories
+named publishers whose own source holds zero references to the broker (it is reached through an
+event-stream adapter), so "author the edge" would have injected exactly the misattribution the
+grounding skeptics are told to refute; and two minted-bucket advisories asked for a rename "on
+rebuild", which is nothing to do now. Four advisories, no home, and both stock answers wrong. Anchor drift is the exception that is a
+judgement call: the skeptics can report a line from a sibling file while the stored anchor is right,
+so it has its own escape — record ``anchor-drift `<the claim, verbatim>`: <why>`` under a
+**`Drift exceptions`** extras heading. The key is the WHOLE claim in backticks, not its leading id:
+keying on the id would let one line silence every drift finding rooted at that component, which is
+the family escape the `Audit exceptions` rule above forbids in so many words. `anchor-drift` prints
+the exact key to copy, and reports any recorded line that matched nothing. `finalize` exits non-zero for what validate and audit already block on, and for
 `INCOMPLETE`; unapplied anchor drift is reported and never gates, because `fix apply-drift` cannot fix
 an entry-point cadence anchor and a gate with no remedy is a false failure. It is a convenience
 wrapper and a durable record, not a gate that can force anything.

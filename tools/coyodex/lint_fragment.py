@@ -28,6 +28,7 @@ from coyodex.validate_model import (
     _check_states,
     _check_stores,
     _granularity_warnings,
+    confidence_warnings,
     _referenced_ids,
     check_anchor_existence_model,
     check_domain_relations,
@@ -176,7 +177,8 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     # (the other reference may live in a sibling fragment); promoting it to blocking made a live
     # rebuild inline three legitimate sub-flows and ship a fragment its author believed had passed.
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
-            + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m))
+            + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m)
+            + confidence_warnings(m))
 
 
 # DELIBERATELY ABSENT: a per-fragment nudge about the entry-point per-kind COMPLETENESS statement.

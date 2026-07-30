@@ -18,12 +18,12 @@ After any fix, re-run the invariant: validate --check-sources → audit → rend
 """
 from __future__ import annotations
 
-import json
 import re
 import sys
 from pathlib import Path
 
-from coyodex.anchor_drift import drift_records
+from coyodex.anchor_drift import (apply_drift_exceptions, drift_findings, drift_records,
+                                  load_verdicts)
 from coyodex.audit_model import _claim_text, l2_worklist_model
 from coyodex.model import ProjectModel
 from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
@@ -115,7 +115,8 @@ def _need(argv: list[str], i: int, flag: str) -> str:
 # ── fix apply-drift ────────────────────────────────────────────────────────────────────────────────
 
 def apply_drift(argv: list[str]) -> int:
-    map_path = verdicts_path = None
+    map_path = None
+    verdicts_paths: list[str] = []
     tolerance = 2
     i = 0
     while i < len(argv):
@@ -126,19 +127,35 @@ def apply_drift(argv: list[str]) -> int:
             if a == "--map":
                 map_path = val
             elif a == "--verdicts":
-                verdicts_path = val
+                # REPEATABLE, and it must stay in lockstep with `anchor-drift`. This used to bind a
+                # scalar, so fixing only `anchor-drift`'s arity would have been worse than fixing
+                # neither: drift would be reported over the union while the corrections were written
+                # from one file, with nothing saying the two disagreed. It also silently lost the
+                # NOT-APPLICABLE skip report — with >1 file this printed a bare "rewrote nothing".
+                verdicts_paths.append(val)
             else:
                 tolerance = int(val)
         else:
             print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
             return 2
         i += 1
-    if not map_path or not verdicts_path:
+    if not map_path or not verdicts_paths:
         print("ERROR: --map and --verdicts are required", file=sys.stderr)
         return 2
     m, _present = _load(Path(map_path))
-    grounding = json.loads(Path(verdicts_path).read_text(encoding="utf-8")).get("grounding", [])
-    records = drift_records(l2_worklist_model(m), grounding, tolerance)
+    grounding, notes = load_verdicts(verdicts_paths)
+    for n in notes:
+        print(n)
+    worklist = l2_worklist_model(m)
+    # Honour `Drift exceptions` HERE too. Reporting them in `anchor-drift` while the writer stayed
+    # blind was worse than having no escape at all: the row vanished from the report and the anchor
+    # got overwritten anyway, so the operator lost the warning he was about to be clobbered by.
+    kept, exc_notes = apply_drift_exceptions(m, drift_findings(worklist, grounding, tolerance))
+    for n in exc_notes:
+        print(n, file=sys.stderr)
+    keep_claims = {w.claim for w, _d in kept}
+    records = [r for r in drift_records(worklist, grounding, tolerance)
+               if r["claim"] in keep_claims]
     edges_applied = 0
     sec_applied = 0
     not_applicable: list[tuple[str, str]] = []
@@ -386,7 +403,7 @@ _USAGE = """usage: coyodex fix <verb> [args...]
 
 Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
 
-  apply-drift --map <map> --verdicts <raw.json> [--tolerance N]
+  apply-drift --map <map> --verdicts <raw.json>... [--tolerance N]
       Write the grounding skeptics' corrected `where` line into each drifted edge (same verdicts
       `coyodex anchor-drift` reads). Matches the full (src, verb, dst) triple; an ambiguous
       multi-site edge is skipped, not blind-rewritten.

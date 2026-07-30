@@ -114,6 +114,8 @@ Emit the parsed model as JSON — whole (no flag), or one FIXED slice:
   --record <ID>   the element's full stored record
   --edges <ID>    the backbone edges into/out of a node: {"in": [...], "out": [...]}
   --members <ID>  a subsystem's / subdomain's member records
+Reads an assembled map OR a build FRAGMENT, so it works during Phases 1-3 as well as after
+assembly (the help never said so, and a build spent a turn on `dump --help` finding out).
 Read-only; complements reading the map, never replaces the whole-map read."""
 
 _SLICES = ("--id", "--record", "--edges", "--members")

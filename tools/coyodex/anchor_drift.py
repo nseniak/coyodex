@@ -10,10 +10,12 @@ auto-fix, non-gating (informational, like the L2 worklist). Stdlib-only (the cli
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections import defaultdict
 from pathlib import Path
 
+from coyodex import reporting
 from coyodex.anchors import DriftResult, anchor_drift, parse_anchor
 from coyodex.audit_model import WorkItem, l2_worklist_model
 from coyodex.model import ProjectModel, load_model
@@ -121,11 +123,86 @@ def drift_records(worklist: list[WorkItem], grounding: list[dict], tolerance: in
     } for w, d, ev in _confirmed_drifts(worklist, grounding, tolerance)]
 
 
+DRIFT_EXCEPTIONS_HEADING = "Drift exceptions"
+
+#: A recorded line: ``anchor-drift `<the claim, verbatim>`: <why>``. The key is the WHOLE claim inside
+#: backticks, not its leading id, and that is the entire point. Keying on the first `[A-Z]+\d+` looked
+#: tidier and was a family escape in disguise: backbone claims read `C140 calls C78`, so `anchor-drift
+#: C140` silenced every drift finding on every outgoing edge of C140 — reproduced at 3-for-1. The
+#: sibling escape this is modelled on states the rule it broke: a recorded line "silences exactly one
+#: (check, id) pair — never a family" (method.md). A `why` is required; a key alone is a dismissal.
+_DRIFT_RECORD = re.compile(r"^\s*(?:[-*]\s+)?\**\s*anchor-drift\s+[`'\"]([^`'\"]+)[`'\"]\s*[:—-]\s*\S")
+
+
+def drift_exceptions(m: ProjectModel) -> set[str]:
+    """Claims whose drift the operator has durably judged a false alarm, keyed by the claim itself.
+
+    Drift was the one advisory family with no escape ANYWHERE. `validate`'s families each either
+    name a recordable heading or sit in `tests/test_method_contract.KNOWN_NO_ESCAPE` with a stated
+    reason ("always fixable at the point it fires"); drift is neither. It is genuinely a judgement
+    call — the skeptics report a line, and the stored anchor can still be the right one when they
+    read a sibling file — so "fix it" is not always the answer and there was nowhere to say so. On a
+    live map a state-machine anchor was hand-verified, dismissed in chat, and shipped unrecorded,
+    so the row will re-fire on every future run."""
+    from coyodex import balance_lib
+    out: set[str] = set()
+    for body in balance_lib.extras_bodies(m, DRIFT_EXCEPTIONS_HEADING):
+        for line in body.splitlines():
+            hit = _DRIFT_RECORD.match(line)
+            if hit:
+                out.add(hit.group(1))
+    return out
+
+
+def _drift_key(claim: str) -> str:
+    """The key a drift finding is recorded against: the claim itself, verbatim.
+
+    Exact, so one recorded line answers exactly one finding. The report prints the key to copy, so
+    the operator never has to derive it."""
+    return claim.strip()
+
+
+def apply_drift_exceptions(m: ProjectModel,
+                           findings: list[tuple[WorkItem, DriftResult]],
+                           ) -> tuple[list[tuple[WorkItem, DriftResult]], list[str]]:
+    """Drop drift rows the operator recorded as ``anchor-drift `<claim>` `` — and say which.
+
+    Drift is the one advisory family that named NO extras heading at all, so an operator who had
+    read the code and judged the stored anchor correct had nowhere to write it down: the row
+    re-fired on every future run. On a live map exactly this happened — a state-machine anchor was
+    hand-verified, dismissed in chat, and shipped unrecorded."""
+    recorded = drift_exceptions(m)
+    if not recorded:
+        return findings, []
+    kept: list[tuple[WorkItem, DriftResult]] = []
+    silenced: list[str] = []
+    for w, d in findings:
+        key = _drift_key(w.claim)
+        if key in recorded:
+            silenced.append(key)
+            continue
+        kept.append((w, d))
+    notes: list[str] = []
+    if silenced:
+        notes.append(f"{len(silenced)} drift finding(s) suppressed by recorded exception(s) under a "
+                     f"'{DRIFT_EXCEPTIONS_HEADING}' extras heading: "
+                     f"{', '.join('anchor-drift `' + reporting.clip(k, 48) + '`' for k in sorted(silenced))}.")
+    dead = sorted(k for k in recorded if k not in silenced)
+    if dead:
+        notes.append(f"{len(dead)} recorded drift exception(s) matched no finding: "
+                     f"{', '.join('anchor-drift `' + reporting.clip(k, 48) + '`' for k in dead)} — the "
+                     f"anchor was fixed or the claim changed. A line that silences nothing reads as a decision "
+                     f"the operator never had to make.")
+    return kept, notes
+
+
 def _format(findings: list[tuple[WorkItem, DriftResult]], tolerance: int) -> str:
     if not findings:
         return f"anchor-drift: no drift among confirmed claims (tolerance={tolerance})."
     lines = [f"anchor-drift: {len(findings)} confirmed claim(s) whose `where` drifts "
-             f"(tolerance={tolerance}) — fix each map `where`, the LLM only reported the line:"]
+             f"(tolerance={tolerance}) — fix each map `where`, the LLM only reported the line. Fix "
+             f"it, or record ``anchor-drift `<the claim, verbatim>`: <why>`` under a "
+             f"'{DRIFT_EXCEPTIONS_HEADING}' extras heading if the stored anchor is right:"]
     for w, d in findings:
         found = "a different file" if not d.same_file else f"line {d.reported} ({d.distance} off)"
         lines.append(f"  - {w.claim}: stored [{d.stored}] — skeptics found {found}")
@@ -144,20 +221,86 @@ def shape_findings(m: ProjectModel, roots: list[Path]) -> list[str]:
     return check_operative_lines_model(m, roots)
 
 
+def load_verdicts(paths: list[str]) -> tuple[list[dict], list[str]]:
+    """Every verdict row across every `--verdicts` file, plus notes about the input itself.
+
+    `--verdicts` used to bind a SCALAR (`verdicts_path = argv[i]`), so passing the 13 per-batch
+    files a themed Phase-4 fan-out produces read only the LAST one and reported a clean pass over
+    9% of the evidence — while `finalize` printed that the leg had run. "The gate did not run" read
+    exactly like "the gate passed", which is the one thing `finalize` exists to prevent. Accumulating
+    is the fix; the notes below make the remaining hazard visible instead of silent.
+
+    Overlap is REPORTED, never refused and never deduped. Two independent skeptics that agree on the
+    same line are indistinguishable from one row seen twice — in a recorded mcpolis build,
+    `verdicts1.json` and `verdicts1b.json` are two independent reads of one batch agreeing exactly on
+    37 of 40 claims (they differ on three anchors, not on any verdict). Refusing would break that N-skeptic majority workflow; deduping would collapse a
+    genuine 2-2 tie into 2-1 CONFIRMED (refutations carry no evidence line, so they collapse hardest).
+    `_confirmed_drifts` documents why the real fix is a per-VOTE identity the verdicts format does
+    not carry — a format change, not a tally change."""
+    rows: list[dict] = []
+    seen: dict[tuple[str, object, str], str] = {}
+    dupes: list[str] = []
+    notes: list[str] = []
+    for p in paths:
+        try:
+            payload = json.loads(Path(p).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            raise SystemExit(f"ERROR: --verdicts {p} not found")
+        except json.JSONDecodeError as e:
+            raise SystemExit(f"ERROR: --verdicts {p} is not valid JSON ({e})")
+        loaded = payload.get("grounding", []) if isinstance(payload, dict) else payload
+        if not isinstance(loaded, list):
+            raise SystemExit(f"ERROR: --verdicts {p}: `grounding` must be a list of verdict rows, "
+                             f"got {type(loaded).__name__}")
+        loaded = [r for r in loaded if isinstance(r, dict)]
+        for r in loaded:
+            key = (str(r.get("claim", "")), r.get("grounded"), str(r.get("evidence", "")))
+            first = seen.get(key)
+            if first is not None and first != p:
+                dupes.append(f"{Path(first).name} + {Path(p).name}")
+            else:
+                seen.setdefault(key, p)
+        rows.extend(loaded)
+    if dupes:
+        pairs = ", ".join(sorted(set(dupes)))
+        notes.append(f"note: {len(dupes)} identical (claim, verdict, evidence) row(s) appear in more "
+                     f"than one input file ({pairs}). If you passed an aggregate file AND its parts, "
+                     f"drop one — a row counted twice can turn a tie into a majority. If these are "
+                     f"genuinely independent skeptics agreeing, this is the majority working.")
+    return rows, notes
+
+
+def coverage_note(worklist: list[WorkItem], grounding: list[dict]) -> str:
+    """`challenged N of M` — the number that makes "the gate did not run" legible.
+
+    Accumulation alone still passes silently when a build forgets one of thirteen files: a run over
+    a third of the claims prints the same "no drift" line as a run over all of them. Naming the
+    unvoted claims is what turns that into something an operator can see."""
+    voted = {str(r.get("claim", "")) for r in grounding}
+    missing = [w.claim for w in worklist if w.claim not in voted]
+    head = f"challenged {len(worklist) - len(missing)} of {len(worklist)} worklist claim(s)"
+    if not missing:
+        return head + " — every claim has a verdict."
+    return (f"{head} — {len(missing)} claim(s) have NO verdict and were not examined by this "
+            f"pass: {reporting.shown([reporting.clip(c, 48) for c in missing], 5)}")
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex anchor-drift --map <map.json> [--verdicts <raw.json>] "
+        print("usage: coyodex anchor-drift --map <map.json> [--verdicts <raw.json>]... "
               "[--repo <root>] [--tolerance N] [--json]\n\n"
               "Deterministic Layer-2 anchor-drift. WITH --verdicts: for each CONFIRMED claim, flag\n"
               "when the stored `where` differs from the line the skeptics found (feed `--json` into\n"
-              "`coyodex fix apply-drift` to write the corrections).\n"
+              "`coyodex fix apply-drift` to write the corrections). `--verdicts` is REPEATABLE and\n"
+              "every file is read — pass the per-batch files directly, no hand-merge needed.\n"
               "WITHOUT --verdicts: the shape-only pass — call-site anchors pointing at a line that\n"
               "cannot be the acting statement (a `def` header, an import, a comment). Needs no\n"
               "skeptics, so a SERIAL build gets the same grounding floor as a parallel one.\n"
               "Informational (non-gating) either way.")
         return 0
-    map_path = verdicts_path = repo_root = None
+    map_path = repo_root = None
+    verdicts_paths: list[str] = []
     tolerance = _DEFAULT_TOLERANCE
     as_json = False
     i = 0
@@ -173,7 +316,7 @@ def main(argv: list[str] | None = None) -> int:
             if a == "--map":
                 map_path = argv[i]
             elif a == "--verdicts":
-                verdicts_path = argv[i]
+                verdicts_paths.append(argv[i])
             elif a == "--tolerance":
                 tolerance = int(argv[i])
             elif a == "--repo":
@@ -186,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: --map is required", file=sys.stderr)
         return 2
     m = load_model(Path(map_path).read_text(encoding="utf-8"))
-    if not verdicts_path:
+    if not verdicts_paths:
         # No verdicts → the shape-only pass, so a serial build still gets a grounding floor.
         roots = _source_roots(Path(map_path).resolve(),
                               Path(repo_root).resolve() if repo_root else None)
@@ -203,11 +346,21 @@ def main(argv: list[str] | None = None) -> int:
                   "line that can act.")
         return 0
     worklist = l2_worklist_model(m)
-    grounding = json.loads(Path(verdicts_path).read_text(encoding="utf-8")).get("grounding", [])
+    grounding, notes = load_verdicts(verdicts_paths)
+    coverage = coverage_note(worklist, grounding)
     if as_json:
-        print(json.dumps({"findings": drift_records(worklist, grounding, tolerance)}, indent=2))
+        print(json.dumps({"findings": drift_records(worklist, grounding, tolerance),
+                          "coverage": coverage, "notes": notes}, indent=2))
     else:
-        print(_format(drift_findings(worklist, grounding, tolerance), tolerance))
+        for n in notes:
+            # stderr: the build that motivated this ran `anchor-drift … | head -35`, and a warning
+            # about the INPUT is exactly what a pipe must not eat.
+            print(n, file=sys.stderr)
+        print(coverage)
+        kept, exc_notes = apply_drift_exceptions(m, drift_findings(worklist, grounding, tolerance))
+        for n in exc_notes:
+            print(n)
+        print(_format(kept, tolerance))
     return 0
 
 

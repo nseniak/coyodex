@@ -31,6 +31,9 @@ Commands:
              format + extra-key conventions, and with --repo that anchors exist).
   anchor-drift  Deterministic Layer-2 check: for each grounding-confirmed claim, flag
              when the stored `where` line drifts from the line the skeptics found.
+  grounding  Derive the map's `grounding` record from the skeptics' verdict files and the
+             PINNED audit worklist (`grounding write`). The four counts are what `validate`
+             blocks on, so they are never hand-tallied.
   fix        Apply a reconcile edit to the model in place (apply-drift / drop-edge /
              dedup-relation) — the mechanical fixes the method's Phase-3/4 reconcile
              needs, so they are never hand-scripted. Re-run validate → audit → render after.
@@ -117,6 +120,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "finalize":
         from coyodex import finalize  # stdlib-only; shells out to coyodex-eval for the compare leg
         return finalize.main(_default_map(rest))
+    if cmd == "grounding":
+        from coyodex import grounding  # stdlib-only; derives the record validate blocks on
+        return grounding.main(rest)
     if cmd == "fix":
         from coyodex import fix  # stdlib-only; owns its own second-level (verb) dispatch
         return fix.main(rest)

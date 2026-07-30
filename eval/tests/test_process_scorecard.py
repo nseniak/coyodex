@@ -513,9 +513,12 @@ def test_the_transcript_command_reports_a_missing_file():
         assert T.main([str(Path(td) / "nope.jsonl")]) == 2
 
 
-def test_every_assertion_id_is_unique_and_covers_one_to_ten():
+def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
+    """11 is RESERVED for the trapdoor golden-map comparison (L3-DESIGN.md: "11 is deliberately
+    absent"), so a new transcript-only assertion takes 12 rather than filling the hole."""
     ids = [a.id for a in P.score_turns(()).assertions]
-    assert ids == list(range(1, 11)), ids
+    assert ids == [*range(1, 11), 12], ids
+    assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
 
 
 def _main() -> int:

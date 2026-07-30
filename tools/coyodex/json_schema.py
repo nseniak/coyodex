@@ -77,6 +77,19 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Component", "files"): {"description": "repo-relative file paths this component owns, as a "
                               "plain list — not a count, not a comma-joined string."},
     ("Component", "extra"): {"description": _EXTRA_DESC},
+    # Enumerated because the dispatch template asks for exactly these two words while the field
+    # accepted any string, so a harvest agent could return high/medium/low and `lint-fragment`
+    # passed it clean. method.md also listed `confidence` among the STRAY keys to omit while the
+    # same template required it — both halves of that contradiction are fixed together.
+    ("Group", "confidence"): {"enum": [*grammar.CONFIDENCE_VALUES, ""],
+                             "description": "verified = read in the code; inferred = deduced. '' = unstated."},
+    ("Component", "confidence"): {"enum": [*grammar.CONFIDENCE_VALUES, ""],
+                             "description": "verified = read in the code; inferred = deduced. '' = unstated."},
+    ("Dep", "confidence"): {"enum": [*grammar.CONFIDENCE_VALUES, ""],
+                             "description": "verified = read in the code; inferred = deduced. '' = unstated."},
+    ("TestRow", "confidence"): {"enum": [*grammar.CONFIDENCE_VALUES, ""],
+                             "description": "verified = read in the code; inferred = deduced. '' = unstated."},
+
     ("Dep", "id"): {"pattern": r"^D\d+$"},
     ("Dep", "kind"): {"enum": [*grammar.DEP_KINDS, None], "description": "closed Context "
                        "vocabulary; null → inferred from `type`."},

@@ -152,13 +152,20 @@ def _drift_leg(map_path: Path, repo: Path, verdicts: list[Path]) -> Leg:
     text = (out or "") + (err or "")
     rows = [ln.strip()[2:] for ln in text.splitlines() if ln.startswith("  - ")]
     kind = "verdict-based" if verdicts else "shape-only"
+    # Carry the COVERAGE line into the report and the gate block. Without it the leg printed
+    # "no drifted anchors" off a pass that had seen 31 of 404 claims — the same "the gate did not
+    # run reads as the gate passed" sentence this whole command exists to make impossible, in the
+    # one artifact meant to be quotable.
+    coverage = next((ln.strip().split(" — ")[0] for ln in text.splitlines()
+                     if ln.startswith("challenged ")), "")
     # ADVISORY on purpose: `fix apply-drift` handles edge and security anchors only, so on the map
     # this command was written for all 17 confirmed rows were entry-point cadence claims it cannot
     # apply. A gate on a finding with no remedy is a false failure.
     return Leg(f"anchor-drift ({kind})", RAN if code in (0, 1) else FAILED, advisory=rows,
-               note=(f"{len(rows)} drifted anchor(s) — reconcile each (fix the `where`, or record why "
-                     f"it stands); `fix apply-drift` covers edge + security anchors only"
-                     if rows else "no drifted anchors"))
+               note=((f"{len(rows)} drifted anchor(s) — reconcile each (fix the `where`, or record "
+                      f"why it stands); `fix apply-drift` covers edge + security anchors only"
+                      if rows else "no drifted anchors")
+                     + (f" · {coverage}" if coverage else "")))
 
 
 def build_report(map_path: Path, repo: Path, verdicts: list[Path]) -> FinalizeReport:
@@ -223,10 +230,34 @@ def format_report(r: FinalizeReport) -> str:
     return "\n".join(out)
 
 
+def gate_block(report: FinalizeReport, map_sha: str) -> str:
+    """A copy-pasteable gate summary for the COMMIT MESSAGE, generated from the report.
+
+    A live build read its own report, quoted the verdict honestly in chat ("that is not a clean
+    pass"), and then wrote `validate … clean (1166 anchors resolved), audit reports no
+    self-contradiction, anchor-drift clean` into the commit — three false clauses, with an anchor
+    count copied from a validate run 32 minutes earlier. Chat is ephemeral; the commit is
+    the only record a future reader sees. So the durable half must be generated, not remembered."""
+    lines = [f"Gates: finalize {report.verdict} — {report.blocking_total} blocking, "
+             f"{report.advisory_total} advisory (map sha256 {map_sha[:12]}…)."]
+    for leg in report.legs:
+        if not leg.ran:
+            lines.append(f"  {leg.name}: DID NOT RUN ({leg.status})")
+            continue
+        counts = f"{len(leg.blocking)} blocking, {len(leg.advisory)} advisory"
+        lines.append(f"  {leg.name}: {counts}" + (f" — {leg.note}" if leg.note else ""))
+    if report.advisory_total:
+        lines.append("Advisories are NOT a pass. Some name an extras heading and can be recorded; "
+                     "the rest name none (tests/test_method_contract.py KNOWN_NO_ESCAPE) and can only "
+                     "be fixed or carried. State which of the two you did — neither is 'clean'.")
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
         print("usage: coyodex finalize [--repo <root>] [--verdicts <file>]... "
+              "[--emit-gate-block <file>] "
               "[.coyodex/project-map.json]\n\n"
               "The pre-commit read: validate (--check-sources --check-coverage) + audit +\n"
               "anchor-drift (shape-only, and verdict-based when --verdicts is given). Writes\n"
@@ -243,11 +274,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     repo: Path | None = None
     verdicts: list[Path] = []
+    gate_block_path: Path | None = None
     positional: list[str] = []
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a in ("--repo", "--verdicts"):
+        if a == "--emit-gate-block":
+            i += 1
+            if i >= len(argv):
+                print("ERROR: --emit-gate-block needs a value", file=sys.stderr)
+                return 2
+            gate_block_path = Path(argv[i])
+        elif a in ("--repo", "--verdicts"):
             i += 1
             if i >= len(argv):
                 print(f"ERROR: {a} needs a path", file=sys.stderr)
@@ -285,6 +323,25 @@ def main(argv: list[str] | None = None) -> int:
     md_path = map_path.parent / f"{REPORT_STEM}.md"
     json_path.write_text(report.to_json(), encoding="utf-8")
     md_path.write_text(format_report(report), encoding="utf-8")
+    if gate_block_path is not None:
+        import hashlib
+        sha = hashlib.sha256(map_path.read_bytes()).hexdigest()
+        gate_block_path.parent.mkdir(parents=True, exist_ok=True)
+        gate_block_path.write_text(gate_block(report, sha) + "\n", encoding="utf-8")
+        print(f"finalize: wrote the commit-message gate block to {gate_block_path}")
+    # The four artifacts the method says ship with the map, and whether git will actually take them.
+    # A live build ran `git check-ignore`, GOT the answer (`.gitignore:85:.coyodex/`), and then issued
+    # an un-forced `git add` two turns later that failed — shipping a map whose viewer symbol-search
+    # input (`preindex.json`) and provenance were left untracked. Naming the command removes the step
+    # where the operator has to remember the `-f`.
+    required = [map_path, map_path.with_suffix(".md"),
+                map_path.parent / "preindex.json", map_path.parent / "provenance.json"]
+    present = [p for p in required if p.exists()]
+    if present:
+        print("finalize: commit these with the map — "
+              f"git add -f {' '.join(str(p) for p in present)}\n"
+              "  (`-f` because a repo whose root .gitignore ignores `.coyodex/` refuses a plain "
+              "`git add`, and method.md requires the pre-index and provenance to ship with the map.)")
     unran = [f"{l.name} ({l.status})" for l in report.legs if not l.ran]
     print(f"finalize: {report.verdict} — {report.blocking_total} blocking, "
           f"{report.advisory_total} advisory"

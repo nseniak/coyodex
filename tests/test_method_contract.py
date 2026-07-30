@@ -69,7 +69,7 @@ COMMAND_MODULE: dict[str, str] = {
     "render": "viewer/render", "serve": "viewer/serve", "assemble": "assemble",
     "lint-fragment": "lint_fragment", "anchor-drift": "anchor_drift", "fix": "fix",
     "dump": "dump", "reconcile": "reconcile_build", "balance": "balance",
-    "finalize": "finalize",
+    "finalize": "finalize", "grounding": "grounding",
 }
 
 #: The extras headings some tool actually READS (the escape tokens that silence an advisory).
@@ -77,7 +77,7 @@ COMMAND_MODULE: dict[str, str] = {
 MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "audit exceptions", "balance exceptions", "coverage exceptions",
     "accepted duplications", "entry-point coverage", "happy path coverage",
-    "persistence exceptions", "unclaimed surfaces",
+    "persistence exceptions", "unclaimed surfaces", "drift exceptions",
 )
 
 
@@ -540,6 +540,9 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
         "record `grounding` (the block itself IS the escape); an extras token would defeat the feature",
     "Grounding is partial":
         "a measured share of the claim surface — ground more claims; nothing else can honestly quiet it",
+    # Closed two-word vocabulary: the fix is to write `verified` or `inferred`, never a judgement.
+    "{} row(s) carry a `confidence` outside the vocabulary":
+        "use one of the two words the template asks for; there is nothing to adjudicate",
     # Vocabulary nudges: reuse the seed spelling or mint deliberately; the map records the choice.
     "{} bucket '{}' is long (>40 chars)": "shorten the label",
     "Library bucket '{}' is minted (not a seed)": "the minted name IS the record",
@@ -778,11 +781,13 @@ def test_the_machine_read_heading_list_matches_the_validator():
     """MACHINE_READ_HEADINGS is used by the escape-token audit above, so it must not drift from
     the source. Re-derived here from the tools' own call sites — including `balance_lib`, which
     owns the 'Balance exceptions' constant that `validate_model` reaches through a helper, and
-    `audit_model`, which owns 'Audit exceptions'. `audit` read no extras heading at all until that
-    one landed, so every one of its six advisory families was permanently unanswerable; a file
-    missing from this list is a family whose escape nothing here audits."""
+    `audit_model`, which owns 'Audit exceptions', and `anchor_drift`, which owns 'Drift exceptions'.
+    `audit` read no extras heading at all until that one landed, so every one of its six advisory
+    families was permanently unanswerable; a file missing from this list is a family whose escape
+    nothing here audits."""
     src = "\n".join((TOOLS / f).read_text(encoding="utf-8")
-                    for f in ("validate_model.py", "balance_lib.py", "audit_model.py"))
+                    for f in ("validate_model.py", "balance_lib.py", "audit_model.py",
+                              "anchor_drift.py"))
     # Case-folded: `extras_bodies` matches headings case-insensitively, so a constant written in
     # title case ("Audit exceptions") and a call-site literal in lower case name the same heading.
     found = {h.lower() for h in

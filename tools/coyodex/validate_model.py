@@ -778,6 +778,29 @@ def _check_actor_kinds(m: ProjectModel) -> list[str]:
     return out
 
 
+def confidence_warnings(m: ProjectModel) -> list[str]:
+    """`confidence` must be one of the two words the dispatch template asks for.
+
+    The schema enumerates it, but `method/project-map.schema.json` is a generated DOCUMENT that
+    nothing validates against at runtime — a fragment carrying `confidence: "high"` linted clean.
+    An enum nothing enforces is the "shipped, tested and unreachable" defect this project keeps
+    hitting, so the check lives here, where `lint-fragment` reaches it in the authoring agent's own
+    turn."""
+    ok = {*grammar.CONFIDENCE_VALUES, ""}
+    bad: list[str] = []
+    for label, rows in (("subsystem", m.subsystems), ("component", m.components),
+                        ("dep", m.deps), ("test", m.tests)):
+        for r in rows:
+            val = getattr(r, "confidence", "")
+            if val not in ok:
+                bad.append(f"{label} {getattr(r, 'id', getattr(r, 'area', '?'))}: '{val}'")
+    if not bad:
+        return []
+    return [f"{len(bad)} row(s) carry a `confidence` outside the vocabulary "
+            f"({' / '.join(grammar.CONFIDENCE_VALUES)}): {_shown(bad, 8)} — the dispatch "
+            f"template asks for those two words; anything else is a synonym nobody can group on."]
+
+
 def _check_dep_kinds(m: ProjectModel) -> list[str]:
     return [f"{d.id} has an invalid dependency Kind '{d.kind}' — use one of: "
             f"{', '.join(grammar.DEP_KINDS)}"
@@ -2677,6 +2700,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_roles(m))
     problems.extend(_check_actors(m))
     warnings.extend(_check_actor_kinds(m))
+    warnings.extend(confidence_warnings(m))
     problems.extend(_check_dep_kinds(m))
     dep_bucket_problems, dep_bucket_warnings = _check_dep_buckets(m)
     problems.extend(dep_bucket_problems)

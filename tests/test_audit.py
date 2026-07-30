@@ -1889,3 +1889,35 @@ def test_a_line_with_no_why_is_not_a_recorded_decision():
     m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
                              body="read-never-created HP1")]
     assert any(f.check == "read-never-created" for f in audit_model.audit_model(m))
+
+
+def test_theme_batches_carry_the_anchor_the_hand_script_dropped():
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        _theme_batches_carry_the_anchor(td)
+
+
+def _theme_batches_carry_the_anchor(tmp_path: str) -> None:
+    """`--batches` exists because the hand-rolled batcher wrote `f.write(c['claim'])` and nothing
+    else, so 360 of 408 dispatched claims reached the skeptics as a bare `C140 calls C78` — while
+    the prompt promised them the claim would end with its `path:line` anchor in square brackets.
+    The tool held an anchor for 400 of 404 items the whole time."""
+    from coyodex.audit_model import BATCH_SCHEMA, l2_worklist_model, write_theme_batches
+
+    own_map = Path(__file__).resolve().parents[1] / ".coyodex" / "project-map.json"
+    m = load_model(own_map.read_text(encoding="utf-8"))
+    worklist = l2_worklist_model(m)
+    written = write_theme_batches(worklist, Path(tmp_path), cap=40)
+    assert written, "coyodex's own map must produce at least one theme batch"
+    total = anchored = 0
+    for name, n in written:
+        payload = json.loads((Path(tmp_path) / name).read_text(encoding="utf-8"))
+        assert payload["schema"] == BATCH_SCHEMA, "the artifact is versioned from day one"
+        assert len(payload["claims"]) == n <= 40
+        for c in payload["claims"]:
+            total += 1
+            assert set(c) == {"claim", "anchor", "detail", "why_risky"}
+            anchored += bool(c["anchor"])
+    assert total == len(worklist), "every worklist claim lands in exactly one batch"
+    assert anchored > total * 0.9, (
+        f"only {anchored}/{total} dispatched claims carry an anchor — the defect this removes")

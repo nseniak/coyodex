@@ -720,6 +720,65 @@ def main(argv: list[str] | None = None) -> int:
         reset_full_lists()
 
 
+BATCH_SCHEMA = "coyodex/theme-batch/v1"
+
+
+def _opt_value(argv: list[str], flag: str) -> str | None:
+    """The value given to `flag`, or None. A value that LOOKS like a flag is not a value.
+
+    `--batches --cap 40` used to bind `--cap` as the output directory and silently write the batch
+    files into a directory called `--cap`. Accepting-and-misreading is the failure mode with no
+    visible symptom, which `test_every_command_refuses_an_unknown_option` exists to prevent."""
+    for i, a in enumerate(argv):
+        if a == flag and i + 1 < len(argv) and not argv[i + 1].startswith("-"):
+            return argv[i + 1]
+        if a.startswith(flag + "="):
+            return a.split("=", 1)[1]
+    return None
+
+
+def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int) -> list[tuple[str, int]]:
+    """One file per theme (split at `cap` claims), each claim carrying its ANCHOR and `detail`.
+
+    This exists because the batching step was hand-scripted on every build, and the hand-script threw
+    away the fields the skeptics needed. A live build wrote `f.write(c['claim'])` and nothing else, so
+    360 of 408 dispatched claims arrived as bare `C140 calls C78` — no file, no line, no component
+    name — while the skeptic prompt told them the claim would end with `the path:line anchor the map
+    recorded, in square brackets` and demanded it back verbatim. The tool had the anchor for 400 of
+    404 items all along.
+
+    Not a quality claim: on that build the anchored theme refuted at 1.8% and the unanchored ones at
+    1.7%, so this is hygiene — the prompt stops lying to the agent — not a measured grounding gain."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    # Clear our OWN previous output first. Two runs at different caps left the smaller run's extra
+    # files behind, so a `claims-*.json` glob dispatched 207 claims for a 184-claim worklist — 23
+    # duplicated, while the tool printed the honest total. That is the stale-glob hazard that blocked
+    # a `--verdicts` glob in the first place; leaving it here would just move it.
+    for stale in out_dir.glob("claims-*.json"):
+        stale.unlink()
+    by_theme: dict[str, list[WorkItem]] = {}
+    for w in worklist:
+        by_theme.setdefault(w.theme, []).append(w)
+    written: list[tuple[str, int]] = []
+    for theme in _THEMES:                      # most-dangerous-first, so batch 1 is the risky one
+        items = by_theme.get(theme, [])
+        if not items:
+            continue
+        chunks = [items[i:i + cap] for i in range(0, len(items), cap)] or [[]]
+        for n, chunk in enumerate(chunks, 1):
+            name = f"claims-{theme}.json" if len(chunks) == 1 else f"claims-{theme}-{n}.json"
+            payload = {
+                "schema": BATCH_SCHEMA,
+                "theme": theme,
+                "claims": [{"claim": w.claim, "anchor": w.anchor, "detail": w.detail,
+                            "why_risky": w.why_risky} for w in chunk],
+            }
+            (out_dir / name).write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
+                                        encoding="utf-8")
+            written.append((name, len(chunk)))
+    return written
+
+
 def _run(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
@@ -728,6 +787,9 @@ def _run(argv: list[str] | None = None) -> int:
               "checks + the L2 grounding worklist. Blocks (exit 1) only on a hard contradiction.\n"
               "--verbose adds each worklist claim's `risk:` rationale (collapsed by default).\n"
               "--json emits {findings, worklist, themes, theme_counts} as machine-readable JSON.\n"
+              "--batches <dir> [--cap N] writes one Phase-4 claims file per theme (default cap 40),\n"
+              "  most-dangerous-first, each claim carrying its anchor + detail so the skeptics are\n"
+              "  not handed a bare `C1 calls C2`. Not build-fragments/ — assemble globs that.\n"
               "  Each worklist item carries `theme` (a closed, most-dangerous-first set) and\n"
               "  `drift_eligible`; `theme_counts` sizes each group. Batch the Phase-4 skeptics\n"
               "  BY THEME — the shape the Phase-4\n"
@@ -735,16 +797,38 @@ def _run(argv: list[str] | None = None) -> int:
         return 0
     verbose = "--verbose" in argv
     as_json = "--json" in argv
+    batches_out = _opt_value(argv, "--batches")
+    cap_raw = _opt_value(argv, "--cap")
+    for flag, val in (("--batches", batches_out), ("--cap", cap_raw)):
+        if flag in argv and val is None:
+            print(f"ERROR: {flag} needs a value (a value starting with '-' is not one)",
+                  file=sys.stderr)
+            return 2
     # Reject unknown options rather than ignoring them. `--jsonn` used to produce the human report and
     # exit 0: a build asking for JSON silently got prose, with no signal that its flag was a typo.
     # Every sibling command already refuses; these two were the exceptions.
-    unknown = [a for a in argv if a.startswith("-") and a not in ("--verbose", "--json")]
+    _known = ("--verbose", "--json", "--batches", "--cap")
+    unknown = [a for a in argv if a.startswith("-") and a not in _known
+               and not any(a.startswith(k + "=") for k in _known)]
     if unknown:
         print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
         return 2
     if as_json:
         set_full_lists(True)   # whole `detail` member lists; reset by main()'s finally
-    args = [a for a in argv if not a.startswith("-")]
+    # Skip each value-taking flag's VALUE. `args = [a for a in argv if not a.startswith("-")]` was
+    # safe while every flag was valueless; with `--batches <dir>` it took the directory as the map
+    # path and reported `AUDIT SKIPPED: [Errno 21] Is a directory` — an error about the wrong thing.
+    args: list[str] = []
+    skip = False
+    for a in argv:
+        if skip:
+            skip = False
+            continue
+        if a in ("--batches", "--cap"):
+            skip = True
+            continue
+        if not a.startswith("-"):
+            args.append(a)
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():
         print(f"ERROR: {path} not found", file=sys.stderr)
@@ -756,6 +840,40 @@ def _run(argv: list[str] | None = None) -> int:
         return 1
     findings = audit_model(m)
     worklist = l2_worklist_model(m)
+    if batches_out is not None:
+        out_dir = Path(batches_out)
+        # `build-fragments/` is where `assemble` globs. A batch file dropped there is not a fragment
+        # and hard-stops the build's most expensive step with `theme: unknown field / ASSEMBLY
+        # FAILED`, and it is the obvious place to point this. Refuse by name rather than let the
+        # build discover it at assemble time.
+        if out_dir.name == "build-fragments" or out_dir.parent.name == "build-fragments":
+            print(f"ERROR: refusing --batches {out_dir} — `assemble` globs build-fragments/ and a "
+                  f"theme-batch file is not a fragment; it would fail the assemble. Use "
+                  f".coyodex/verify/ (where the verdicts live).", file=sys.stderr)
+            return 2
+        try:
+            cap = int(cap_raw) if cap_raw else 40
+        except ValueError:
+            print(f"ERROR: --cap must be an integer, got '{cap_raw}'", file=sys.stderr)
+            return 2
+        if cap < 1:
+            print("ERROR: --cap must be >= 1", file=sys.stderr)
+            return 2
+        blocking = [f for f in findings if f.severity == CONTRADICTION]
+        if blocking:
+            # Batching a contradicting map would dispatch skeptics against a model the audit already
+            # rejects, and the old code printed a success line while returning 1 — output and exit
+            # status disagreeing is the exact failure this change set exists to remove.
+            print(f"ERROR: refusing to write batches — audit found {len(blocking)} blocking "
+                  f"contradiction(s). Fix them first; run `coyodex audit <map>` to see them.",
+                  file=sys.stderr)
+            return 1
+        written = write_theme_batches(worklist, out_dir, cap)
+        for name, n in written:
+            print(f"{name}: {n} claim(s)")
+        print(f"wrote {len(written)} theme batch(es) to {out_dir} — {len(worklist)} claim(s) total, "
+              f"each carrying its anchor and detail")
+        return 0
     if as_json:
         print(json.dumps({
             "findings": [{"check": f.check, "severity": f.severity, "location": f.location,

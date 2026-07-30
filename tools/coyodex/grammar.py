@@ -24,6 +24,8 @@ DEEP_NEST_WARN = 5  # warn (non-blocking) when a membership chain is deeper than
 # The first four are EXTERNAL SYSTEMS the project talks to across a boundary (drawn at Context, by
 # name); framework + library are in-process code deps that FOLD into one collapsed "Libraries" box.
 # Authored in an OPTIONAL T2 `Kind` column; when absent, classify_dep() infers it from `Type`.
+CONFIDENCE_VALUES: tuple[str, ...] = ("verified", "inferred")
+
 DEP_KINDS = ("datastore", "messaging", "service", "platform", "framework", "library")
 DEP_KINDS_FOLDED = ("framework", "library")                          # in-process — fold into "Libraries"
 # The EXTERNAL (system) dep kinds — everything the project talks to across a boundary. A deployment

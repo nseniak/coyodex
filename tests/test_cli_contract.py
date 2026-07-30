@@ -28,6 +28,7 @@ COMMAND_MODULE: dict[str, str] = {
     "render": "viewer.render", "serve": "viewer.serve", "assemble": "assemble",
     "lint-fragment": "lint_fragment", "anchor-drift": "anchor_drift", "fix": "fix",
     "dump": "dump", "reconcile": "reconcile_build", "balance": "balance", "finalize": "finalize",
+    "grounding": "grounding",
 }
 
 
@@ -175,3 +176,56 @@ if __name__ == "__main__":
             _fn()
             print(f"ok  {_name}")
     print("all CLI contract tests passed")
+
+
+def _l2(map_path: Path):
+    from coyodex.audit_model import l2_worklist_model
+    from coyodex.model import load_model
+    return l2_worklist_model(load_model(map_path.read_text(encoding='utf-8')))
+
+
+def test_a_flag_advertised_as_repeatable_reads_every_occurrence():
+    """`usage: … [--verdicts <f>]...` is a promise. A scalar rebind silently keeps only the LAST.
+
+    `anchor-drift` bound `verdicts_path = argv[i]`, so a themed Phase-4 fan-out that passed its 13
+    per-batch verdict files got a pass computed over the LAST file — 9% of the evidence — while
+    `finalize` printed that the verdict-based drift leg had run. "The gate did not run" read exactly
+    like "the gate passed", the single thing `finalize` exists to prevent, reintroduced through flag
+    arity. `fix apply-drift` carried the identical bug, and fixing only one would have been worse
+    than fixing neither: drift reported over the union, corrections written from one file.
+
+    Driven through `main()` on purpose. An earlier version of this test called `load_verdicts`
+    directly and stayed green with `main()`'s arity reverted to the scalar — it tested the helper,
+    not the flag."""
+    import json as _json
+    import tempfile
+
+    from coyodex import anchor_drift as ad
+    from coyodex import fix as fx
+
+    claims = [w.claim for w in _l2(MAP)]
+    assert len(claims) >= 2, "need two claims to split across two files"
+    with tempfile.TemporaryDirectory() as td:
+        # `fix apply-drift` WRITES the map in place, so it must never be pointed at the repo's own
+        # committed one. An earlier version of this test did exactly that and rewrote two security
+        # anchors to `nowhere/at/all.py`, which `validate --check-sources` then failed on.
+        target = Path(td) / "map.json"
+        target.write_text(MAP.read_text(encoding="utf-8"), encoding="utf-8")
+        a, b = Path(td) / "a.json", Path(td) / "b.json"
+        a.write_text(_json.dumps({"grounding": [
+            {"claim": claims[0], "grounded": True, "evidence": "nowhere/at/all.py:1"}]}))
+        b.write_text(_json.dumps({"grounding": [
+            {"claim": claims[1], "grounded": True, "evidence": "nowhere/at/all.py:2"}]}))
+        for name, main, argv in (
+            ("anchor-drift", ad.main,
+             ["--map", str(target), "--verdicts", str(a), "--verdicts", str(b)]),
+            ("fix apply-drift", fx.apply_drift,
+             ["--map", str(target), "--verdicts", str(a), "--verdicts", str(b)]),
+        ):
+            code, text = run_main(main, argv)
+            assert code == 0, f"{name} exited {code}"
+            if name == "anchor-drift":
+                # The coverage line counts BOTH files' claims, so it proves both were read.
+                assert "challenged 2 of" in text, (
+                    f"{name} read {text.splitlines()[0] if text else '(nothing)'} — a repeatable "
+                    f"flag that keeps only the last occurrence")

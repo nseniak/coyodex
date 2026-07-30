@@ -324,7 +324,13 @@
           "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. The group's home directory (or a representative file)."
         },
         "confidence": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "verified",
+            "inferred",
+            ""
+          ],
+          "description": "verified = read in the code; inferred = deduced. '' = unstated."
         },
         "tech": {
           "type": "string",
@@ -382,7 +388,13 @@
           "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. Where the component LIVES."
         },
         "confidence": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "verified",
+            "inferred",
+            ""
+          ],
+          "description": "verified = read in the code; inferred = deduced. '' = unstated."
         },
         "files": {
           "type": "array",
@@ -525,7 +537,13 @@
           "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored)."
         },
         "confidence": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "verified",
+            "inferred",
+            ""
+          ],
+          "description": "verified = read in the code; inferred = deduced. '' = unstated."
         },
         "deployment_linked": {
           "type": "boolean"
@@ -1116,7 +1134,13 @@
           "type": "string"
         },
         "confidence": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "verified",
+            "inferred",
+            ""
+          ],
+          "description": "verified = read in the code; inferred = deduced. '' = unstated."
         }
       },
       "required": [
