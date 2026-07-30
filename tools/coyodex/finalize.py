@@ -8,7 +8,7 @@ those commands already produce.
 **It compares nothing against a previous map, deliberately.** An earlier version of this command did,
 and that was wrong for the build: in real use a map EVOLVES INCREMENTALLY alongside the code, so a
 from-scratch rebuild is a first-run event and there is usually no meaningful predecessor to diff
-against. Rebuilding often is a coyodex-DEVELOPER habit, with its own `.coyodex/.old-ignore-N`
+against. Rebuilding often is a coyodex-DEVELOPER habit, with its own `.coyodex/dev-rebuilds/NNNN/`
 convention that users should not adopt — so baseline comparison belongs to the developer's
 `/coyodex-retro`, which already does it (`eval/retro/method.md`), and not to anybody's build.
 

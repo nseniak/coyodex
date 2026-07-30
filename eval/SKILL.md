@@ -1,7 +1,8 @@
 ---
 name: coyodex-eval
 description: >
-  Run the coyodex method-quality regression eval on a project that already has a coyodex map.
+  FOR THE COYODEX DEVELOPER, not for users of coyodex: run the method-quality regression
+  eval on a project that already has a coyodex map.
   Rebuilds a fresh map with the current method, judges it (grounding + rubric), and compares it to
   the project's committed .coyodex/ map as the baseline — telling you whether the method/tooling got
   better or worse. Results go in a git-ignored .coyodex-eval/. Use whenever the user wants to
@@ -10,6 +11,8 @@ description: >
 ---
 
 # coyodex-eval
+
+**For the coyodex DEVELOPER, not for users of coyodex.** It exists to answer "did my change to the method or the tooling make the maps worse?", which is a question only someone changing coyodex asks. A user's map evolves incrementally alongside their code; a from-scratch rebuild is a first-run event for them, so the repeated rebuilding this command depends on is a developer habit.
 
 coyodex-eval is a method (prompts) + the `coyodex` CLI for a method-quality regression check on a
 codebase map. **Read the method doc and follow it; don't work from memory.**

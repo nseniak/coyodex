@@ -16,8 +16,16 @@ complementary; neither replaces the other.
 - **`COYODEX_HOME`** — the coyodex clone (the skill substitutes the real path). The CLI is
   `COYODEX_HOME/.venv/bin/coyodex` and `COYODEX_HOME/.venv/bin/coyodex-eval`; the method under
   audit is `COYODEX_HOME/method.md` + `COYODEX_HOME/method/`.
-- **The reviewed project** — your cwd. Map in `.coyodex/`, previous map in `.coyodex/.old-ignore*/`,
-  output in `.coyodex-eval/retro/<timestamp>/`.
+- **The reviewed project** — your cwd. Map in `.coyodex/`, previous maps in
+  `.coyodex/dev-rebuilds/NNNN/`, output in `.coyodex-eval/retro/<timestamp>/`.
+
+**`dev-rebuilds/` is a coyodex-DEVELOPER convention and nothing a user of coyodex should have.** A
+user's map evolves incrementally with their code, so a from-scratch rebuild is a first-run event and
+they never accumulate previous maps. Rebuilding repeatedly is what someone changing coyodex does, and
+`internal/scripts/archive_map.py` is what files each snapshot. No production code path reads the
+directory — a *build* compares against nothing, deliberately. So expect it in the coyodex author's own
+repos and expect it to be ABSENT everywhere else; when it is missing, say Step 1's comparison was
+skipped rather than treating it as a defect.
 
 ---
 
@@ -60,8 +68,9 @@ one is often the retro itself.
 
 Also locate, for comparison (all optional — say so when absent):
 
-- **the previous map** — the highest-numbered `.coyodex/.old-ignore*/project-map.json`. That is
-  where `archive_map.py` puts the map a from-scratch rebuild replaced.
+- **the previous map** — the highest-numbered `.coyodex/dev-rebuilds/NNNN/project-map.json`. That is
+  where `archive_map.py` puts the map a from-scratch rebuild replaced. Names are zero-padded, so a
+  plain sort is a numeric sort; take the last one.
 - **the previous transcript** — the `session_id` in that archive's own `provenance.json`.
 
 Stop and say what is missing if the map or the provenance is absent. A retro with no transcript can

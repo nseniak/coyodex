@@ -1,7 +1,8 @@
 ---
 name: coyodex-retro
 description: >
-  Run a retrospective on a coyodex build that has ALREADY finished — read the map it produced and
+  FOR THE COYODEX DEVELOPER, not for users of coyodex: run a retrospective on a coyodex
+  build that has ALREADY finished — read the map it produced and
   the chat transcript that produced it, and report what the run says about the tools and the method:
   quality signals, process signals, and the friction, bugs and gaps worth fixing. Report only; it
   changes nothing. Use whenever the user wants to "review the build", "what went wrong in that
@@ -10,6 +11,8 @@ description: >
 ---
 
 # coyodex-retro
+
+**For the coyodex DEVELOPER, not for users of coyodex.** It exists to answer "did my change to the method or the tooling make the maps worse?", which is a question only someone changing coyodex asks. A user's map evolves incrementally alongside their code; a from-scratch rebuild is a first-run event for them, so the repeated rebuilding this command depends on is a developer habit.
 
 A retrospective on ONE finished build. **Read the method doc and follow it; don't work from
 memory.**

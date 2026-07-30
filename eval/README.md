@@ -1,5 +1,7 @@
 # coyodex-eval — method-quality regression harness
 
+**For the coyodex DEVELOPER, not for users of coyodex.** It exists to answer "did my change to the method or the tooling make the maps worse?", which is a question only someone changing coyodex asks. A user's map evolves incrementally alongside their code; a from-scratch rebuild is a first-run event for them, so the repeated rebuilding this command depends on is a developer habit.
+
 This package answers one question: **did a change to the coyodex method or tooling make the maps it
 produces better or worse?** You keep the project's committed `.coyodex/project-map.md` as the
 **baseline**; the eval rebuilds a **fresh** map with the current method and compares the two. If quality
