@@ -11,13 +11,17 @@ while this one says *not part of the analysed tree at all*.
 
 So the repo declares it once, next to the map:
 
-    .coyodex/.ignore        # gitignore-like patterns, one per line
-    trapdoor/               # the trap fixture — deliberately broken code
+    # .coyodex/.ignore — gitignore-like patterns, one per line.
+    # A comment goes on its OWN line: `pattern  # why` is one literal pattern (see below).
+    # the trap fixture — deliberately broken code
+    trapdoor/
     generated/**
     !generated/hand_written.py
 
 Semantics (a deliberate SUBSET of gitignore, matched by `coyodex.pathmatch`):
-  * blank lines and `#` comments are skipped
+  * blank lines and `#` comments are skipped — `#` opens a comment only at the START of a line,
+    exactly as in gitignore, so `pattern  # why` is NOT a pattern plus a comment. That line is
+    reported as bad rather than stored (see `parse_ignore`); write `\\#` for a literal `#`
   * a wildcard-free pattern matches that path AND everything beneath it (`trapdoor/` == `trapdoor`)
   * `*`/`?` match within one path segment; `**` spans segments
   * a leading `!` negates, and the LAST matching line wins — so a broad ignore can be narrowed
@@ -42,6 +46,7 @@ reassuring total.
 """
 from __future__ import annotations
 
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -138,6 +143,11 @@ _EMPTY = IgnoreSpec()
 _CACHE: dict[tuple[str, int, int], IgnoreSpec] = {}
 
 
+#: Whitespace followed by an unescaped `#` — the trailing-comment mistake. `\#` does not match,
+#: because the character after the whitespace is the backslash, so an escaped hash is left alone.
+_TRAILING_COMMENT = re.compile(r"\s#")
+
+
 def parse_ignore(text: str, path: Path | None = None) -> IgnoreSpec:
     """Parse ignore-file text. Pure, so the semantics are testable without a filesystem."""
     rules: list[tuple[bool, str]] = []
@@ -148,6 +158,18 @@ def parse_ignore(text: str, path: Path | None = None) -> IgnoreSpec:
             continue
         negated = line.startswith("!")
         pattern = line[1:].strip() if negated else line
+        # A trailing `# comment` is the one syntax mistake worth its own detection. `#` opens a
+        # comment only at the start of a line (gitignore's rule, which this file follows), so
+        # `internal/    # private ops runbooks` is ONE literal pattern containing spaces, and it can
+        # never match a real path. A live build wrote all three of its patterns that way — copied
+        # from the method's own example, which showed them with trailing comments — and got only the
+        # soft "decided nothing" advisory, so it deleted the file instead of fixing the syntax. That
+        # silence cost a coverage decision, so report the line here. NOT stripped: stripping would
+        # diverge from gitignore and make a real `a #b` path unmatchable. `\#` escapes a literal `#`.
+        if _TRAILING_COMMENT.search(pattern):
+            bad.append(raw)
+            continue
+        pattern = pattern.replace("\\#", "#")
         # `matches` treats an all-slash pattern as matching nothing; report it rather than storing a
         # rule that can never fire (a silently-dead pattern reads as coverage the author never got).
         if not pattern.strip("/"):

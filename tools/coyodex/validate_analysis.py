@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import ast
 import re
+from collections.abc import Sequence
 from pathlib import Path
 
 # Grammar (regexes, membership rule) lives in grammar, shared with the parser — one grammar.
@@ -277,12 +278,19 @@ def ignore_disclosure(root: Path) -> list[str]:
     # Cheap gate FIRST (a stat, then a cached parse): this now runs on every validate, including the
     # bare gate, and the overwhelmingly common case is no ignore file at all. Walking the tree only
     # to discover there was nothing to disclose would tax every run for a repo that declared nothing.
-    if not load_ignore(root):
-        return []
+    #
+    # `IgnoreSpec.__bool__` is `bool(rules)` — "does this file remove anything" — so a file whose
+    # EVERY line is unusable is falsy. Gating on truthiness alone therefore made the worst case
+    # silent: a build that wrote all three of its patterns with trailing comments got zero output
+    # instead of a report naming all three, which is the exact input this disclosure exists for.
+    # Bad lines are disclosed on their own, before any walk (there is nothing to walk).
+    spec0 = load_ignore(root)
+    if not spec0:
+        return _bad_line_disclosure(spec0.bad_lines)
     walk = iter_source_files(root)
     spec = walk.ignore
     if not spec:      # raced away between the two reads — nothing to disclose
-        return []
+        return _bad_line_disclosure(spec.bad_lines)
     rep = ignore_report(spec, walk.ignore_hits)
     out: list[str] = [
         f"`.coyodex/.ignore` is in effect: {walk.skipped_ignored} file(s) removed from the analysed "
@@ -296,11 +304,22 @@ def ignore_disclosure(root: Path) -> list[str]:
                    f"this tree: {', '.join(rep.unused)} — nothing removed (and for a `!` line, "
                    f"nothing put back). A typo, a tree that moved, or a path already covered by a "
                    f"built-in exclusion; either way it reads as coverage the author never got.")
-    if rep.bad_lines:
-        out.append(f"`.coyodex/.ignore` has {len(rep.bad_lines)} line(s) that match nothing and "
-                   f"were dropped: {', '.join(repr(b) for b in rep.bad_lines)} — a pattern that "
-                   f"cannot fire reads as coverage the author never got.")
+    out.extend(_bad_line_disclosure(rep.bad_lines))
     return out
+
+
+def _bad_line_disclosure(bad_lines: Sequence[str]) -> list[str]:
+    """The unusable-line report, on its own so it can be emitted with or without a walk — a file whose
+    every line is bad has no rules to walk with, and that is precisely the case worth reporting."""
+    if not bad_lines:
+        return []
+    return [f"`.coyodex/.ignore` has {len(bad_lines)} unusable line(s), DROPPED — nothing they name "
+            f"is excluded from the analysed tree: {', '.join(repr(b) for b in bad_lines)}. A pattern "
+            f"that cannot fire reads as coverage the author never got. Two causes: the pattern strips "
+            f"to nothing (e.g. `/`), or it carries a trailing `# comment`, which this file does not "
+            f"support — `#` opens a comment only at the START of a line (gitignore's rule), so "
+            f"`pattern  # why` is one literal pattern containing spaces. Put the comment on its own "
+            f"line above the pattern, or write `\\#` for a literal `#`."]
 
 
 def granularity_advisory(n_components: int, root: Path) -> list[str]:

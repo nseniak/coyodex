@@ -602,11 +602,18 @@ genuinely outside the product: a fixture tree built to exercise the tooling, a v
 tracks, a scratch area. `.gitignore` cannot say it (the files are meant to be committed), so the repo
 declares it once next to the map, in gitignore-like patterns:
 
+Write it to `.coyodex/.ignore`. **A `#` opens a comment only at the START of a line** — the same rule
+gitignore uses — so a comment goes on its own line above the pattern it explains. `pattern  # why` is
+ONE literal pattern containing spaces; it can never match a real path, and `validate` reports the
+line as unusable and drops it (write `\#` if you need a literal `#` in a pattern):
+
 ```
-.coyodex/.ignore
-trapdoor/                 # a wildcard-free pattern covers everything beneath it
-generated/**              # * stays inside one segment; ** spans segments
-!generated/hand_written.py   # ! negates; the LAST matching line wins
+# the trap fixture — a wildcard-free pattern covers everything beneath it
+trapdoor/
+# * stays inside one segment; ** spans segments
+generated/**
+# ! negates; the LAST matching line wins
+!generated/hand_written.py
 ```
 
 Everything that measures the tree honours it — the weight tree, the component expectation E, and

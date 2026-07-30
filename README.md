@@ -89,11 +89,17 @@ Some committed code isn't part of what the map should describe — a vendored co
 your build checks in, a fixture tree. Since it *is* committed, `.gitignore` can't say that. List it
 in `.coyodex/.ignore` instead:
 
+A `#` starts a comment only at the beginning of a line, so each comment goes on its own line —
+`pattern  # why` is read as one long pattern and matches nothing:
+
 ```
 # .coyodex/.ignore — one pattern per line, gitignore-style
-fixtures/broken_repo/        # a plain name covers everything under it
-generated/**                 # * stays inside one folder level, ** goes deeper
-!generated/hand_written.py   # ! puts something back; the last matching line wins
+# a plain name covers everything under it
+fixtures/broken_repo/
+# * stays inside one folder level, ** goes deeper
+generated/**
+# ! puts something back; the last matching line wins
+!generated/hand_written.py
 ```
 
 Anything listed here is left out of the map's sizing and out of its coverage checks.

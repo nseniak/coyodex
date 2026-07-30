@@ -2129,6 +2129,56 @@ def test_the_unlinked_units_group_is_counted_too():
     assert not any("no component or entry point sets" in w for w in ws)
 
 
+def make_token_tagged_deployment_model(placed: int = 1, total: int = 12) -> ProjectModel:
+    """A map with `total` components of which only `placed` carry `runs_in` — the shape that defeats
+    the all-or-nothing canary. `total` is above `_RUNS_IN_UNPLACED_MIN` on purpose: the share alone is
+    meaningless on a tiny map (1-of-2 is 50% and reads as a finding over a single component), so the
+    check needs a real number of unplaced components before it means anything."""
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="api")]
+    m.components = [Component(id=f"C{i}", name=f"Comp{i}", purpose="does",
+                              entry_point=f"src/c{i}.py:1") for i in range(1, total + 1)]
+    for i, c in enumerate(m.components):
+        c.runs_in = ["api"] if i < placed else []
+    return m
+
+
+def test_one_tagged_component_does_not_buy_silence_for_the_rest():
+    """The graded hole the all-or-nothing canary leaves.
+
+    `_deployment_unlinked_warning` early-returns on `any(c.runs_in ...)`, so ONE tagged component out
+    of many satisfies it and the other N-1 go unreported — the Deployment view is then almost empty
+    with no signal, which is the same failure that check was written for, one component short of
+    triggering it. Measured on two real maps (100% and 97% placed), the new canary is silent."""
+    m = make_token_tagged_deployment_model(placed=1, total=12)
+    ws = warnings_of(m)
+    assert not any("no component or entry point sets" in w for w in ws)   # the old one is blind here
+    assert any("component(s) set `runs_in`" in w and "the other 11" in w for w in ws)
+
+
+def test_a_fully_placed_map_says_nothing_about_placement_share():
+    """The other half: a real map must not be nagged. Silence is the correct output at 100%."""
+    m = make_token_tagged_deployment_model(placed=12, total=12)
+    assert not any("component(s) set `runs_in`" in w for w in warnings_of(m))
+
+
+def test_a_small_map_is_not_nagged_about_a_single_unplaced_component():
+    """A share needs an absolute floor. 1-of-2 placed is 50% but the gap is one component, and an
+    existing 2-component fixture caught the share-only version of this check nagging."""
+    m = make_token_tagged_deployment_model(placed=1, total=2)
+    assert not any("component(s) set `runs_in`" in w for w in warnings_of(m))
+
+
+def test_the_placement_share_group_is_silenced_and_counted_with_its_family():
+    """It is a `runs_in` advisory, so the one recorded literal must swallow it — and SAY it did."""
+    m = make_token_tagged_deployment_model(placed=1, total=12)
+    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: deliberately unplaced.")]
+    ws = warnings_of(m)
+    assert not any("component(s) set `runs_in`" in w for w in ws)
+    hits = [w for w in ws if "suppressed by the recorded `runs-in` exception" in w]
+    assert len(hits) == 1 and "most components unplaced" in hits[0], ws
+
+
 def test_no_runs_in_record_means_no_count_line_at_all():
     """The count reports a suppression; with nothing suppressed it must not appear."""
     m = make_multi_family_runs_in_model()

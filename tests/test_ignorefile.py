@@ -12,12 +12,14 @@ Every surface that narrows the tree must say so, and the tests below pin that.
 """
 from __future__ import annotations
 
+import re
 import sys
 import tempfile
+import textwrap
 from pathlib import Path
 from typing import cast
 
-from coyodex import validate_analysis
+from coyodex import ignorefile as ignorefile_mod, validate_analysis
 from coyodex.ignorefile import IGNORE_REL, ignore_report, load_ignore, parse_ignore
 from coyodex.preindex_lib import expected_components, iter_source_files
 from coyodex.viewer.build_graph import GraphDict
@@ -100,6 +102,69 @@ def test_a_pattern_that_can_never_fire_is_reported_not_stored():
     assert spec.bad_lines == ("/",)
 
 
+def test_a_trailing_comment_is_reported_not_stored_and_not_stripped():
+    # The live defect: a build wrote all three of its patterns as `pattern  # why`, copied from the
+    # method's own example. `#` opens a comment only at the START of a line, so each line became one
+    # literal pattern containing spaces, matched nothing, and produced only the soft "decided nothing"
+    # advisory — so the build deleted the file instead of fixing the syntax, silently dropping its
+    # coverage intent. Reported here as unusable. NOT stripped: stripping would diverge from the
+    # gitignore semantics `pathmatch` mirrors, and would make a real `a #b` path unmatchable.
+    spec = parse_ignore("internal/     # private ops runbooks\nplans/  # drafts\ntrapdoor/\n")
+    assert spec.patterns == ["trapdoor/"]
+    assert spec.bad_lines == ("internal/     # private ops runbooks", "plans/  # drafts")
+    assert not spec.match("internal/ops.py")      # the intent was NOT silently honoured
+
+
+def make_documented_ignore_examples() -> list[tuple[str, str]]:
+    """(source, text) for every `.ignore` example a reader can copy: the two docs' fenced blocks and
+    the module's own docstring. Read from the REAL files — a retyped copy guards nothing, which is
+    how the first version of this test passed while `README.md` and `ignorefile.py` still taught the
+    broken syntax the parser had just started rejecting."""
+    repo = Path(__file__).resolve().parent.parent
+    out: list[tuple[str, str]] = []
+    for rel in ("method.md", "README.md"):
+        text = (repo / rel).read_text(encoding="utf-8")
+        for i, block in enumerate(re.findall(r"```\n(.*?)```", text, re.S)):
+            # An `.ignore` example is a fenced block naming the file, or one made only of patterns
+            # and comments where at least one line ends in `/` or carries a glob.
+            if ".coyodex/.ignore" in block or "!generated/hand_written.py" in block:
+                out.append((f"{rel} block {i}", block))
+    # The docstring's example is the contiguous indented block starting at its `.coyodex/.ignore`
+    # banner — NOT every indented line, which would sweep in wrapped prose from the bullets below it.
+    doc = (ignorefile_mod.__doc__ or "").splitlines()
+    start = next((i for i, ln in enumerate(doc) if ln.strip().startswith("# .coyodex/.ignore")), None)
+    if start is not None:
+        block: list[str] = []
+        for ln in doc[start:]:
+            if not ln.strip():
+                break
+            block.append(ln)
+        out.append(("ignorefile.py docstring", textwrap.dedent("\n".join(block))))
+    return out
+
+
+def test_every_documented_ignore_example_parses_clean():
+    """The examples are what a build copies, so a doc that teaches unusable syntax IS the defect.
+
+    This is the one test that would have caught the whole class: the live build's three broken
+    patterns were copied verbatim from `method.md`, and after that example was fixed `README.md` and
+    this module's own docstring still taught the same thing."""
+    examples = make_documented_ignore_examples()
+    assert len(examples) >= 3, f"expected the two docs plus the docstring, found: {examples}"
+    for source, text in examples:
+        spec = parse_ignore(text)
+        assert spec.bad_lines == (), f"{source} teaches syntax the parser rejects: {spec.bad_lines}"
+        assert spec.patterns, f"{source} produced no usable pattern at all"
+
+
+def test_an_escaped_hash_stays_a_literal_pattern_character():
+    # The escape hatch the trailing-comment check needs, so a real path containing `#` is reachable.
+    spec = parse_ignore("weird\\#dir/\n")
+    assert spec.patterns == ["weird#dir/"]
+    assert spec.bad_lines == ()
+    assert spec.match("weird#dir/a.py")
+
+
 def test_an_absent_file_ignores_nothing():
     with tempfile.TemporaryDirectory() as td:
         root = make_repo(Path(td))
@@ -172,11 +237,30 @@ def test_validate_says_nothing_when_there_is_no_ignore_file():
         assert validate_analysis.ignore_disclosure(make_repo(Path(td))) == []
 
 
+def test_a_file_whose_every_line_is_unusable_is_still_disclosed():
+    """The worst case, and the one the first version of this fix made SILENT.
+
+    `IgnoreSpec.__bool__` is `bool(rules)`, so a file where every line is bad is falsy, and the
+    disclosure's cheap `if not load_ignore(root): return []` gate swallowed it whole — a build that
+    wrote all three of its patterns with trailing comments went from a soft advisory to no output at
+    all. That is exactly the input this disclosure exists for, so it must never depend on some line
+    having survived parsing."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_repo(Path(td), ignore="internal/  # ops\nplans/  # drafts\n.claude/  # cfg\n")
+        out = validate_analysis.ignore_disclosure(root)
+        assert len(out) == 1, out
+        assert "3 unusable line(s)" in out[0]
+        for pat in ("internal/", "plans/", ".claude/"):
+            assert pat in out[0]
+
+
 def test_validate_calls_out_a_line_that_parsed_to_nothing():
+    # Assert the BEHAVIOUR — a second disclosure line naming the dropped line — not the wording.
     with tempfile.TemporaryDirectory() as td:
         root = make_repo(Path(td), ignore="trapdoor/\n/\n")
         out = validate_analysis.ignore_disclosure(root)
-        assert len(out) == 2 and "match nothing" in out[1]
+        assert len(out) == 2
+        assert "'/'" in out[1] and "DROPPED" in out[1]
 
 
 # --- per-rule hits: an unused pattern is the one that can lie -------------------

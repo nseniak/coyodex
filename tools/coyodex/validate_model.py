@@ -26,6 +26,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from coyodex import balance_lib, grammar
+from coyodex.audit_model import l2_worklist_model
 from coyodex.anchors import (
     DIR_ANCHOR as _DIR_ANCHOR,
     FILE_ANCHOR as _ANCHOR_LINE,
@@ -1271,13 +1272,19 @@ def _grounding_warnings(m: ProjectModel) -> list[str]:
     3-11% on live builds, silence here is the difference between "verified" and "plausible". Only
     ever advisory: grounding is a judgement about effort, never a well-formedness property."""
     g = m.grounding
-    claim_surface = len(m.edges) + len(m.security)
+    # The claim surface is whatever `audit` will actually put on the worklist, so call the same
+    # builder instead of estimating it. The old estimate `len(edges) + len(security)` under-counted by
+    # a third on a live map — 280 against a real worklist of 398, because the worklist also carries
+    # entry-point cadence, ownership and dep-usage claims — and a lead sizing the Phase-4 skeptic
+    # fan-out off this number under-provisioned by that third. No circular import: `audit_model` does
+    # not import this module, and both are stdlib-only (the cli.py dependency firewall).
     if g is None:
+        claim_surface = len(l2_worklist_model(m))     # only needed for this message
         if claim_surface >= 20:
-            return [f"No `grounding` record: this map's ~{claim_surface} L2 claims (backbone edges + "
-                    "security surfaces) were never challenged by fresh-context skeptics, and nothing "
-                    "in the map says so. Run the Phase-4 grounding pass, or record the decision in "
-                    "`grounding` (claims_total/claims_grounded/claims_refuted + note)"]
+            return [f"No `grounding` record: this map's {claim_surface} L2 claims (the same worklist "
+                    "`coyodex audit` builds) were never challenged by fresh-context skeptics, and "
+                    "nothing in the map says so. Run the Phase-4 grounding pass, or record the "
+                    "decision in `grounding` (claims_total/claims_grounded/claims_refuted + note)"]
         return []
     if g.claims_total <= 0:
         return []
@@ -1649,7 +1656,18 @@ def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
     no `deployment[]` means the dimension was legitimately not harvested (a different, coarser choice).
 
     Raw, like its siblings: the recorded `runs-in` literal (deliberately unmapped — everything runs
-    in one unit) is applied and COUNTED once, in `_runs_in_family_warnings`."""
+    in one unit) is applied and COUNTED once, in `_runs_in_family_warnings`.
+
+    The all-or-nothing test below leaves a graded hole, so a second, weaker canary follows it: ONE
+    tagged component out of eighty-six satisfies `any(...)` and buys silence for the other eighty-five,
+    and the Deployment view is then 99% empty with no signal at all — the same failure this check was
+    written for, one component short of triggering it. `_deployment_mostly_unplaced_warning` covers
+    that. It is deliberately NOT the check a review proposed here (report that no ENTRY POINT carries
+    `runs_in`): measured on two real maps, zero self-started entry points had an ambiguous or missing
+    host, because every entry point inherits an unambiguous unit from its placed component, so that
+    check would fire on both maps and on every well-built map — a noise generator, not a signal. The
+    one real sub-case (a self-started entry point with no host at all) is already reported by
+    `_deployment_placement_warnings`."""
     if not m.deployment:
         return []
     if any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points):
@@ -1659,6 +1677,43 @@ def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
             f"name the deployment unit(s) whose process runs it (method.md 'Deployment & topology'); "
             f"`runs` edges are then derived. If the code truly runs as one unit, record the literal "
             f"`runs-in` under a 'Balance exceptions' extras heading to silence this."]
+
+
+#: Below this share of components carrying `runs_in`, the Deployment view is mostly empty and says so.
+#: Set well under the two reference maps (100% and 97% placed) so a real, near-complete map is silent;
+#: the shape this catches is a token tagging of a handful of components, which the all-or-nothing
+#: canary above cannot see because one tagged component satisfies its `any(...)`.
+_RUNS_IN_PLACED_THIN = 0.60
+#: …AND this many components must actually be unplaced. A share alone is meaningless on a small map:
+#: 1-of-2 placed is 50% and reads as a finding, when the "gap" is a single component. The absolute
+#: count is what makes the Deployment view empty, so both conditions must hold. Caught immediately by
+#: an existing 2-component fixture, which the share-only version nagged.
+_RUNS_IN_UNPLACED_MIN = 8
+
+
+def _deployment_mostly_unplaced_warning(m: ProjectModel) -> list[str]:
+    """Advisory: units exist and SOME component is placed, but most are not — the graded version of
+    `_deployment_unlinked_warning`, whose `any(...)` early-return a single tagged component defeats.
+
+    Same family as its siblings, so the recorded `runs-in` literal silences it with them."""
+    if not m.deployment or not m.components:
+        return []
+    placed = sum(1 for c in m.components if c.runs_in)
+    # Defer to the all-or-nothing canary ONLY when it actually fires. It early-returns on
+    # `any(c.runs_in) or any(ep.runs_in)`, so with zero components placed but one ENTRY POINT tagged
+    # it stays silent — and an unconditional `placed == 0: return []` here left that case, the worst
+    # one, reported by nobody.
+    if placed == 0 and not any(ep.runs_in for ep in m.entry_points):
+        return []
+    unplaced = len(m.components) - placed
+    share = placed / len(m.components)
+    if share >= _RUNS_IN_PLACED_THIN or unplaced < _RUNS_IN_UNPLACED_MIN:
+        return []
+    return [f"only {placed} of {len(m.components)} component(s) set `runs_in` ({share:.0%}) across "
+            f"{len(m.deployment)} deployment unit(s) — the Deployment view maps the other {unplaced} "
+            f"to nothing. A partial tagging reads as a finished topology, so name the unit(s) for "
+            f"those {unplaced}, or record the literal `runs-in` under a 'Balance exceptions' extras "
+            f"heading if they are deliberately unplaced."]
 
 
 def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
@@ -1796,6 +1851,7 @@ _RUNS_IN_FAMILY: tuple[tuple[str, Callable[[ProjectModel], list[str]]], ...] = (
     ("deployment quality (unit naming, formula-filled `runs_in`, unlinked units, thread hosts, "
      "variant tagging)", _deployment_quality_warnings_raw),
     ("deployment units enumerated but nothing links code to them", _deployment_unlinked_warning),
+    ("most components unplaced across the enumerated units", _deployment_mostly_unplaced_warning),
     ("self-started entry points with no host unit", _deployment_placement_warnings),
     ("messaging channels no participant's `runs_in` can place", _messaging_placement_warnings),
 )
@@ -2494,9 +2550,17 @@ def _check_view_fresh(m: ProjectModel, model_path: Path) -> list[str]:
 
 def validate_model(m: ProjectModel, model_path: Path | None = None, *,
                    check_sources: bool = False, check_coverage: bool = False,
-                   repo_root: Path | None = None) -> tuple[list[str], list[str]]:
+                   repo_root: Path | None = None,
+                   stats: dict[str, int] | None = None) -> tuple[list[str], list[str]]:
     """Every semantic check over a structurally-valid model; returns (problems, warnings) exactly
-    like the v1 validator did, so the profiler and the CLI share one orchestration."""
+    like the v1 validator did, so the profiler and the CLI share one orchestration.
+
+    `stats` is an optional out-param (same shape as `assemble`'s reconcile stats) recording HOW MUCH
+    the repo-reading flags actually read. It exists because `validate` and `validate --check-sources`
+    printed byte-identical output on a clean map — so a lead who passed the flag on every run could
+    not tell whether it did anything, and a silent flag is indistinguishable from a no-op one. Counts
+    come from the same iterators the checks walk, never a re-derivation, so the number cannot drift
+    from the work."""
     if (check_sources or check_coverage) and model_path is None and repo_root is None:
         raise ValueError("model_path or repo_root is required when check_sources/check_coverage is set")
     problems: list[str] = []
@@ -2558,6 +2622,10 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     roots = _source_roots(model_path, repo_root) if model_path is not None else (
         [repo_root.resolve()] if repo_root is not None else [])
     if check_sources:
+        if stats is not None:
+            # The same two iterators the checks below walk, so the reported count IS the work done.
+            stats["anchors_checked"] = len(_anchor_pairs(m))
+            stats["call_sites_checked"] = len(call_site_anchors(m))
         problems.extend(check_entity_sources_model(m, roots))
         # A nonexistent-file anchor means a wrong repo-root prefix or a stale path reached the map — a
         # real error, not a nudge. Blocking (B3) so `validate --check-sources` is the deterministic
@@ -2587,6 +2655,9 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         cov_dirs = frozenset(_recorded_coverage_dirs(m))  # 'Coverage exceptions': conscious coarse-fold
         if walk_root is not None:
             refs = referenced_paths(m, walk_root.resolve())
+            if stats is not None:
+                stats["coverage_refs"] = len(refs)
+                stats["coverage_recorded_dirs"] = len(cov_dirs)
             warnings.extend(compression_coverage_from_refs(refs, walk_root, cov_dirs))
             # File-level coverage: the loose-file slice-seam gap the directory-granular check above
             # misses (a component-less .py inside an otherwise-covered dir). Same refs + recorded dirs.
@@ -2707,6 +2778,21 @@ def _inventory(m: ProjectModel) -> str:
     return ", ".join(f"{k}:{v}" for k, v in sorted(counts.items()) if v)
 
 
+def _checked_summary(stats: dict[str, int], check_sources: bool, check_coverage: bool) -> str:
+    """One phrase naming what the repo-reading flags read, or "" when neither flag ran."""
+    parts: list[str] = []
+    if check_sources:
+        # "considered", not "read": the operative-line check skips prose files, unresolvable paths
+        # and out-of-range lines, so the count is what was handed to it, not what it opened.
+        parts.append(f"{stats.get('anchors_checked', 0)} anchor(s) resolved against the repo, "
+                     f"{stats.get('call_sites_checked', 0)} call-site anchor(s) considered for an "
+                     f"operative line")
+    if check_coverage:
+        parts.append(f"coverage measured over {stats.get('coverage_refs', 0)} map-referenced path(s) "
+                     f"with {stats.get('coverage_recorded_dirs', 0)} recorded coverage exception(s)")
+    return " · ".join(parts)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
@@ -2761,9 +2847,17 @@ def main(argv: list[str] | None = None) -> int:
             triggers = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
             print(f"- {cid} ({comp_name.get(cid, cid)}): <why>   # {triggers}")
         return 0
+    vstats: dict[str, int] = {}
     problems, warnings = validate_model(m, path, check_sources=check_sources,
-                                        check_coverage=check_coverage, repo_root=repo_root)
+                                        check_coverage=check_coverage, repo_root=repo_root,
+                                        stats=vstats)
     print(f"Inventory — {_inventory(m)}")
+    # What the repo-reading flags actually read. Without this, `validate` and
+    # `validate --check-sources` print byte-identical output on a clean map, so passing the flag is
+    # indistinguishable from forgetting it — and a lead cannot tell a silent pass from a no-op.
+    checked = _checked_summary(vstats, check_sources, check_coverage)
+    if checked:
+        print(f"Checked — {checked}")
     if warnings:
         print("\nVALIDATION WARNINGS (non-blocking):")
         for w in warnings:
@@ -2773,8 +2867,14 @@ def main(argv: list[str] | None = None) -> int:
         for p in problems:
             print(f"  - {p}")
         return 1
+    # "Schema OK" is the line a reader treats as "the gates are clean", so it must say what clean was
+    # measured OVER. The counts are on the `Checked —` line above rather than repeated here; what this
+    # line adds is the scope — and, when no repo-reading flag ran, the fact that it did not.
     print("Schema OK — structure valid, all IDs defined once, all references resolve, every HP "
-          "step names a use case, every flow step well-formed.")
+          "step names a use case, every flow step well-formed."
+          + (" Repo-reading checks ran (see `Checked —` above)." if checked else
+             " NOTE: no repo-reading check ran — pass --check-sources / --check-coverage for the "
+             "anchor-existence and coverage passes."))
     return 0
 
 

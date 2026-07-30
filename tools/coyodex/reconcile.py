@@ -262,6 +262,12 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
                 set_counts["bucket"] += 1
     stats["reconcile_set"] = set_counts
     dropped_total = 0
+    # Riding steps left unhealed by a report-only drop. Counted here so `assemble` can put the number
+    # in its FINAL summary line: the per-directive detail below is multi-line and a live build cut it
+    # with `| tail -4`, so the two orphaned steps only surfaced a full round later at the next
+    # validate, costing a fragment edit + re-assemble + a re-run of apply-drift. A count that rides
+    # the last line cannot be truncated away by reading the tail.
+    unhealed_total = 0
     for de in rec.drop_edges:
         verb = de.verb.strip().lower()
         kept = [e for e in m.edges
@@ -282,6 +288,7 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             drop_riding(m, riding)
             notes.append(f"note: {head} and {len(riding)} riding step(s).")
         elif riding:
+            unhealed_total += len(riding)
             lines = [f"note: {head}. {len(riding)} flow step(s) rode it and now attribute "
                      f"{de.src}↔{de.dst} with no backing edge (validate warns on C↔E; C↔C is silent) — "
                      f"reconcile them via `drop_steps` / `repoint`, or edit by hand:"]
@@ -291,4 +298,5 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
         else:
             notes.append(f"note: {head}.")
     stats["reconcile_edges_dropped"] = dropped_total
+    stats["reconcile_riding_unhealed"] = unhealed_total
     return notes

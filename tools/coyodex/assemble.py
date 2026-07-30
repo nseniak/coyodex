@@ -459,8 +459,20 @@ def main(argv: list[str] | None = None) -> int:
         sc = rec_stats.get("reconcile_set", {})
         set_summary = (", ".join(f"{k}: {v}" for k, v in sc.items() if v)
                        if isinstance(sc, dict) else "") or "nothing"
+        # The unhealed-riding-step count is repeated here AND carried in `_assemble_digest`'s `ops:`
+        # string. The digest is the one that matters: this note is line 9 of 13 on a fresh assemble,
+        # so `| tail -4` — how a live build actually read this output — cuts it, and the two orphaned
+        # steps only surfaced a round later at validate, costing a fragment edit, a re-assemble and a
+        # re-run of apply-drift. Repeating it costs a clause and covers the reader who sees only the
+        # head as well as the one who sees only the tail.
+        unhealed = rec_stats.get("reconcile_riding_unhealed", 0)
+        unhealed_tail = (
+            f" {unhealed} flow step(s) still attribute a dropped edge and are NOT healed — heal them "
+            f"with `drop_steps` / `repoint` (a report-only C→E drop leaves the step, which the next "
+            f"assemble re-derives into the edge you just dropped)."
+            if isinstance(unhealed, int) and unhealed else "")
         print(f"note: reconcile applied — set {{{set_summary}}}; "
-              f"drop_edges: {rec_stats.get('reconcile_edges_dropped', 0)} edge(s).")
+              f"drop_edges: {rec_stats.get('reconcile_edges_dropped', 0)} edge(s).{unhealed_tail}")
     elif out_dir is not None and (out_dir / "reconcile.json").exists():
         # S8: a reconcile file is present but was NOT passed — an assemble without it silently reverts
         # every synthesis/trace assignment. Nudge, don't guess (the lead may have meant to omit it).
@@ -510,6 +522,14 @@ def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict
         ops.append("reconcile set " + "/".join(f"{k}:{v}" for k, v in sc.items() if v))
     if rec_stats.get("reconcile_edges_dropped"):
         ops.append(f"reconcile drop_edges {rec_stats['reconcile_edges_dropped']}")
+    # Unhealed riding steps belong HERE, in the digest, not on the reconcile note further up: the
+    # note is line 9 of 13 on a fresh assemble, so `| tail -4` (how a live build read this output)
+    # cuts it, while the digest is always in the last three lines. A report-only `drop_edges` that
+    # leaves steps behind is a pending edit — the next assemble re-derives the C→E edge from the
+    # surviving step — so it has to reach the reader who only sees the tail.
+    if rec_stats.get("reconcile_riding_unhealed"):
+        ops.append(f"UNHEALED riding steps {rec_stats['reconcile_riding_unhealed']} "
+                   f"(heal with drop_steps/repoint)")
     parts.append("ops: " + ("; ".join(ops) if ops else "none"))
     return " | ".join(parts)
 
