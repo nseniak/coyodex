@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for `internal/scripts/archive_map.py` — moving a map aside for a from-scratch rebuild.
+"""Tests for `eval/scripts/archive_map.py` — moving a map aside for a from-scratch rebuild.
 
 This script moves a repo's only copy of its map, so the tests are about not losing it: the archive
 never nests inside itself, `.gitignore` stays where the next assemble expects it, an interrupted run
@@ -18,7 +18,12 @@ from pathlib import Path
 
 import pytest
 
-_SCRIPT = Path(__file__).resolve().parent.parent / "internal" / "scripts" / "archive_map.py"
+_SCRIPT = Path(__file__).resolve().parent.parent / "eval" / "scripts" / "archive_map.py"
+# A plain assert, not a skip: the script is TRACKED now, so its absence is a broken checkout rather
+# than an optional extra. It used to live under the git-ignored `internal/`, which made this import
+# fail at collection time in any clone but the author's — the project's own required gate, red for
+# everyone else, and invisible to the author.
+assert _SCRIPT.is_file(), f"{_SCRIPT} is missing — it is tracked, so this is a broken checkout"
 _spec = importlib.util.spec_from_file_location("archive_map", _SCRIPT)
 assert _spec and _spec.loader
 archive_map = importlib.util.module_from_spec(_spec)

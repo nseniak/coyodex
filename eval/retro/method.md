@@ -22,7 +22,7 @@ complementary; neither replaces the other.
 **`dev-rebuilds/` is a coyodex-DEVELOPER convention and nothing a user of coyodex should have.** A
 user's map evolves incrementally with their code, so a from-scratch rebuild is a first-run event and
 they never accumulate previous maps. Rebuilding repeatedly is what someone changing coyodex does, and
-`internal/scripts/archive_map.py` is what files each snapshot. No production code path reads the
+`eval/scripts/archive_map.py` is what files each snapshot. No production code path reads the
 directory — a *build* compares against nothing, deliberately. So expect it in the coyodex author's own
 repos and expect it to be ABSENT everywhere else; when it is missing, say Step 1's comparison was
 skipped rather than treating it as a defect.
