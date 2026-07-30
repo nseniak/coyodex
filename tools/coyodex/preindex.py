@@ -437,6 +437,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if "--report" in argv:
         return report(argv)
+    # Reject unknown options. `preindex` accepted anything and exited 0, so `--outt out.json` (a
+    # one-letter typo) silently dropped the flag, wrote to the DEFAULT path and reported success —
+    # rewriting a committed artifact the caller never meant to touch. It was the last command in the
+    # package that did not refuse, and the only one where the silence is destructive.
+    known = {"--root", "--out", "--since", "--pairs", "--max-depth", "--report", "--in", "--depth",
+             "--top"}
+    unknown = [a for a in argv if a.startswith("-") and a not in known]
+    if unknown:
+        print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
+        return 2
     root = Path(_arg(argv, "--root", ".") or ".").resolve()
     out_path = Path(_arg(argv, "--out", str(root / ".coyodex" / "preindex.json")) or "")
     since = _arg(argv, "--since")

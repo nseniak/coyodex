@@ -735,6 +735,13 @@ def _run(argv: list[str] | None = None) -> int:
         return 0
     verbose = "--verbose" in argv
     as_json = "--json" in argv
+    # Reject unknown options rather than ignoring them. `--jsonn` used to produce the human report and
+    # exit 0: a build asking for JSON silently got prose, with no signal that its flag was a typo.
+    # Every sibling command already refuses; these two were the exceptions.
+    unknown = [a for a in argv if a.startswith("-") and a not in ("--verbose", "--json")]
+    if unknown:
+        print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
+        return 2
     if as_json:
         set_full_lists(True)   # whole `detail` member lists; reset by main()'s finally
     args = [a for a in argv if not a.startswith("-")]

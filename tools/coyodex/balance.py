@@ -184,6 +184,12 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         focus = argv[i + 1]
         del argv[i:i + 2]
+    unknown = [a for a in argv if a.startswith("-") and a != "--json"]
+    if unknown:
+        # Silently ignoring a typo'd flag is the same defect `audit` had: the command runs, prints
+        # something plausible and exits 0, so the caller cannot tell its request was dropped.
+        print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
+        return 2
     args = [a for a in argv if not a.startswith("-")]
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():

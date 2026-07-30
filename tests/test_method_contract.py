@@ -43,6 +43,8 @@ so the suite is green and each test is now a standing regression gate on the fix
 from __future__ import annotations
 
 import ast
+import tempfile
+import json
 import re
 import sys
 import textwrap
@@ -865,3 +867,84 @@ def test_every_balance_exceptions_literal_the_method_prescribes_is_read_by_a_too
         "literal(s) the method tells a build to record under 'Balance exceptions' that no tool reads: "
         + ", ".join(unread) + " — a record nothing consumes is a decision the build cannot act on, "
         "and a typo in it is undetectable")
+
+
+def make_documented_json_blocks() -> list[tuple[str, str, str]]:
+    """(source, kind, RAW TEXT) for every ```json block in the method docs that a build copies.
+
+    The raw text, not a re-serialized parse: an earlier version parsed each block and handed
+    `json.dumps(obj)` to the loader, which normalized away every purely textual defect — a trailing
+    comma, a smart quote, an inline `//`. It read the real file and then threw the file's text away.
+
+    Kind comes from the surrounding PROSE (which loader the doc names), never from the loader's own
+    key allowlist. Classifying by allowlist meant a misspelled top-level key — exactly the defect worth
+    catching — silently reclassified the block as "other" and removed it from scope."""
+    out: list[tuple[str, str, str]] = []
+    for doc in METHOD_DOCS:
+        if not doc.is_file():
+            continue
+        text = doc.read_text(encoding="utf-8")
+        for hit in re.finditer(r"```json\n(.*?)```", text, re.S):
+            before = text[max(0, hit.start() - 800):hit.start()].lower()
+            if "--rules" in before or "coyodex reconcile" in before:
+                kind = "reconcile-rules"
+            elif "reconcile" in before or "drop_edges" in before:
+                kind = "reconcile"
+            else:
+                kind = "other"
+            out.append((f"{doc.name}:{text[:hit.start()].count(chr(10)) + 1}", kind, hit.group(1)))
+    return out
+
+
+def test_every_documented_json_block_is_valid_json():
+    """The most basic doc defect, and the one the loader tests used to EXEMPT: a fenced ```json block
+    a build copies that is not JSON at all. The earlier `except ValueError: continue` was justified as
+    skipping "elided sketches"; there are none, so its only live effect was to hide real syntax
+    errors."""
+    bad: list[str] = []
+    for src, _kind, raw in make_documented_json_blocks():
+        try:
+            json.loads(raw)
+        except ValueError as e:
+            bad.append(f"{src}: {e}")
+    assert not bad, "```json block(s) a build copies that are not valid JSON:\n  " + "\n  ".join(bad)
+
+
+def test_every_reconcile_example_in_the_method_loads_through_the_real_loader():
+    """A build copies these blocks verbatim, so a shape the loader rejects is a doc-shaped bug.
+
+    This is the class the `.coyodex/.ignore` example proved: the method showed `pattern  # comment`,
+    the parser treated the whole line as one pattern, three live patterns matched nothing, and the
+    build deleted the file instead of fixing the syntax. The fix was worth little until a test read the
+    example out of the REAL doc — so the same discipline applies to the JSON the method teaches, and
+    `drop_edges`'s shape was undocumented until a build read `reconcile.py`'s source to find it."""
+    from coyodex.reconcile import ReconcileError, load_reconcile
+
+    examples = [(src, raw) for src, kind, raw in make_documented_json_blocks()
+                if kind == "reconcile"]
+    assert len(examples) >= 2, f"expected the `set` and `drop_edges` examples, found {examples}"
+    for src, raw in examples:
+        try:
+            rec = load_reconcile(raw, src)          # the RAW text a build copies
+        except ReconcileError as e:
+            raise AssertionError(f"{src} is not loadable by `assemble --reconcile`: {e}") from e
+        assert not rec.is_empty(), f"{src} parsed to an EMPTY reconcile — the example teaches nothing"
+
+
+def test_every_reconcile_rules_example_in_the_method_is_accepted_by_the_generator():
+    """The `coyodex reconcile --rules` input shape, same reasoning. It ran 0 times in 3 measured
+    builds, so its documented example is the only thing a build has to go on."""
+    from coyodex.reconcile_build import RuleError, load_rules
+
+    examples = [(src, raw) for src, kind, raw in make_documented_json_blocks()
+                if kind == "reconcile-rules"]
+    assert examples, "expected the --rules example the method documents"
+    for src, raw in examples:
+        with tempfile.TemporaryDirectory() as td:
+            p = Path(td) / "rules.json"
+            p.write_text(raw, encoding="utf-8")     # the RAW text a build copies
+            try:
+                rules = load_rules(p)
+            except RuleError as e:
+                raise AssertionError(f"{src} is not loadable by `coyodex reconcile --rules`: {e}") from e
+        assert rules, f"{src} parsed to zero rules — the example teaches nothing"
