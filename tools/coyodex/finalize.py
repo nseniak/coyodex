@@ -139,29 +139,38 @@ def _audit_leg(map_path: Path) -> Leg:
     advisory = [f"{f.get('check')}: {f.get('location')} — {f.get('message')}"
                 for f in findings if f.get("severity") != "CONTRADICTION"]
     counts = payload.get("theme_counts") or {}
-    live_worklist = len(payload.get("worklist") or [])
+    live_claims = [str(w.get("claim", "")) for w in (payload.get("worklist") or [])
+                   if isinstance(w, dict)]
+    live_worklist = len(live_claims)
     note = (f"{live_worklist} L2 claims on the grounding worklist"
             + (f" ({', '.join(f'{k}:{v}' for k, v in counts.items())})" if counts else ""))
-    stale = _stale_grounding_pin(map_path, live_worklist)
+    stale = _stale_grounding_pin(map_path, live_claims)
     if stale:
         advisory.append(stale)
     return Leg("audit", RAN, blocking=blocking, advisory=advisory, note=note)
 
 
-def _stale_grounding_pin(map_path: Path, live_worklist: int) -> str | None:
-    """The map's `grounding` counts describe a worklist that no longer exists.
+def _stale_grounding_pin(map_path: Path, live_claims: list[str]) -> str | None:
+    """The map's `grounding` record no longer describes the map's claim surface.
 
-    `grounding write` PINS `claims_total` to the worklist the skeptics were given, and that is
-    correct — recomputing it would emit `claims_challenged exceeds claims_total` on a map whose
-    claims were since rewritten. But reconciling a refutation rewrites the claim and orphans its
-    verdict, so a record written BEFORE the reconcile overstates coverage, and nothing catches it:
-    `validate` blocks only `claims_challenged > claims_total`, and a stale pin is self-consistent
-    (418 = 418 passes).
+    `grounding write` PINS `claims_total` to the worklist the skeptics were given, and that pin is
+    load-bearing: recomputing the split against the finished map yields `refuted 0`, because the
+    claims a reconcile deletes are exactly the refuted ones. But reconciling a refutation rewrites
+    its claim, so the pinned surface and the shipped one legitimately differ, and for a long time a
+    build had no way to say so — the pinned record raised this advisory, re-running against a fresh
+    worklist was REFUSED, and explaining it in `note` changed nothing. Three documented escapes, all
+    closed. `grounding write --map` is the escape: it records the delta and a DIGEST of the live
+    claim set.
 
-    A live build shipped `418 of 418 challenged` on a map whose worklist held 415 and of which only
-    403 could still be matched, and quoted 418 in its commit message as fact. This advisory is the
-    thing that would have said so. The fix is ordering: write the record AFTER the last reconcile
-    edit."""
+    So the check is the digest, not the counts. `claims_total - claims_superseded +
+    claims_added_since == live` is a tautology given the writer's own refusals (they force the vote
+    set to equal the pinned set), so it closes for every input and proves nothing; and every
+    size-based test is blind to a 1-for-1 rewrite, which is the shape a reconcile actually produces.
+    A live build shipped `418 of 418 challenged` on a map whose worklist held 415, and quoted the
+    418 in its commit message as fact — the digest is what makes that impossible to do silently.
+
+    Falls back to the old count comparison when no digest is stored, so a record written without
+    `--map`, or by an older build, behaves exactly as before."""
     try:
         doc = json.loads(map_path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -170,13 +179,34 @@ def _stale_grounding_pin(map_path: Path, live_worklist: int) -> str | None:
     if not isinstance(g, dict):
         return None
     pinned = g.get("claims_total")
-    if not isinstance(pinned, int) or pinned <= 0 or pinned == live_worklist:
+    if not isinstance(pinned, int) or pinned <= 0:
+        return None
+    # Both sides over the DE-DUPLICATED claim set: `build_record` de-duplicates the pinned side, and
+    # two sides counted by different rules measure the rule rather than the map.
+    live_set = set(live_claims)
+    stored_digest = g.get("live_claims_digest")
+    if isinstance(stored_digest, str) and stored_digest:
+        from coyodex.grounding import live_claims_digest
+        if live_claims_digest(live_set) == stored_digest:
+            return None
+        superseded = g.get("claims_superseded", 0)
+        added = g.get("claims_added_since", 0)
+        return (f"grounding: the record's `live_claims_digest` does not match this map's claim "
+                f"surface. It was written against a map with {pinned} pinned claim(s), "
+                f"{superseded} superseded and {added} added since the pin; this map's audit "
+                f"worklist holds {len(live_set)}. Something changed the claims AFTER "
+                f"`grounding write` ran — re-run it as the last step before the final assemble:\n"
+                f"  coyodex grounding write --worklist <pinned.json> --map {map_path} "
+                f"--verdicts <…> --out .coyodex/build-fragments/grounding.json")
+    if pinned == len(live_set):
         return None
     return (f"grounding: the record is pinned to a worklist of {pinned} claim(s), but this map's "
-            f"audit worklist holds {live_worklist} — the record was written BEFORE the last claim "
-            f"was rewritten, so `claims_challenged` describes a surface that no longer exists. "
-            f"Re-run `coyodex grounding write` against a freshly captured worklist as the LAST "
-            f"write before assemble, or say in `grounding.note` which snapshot the counts describe.")
+            f"audit worklist holds {len(live_set)} — and the record does not say why. Reconciling a "
+            f"refutation rewrites its claim, so the two legitimately differ; record the delta with "
+            f"`coyodex grounding write --worklist <pinned.json> --map <this map> --verdicts <…>`, "
+            f"which stores how many claims were superseded and added and a digest of the live "
+            f"surface. Do NOT re-pin against a fresh worklist: the claims a reconcile deletes are "
+            f"the refuted ones, so that records `refuted 0`.")
 
 
 def _drift_leg(map_path: Path, repo: Path, verdicts: list[Path]) -> Leg:

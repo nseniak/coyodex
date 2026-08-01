@@ -147,3 +147,51 @@ def test_the_same_skeptic_id_in_two_files_is_still_reported():
         b.write_text(json.dumps({"grounding": [row]}), encoding="utf-8")
         _loaded, notes = load_verdicts([str(a), str(b)])
         assert len(notes) == 1 and "SAME `skeptic` id" in notes[0]
+
+
+def test_the_record_states_the_delta_when_given_the_live_map():
+    """Without `--map` the record cannot say how the shipped map differs from the pinned worklist,
+    and a build had no legal answer to the staleness advisory."""
+    from coyodex.grounding import build_record, live_claims_digest
+    pinned = ["a", "b", "c"]
+    rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
+    live = ["a", "b", "d"]                       # c was reconciled away; d was authored since
+    rec, errors = build_record(pinned, rows, live_claims=live)
+    assert not errors
+    assert rec["claims_total"] == 3 and rec["claims_challenged"] == 3
+    assert rec["claims_superseded"] == 1 and rec["claims_added_since"] == 1
+    assert rec["live_claims_digest"] == live_claims_digest(live)
+
+
+def test_without_the_live_map_the_record_is_exactly_as_before():
+    """`--map` is optional: a build that never reconciles a count-changing refutation needs none of
+    this, and its record must not grow fields it cannot fill honestly."""
+    from coyodex.grounding import build_record
+    pinned = ["a", "b"]
+    rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
+    rec, errors = build_record(pinned, rows)
+    assert not errors
+    for field in ("claims_superseded", "claims_added_since", "live_claims_digest"):
+        assert field not in rec, field
+
+
+def test_the_digest_ignores_order_and_duplication():
+    """Both sides are counted over the de-duplicated claim SET — two sides counted by different
+    rules measure the rule instead of the map."""
+    from coyodex.grounding import live_claims_digest
+    assert live_claims_digest(["b", "a"]) == live_claims_digest(["a", "b"])
+    assert live_claims_digest(["a", "a", "b"]) == live_claims_digest(["a", "b"])
+    assert live_claims_digest(["a", "b"]) != live_claims_digest(["a", "c"])
+
+
+def test_the_pinned_split_is_never_recomputed_against_the_live_map():
+    """The `refuted 0` trap, pinned as a test. The claims a reconcile deletes are exactly the
+    REFUTED ones, so a split measured against the live worklist reports that nothing was ever found
+    wrong. The split must stay pinned no matter what `--map` says."""
+    from coyodex.grounding import build_record
+    pinned = ["kept", "refuted-and-rewritten"]
+    rows = [{"claim": "kept", "grounded": True, "evidence": "f.py:1"},
+            {"claim": "refuted-and-rewritten", "grounded": False, "note": "wrong"}]
+    rec, _ = build_record(pinned, rows, live_claims=["kept", "the rewritten form"])
+    assert rec["claims_refuted"] == 1, "the refutation must survive the live comparison"
+    assert rec["claims_superseded"] == 1

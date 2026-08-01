@@ -204,9 +204,10 @@ def test_a_grounding_record_pinned_to_a_stale_worklist_is_flagged():
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g",
                                  "grounding": {"claims_total": 418, "claims_challenged": 418}}),
                      encoding="utf-8")
-        msg = _stale_grounding_pin(p, 415)
+        msg = _stale_grounding_pin(p, [f"claim {i}" for i in range(415)])
         assert msg and "418" in msg and "415" in msg
-        assert _stale_grounding_pin(p, 418) is None, "an in-sync pin must be silent"
+        assert _stale_grounding_pin(p, [f"c{i}" for i in range(418)]) is None, (
+            "an in-sync pin must be silent")
 
 
 def test_a_map_with_no_grounding_record_is_not_flagged():
@@ -214,7 +215,7 @@ def test_a_map_with_no_grounding_record_is_not_flagged():
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "m.json"
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g"}), encoding="utf-8")
-        assert _stale_grounding_pin(p, 415) is None
+        assert _stale_grounding_pin(p, [f"c{i}" for i in range(415)]) is None
 
 
 # ── the commit message's two other lies ──────────────────────────────────────────────────────────
@@ -260,3 +261,39 @@ def test_an_unreadable_map_says_so_instead_of_omitting_the_shape():
     p.write_text("{truncated", encoding="utf-8")          # as a concurrent write would leave it
     block = finalize.gate_block(report, report.map_sha256)
     assert "Shape: UNAVAILABLE" in block and "Grounding: UNAVAILABLE" in block
+
+
+def test_a_recorded_delta_makes_the_pin_advisory_go_quiet():
+    """The escape that did not exist. All three documented ways out were closed: the pinned record
+    raised this advisory, re-running against a fresh worklist was REFUSED, and explaining it in
+    `note` changed nothing. `grounding write --map` records the delta and a digest of the live
+    claim set, and that is what the gate now reads."""
+    from coyodex.finalize import _stale_grounding_pin
+    from coyodex.grounding import live_claims_digest
+    live = [f"claim {i}" for i in range(444)]
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {
+            "claims_total": 446, "claims_challenged": 446, "claims_superseded": 6,
+            "claims_added_since": 4, "live_claims_digest": live_claims_digest(live)}}),
+            encoding="utf-8")
+        assert _stale_grounding_pin(p, live) is None
+
+
+def test_the_digest_catches_a_one_for_one_rewrite_that_the_counts_cannot():
+    """The reason the gate is a digest and not arithmetic. Replace k claims with k others and every
+    size-based check still closes — and a reconcile that rewrites a claim IS 1-for-1 by
+    construction; 4 of 6 superseded claims on the build this came from were exactly that shape."""
+    from coyodex.finalize import _stale_grounding_pin
+    from coyodex.grounding import live_claims_digest
+    live = [f"claim {i}" for i in range(444)]
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {
+            "claims_total": 446, "claims_challenged": 446, "claims_superseded": 6,
+            "claims_added_since": 4, "live_claims_digest": live_claims_digest(live)}}),
+            encoding="utf-8")
+        swapped = live[:-1] + ["a claim authored after the record was written"]
+        assert len(swapped) == len(live), "the count must be unchanged, or this proves nothing"
+        msg = _stale_grounding_pin(p, swapped)
+        assert msg and "live_claims_digest" in msg, msg

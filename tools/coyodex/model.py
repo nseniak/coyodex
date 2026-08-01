@@ -428,6 +428,30 @@ class Grounding:
     claims_confirmed: int = 0
     claims_refuted: int = 0
     claims_unverifiable: int = 0
+
+    #: THE PIN vs THE LIVE MAP. The five counts above are pinned to the worklist the skeptics were
+    #: GIVEN, and that pin is load-bearing: recomputing them against the finished map yields
+    #: `refuted 0`, because the claims a reconcile deletes are exactly the refuted ones. (Reproduced;
+    #: see `grounding.py`.) But reconciling a refutation rewrites its claim, so the pinned surface and
+    #: the shipped one legitimately differ — and a build had no way to say so. Every documented escape
+    #: was closed: the pinned record raised a staleness advisory, re-running against a fresh worklist
+    #: was REFUSED, and explaining the snapshot in `note` changed nothing. These three fields are how
+    #: a build states the delta instead of arguing with the gate.
+    #:
+    #: `claims_superseded` — pinned claims the reconcile rewrote or removed, so their verdict names
+    #: nothing in the shipped map. `claims_added_since` — claims the shipped map has that did not
+    #: exist when the worklist was pinned. Both are EXPLANATIONS, deliberately not proof: they are
+    #: sizes, and `total - superseded + added_since == live` is a TAUTOLOGY given the writer's own
+    #: refusals, so it can never fail and must never be read as a reconciliation.
+    #:
+    #: `live_claims_digest` is the proof. sha256 over the sorted, de-duplicated live claim strings at
+    #: the moment the record was written. It is the one field a build cannot plausibly fabricate, and
+    #: the only one that catches a 1-for-1 rewrite — where k claims are replaced by k others, the
+    #: count stays put and every size-based check closes while the surface has changed underneath.
+    claims_superseded: int = 0
+    claims_added_since: int = 0
+    live_claims_digest: str = ""
+
     note: str = ""                   # how claims were triaged when coverage is partial
 
 

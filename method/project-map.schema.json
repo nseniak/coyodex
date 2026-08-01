@@ -1166,6 +1166,15 @@
         "claims_unverifiable": {
           "type": "integer"
         },
+        "claims_superseded": {
+          "type": "integer"
+        },
+        "claims_added_since": {
+          "type": "integer"
+        },
+        "live_claims_digest": {
+          "type": "string"
+        },
         "note": {
           "type": "string"
         }

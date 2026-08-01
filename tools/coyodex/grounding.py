@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Iterable
 from pathlib import Path
 
 from coyodex import subverb_help
@@ -33,6 +34,7 @@ from coyodex.anchor_drift import load_verdicts
 
 USAGE = """usage: coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
                                [--out <fragment.json>] [--note <text>] [--json]
+                               [--map <project-map.json>]
        coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--json]
 
 `report` prints WHICH claims were refuted, tied, unverifiable or unvoted — the reconcile worklist
@@ -72,9 +74,29 @@ def _verdict_bucket(rows: list[dict]) -> str:
     return "unverifiable"
 
 
+def live_claims_digest(claims: "Iterable[str]") -> str:
+    """sha256 over the sorted, DE-DUPLICATED claim set — the shipped map's claim surface, as one
+    value a later gate can recompute.
+
+    This is the only part of the record that is proof rather than explanation. The count-based
+    fields cannot catch a 1-for-1 rewrite (k claims replaced by k others leaves every size
+    unchanged), and a reconcile that rewrites a claim IS 1-for-1 by construction — 4 of the 6
+    superseded claims on the build this was written for were exactly that shape. De-duplicated
+    because `build_record` de-duplicates the pinned side, and two sides counted by different rules
+    is how a check ends up measuring the rule instead of the map."""
+    import hashlib
+    joined = "\n".join(sorted(set(claims)))
+    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+
+
 def build_record(worklist_claims: list[str], grounding_rows: list[dict],
-                 note: str = "") -> tuple[dict[str, object], list[str]]:
-    """The `grounding` block, plus the refusals that must stop it being written."""
+                 note: str = "", live_claims: "list[str] | None" = None,
+                 ) -> tuple[dict[str, object], list[str]]:
+    """The `grounding` block, plus the refusals that must stop it being written.
+
+    `live_claims` is the worklist of the ASSEMBLED map, when the caller passed `--map`. It is what
+    lets the record state how the pinned surface and the shipped one differ, instead of leaving a
+    build to argue with a staleness advisory that had no legal answer."""
     votes: dict[str, list[dict]] = {}
     for r in grounding_rows:
         claim = r.get("claim")
@@ -120,6 +142,15 @@ def build_record(worklist_claims: list[str], grounding_rows: list[dict],
         "claims_refuted": counts["refuted"],
         "claims_unverifiable": counts["unverifiable"],
     }
+    if live_claims is not None:
+        live = set(live_claims)
+        # SIZES, and explicitly not a proof: `total - superseded + added_since == live` is a
+        # tautology given the two refusals above (they force `votes` == `pinned`), so it closes for
+        # every input and can never fail. It is here to tell a reader WHAT moved; the digest is what
+        # tells a gate whether anything moved.
+        record["claims_superseded"] = len(pinned - live)
+        record["claims_added_since"] = len(live - pinned)
+        record["live_claims_digest"] = live_claims_digest(live)
     if note:
         record["note"] = note
     return record, errors
@@ -207,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
     helped = subverb_help.handle(USAGE, verb, rest)
     if helped is not None:
         return helped
-    worklist_path = out_path = None
+    worklist_path = out_path = map_path = None
     verdicts: list[str] = []
     note = ""
     as_json = False
@@ -216,13 +247,15 @@ def main(argv: list[str] | None = None) -> int:
         a = rest[i]
         if a == "--json":
             as_json = True
-        elif a in ("--worklist", "--verdicts", "--out", "--note"):
+        elif a in ("--worklist", "--verdicts", "--out", "--note", "--map"):
             i += 1
             if i >= len(rest):
                 print(f"ERROR: {a} needs a value", file=sys.stderr)
                 return 2
             if a == "--worklist":
                 worklist_path = rest[i]
+            elif a == "--map":
+                map_path = rest[i]
             elif a == "--verdicts":
                 verdicts.append(rest[i])
             elif a == "--out":
@@ -248,7 +281,20 @@ def main(argv: list[str] | None = None) -> int:
     if verb == "report":
         print(format_report(claims, rows, as_json=as_json))
         return 0
-    record, errors = build_record(claims, rows, note)
+    live_claims = None
+    if map_path:
+        # The LIVE claim surface, read from the assembled map this record describes. Not a second
+        # captured file: a file goes stale between capture and write, and the whole defect here is a
+        # record describing a surface that moved.
+        try:
+            from coyodex.audit_model import l2_worklist_model
+            from coyodex.model import load_model
+            live_model = load_model(Path(map_path).read_text(encoding="utf-8"))
+            live_claims = [w.claim for w in l2_worklist_model(live_model)]
+        except Exception as e:
+            print(f"ERROR: --map {map_path} could not be read as a map ({e})", file=sys.stderr)
+            return 2
+    record, errors = build_record(claims, rows, note, live_claims=live_claims)
     if errors:
         for e in errors:
             print(f"ERROR: {e}", file=sys.stderr)
@@ -262,7 +308,10 @@ def main(argv: list[str] | None = None) -> int:
         Path(out_path).write_text(text + "\n", encoding="utf-8")
         print(f"wrote {out_path}: {record['claims_challenged']} of {record['claims_total']} claim(s) "
               f"challenged — {record['claims_confirmed']} confirmed, {record['claims_refuted']} "
-              f"refuted, {record['claims_unverifiable']} unverifiable")
+              f"refuted, {record['claims_unverifiable']} unverifiable"
+              + (f" · vs the live map: {record['claims_superseded']} superseded, "
+                 f"{record['claims_added_since']} added since the pin" if live_claims is not None
+                 else " · no --map, so the record does not state how the live map differs"))
     elif as_json:
         print(text)
     else:

@@ -1287,8 +1287,12 @@ def _any_grounding_count(g: Grounding) -> bool:
 
     Gating on `claims_challenged > 0` was wrong: a record of `total 42, challenged 0, confirmed 39,
     refuted 3` — 42 verdicts against 0 challenges — slipped past the arithmetic entirely."""
+    # The pin-delta fields are here too: a record carrying ONLY `claims_added_since: 4` would
+    # otherwise skip every check below, which is the same shape of hole this function was written
+    # to close.
     return bool(g.claims_total or g.claims_challenged or g.claims_confirmed
-                or g.claims_refuted or g.claims_unverifiable)
+                or g.claims_refuted or g.claims_unverifiable
+                or g.claims_superseded or g.claims_added_since or g.live_claims_digest)
 
 
 def _grounding_split_sum(g: Grounding) -> int:
@@ -1398,13 +1402,25 @@ def _check_grounding_arithmetic(m: ProjectModel) -> list[str]:
     negatives = {name: val for name, val in (
         ("claims_total", g.claims_total), ("claims_challenged", g.claims_challenged),
         ("claims_confirmed", g.claims_confirmed), ("claims_refuted", g.claims_refuted),
-        ("claims_unverifiable", g.claims_unverifiable)) if val < 0}
+        ("claims_unverifiable", g.claims_unverifiable),
+        ("claims_superseded", g.claims_superseded),
+        ("claims_added_since", g.claims_added_since)) if val < 0}
     if negatives:
         # A negative count can BALANCE the equality below (confirmed 13 + refuted -3 == challenged 10),
         # so the sum check alone does not make the record meaningful.
         problems.append(f"`grounding` has negative count(s): "
                         f"{', '.join(f'{k}={v}' for k, v in sorted(negatives.items()))} — these are "
                         f"tallies of claims, so every one is zero or more.")
+    if g.claims_superseded > g.claims_total:
+        # Bounded by TOTAL, not by `challenged`. A superseded claim is one that was PINNED and then
+        # rewritten away; whether it also got a verdict is a different question. The two are equal
+        # today only because `grounding write` refuses an unvoted pinned claim, and its own error
+        # message already offers "challenge a smaller worklist deliberately" as the way out — so a
+        # record of total 100 / challenged 50 with 60 claims reconciled away is legitimate, and
+        # bounding by `challenged` would block it for being correct.
+        problems.append(f"`grounding` records {g.claims_superseded} superseded claim(s) against a "
+                        f"pinned worklist of {g.claims_total} — a superseded claim is one that WAS "
+                        f"pinned, so this cannot exceed `claims_total`.")
     if _grounding_split_attempted(g):
         split = _grounding_split_sum(g)
         if split != g.claims_challenged:

@@ -836,3 +836,35 @@ def test_the_new_assertions_are_all_registered():
     ids = [a.id for a in P.score_turns(()).assertions]
     for new in (18, 19, 21, 22):
         assert new in ids, (new, ids)
+
+
+def test_13_allows_the_final_assemble_that_the_method_now_prescribes():
+    """The record lives in a FRAGMENT, so a final assemble is the only way it reaches the map — and
+    `grounding write --map` needs the assembled map to measure the live claim surface. Before this
+    carve-out the assertion scored 0 for every build that followed the method: the redirection in
+    `assemble … 2>&1 | tail -3` alone matched the file-write pattern."""
+    turns = (make_turn(0, make_bash("coyodex grounding write --worklist wl.json --map m.json "
+                                    "--out .coyodex/build-fragments/grounding.json")),
+             make_turn(1, make_bash("coyodex assemble .coyodex/build-fragments/*.json "
+                                    "--out .coyodex --reconcile .coyodex/reconcile.json 2>&1 | tail -3")))
+    a = P.score_turns(turns).by_id()[13]
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_13_still_catches_a_hand_edit_after_the_record():
+    turns = (make_turn(0, make_bash("coyodex grounding write --worklist wl.json --out g.json")),
+             make_turn(1, make_write(".coyodex/build-fragments/sec.json", "{}")))
+    assert P.score_turns(turns).by_id()[13].observed == 0
+
+
+def test_14_accepts_a_differing_total_when_the_record_states_the_delta():
+    """`total != live` is now LEGAL and expected: reconciling a refutation rewrites its claim, and
+    the pin cannot be recomputed (that records `refuted 0`). What the assertion asks is whether the
+    record SAYS why."""
+    turns = (make_turn(0, make_bash("coyodex grounding write --worklist wl.json --map m.json", uid="g"),
+                       results=(("g", "wrote g.json: 446 of 446 claim(s) challenged · vs the live "
+                                      "map: 6 superseded, 4 added since the pin"),)),
+             make_turn(1, make_bash("coyodex audit m.json --json", uid="a"),
+                       results=(("a", "444 L2 claims on the grounding worklist"),)))
+    a = P.score_turns(turns).by_id()[14]
+    assert (a.observed, a.of) == (1, 1), a

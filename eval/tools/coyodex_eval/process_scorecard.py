@@ -747,6 +747,15 @@ def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assert
             if wrote_at is None or turn.index <= wrote_at:
                 continue
             touches = call.text()
+            # An `assemble` after `grounding write` is now PRESCRIBED, not a violation: the record
+            # lives in a fragment, so a final assemble is the only way it reaches the map, and
+            # `grounding write --map` needs the assembled map to measure the live claim surface.
+            # Assemble is idempotent on claims (verified over the real fragments: 444, 444, 444), so
+            # it cannot invalidate what the record just measured. Before this carve-out the
+            # assertion scored 0 for every build that followed the method — the redirection in
+            # `assemble … 2>&1 | tail -3` alone matched `_WRITES_A_FILE`.
+            if call.name == "Bash" and _invokes(call.command, "assemble"):
+                continue
             if (FRAGMENT_DIR in touches or "project-map.json" in touches) and (
                     call.name in ("Write", "Edit", "NotebookEdit")
                     or (call.name == "Bash" and _WRITES_A_FILE.search(call.command))):
@@ -759,36 +768,48 @@ def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assert
                      f"written at turn {wrote_at}; {len(edited_after)} later map/fragment write(s)")
 
 
-def assert_14_grounding_total_matches_the_worklist(turns: Sequence[Turn],
-                                                   ) -> Assertion:
-    """14 — the coverage number the run REPORTS matches the one its own tools printed.
+def assert_14_grounding_total_matches_the_worklist(turns: Sequence[Turn]) -> Assertion:
+    """14 — the grounding record accounts for the map's live claim surface.
 
-    The companion to 13, read from the run rather than the map: `anchor-drift` prints `challenged N
-    of M worklist claim(s)`, and a build whose grounding record says `T of T` with T != M is quoting
-    a stale pin. The live build printed `challenged 403 of 415` and committed `418 of 418`.
+    It used to require `claims_total == live worklist`. That is now the WRONG rule: reconciling a
+    refutation rewrites its claim, so the pinned surface and the shipped one legitimately differ,
+    and the pin cannot simply be recomputed — the claims a reconcile deletes are exactly the refuted
+    ones, so re-pinning records `refuted 0`. A build following the current method deliberately
+    ships `total != live` and states the delta instead, via `grounding write --map`, which records
+    `claims_superseded`, `claims_added_since` and a digest of the live claim set.
 
-    `of` is 1 when both numbers appear; `observed` is 1 when they agree."""
+    So this now asks: when the totals differ, does the record SAY why? A bare mismatch with no
+    delta recorded is the original failure — a live build shipped `418 of 418 challenged` against a
+    worklist of 415 and quoted the 418 in its commit message as fact."""
     pinned: int | None = None
-    live: tuple[int, int] | None = None
-    ev: list[Evidence] = []
+    live: int | None = None
+    explained = False
+    at: int | None = None
+    results = results_by_tool_use_id(turns)
     for turn in turns:
-        for result in turn.tool_results:
-            text = result.content
-            m = re.search(r"(\d+)\s+of\s+(\d+)\s+claim\(s\)\s+challenged", text)
+        for call in turn.tool_calls:
+            blob = call.text() + "\n" + results.get(call.id, "")
+            m = re.search(r"(\d+)\s+of\s+(\d+)\s+claim\(s\)\s+challenged", blob)
             if m:
-                pinned = int(m.group(2))
-            d = re.search(r"challenged\s+(\d+)\s+of\s+(\d+)\s+worklist claim\(s\)", text)
-            if d:
-                live = (int(d.group(1)), int(d.group(2)))
-                ev.append(Evidence(turn.index, {"challenged": d.group(1), "worklist": d.group(2)}))
+                pinned, at = int(m.group(2)), turn.index
+                explained = ("live_claims_digest" in blob or "superseded" in blob
+                             or (call.name == "Bash" and "--map" in call.text()
+                                 and _invokes(call.command, "grounding")))
+            # Two shapes carry the live size: `audit`/`finalize` say "N L2 claims on the grounding
+            # worklist", `anchor-drift` says "challenged N of M worklist claim(s)".
+            w = (re.search(r"(\d+)\s+L2 claims on the grounding worklist", blob)
+                 or re.search(r"challenged\s+\d+\s+of\s+(\d+)\s+worklist claim\(s\)", blob))
+            if w:
+                live = int(w.group(1))
     if pinned is None or live is None:
-        return Assertion(14, "grounding total matches the live worklist", 0, 0, (),
-                         "the two numbers were not both printed in this transcript")
-    agrees = pinned == live[1]
-    return Assertion(14, "grounding total matches the live worklist", 1 if agrees else 0, 1,
-                     () if agrees else tuple(ev),
-                     f"record pinned {pinned}; worklist held {live[1]}")
-
+        return Assertion(14, "grounding accounts for the live worklist", 0, 0, (),
+                         "no grounding record and audit worklist seen together")
+    ok = pinned == live or explained
+    ev = () if ok else (Evidence(at or 0, {"pinned": str(pinned), "live worklist": str(live),
+                                           "delta recorded": "no"}),)
+    return Assertion(14, "grounding accounts for the live worklist", 1 if ok else 0, 1, ev,
+                     f"record pinned {pinned}; worklist held {live}"
+                     + ("; delta recorded" if explained else "; no delta recorded"))
 
 def assert_15_no_advisory_rechecked_with_a_narrower_filter(turns: Sequence[Turn]) -> Assertion:
     """15 — a gate re-run is not filtered more narrowly than the run that surfaced the finding.
