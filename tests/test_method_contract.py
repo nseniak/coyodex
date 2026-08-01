@@ -573,6 +573,9 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     "Deps marked `deployment_linked` but which are a code call target": "drop the marker",
     "{} deployment advisory/advisories suppressed by recorded scoped exception(s)":
         "this IS the escape being reported; it must never be silenceable itself",
+    "recorded `runs_in` exception key(s) no check reads":
+        "the opposite of an advisory needing an escape — it reports that the escape the operator "
+        "wrote is a typo, and names the five that work",
     "a bare `runs-in` exception is recorded and silences NOTHING":
         "the opposite of an advisory needing an escape — it exists to say the escape the operator "
         "wrote does not work, and names the five scoped lines that do",
@@ -839,11 +842,11 @@ def make_prescribed_balance_literals() -> tuple[str, ...]:
     # near-vacuous-test failure this layer keeps finding elsewhere.
     #   (a) "the literal `runs-in`" / "record the literal `store`"  — a silencing escape
     #   (b) "`security-granularity: <value>`"                        — a declaration
-    escape_form = re.compile(r"literal\s+\*{0,2}`([a-z][a-z-]+)`", re.IGNORECASE)
+    escape_form = re.compile(r"literal\s+\*{0,2}`([a-z][a-z/-]+)`", re.IGNORECASE)
     # The declaration form requires a HYPHEN: every literal in this vocabulary is hyphenated
     # (`security-granularity`, `channel-ends`, `entity-flows`, `runs-in`), while the un-hyphenated
     # backtick-plus-colon hits nearby are field names and prose (`dep:`, `path:`, `why:`, `step:`).
-    declare_form = re.compile(r"`([a-z]+(?:-[a-z]+)+)\s*:")
+    declare_form = re.compile(r"`([a-z]+(?:[-/][a-z]+)+)\s*:")
     found: set[str] = set()
     for para in re.split(r"\n\s*\n", text):
         if not near.search(para):
@@ -956,3 +959,29 @@ def test_every_reconcile_rules_example_in_the_method_is_accepted_by_the_generato
             except RuleError as e:
                 raise AssertionError(f"{src} is not loadable by `coyodex reconcile --rules`: {e}") from e
         assert rules, f"{src} parsed to zero rules — the example teaches nothing"
+
+
+def test_every_scoped_runs_in_literal_appears_in_the_method_prose():
+    """The REVERSE direction of the audit above, and the gap that let a contract change ship half
+    done: the tool stopped honouring a bare `runs-in`, and `method.md` / `method/model.md` went on
+    teaching it for another commit. Build agents read those files on every run, so a lead following
+    the method would have written the dead literal, silenced nothing, and gained an advisory.
+
+    The existing test only checks method-literal -> tool. `runs-in` is still a recognised literal
+    (it is what the "silences nothing" complaint keys off), so that direction stayed green."""
+    from coyodex.balance_lib import RUNS_IN_SCOPES
+    prose = "\n".join((REPO_ROOT / rel).read_text(encoding="utf-8")
+                      for rel in ("method.md", "method/model.md"))
+    missing = [scope for scope in RUNS_IN_SCOPES if f"`{scope}`" not in prose]
+    assert not missing, (
+        f"scoped `runs_in` literal(s) the tool honours but the method never names: {missing} — a "
+        f"build cannot record an escape it has never been told about")
+
+
+def test_the_method_no_longer_teaches_the_bare_runs_in_escape():
+    """It silences nothing now, and a doc that still prescribes it costs a build an advisory plus
+    the turns spent working out why the record did not take."""
+    prose = "\n".join((REPO_ROOT / rel).read_text(encoding="utf-8")
+                      for rel in ("method.md", "method/model.md"))
+    for dead in ("the literal **`runs-in`** silences", "the literal `runs-in` silences"):
+        assert dead not in prose, dead

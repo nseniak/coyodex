@@ -74,7 +74,10 @@ def run_eval(project: str, map_text: str, repo_root: Path | None = None, *,
 def load_baseline(baseline_dir: Path) -> tuple[MapProfile | None, JudgeReport | None]:
     """Read `profile.json` / `judge.json` from a baseline dir; each is None when absent (first run)."""
     prof_p, judge_p = baseline_dir / "profile.json", baseline_dir / "judge.json"
-    prof = MapProfile.from_json(prof_p.read_text(encoding="utf-8")) if prof_p.exists() else None
+    try:
+        prof = MapProfile.from_json(prof_p.read_text(encoding="utf-8")) if prof_p.exists() else None
+    except ValueError as e:
+        raise SystemExit(f"ERROR: {e}")
     judge = JudgeReport.from_json(judge_p.read_text(encoding="utf-8")) if judge_p.exists() else None
     return prof, judge
 

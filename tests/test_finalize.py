@@ -206,8 +206,10 @@ def test_a_grounding_record_pinned_to_a_stale_worklist_is_flagged():
                      encoding="utf-8")
         msg = _stale_grounding_pin(p, [f"claim {i}" for i in range(415)])
         assert msg and "418" in msg and "415" in msg
-        assert _stale_grounding_pin(p, [f"c{i}" for i in range(418)]) is None, (
-            "an in-sync pin must be silent")
+        # Agreeing counts are NOT a pass without a digest: a 1-for-1 rewrite leaves the count
+        # untouched, so this branch says the record cannot be checked rather than that it is fine.
+        msg2 = _stale_grounding_pin(p, [f"c{i}" for i in range(418)])
+        assert msg2 and "no `live_claims_digest`" in msg2, msg2
 
 
 def test_a_map_with_no_grounding_record_is_not_flagged():
@@ -286,12 +288,14 @@ def test_the_digest_catches_a_one_for_one_rewrite_that_the_counts_cannot():
     construction; 4 of 6 superseded claims on the build this came from were exactly that shape."""
     from coyodex.finalize import _stale_grounding_pin
     from coyodex.grounding import live_claims_digest
+    # claims_total EQUALS the live count on purpose: with 446-vs-444 the count check would fire
+    # too, and the test would not distinguish the branches. Here only the digest can catch it.
     live = [f"claim {i}" for i in range(444)]
     with tempfile.TemporaryDirectory() as tmp:
         p = Path(tmp) / "m.json"
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {
-            "claims_total": 446, "claims_challenged": 446, "claims_superseded": 6,
-            "claims_added_since": 4, "live_claims_digest": live_claims_digest(live)}}),
+            "claims_total": 444, "claims_challenged": 444, "claims_superseded": 6,
+            "claims_added_since": 6, "live_claims_digest": live_claims_digest(live)}}),
             encoding="utf-8")
         swapped = live[:-1] + ["a claim authored after the record was written"]
         assert len(swapped) == len(live), "the count must be unchanged, or this proves nothing"

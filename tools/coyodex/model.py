@@ -327,7 +327,7 @@ class VariantTag:
     `ProjectModel.environments` entry; `source` is a bare `path:line` anchor to the manifest line that
     places the unit in that environment (the compose `profiles:` line, the overlay/values file, the
     stage declaration). `source == ""` = INFERRED: no manifest witness, so `validate` surfaces it as an
-    advisory (escapable via the `runs-in` Balance-exceptions literal), never blocks — an unanchored tag
+    advisory (escapable via the `runs-in/quality` Balance-exceptions literal), never blocks — an unanchored tag
     is a soft claim, not a proven fact. A CITED `source` that does not resolve on disk IS a hard block
     under `--check-sources` (same treatment as `security[].source`)."""
     env: str                         # must name a `ProjectModel.environments` entry
@@ -441,8 +441,10 @@ class Grounding:
     #: `claims_superseded` — pinned claims the reconcile rewrote or removed, so their verdict names
     #: nothing in the shipped map. `claims_added_since` — claims the shipped map has that did not
     #: exist when the worklist was pinned. Both are EXPLANATIONS, deliberately not proof: they are
-    #: sizes, and `total - superseded + added_since == live` is a TAUTOLOGY given the writer's own
-    #: refusals, so it can never fail and must never be read as a reconciliation.
+    #: sizes, and `total - superseded + added_since == live` is a TAUTOLOGY — plain set arithmetic,
+    #: `|P| - |P-L| + |L-P| = |P∩L| + |L-P| = |L|`, true for ANY two sets. It is not a consequence
+    #: of the writer's refusals: brute-forced over 20,000 configurations with the refusals
+    #: deliberately violated, zero failures. So it can never fail and must never be read as proof.
     #:
     #: `live_claims_digest` is the proof. sha256 over the sorted, de-duplicated live claim strings at
     #: the moment the record was written. It is the one field a build cannot plausibly fabricate, and

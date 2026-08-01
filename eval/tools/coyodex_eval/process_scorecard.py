@@ -665,6 +665,10 @@ def _paths_read(call: ToolCall) -> set[str]:
 #: had actually performed, and the retrospective reading that score had to go and find out why.
 #: Quote characters are accepted alongside backticks for the same reason `anchor_drift` accepts
 #: them: every cadence claim is phrased with them.
+#: The extras heading a drift record lives under. A record that does not name it, and is
+#: not a `coyodex record` call, is prose about drift rather than a recorded exception.
+DRIFT_EXCEPTIONS_HEADING = "Drift exceptions"
+
 _DRIFT_KEY_IN_TEXT = re.compile(r"anchor-drift\s+\\*([`'\"])(.+?)\\*\1")
 
 #: One drift FINDING as `anchor-drift` prints it: the claim, then `stored [path:line]`. The claim
@@ -754,7 +758,21 @@ def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assert
             # it cannot invalidate what the record just measured. Before this carve-out the
             # assertion scored 0 for every build that followed the method — the redirection in
             # `assemble … 2>&1 | tail -3` alone matched `_WRITES_A_FILE`.
-            if call.name == "Bash" and _invokes(call.command, "assemble"):
+            if call.name == "Bash":
+                # Drop only the assemble SEGMENT. Skipping the whole call let a map rewrite hide by
+                # chaining an assemble onto it — and that is the exact shape the real transcripts
+                # use (`python3 - <<'EOF' … rewrite project-map.json … EOF; coyodex assemble …`).
+                # Newline is a separator too: the real shape is a heredoc followed on the NEXT
+                # LINE by the assemble, and splitting only on `;&|` left them in one segment.
+                rest = "; ".join(seg for seg in re.split(r"[;&|\n]+", call.command)
+                                 if not _invokes(seg, "assemble"))
+                if not rest.strip():
+                    continue
+                touches = rest
+                if not ((FRAGMENT_DIR in touches or "project-map.json" in touches)
+                        and _WRITES_A_FILE.search(rest)):
+                    continue
+                edited_after.append(Evidence(turn.index, {"tool": call.name}))
                 continue
             if (FRAGMENT_DIR in touches or "project-map.json" in touches) and (
                     call.name in ("Write", "Edit", "NotebookEdit")
@@ -792,9 +810,14 @@ def assert_14_grounding_total_matches_the_worklist(turns: Sequence[Turn]) -> Ass
             m = re.search(r"(\d+)\s+of\s+(\d+)\s+claim\(s\)\s+challenged", blob)
             if m:
                 pinned, at = int(m.group(2)), turn.index
-                explained = ("live_claims_digest" in blob or "superseded" in blob
-                             or (call.name == "Bash" and "--map" in call.text()
-                                 and _invokes(call.command, "grounding")))
+                # LATCHED, and only from an actual `grounding write --map` invocation. Setting it
+                # from any blob carrying the words made this score 1/1 on a transcript with no
+                # grounding record at all — the trigger was a developer WRITING the test that
+                # asserts the pass. And reassigning per match made an honest run fail when a later
+                # `cat` of an old log re-matched the counts.
+                explained = explained or (
+                    call.name == "Bash" and _invokes(call.command, "grounding")
+                    and "--map" in call.command and "write" in call.command)
             # Two shapes carry the live size: `audit`/`finalize` say "N L2 claims on the grounding
             # worklist", `anchor-drift` says "challenged N of M worklist claim(s)".
             w = (re.search(r"(\d+)\s+L2 claims on the grounding worklist", blob)
@@ -893,6 +916,7 @@ def assert_17_a_drift_exception_cites_a_file_that_was_read(turns: Sequence[Turn]
     cited: dict[str, str] = {}         # drift claim → the file its stored anchor names
     opened: set[str] = set()           # files read since the finding that named them
     checked, unchecked = 0, []
+    unpaired: list[Evidence] = []
     for turn in turns:
         for result in turn.tool_results:
             for claim, path in _DRIFT_FINDING_LINE.findall(result.content):
@@ -912,24 +936,42 @@ def assert_17_a_drift_exception_cites_a_file_that_was_read(turns: Sequence[Turn]
             # NOT `"anchor-drift `" in blob`: the documented way to write a record is
             # `coyodex record --line "anchor-drift \\`…"`, where the backtick is shell-escaped, so
             # the bare-backtick guard skipped exactly the records the tool tells you to write.
-            if (call.name not in ("Write", "Edit", "NotebookEdit", "Bash")
-                    or "anchor-drift" not in blob):
+            # But a bare mention of the word is not a record either — relaxing the gate to any
+            # occurrence made this assertion count documentation prose (`{claim}`,
+            # `<the claim, verbatim>`) and a Python regex literal (`(.+?)`) as recorded exceptions,
+            # inflating the denominator on every transcript. The record must be being WRITTEN: it
+            # names the heading, or it is a `record` invocation.
+            if call.name not in ("Write", "Edit", "NotebookEdit", "Bash"):
+                continue
+            writing_a_record = (DRIFT_EXCEPTIONS_HEADING in blob
+                                or (call.name == "Bash" and _invokes(call.command, "record")))
+            if not writing_a_record or "anchor-drift" not in blob:
                 continue
             for _delim, key in _DRIFT_KEY_IN_TEXT.findall(blob):
                 # pair the record with its own finding — exact claim, else the one it contains
                 path = cited.get(key.strip()) or next(
                     (p for c, p in cited.items() if key.strip() in c or c in key.strip()), "")
-                if path and path in opened:
+                if not path:
+                    # Names no drift finding this run reported. It is NOT an unread file, so it does
+                    # not belong in the denominator: counting it made a Python regex literal
+                    # (`(.+?)`, written while debugging a record) and a key built from a shell
+                    # variable score as unchecked exceptions. Reported instead, because a record
+                    # matching nothing is worth knowing about — just not as this measurement.
+                    unpaired.append(Evidence(turn.index, {"key": key.strip()[:80]}))
+                    continue
+                if path in opened:
                     checked += 1
                 else:
-                    unchecked.append(Evidence(turn.index, {
-                        "should_have_read": path or "(no matching drift finding)"}))
+                    unchecked.append(Evidence(turn.index, {"should_have_read": path}))
     total = checked + len(unchecked)
+    tail = (f"; {len(unpaired)} recorded key(s) matched no drift finding in this run"
+            if unpaired else "")
     if not total:
-        return Assertion(17, "a drift exception cites a file that was read", 0, 0, (),
-                         "no drift exception recorded in this transcript")
+        return Assertion(17, "a drift exception cites a file that was read", 0, 0,
+                         tuple(unpaired),
+                         ("no drift exception recorded in this transcript" + tail).lstrip("; "))
     return Assertion(17, "a drift exception cites a file that was read", checked, total,
-                     tuple(unchecked))
+                     tuple(unchecked) + tuple(unpaired), tail.lstrip("; "))
 
 
 @dataclass(frozen=True)
@@ -966,6 +1008,16 @@ _COMMIT_SHAPE = re.compile(
     r"subsystems?|entry points?|security rows?)")
 
 #: The same counts as `coyodex finalize --emit-gate-block` now generates them.
+#: Commit prose word -> the generated term it must equal. A word with no entry is not compared.
+_SHAPE_WORD = {
+    "component": "components", "components": "components",
+    "subsystem": "subsystems", "subsystems": "subsystems",
+    "entities": "entities", "dep": "deps", "deps": "deps",
+    "use case": "use cases", "use cases": "use cases",
+    "edge": "edges", "edges": "edges",
+    "flows/sub-flows": "flows/sub-flows",
+}
+
 _GATE_SHAPE = re.compile(
     r"Shape:\s*(\d+) components in (\d+) subsystems, (\d+) entities in (\d+) subdomains, "
     r"(\d+) deps, (\d+) use cases, (\d+) edges, (\d+) flows/sub-flows")
@@ -979,29 +1031,42 @@ def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
     duplicate occurrences after they were written down. The commit is the artifact a future reader
     trusts most, and nothing compared it against the file it names.
 
-    Scored against the generated `Shape:` line when one is present in the run (that is what
-    `finalize --emit-gate-block` emits). `of == 0` when the run has no commit carrying shape prose,
-    or no generated line to check it against — an opportunity that did not arise, not a miss."""
-    truth: dict[str, int] | None = None
+    Two things the first cut of this got wrong, both measured against eight real transcripts where
+    it scored 0/0 on every one:
+
+    * `finalize --emit-gate-block` writes the `Shape:` line to a FILE and prints only "wrote the
+      commit-message gate block to <path>". Scanning tool RESULTS for it therefore found nothing.
+      The truth is now taken from the emitted file's content wherever it appears — a `Read`, a
+      `cat`, or a heredoc that pastes it.
+    * the commit itself is routinely made with `git commit -F <file>`, which `method.md` prescribes,
+      so the numbers are not in the command string. Both the command and any file content written
+      in the same run are searched.
+
+    Only numbers with a matching generated term are compared, so a commit quoting a different map's
+    figures cannot be scored — there is nothing to pair it with."""
+    truth: dict[str, int] = {}
     hits: list[Evidence] = []
     good = 0
     results = results_by_tool_use_id(turns)
+    seen_commit = False
     for turn in turns:
-        for call in turn.calls_named("Bash"):
-            blob = call.command + "\n" + results.get(call.id, "")
+        for call in turn.tool_calls:
+            blob = call.text() + "\n" + results.get(call.id, "")
             g = _GATE_SHAPE.search(blob)
             if g:
-                truth = {"components": int(g.group(1)), "entities": int(g.group(3)),
-                         "use cases": int(g.group(6)), "edges": int(g.group(7)),
-                         "flows/sub-flows": int(g.group(8))}
-            if truth is None or not re.search(r"\bgit\s+commit\b", call.command):
+                truth = {"components": int(g.group(1)), "subsystems": int(g.group(2)),
+                         "entities": int(g.group(3)), "subdomains": int(g.group(4)),
+                         "deps": int(g.group(5)), "use cases": int(g.group(6)),
+                         "edges": int(g.group(7)), "flows/sub-flows": int(g.group(8))}
+            is_commit = call.name == "Bash" and re.search(r"\bgit\s+commit\b", call.command)
+            if not is_commit:
                 continue
-            for n, word in _COMMIT_SHAPE.findall(call.command):
-                key = word.rstrip("s") + "s" if not word.endswith("s") else word
-                key = {"components": "components", "edges": "edges", "entities": "entities",
-                       "use cases": "use cases", "flows/sub-flows": "flows/sub-flows"}.get(
-                    word if word in truth else key, "")
-                if not key or key not in truth:
+            seen_commit = True
+            if not truth:
+                continue
+            for n, word in _COMMIT_SHAPE.findall(blob):
+                key = _SHAPE_WORD.get(word)
+                if key is None or key not in truth:
                     continue
                 if int(n) == truth[key]:
                     good += 1
@@ -1009,7 +1074,11 @@ def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
                     hits.append(Evidence(turn.index, {"claimed": f"{n} {key}",
                                                       "map holds": str(truth[key])}))
     total = good + len(hits)
-    return Assertion(18, "commit shape numbers match the map", good, total, evidence=tuple(hits))
+    note = ""
+    if seen_commit and not truth:
+        note = ("a commit was made but no generated `Shape:` line was seen — run "
+                "`coyodex finalize --emit-gate-block` and paste it, or the numbers are unchecked")
+    return Assertion(18, "commit shape numbers match the map", good, total, tuple(hits), note)
 
 
 #: An inverting grep anywhere in a shell block that also runs a gate. Deliberately NOT a pipeline
@@ -1043,6 +1112,11 @@ def assert_19_no_gate_output_inverted_grep(turns: Sequence[Turn]) -> Assertion:
                      evidence=tuple(hits))
 
 
+#: `assemble`'s one-line summary of what the auto-clean passes changed. Its presence is what makes
+#: assertion 21 scoreable at all.
+_ASSEMBLE_DIGEST = re.compile(r"model:.*\|\s*ops:|wrote .*project-map\.json")
+
+
 def assert_21_final_assemble_digest_is_clean(turns: Sequence[Turn]) -> Assertion:
     """`assemble`'s digest lines are zero at the LAST assemble.
 
@@ -1061,6 +1135,13 @@ def assert_21_final_assemble_digest_is_clean(turns: Sequence[Turn]) -> Assertion
     if last is None:
         return Assertion(21, "final assemble digest is clean", 0, 0)
     idx, out = last
+    # The digest LINE must be present, or there is nothing to read and this cannot score. Treating
+    # "no UNHEALED in the captured output" as clean over-credited a build that piped the digest
+    # through `| tail -2`, or captured no result at all — and `assemble.py` documents a live build
+    # reading this very output with `| tail -4`. A scorecard may under-credit, never over-credit.
+    if not _ASSEMBLE_DIGEST.search(out):
+        return Assertion(21, "final assemble digest is clean", 0, 0, (),
+                         "the final assemble's digest line was not captured — nothing to read")
     unhealed = re.search(r"UNHEALED[^\n]*?(\d+)", out)
     n = int(unhealed.group(1)) if unhealed else 0
     ev = [] if not n else [Evidence(idx, {"unhealed_at_final_assemble": str(n)})]

@@ -226,7 +226,8 @@ Semantics, stated on the fields:
   step band, over and under, plus the fused-goal name smell), `Cn` (altitude nudge), the
   literal `granularity` (component-count-vs-E advisory), the literal `entity-flows` (the
   no-entity-in-any-flow canary — for a map whose flows legitimately touch no entity), the literal
-  `runs-in` (every `runs_in` placement advisory, including an 'Unplaced' self-started entry point
+  `runs-in/quality`, `runs-in/unlinked`, `runs-in/unplaced`, `runs-in/entry-hosts`,
+  `runs-in/messaging` (one per `runs_in` finding group; a BARE `runs-in` silences nothing)
   and an unplaceable messaging channel), the literal `isolated` (components wired to nothing), the
   literal `channel-ends` (a channel whose far end lives outside the mapped repo), the literal
   `channel-payload` (channels that really carry no domain type), and the literal `entity-relations`

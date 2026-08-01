@@ -12,20 +12,17 @@ the instruction is now mechanical:
 3. Change nothing else. If a rule reads wrong for this repo, fix it HERE, once, so the next build
    inherits the fix instead of re-deriving it.
 
-Everything after the numbered list above is the template.
- It used to live inline in `method.md`, and every
-build hand-copied ~5.6 KB of it into a scratchpad. That retyping is where the wording drifts: one
-live build's copy promised that a `.draft.json` suffix "keeps a half-written file out of the
-assemble glob", which was not true of the tool at the time and had to be fixed in both places.
+**Why the wording matters.** This used to live inline in `method.md`, and every build hand-copied
+~5.6 KB of it into a scratchpad. That retyping is where wording drifts: one live build's copy
+promised that a `.draft.json` suffix "keeps a half-written file out of the assemble glob", which was
+not true of the tool at the time and had to be fixed in both places.
 
 Give every harvest agent the same skeleton — only the file list and the background blurb change per
 agent. Reusing one contract is what makes each agent return the same row shapes with the same
 verified/inferred discipline, which keeps the barrier synthesis clean.
 
-**Harvest-prompt template (Phase 1).** Give every harvest agent the same prompt skeleton —
-only the file list and the background blurb change per agent. Reusing one contract is what makes
-each agent return the same row shapes with the same verified/inferred discipline, which keeps the
-barrier synthesis clean. Fill the «angle-bracket» parts:
+**The template starts at the quoted block below.** Everything above it is instructions to you, the
+lead; nothing above this line goes into an agent prompt.
 
 > You are harvesting «structural / operational / build» facts for a coyodex codebase map.
 > Read these files completely, then produce ONLY the rows below — the only file you may write is

@@ -199,7 +199,14 @@ def _stale_grounding_pin(map_path: Path, live_claims: list[str]) -> str | None:
                 f"  coyodex grounding write --worklist <pinned.json> --map {map_path} "
                 f"--verdicts <…> --out .coyodex/build-fragments/grounding.json")
     if pinned == len(live_set):
-        return None
+        # Counts agree — which proves nothing. A 1-for-1 rewrite (the shape a reconcile actually
+        # produces) leaves the count untouched, so this branch is silent EXACTLY where the digest
+        # was needed. Say the record cannot be checked, rather than implying it passed.
+        return (f"grounding: the record carries no `live_claims_digest`, so nothing here can confirm "
+                f"it describes THIS map. The counts agree ({pinned}), but a reconcile that rewrites "
+                f"a claim leaves the count unchanged, so agreement is not evidence. Re-run "
+                f"`coyodex grounding write --worklist <pinned.json> --map <this map> --verdicts <…>` "
+                f"as the last step before the final assemble.")
     return (f"grounding: the record is pinned to a worklist of {pinned} claim(s), but this map's "
             f"audit worklist holds {len(live_set)} — and the record does not say why. Reconciling a "
             f"refutation rewrites its claim, so the two legitimately differ; record the delta with "

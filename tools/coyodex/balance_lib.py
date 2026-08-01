@@ -247,6 +247,26 @@ def _exceptions(m: ProjectModel) -> set[str]:
     return out
 
 
+#: A line that LOOKS like a scoped `runs_in` escape. Deliberately looser than `_LITERAL_LINE`,
+#: which only ever matches keys that are already recognised — so a typo'd key does not appear in
+#: `_exceptions` at all, silences nothing, and says nothing. The operator then believes the finding
+#: is adjudicated while `validate` goes on reporting it. Scoping replaced one short word with five
+#: slash-and-hyphen keys typed free-hand into `record --line`, which multiplies that surface.
+_RUNS_IN_NEAR_MISS = re.compile(
+    r"^\s*(?:[-*]\s+)?\**\s*(runs[-_]in[-/][a-z-]+)\**\s*(?:[:(—–]|\s+-\s|\s*$)", re.IGNORECASE)
+
+
+def near_miss_runs_in_keys(m: ProjectModel) -> list[str]:
+    """Recorded lines that meant to be a scoped `runs_in` escape and are not one."""
+    out: set[str] = set()
+    for body in extras_bodies(m, _EXCEPTIONS_HEADING):
+        for line in body.splitlines():
+            hit = _RUNS_IN_NEAR_MISS.match(line)
+            if hit and hit.group(1) not in RUNS_IN_SCOPES:
+                out.add(hit.group(1))
+    return sorted(out)
+
+
 def _name_of(m: ProjectModel, gid: str) -> str:
     for grp in (*m.subsystems, *m.subdomains):
         if grp.id == gid:

@@ -699,7 +699,12 @@ def test_16_passes_when_the_slowest_goes_first():
 
 
 def test_17_flags_a_drift_exception_recorded_without_opening_the_file():
-    record = "- anchor-drift `E1 runs on cadence 'continuous'`: the stored anchor is right."
+    # A real record lives under the `Drift exceptions` extras heading — which is what marks it as a
+    # RECORD rather than prose that happens to say "anchor-drift". A bare line is not the shape a
+    # fragment carries, and treating any mention as a record made this assertion count
+    # documentation text and a Python regex literal as recorded exceptions.
+    record = ('{"extras": [{"heading": "Drift exceptions", "body": '
+              '"- anchor-drift `E1 runs on cadence \'continuous\'`: the stored anchor is right."}]}')
     turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
                                       "— skeptics found a different file"),)),
@@ -710,7 +715,12 @@ def test_17_flags_a_drift_exception_recorded_without_opening_the_file():
 
 
 def test_17_passes_when_the_cited_file_was_read_after_the_finding():
-    record = "- anchor-drift `E1 runs on cadence 'continuous'`: the stored anchor is right."
+    # A real record lives under the `Drift exceptions` extras heading — which is what marks it as a
+    # RECORD rather than prose that happens to say "anchor-drift". A bare line is not the shape a
+    # fragment carries, and treating any mention as a record made this assertion count
+    # documentation text and a Python regex literal as recorded exceptions.
+    record = ('{"extras": [{"heading": "Drift exceptions", "body": '
+              '"- anchor-drift `E1 runs on cadence \'continuous\'`: the stored anchor is right."}]}')
     turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
                                       "— skeptics found a different file"),)),
@@ -723,7 +733,12 @@ def test_17_passes_when_the_cited_file_was_read_after_the_finding():
 def test_17_does_not_count_merely_naming_the_file_in_a_patch_script():
     """A fragment-patching heredoc mentions the very path being recorded; counting that as 'looked'
     turned this assertion into a false 1.00 on the build that motivated it."""
-    record = "- anchor-drift `E1 runs on cadence 'continuous'`: the stored anchor is right."
+    # A real record lives under the `Drift exceptions` extras heading — which is what marks it as a
+    # RECORD rather than prose that happens to say "anchor-drift". A bare line is not the shape a
+    # fragment carries, and treating any mention as a record made this assertion count
+    # documentation text and a Python regex literal as recorded exceptions.
+    record = ('{"extras": [{"heading": "Drift exceptions", "body": '
+              '"- anchor-drift `E1 runs on cadence \'continuous\'`: the stored anchor is right."}]}')
     turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
                        results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
                                       "— skeptics found a different file"),)),
@@ -775,17 +790,35 @@ def test_the_four_fix_verbs_are_reported_apart():
 
 # ── 18-22 ────────────────────────────────────────────────────────────────────────────────────────
 
-def test_a18_catches_a_commit_claiming_a_shape_the_map_does_not_have():
-    """A live commit claimed "416 backbone edges … 33 flows/sub-flows" for a map holding 365 and 36.
-    Both had been true earlier in the build; `fix dedup-edge` then dropped 49 duplicates."""
+def test_a18_scores_the_flow_the_method_actually_prescribes():
+    """`finalize --emit-gate-block` writes the Shape line to a FILE and `method.md` prescribes
+    `git commit -F <file>`, so neither number is in a command string. The first cut scanned tool
+    results for the Shape line and command text for the claim, and scored 0/0 on all eight real
+    build transcripts."""
     gate = ("Shape: 66 components in 14 subsystems, 55 entities in 8 subdomains, 40 deps, "
             "26 use cases, 365 edges, 36 flows/sub-flows, 281 entry points, 26 security rows.")
-    turns = [make_turn(1, make_bash("coyodex finalize map.json --emit-gate-block g.txt", uid="u1"),
-                       results=(("u1", gate),)),
-             make_turn(2, make_bash("git commit -m 'map: 416 backbone edges, 36 flows/sub-flows'"))]
+    turns = [make_turn(1, make_bash("coyodex finalize m.json --emit-gate-block /tmp/g.txt", uid="f"),
+                       results=(("f", "finalize: wrote the commit-message gate block to /tmp/g.txt"),)),
+             make_turn(2, make_bash("cat /tmp/g.txt", uid="c"), results=(("c", gate),)),
+             make_turn(3, make_bash("git commit -F /tmp/msg.txt"))]
     a = P.assert_18_commit_shape_matches_the_map(turns)
-    assert a.of == 2 and a.observed == 1, a
+    assert a.of == 0 and "no generated" not in (a.note or ""), a
+
+
+def test_a18_compares_numbers_a_commit_states_alongside_the_generated_line():
+    gate = ("Shape: 66 components in 14 subsystems, 55 entities in 8 subdomains, 40 deps, "
+            "26 use cases, 365 edges, 36 flows/sub-flows, 281 entry points, 26 security rows.")
+    turns = [make_turn(1, make_bash("coyodex finalize m.json", uid="f"), results=(("f", gate),)),
+             make_turn(2, make_bash("git commit -F - <<'MSG'\n66 components, 416 edges\nMSG"))]
+    a = P.assert_18_commit_shape_matches_the_map(turns)
+    assert (a.observed, a.of) == (1, 2), a
     assert any("416" in str(e.detail) for e in a.evidence), a.evidence
+
+
+def test_a18_says_so_when_a_commit_had_no_generated_line_to_check_against():
+    turns = [make_turn(1, make_bash("git commit -m 'map: 416 backbone edges'"))]
+    a = P.assert_18_commit_shape_matches_the_map(turns)
+    assert a.of == 0 and "no generated" in (a.note or ""), a
 
 
 def test_a19_sees_an_inverting_grep_that_is_not_a_pipeline():
@@ -809,12 +842,12 @@ def test_a21_reads_only_the_final_assemble():
     """An unhealed count mid-build is expected and drains as the trace lands; only the last one
     means anything. A live build was told UNHEALED 4 at four successive assembles and shipped."""
     turns = [make_turn(1, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a1"),
-                       results=(("a1", "assembled — UNHEALED riding steps 4"),)),
+                       results=(("a1", "model: C:5 | ops: UNHEALED riding steps 4"),)),
              make_turn(2, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a2"),
-                       results=(("a2", "assembled — dup-edges collapsed 3"),))]
+                       results=(("a2", "model: C:5 | ops: dup-edges collapsed 3"),))]
     assert P.assert_21_final_assemble_digest_is_clean(turns).observed == 1
     turns.append(make_turn(3, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a3"),
-                           results=(("a3", "assembled — UNHEALED riding steps 4"),)))
+                           results=(("a3", "model: C:5 | ops: UNHEALED riding steps 4"),)))
     a = P.assert_21_final_assemble_digest_is_clean(turns)
     assert a.observed == 0 and a.of == 1, a
 
@@ -868,3 +901,140 @@ def test_14_accepts_a_differing_total_when_the_record_states_the_delta():
                        results=(("a", "444 L2 claims on the grounding worklist"),)))
     a = P.score_turns(turns).by_id()[14]
     assert (a.observed, a.of) == (1, 1), a
+
+
+# ── the assertion-17 repair itself, which shipped untested ───────────────────────────────────────
+
+def test_17_sees_a_record_written_through_record_line_with_escaped_backticks():
+    """`coyodex record --line "anchor-drift \\`…"` is the DOCUMENTED way to write a record, and
+    nested quoting escapes the backtick again. Requiring a bare one made three well-formed records
+    invisible on a live build, which then scored 0 for a behaviour it had performed."""
+    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+                       results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
+                                      "— skeptics found a different file"),)),
+             make_turn(1, make_bash("sed -n '15,30p' src/session.ts")),
+             make_turn(2, make_bash(
+                 'coyodex record --map m.json --heading "Drift exceptions" --line '
+                 '"anchor-drift \\\\`E1 runs on cadence \'continuous\'\\\\`: the stored anchor is right."')))
+    a = P.score_turns(turns).by_id()[17]
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_17_pairs_a_record_when_the_findings_were_captured_as_json():
+    """A build that ran `anchor-drift --json` produced no `stored [path:line]` text at all, so every
+    record scored "(no matching drift finding)" — the assertion reporting 0 for a reason other than
+    the behaviour it audits."""
+    payload = ('{"drift": [{"claim": "E1 runs on cadence \'continuous\'", '
+               '"stored": "src/session.ts:21", "corrected": "src/session.ts:33"}]}')
+    record = ('{"extras": [{"heading": "Drift exceptions", "body": '
+              '"- anchor-drift `E1 runs on cadence \'continuous\'`: the stored anchor is right."}]}')
+    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json --json", uid="d"),
+                       results=(("d", payload),)),
+             make_turn(1, make_bash("sed -n '15,30p' src/session.ts")),
+             make_turn(2, make_write("frag.json", record)))
+    a = P.score_turns(turns).by_id()[17]
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_17_does_not_count_prose_or_a_regex_that_merely_says_anchor_drift():
+    """Relaxing the scan gate to any occurrence of the word made this count documentation text
+    (`{claim}`) and a Python regex literal (`(.+?)`, written while debugging a record) as recorded
+    exceptions, inflating the denominator on every transcript measured — one went 0/18 to 0/19."""
+    # The quoted text is the REAL claim, so it pairs with the finding — which is what makes this a
+    # test of the GATE and not of the unpaired-key handling. It is still not a record: nobody wrote
+    # anything under the heading, they printed a diagnostic about one.
+    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+                       results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
+                                      "— skeptics found a different file"),)),
+             make_turn(1, make_bash(
+                 "python3 - <<'PY'\n"
+                 "print(\"checking anchor-drift `E1 runs on cadence 'continuous'`: does it parse?\")\nPY")))
+    a = P.score_turns(turns).by_id()[17]
+    assert a.of == 0, f"a diagnostic ABOUT a record is not a record: {a}"
+
+
+def test_17_reports_a_key_that_names_no_finding_instead_of_scoring_it():
+    """Such a key is not an unread FILE, so it does not belong in the denominator — but a record
+    matching nothing is worth knowing about, so it is reported."""
+    record = ('{"extras": [{"heading": "Drift exceptions", "body": '
+              '"- anchor-drift `a claim this run never reported`: judged fine."}]}')
+    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+                       results=(("d", "E1 runs on cadence 'x': stored [src/session.ts:21] — drift"),)),
+             make_turn(1, make_write("frag.json", record)))
+    a = P.score_turns(turns).by_id()[17]
+    assert a.of == 0 and "matched no drift finding" in (a.note or ""), a
+
+
+def test_21_cannot_score_when_the_digest_was_not_captured():
+    """Treating "no UNHEALED in the captured output" as clean over-credited a build that piped the
+    digest through `| tail -2` — and assemble.py records a live build reading this very output with
+    `| tail -4`. A scorecard may under-credit, never over-credit."""
+    turns = (make_turn(0, make_bash("coyodex assemble f/*.json --out .coyodex | tail -2", uid="a"),
+                       results=(("a", "Next: coyodex validate .coyodex/project-map.json"),)),)
+    assert P.assert_21_final_assemble_digest_is_clean(turns).of == 0
+    turns2 = (make_turn(0, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a"),
+                        results=(("a", "model: C:66, D:40 | ops: dup-edges collapsed 38"),)),)
+    assert P.assert_21_final_assemble_digest_is_clean(turns2).observed == 1
+
+
+def test_21_still_flags_an_unhealed_count_in_a_captured_digest():
+    turns = (make_turn(0, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a"),
+                       results=(("a", "model: C:66 | ops: UNHEALED riding steps 4"),)),)
+    a = P.assert_21_final_assemble_digest_is_clean(turns)
+    assert (a.observed, a.of) == (0, 1), a
+
+
+def test_the_subcommand_allowlist_matches_both_clis():
+    """A missing name is a SILENT undercount — precisely the failure `--commands` exists to fix.
+    The first cut omitted `bless`, `claims`, `hash` and `protocol`, and carried `impact`, which is
+    not a coyodex-eval subcommand."""
+    import re
+    from pathlib import Path
+    from coyodex_eval.transcript import _COYODEX_SUBCOMMANDS
+    repo = Path(__file__).resolve().parents[2]
+    declared: set[str] = set()
+    for rel in ("tools/coyodex/cli.py", "eval/tools/coyodex_eval/cli.py"):
+        declared |= set(re.findall(r'cmd == "([a-z-]+)"',
+                                   (repo / rel).read_text(encoding="utf-8")))
+    assert declared, "the CLIs must declare their commands as `cmd == \"...\"`, or this cannot check"
+    missing = sorted(declared - set(_COYODEX_SUBCOMMANDS))
+    extra = sorted(set(_COYODEX_SUBCOMMANDS) - declared)
+    assert not missing, f"subcommand(s) the CLIs have and --commands would never count: {missing}"
+    assert not extra, f"names in the allowlist that no CLI declares: {extra}"
+
+
+def test_14_does_not_pass_on_prose_that_merely_mentions_the_words():
+    """It scored 1/1 on a transcript with NO grounding record, because `explained` was set from any
+    blob carrying "superseded" — and the trigger was a developer writing the test that asserts the
+    pass. Only an actual `grounding write --map` counts."""
+    turns = (make_turn(0, make_bash("echo hi", uid="e"),
+                       results=(("e", "446 of 446 claim(s) challenged (6 superseded)"),)),
+             make_turn(1, make_bash("coyodex audit m.json --json", uid="a"),
+                       results=(("a", "444 L2 claims on the grounding worklist"),)))
+    a = P.score_turns(turns).by_id()[14]
+    assert (a.observed, a.of) == (0, 1), a
+
+
+def test_14_stays_explained_when_a_later_log_repeats_the_counts():
+    """`explained` was reassigned on every match, so an honest run failed if a later `cat` of an old
+    log re-matched "N of M claim(s) challenged"."""
+    turns = (make_turn(0, make_bash("coyodex grounding write --worklist w.json --map m.json", uid="g"),
+                       results=(("g", "wrote g.json: 446 of 446 claim(s) challenged · vs the live "
+                                      "map: 6 superseded, 4 added since the pin"),)),
+             make_turn(1, make_bash("cat /tmp/old.log", uid="c"),
+                       results=(("c", "418 of 418 claim(s) challenged"),)),
+             make_turn(2, make_bash("coyodex audit m.json --json", uid="a"),
+                       results=(("a", "444 L2 claims on the grounding worklist"),)))
+    assert P.score_turns(turns).by_id()[14].observed == 1
+
+
+def test_13_does_not_let_a_chained_assemble_hide_a_map_rewrite():
+    """Skipping the whole call let a rewrite hide by chaining an assemble onto it — and that is the
+    exact shape the real transcripts use."""
+    turns = (make_turn(0, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+             make_turn(1, make_bash(
+                 "python3 - <<'EOF'\n"
+                 "import json; json.dump(d, open('.coyodex/project-map.json','w'))\nEOF\n"
+                 "coyodex assemble .coyodex/build-fragments/*.json --out .coyodex")))
+    a = P.score_turns(turns).by_id()[13]
+    assert (a.observed, a.of) == (0, 1), a

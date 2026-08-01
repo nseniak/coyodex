@@ -269,6 +269,15 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: unknown option(s): {a}", file=sys.stderr)
             return 2
         i += 1
+    if verb == "report" and map_path:
+        # Accepted and silently discarded before — including a path that does not exist, where
+        # `write` exits 2. `report`'s job is WHICH claim landed in which bucket, against the pinned
+        # worklist; it has no use for the live map, and accepting the flag implied the superseded
+        # SET can be listed somewhere. It cannot, yet — only its count, via `write --map`.
+        print("ERROR: `grounding report` takes no --map. It lists which claims landed in which "
+              "bucket, against the pinned worklist. (The superseded SET is not listable anywhere "
+              "yet — only its count, via `grounding write --map`.)", file=sys.stderr)
+        return 2
     if not worklist_path or not verdicts:
         print(f"ERROR: --worklist and at least one --verdicts are required\n\n{USAGE}",
               file=sys.stderr)

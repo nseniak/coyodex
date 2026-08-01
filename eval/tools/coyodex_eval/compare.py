@@ -227,6 +227,19 @@ def _compare_judge(baseline: JudgeReport, candidate: JudgeReport, t: Thresholds)
     return out
 
 
+def _load_profile(text: str) -> MapProfile:
+    """Load a profile, turning a refusal into a clean CLI error instead of a traceback.
+
+    `MapProfile.from_json` refuses a profile written before `advisories` became
+    `audit_advisories` — deliberately, because silently reading 0 would relocate the misreading
+    rather than fix it. But every other error path in this CLI prints `ERROR: …` and returns 2,
+    and a stack trace on a stale baseline reads as a crash rather than as the instruction it is."""
+    try:
+        return MapProfile.from_json(text)
+    except ValueError as e:
+        raise SystemExit(f"ERROR: {e}")
+
+
 def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds | None = None,
             baseline_judge: JudgeReport | None = None,
             candidate_judge: JudgeReport | None = None) -> DeltaReport:
@@ -461,8 +474,8 @@ def main(argv: list[str] | None = None) -> int:
         if p is not None and not p.exists():
             print(f"ERROR: {p} not found", file=sys.stderr)
             return 1
-    baseline = MapProfile.from_json(base_path.read_text(encoding="utf-8"))
-    candidate = MapProfile.from_json(cand_path.read_text(encoding="utf-8"))
+    baseline = _load_profile(base_path.read_text(encoding="utf-8"))
+    candidate = _load_profile(cand_path.read_text(encoding="utf-8"))
     thresholds = load_thresholds(thresholds_path, project) if thresholds_path else Thresholds()
     base_judge = JudgeReport.from_json(base_judge_path.read_text(encoding="utf-8")) if base_judge_path else None
     cand_judge = JudgeReport.from_json(cand_judge_path.read_text(encoding="utf-8")) if cand_judge_path else None

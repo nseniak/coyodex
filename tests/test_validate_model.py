@@ -2197,20 +2197,24 @@ def test_no_runs_in_record_means_no_count_line_at_all():
     assert not any("suppressed by recorded scoped exception(s)" in w for w in warnings_of(m))
 
 
-def test_only_one_function_may_read_the_runs_in_literal():
+def test_only_one_function_may_read_the_runs_in_vocabulary():
     """The structural guard that stops a FIFTH group repeating F1.
 
     Every producer is RAW; the literal is applied — and counted — at exactly one exit. A new group
     added with its own private `if "runs-in" in ...: return []` would silence findings the count
     line never sees, which is precisely the bug this test exists to prevent. Adding a group means
     appending one row to `_RUNS_IN_FAMILY`; there is no other wiring."""
+    # The whole VOCABULARY, not just the bare literal. Scoping the escape made `"runs-in"` inert —
+    # it is now only what the "silences nothing" complaint keys off — so a sixth group added with a
+    # private `if "runs-in/unplaced" in _exceptions(m): return []` would have tripped nothing.
+    watched = ("runs-in", *balance_lib_mod.RUNS_IN_SCOPES)
     src = Path(str(validate_model_mod.__file__)).read_text(encoding="utf-8")
     readers = sorted({fn.name for fn in ast.walk(ast.parse(src))
                       if isinstance(fn, ast.FunctionDef)
-                      and any(isinstance(n, ast.Constant) and n.value == "runs-in"
+                      and any(isinstance(n, ast.Constant) and n.value in watched
                               for n in ast.walk(fn))})
     assert readers == ["_runs_in_family_warnings"], (
-        "the `runs-in` literal is read outside its one counted exit: " + ", ".join(readers))
+        "a `runs_in` escape literal is read outside its one counted exit: " + ", ".join(readers))
 
 
 def test_every_runs_in_group_is_registered_in_the_family_table():
@@ -2669,9 +2673,12 @@ def test_the_guard_above_would_catch_a_reintroduced_truncation():
         assert not (tail.search(ok) and not any(h in ok for h in ("shown(", "capped(", "clip("))), ok
 
 
-def make_grounded_model(**counts: int) -> ProjectModel:
+def make_grounded_model(digest: str = "", **counts: int) -> ProjectModel:
+    """`digest` is split out from `**counts` deliberately: `Grounding` now carries a str field
+    alongside the ints, and widening the kwargs to `int | str` makes every int parameter
+    unassignable instead."""
     m = make_valid_model()
-    m.grounding = Grounding(**counts)
+    m.grounding = Grounding(**counts, live_claims_digest=digest)
     return m
 
 
@@ -2786,3 +2793,36 @@ def test_one_scoped_runs_in_record_does_not_silence_a_sibling_group():
     hits = [w for w in ws if "suppressed by recorded scoped exception(s)" in w]
     assert len(hits) == 1 and "runs-in/messaging" in hits[0]
     assert "self-started entry points" not in hits[0], "only the silenced group is named"
+
+
+# ── the pin-delta fields, whose three guards shipped uncovered ───────────────────────────────────
+
+def test_superseded_above_the_pinned_total_is_blocking():
+    """A superseded claim is one that WAS pinned, so it cannot exceed `claims_total`. Bounded by
+    total and NOT by `challenged`: those are equal only because `grounding write` refuses an unvoted
+    pinned claim, and its own error offers "challenge a smaller worklist deliberately" as the way
+    out — so `total 100 / challenged 50 / superseded 60` is legitimate and must not be blocked."""
+    m = make_grounded_model(claims_total=10, claims_challenged=10, claims_confirmed=10,
+                            claims_superseded=11)
+    assert any("cannot exceed `claims_total`" in p for p in problems_of(m))
+    ok = make_grounded_model(claims_total=100, claims_challenged=50, claims_confirmed=50,
+                             claims_superseded=60)
+    assert not any("cannot exceed `claims_total`" in p for p in problems_of(ok))
+
+
+def test_a_negative_pin_delta_is_blocking():
+    """A negative count can BALANCE an equality — the reason the negatives check exists at all —
+    and `total - superseded` is exactly such a sum."""
+    m = make_grounded_model(claims_total=10, claims_challenged=10, claims_confirmed=10,
+                            claims_added_since=-3)
+    assert any("negative count" in p and "claims_added_since" in p for p in problems_of(m))
+
+
+def test_a_record_carrying_only_a_pin_delta_still_reaches_the_checks():
+    """`_any_grounding_count` gates every grounding check. A record with only `claims_added_since`
+    would otherwise skip all of them — the same hole that function was written to close."""
+    m = make_grounded_model(claims_added_since=4)
+    # A GROUNDING finding specifically — the model has unrelated warnings, so "any warning at all"
+    # passes even with the gate reverted, which is how this test first shipped proving nothing.
+    assert any("`grounding`" in w for w in warnings_of(m)), (
+        "a record carrying only a pin-delta must still reach the grounding checks")

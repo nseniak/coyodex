@@ -203,3 +203,17 @@ def test_the_digest_is_not_ambiguous_about_where_a_claim_ends():
     it was worth removing before one does."""
     from coyodex.grounding import live_claims_digest
     assert live_claims_digest(["a\nb"]) != live_claims_digest(["a", "b"])
+
+
+def test_report_refuses_map_instead_of_swallowing_it():
+    """It was accepted and discarded — including a path that does not exist, where `write` exits 2.
+    A flag that does nothing is worse than one that is rejected: it implies the superseded SET can
+    be listed, and it cannot be anywhere yet."""
+    import contextlib
+    import io
+    from coyodex import grounding
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf):
+        code = grounding.main(["report", "--worklist", "/nonexistent/wl.json",
+                               "--verdicts", "/nonexistent/v.json", "--map", "/nonexistent/m.json"])
+    assert code == 2 and "takes no --map" in buf.getvalue()

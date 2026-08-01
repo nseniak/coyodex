@@ -175,8 +175,14 @@ index and the fan-out map:
 
 ```
 coyodex-eval transcript <transcript> --stats
+coyodex-eval transcript <transcript> --commands         # every coyodex subcommand, with turn numbers
 coyodex-eval transcript <transcript>                    # one line per tool call, with turn numbers
 ```
+
+**Use `--commands` before concluding a command "never ran".** The one-line index truncates at 100
+characters, so a subcommand chained behind `;` or `&&` is invisible in it. A retrospective read the
+index, concluded `grounding write` never ran, and published that about a build which ran it at turn
+489 behind an `assemble`; the finding had to be withdrawn. `--commands` reads the full command text.
 
 Cut it into phases at the fan-out boundaries the stats print — typically: **setup + behavioral
 draft**, **pre-index + harvest**, **synthesis**, **trace**, **gates (validate/audit/balance)**,

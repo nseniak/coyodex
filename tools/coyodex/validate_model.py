@@ -2031,6 +2031,14 @@ def _runs_in_family_warnings(m: ProjectModel) -> list[str]:
                    f"recorded scoped exception(s), across {len(suppressed)} finding group(s) — "
                    f"{detail}. Each silences only its own group; re-read one by validating a copy "
                    f"with that line removed.")
+    # A near-miss key silences nothing and says nothing, so the operator believes the finding is
+    # adjudicated while validate keeps firing. Scoping replaced one short word with five
+    # slash-and-hyphen keys typed free-hand into `record --line`, which multiplies that surface.
+    typos = balance_lib.near_miss_runs_in_keys(m)
+    if typos:
+        out.append(f"recorded `runs_in` exception key(s) no check reads: {', '.join(typos)} — these "
+                   f"silence nothing. The five that work are "
+                   + ", ".join(f"`{scope}`" for scope, _l, _p in _RUNS_IN_FAMILY) + ".")
     if "runs-in" in recorded:
         # A BARE `runs-in` silences nothing, deliberately. It used to switch off all five groups at
         # once while the justification behind it was about a single one — the family escape the

@@ -319,10 +319,10 @@ def bash_commands(turns: Sequence[Turn]) -> tuple[tuple[int, str], ...]:
 #: loose enough to read `$SP files` or `--map x` as subcommands — the first cut of this reported
 #: `files`, `loc`, `map` and `runs`.
 _COYODEX_SUBCOMMANDS = frozenset({
-    "preindex", "validate", "audit", "render", "serve", "assemble", "dump", "balance",
-    "reconcile", "lint-fragment", "anchor-drift", "finalize", "grounding", "fix", "record",
-    "impact", "score", "compare", "process", "transcript", "judge", "run", "archive",
-    "retro-precheck",
+    "anchor-drift", "archive", "assemble", "audit", "balance", "bless", "claims", "compare",
+    "dump", "finalize", "fix", "grounding", "hash", "judge", "lint-fragment", "preindex",
+    "process", "protocol", "reconcile", "record", "render", "retro-precheck", "run", "score",
+    "serve", "transcript", "validate",
 })
 
 #: Sub-verbs worth reporting separately: `grounding write` and `grounding report` are different
