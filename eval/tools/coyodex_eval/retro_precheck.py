@@ -85,6 +85,12 @@ def build_output_age(repo: Path) -> tuple[float | None, str | None]:
     build window after the commit (a transcript-only rule would then refuse forever, telling them to
     wait for something that already happened). And it does not depend on provenance being older or
     newer than the map — an ordering that does not survive the final `render`.
+
+    **What it observes is a recent WRITE, which is not the same fact as "a build is running."** The
+    operator running `coyodex finalize` or `coyodex render` by hand writes here too. The refusal is
+    still right — a map being rewritten by anything is a map the gates should not be read off — but
+    the message must report the observation and let the reader supply the cause, because an
+    explanation that is wrong teaches the reader to stop believing the check.
     """
     coy = repo / ".coyodex"
     if not coy.is_dir():
@@ -137,12 +143,14 @@ def check(repo: Path, idle_seconds: int = DEFAULT_IDLE_SECONDS,
     detail["newest_build_output_age_seconds"] = None if out_age is None else round(out_age)
     if out_age is not None and out_age < idle_seconds:
         return False, (
-            f"{out_file} was written {out_age:.0f}s ago — the build is still producing output. "
-            f"Provenance is stamped near the END of a build and the build then keeps going "
-            f"(recording advisories, `finalize`, `render`, the commit), so a fresh provenance "
-            f"timestamp ({detail['built_at']}) does NOT mean the map has stopped changing. "
-            f"Retrospecting now would gate a map that is still being written. Wait for "
-            f"`.coyodex/` to go quiet (>{idle_seconds}s)."), detail
+            f"{out_file} was written {out_age:.0f}s ago, so something is still writing under "
+            f"`.coyodex/`. Two things look like this and only you can tell them apart: a build that "
+            f"has not finished (provenance is stamped near the END and the build keeps going — "
+            f"recording advisories, `finalize`, `render`, the commit, so a fresh provenance "
+            f"timestamp of {detail['built_at']} does NOT mean the map stopped changing), or you "
+            f"having just run a coyodex command by hand. Either way the gates would be read off a "
+            f"map that is still moving. Wait for `.coyodex/` to go quiet (>{idle_seconds}s), or "
+            f"pass --idle-seconds if you know it is settled."), detail
 
     tdir = transcript_dir(repo)
     live: list[tuple[str, float]] = []

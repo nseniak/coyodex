@@ -146,7 +146,11 @@ def test_it_refuses_while_the_build_that_stamped_provenance_is_still_writing():
             os.utime(d / f"{PREV}.jsonl", (old, old))    # even a quiet transcript must not save it
             ok, message, detail = check(root, idle_seconds=180, this_session=MINE)
             assert not ok, "a build still writing its own output must stop the retro"
-            assert "still producing output" in message
+            assert "still writing under" in message
+            # It observes a WRITE; it must not assert a cause it cannot know. The operator running
+            # `finalize` or `render` by hand looks identical, and an explanation that is wrong
+            # teaches the reader to stop believing the check.
+            assert "only you can tell them apart" in message
             assert detail["newest_build_output"].startswith(".coyodex/")
         finally:
             shutil.rmtree(d, ignore_errors=True)
@@ -180,5 +184,25 @@ def test_a_fresh_archive_is_not_mistaken_for_a_live_build():
             os.utime(d / f"{PREV}.jsonl", (old, old))
             ok, message, _detail = check(root, idle_seconds=180, this_session=MINE)
             assert ok, message
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def test_the_refusal_reports_the_observation_not_a_diagnosis():
+    """A recent write under `.coyodex/` is not the same fact as "a build is running" — running
+    `coyodex finalize` by hand looks identical. Refusing is still right; claiming to know why is
+    not, and a check that explains wrongly is a check the reader stops believing."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj", output_age_seconds=3600)
+        (root / ".coyodex" / "finalize-report.md").write_text("# hand-run", encoding="utf-8")
+        d = make_transcripts(root, PREV)
+        try:
+            old = time.time() - 3600
+            os.utime(d / f"{PREV}.jsonl", (old, old))
+            ok, message, _detail = check(root, idle_seconds=180, this_session=MINE)
+            assert not ok
+            assert "finalize-report.md" in message, "name the file that moved"
+            assert "--idle-seconds" in message, "offer the override"
+            assert "the build is still producing output" not in message
         finally:
             shutil.rmtree(d, ignore_errors=True)
