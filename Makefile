@@ -16,7 +16,9 @@ MIN_PY := 3.10
 # Codex and Cursor and extra copies would just show up as duplicate skills.
 SKILLS_DIRS := $(HOME)/.claude/skills $(HOME)/.agents/skills
 
-.PHONY: install install-eval uninstall uninstall-eval deps dev venv clean start
+.PHONY: install install-eval install-retro install-dev \
+        uninstall uninstall-eval uninstall-retro uninstall-dev \
+        deps dev venv clean start
 
 # Port for the local map server (the file browser + code viewer backend).
 PORT ?= 8765
@@ -80,6 +82,17 @@ install-retro: deps
 		sed 's|__COYODEX_HOME__|$(REPO)|g' eval/retro/SKILL.md > "$$dir/coyodex-retro/SKILL.md"; \
 		echo "Installed coyodex-retro skill -> $$dir/coyodex-retro (home: $(REPO))"; \
 	done
+
+# Both DEVELOPER skills at once. They are opt-in and always wanted together: eval answers "did my
+# change make the maps worse?" and retro answers "what did that run reveal?" — two halves of the
+# same feedback loop, and neither is meant for a user of coyodex. `install` (the user skill) is
+# deliberately NOT included: installing the developer surface should never be a side effect of
+# setting up the tool.
+install-dev: install-eval install-retro
+	@echo "Installed the developer skills (coyodex-eval + coyodex-retro). The user skill is \`make install\`."
+
+uninstall-dev: uninstall-eval uninstall-retro
+	@echo "Uninstalled the developer skills."
 
 uninstall:
 	@for dir in $(SKILLS_DIRS); do \

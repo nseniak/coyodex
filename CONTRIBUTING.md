@@ -50,9 +50,23 @@ skills home — `~/.claude/skills` (Claude Code) and `~/.agents/skills` (the cro
 standard read by Codex and Cursor):
 
 ```
-make install      # copies skill/coyodex -> ~/.claude/skills + ~/.agents/skills
-make uninstall     # removes it from both
+make install       # the USER skill: skill/coyodex -> ~/.claude/skills + ~/.agents/skills
+make install-dev   # both DEVELOPER skills: coyodex-eval + coyodex-retro
+make uninstall     # removes the user skill from both homes
+make uninstall-dev # removes both developer skills
 ```
+
+`install-dev` is the one a contributor wants: `coyodex-eval` answers "did my change make the maps
+worse?" and `coyodex-retro` answers "what did that run reveal?" — two halves of one feedback loop.
+They are deliberately NOT part of `make install`, so installing the developer surface is never a
+side effect of setting the tool up. (`make install-eval` / `make install-retro` still install one
+at a time.)
+
+**Re-run the relevant target after editing any `SKILL.md`, or after moving the clone.** The install
+renders a COPY into the skills homes with the repo path baked in, and nothing re-runs it for you —
+which is how the main skill spent weeks telling agents to read a method doc that had been renamed.
+`tests/test_skill_pointers.py` keeps the copies thin enough that drift is nearly harmless, but it
+cannot see the installed files.
 
 The `coyodex` package is tested with `pytest` and type-checked with `pyright` (see
 `pyrightconfig.json`). `make dev` builds the repo-local venv and installs both into it
