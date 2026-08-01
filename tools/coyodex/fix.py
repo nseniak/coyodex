@@ -18,10 +18,12 @@ After any fix, re-run the invariant: validate --check-sources → audit → rend
 """
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
+from coyodex import subverb_help
 from coyodex.anchor_drift import (apply_drift_exceptions, drift_findings, drift_records,
                                   load_verdicts)
 from coyodex.audit_model import _claim_text, l2_worklist_model
@@ -437,10 +439,16 @@ def dedup_edge(argv: list[str]) -> int:
     map_path = None
     repo: Path | None = None
     keeps: list[str] = []
+    as_json = False
+    accept_suggested = False
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a in ("--map", "--repo", "--keep"):
+        if a == "--json":
+            as_json = True
+        elif a == "--accept-suggested":
+            accept_suggested = True
+        elif a in ("--map", "--repo", "--keep"):
             i += 1
             val = _need(argv, i, a)
             if a == "--map":
@@ -459,14 +467,36 @@ def dedup_edge(argv: list[str]) -> int:
     m, present = _load(Path(map_path))
     conflicts = _conflicting_edges(m)
     if not conflicts:
-        print("dedup-edge: no (src, verb, dst) edge is declared more than once.")
+        if as_json:
+            print(json.dumps({"conflicts": []}, indent=1))
+        else:
+            print("dedup-edge: no (src, verb, dst) edge is declared more than once.")
         return 0
+    # The suggestion ranking's first term is "exists under --repo"; with no --repo it is constant for
+    # every candidate and the sort silently degrades to shortest-path. A live build passed --repo to
+    # the listing it discarded and omitted it from the listing it applied, with nothing saying so.
+    ranked = {(s, v, d): (
+        [(m.edges[i].where or "(no call site)") for i in idxs],
+        min([(m.edges[i].where or "(no call site)") for i in idxs],
+            key=lambda a: _own_code_rank(a, repo)))
+        for (s, v, d), idxs in sorted(conflicts.items())}
+    if as_json:
+        print(json.dumps({
+            "repo_ranked": repo is not None,
+            "conflicts": [{"src": s, "verb": v, "dst": d, "anchors": anchors,
+                           "suggested": best, "keep_token": f"{s}:{v}:{d}:{best}"}
+                          for (s, v, d), (anchors, best) in ranked.items()],
+        }, indent=1))
+        return 0
+    if accept_suggested:
+        keeps = [f"{s}:{v}:{d}:{best}" for (s, v, d), (_a, best) in ranked.items()]
+        print(f"dedup-edge: accepting the suggested anchor for all {len(keeps)} conflict(s)"
+              f"{'' if repo else ' — WITHOUT --repo, so suggestions are ranked by path length only'}.")
     if not keeps:
         print(f"{len(conflicts)} edge(s) declared more than once, at DIFFERING call sites. "
-              f"Pick the true site for each, then re-run with the --keep token(s):\n")
-        for (s, v, d), idxs in sorted(conflicts.items()):
-            anchors = [(m.edges[i].where or "(no call site)") for i in idxs]
-            best = min(anchors, key=lambda a: _own_code_rank(a, repo))
+              f"Pick the true site for each, then re-run with the --keep token(s) — or "
+              f"`--accept-suggested` to take every suggestion below:\n")
+        for (s, v, d), (anchors, best) in ranked.items():
             print(f"  {s} {v} {d}")
             for anchor in anchors:
                 mark = " <- suggested" if anchor == best else ""
@@ -475,6 +505,10 @@ def dedup_edge(argv: list[str]) -> int:
         print("\nEach --keep drops every OTHER occurrence of that triple. The suggestion prefers an "
               "anchor that exists in --repo, outside tests/scripts, with the shortest path — it is "
               "a hint, not a verdict.")
+        if repo is None:
+            print("NOTE: no --repo was given, so the 'exists in the repo' term is constant and the "
+                  "suggestions are ranked by path length alone. Pass --repo for a real ranking.")
+        print("Machine-readable: re-run with --json rather than parsing the lines above.")
         return 0
     drop_idx: set[int] = set()
     for tok in keeps:
@@ -515,10 +549,17 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       `coyodex anchor-drift` reads). Matches the full (src, verb, dst) triple; an ambiguous
       multi-site edge is skipped, not blind-rewritten.
 
-  dedup-edge --map <map> [--repo <root>] [--keep <src:verb:dst:path:line> ...]
+  dedup-edge --map <map> [--repo <root>] [--json] [--accept-suggested]
+             [--keep <src:verb:dst:path:line> ...]
       With no --keep, LIST every (src, verb, dst) edge declared more than once at DIFFERING call
       sites — the conflict `validate` warns about — and suggest which anchor is the true one.
       With --keep, drop every other occurrence of that triple.
+      --accept-suggested takes the suggestion for EVERY conflict, which is what harvesting the
+      printed --keep lines through a shell was trying to do (and got wrong twice: zsh does not
+      word-split an unquoted expansion, and the surrounding prose also contains "--keep ").
+      --json emits the same listing as data; parse that, never the lines above.
+      Pass --repo, or the "exists in the repo" rank term is constant and suggestions fall back to
+      shortest-path.
 
   drop-edge --map <map> <src> <verb> <dst> [--drop-steps | --repoint <newDst>]
       Remove a refuted backbone edge. By default it REPORTS the flow steps that rode it (for a
@@ -542,6 +583,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"coyodex fix: unknown verb '{verb}'\n", file=sys.stderr)
         print(_USAGE, file=sys.stderr)
         return 2
+    # Above the per-verb parsers on purpose: each one treats an unknown flag as a usage error, so
+    # all four answered `ERROR: unknown argument '--help'`. See subverb_help.
+    helped = subverb_help.handle(_USAGE, verb, rest)
+    if helped is not None:
+        return helped
     return fn(rest)
 
 

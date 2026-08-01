@@ -317,3 +317,51 @@ def test_apply_drift_accepts_the_repo_flag_its_sibling_requires():
         v.write_text(json.dumps({"grounding": []}), encoding="utf-8")
         assert fix.main(["apply-drift", "--map", str(p), "--verdicts", str(v),
                          "--repo", tmp]) == 0
+
+
+# ── the retro findings: a sub-verb that answers --help, and an intent the flags could not express ──
+
+def test_every_fix_sub_verb_answers_help_instead_of_erroring(capsys):
+    """Four verbs answered `ERROR: unknown argument '--help'` because each per-verb parser treats an
+    unknown flag as a usage error. A live build lost seven turns to this on `dedup-edge`."""
+    for verb in ("apply-drift", "drop-edge", "dedup-relation", "dedup-edge"):
+        assert fix.main([verb, "--help"]) == 0, verb
+        out = capsys.readouterr().out
+        assert verb in out and out.strip(), f"{verb} printed no help"
+
+
+def test_dedup_edge_json_is_parseable_and_says_whether_repo_ranked():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        before = p.read_text()
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            assert fix.main(["dedup-edge", "--map", str(p), "--json"]) == 0
+        payload = json.loads(buf.getvalue())
+        assert payload["repo_ranked"] is False
+        assert len(payload["conflicts"]) == 1
+        c = payload["conflicts"][0]
+        assert (c["src"], c["verb"], c["dst"]) == ("C1", "calls", "C2")
+        assert c["keep_token"].startswith("C1:calls:C2:")
+        assert c["suggested"] in c["anchors"]
+        assert p.read_text() == before, "--json must not edit the map"
+
+
+def test_dedup_edge_accept_suggested_resolves_every_conflict():
+    """"Take every suggestion" was the intent behind all four failed shell harvests; it had no flag."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested"]) == 0
+        edges = load_model_path(p).edges
+        assert len(edges) == 1, "every duplicated triple must be resolved to one row"
+
+
+def test_dedup_edge_says_when_suggestions_are_unranked_for_want_of_repo(capsys):
+    """Without --repo the 'exists in the repo' rank term is constant, so the sort degrades to
+    shortest-path. A live build passed --repo to the listing it discarded and omitted it from the
+    listing it applied, and nothing in the output said the ranking had changed."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        assert fix.main(["dedup-edge", "--map", str(p)]) == 0
+        assert "no --repo" in capsys.readouterr().out

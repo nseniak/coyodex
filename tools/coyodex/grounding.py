@@ -28,6 +28,7 @@ import json
 import sys
 from pathlib import Path
 
+from coyodex import subverb_help
 from coyodex.anchor_drift import load_verdicts
 
 USAGE = """usage: coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
@@ -202,6 +203,10 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: unknown verb '{verb}' (expected `write` or `report`)\n\n{USAGE}",
               file=sys.stderr)
         return 2
+    # Same hole `coyodex fix` had: the option loop below rejects `--help` as an unknown option.
+    helped = subverb_help.handle(USAGE, verb, rest)
+    if helped is not None:
+        return helped
     worklist_path = out_path = None
     verdicts: list[str] = []
     note = ""
