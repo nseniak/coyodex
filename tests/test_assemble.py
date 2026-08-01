@@ -699,3 +699,61 @@ def test_a_draft_fragment_is_skipped_by_name():
         assert errors == []
         assert [label for label, _ in parts] == ["h-a.json"]
         assert len(notes) == 1 and "draft" in notes[0]
+
+
+# ── one section per heading ──────────────────────────────────────────────────────────────────────
+
+def make_extras_fragment(name: str, heading: str, body: str) -> tuple[str, object]:
+    from coyodex.model import ExtraSection, ProjectModel
+    m = ProjectModel(title="T", goal="g")
+    m.extras.append(ExtraSection(heading=heading, body=body))
+    return (name, m)
+
+
+def test_same_named_extras_sections_are_merged_into_one():
+    """A live map shipped five `Entry-point coverage` sections, three `Balance exceptions` and two
+    `Coverage exceptions` — one per contributing fragment, simply concatenated."""
+    from coyodex.assemble import merge_fragments
+    out, problems = merge_fragments([
+        make_extras_fragment("a.json", "Entry-point coverage", "- first"),
+        make_extras_fragment("b.json", "Entry-point coverage", "- second"),
+        make_extras_fragment("c.json", "Balance exceptions", "- other"),
+    ])
+    headings = [e.heading for e in out.extras]
+    assert headings.count("Entry-point coverage") == 1, headings
+    body = next(e.body for e in out.extras if e.heading == "Entry-point coverage")
+    assert "- first" in body and "- second" in body, "no recorded line may be dropped"
+    assert not problems
+
+
+def test_merging_headings_makes_record_replace_reach_every_line():
+    """The write path this actually fixes: `record.append_line` resolves a heading with the FIRST
+    matching section, so with the sections split a `--replace` aimed at a line in a later one
+    matched nothing and reported "nothing replaced"."""
+    from coyodex.assemble import merge_fragments
+    from coyodex.record import append_line
+    out, _ = merge_fragments([
+        make_extras_fragment("a.json", "Balance exceptions", "- alpha: original why"),
+        make_extras_fragment("b.json", "Balance exceptions", "- beta: original why"),
+    ])
+    # the prefix is matched AFTER the bullet is stripped, so it carries no "- "
+    changed, message = append_line(out, "Balance exceptions", "- beta: corrected why",
+                                   replace_prefix="beta:")
+    assert changed, message
+    body = next(e.body for e in out.extras if e.heading == "Balance exceptions")
+    assert "corrected why" in body and "beta: original why" not in body
+
+
+def test_a_heading_written_in_another_case_is_the_same_section():
+    """Matching reuses `record._resolve_heading` rather than a third implementation, so it is
+    case- and outer-space-tolerant (it does NOT normalise interior spacing — that would silently
+    accept a heading no check reads)."""
+    from coyodex.assemble import merge_fragments
+    out, _ = merge_fragments([
+        make_extras_fragment("a.json", "Coverage exceptions", "- one"),
+        make_extras_fragment("b.json", "  coverage exceptions  ", "- two"),
+    ])
+    covers = [e for e in out.extras if e.heading.strip().lower() == "coverage exceptions"]
+    assert len(covers) == 1, [e.heading for e in out.extras]
+    assert covers[0].heading == "Coverage exceptions", "the canonical spelling wins"
+    assert "- one" in covers[0].body and "- two" in covers[0].body

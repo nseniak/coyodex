@@ -31,6 +31,7 @@ from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
     Edge,
+    ExtraSection,
     Flow,
     FlowStep,
     MessagingRow,
@@ -338,12 +339,50 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
     chan_merged = _merge_duplicate_messaging(out, problems)   # two agents, same example row
     edges_before_dup = len(out.edges)
     _merge_duplicate_edges(out)  # LAST: dep-merge / actor-strip / component re-point can create exact dups
+    extras_merged = _merge_extras_headings(out)
     if stats is not None:
         stats["actor_edges_stripped"] = actor_stripped
         stats["components_merged"] = comp_merged
         stats["messaging_rows_collapsed"] = chan_merged
         stats["duplicate_edges_collapsed"] = edges_before_dup - len(out.edges)
+        stats["extras_sections_merged"] = extras_merged
     return out, problems
+
+
+def _merge_extras_headings(m: ProjectModel) -> int:
+    """One section per heading. Returns how many duplicate sections were folded away.
+
+    Extras arrive one per contributing fragment and were simply concatenated, so a live map shipped
+    five `Entry-point coverage` sections, three `Balance exceptions` and two `Coverage exceptions`,
+    each with different content. That is more than a reading annoyance:
+
+      * `record.append_line` resolves a heading with `next(...)` — the FIRST section. With five
+        sections a `--replace` aimed at a line in the third finds the first, matches no prefix and
+        reports "nothing replaced", so the documented way to correct a record silently does nothing.
+      * a reader of `project-map.md` meets the same heading repeatedly and has no way to know which
+        copy the checks read.
+
+    Bodies are concatenated in fragment-argument order, which is the order the reader already sees,
+    and blank bodies are dropped so a placeholder section cannot leave a stray blank line. Matching
+    is the same case/space-tolerant rule `record` and the readers use — deliberately shared rather
+    than a third implementation of "is this the same heading"."""
+    from coyodex.record import _resolve_heading
+    by_key: dict[str, ExtraSection] = {}
+    order: list[str] = []
+    for sec in m.extras:
+        canonical, _complaint = _resolve_heading(sec.heading)
+        key = canonical.strip().lower()
+        body = sec.body.strip("\n")
+        if key not in by_key:
+            by_key[key] = ExtraSection(heading=canonical, body=body)
+            order.append(key)
+            continue
+        keep = by_key[key]
+        if body:
+            keep.body = f"{keep.body}\n{body}" if keep.body.strip() else body
+    merged = len(m.extras) - len(order)
+    m.extras = [by_key[k] for k in order]
+    return merged
 
 
 def _merge_duplicate_messaging(m: ProjectModel, problems: list[str]) -> int:
