@@ -55,6 +55,25 @@ Tell the user to open a new chat in the same project and run `/coyodex-retro` th
 .coyodex/provenance.json         names the session that built it
 ```
 
+**First, refuse if the build has not finished:**
+
+```
+COYODEX_HOME/.venv/bin/coyodex-eval retro-precheck        # exit 1 = do not proceed
+```
+
+Step 0a's same-session guard does NOT cover this, and the gap is silent. Provenance is stamped near
+the END of a build, so while one is running it still names the PREVIOUS build — a different session
+id from yours, so the guard passes, the retro proceeds, and every finding is about the wrong run
+with nothing saying so. `retro-precheck` compares provenance against the newest OTHER transcript in
+the project and refuses while that one is still being written; it also refuses a half-written map.
+
+Do not hand-roll this wait. The one live attempt used `find -newermt '-120 seconds'`, which this
+platform's `find` rejects outright — so the idle test silently read as "always idle" — and it waited
+on a `dev-rebuilds/NNNN/` directory that **a build never creates** (archiving is
+`eval/scripts/archive_map.py`, a developer convention; see the note above). Both conditions were
+unsatisfiable, and the finished build went unnoticed for ~90 minutes. Poll the command instead, from
+a background waiter, and read its exit code.
+
 Read `provenance.json`. Its last `sessions[]` entry carries the `session_id` and `built_at` of the
 build. The transcript is:
 

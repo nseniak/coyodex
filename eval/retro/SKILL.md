@@ -28,9 +28,14 @@ memory.**
 So whenever the method doc says to read a doc or run `.venv/bin/coyodex ...`, that path is **under
 `COYODEX_HOME`**. Only `.coyodex/...` and `.coyodex-eval/...` paths are in the reviewed project.
 
-**Precondition:** a build has finished in this project, so `.coyodex/project-map.json` and
+**Precondition:** a build has FINISHED in this project, so `.coyodex/project-map.json` and
 `.coyodex/provenance.json` both exist. Provenance names the session that built the map, which is
 how the retro finds the right transcript instead of guessing.
+
+**Check it, don't assume it** — `__COYODEX_HOME__/.venv/bin/coyodex-eval retro-precheck` (exit 1 =
+do not proceed). Provenance is stamped near the END of a build, so while one is running it still
+names the PREVIOUS build. That is a different session id from yours, so the same-chat guard below
+passes, the retro runs, and every finding is about the wrong build with nothing saying so.
 
 **Run this in a NEW chat, never the build's own.** A transcript is named after its session, so
 running here would append the retro's own turns to the file it is analysing — it would be reading
