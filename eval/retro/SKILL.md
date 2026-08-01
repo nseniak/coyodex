@@ -12,42 +12,19 @@ description: >
 
 # coyodex-retro
 
-**For the coyodex DEVELOPER, not for users of coyodex.** It exists to answer "did my change to the method or the tooling make the maps worse?", which is a question only someone changing coyodex asks. A user's map evolves incrementally alongside their code; a from-scratch rebuild is a first-run event for them, so the repeated rebuilding this command depends on is a developer habit.
+A retrospective on ONE finished build: what the run reveals about the tools and the method.
 
-A retrospective on ONE finished build. **Read the method doc and follow it; don't work from
-memory.**
+**The repo is the source of truth — this skill is only a pointer into it, and is deliberately
+thin.** Anything written HERE is a copy baked into `~/.claude/skills/` at `make install-retro` time, and
+goes stale the moment the repo moves on: the coyodex skill told agents for weeks to read a method
+doc that had been renamed. So this file carries only what is needed to FIND the repo. Everything
+else lives there and is read live.
 
-**Two different directories — keep them straight:**
-- **`COYODEX_HOME` = `__COYODEX_HOME__`** — the coyodex clone. The retro method doc, the method it
-  audits (`method.md`, `method/`), and the CLI (`.venv/bin/coyodex`, `.venv/bin/coyodex-eval`) are
-  all here.
+- **`COYODEX_HOME` = `__COYODEX_HOME__`** — the coyodex clone. Every method doc, template and tool
+  lives here; read and run them with that absolute prefix.
 - **The project whose build you are reviewing** — your current working directory, a *different*
-  path. Its map is `.coyodex/`, its previous maps are `.coyodex/dev-rebuilds/NNNN/`, and the retro's
-  output goes in `.coyodex-eval/retro/` (git-ignored).
+  path. Only `.coyodex/` and `.coyodex-eval/` paths belong to it.
 
-So whenever the method doc says to read a doc or run `.venv/bin/coyodex ...`, that path is **under
-`COYODEX_HOME`**. Only `.coyodex/...` and `.coyodex-eval/...` paths are in the reviewed project.
-
-**Precondition:** a build has FINISHED in this project, so `.coyodex/project-map.json` and
-`.coyodex/provenance.json` both exist. Provenance names the session that built the map, which is
-how the retro finds the right transcript instead of guessing.
-
-**Check it, don't assume it** — `__COYODEX_HOME__/.venv/bin/coyodex-eval retro-precheck` (exit 1 =
-do not proceed). Provenance is stamped near the END of a build, so while one is running it still
-names the PREVIOUS build. That is a different session id from yours, so the same-chat guard below
-passes, the retro runs, and every finding is about the wrong build with nothing saying so.
-
-**Run this in a NEW chat, never the build's own.** A transcript is named after its session, so
-running here would append the retro's own turns to the file it is analysing — it would be reading
-itself. Fresh context is also the point: an agent that built the map cannot see its own workarounds
-as friction. The method doc's Step 0a refuses when the session ids match.
-
-**This is REPORT ONLY.** It edits no map, no tool and no method doc. Its findings are proposals for
-the user to decide on.
-
-**It is not `/coyodex-eval`.** That one rebuilds the map blind and judges it against a baseline to
-answer *did quality regress*. This one reads a build that already happened to answer *what did the
-run reveal about the tools and the method*. Run `/coyodex-eval` when you want the semantic quality
-verdict; run this when you want the bug list.
-
-Read `__COYODEX_HOME__/eval/retro/method.md` and follow it end to end.
+Read `__COYODEX_HOME__/eval/retro/method.md` and follow it end to end. It is the entry point, and it names every
+other doc, tool and precondition — work from it, not from memory, and do not expect this file to
+list them.

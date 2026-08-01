@@ -11,19 +11,19 @@ description: >
 
 # coyodex
 
-coyodex is a method (prompts) + tools for a drillable map of a codebase. **The repo is the source of
-truth — this skill only points at it. Read the method docs and follow them; don't work from memory.**
+coyodex is a method (prompts) + tools for a drillable map of a codebase.
 
-**Two different directories — keep them straight:**
-- **`COYODEX_HOME` = `__COYODEX_HOME__`** — the coyodex clone. ALL method docs (`method.md`,
-  `method/...`, templates) and the tools (`.venv/bin/coyodex`) live here.
-- **The repo you are mapping** — your current working directory, a *different* path. Its only
-  coyodex content is `.coyodex/` (the map + report you produce).
+**The repo is the source of truth — this skill is only a pointer into it, and is deliberately
+thin.** Anything written HERE is a copy baked into `~/.claude/skills/` at `make install` time, and
+goes stale the moment the repo moves on: the coyodex skill told agents for weeks to read a method
+doc that had been renamed. So this file carries only what is needed to FIND the repo. Everything
+else lives there and is read live.
 
-So whenever a doc says to read `method.md`, `method/model.md`, a template, or to run
-`.venv/bin/coyodex ...`, that path is **under `COYODEX_HOME`** — read/run it with that absolute
-prefix (e.g. `__COYODEX_HOME__/method.md`). **Never look for method docs or tools in the repo you
-are mapping; they are not there.** Only `.coyodex/...` paths are relative to the analyzed repo.
+- **`COYODEX_HOME` = `__COYODEX_HOME__`** — the coyodex clone. Every method doc, template and tool
+  lives here; read and run them with that absolute prefix.
+- **The repo you are mapping** — your current working directory, a *different*
+  path. Only `.coyodex/` paths belong to it.
 
-Read `__COYODEX_HOME__/method/dispatch.md` and follow it. It picks the mode (build / analyze /
-accept), handles an existing baseline, and points to every other doc and tool.
+Read `__COYODEX_HOME__/method/dispatch.md` and follow it end to end. It is the entry point, and it names every
+other doc, tool and precondition — work from it, not from memory, and do not expect this file to
+list them.

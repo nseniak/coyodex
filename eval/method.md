@@ -1,5 +1,10 @@
 # coyodex-eval — method-quality regression for a coyodex map
 
+**For the coyodex DEVELOPER, not for users of coyodex.** It answers "did my change to the
+method or the tooling make the maps worse?", which is a question only someone changing
+coyodex asks. A user's map evolves incrementally alongside their code; a from-scratch rebuild
+is a first-run event for them, so the repeated rebuilding this depends on is a developer habit.
+
 Run this **inside a project that already has a coyodex map** (`.coyodex/project-map.json`). It rebuilds a
 FRESH map with the current coyodex method, judges it, and compares it to that baseline — answering one
 question: **did the method/tooling get better or worse?** All results go in `.coyodex-eval/`

@@ -12,27 +12,19 @@ description: >
 
 # coyodex-eval
 
-**For the coyodex DEVELOPER, not for users of coyodex.** It exists to answer "did my change to the method or the tooling make the maps worse?", which is a question only someone changing coyodex asks. A user's map evolves incrementally alongside their code; a from-scratch rebuild is a first-run event for them, so the repeated rebuilding this command depends on is a developer habit.
+A method-quality regression check on a codebase map: rebuild blind, judge, compare.
 
-coyodex-eval is a method (prompts) + the `coyodex` CLI for a method-quality regression check on a
-codebase map. **Read the method doc and follow it; don't work from memory.**
+**The repo is the source of truth — this skill is only a pointer into it, and is deliberately
+thin.** Anything written HERE is a copy baked into `~/.claude/skills/` at `make install-eval` time, and
+goes stale the moment the repo moves on: the coyodex skill told agents for weeks to read a method
+doc that had been renamed. So this file carries only what is needed to FIND the repo. Everything
+else lives there and is read live.
 
-**Two different directories — keep them straight:**
-- **`COYODEX_HOME` = `__COYODEX_HOME__`** — the coyodex clone. The eval bundle (this skill, the method
-  doc, and the config `eval/thresholds.json`, `eval/rubric.md`) lives under `eval/`,
-  and the CLI is `.venv/bin/coyodex` — all here.
-- **The project you are evaluating** — your current working directory, a *different* path. Its
-  baseline map is `.coyodex/project-map.json`; all eval output goes in `.coyodex-eval/` (git-ignored).
+- **`COYODEX_HOME` = `__COYODEX_HOME__`** — the coyodex clone. Every method doc, template and tool
+  lives here; read and run them with that absolute prefix.
+- **The project you are evaluating** — your current working directory, a *different*
+  path. Only `.coyodex/` and `.coyodex-eval/` paths belong to it.
 
-So whenever the method doc says to read a config file or run `.venv/bin/coyodex ...`, that path is
-**under `COYODEX_HOME`** — use that absolute prefix (e.g. `__COYODEX_HOME__/eval/rubric.md`).
-Only `.coyodex/...` and `.coyodex-eval/...` paths are in the evaluated project.
-
-**Precondition:** this needs an existing `.coyodex/project-map.json` (markdown maps are not supported), and the working tree must be at the
-commit that map is pinned to (the method refuses otherwise — see Step 1). If there is no map yet, run
-`/coyodex` first to build one.
-
-Read `__COYODEX_HOME__/eval/method.md` and follow it end to end (guard → build the fresh map BLIND
-in an isolated worktree + freeze its hash → baseline cache → judge → compare + store). The order
-matters: the build comes first so no baseline numbers exist in context while the map is written, and
-the frozen map is never edited afterwards. It runs the FULL judge every time.
+Read `__COYODEX_HOME__/eval/method.md` and follow it end to end. It is the entry point, and it names every
+other doc, tool and precondition — work from it, not from memory, and do not expect this file to
+list them.
