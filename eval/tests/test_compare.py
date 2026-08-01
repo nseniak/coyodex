@@ -441,3 +441,43 @@ def _run() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(_run())
+
+
+# ── deployment linkage: units nothing runs in ────────────────────────────────────────────────────
+
+def test_a_deployment_unit_losing_its_last_component_is_a_hard_gate():
+    """A live rebuild kept all eight units, dropped the two components that owned the nginx and
+    vector files, and filled `runs_in` by contiguous component-id range — a formula that can only
+    produce contiguous buckets, so six of eight boxes ended up empty. Nothing watched it."""
+    base = make_profile(deployment_units=8, deployment_units_linked=4)
+    cand = make_profile(deployment_units=8, deployment_units_linked=2)
+    report = compare(base, cand, Thresholds())
+    gate = next(g for g in report.gates if g.name == "deployment-linkage-no-drop")
+    assert not gate.passed, gate.detail
+    assert "4/8 -> 2/8" in gate.detail
+    assert report.verdict == "REGRESSED"
+
+
+def test_runs_in_coverage_rising_does_not_hide_lost_linkage():
+    """The trap this gate exists for: the number that WAS being watched moved the right way. Across
+    the same rebuild `runs_in` coverage went 93/96 to 66/66 — a perfect score, produced by dumping
+    every component into two units."""
+    base = make_profile(components=96, deployment_units=8, deployment_units_linked=4)
+    cand = make_profile(components=66, deployment_units=8, deployment_units_linked=2)
+    report = compare(base, cand, Thresholds())
+    assert not next(g for g in report.gates if g.name == "deployment-linkage-no-drop").passed
+
+
+def test_holding_deployment_linkage_passes_the_gate():
+    base = make_profile(deployment_units=8, deployment_units_linked=4)
+    cand = make_profile(deployment_units=8, deployment_units_linked=5)
+    assert next(g for g in compare(base, cand, Thresholds()).gates
+                if g.name == "deployment-linkage-no-drop").passed
+
+
+def test_a_map_with_no_deployment_section_is_not_gated():
+    """Most maps declare no units at all; the gate must not fire on an absent section."""
+    base = make_profile(deployment_units=0, deployment_units_linked=0)
+    cand = make_profile(deployment_units=0, deployment_units_linked=0)
+    assert not [g for g in compare(base, cand, Thresholds()).gates
+                if g.name == "deployment-linkage-no-drop"]

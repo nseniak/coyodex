@@ -93,6 +93,7 @@ class Thresholds:
     no_new_contradictions: bool = True
     coverage_flags_may_increase_by: int = 0
     auth_surfaces_must_not_drop: bool = True
+    deployment_linkage_must_not_drop: bool = True
     bands: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_BANDS))
     judge_bands: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_JUDGE_BANDS))
     granularity_band_pct: float = DEFAULT_GRANULARITY_BAND_PCT
@@ -120,6 +121,8 @@ class Thresholds:
             no_new_contradictions=hard.get("no_new_contradictions", True),
             coverage_flags_may_increase_by=hard.get("coverage_flags_may_increase_by", 0),
             auth_surfaces_must_not_drop=hard.get("auth_surfaces_must_not_drop", True),
+            deployment_linkage_must_not_drop=hard.get(
+                "deployment_linkage_must_not_drop", True),
             bands=bands,
             judge_bands=jbands,
             granularity_band_pct=float(gran),
@@ -259,6 +262,25 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         if dropped:
             notes.append("auth surfaces in baseline but not (by name) in candidate — names drift with "
                          f"LLM wording, so verify rather than trust: {', '.join(dropped)}")
+
+    if t.deployment_linkage_must_not_drop and baseline.deployment_units:
+        # LINKAGE, not coverage. A live rebuild kept all eight deployment units, dropped the two
+        # components that owned the nginx and vector files, and filled `runs_in` by contiguous
+        # component-id range — a formula that can only produce contiguous buckets, so six of the
+        # eight boxes ended up with nothing running in them. The Deployment view still rendered.
+        # `runs_in` coverage went 93/96 -> 66/66 across the same rebuild: a PERFECT score, produced
+        # by dumping every component into two units. Coverage was the number being watched and it
+        # moved the right way while the view got poorer, which is why this gate counts units that
+        # some component actually claims instead.
+        ok = candidate.deployment_units_linked >= baseline.deployment_units_linked
+        gates.append(GateResult("deployment-linkage-no-drop", ok,
+            f"deployment units hosting a component "
+            f"{baseline.deployment_units_linked}/{baseline.deployment_units} -> "
+            f"{candidate.deployment_units_linked}/{candidate.deployment_units}"))
+        if not ok:
+            notes.append("a unit nothing runs in is an empty box in the Deployment view — check "
+                         "whether the components that owned those files were dropped, and whether "
+                         "`runs_in` was filled from the deploy manifests or from an id-range formula")
 
     # Granularity — both counts measured against the same code-derived E; only the CANDIDATE gates.
     # The gate uses the CANDIDATE profile's E only: that is the value re-computed from the tree at

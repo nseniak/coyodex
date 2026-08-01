@@ -94,6 +94,15 @@ class MapProfile:
     entities_in_flows_pct: float | None = None  # share of all entities; both fields None when the
     #                                            map has no entities or no flows (an untraced map
     #                                            is "not yet traced", not "traced and zero")
+    # ── deployment linkage ──────────────────────────────────────────────────────────────────────
+    # A Deployment view is only a view if components point at units. A live rebuild kept all eight
+    # units, dropped the two components that owned the nginx and vector files, and filled `runs_in`
+    # by contiguous component-id range — a formula that can only produce contiguous buckets, so six
+    # of the eight boxes ended up empty. Nothing watched it: `runs_in` COVERAGE went 93/96 -> 66/66,
+    # a perfect score produced by dumping everything into two units. Coverage is not linkage.
+    deployment_units: int = 0
+    deployment_units_linked: int = 0             # units named by at least one component's runs_in
+
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
     use_case_names: list[str] = field(default_factory=list)
@@ -159,7 +168,14 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     e_in_flows = (len(validate_model.flow_touched_entities(m))
                   if m.entities and m.flows else None)
 
+    # Linkage, not coverage: how many declared units any component actually claims to run in.
+    unit_names = [u.unit for u in m.deployment if getattr(u, "unit", None)]
+    claimed = {name for c in m.components for name in (c.runs_in or [])}
+    claimed |= {name for ep in m.entry_points for name in (getattr(ep, "runs_in", None) or [])}
+
     return MapProfile(
+        deployment_units=len(unit_names),
+        deployment_units_linked=sum(1 for u in unit_names if u in claimed),
         use_cases=len({u.id for u in m.use_cases}),
         subsystems=len({s.id for s in m.subsystems}),
         subdomains=len({s.id for s in m.subdomains}),
