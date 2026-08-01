@@ -102,3 +102,36 @@ second map file** (a per-area `.coyodex/<area>/project-map.md` "child map"): a s
 separate ID space, so cross-references can't resolve, bidirectional links and shared elements break, the
 viewer can't drill across it, and Analyze/Accept/change-impact only ever track this one baseline. Child
 maps are **not supported**.
+
+## Waiting at a barrier (every fan-out, every phase)
+
+This is here, in the file the skill points at, because the rule lived only in `method.md` — inside a
+block introduced by "**Parallel mode covers HARVESTING ONLY … Verification is NOT part of it**", and
+this file did not contain the words *poll*, *sleep*, *Monitor*, *notification*, *wait* or *barrier*
+anywhere. Every build reads this file. It applies to **every** fan-out: harvest, trace, and the
+Phase-4 skeptics.
+
+**The wait is a TEXT turn. Emit no tool call at all.**
+
+- **Never** `sleep`, `until … sleep …`, or a keep-alive like `echo ok` — foreground or backgrounded.
+  A no-op turn costs a full model round trip and yields the turn no better than ending on text.
+- **Never** `ls` the fragment or verdicts directory. A not-ready file reads as an error and burns
+  the turn. It is also unsafe: on a live build a verdicts file was tallied 22 seconds before the
+  agent writing it finished, and only luck kept the read from being truncated JSON.
+- **The agents' completion notifications ARE the barrier signal.** They arrive named and carrying
+  the agent's result. A live build had all fifteen and counted files anyway.
+- If you genuinely must block on a condition, use the **`Monitor` tool with an until-condition** —
+  and `Monitor`'s command must not itself be an `ls`/`sleep` poll. (`Monitor` is deferred: run
+  `ToolSearch select:Monitor` once before the first call.) **One barrier means ONE `Monitor`.**
+
+The measured cost of ignoring this: one build spent **88 of its 278 tool calls (32 %)** on
+`sleep 1; echo ok`, 77 of them inside a single 9-minute barrier — one poll every 7 seconds — and
+never called `Monitor` or `ToolSearch` once in 560 turns. The prose in `method.md` had already been
+escalated twice, citing an earlier build that wasted 22 %. **L3 assertion 10 is the enforcement;
+this paragraph is the courtesy.**
+
+**Dispatch the known-longest slice FIRST** — launch order is the only lever on when a barrier
+closes. Where the slices are deliberately uniform (the Phase-4 skeptic batches are capped at the
+same claim count) that lever does not exist: identical 40-claim batches have run 4m54s to 10m31s,
+a 2.1× spread with nothing to sort on. There, **probe the straggler** with `SendMessage` after a
+couple of minutes of silence — not with a late `ls` sweep, and not by waiting out the tail.

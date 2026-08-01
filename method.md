@@ -965,9 +965,11 @@ synthesis → parallel trace.**
   `deployment[]` units exist but no component sets `runs_in`, and flags a formula-filled `runs_in`.
   Keep fragment argument order stable and author the reconcile ids against the assembled ids (dedup
   survivors are first-occurrence-in-argument-order, so reordering fragments can shift surviving ids).
-  - **Generate the file — `coyodex reconcile`.** Hand-authoring is fine below ~30 assignments; above
-    that it wants explicit id LISTS, and on a large map that is hundreds of ids nobody types
-    correctly. Write RULES against the fact you actually know — the source path — and let the tool
+  - **Generate the file — `coyodex reconcile`.** Count IDS, not rules: a file of 25 rules can carry
+    187 hand-typed ids, and "25 rules" reads as small. There is no hand-authoring threshold any
+    more, because the one that used to be here ("fine below ~30 assignments") is the sentence ten
+    consecutive builds used to justify writing the file by hand — including the 187-id one. It wants
+    explicit id LISTS, and on any real map that is hundreds of ids nobody types correctly. Write RULES against the fact you actually know — the source path — and let the tool
     resolve them into ids. **Point it at the FRAGMENTS**: you are mid-build, so the map does not
     exist yet, and it does not need to — `assemble` mints no ids, so the `(id, source)` pairs the
     rules match are the same either way.
@@ -1133,7 +1135,17 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   under `unverifiable`, which is right for the count and wrong for the reader, so run
   **`coyodex grounding report`** to see ties listed apart from the claims a skeptic actually called
   unverifiable — a live build's own grounding note described four unverifiables as one kind when two
-  were the other. **Cap each batch at ~40 claims** and split an oversized theme into
+  were the other.
+- **Re-verify every REFUTATION against the code before applying it.** A refutation rewrites the map;
+  a false one corrupts it silently and no gate can tell the difference. The majority vote is a
+  filter, not a verdict, and on the highest-risk claim of a live build it returned the WRONG answer:
+  three skeptics split 2-1 on whether the rate limiter was installed, and the lead only got it right
+  by grepping `app.py` itself. In the same batch two more refutations claimed a component was unused
+  because neither source named it — while one of its own files was imported by both. Three of that
+  batch's adverse findings were false, and all three were caught by the lead's own initiative rather
+  than by any step written here. This is that step: open the file, confirm the refutation, THEN
+  reconcile. Rejecting a refutation is a normal outcome — say so in `grounding.note`.
+- **Cap each batch at ~40 claims** and split an oversized theme into
   two skeptics rather than one long-running one — a live build gave one skeptic 144 claims (150
   turns, 10 minutes, the phase's critical path) while its siblings finished in half the time;
   more, smaller skeptics also mean fresher context per claim, so this trades nothing away.
@@ -1441,7 +1453,12 @@ It adds no check of its own. What it adds is a record and an answer:
   filter narrower than the run that surfaced it** — the same build re-checked with a grep whose
   pattern no longer matched the wording, the finding vanished from view, and it shipped unrecorded
   and unfixed. Narrowing the view is what a waved-through advisory looks like from the inside. (L3
-  assertion 15 watches this.) When a message says a recorded exception silenced more than it names,
+  assertion 15 watches this.) **`grep -v` on a gate's output is the same move in disguise:**
+  filtering a family out of your own view is not reconciling it. A later build piped `validate`
+  through `grep -v 'declared .* times with differing'`, hiding 38 duplicate-edge warnings that then
+  stayed invisible across two assembles and an entire grounding pass — the same 38 `fix dedup-edge`
+  listed when it was finally run 30 turns later. If a family is noise, record an exception; never
+  delete it from the report you are reading. When a message says a recorded exception silenced more than it names,
   the re-read is **`coyodex validate <map> --ignore-exceptions`** — not a hand-edited copy of the
   map, which is what the message used to ask for and which no build ever did.
 - **it says whether every check actually ran.** Run the three commands by hand and a skipped one
