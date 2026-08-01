@@ -252,3 +252,68 @@ def test_an_unparseable_edge_claim_is_not_reported_as_a_missing_security_row(cap
     assert "could not parse back to an edge" in combined
     last = [ln for ln in out.out.splitlines() if ln.strip()][-1]
     assert "NOT APPLICABLE" in last, last
+
+
+# --- fix dedup-edge -------------------------------------------------------------------------
+#
+# `validate` warned about (src, verb, dst) declared at DIFFERING call sites and no verb resolved it,
+# so a live build hand-wrote a 40-line script for 24 of them and dropped 29 rows unreviewed —
+# against this tool's own claim that these mechanical edits are never hand-scripted.
+
+
+def make_dup_edge_map(tmp: str) -> Path:
+    p = Path(tmp) / "project-map.json"
+    p.write_text(json.dumps({
+        "format": FORMAT, "title": "T", "goal": "g",
+        "components": [{"id": "C1", "name": "A", "source": "src/a.py:1"},
+                       {"id": "C2", "name": "B", "source": "src/b.py:1"}],
+        "edges": [{"src": "C1", "verb": "calls", "dst": "C2", "why": "w", "where": "src/a.py:10"},
+                  {"src": "C1", "verb": "calls", "dst": "C2", "why": "w", "where": "tests/a.py:99"}],
+    }), encoding="utf-8")
+    return p
+
+
+def test_dedup_edge_lists_the_conflict_and_writes_nothing():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        before = p.read_text()
+        assert fix.main(["dedup-edge", "--map", str(p)]) == 0
+        assert p.read_text() == before, "listing must not edit the map"
+
+
+def test_dedup_edge_keeps_the_named_anchor_and_drops_the_rest():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        assert fix.main(["dedup-edge", "--map", str(p),
+                         "--keep", "C1:calls:C2:src/a.py:10"]) == 0
+        edges = load_model_path(p).edges
+        assert len(edges) == 1 and edges[0].where == "src/a.py:10"
+
+
+def test_dedup_edge_refuses_an_anchor_none_of_the_occurrences_has():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        assert fix.main(["dedup-edge", "--map", str(p), "--keep", "C1:calls:C2:src/z.py:1"]) == 1
+        assert len(load_model_path(p).edges) == 2, "nothing may be dropped on a bad --keep"
+
+
+def test_dedup_edge_is_silent_when_there_is_no_duplicate():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        p.write_text(json.dumps({
+            "format": FORMAT, "title": "T", "goal": "g",
+            "components": [{"id": "C1", "name": "A", "source": "src/a.py:1"}],
+            "edges": [],
+        }), encoding="utf-8")
+        assert fix.main(["dedup-edge", "--map", str(p)]) == 0
+
+
+def test_apply_drift_accepts_the_repo_flag_its_sibling_requires():
+    """`anchor-drift` REQUIRES --repo and the two run back-to-back on the same inputs; rejecting it
+    here cost a live build a turn on `unknown argument '--repo'`."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        v = Path(tmp) / "verdicts.json"
+        v.write_text(json.dumps({"grounding": []}), encoding="utf-8")
+        assert fix.main(["apply-drift", "--map", str(p), "--verdicts", str(v),
+                         "--repo", tmp]) == 0

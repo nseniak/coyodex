@@ -683,3 +683,19 @@ def test_assemble_fails_the_build_and_writes_nothing_when_a_fragment_is_bad():
         assert r.returncode == 1
         assert "ASSEMBLY FAILED" in r.stderr
         assert not (out / "project-map.json").exists()
+
+
+def test_a_draft_fragment_is_skipped_by_name():
+    """The harvest contract promised the `.draft.json` suffix "keeps a half-written file out of the
+    assemble glob". It did not: `*.draft.json` matches `*.json` and nothing looked at the name."""
+    from coyodex.assemble import load_fragment_paths
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        good = make_fragment_file(d, "h-a.json", {"components": [
+            {"id": "C1", "name": "A", "source": "a.py:1"}]})
+        draft = d / "h-b.json.draft.json"
+        draft.write_text('{"components": [{"id": "C2", "name":', encoding="utf-8")  # truncated
+        parts, notes, errors = load_fragment_paths([draft, good])
+        assert errors == []
+        assert [label for label, _ in parts] == ["h-a.json"]
+        assert len(notes) == 1 and "draft" in notes[0]

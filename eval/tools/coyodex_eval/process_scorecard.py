@@ -44,9 +44,25 @@ PREINDEX_JSON = "preindex.json"
 RECONCILE_JSON = "reconcile.json"
 FRAGMENT_DIR = "build-fragments"
 
-#: Assertion 10's proposed ceiling: how many `ls`/`find` sweeps of the fragment dir a single
-#: fan-out may make before it counts as polling. The method says wait on completion notifications.
+#: Assertion 10's proposed ceiling: how many idle turns a single fan-out may spend before it counts
+#: as polling. The method says wait on completion notifications.
 POLL_THRESHOLD = 3
+
+#: A command that does nothing but yield the turn. `echo .`, `sleep 120`, `true`, `:` — and any
+#: `;`-chain of only those.
+#:
+#: Assertion 10 used to count ONLY `ls`/`find`/`stat`/`wc` naming the fragment dir. A live build
+#: then spent 42 of its 195 tool calls on `echo .` keep-alives and scored a PERFECT 38/38, up from
+#: 0.60 — the scorecard reported an improvement while the waste roughly tripled. The behaviour the
+#: assertion is about is "turns burned waiting", so it has to see any shape of it, not the one shape
+#: the first build happened to use.
+_NOOP_SEGMENT = re.compile(r"^\s*(?:echo\b[^|<>]*|sleep\s+[\d.]+|true|:)\s*$")
+
+
+def _is_noop_wait(command: str) -> bool:
+    """True when every `;`-separated segment of `command` does nothing observable."""
+    segments = [s for s in command.split(";") if s.strip()]
+    return bool(segments) and all(_NOOP_SEGMENT.match(s) for s in segments)
 
 #: Reading `preindex.json` YOURSELF, as opposed to letting `preindex --report` read it.
 #: These target the file rather than merely co-occurring with it, because a `git add …
@@ -377,22 +393,46 @@ def assert_5_skeptics_fanned_out(turns: Sequence[Turn]) -> Assertion:
     return Assertion(5, "Phase-4 skeptics fanned out", observed, of, tuple(launched), note)
 
 
-def assert_6_grounding_recorded(turns: Sequence[Turn]) -> Assertion:
+def assert_6_grounding_recorded(turns: Sequence[Turn],
+                                ctx: "ScoreContext | None" = None) -> Assertion:
     """6 — the assembled model carries a non-empty `grounding` object.
 
     A monorepo build grounded 319 of 1,608 claims and reported it only in chat, where it evaporated.
-    Only WRITING tools count: a skeptic prompt that discusses grounding is not a record."""
+
+    READ THE MAP when one is given: that is what the assertion actually claims to measure, and
+    grepping the transcript for it got the answer exactly backwards. The old rule looked for
+    `claims_total` in a tool call's own text, which is present when a build HAND-WRITES the record
+    in a python heredoc and absent when it runs `coyodex grounding write` (the string appears only
+    in that command's output). So the correct path scored 0.0 and the defect scored 1.0 — a live
+    build used the command, scored 0, and read as a regression against the previous build that had
+    hand-tallied it.
+
+    Without a map, fall back to the transcript and count BOTH paths — the command counts as
+    evidence, not just the hand-written text."""
+    grounding = ctx.grounding if ctx else None
+    if grounding is not None:
+        non_empty = bool(grounding) and any(
+            v for k, v in grounding.items() if k != "note")
+        ev = (Evidence(0, {"source": "map", "claims_total": grounding.get("claims_total", 0)}),)
+        return Assertion(6, "grounding recorded in the model", 1 if non_empty else 0, 1,
+                         ev if non_empty else (), "read from the map")
     hits: list[Evidence] = []
     for turn in turns:
         for call in turn.tool_calls:
             if call.name not in ("Write", "Edit", "NotebookEdit", "Bash"):
                 continue
             blob = call.text()
-            if "claims_total" in blob or "claims_challenged" in blob or "claims_grounded" in blob:
-                hits.append(Evidence(turn.index, {"tool": call.name}))
+            wrote_by_hand = ("claims_total" in blob or "claims_challenged" in blob
+                             or "claims_grounded" in blob)
+            by_command = call.name == "Bash" and _invokes(call.command, "grounding")
+            if wrote_by_hand or by_command:
+                hits.append(Evidence(turn.index, {
+                    "tool": call.name,
+                    "how": "coyodex grounding write" if by_command else "hand-written"}))
                 break
     observed, of = _at_least_once(len(hits))
-    return Assertion(6, "grounding recorded in the model", observed, of, tuple(hits))
+    return Assertion(6, "grounding recorded in the model", observed, of, tuple(hits),
+                     "inferred from the transcript — no map given")
 
 
 def assert_7_reconcile_command_used(turns: Sequence[Turn]) -> Assertion:
@@ -477,30 +517,38 @@ def assert_9_no_advisory_waved_through(turns: Sequence[Turn]) -> Assertion:
                      evidence, note)
 
 
-def assert_10_fragment_polling(turns: Sequence[Turn]) -> Assertion:
-    """10 — `ls`/`find` polling of `build-fragments/` stays under a threshold.
+def assert_10_idle_turns_at_a_barrier(turns: Sequence[Turn]) -> Assertion:
+    """10 — turns burned waiting at a fan-out barrier stay under a threshold.
 
     The method says wait on completion notifications, never poll: a not-ready file reads as an error
-    and burns turns. Each poll is attributed to the most recent preceding fan-out, so the threshold
-    is per fan-out as the design proposes. `of` is the number of fan-outs; `observed` is how many
-    stayed under the ceiling."""
+    and burns turns. Each idle turn is attributed to the most recent preceding fan-out, so the
+    threshold is per fan-out as the design proposes. `of` is the number of fan-outs; `observed` is
+    how many stayed under the ceiling.
+
+    TWO shapes count, because scoring only the first one made this assertion lie. It used to match
+    `ls`/`find`/`stat`/`wc` naming the fragment dir and nothing else; a live build waited with
+    `echo .` instead, burned 42 of its 195 tool calls, and scored 38/38 — reported as an improvement
+    from 0.60 while the waste roughly tripled. What the assertion is about is turns spent waiting,
+    so it counts a no-op command too (see `_is_noop_wait`)."""
     fanouts = [t.index for t in turns if t.agent_calls]
     if not fanouts:
-        return Assertion(10, "fragment-dir polling under threshold", 0, 0, (),
+        return Assertion(10, "idle turns at a barrier under threshold", 0, 0, (),
                          "no fan-out in this transcript")
-    polls: dict[int, int] = {idx: 0 for idx in fanouts}
+    idle: dict[int, int] = {idx: 0 for idx in fanouts}
     evidence: list[Evidence] = []
     for idx, cmd in bash_commands(turns):
-        if FRAGMENT_DIR not in cmd:
-            continue
-        if not re.search(r"\b(ls|find|stat|wc)\b", cmd):
+        polls_dir = FRAGMENT_DIR in cmd and bool(re.search(r"\b(ls|find|stat|wc)\b", cmd))
+        noop = _is_noop_wait(cmd)
+        if not (polls_dir or noop):
             continue
         owner = max((f for f in fanouts if f <= idx), default=fanouts[0])
-        polls[owner] += 1
-        evidence.append(Evidence(idx, {"after_fanout": owner, "command": cmd[:120]}))
-    under = [idx for idx, n in polls.items() if n <= POLL_THRESHOLD]
-    return Assertion(10, "fragment-dir polling under threshold", len(under), len(fanouts),
-                     tuple(evidence), f"threshold {POLL_THRESHOLD} poll(s) per fan-out")
+        idle[owner] += 1
+        evidence.append(Evidence(idx, {"after_fanout": owner,
+                                       "kind": "fragment-dir poll" if polls_dir else "no-op turn",
+                                       "command": cmd[:120]}))
+    under = [idx for idx, n in idle.items() if n <= POLL_THRESHOLD]
+    return Assertion(10, "idle turns at a barrier under threshold", len(under), len(fanouts),
+                     tuple(evidence), f"threshold {POLL_THRESHOLD} idle turn(s) per fan-out")
 
 
 #: Every assertion, in scorecard order. 11 is deliberately absent: it compares a built map against
@@ -582,6 +630,289 @@ def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Asse
                      f"finalize said {verdict}")
 
 
+# --- helpers for assertions 13-17 ---------------------------------------------------------------
+
+#: A shell command that writes a file — the shapes a build actually uses to patch a fragment.
+_WRITES_A_FILE = re.compile(r"(>>?\s*\S|\btee\b|json\.dump\b|\.write_text\b|\bcp\b|\bmv\b)")
+
+#: A content filter on a gate's output, as opposed to merely paging it.
+_GREP_FILTER = re.compile(r"\|\s*(?:grep|egrep|rg|ag)\b")
+
+#: A shell command that READS a file's contents, as opposed to merely naming it. The distinction is
+#: load-bearing: a fragment-patching heredoc mentions the very path whose drift is being recorded,
+#: and counting that as "the agent looked" turned assertion 17 from 0/2 into a false 1.00 on the
+#: build that motivated it.
+_READER_CMD = re.compile(r"\b(?:cat|sed|grep|egrep|rg|ag|head|tail|awk|less|bat|open)\b")
+
+#: A source path inside such a command.
+_SOURCE_PATH = re.compile(r"[\w./-]+\.(?:py|ts|tsx|js|jsx|go|rs|rb|java|kt|json|yaml|yml|toml)")
+
+
+def _paths_read(call: ToolCall) -> set[str]:
+    """The source files this call actually opened — `Read`, or a shell READER command."""
+    if call.name == "Read":
+        return {str(call.input.get("file_path", ""))}
+    if call.name == "Bash" and _READER_CMD.search(call.command):
+        return set(_SOURCE_PATH.findall(call.command))
+    return set()
+
+#: A recorded drift exception inside any tool input: ``anchor-drift `<key>` ``.
+_DRIFT_KEY_IN_TEXT = re.compile(r"anchor-drift\s+`([^`]+)`")
+
+#: One drift FINDING as `anchor-drift` prints it: the claim, then `stored [path:line]`. The claim
+#: and the file arrive on the same line, which is what lets a recorded exception be paired with the
+#: file it should have been checked against — the exception KEY is the claim text and carries no
+#: path of its own.
+_DRIFT_FINDING_LINE = re.compile(r"([^\n]+?):\s*stored \[([\w./-]+\.\w+):\d+\]")
+
+#: Launches more than this far apart belong to different fan-outs. A real batch dispatches ~10-20 s
+#: apart even when serialised one message at a time; separate phases sit minutes apart.
+_FANOUT_GAP_SECONDS = 300.0
+
+
+def _seconds(stamp: str) -> float | None:
+    from datetime import datetime
+    try:
+        return datetime.fromisoformat(stamp.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+def _fanout_groups(turns: Sequence[Turn]) -> list[list[tuple[int, float | None]]]:
+    """Agent launches grouped into fan-outs, each entry `(launch turn, duration in seconds)`.
+
+    Duration is the gap between the launch turn and the turn carrying that call's tool_result, so a
+    background launch measures the AGENT's runtime rather than the launch acknowledgement."""
+    ended: dict[str, float | None] = {}
+    for turn in turns:
+        for res in turn.tool_results:
+            ended.setdefault(res.tool_use_id, _seconds(turn.timestamp))
+    launches: list[tuple[int, float | None, float | None]] = []
+    for turn in turns:
+        for call in turn.agent_calls:
+            started = _seconds(turn.timestamp)
+            finished = ended.get(call.id)
+            launches.append((turn.index, started, finished))
+    groups: list[list[tuple[int, float | None]]] = []
+    prev_start: float | None = None
+    for idx, started, finished in launches:
+        duration = (finished - started) if (started is not None and finished is not None) else None
+        new_group = (not groups or started is None or prev_start is None
+                     or started - prev_start > _FANOUT_GAP_SECONDS)
+        if new_group:
+            groups.append([])
+        groups[-1].append((idx, duration))
+        prev_start = started
+    return groups
+
+
+# --- assertions 13-17: added from the 2026-08-01 retro ------------------------------------------
+#
+# Each is a repeatable process defect a real build committed and no existing assertion could see.
+# The scorecard exists to turn a one-off discovery into a number that gets watched.
+
+
+def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assertion:
+    """13 — `grounding write` runs AFTER the last reconcile edit, not before it.
+
+    `grounding write` pins `claims_total` to the worklist as it stands. Reconciling a refutation
+    rewrites the claim, which orphans its verdict — so a record written first describes a map that
+    no longer exists. A live build wrote it at turn 394 and reconciled nine refutations at 400-428;
+    the map shipped `418 of 418 challenged` while the live worklist held 415 and only 403 could be
+    matched. `validate` cannot catch it: it blocks only `challenged > total`, and 418 = 418 passes.
+
+    `of` is 1 when the run wrote a grounding record at all; `observed` is 1 when nothing edited a
+    fragment or the map after it."""
+    wrote_at: int | None = None
+    edited_after: list[Evidence] = []
+    for turn in turns:
+        for call in turn.tool_calls:
+            if call.name == "Bash" and _invokes(call.command, "grounding"):
+                wrote_at = turn.index
+                continue
+            if wrote_at is None or turn.index <= wrote_at:
+                continue
+            touches = call.text()
+            if (FRAGMENT_DIR in touches or "project-map.json" in touches) and (
+                    call.name in ("Write", "Edit", "NotebookEdit")
+                    or (call.name == "Bash" and _WRITES_A_FILE.search(call.command))):
+                edited_after.append(Evidence(turn.index, {"tool": call.name}))
+    if wrote_at is None:
+        return Assertion(13, "grounding write is the last write", 0, 0, (),
+                         "no grounding record written in this transcript")
+    return Assertion(13, "grounding write is the last write", 0 if edited_after else 1, 1,
+                     tuple(edited_after),
+                     f"written at turn {wrote_at}; {len(edited_after)} later map/fragment write(s)")
+
+
+def assert_14_grounding_total_matches_the_worklist(turns: Sequence[Turn],
+                                                   ) -> Assertion:
+    """14 — the coverage number the run REPORTS matches the one its own tools printed.
+
+    The companion to 13, read from the run rather than the map: `anchor-drift` prints `challenged N
+    of M worklist claim(s)`, and a build whose grounding record says `T of T` with T != M is quoting
+    a stale pin. The live build printed `challenged 403 of 415` and committed `418 of 418`.
+
+    `of` is 1 when both numbers appear; `observed` is 1 when they agree."""
+    pinned: int | None = None
+    live: tuple[int, int] | None = None
+    ev: list[Evidence] = []
+    for turn in turns:
+        for result in turn.tool_results:
+            text = result.content
+            m = re.search(r"(\d+)\s+of\s+(\d+)\s+claim\(s\)\s+challenged", text)
+            if m:
+                pinned = int(m.group(2))
+            d = re.search(r"challenged\s+(\d+)\s+of\s+(\d+)\s+worklist claim\(s\)", text)
+            if d:
+                live = (int(d.group(1)), int(d.group(2)))
+                ev.append(Evidence(turn.index, {"challenged": d.group(1), "worklist": d.group(2)}))
+    if pinned is None or live is None:
+        return Assertion(14, "grounding total matches the live worklist", 0, 0, (),
+                         "the two numbers were not both printed in this transcript")
+    agrees = pinned == live[1]
+    return Assertion(14, "grounding total matches the live worklist", 1 if agrees else 0, 1,
+                     () if agrees else tuple(ev),
+                     f"record pinned {pinned}; worklist held {live[1]}")
+
+
+def assert_15_no_advisory_rechecked_with_a_narrower_filter(turns: Sequence[Turn]) -> Assertion:
+    """15 — a gate re-run is not filtered more narrowly than the run that surfaced the finding.
+
+    A live build surfaced a messaging advisory with a wide `validate`, then re-checked with a grep
+    whose pattern no longer matched that wording. The finding vanished from view and shipped
+    unrecorded and unfixed. Narrowing the view is how a waved-through advisory looks handled.
+
+    `of` counts consecutive same-gate re-runs; `observed` counts those not narrowed."""
+    runs: list[tuple[int, str, int]] = []          # (turn, gate, filter width; lower = narrower)
+    for idx, cmd in bash_commands(turns):
+        for gate in ("validate", "audit", "balance", "anchor-drift", "finalize"):
+            if not _invokes(cmd, gate):
+                continue
+            if _GREP_FILTER.search(cmd):
+                width = 0                          # a content filter — the narrowest view
+            elif _PAGERS.search(cmd):
+                width = 1                          # paged, but not content-filtered
+            else:
+                width = 2                          # read whole
+            runs.append((idx, gate, width))
+            break
+    narrowed: list[Evidence] = []
+    pairs = 0
+    for gate in {g for _, g, _ in runs}:
+        seq = [(i, w) for i, g, w in runs if g == gate]
+        for (_, prev), (idx, cur) in zip(seq, seq[1:]):
+            pairs += 1
+            if cur < prev:
+                narrowed.append(Evidence(idx, {"gate": gate, "was": prev, "now": cur}))
+    if not pairs:
+        return Assertion(15, "no advisory re-checked with a narrower filter", 0, 0, (),
+                         "no gate was run twice in this transcript")
+    return Assertion(15, "no advisory re-checked with a narrower filter",
+                     pairs - len(narrowed), pairs, tuple(narrowed))
+
+
+def assert_16_longest_slice_dispatched_first(turns: Sequence[Turn]) -> Assertion:
+    """16 — the slowest agent in a fan-out is not the one dispatched last.
+
+    A straggler dispatched last holds the barrier for its whole runtime. In a live build the T5
+    domain-model slice ran 10.2 min against siblings' 5.0-6.9 and was dispatched twelfth, closing
+    the barrier ~4 min later than it had to. The method warns about stragglers but never says
+    "dispatch the known-longest slice first".
+
+    `of` counts fan-outs whose agents can be timed; `observed` counts those where the slowest agent
+    was not in the last third of the dispatch order."""
+    ok, bad = 0, []
+    for group in _fanout_groups(turns):
+        timed = [(idx, dur) for idx, dur in group if dur is not None]
+        if len(timed) < 3:
+            continue
+        slowest_at = max(timed, key=lambda p: p[1])[0]
+        order = [idx for idx, _ in timed]
+        rank = order.index(slowest_at)
+        if rank >= (len(order) * 2) // 3:
+            bad.append(Evidence(slowest_at, {"dispatched": rank + 1, "of": len(order)}))
+        else:
+            ok += 1
+    total = ok + len(bad)
+    if not total:
+        return Assertion(16, "longest slice dispatched first", 0, 0, (),
+                         "no fan-out with timeable agents in this transcript")
+    return Assertion(16, "longest slice dispatched first", ok, total, tuple(bad))
+
+
+def assert_17_a_drift_exception_cites_a_file_that_was_read(turns: Sequence[Turn]) -> Assertion:
+    """17 — a recorded drift exception is preceded by actually opening the file it is about.
+
+    A live build recorded two drift findings as false alarms without a single Read or grep of either
+    cited file between the finding and the record, on asserted reasoning about what a cadence anchor
+    "is defined to point at". The two SECURITY anchors in the same run were properly checked against
+    source first, which is the standard the drift ones fell short of.
+
+    The file cannot come from the exception KEY — the key is the claim text ("… runs on cadence
+    'continuous'"), which carries no path. It comes from the FINDING the record answers, which
+    `anchor-drift` prints as `stored [path:line]`. So: collect the files the open drift findings
+    cite, then ask whether the run opened any of them before writing the record.
+
+    `of` counts recorded drift exceptions; `observed` counts those preceded by such a read."""
+    cited: dict[str, str] = {}         # drift claim → the file its stored anchor names
+    opened: set[str] = set()           # files read since the finding that named them
+    checked, unchecked = 0, []
+    for turn in turns:
+        for result in turn.tool_results:
+            for claim, path in _DRIFT_FINDING_LINE.findall(result.content):
+                cited[claim.strip()] = path
+        for call in turn.tool_calls:
+            # Only reads AFTER the finding count — a file opened earlier for unrelated reasons is
+            # not evidence that anyone re-checked this drift.
+            for got in _paths_read(call):
+                opened |= {p for p in cited.values() if p == got or got.endswith(p)}
+            blob = call.text()
+            if (call.name not in ("Write", "Edit", "NotebookEdit", "Bash")
+                    or "anchor-drift `" not in blob):
+                continue
+            for key in _DRIFT_KEY_IN_TEXT.findall(blob):
+                # pair the record with its own finding — exact claim, else the one it contains
+                path = cited.get(key.strip()) or next(
+                    (p for c, p in cited.items() if key.strip() in c or c in key.strip()), "")
+                if path and path in opened:
+                    checked += 1
+                else:
+                    unchecked.append(Evidence(turn.index, {
+                        "should_have_read": path or "(no matching drift finding)"}))
+    total = checked + len(unchecked)
+    if not total:
+        return Assertion(17, "a drift exception cites a file that was read", 0, 0, (),
+                         "no drift exception recorded in this transcript")
+    return Assertion(17, "a drift exception cites a file that was read", checked, total,
+                     tuple(unchecked))
+
+
+@dataclass(frozen=True)
+class ScoreContext:
+    """What an assertion can know BEYOND the transcript.
+
+    Only assertion 6 needs it today, and only because its subject is the assembled map rather than
+    the run. Everything else is transcript-only by design: the scorecard must work on a corpus
+    transcript whose repo has moved on. `grounding` is None when no map was given."""
+    map_path: Path | None = None
+    grounding: dict[str, EvidenceValue] | None = None
+
+
+def read_score_context(map_path: str | Path | None) -> ScoreContext:
+    """Build a context from a map path, tolerating a missing or unreadable map (the scorecard is
+    never a gate, so a bad --map degrades to transcript-only rather than failing the run)."""
+    if not map_path:
+        return ScoreContext()
+    p = Path(map_path)
+    try:
+        doc = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ScoreContext(map_path=p)
+    g = doc.get("grounding") if isinstance(doc, dict) else None
+    return ScoreContext(map_path=p, grounding=g if isinstance(g, dict) else {})
+
+
 ASSERTIONS = (
     assert_1_preindex_report_used,
     assert_2_preindex_not_hand_parsed,
@@ -592,26 +923,40 @@ ASSERTIONS = (
     assert_7_reconcile_command_used,
     assert_8_audit_read_as_json,
     assert_9_no_advisory_waved_through,
-    assert_10_fragment_polling,
+    assert_10_idle_turns_at_a_barrier,
     assert_12_commit_matches_the_finalize_verdict,
+    assert_13_grounding_write_is_the_last_write,
+    assert_14_grounding_total_matches_the_worklist,
+    assert_15_no_advisory_rechecked_with_a_narrower_filter,
+    assert_16_longest_slice_dispatched_first,
+    assert_17_a_drift_exception_cites_a_file_that_was_read,
 )
 
 
 def score_turns(turns: Sequence[Turn], *, transcript: str = "", label: str = "",
-                grouping_consistent: bool = True) -> Scorecard:
+                grouping_consistent: bool = True,
+                ctx: ScoreContext | None = None) -> Scorecard:
     """Every assertion over an already-read turn sequence. The seam the unit tests drive with
     synthetic turns — no file, no corpus, fully deterministic."""
-    return Scorecard(transcript=transcript, turns=len(turns),
-                     assertions=tuple(fn(turns) for fn in ASSERTIONS),
+    ctx = ctx or ScoreContext()
+    # Assertion 6 is the one whose subject is the MAP rather than the run, so it alone is handed the
+    # context. Passing it to every assertion would invite the rest to reach for the repo, and a
+    # scorecard that needs the repo cannot score an archived corpus transcript.
+    assertions = tuple(assert_6_grounding_recorded(turns, ctx)
+                       if fn is assert_6_grounding_recorded else fn(turns)
+                       for fn in ASSERTIONS)
+    return Scorecard(transcript=transcript, turns=len(turns), assertions=assertions,
                      grouping_consistent=grouping_consistent, label=label)
 
 
-def score_transcript(path: Path | str, *, label: str = "") -> Scorecard:
+def score_transcript(path: Path | str, *, label: str = "",
+                     map_path: str | Path | None = None) -> Scorecard:
     """Read a transcript and score it."""
     p = Path(path)
     turns = read_turns(p)
     return score_turns(turns, transcript=str(p), label=label or p.stem,
-                       grouping_consistent=grouping_is_consistent(p))
+                       grouping_consistent=grouping_is_consistent(p),
+                       ctx=read_score_context(map_path))
 
 
 # --- the diff --------------------------------------------------------------------------
@@ -722,10 +1067,14 @@ def format_diff(before: Scorecard, after: Scorecard) -> str:
 
 # --- CLI -------------------------------------------------------------------------------
 
-USAGE = """usage: coyodex-eval process <transcript.jsonl> [--out <scorecard.json>] [--json] [--label L]
+USAGE = """usage: coyodex-eval process <transcript.jsonl> [--map <project-map.json>]
+                                  [--out <scorecard.json>] [--json] [--label L]
        coyodex-eval process --diff <before.json> <after.json> [--json]
 
-Score a build TRANSCRIPT against the L3 process assertions (1-10), or diff two scorecards.
+Score a build TRANSCRIPT against the L3 process assertions, or diff two scorecards.
+
+--map lets assertion 6 read the built map's `grounding` record instead of inferring it from the
+transcript. Without it that assertion falls back to transcript evidence and says so in its note.
 
 Without --out, the scorecard is written next to the transcript as <name>.l3-scorecard.json.
 This is a SCORECARD, not a gate: it always exits 0 unless a file is missing or unreadable, and
@@ -778,7 +1127,8 @@ def main(argv: list[str] | None = None) -> int:
     if not src.is_file():
         print(f"ERROR: no transcript at {src}", file=sys.stderr)
         return 2
-    card = score_transcript(src, label=_arg(args, "--label") or "")
+    card = score_transcript(src, label=_arg(args, "--label") or "",
+                            map_path=_arg(args, "--map"))
     out = Path(_arg(args, "--out") or src.with_suffix(".l3-scorecard.json"))
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(card.as_json(), indent=2), encoding="utf-8")

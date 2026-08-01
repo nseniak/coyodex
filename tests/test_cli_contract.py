@@ -28,7 +28,7 @@ COMMAND_MODULE: dict[str, str] = {
     "render": "viewer.render", "serve": "viewer.serve", "assemble": "assemble",
     "lint-fragment": "lint_fragment", "anchor-drift": "anchor_drift", "fix": "fix",
     "dump": "dump", "reconcile": "reconcile_build", "balance": "balance", "finalize": "finalize",
-    "grounding": "grounding",
+    "grounding": "grounding", "record": "record",
 }
 
 

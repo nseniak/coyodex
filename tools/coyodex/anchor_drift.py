@@ -131,11 +131,27 @@ DRIFT_EXCEPTIONS_HEADING = "Drift exceptions"
 #: C140` silenced every drift finding on every outgoing edge of C140 — reproduced at 3-for-1. The
 #: sibling escape this is modelled on states the rule it broke: a recorded line "silences exactly one
 #: (check, id) pair — never a family" (method.md). A `why` is required; a key alone is a dismissal.
-_DRIFT_RECORD = re.compile(r"^\s*(?:[-*]\s+)?\**\s*anchor-drift\s+[`'\"]([^`'\"]+)[`'\"]\s*[:—-]\s*\S")
+#:
+#: The delimiter is CAPTURED and back-referenced, and the key is `.+` rather than a "contains no
+#: quote" class. The class was `[^`'\"]+`, so a key holding any quote character could not parse — and
+#: every cadence claim is phrased ``runs on cadence '<x>'``, which made the whole cadence family
+#: permanently un-recordable. It failed silently, too: a line that does not parse contributes no key,
+#: `apply_drift_exceptions` early-returns on the empty set, and the "matched no finding" diagnostic
+#: never runs, so the operator watched the row re-fire with nothing said about why. A live build
+#: recorded two exceptions in the exact format the report prints, then had to read this file to find
+#: out they could never work. `.+` is greedy on purpose: it binds the LAST delimiter that a
+#: `: <why>` follows, so a key containing the delimiter character itself still parses.
+_DRIFT_RECORD = re.compile(r"^\s*(?:[-*]\s+)?\**\s*anchor-drift\s+([`'\"])(.+)\1\s*[:—-]\s*\S")
+
+#: A line that opens like a record but does not parse. Reported, never skipped: a silently-dropped
+#: exception is indistinguishable from one that matched nothing, which is how the bug above hid.
+_DRIFT_RECORD_ATTEMPT = re.compile(r"^\s*(?:[-*]\s+)?\**\s*anchor-drift\b")
 
 
-def drift_exceptions(m: ProjectModel) -> set[str]:
-    """Claims whose drift the operator has durably judged a false alarm, keyed by the claim itself.
+def drift_exceptions(m: ProjectModel) -> tuple[set[str], list[str]]:
+    """`(recorded claim keys, lines that tried to be a record and failed to parse)`.
+
+    Claims whose drift the operator has durably judged a false alarm, keyed by the claim itself.
 
     Drift was the one advisory family with no escape ANYWHERE. `validate`'s families each either
     name a recordable heading or sit in `tests/test_method_contract.KNOWN_NO_ESCAPE` with a stated
@@ -146,12 +162,15 @@ def drift_exceptions(m: ProjectModel) -> set[str]:
     so the row will re-fire on every future run."""
     from coyodex import balance_lib
     out: set[str] = set()
+    malformed: list[str] = []
     for body in balance_lib.extras_bodies(m, DRIFT_EXCEPTIONS_HEADING):
         for line in body.splitlines():
             hit = _DRIFT_RECORD.match(line)
             if hit:
-                out.add(hit.group(1))
-    return out
+                out.add(hit.group(2))
+            elif _DRIFT_RECORD_ATTEMPT.match(line):
+                malformed.append(line.strip())
+    return out, malformed
 
 
 def _drift_key(claim: str) -> str:
@@ -171,8 +190,10 @@ def apply_drift_exceptions(m: ProjectModel,
     read the code and judged the stored anchor correct had nowhere to write it down: the row
     re-fired on every future run. On a live map exactly this happened — a state-machine anchor was
     hand-verified, dismissed in chat, and shipped unrecorded."""
-    recorded = drift_exceptions(m)
-    if not recorded:
+    recorded, malformed = drift_exceptions(m)
+    # A malformed line is reported even when nothing else was recorded — the early return used to
+    # swallow it, which is exactly how an un-parseable key looked identical to no key at all.
+    if not recorded and not malformed:
         return findings, []
     kept: list[tuple[WorkItem, DriftResult]] = []
     silenced: list[str] = []
@@ -183,6 +204,12 @@ def apply_drift_exceptions(m: ProjectModel,
             continue
         kept.append((w, d))
     notes: list[str] = []
+    if malformed:
+        notes.append(f"{len(malformed)} line(s) under the '{DRIFT_EXCEPTIONS_HEADING}' heading open "
+                     f"with `anchor-drift` but do not parse, so they silence NOTHING: "
+                     f"{'; '.join(reporting.clip(ln, 60) for ln in malformed)}. The form is "
+                     f"``anchor-drift `<the claim, verbatim>`: <why>`` — the claim inside a matched "
+                     f"pair of delimiters, then a colon, then a non-empty why.")
     if silenced:
         notes.append(f"{len(silenced)} drift finding(s) suppressed by recorded exception(s) under a "
                      f"'{DRIFT_EXCEPTIONS_HEADING}' extras heading: "
@@ -236,11 +263,19 @@ def load_verdicts(paths: list[str]) -> tuple[list[dict], list[str]]:
     37 of 40 claims (they differ on three anchors, not on any verdict). Refusing would break that N-skeptic majority workflow; deduping would collapse a
     genuine 2-2 tie into 2-1 CONFIRMED (refutations carry no evidence line, so they collapse hardest).
     `_confirmed_drifts` documents why the real fix is a per-VOTE identity the verdicts format does
-    not carry — a format change, not a tally change."""
+    not carry — a format change, not a tally change.
+
+    A row may now carry a `skeptic` id, and that resolves the ambiguity at the source: two rows from
+    DIFFERENT skeptics are two votes and are never a duplicate, while the same skeptic id arriving
+    twice is the aggregate-plus-parts mistake. Without the field the old ambiguous note stands, but
+    it no longer leads with the wrong diagnosis — the method PRESCRIBES a two-skeptic read of the
+    security claims, so agreement between two files is the intended state, and a live build was told
+    to "drop one" for doing exactly what it was asked to do."""
     rows: list[dict] = []
-    seen: dict[tuple[str, object, str], str] = {}
+    seen: dict[tuple[str, object, str, str], str] = {}
     dupes: list[str] = []
     notes: list[str] = []
+    any_skeptic_ids = False
     for p in paths:
         try:
             payload = json.loads(Path(p).read_text(encoding="utf-8"))
@@ -254,19 +289,28 @@ def load_verdicts(paths: list[str]) -> tuple[list[dict], list[str]]:
                              f"got {type(loaded).__name__}")
         loaded = [r for r in loaded if isinstance(r, dict)]
         for r in loaded:
-            key = (str(r.get("claim", "")), r.get("grounded"), str(r.get("evidence", "")))
+            skeptic = str(r.get("skeptic", ""))
+            any_skeptic_ids = any_skeptic_ids or bool(skeptic)
+            key = (str(r.get("claim", "")), r.get("grounded"), str(r.get("evidence", "")), skeptic)
             first = seen.get(key)
             if first is not None and first != p:
                 dupes.append(f"{Path(first).name} + {Path(p).name}")
             else:
                 seen.setdefault(key, p)
         rows.extend(loaded)
-    if dupes:
+    if dupes and any_skeptic_ids:
+        pairs = ", ".join(sorted(set(dupes)))
+        notes.append(f"note: {len(dupes)} row(s) carry the SAME `skeptic` id in more than one input "
+                     f"file ({pairs}) — that is one vote counted twice, not two skeptics agreeing. "
+                     f"Drop the aggregate or drop its parts.")
+    elif dupes:
         pairs = ", ".join(sorted(set(dupes)))
         notes.append(f"note: {len(dupes)} identical (claim, verdict, evidence) row(s) appear in more "
-                     f"than one input file ({pairs}). If you passed an aggregate file AND its parts, "
-                     f"drop one — a row counted twice can turn a tie into a majority. If these are "
-                     f"genuinely independent skeptics agreeing, this is the majority working.")
+                     f"than one input file ({pairs}). Two readings, and the rows cannot tell them "
+                     f"apart: independent skeptics agreeing (the method PRESCRIBES a double read of "
+                     f"the security claims, so this is the intended state), or one aggregate passed "
+                     f"alongside its own parts (a row counted twice can turn a tie into a majority). "
+                     f"Give each row a `skeptic` id and this note answers itself.")
     return rows, notes
 
 

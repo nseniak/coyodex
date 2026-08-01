@@ -280,13 +280,25 @@ def main(argv: list[str] | None = None) -> int:
         print("ERROR: no fragment given", file=sys.stderr)
         return 2
     clean = True
+    unreadable = False
     for p in frags:
+        # "cannot read it" and "it breaks a rule" are different answers, and they used to print the
+        # same verdict: a wrong path produced `ERROR: … not found` followed by "LINT FAILED: fix the
+        # rows above", sending the agent hunting for a rule violation in a file nobody opened. A
+        # live build lost two turns to it, both times from running the command in another directory.
         if not p.exists():
-            print(f"ERROR: {p} not found", file=sys.stderr)
-            clean = False
+            print(f"ERROR: cannot read {p} — no such file. (The fragment path and --repo are both "
+                  f"resolved from the CURRENT directory.)", file=sys.stderr)
+            unreadable = True
             continue
         try:
-            m = load_fragment(p.read_text(encoding="utf-8"), p.name)
+            text = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"ERROR: cannot read {p}: {e}", file=sys.stderr)
+            unreadable = True
+            continue
+        try:
+            m = load_fragment(text, p.name)
         except ModelError as e:
             print(f"{p.name}: SCHEMA — {e}", file=sys.stderr)
             clean = False
@@ -303,6 +315,10 @@ def main(argv: list[str] | None = None) -> int:
         # advisory warnings never fail the lint — heuristic nudges the agent can act on or ignore
         for w in lint_fragment_warnings(m) + _budget_warnings(m, expect):
             print(f"{p.name}: warning: {w}", file=sys.stderr)
+    if unreadable:
+        print("LINT DID NOT RUN on the file(s) above — they could not be read, so nothing was "
+              "checked. This is not a rule violation; fix the path and re-run.", file=sys.stderr)
+        return 2
     if not clean:
         print("LINT FAILED: fix the rows above before returning this fragment. "
               "(`warning:` lines are advisory heuristics — they do not fail the lint.)", file=sys.stderr)

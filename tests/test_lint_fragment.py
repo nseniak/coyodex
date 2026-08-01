@@ -243,3 +243,17 @@ def test_expect_says_nothing_about_a_fragment_that_defines_no_component():
     m = make_fragment({"edges": [{"src": "C1", "verb": "calls", "dst": "C2", "why": "w",
                                   "where": "src/a.py:1"}]})
     assert lint_fragment._budget_warnings(m, 8) == []
+
+
+def test_an_unreadable_path_is_not_reported_as_a_rule_violation():
+    """`ERROR: … not found` used to be followed by "LINT FAILED: fix the rows above", sending the
+    agent hunting for a violation in a file nobody opened. A live build lost two turns to it."""
+    import subprocess
+    import sys
+    with tempfile.TemporaryDirectory() as tmp:
+        r = subprocess.run([sys.executable, "-m", "coyodex.lint_fragment",
+                            str(Path(tmp) / "nope.json")], capture_output=True, text=True)
+        assert r.returncode == 2, "a missing file is not a lint failure (exit 1)"
+        assert "cannot read" in r.stderr
+        assert "LINT DID NOT RUN" in r.stderr
+        assert "LINT FAILED" not in r.stderr

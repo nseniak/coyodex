@@ -35,8 +35,12 @@ Commands:
              PINNED audit worklist (`grounding write`). The four counts are what `validate`
              blocks on, so they are never hand-tallied.
   fix        Apply a reconcile edit to the model in place (apply-drift / drop-edge /
-             dedup-relation) — the mechanical fixes the method's Phase-3/4 reconcile
-             needs, so they are never hand-scripted. Re-run validate → audit → render after.
+             dedup-relation / dedup-edge) — the mechanical fixes the method's Phase-3/4
+             reconcile needs, so they are never hand-scripted. Re-run validate → audit →
+             render after.
+  record     Append (or --replace) one `<id>: <why>` line under a recorded-exception extras
+             heading — the one writer for an advisory an operator judged acceptable, so a
+             record is never a hand-rolled string append into the wrong heading.
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
   reconcile  Expand path RULES into an explicit `reconcile.json` (the synthesis
@@ -127,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "fix":
         from coyodex import fix  # stdlib-only; owns its own second-level (verb) dispatch
         return fix.main(rest)
+    if cmd == "record":
+        from coyodex import record  # stdlib-only; the one writer for a recorded exception
+        return record.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)

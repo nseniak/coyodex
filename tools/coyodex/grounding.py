@@ -30,8 +30,14 @@ from pathlib import Path
 
 from coyodex.anchor_drift import load_verdicts
 
-USAGE = """usage: coyodex grounding write --worklist <audit.json> --verdicts <raw.json>... \\
+USAGE = """usage: coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
                                [--out <fragment.json>] [--note <text>] [--json]
+       coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--json]
+
+`report` prints WHICH claims were refuted, tied, unverifiable or unvoted — the reconcile worklist
+`write` computes and then reduces to four counts. A TIE is listed apart from a stated
+`unverifiable`: the first needs a human decision, the second is a skeptic saying the code cannot
+answer, and the counts cannot tell them apart.
 
 Derive the `grounding` block from the skeptics' verdict files and the PINNED audit worklist they
 were drawn from (`coyodex audit <map> --json > audit.json`, captured BEFORE the refutations were
@@ -118,6 +124,68 @@ def build_record(worklist_claims: list[str], grounding_rows: list[dict],
     return record, errors
 
 
+def format_report(worklist_claims: list[str], grounding_rows: list[dict],
+                  as_json: bool = False) -> str:
+    """WHICH claims landed in each bucket — the half `write` computes and then throws away.
+
+    `write` resolves every claim to confirmed / refuted / unverifiable and emits only the four
+    counts, so a build that needs the actual worklist (every refutation has to be reconciled, and a
+    tie has to be adjudicated) has nothing to read. A live build hand-wrote a 12-line vote
+    aggregator one turn after `write` had parsed the same 14 files.
+
+    A TIE is called out separately from a stated `unverifiable`. `_verdict_bucket` files both under
+    `unverifiable`, which is right for the count but wrong for the reader: a tie is two skeptics
+    disagreeing and needs a human decision, while an `unverifiable` verdict is a skeptic saying the
+    code cannot answer. A live build's grounding note described its four unverifiables as one kind
+    when two were the other."""
+    votes: dict[str, list[dict]] = {}
+    for r in grounding_rows:
+        claim = r.get("claim")
+        if isinstance(claim, str):
+            votes.setdefault(claim, []).append(r)
+    buckets: dict[str, list[dict[str, object]]] = {
+        "refuted": [], "unverifiable": [], "tied": [], "unvoted": [], "confirmed": []}
+    for claim in worklist_claims:
+        rows = votes.get(claim)
+        if not rows:
+            buckets["unvoted"].append({"claim": claim})
+            continue
+        bucket = _verdict_bucket(rows)
+        grounded = sum(1 for r in rows if r.get("grounded") is True)
+        refuted = sum(1 for r in rows if r.get("grounded") is False)
+        stated = any(isinstance(r.get("grounded"), str) for r in rows)
+        if bucket == "unverifiable" and not stated:
+            bucket = "tied"
+        buckets[bucket].append({
+            "claim": claim, "votes": len(rows), "for": grounded, "against": refuted,
+            "evidence": [str(r.get("evidence", "")) for r in rows if r.get("evidence")],
+            "skeptics": sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")}),
+            "notes": [str(r.get("note", "")) for r in rows if r.get("note")],
+        })
+    if as_json:
+        return json.dumps(buckets, indent=2, ensure_ascii=False)
+    out: list[str] = []
+    for name, label in (("refuted", "REFUTED — reconcile each into the map"),
+                        ("tied", "TIED — the skeptics split; adjudicate against the code"),
+                        ("unverifiable", "UNVERIFIABLE — a skeptic said the code cannot answer"),
+                        ("unvoted", "NO VERDICT — not challenged")):
+        if not buckets[name]:
+            continue
+        out.append(f"\n{label} ({len(buckets[name])}):")
+        for row in buckets[name]:
+            out.append(f"  * {row['claim']}")
+            raw_skeptics = row.get("skeptics")
+            skeptics = [str(s) for s in raw_skeptics] if isinstance(raw_skeptics, list) else []
+            if row.get("votes"):
+                out.append(f"      {row['for']} for / {row['against']} against"
+                           + (f"  [{', '.join(skeptics)}]" if skeptics else ""))
+            raw_notes = row.get("notes")
+            for n in (raw_notes if isinstance(raw_notes, list) else [])[:2]:
+                out.append(f"      {str(n)[:160]}")
+    out.append(f"\nconfirmed: {len(buckets['confirmed'])} of {len(worklist_claims)} claim(s)")
+    return "\n".join(out).lstrip("\n")
+
+
 def _worklist_claims(path: Path) -> list[str]:
     payload = json.loads(path.read_text(encoding="utf-8"))
     items = payload.get("worklist", payload if isinstance(payload, list) else [])
@@ -130,8 +198,9 @@ def main(argv: list[str] | None = None) -> int:
         print(USAGE)
         return 0
     verb, rest = argv[0], argv[1:]
-    if verb != "write":
-        print(f"ERROR: unknown verb '{verb}' (only `write`)\n\n{USAGE}", file=sys.stderr)
+    if verb not in ("write", "report"):
+        print(f"ERROR: unknown verb '{verb}' (expected `write` or `report`)\n\n{USAGE}",
+              file=sys.stderr)
         return 2
     worklist_path = out_path = None
     verdicts: list[str] = []
@@ -171,6 +240,9 @@ def main(argv: list[str] | None = None) -> int:
     rows, notes = load_verdicts(verdicts)
     for n in notes:
         print(n, file=sys.stderr)
+    if verb == "report":
+        print(format_report(claims, rows, as_json=as_json))
+        return 0
     record, errors = build_record(claims, rows, note)
     if errors:
         for e in errors:

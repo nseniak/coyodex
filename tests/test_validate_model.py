@@ -2738,3 +2738,26 @@ def test_the_renamed_grounding_field_tells_the_reader_what_to_do():
         raise AssertionError("expected ModelError")
     except ModelError as e:
         assert "claims_challenged" in str(e) and "claims_confirmed" in str(e), str(e)
+
+
+def test_ignore_exceptions_re_reads_the_map_with_every_recorded_line_dropped():
+    """Several suppression messages end with "re-read the rest by validating a copy with the
+    exception removed" — an instruction asking the operator to hand-edit a copy, which no build ever
+    did. This flag IS that copy, made by the tool."""
+    import subprocess
+    import sys
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        p.write_text(json.dumps({
+            "format": FORMAT, "title": "T", "goal": "g",
+            "extras": [{"heading": "Balance exceptions", "body": "UC1: granularity — a why.\n"}],
+        }), encoding="utf-8")
+        plain = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p)],
+                               capture_output=True, text=True)
+        rescan = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p),
+                                 "--ignore-exceptions"], capture_output=True, text=True)
+        assert "--ignore-exceptions" in rescan.stdout
+        assert "1 recorded line(s) were dropped" in rescan.stdout
+        # and it is a READ: the file on disk is untouched
+        assert "Balance exceptions" in p.read_text()
+        assert "recorded line(s) were dropped" not in plain.stdout

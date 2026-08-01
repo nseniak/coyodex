@@ -202,6 +202,13 @@ def load_fragment_paths(paths: list[Path]) -> tuple[list[tuple[str, ProjectModel
     notes: list[str] = []
     errors: list[str] = []
     for p in paths:
+        if p.name.endswith(".draft.json"):
+            # The harvest contract tells agents to write `<path>.draft.json` while a fragment is
+            # half-written, promising "the draft suffix keeps it out of the assemble glob". It did
+            # not: `*.draft.json` matches `*.json`, and nothing here looked at the name. A build was
+            # one mistimed assemble away from merging a truncated fragment.
+            notes.append(f"note: skipping {p.name} — a draft, still being written")
+            continue
         if not p.exists():
             errors.append(f"{p} not found")
             continue

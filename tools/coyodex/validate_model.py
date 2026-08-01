@@ -2954,7 +2954,7 @@ def main(argv: list[str] | None = None) -> int:
 def _run(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex validate [--check-sources] [--check-coverage] [--repo <root>] "
+        print("usage: coyodex validate [--check-sources] [--check-coverage] [--ignore-exceptions] [--repo <root>] "
               "[--emit-unclaimed] [--json] [.coyodex/project-map.json]\n\n"
               "Validate a model: structural schema validation, then the semantic\n"
               "checks (IDs resolve, hierarchy sound, cards complete, view fresh, …).\n"
@@ -2985,8 +2985,10 @@ def _run(argv: list[str] | None = None) -> int:
         # consumer gets whole lists and whole trigger text. Reset in a `finally` below so an
         # in-process caller cannot inherit the mode from a previous JSON run.
         set_full_lists(True)
+    ignore_exceptions = "--ignore-exceptions" in argv
     unknown = [a for a in argv if a.startswith("-")
-               and a not in ("--check-sources", "--check-coverage", "--emit-unclaimed", "--json")]
+               and a not in ("--check-sources", "--check-coverage", "--emit-unclaimed", "--json",
+                             "--ignore-exceptions")]
     if unknown:
         print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
         return 2
@@ -3005,6 +3007,27 @@ def _run(argv: list[str] | None = None) -> int:
         print("\nVALIDATION FAILED (schema):")
         print(f"  - {e}")
         return 1
+    if ignore_exceptions:
+        # THE RE-READ. Several suppression messages end with "re-read the rest by validating a copy
+        # with the exception removed" — an instruction that asks the operator to hand-edit a copy of
+        # the map, which nobody ever did. A recorded id exempts its element from a whole FAMILY (the
+        # step-count band AND the fused-goal name smell; every `runs_in` advisory, not just the one
+        # the exception was written about), so what a literal actually silences is routinely more
+        # than its author meant. This flag is that copy, made by the tool.
+        dropped = sum(len(x.body.splitlines()) for x in m.extras
+                      if x.heading.strip().lower().endswith("exceptions")
+                      or x.heading.strip().lower() in ("accepted duplications", "unclaimed surfaces",
+                                                       "happy path coverage",
+                                                       "entry-point coverage"))
+        m.extras = [x for x in m.extras
+                    if not (x.heading.strip().lower().endswith("exceptions")
+                            or x.heading.strip().lower() in ("accepted duplications",
+                                                             "unclaimed surfaces",
+                                                             "happy path coverage",
+                                                             "entry-point coverage"))]
+        print(f"NOTE: --ignore-exceptions — {dropped} recorded line(s) were dropped for this run, so "
+              f"every advisory a recorded exception would have silenced is shown below. Nothing was "
+              f"written; this is a READ of the map you have, not a different map.\n")
     if emit_unclaimed:
         rows = unclaimed_surface_components(m)
         if not rows:

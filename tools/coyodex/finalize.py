@@ -139,9 +139,44 @@ def _audit_leg(map_path: Path) -> Leg:
     advisory = [f"{f.get('check')}: {f.get('location')} — {f.get('message')}"
                 for f in findings if f.get("severity") != "CONTRADICTION"]
     counts = payload.get("theme_counts") or {}
-    note = (f"{len(payload.get('worklist') or [])} L2 claims on the grounding worklist"
+    live_worklist = len(payload.get("worklist") or [])
+    note = (f"{live_worklist} L2 claims on the grounding worklist"
             + (f" ({', '.join(f'{k}:{v}' for k, v in counts.items())})" if counts else ""))
+    stale = _stale_grounding_pin(map_path, live_worklist)
+    if stale:
+        advisory.append(stale)
     return Leg("audit", RAN, blocking=blocking, advisory=advisory, note=note)
+
+
+def _stale_grounding_pin(map_path: Path, live_worklist: int) -> str | None:
+    """The map's `grounding` counts describe a worklist that no longer exists.
+
+    `grounding write` PINS `claims_total` to the worklist the skeptics were given, and that is
+    correct — recomputing it would emit `claims_challenged exceeds claims_total` on a map whose
+    claims were since rewritten. But reconciling a refutation rewrites the claim and orphans its
+    verdict, so a record written BEFORE the reconcile overstates coverage, and nothing catches it:
+    `validate` blocks only `claims_challenged > claims_total`, and a stale pin is self-consistent
+    (418 = 418 passes).
+
+    A live build shipped `418 of 418 challenged` on a map whose worklist held 415 and of which only
+    403 could still be matched, and quoted 418 in its commit message as fact. This advisory is the
+    thing that would have said so. The fix is ordering: write the record AFTER the last reconcile
+    edit."""
+    try:
+        doc = json.loads(map_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    g = doc.get("grounding") if isinstance(doc, dict) else None
+    if not isinstance(g, dict):
+        return None
+    pinned = g.get("claims_total")
+    if not isinstance(pinned, int) or pinned <= 0 or pinned == live_worklist:
+        return None
+    return (f"grounding: the record is pinned to a worklist of {pinned} claim(s), but this map's "
+            f"audit worklist holds {live_worklist} — the record was written BEFORE the last claim "
+            f"was rewritten, so `claims_challenged` describes a surface that no longer exists. "
+            f"Re-run `coyodex grounding write` against a freshly captured worklist as the LAST "
+            f"write before assemble, or say in `grounding.note` which snapshot the counts describe.")
 
 
 def _drift_leg(map_path: Path, repo: Path, verdicts: list[Path]) -> Leg:
@@ -337,11 +372,22 @@ def main(argv: list[str] | None = None) -> int:
     required = [map_path, map_path.with_suffix(".md"),
                 map_path.parent / "preindex.json", map_path.parent / "provenance.json"]
     present = [p for p in required if p.exists()]
+    missing = [p for p in required if not p.exists()]
     if present:
         print("finalize: commit these with the map — "
               f"git add -f {' '.join(str(p) for p in present)}\n"
               "  (`-f` because a repo whose root .gitignore ignores `.coyodex/` refuses a plain "
               "`git add`, and method.md requires the pre-index and provenance to ship with the map.)")
+    if missing:
+        # NAME what is absent instead of quietly dropping it from the command. The filter above is
+        # right — `git add` on a non-existent path fails — but printing the survivors alone turns a
+        # missing artifact into a shorter, still-copyable line. A live build ran finalize before
+        # stamping provenance, and the hint it printed would have committed the map WITHOUT it: the
+        # exact omission the hint exists to prevent. The operator caught it by hand.
+        print(f"finalize: NOT in that command, because {'it does' if len(missing) == 1 else 'they do'}"
+              f" not exist yet — {', '.join(str(p) for p in missing)}. method.md requires the "
+              f"pre-index and provenance to ship WITH the map; produce them and re-run finalize "
+              f"rather than committing the shorter line above.")
     unran = [f"{l.name} ({l.status})" for l in report.legs if not l.ran]
     print(f"finalize: {report.verdict} — {report.blocking_total} blocking, "
           f"{report.advisory_total} advisory"

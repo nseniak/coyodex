@@ -9,6 +9,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "tools"))
 
+from coyodex import grounding as G  # noqa: E402
 from coyodex.grounding import build_record, main  # noqa: E402
 
 
@@ -85,3 +86,64 @@ def _cli_exits_nonzero(tmp_path: Path) -> None:
     vd = tmp_path / "v.json"
     vd.write_text(json.dumps({"grounding": [{"claim": "A", "grounded": True}]}), encoding="utf-8")
     assert main(["write", "--worklist", str(wl), "--verdicts", str(vd)]) == 1
+
+
+# --- grounding report, skeptic ids, and the stale pin ------------------------------------------
+
+
+def test_report_lists_which_claims_were_refuted_not_only_how_many():
+    """`write` resolves every claim and emits four counts, so a build that must reconcile each
+    refutation had nothing to read — one hand-wrote a 12-line vote aggregator one turn later."""
+    claims = ["C1 calls C2", "C3 reads E1", "C4 persists E2"]
+    rows = [{"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1"},
+            {"claim": "C3 reads E1", "grounded": False, "evidence": "b.py:2",
+             "note": "b.py:2 writes, it never reads"},
+            {"claim": "C4 persists E2", "grounded": "unverifiable", "evidence": ""}]
+    out = G.format_report(claims, rows)
+    assert "REFUTED" in out and "C3 reads E1" in out
+    assert "UNVERIFIABLE" in out and "C4 persists E2" in out
+    assert "C1 calls C2" not in out.split("confirmed:")[0], "a confirmed claim is not a worklist item"
+    assert "confirmed: 1 of 3" in out
+
+
+def test_report_separates_a_tie_from_a_stated_unverifiable():
+    """`_verdict_bucket` files both under `unverifiable` — right for the count, wrong for the
+    reader. A live build's grounding note described four unverifiables as one kind when two were
+    the other."""
+    claims = ["C1 calls C2"]
+    rows = [{"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1", "skeptic": "sec-a"},
+            {"claim": "C1 calls C2", "grounded": False, "evidence": "a.py:9", "skeptic": "sec-b"}]
+    out = G.format_report(claims, rows)
+    assert "TIED" in out
+    assert "1 for / 1 against" in out
+    assert "sec-a" in out and "sec-b" in out
+
+
+def test_report_names_the_claims_that_were_never_challenged():
+    out = G.format_report(["C1 calls C2", "C3 reads E1"],
+                          [{"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1"}])
+    assert "NO VERDICT" in out and "C3 reads E1" in out
+
+
+def test_two_skeptics_agreeing_are_not_reported_as_a_duplicate_row():
+    """The method PRESCRIBES a double read of the security claims, and the note used to tell the
+    build to "drop one" for doing exactly what it was asked to do."""
+    from coyodex.anchor_drift import load_verdicts
+    with tempfile.TemporaryDirectory() as tmp:
+        rows = [{"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1"}]
+        a, b = Path(tmp) / "v-a.json", Path(tmp) / "v-b.json"
+        a.write_text(json.dumps({"grounding": [{**rows[0], "skeptic": "sec-a"}]}), encoding="utf-8")
+        b.write_text(json.dumps({"grounding": [{**rows[0], "skeptic": "sec-b"}]}), encoding="utf-8")
+        _loaded, notes = load_verdicts([str(a), str(b)])
+        assert notes == [], notes
+
+
+def test_the_same_skeptic_id_in_two_files_is_still_reported():
+    from coyodex.anchor_drift import load_verdicts
+    with tempfile.TemporaryDirectory() as tmp:
+        row = {"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1", "skeptic": "sec-a"}
+        a, b = Path(tmp) / "v-a.json", Path(tmp) / "agg.json"
+        a.write_text(json.dumps({"grounding": [row]}), encoding="utf-8")
+        b.write_text(json.dumps({"grounding": [row]}), encoding="utf-8")
+        _loaded, notes = load_verdicts([str(a), str(b)])
+        assert len(notes) == 1 and "SAME `skeptic` id" in notes[0]

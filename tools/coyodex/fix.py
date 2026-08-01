@@ -121,10 +121,17 @@ def apply_drift(argv: list[str]) -> int:
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a in ("--map", "--verdicts", "--tolerance"):
+        if a in ("--map", "--verdicts", "--tolerance", "--repo"):
             i += 1
             val = _need(argv, i, a)
-            if a == "--map":
+            if a == "--repo":
+                # ACCEPTED AND IGNORED. This verb reads the map and the verdicts and needs no repo,
+                # but its sibling `anchor-drift` REQUIRES `--repo` and the two are invoked
+                # back-to-back on the same inputs. Rejecting it cost a live build a turn on
+                # `ERROR: unknown argument '--repo'`, with nothing saying the flag was merely
+                # surplus rather than wrong.
+                pass
+            elif a == "--map":
                 map_path = val
             elif a == "--verdicts":
                 # REPEATABLE, and it must stay in lockstep with `anchor-drift`. This used to bind a
@@ -395,9 +402,109 @@ def dedup_relation(argv: list[str]) -> int:
     return 0
 
 
+# ── fix dedup-edge ──────────────────────────────────────────────────────────────────────────────
+
+def _conflicting_edges(m: ProjectModel) -> dict[tuple[str, str, str], list[int]]:
+    """(src, verb, dst) triples authored more than once, with the indexes of every occurrence.
+
+    `assemble` already collapses duplicates that share a call site; what is left here declares the
+    SAME relationship at DIFFERENT lines, which is a real conflict — one of the anchors is wrong,
+    and a duplicate has masked a wrong anchor before."""
+    triples: dict[tuple[str, str, str], list[int]] = {}
+    for i, e in enumerate(m.edges):
+        triples.setdefault((e.src, e.verb, e.dst), []).append(i)
+    return {k: v for k, v in triples.items() if len(v) > 1}
+
+
+def _own_code_rank(anchor: str, repo: Path | None) -> tuple[int, int, str]:
+    """Sort key preferring the anchor most likely to be the true call site.
+
+    The heuristic a live build hand-wrote as a 40-line script: prefer a path that exists in the
+    repo, then one under a source root over a test or a script, then the shortest path. Reported,
+    never applied silently — `--keep` is how a choice becomes an edit."""
+    path = anchor.split(":")[0] if anchor else ""
+    exists = 0 if (repo and path and (repo / path).exists()) else 1
+    is_side = 1 if re.search(r"(^|/)(tests?|scripts?|docs?|examples?)/", path) else 0
+    return (exists, is_side, str(len(path)).zfill(4) + path)
+
+
+def dedup_edge(argv: list[str]) -> int:
+    """List, or resolve, the duplicate (src, verb, dst) edges `validate` warns about.
+
+    This existed only as a warning with no tool behind it: `coyodex fix` claims these mechanical
+    reconcile edits are "never hand-scripted", but there was no verb for the commonest one. A live
+    build hand-wrote a 40-line script to resolve 24 conflicting triples and dropped 29 rows."""
+    map_path = None
+    repo: Path | None = None
+    keeps: list[str] = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--map", "--repo", "--keep"):
+            i += 1
+            val = _need(argv, i, a)
+            if a == "--map":
+                map_path = val
+            elif a == "--repo":
+                repo = Path(val)
+            else:
+                keeps.append(val)
+        else:
+            print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
+            return 2
+        i += 1
+    if not map_path:
+        print("ERROR: --map is required", file=sys.stderr)
+        return 2
+    m, present = _load(Path(map_path))
+    conflicts = _conflicting_edges(m)
+    if not conflicts:
+        print("dedup-edge: no (src, verb, dst) edge is declared more than once.")
+        return 0
+    if not keeps:
+        print(f"{len(conflicts)} edge(s) declared more than once, at DIFFERING call sites. "
+              f"Pick the true site for each, then re-run with the --keep token(s):\n")
+        for (s, v, d), idxs in sorted(conflicts.items()):
+            anchors = [(m.edges[i].where or "(no call site)") for i in idxs]
+            best = min(anchors, key=lambda a: _own_code_rank(a, repo))
+            print(f"  {s} {v} {d}")
+            for anchor in anchors:
+                mark = " <- suggested" if anchor == best else ""
+                print(f"      {anchor}{mark}")
+            print(f"      --keep {s}:{v}:{d}:{best}")
+        print("\nEach --keep drops every OTHER occurrence of that triple. The suggestion prefers an "
+              "anchor that exists in --repo, outside tests/scripts, with the shortest path — it is "
+              "a hint, not a verdict.")
+        return 0
+    drop_idx: set[int] = set()
+    for tok in keeps:
+        parts = tok.split(":")
+        if len(parts) < 4:
+            print(f"ERROR: bad --keep token '{tok}' (want src:verb:dst:path:line)", file=sys.stderr)
+            return 2
+        s, v, d, anchor = parts[0], parts[1], parts[2], ":".join(parts[3:])
+        idxs = conflicts.get((s, v, d))
+        if idxs is None:
+            print(f"ERROR: '{s} {v} {d}' is not a duplicated edge in this map", file=sys.stderr)
+            return 1
+        keep = [i for i in idxs if (m.edges[i].where or "(no call site)") == anchor]
+        if not keep:
+            print(f"ERROR: none of {s} {v} {d}'s occurrences is anchored at '{anchor}'",
+                  file=sys.stderr)
+            return 1
+        drop_idx |= {i for i in idxs if i != keep[0]}
+        print(f"  kept {s} {v} {d} at {anchor}")
+    m.edges = [e for i, e in enumerate(m.edges) if i not in drop_idx]
+    _write(Path(map_path), m, present)
+    print(f"dedup-edge: dropped {len(drop_idx)} duplicate occurrence(s). "
+          f"Re-run: validate --check-sources → audit → render.")
+    return 0
+
+
 # ── dispatch ─────────────────────────────────────────────────────────────────────────────────────
 
-_VERBS = {"apply-drift": apply_drift, "drop-edge": drop_edge, "dedup-relation": dedup_relation}
+_VERBS = {"apply-drift": apply_drift, "drop-edge": drop_edge, "dedup-relation": dedup_relation,
+          "dedup-edge": dedup_edge}
 
 _USAGE = """usage: coyodex fix <verb> [args...]
 
@@ -407,6 +514,11 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       Write the grounding skeptics' corrected `where` line into each drifted edge (same verdicts
       `coyodex anchor-drift` reads). Matches the full (src, verb, dst) triple; an ambiguous
       multi-site edge is skipped, not blind-rewritten.
+
+  dedup-edge --map <map> [--repo <root>] [--keep <src:verb:dst:path:line> ...]
+      With no --keep, LIST every (src, verb, dst) edge declared more than once at DIFFERING call
+      sites — the conflict `validate` warns about — and suggest which anchor is the true one.
+      With --keep, drop every other occurrence of that triple.
 
   drop-edge --map <map> <src> <verb> <dst> [--drop-steps | --repoint <newDst>]
       Remove a refuted backbone edge. By default it REPORTS the flow steps that rode it (for a

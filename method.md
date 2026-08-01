@@ -807,7 +807,11 @@ synthesis → parallel trace.**
     (API outage, machine sleep — two live builds each lost ~13 minutes this way) loses ALL its
     reading if the fragment only exists at the end. Write incremental progress to
     `<id>.draft.json` and RENAME to `<id>.json` only when complete — the draft suffix keeps a
-    half-written file out of the assemble glob (a partial fragment must never assemble). The lead
+    half-written file out of the assemble glob (a partial fragment must never assemble). Write it as
+    `<id>.draft.json`, NOT `<your-path>.draft.json` — the fragment path already ends in `.json`, and
+    the doubled suffix was what a live build produced. `assemble` now skips `*.draft.json` by name;
+    before that it did not look at the name at all, so the suffix protected nothing and `*.json`
+    matched the draft like any other fragment. The lead
     probes stalled agents early (a couple of minutes of no progress, not a late `ls` sweep) and
     resumes a dead agent via SendMessage with its draft as the continuation point, or relaunches.
   - **Reconcile your slice expectations with E BEFORE launching.** Hand each agent its slice's E
@@ -818,6 +822,12 @@ synthesis → parallel trace.**
     post-hoc shrug when validate warns. (That recorded token also silences the E advisory; an
     overridden-but-unrecorded expectation was how a live build drifted to 2× E with the warning
     waved through at every validate.)
+    **Check each slice against ITS E, not only the sum.** The recorded-decision rule above fires on
+    the whole-repo total, so one slice can run 3× over while the sum stays in band and nothing says
+    a word: a live build gave `domain/services` (E=4) about 12 across two agents, `frontend/src/pages`
+    (E=6) about 10, and `entrypoints` (E=8) thirteen — and shipped 96 components against a
+    code-derived expectation of 59 (+63 %), the largest single quality drift in that build. Where a
+    slice's budget deviates from its E, that is the moment to say why — per slice, not per repo.
   - **Never delete draft fragments with a glob while any agent is still running.** `rm -f
     build-fragments/*.draft.json` mid-fan-out destroys the crash-resilience artifact of every agent
     that has not finished — a live build ran exactly that three times, once with three agents still
@@ -836,6 +846,24 @@ synthesis → parallel trace.**
     agent an **absolute** fragment output path
     (`<repo-root>/.coyodex/build-fragments/<id>.json`) so it can never land in a subdirectory; `assemble`
     warns about any fragment left in `build-fragments/` that you did not pass in.
+    **The wait itself is a TEXT turn — emit no tool call at all.** A keep-alive `echo .` yields the
+    turn no better than ending on text, and it costs a full round trip each time: a live build ran
+    39 of them plus `sleep 1` / `sleep 120`, burning **42 of its 195 tool calls (22 %)** doing
+    nothing. It also scored a perfect 38/38 on the polling assertion, which until then only counted
+    `ls` on the fragment dir — so the waste was invisible in the one number watching for it (L3
+    assertion 10 now counts any no-op turn). **One barrier means ONE `Monitor`**: stop the previous
+    one before starting another, or its events interleave with the new one's and with the agents'
+    own completion notifications — three streams for one wait, as a live build produced. And the
+    `Monitor` **command itself must not be an `ls` poll**: wrapping `for i in $(seq 1 240) … sleep 20`
+    in `Monitor` satisfies "use the Monitor tool" in letter while reproducing the exact poll this
+    paragraph bans.
+  - **Dispatch the known-longest slice FIRST, in every fan-out.** Launch order is the one lever you
+    have over when the barrier closes: a straggler dispatched last holds it for its whole runtime.
+    In a live build the T5 domain-model slice ran 10.2 min against its siblings' 5.0–6.9 and was
+    dispatched **twelfth** of thirteen, closing the barrier ~4 min later than it had to. T5 and the
+    security slice are the reliably heaviest in Phase 1; in Phase 3 it is whichever use case owns
+    the most sub-flows and the widest "where to look" list. Send those first, the small ones last.
+    (L3 assertion 16 watches this.)
   - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
     whole-domain slice: one dedicated agent reads the domain/model layer across the repo and returns
     **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). This holds even when
@@ -871,7 +899,11 @@ synthesis → parallel trace.**
     - **Large domain models (many entities) — shard the RELATIONS pass, never skip it.** One agent can
       read ~40 entities and author a complete `E↔E` graph; on a 150–200-entity domain it will
       under-author relations and the graph comes out sparse (a fresh large-monorepo build left ~a
-      quarter of its entities with no relation at all). When the entity count is high, the single T5
+      quarter of its entities with no relation at all). **The symptom shows up far below that
+      threshold, so measure it instead of guessing**: a 48-entity build came back with 19 of them
+      (40 %) holding no relation at all — the lead printed the isolated list at synthesis and moved
+      on. Count the isolated entities after the T5 fragment lands; if the share is material, shard
+      the relations pass or re-ping the slice, and if you carry it, record the count and the why. When the entity count is high, the single T5
       owner still owns the slice but MAY fan the relations pass out **by subdomain** (each sub-agent
       relates the entities within one subdomain + names cross-subdomain targets), then merges. The
       invariant is coverage, not headcount: every entity gets its relations authored. `validate`'s
@@ -885,7 +917,13 @@ synthesis → parallel trace.**
   concurrently once dedup is done: fan out the **test-completeness agent** and any remaining
   **deployment/ops backfill** WHILE the lead authors the reconcile assignments
   (subsystem/subdomain/runs_in/bucket) — a live build spent 13 lead-only minutes here with every
-  agent idle, then ran tests/backfill serially after the traces. Harvest agents may use per-slice *provisional* ids; synthesis assigns the
+  agent idle, then ran tests/backfill serially after the traces; a later one repeated it for ~6.
+  **Treat this as a launch STEP, not advice**: dispatch those agents before you start authoring, and
+  **put the gap-fill slice in the SAME batch as the Phase-3 trace fan-out.** Slicing the trace by use
+  case structurally guarantees that components off every traced flow get no edges, so the gap-fill is
+  predictable, not a surprise — a live build found 18 of 96 components (19 %) edgeless AFTER nine
+  trace agents had finished, and paid for it with a serial dispatch plus two turns of rework on an
+  extras paragraph it had written too early. Seed that slice from the post-synthesis edgeless set. Harvest agents may use per-slice *provisional* ids; synthesis assigns the
   final canonical ids here. This is the safe place to renumber: Phase 1 produced only nodes (no edges
   yet — those are Phase 3), so the only intra-slice references to fix up are `entry_point.component`,
   `entity.subdomain`, and the `E↔E` `relation.target` / `FK→En` markers. Because collisions are resolved
@@ -1083,8 +1121,19 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   chunks of 40 in worklist order. **Batch by theme/risk,
   don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group the claims into
   themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage), one
-  fresh-context skeptic per batch, and for the riskiest claims (auth, scoping, encryption) run **N
-  skeptics + majority vote**. **Cap each batch at ~40 claims** and split an oversized theme into
+  fresh-context skeptic per batch — hand each one
+  [method/templates/skeptic-contract.md](method/templates/skeptic-contract.md), the copyable
+  contract, rather than composing one from this section (a live build wrote ~5 KB of it into a
+  scratchpad, as every build before it had) — and for the riskiest claims (auth, scoping, encryption) run **N
+  skeptics + majority vote — with N ODD, and N ≥ 3.** Two skeptics cannot form a majority: a live
+  build ran exactly two on its security claims, they split, and the lead broke the tie by hand
+  against the code — which is the build-context blind spot the fresh-context rule exists to break,
+  reintroduced at the last step. Give each row a `skeptic` id so two independent agreements are
+  never mistaken for one vote counted twice. And note what a tie IS: `grounding write` files it
+  under `unverifiable`, which is right for the count and wrong for the reader, so run
+  **`coyodex grounding report`** to see ties listed apart from the claims a skeptic actually called
+  unverifiable — a live build's own grounding note described four unverifiables as one kind when two
+  were the other. **Cap each batch at ~40 claims** and split an oversized theme into
   two skeptics rather than one long-running one — a live build gave one skeptic 144 claims (150
   turns, 10 minutes, the phase's critical path) while its siblings finished in half the time;
   more, smaller skeptics also mean fresher context per claim, so this trades nothing away.
@@ -1132,7 +1181,15 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   It derives all four counts and REFUSES two things a hand tally cannot see: a verdict whose claim is
   not in the pinned worklist (the snapshot is wrong), and a worklist claim with no verdict at all (the
   pass did not challenge everything). Pin the worklist — re-deriving it after the refutations land
-  makes `claims_challenged` exceed `claims_total`, which `validate` blocks on. A hand-written record
+  makes `claims_challenged` exceed `claims_total`, which `validate` blocks on.
+  **`grounding write` is the LAST write before assemble — after the final reconcile edit, not
+  before it.** Reconciling a refutation REWRITES the claim, which orphans its verdict, so a record
+  written first describes a worklist that no longer exists. A live build wrote it, then reconciled
+  nine refutations, and shipped `418 of 418 challenged` on a map whose worklist held 415 and of
+  which only 403 could still be matched — then quoted the 418 in its commit message as fact. No gate
+  saw it: `validate` blocks only `claims_challenged > claims_total`, and a stale pin is
+  self-consistent. `finalize` now raises an advisory when the pin and the live worklist disagree,
+  and L3 assertions 13 and 14 watch the ordering and the number. A hand-written record
   shipped on a live build asserting anchors had been "corrected" 29 seconds before the tool that
   corrects them first ran. `--verdicts` is REPEATABLE: pass the per-batch files, do not hand-merge.
   **Then run `coyodex anchor-drift --map … --verdicts …`** — a deterministic check that flags any CONFIRMED claim
@@ -1207,84 +1264,11 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   against the code, never invented at synthesis to satisfy the "every dep needs an incoming
   edge" nudge (the audit→Elastic false-edge class — a benign-verb edge no gate re-checks).
 
-**Harvest-prompt template (Phase 1).** Give every harvest agent the same prompt skeleton —
-only the file list and the background blurb change per agent. Reusing one contract is what makes
-each agent return the same row shapes with the same verified/inferred discipline, which keeps the
-barrier synthesis clean. Fill the «angle-bracket» parts:
-
-> You are harvesting «structural / operational / build» facts for a coyodex codebase map.
-> Read these files completely, then produce ONLY the rows below — the only file you may write is
-> your own fragment file (see the output rule below). **Do this work yourself — do NOT spawn your
-> own sub-agents / delegate.** A sub-agent's output is silently dropped: on a live build a harvest
-> agent that delegated returned prose instead of writing its fragment, and the whole slice had to be
-> re-harvested. You read the files and write the one fragment; no delegation.
->
-> **Files:** «absolute paths this agent owns; list a directory first, then read each file».
-> **Background:** «what the main agent already learned about this slice, handed down so you
-> don't re-derive it».
->
-> **Expect roughly «the slice's E from the pre-index `granularity.per_dir`» components for your
-> slice** (one component ≈ one module-/folder-sized unit, ≤ ~10 source files / ~3 kLOC). If you come
-> out far under, you are folding subsystem-shaped dirs into single components — make those
-> subsystems and recurse into their units; far over, you are splitting module-sized units.
-> For every row give `file:line` evidence and a confidence tag (**verified** = read in code /
-> **inferred** = guessed). Use only the schema IDs and edge verbs; reference nodes, never
-> invent them. **Return exactly this fixed set of sections — one per prescribed slice — and if you
-> cannot fill one, return its header with `(none found)` and say why; never silently omit a
-> section.** Your output is **ONE JSON fragment** — a partial map model per
-> [method/model.md](method/model.md): an object holding only the top-level arrays your slice owns
-> («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`, `security`,
-> `config`»), each entry using that array's exact field names. **WRITE the fragment to
-> `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
-> one-line inventory (row count per array)** — never inline the fragment in your reply: a large
-> fragment (a T5 return routinely exceeds 50 KB) is silently truncated by sub-agent result caps,
-> and a truncated fragment fails `assemble`. An empty slice is an empty array plus a one-line note.
-> **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
-> rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
-> `deps[].where_configured`, `edges[].where`, `entry_points[].source`, `evidence[].file`,
-> `run_commands[].source`, `security[].source`, `non_entity_types[].source`, **and the group `source`
-> fields** (`subsystems[].source` / `subdomains[].source`) are all **bare** repo-root-relative refs
-> (`path/to/file.py:120`; a directory anchor keeps its trailing slash, `path/dir/`; an extensionless
-> ops file carrying a line is fine — `Dockerfile:1`, `Makefile:6-9`) — a bare file or directory ref,
-> never a markdown link and never two refs joined by a separator (put a run command's doc pointer in
-> its `command`/prose, not its `source`). `tests[].tests[].file` is also a bare anchor (a `path:line`
-> or a `path/` test dir), turned into a code link. The operational free-prose fields
-> (`deployment[].config_source`, `observability[].where_emitted`/`where_viewed`) are
-> the deliberate exception — they stay prose, not anchors.
-> **Field discipline** (what `assemble` / `validate` reject — get it right at the source): (a) every
-> **required** field is present and non-null; for an **optional** field with no value **omit the key**
-> entirely — do NOT emit `null` (rejected on defaulted-string fields) and do NOT emit a placeholder like
-> `(none)` (fails the anchor gate). (b) Use **only** each array's exact field names — no stray keys
-> (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`); it was listed here as a stray key while the same template demanded it. (c) Every anchor is **repo-root-relative**: the repo root
-> is «absolute repo path» — prefix every path with it. Minimal valid fragment:
-> `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
-> **SELF-CHECK BEFORE RETURNING (required):** run
-> `«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «repo» --expect «N» «your-fragment».json` and
-> fix every row it reports until it exits clean — this catches schema / anchor-format / extra-key /
-> missing-file errors in YOUR context (in parallel), so nothing bounces back from the lead's
-> `assemble`. Pass `--expect «N»` with the component budget this slice was dispatched with: it is
-> advisory, and it puts the over/undershoot in front of the agent that can explain it. On a live build
-> nine slices dispatched with budgets summing to ~55 delivered 86 components, every slice over, and
-> nobody noticed until the lead's granularity advisory fired after assembly.
-> If the lint prints `warning:` lines (advisory), either FIX them or **repeat them verbatim in your
-> reply with one line of justification each** — never silently shrug an advisory off; the lead must
-> not rediscover a warning your own lint already showed you.
-> **Anchor the operative statement** — the call / write / enforce line itself — **never the enclosing
-> `def`/class header** (the most common anchor-drift the adversarial pass finds).
-> Your AGENT_ID is your fragment's **filename stem only** — never a field inside the JSON.
-> **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
-> also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
-> `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
-> [domain-cards.md](method/domain-cards.md)), with **a `relations` item wherever two entities
-> relate** — the entities + their `E↔E` relations are the whole point of the slice. Each entity is a
-> **real named type** (class / dataclass / enum) whose `source` anchors its **definition** — do NOT
-> synthesize an entity for an unnamed concept; type embedded fields by their entity (`auth:E7`) so
-> relations carry the field name. For a **field-less** relation a store realizes by keying (no FK on
-> the row — e.g. a per-parent store keyed by `parent_id`), set the relation's **`keyed_by`** so the
-> arrow shows the key (`«key» parent_id`) instead of a bare line — see [domain-cards.md](method/domain-cards.md).
-> Mark plumbing types you deliberately did NOT model in `non_entity_types` (name + why). A directory- or subsystem-sliced agent that is **not** the T5
-> owner returns its components / entry-points only and leaves `entities` to the owner.
-> (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)
+**Harvest-prompt template (Phase 1).** The copyable contract is
+[method/templates/harvest-contract.md](method/templates/harvest-contract.md) — hand every
+harvest agent that file's contents, changing only the file list and the background blurb.
+Copy it; do not retype it from this document. A live build retyped 5.6 KB of it into a
+scratchpad and the copy drifted from the tool it described.
 
 **Completeness check before the barrier (lead, not delegated).** Before the Phase 2 synthesis, the
 lead confirms **every prescribed slice came back with its sections** — in particular that the T5 owner
@@ -1450,6 +1434,16 @@ It adds no check of its own. What it adds is a record and an answer:
 - **the report is a FILE.** A live build piped `validate` through `grep`, sent `audit` to
   `/dev/null`, and then told its operator "gates clean" with four warnings and two advisories open.
   A file survives `> /dev/null`, `| tail -12`, and a summary written from memory.
+  **This binds the MID-BUILD gate runs too, not only this pre-commit one.** A later build read every
+  Phase-3 gate through `| tail -40` / `| head -14` and paid for it in serial rounds: four `validate`
+  runs, each surfacing a different untouched warning family, each followed by its own patch turn,
+  where one whole read would have produced one batch of fixes. **And never re-check a warning with a
+  filter narrower than the run that surfaced it** — the same build re-checked with a grep whose
+  pattern no longer matched the wording, the finding vanished from view, and it shipped unrecorded
+  and unfixed. Narrowing the view is what a waved-through advisory looks like from the inside. (L3
+  assertion 15 watches this.) When a message says a recorded exception silenced more than it names,
+  the re-read is **`coyodex validate <map> --ignore-exceptions`** — not a hand-edited copy of the
+  map, which is what the message used to ask for and which no build ever did.
 - **it says whether every check actually ran.** Run the three commands by hand and a skipped one
   looks exactly like a clean one. A leg that should have run and did not makes the verdict
   `INCOMPLETE`, which exits non-zero — "the gate did not run" must never read as "the gate passed".
@@ -1464,6 +1458,7 @@ The commit is the only record a future reader sees. `finalize --emit-gate-block 
 block to paste, so the durable record is generated rather than remembered.
 
 **ADVISORIES is not a pass** — fix each one, or record it under the extras heading its message names.
+**Where a verb exists, use it.** `validate`'s "the '<verb>' edge is declared N times with differing call sites" has one: **`coyodex fix dedup-edge --map … --repo …`** lists every conflicting triple with its competing anchors and suggests the likeliest true site, and `--keep <src:verb:dst:path:line>` drops the rest. A live build hand-wrote a 40-line script for 24 of them and dropped 29 rows unreviewed, against this method's own rule that these mechanical edits are never hand-scripted.
 **Some advisories deliberately name no heading.** `tests/test_method_contract.py`'s
 `KNOWN_NO_ESCAPE` is that list, each entry with its own reason, and the reasons are not one kind:
 some are mechanical and local ("contradictory row; drop one field"), some say the record already
@@ -1479,7 +1474,21 @@ so it has its own escape — record ``anchor-drift `<the claim, verbatim>`: <why
 **`Drift exceptions`** extras heading. The key is the WHOLE claim in backticks, not its leading id:
 keying on the id would let one line silence every drift finding rooted at that component, which is
 the family escape the `Audit exceptions` rule above forbids in so many words. `anchor-drift` prints
-the exact key to copy, and reports any recorded line that matched nothing. `finalize` exits non-zero for what validate and audit already block on, and for
+the exact key to copy; it reports any recorded line that matched nothing, AND any line that opens
+with `anchor-drift` but does not parse. (The key regex used to reject every quote character, so a
+cadence claim — always phrased `runs on cadence '<x>'` — could never be recorded, and the failure
+was silent: an unparsed line yields no key, and a line that silences nothing looked exactly like no
+line at all. A live build wrote two exceptions in the printed format, watched them do nothing, and
+had to read `anchor_drift.py` to find out why.)
+**OPEN THE FILE before recording one.** The escape is for "the skeptics read a sibling file and the
+stored anchor is right" — a claim about what is at a `path:line`, which you cannot know without
+looking. A live build recorded both of its drift findings as false alarms with no `Read` and no
+grep of either cited file, reasoning instead about what a cadence anchor "is defined to point at";
+the two SECURITY anchors in the same run were properly checked against source first, which is the
+standard. (L3 assertion 17 watches this.) Write the record with **`coyodex record --heading "Drift
+exceptions" --line "…"`** rather than a hand-rolled append: it checks the heading is one a check
+actually reads, refuses a key with no why, and `--replace <prefix>` is how you correct a record
+whose facts moved. `finalize` exits non-zero for what validate and audit already block on, and for
 `INCOMPLETE`; unapplied anchor drift is reported and never gates, because `fix apply-drift` cannot fix
 an entry-point cadence anchor and a gate with no remedy is a false failure. It is a convenience
 wrapper and a durable record, not a gate that can force anything.

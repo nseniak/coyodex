@@ -220,7 +220,13 @@ def test_method_states_the_leaf_rule() -> None:
 
 
 def test_harvest_prompt_carries_the_per_slice_expectation() -> None:
-    text = METHOD_MD.read_text(encoding="utf-8")
+    # The harvest contract moved OUT of method.md into method/templates/, so agents copy a file
+    # instead of retyping prose. This guard follows it: the E placeholder must survive the move, in
+    # whichever of the two documents now carries the prompt skeleton.
+    method = METHOD_MD.read_text(encoding="utf-8")
+    templates = "".join(p.read_text(encoding="utf-8")
+                        for p in sorted((METHOD_MD.parent / "method" / "templates").glob("*.md")))
+    text = method + templates
     assert "«the slice's E from the pre-index `granularity.per_dir`»" in text
     # …and the unified under-delivery guidance points at the same E, not the old rough ratios
     assert "judge each return against its E" in text

@@ -192,3 +192,26 @@ def test_the_report_records_the_maps_hash_so_a_stale_one_is_detectable():
     r = json.loads((root / ".coyodex" / "finalize-report.json").read_text(encoding="utf-8"))
     assert r["map_sha256"] == hashlib.sha256(p.read_bytes()).hexdigest()
     assert r["map_sha256"] in (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+
+
+def test_a_grounding_record_pinned_to_a_stale_worklist_is_flagged():
+    """A live build shipped `418 of 418 challenged` on a map whose worklist held 415 and quoted the
+    418 in its commit as fact. `validate` cannot see it — it blocks only `challenged > total`, and a
+    stale pin is self-consistent."""
+    from coyodex.finalize import _stale_grounding_pin
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g",
+                                 "grounding": {"claims_total": 418, "claims_challenged": 418}}),
+                     encoding="utf-8")
+        msg = _stale_grounding_pin(p, 415)
+        assert msg and "418" in msg and "415" in msg
+        assert _stale_grounding_pin(p, 418) is None, "an in-sync pin must be silent"
+
+
+def test_a_map_with_no_grounding_record_is_not_flagged():
+    from coyodex.finalize import _stale_grounding_pin
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g"}), encoding="utf-8")
+        assert _stale_grounding_pin(p, 415) is None

@@ -517,8 +517,9 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     """11 is RESERVED for the trapdoor golden-map comparison (L3-DESIGN.md: "11 is deliberately
     absent"), so a new transcript-only assertion takes 12 rather than filling the hole."""
     ids = [a.id for a in P.score_turns(()).assertions]
-    assert ids == [*range(1, 11), 12], ids
+    assert ids == [*range(1, 11), *range(12, 18)], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
+    assert len(ids) == len(set(ids))
 
 
 def _main() -> int:
@@ -536,3 +537,194 @@ def _main() -> int:
 
 if __name__ == "__main__":
     sys.exit(_main())
+
+
+# --- assertions 6 and 10, after the 2026-08-01 retro found both measuring the wrong thing --------
+
+
+def make_grounded_map(tmp: Path, grounding: dict | None) -> Path:
+    p = tmp / "project-map.json"
+    doc: dict = {"format": "coyodex-map", "title": "T", "goal": "g"}
+    if grounding is not None:
+        doc["grounding"] = grounding
+    p.write_text(json.dumps(doc), encoding="utf-8")
+    return p
+
+
+def test_assertion_6_reads_the_map_when_one_is_given():
+    with tempfile.TemporaryDirectory() as td:
+        m = make_grounded_map(Path(td), {"claims_total": 418, "claims_challenged": 418})
+        ctx = P.read_score_context(m)
+        # no transcript evidence at all — the map alone must satisfy it
+        a = P.assert_6_grounding_recorded((), ctx)
+        assert (a.observed, a.of) == (1, 1) and a.note == "read from the map"
+
+
+def test_assertion_6_scores_zero_when_the_map_carries_no_grounding():
+    with tempfile.TemporaryDirectory() as td:
+        ctx = P.read_score_context(make_grounded_map(Path(td), None))
+        a = P.assert_6_grounding_recorded((), ctx)
+        assert (a.observed, a.of) == (0, 1)
+
+
+def test_assertion_6_counts_the_command_not_only_a_hand_written_record():
+    """The inversion: `coyodex grounding write` never puts `claims_total` in its own command text,
+    so the CORRECT path scored 0 while a python heredoc that hand-tallied the record scored 1."""
+    by_command = (make_turn(0, make_bash(
+        "coyodex grounding write --worklist wl.json --verdicts v.json --out g.json")),)
+    a = P.assert_6_grounding_recorded(by_command)
+    assert (a.observed, a.of) == (1, 1)
+    assert a.evidence[0].detail["how"] == "coyodex grounding write"
+
+
+def test_assertion_10_counts_a_no_op_turn_not_only_a_fragment_dir_poll():
+    """A live build waited with `echo .` 39 times and scored a PERFECT 38/38 on the old rule, which
+    only saw ls/find/stat/wc naming the fragment dir."""
+    turns = [make_turn(0, make_agent())]
+    turns += [make_turn(i, make_bash("echo .")) for i in range(1, 6)]
+    a = P.score_turns(tuple(turns)).by_id()[10]
+    assert (a.observed, a.of) == (0, 1), "5 no-op turns must break the threshold of 3"
+    assert all(e.detail["kind"] == "no-op turn" for e in a.evidence)
+
+
+def test_assertion_10_still_counts_the_original_fragment_dir_poll():
+    turns = [make_turn(0, make_agent())]
+    turns += [make_turn(i, make_bash("ls .coyodex/build-fragments/*.json | wc -l"))
+              for i in range(1, 6)]
+    a = P.score_turns(tuple(turns)).by_id()[10]
+    assert (a.observed, a.of) == (0, 1)
+    assert all(e.detail["kind"] == "fragment-dir poll" for e in a.evidence)
+
+
+def test_assertion_10_leaves_real_work_alone():
+    turns = (make_turn(0, make_agent()),
+             make_turn(1, make_bash("echo hello > out.txt")),      # a redirect is not a no-op
+             make_turn(2, make_bash("coyodex validate map.json")))
+    a = P.score_turns(turns).by_id()[10]
+    assert (a.observed, a.of) == (1, 1) and a.evidence == ()
+
+
+def test_a_noop_wait_recognises_the_shapes_a_build_actually_used():
+    assert P._is_noop_wait("echo .")
+    assert P._is_noop_wait("sleep 120")
+    assert P._is_noop_wait("sleep 1; echo waiting")
+    assert P._is_noop_wait('echo "waiting on agents"')
+    assert not P._is_noop_wait("echo x > f")
+    assert not P._is_noop_wait("sleep 120; ls *.json | wc -l")
+    assert not P._is_noop_wait("")
+
+
+# --- assertions 13-17, added from the 2026-08-01 retro -------------------------------------------
+
+
+def test_13_flags_a_grounding_record_written_before_the_reconcile_edits():
+    turns = (make_turn(0, make_bash("coyodex grounding write --worklist wl.json --out g.json")),
+             make_turn(1, make_bash("python3 - <<'PY'\njson.dump(d, open('.coyodex/build-fragments/x.json','w'))\nPY")))
+    a = P.score_turns(turns).by_id()[13]
+    assert (a.observed, a.of) == (0, 1)
+
+
+def test_13_passes_when_nothing_is_written_after_the_record():
+    turns = (make_turn(0, make_bash("python3 - <<'PY'\njson.dump(d, open('.coyodex/build-fragments/x.json','w'))\nPY")),
+             make_turn(1, make_bash("coyodex grounding write --worklist wl.json --out g.json")))
+    a = P.score_turns(turns).by_id()[13]
+    assert (a.observed, a.of) == (1, 1)
+
+
+def test_14_catches_a_pinned_total_that_the_live_worklist_contradicts():
+    turns = (make_turn(0, make_bash("coyodex grounding write", uid="g"),
+                       results=(("g", "wrote g.json: 418 of 418 claim(s) challenged"),)),
+             make_turn(1, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+                       results=(("d", "2 drifted anchor(s) · challenged 403 of 415 worklist claim(s)"),)))
+    a = P.score_turns(turns).by_id()[14]
+    assert (a.observed, a.of) == (0, 1) and "418" in a.note and "415" in a.note
+
+
+def test_15_catches_a_gate_rerun_narrowed_by_a_grep():
+    turns = (make_turn(0, make_bash("coyodex validate map.json --check-sources")),
+             make_turn(1, make_bash("coyodex validate map.json --check-sources | grep 'carry no'")))
+    a = P.score_turns(turns).by_id()[15]
+    assert (a.observed, a.of) == (0, 1)
+
+
+def test_15_allows_a_rerun_that_widens_the_view():
+    turns = (make_turn(0, make_bash("coyodex validate map.json | grep x")),
+             make_turn(1, make_bash("coyodex validate map.json")))
+    a = P.score_turns(turns).by_id()[15]
+    assert (a.observed, a.of) == (1, 1)
+
+
+def make_timed_turn(index: int, stamp: str, *calls: ToolCall) -> Turn:
+    return Turn(index=index, role="assistant", tool_calls=calls, timestamp=stamp)
+
+
+def make_result_turn(index: int, stamp: str, uid: str) -> Turn:
+    from coyodex_eval.transcript import ToolResult
+    return Turn(index=index, role="user", timestamp=stamp,
+                tool_results=(ToolResult(tool_use_id=uid, content="done"),))
+
+
+def test_16_flags_the_slowest_slice_dispatched_last():
+    def agent(uid: str) -> ToolCall:
+        return ToolCall(name="Agent", input={"description": uid}, id=uid)
+    turns = (
+        make_timed_turn(0, "2026-08-01T08:00:00Z", agent("a")),
+        make_timed_turn(1, "2026-08-01T08:00:10Z", agent("b")),
+        make_timed_turn(2, "2026-08-01T08:00:20Z", agent("c")),   # dispatched last, runs longest
+        make_result_turn(3, "2026-08-01T08:05:00Z", "a"),
+        make_result_turn(4, "2026-08-01T08:05:10Z", "b"),
+        make_result_turn(5, "2026-08-01T08:20:00Z", "c"),
+    )
+    a = P.score_turns(turns).by_id()[16]
+    assert (a.observed, a.of) == (0, 1)
+    assert a.evidence[0].detail["dispatched"] == 3
+
+
+def test_16_passes_when_the_slowest_goes_first():
+    def agent(uid: str) -> ToolCall:
+        return ToolCall(name="Agent", input={"description": uid}, id=uid)
+    turns = (
+        make_timed_turn(0, "2026-08-01T08:00:00Z", agent("a")),   # longest, dispatched first
+        make_timed_turn(1, "2026-08-01T08:00:10Z", agent("b")),
+        make_timed_turn(2, "2026-08-01T08:00:20Z", agent("c")),
+        make_result_turn(3, "2026-08-01T08:20:00Z", "a"),
+        make_result_turn(4, "2026-08-01T08:05:10Z", "b"),
+        make_result_turn(5, "2026-08-01T08:05:20Z", "c"),
+    )
+    a = P.score_turns(turns).by_id()[16]
+    assert (a.observed, a.of) == (1, 1)
+
+
+def test_17_flags_a_drift_exception_recorded_without_opening_the_file():
+    record = "- anchor-drift `E1 runs on cadence 'continuous'`: the stored anchor is right."
+    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+                       results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
+                                      "— skeptics found a different file"),)),
+             make_turn(1, make_write("frag.json", record)))
+    a = P.score_turns(turns).by_id()[17]
+    assert (a.observed, a.of) == (0, 1)
+    assert a.evidence[0].detail["should_have_read"] == "src/session.ts"
+
+
+def test_17_passes_when_the_cited_file_was_read_after_the_finding():
+    record = "- anchor-drift `E1 runs on cadence 'continuous'`: the stored anchor is right."
+    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+                       results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
+                                      "— skeptics found a different file"),)),
+             make_turn(1, make_bash("sed -n '15,30p' src/session.ts")),
+             make_turn(2, make_write("frag.json", record)))
+    a = P.score_turns(turns).by_id()[17]
+    assert (a.observed, a.of) == (1, 1)
+
+
+def test_17_does_not_count_merely_naming_the_file_in_a_patch_script():
+    """A fragment-patching heredoc mentions the very path being recorded; counting that as 'looked'
+    turned this assertion into a false 1.00 on the build that motivated it."""
+    record = "- anchor-drift `E1 runs on cadence 'continuous'`: the stored anchor is right."
+    turns = (make_turn(0, make_bash("coyodex anchor-drift --map m.json", uid="d"),
+                       results=(("d", "E1 runs on cadence 'continuous': stored [src/session.ts:21] "
+                                      "— skeptics found a different file"),)),
+             make_turn(1, make_bash("python3 - <<'PY'\nd['x']='src/session.ts:33'\nPY")),
+             make_turn(2, make_write("frag.json", record)))
+    a = P.score_turns(turns).by_id()[17]
+    assert (a.observed, a.of) == (0, 1)

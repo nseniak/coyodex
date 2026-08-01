@@ -266,3 +266,55 @@ def test_a_split_vote_is_a_tie_in_either_order_and_votes_are_never_deduped():
     assert _confirmed_drifts([w], [yes, dict(yes), no], 2)
     # …and N refutations are N votes, not one: a real 2-2 tie stays a tie.
     assert not _confirmed_drifts([w], [yes, {**yes, "evidence": "a.py:41"}, no, dict(no)], 2)
+
+
+# --- recording a drift exception --------------------------------------------------------------
+#
+# The escape existed but could not be used. The key regex was `[^`'"]+` — a class that cannot span
+# a quote — while EVERY cadence claim is phrased `runs on cadence '<x>'`. So the whole cadence
+# family was permanently un-recordable, and silently: a line that does not parse yields no key, the
+# early return fires, and the "matched no finding" diagnostic never runs. A live build recorded two
+# exceptions in the exact format the report prints, watched them do nothing, and had to read
+# anchor_drift.py to find out why.
+
+
+def make_map_with_drift_exceptions(body: str) -> "object":
+    return load_model(json.dumps({
+        "format": FORMAT, "title": "T", "goal": "g",
+        "extras": [{"heading": ad.DRIFT_EXCEPTIONS_HEADING, "body": body}],
+    }))
+
+
+def test_a_cadence_claim_with_quotes_can_be_recorded():
+    claim = "Entry point [poller] hourly sweep runs on cadence 'every 1h'"
+    m = make_map_with_drift_exceptions(
+        f"- anchor-drift `{claim}`: the stored anchor is the declaration; skeptics read the caller.")
+    findings = [(make_item(claim, "health.py:49"), ad.DriftResult(True, "health.py:49", "health.py:80", True, 31))]
+    kept, notes = ad.apply_drift_exceptions(m, findings)
+    assert kept == []
+    assert any("suppressed by recorded exception" in n for n in notes)
+
+
+def test_a_key_containing_the_delimiter_still_parses():
+    claim = "C1 calls `weird` C2"
+    m = make_map_with_drift_exceptions(f"- anchor-drift `{claim}`: verified, the stored line is right.")
+    recorded, malformed = ad.drift_exceptions(m)
+    assert recorded == {claim} and malformed == []
+
+
+def test_a_line_that_does_not_parse_is_reported_not_silently_dropped():
+    # the silent half of the bug: an unusable record must never look like no record at all.
+    m = make_map_with_drift_exceptions("- anchor-drift C42 persists E6: no delimiters, so no key")
+    recorded, malformed = ad.drift_exceptions(m)
+    assert recorded == set() and len(malformed) == 1
+    findings = [(make_item("C42 persists E6", "a.py:1"), ad.DriftResult(True, "a.py:1", "a.py:9", True, 8))]
+    kept, notes = ad.apply_drift_exceptions(m, findings)
+    assert len(kept) == 1                      # the finding still fires — nothing was silenced
+    assert any("do not parse, so they silence NOTHING" in n for n in notes)
+
+
+def test_a_key_alone_without_a_why_is_still_refused():
+    # a dismissal is not a record; this rule must survive the regex widening.
+    m = make_map_with_drift_exceptions("- anchor-drift `C42 persists E6`:")
+    recorded, malformed = ad.drift_exceptions(m)
+    assert recorded == set() and len(malformed) == 1
