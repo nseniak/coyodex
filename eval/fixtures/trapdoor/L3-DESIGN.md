@@ -1,6 +1,6 @@
 # L3 — process assertions over a build transcript
 
-**Status: assertions 1–10 are IMPLEMENTED.** The reader is
+**Status: assertions 1–10 and 12–17 are IMPLEMENTED; 11 is not.** The reader is
 [eval/tools/coyodex_eval/transcript.py](../../tools/coyodex_eval/transcript.py), the assertions and
 the scorecard/diff CLI are
 [eval/tools/coyodex_eval/process_scorecard.py](../../tools/coyodex_eval/process_scorecard.py)
@@ -98,6 +98,22 @@ Assertions 1–10 are project-agnostic and run against any build transcript — 
 be validated against eight real builds of four different repos instead of waiting for a fixture run.
 11 is what makes the trapdoor fixture worth building a map of rather than just testing tools
 against, and it is the one still unimplemented.
+
+### 12–17, added after later builds
+
+These shipped without an entry here, and the omission had a cost: a retrospective met three of them
+scoring zero (13, 14, 17), found nothing in this table, and had to read the detector source to learn
+what they even measured. There is no assertion 11 in the runner — the number stays reserved for the
+fixture row above.
+
+| # | assertion | the fix it audits |
+|---|---|---|
+| 12 | the commit message's gate claim matches what `finalize` actually returned | a build wrote "gates clean" over a report that said ADVISORIES. The durable record is the commit; if it disagrees with the gate, the gate may as well not have run |
+| 13 | `grounding write` is the LAST write — no map or fragment write follows it | the record describes a worklist that no longer exists. A live build wrote it and then made 21 further writes, four of which ADDED claims no skeptic ever saw |
+| 14 | the record's pinned `claims_total` matches the map's live audit worklist | the same failure seen from the other side. A build shipped `446 of 446 challenged` against a live worklist of 444 and quoted the 446 in its commit message |
+| 15 | no advisory is re-checked with a filter narrower than the run that surfaced it | narrowing the view is what a waved-through advisory looks like from the inside. Distinct from 9, which compares the final view to the model's records; this one watches the *re-check* |
+| 16 | in every fan-out, the known-longest slice is dispatched first | launch order is the only lever on when a barrier closes. A straggler dispatched twelfth of thirteen held one ~4 minutes longer than it had to |
+| 17 | a recorded drift exception cites a file the build actually opened | a record is a judgement about code; written without reading the code it is a dismissal. **Read this score with care** — it has been observed reporting 0 for reasons other than the behaviour, when records were written through `coyodex record --line` with shell-escaped backticks, or when the anchor-drift output was captured as `--json` so the text form it pairs on never landed |
 
 ### What building them taught
 

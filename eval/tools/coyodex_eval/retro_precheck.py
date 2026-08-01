@@ -45,7 +45,9 @@ build looks live or the map/provenance is unusable, 2 on a usage error.
 Checks, in order:
   1. .coyodex/project-map.json and .coyodex/provenance.json exist and parse
   2. provenance's newest session is not THIS session ($CLAUDE_CODE_SESSION_ID)
-  3. no transcript newer than provenance's own has been written in the last N seconds"""
+  3. nothing under .coyodex/ has been written in the last N seconds — the build's own output, which
+     is the only signal that sees a build STILL RUNNING AFTER it stamped provenance
+  4. no OTHER session's transcript has been written in the last N seconds"""
 
 
 def project_slug(repo: Path) -> str:
@@ -63,6 +65,42 @@ def age_seconds(p: Path) -> float | None:
         return time.time() - os.path.getmtime(p)
     except OSError:
         return None
+
+
+#: Written by `coyodex-eval archive`, not by a build — a fresh archive must not read as a live build.
+_NOT_BUILD_OUTPUT = ("dev-rebuilds",)
+
+
+def build_output_age(repo: Path) -> tuple[float | None, str | None]:
+    """(seconds since the most recent write under `.coyodex/`, the file). (None, None) if empty.
+
+    The transcript scan below cannot see the case that actually happens. Provenance is stamped near
+    the end of a build and the build then KEEPS GOING — recording advisories, running `finalize`,
+    re-rendering, committing. On the run this was written for, provenance said 14:57 and the map was
+    still being rewritten at 15:43: 46 minutes in which the map, the fragments and the verify
+    directory all changed while `retro-precheck` said "safe to proceed".
+
+    Watching the build's own OUTPUT closes that window directly, and it is a better signal than the
+    build's transcript for two reasons. It does not reset when the operator keeps chatting in the
+    build window after the commit (a transcript-only rule would then refuse forever, telling them to
+    wait for something that already happened). And it does not depend on provenance being older or
+    newer than the map — an ordering that does not survive the final `render`.
+    """
+    coy = repo / ".coyodex"
+    if not coy.is_dir():
+        return None, None
+    newest: tuple[float, str] | None = None
+    for p in coy.rglob("*"):
+        if not p.is_file():
+            continue
+        if any(part in _NOT_BUILD_OUTPUT for part in p.relative_to(coy).parts):
+            continue
+        a = age_seconds(p)
+        if a is None:
+            continue
+        if newest is None or a < newest[0]:
+            newest = (a, str(p.relative_to(repo)))
+    return (newest[0], newest[1]) if newest else (None, None)
 
 
 def check(repo: Path, idle_seconds: int = DEFAULT_IDLE_SECONDS,
@@ -90,6 +128,21 @@ def check(repo: Path, idle_seconds: int = DEFAULT_IDLE_SECONDS,
     if this_session and built_sid == this_session:
         return False, ("provenance names THIS session — the retro would read the file it is writing. "
                        "Open a new chat in this project and run it there."), detail
+
+    # The build's own output, checked BEFORE the transcript scan: a build that stamped provenance and
+    # is still writing is the case the transcript scan structurally cannot see, because it skips the
+    # session provenance names. See `build_output_age`.
+    out_age, out_file = build_output_age(repo)
+    detail["newest_build_output"] = out_file
+    detail["newest_build_output_age_seconds"] = None if out_age is None else round(out_age)
+    if out_age is not None and out_age < idle_seconds:
+        return False, (
+            f"{out_file} was written {out_age:.0f}s ago — the build is still producing output. "
+            f"Provenance is stamped near the END of a build and the build then keeps going "
+            f"(recording advisories, `finalize`, `render`, the commit), so a fresh provenance "
+            f"timestamp ({detail['built_at']}) does NOT mean the map has stopped changing. "
+            f"Retrospecting now would gate a map that is still being written. Wait for "
+            f"`.coyodex/` to go quiet (>{idle_seconds}s)."), detail
 
     tdir = transcript_dir(repo)
     live: list[tuple[str, float]] = []

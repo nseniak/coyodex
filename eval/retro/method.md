@@ -64,8 +64,17 @@ COYODEX_HOME/.venv/bin/coyodex-eval retro-precheck        # exit 1 = do not proc
 Step 0a's same-session guard does NOT cover this, and the gap is silent. Provenance is stamped near
 the END of a build, so while one is running it still names the PREVIOUS build — a different session
 id from yours, so the guard passes, the retro proceeds, and every finding is about the wrong run
-with nothing saying so. `retro-precheck` compares provenance against the newest OTHER transcript in
-the project and refuses while that one is still being written; it also refuses a half-written map.
+with nothing saying so. `retro-precheck` refuses a half-written map, refuses while another
+session's transcript is still being written, and — the case the transcript scan cannot see — refuses
+while anything under `.coyodex/` is still being written.
+
+**That last check is the one that matters most, because provenance being fresh does not mean the
+build is over.** A build stamps provenance and then keeps going: recording advisories, `finalize`,
+`render`, the commit. On the 2026-08-01 mcpolis build, provenance said 14:57 and the map was still
+being rewritten at 15:43. The transcript scan is blind to it by construction — it must skip the
+session provenance names, or the retro would refuse forever after every build — so for 46 minutes
+the only answer available was "safe to proceed". Watching the build's own output closes it, and
+survives the operator carrying on chatting in the build window after the commit.
 
 Do not hand-roll this wait. The one live attempt used `find -newermt '-120 seconds'`, which this
 platform's `find` rejects outright — so the idle test silently read as "always idle" — and it waited
@@ -144,11 +153,15 @@ coyodex-eval process <prev-transcript> --out .../prev-process.json
 coyodex-eval process --diff .../prev-process.json .../process.json
 ```
 
-The ten assertions and what each audits are in
-`COYODEX_HOME/eval/fixtures/trapdoor/L3-DESIGN.md`. **Read the scores with their notes** — several
-carry a caveat that changes their meaning (assertion 9 says so when the final validate view was
-narrowed by a grep), and `n/a` means the run held no opportunity of that kind, which is not the
-same as a miss.
+The assertions and what each audits are in
+`COYODEX_HOME/eval/fixtures/trapdoor/L3-DESIGN.md` — **all of them, so check the doc against
+`coyodex-eval process` output rather than against this sentence.** It said "the ten assertions"
+while the scorecard ran fifteen, and the six the doc did not cover were three of the four a live
+build scored zero on; the retro had to read the source to learn what they meant.
+
+**Read the scores with their notes** — several carry a caveat that changes their meaning
+(assertion 9 says so when the final validate view was narrowed by a grep), and `n/a` means the run
+held no opportunity of that kind, which is not the same as a miss.
 
 ---
 

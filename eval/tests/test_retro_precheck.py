@@ -24,8 +24,13 @@ LIVE = "bbbbbbbb-5555-6666-7777-888888888888"
 MINE = "cccccccc-9999-0000-1111-222222222222"
 
 
-def make_project(root: Path, *, built_session: str = PREV, valid_map: bool = True) -> Path:
-    """A project tree with a committed map and a provenance naming `built_session`."""
+def make_project(root: Path, *, built_session: str = PREV, valid_map: bool = True,
+                 output_age_seconds: float = 3600) -> Path:
+    """A project tree with a committed map and a provenance naming `built_session`.
+
+    `output_age_seconds` ages everything under `.coyodex/`. It defaults to an hour because the
+    interesting cases below are about TRANSCRIPTS, and a build whose own output was written one
+    second ago is a build that has not finished — which the guard now refuses on its own."""
     coy = root / ".coyodex"
     coy.mkdir(parents=True)
     (coy / "project-map.json").write_text(
@@ -35,7 +40,16 @@ def make_project(root: Path, *, built_session: str = PREV, valid_map: bool = Tru
         "schema": "coyodex-provenance/v1",
         "sessions": [{"session_id": built_session, "built_at": "2026-07-30 16:23", "mode": "build"}],
     }), encoding="utf-8")
+    age_build_output(root, output_age_seconds)
     return root
+
+
+def age_build_output(root: Path, seconds: float) -> None:
+    """Backdate every file under `.coyodex/`, as a finished build's output would be."""
+    when = time.time() - seconds
+    for f in (root / ".coyodex").rglob("*"):
+        if f.is_file():
+            os.utime(f, (when, when))
 
 
 def make_transcripts(root: Path, *sessions: str) -> Path:
@@ -112,3 +126,59 @@ def test_it_refuses_when_there_is_no_build_at_all():
         (root / ".coyodex").mkdir(parents=True)
         ok, message, _detail = check(root, idle_seconds=180, this_session=MINE)
         assert not ok and "no finished build" in message
+
+
+# ── the case the transcript scan structurally cannot see ─────────────────────────────────────────
+
+def test_it_refuses_while_the_build_that_stamped_provenance_is_still_writing():
+    """The live failure this check was added for, and the one the transcript scan misses BY DESIGN.
+
+    On 2026-08-01 provenance said 14:57 while the build kept rewriting the map until 15:43 —
+    recording advisories, `finalize`, `render`, the commit. The transcript scan skips the session
+    provenance names (otherwise the retro would refuse forever after a build), so all it saw was
+    "no OTHER session is live" and it said "safe to proceed" for 46 minutes. A retro started in that
+    window gates a map that is still changing under it."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj", output_age_seconds=1)
+        d = make_transcripts(root, PREV)
+        try:
+            old = time.time() - 3600
+            os.utime(d / f"{PREV}.jsonl", (old, old))    # even a quiet transcript must not save it
+            ok, message, detail = check(root, idle_seconds=180, this_session=MINE)
+            assert not ok, "a build still writing its own output must stop the retro"
+            assert "still producing output" in message
+            assert detail["newest_build_output"].startswith(".coyodex/")
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def test_it_proceeds_once_the_build_output_has_gone_quiet():
+    """The guard must not become a permanent veto — the mirror of the transcript test above."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj", output_age_seconds=3600)
+        d = make_transcripts(root, PREV)
+        try:
+            old = time.time() - 3600
+            os.utime(d / f"{PREV}.jsonl", (old, old))
+            ok, message, _detail = check(root, idle_seconds=180, this_session=MINE)
+            assert ok, message
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def test_a_fresh_archive_is_not_mistaken_for_a_live_build():
+    """`coyodex-eval archive` writes under `.coyodex/dev-rebuilds/` AFTER a build, by a developer.
+    Counting it would refuse the retro that normally follows it."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj", output_age_seconds=3600)
+        arch = root / ".coyodex" / "dev-rebuilds" / "0001"
+        arch.mkdir(parents=True)
+        (arch / "project-map.json").write_text("{}", encoding="utf-8")   # written NOW
+        d = make_transcripts(root, PREV)
+        try:
+            old = time.time() - 3600
+            os.utime(d / f"{PREV}.jsonl", (old, old))
+            ok, message, _detail = check(root, idle_seconds=180, this_session=MINE)
+            assert ok, message
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
