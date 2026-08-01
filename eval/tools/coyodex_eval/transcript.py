@@ -43,6 +43,7 @@ Stdlib only (`json`), frozen dataclasses — `coyodex_eval` carries no runtime d
 """
 from __future__ import annotations
 
+import re
 import json
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -313,6 +314,46 @@ def bash_commands(turns: Sequence[Turn]) -> tuple[tuple[int, str], ...]:
     return tuple((t.index, c.command) for t in turns for c in t.calls_named("Bash") if c.command)
 
 
+#: The canonical `coyodex` / `coyodex-eval` subcommands. An ALLOWLIST, because builds alias the
+#: binary (`CX=…/coyodex; $CX audit …`) and a pattern loose enough to catch `$CX audit` is also
+#: loose enough to read `$SP files` or `--map x` as subcommands — the first cut of this reported
+#: `files`, `loc`, `map` and `runs`.
+_COYODEX_SUBCOMMANDS = frozenset({
+    "preindex", "validate", "audit", "render", "serve", "assemble", "dump", "balance",
+    "reconcile", "lint-fragment", "anchor-drift", "finalize", "grounding", "fix", "record",
+    "impact", "score", "compare", "process", "transcript", "judge", "run", "archive",
+    "retro-precheck",
+})
+
+#: Sub-verbs worth reporting separately: `grounding write` and `grounding report` are different
+#: acts, and so are the four `fix` verbs. Anything else is reported at subcommand granularity.
+_COYODEX_SUBVERBS = frozenset({"write", "report", "apply-drift", "dedup-edge", "drop-edge",
+                               "dedup-relation"})
+
+#: `coyodex <subcommand>` anywhere in a shell command, including behind `;`, `&&` or a `$CX` alias.
+#: The one-line index truncates at 100 characters, so a subcommand chained after another was
+#: INVISIBLE there — and a retrospective concluded from the index that `grounding write` "never ran"
+#: in a build that ran it at turn 489, chained behind an `assemble`. The finding was published, then
+#: withdrawn. Counting from the full command text is the fix; the index stays short on purpose.
+_COYODEX_CMD = re.compile(
+    r"(?:coyodex(?:-eval)?|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)\s+"
+    r"(?!-)([a-z][a-z0-9-]*)(?:\s+([a-z][a-z0-9-]*))?")
+
+
+def coyodex_subcommands(turns: "Sequence[Turn]") -> "list[tuple[int, str]]":
+    """(turn index, `subcommand [verb]`) for every coyodex invocation found ANYWHERE in a Bash
+    command — not only at its head. See `_COYODEX_CMD` for why that distinction cost a real
+    finding, and `_COYODEX_SUBCOMMANDS` for why it is an allowlist."""
+    out: list[tuple[int, str]] = []
+    for idx, cmd in bash_commands(turns):
+        for m in _COYODEX_CMD.finditer(cmd):
+            sub, verb = m.group(1), m.group(2)
+            if sub not in _COYODEX_SUBCOMMANDS:
+                continue
+            out.append((idx, f"{sub} {verb}" if verb in _COYODEX_SUBVERBS else sub))
+    return out
+
+
 def summarise_call(call: ToolCall, width: int = 100) -> str:
     """One line describing a tool call — the command for Bash, the description for an Agent, the
     path for a file tool, the first field otherwise."""
@@ -380,6 +421,7 @@ def results_by_tool_use_id(turns: Sequence[Turn]) -> dict[str, str]:
 
 USAGE = """usage: coyodex-eval transcript <transcript.jsonl> [--from N] [--to N]
                                  [--tool NAME] [--grep PATTERN] [--full] [--stats]
+                                 [--commands]
 
 READ a build transcript in slices — the retrospective's eye on what the agent actually did.
 A 3 MB JSONL cannot be opened whole, so this prints an INDEX by default (one line per tool
@@ -389,7 +431,10 @@ call, with its turn number) and the FULL text of a range with --full.
   --tool NAME   only turns using that tool (Bash, Agent, Write, …)
   --grep PAT    only tool calls whose text matches (case-insensitive substring)
   --full        include the whole command and a slice of what it printed
-  --stats       tool counts and fan-out sizes instead of a listing"""
+  --stats       tool counts and fan-out sizes instead of a listing
+  --commands    every `coyodex` subcommand run, with turn numbers and a total per subcommand —
+                found ANYWHERE in a command, so one chained behind `;` or `&&` is not missed
+                (the one-line index truncates, and that once produced a false "never ran")"""
 
 
 def _stats(turns: Sequence[Turn]) -> str:
@@ -430,6 +475,21 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     turns = read_turns(src)
+    if "--commands" in args:
+        from collections import Counter
+        found = coyodex_subcommands(turns)
+        counts = Counter(name for _i, name in found)
+        by_name: dict[str, list[int]] = {}
+        for i, name in found:
+            by_name.setdefault(name, []).append(i)
+        print(f"{len(found)} coyodex invocation(s) across {len(counts)} subcommand(s)\n")
+        print(f"{'subcommand':28} {'runs':>5}  turns")
+        for name, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+            turns_s = ", ".join(str(t) for t in by_name[name][:12])
+            if len(by_name[name]) > 12:
+                turns_s += f", … +{len(by_name[name]) - 12} more"
+            print(f"  {name:26} {n:>5}  {turns_s}")
+        return 0
     if "--stats" in args:
         print(_stats(turns))
         return 0

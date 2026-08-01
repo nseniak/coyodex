@@ -68,8 +68,18 @@ that is the lead's problem, not yours.
 - **One claim, one row.** No summaries, no grouping, no "same as above".
 - **Do not fix the map.** You report; the lead reconciles. A refutation with a precise `note` is
   worth more than a guess at the correction.
-- **Return the JSON and nothing else.** Your final message IS the verdicts file.
+- **WRITE the JSON to your output path, then say only that you wrote it.** Your final message is
+  NOT the verdicts file: `coyodex grounding write --verdicts <file>` and `coyodex anchor-drift
+  --verdicts <file>` both read FILES, and the lead's barrier collects files. A contract that says
+  "your final message IS the verdicts file" is why every build so far has rewritten this template
+  instead of copying it.
 
-## Your batch
+## Your inputs and output
 
-«paste the claims here, one per line, verbatim from `coyodex audit <map> --json`»
+- **Claims file** (read it; do not expect them pasted below): `«.coyodex/verify/claims-<batch>.json»`
+  — written by `coyodex audit <map> --batches .coyodex/verify --cap 40`.
+- **Map**: `«.coyodex/project-map.json»` · **Repo root**: `«/abs/path/to/repo»`
+- **Write your verdicts to**: `«.coyodex/verify/verdicts-<batch>.json»`
+
+Your batch id is `«<batch>»`. Use it in the output filename exactly as given, so the lead's glob
+finds it.

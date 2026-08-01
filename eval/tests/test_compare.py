@@ -28,7 +28,7 @@ def make_profile(**over: object) -> MapProfile:
         use_cases=10, subsystems=4, subdomains=3, components=20, deps=5, entities=15,
         edges=40, hp_steps=8, flows=10, security_surfaces=5,
         validate_ok=True, validate_problems=2, validate_warnings=1,
-        contradictions=0, advisories=1, audit_warnings=0, l2_claims=6,
+        contradictions=0, audit_advisories=1, audit_warnings=0, l2_claims=6,
         coverage_flags=0, edges_per_component=2.0,
         auth_surfaces=["a", "b", "c", "d", "e"], use_case_names=[], entity_names=[],
     )

@@ -108,7 +108,7 @@ def delta_md(result: RunResult) -> str:
         f"· auth {p.security_surfaces}",
         f"validate  : {'OK' if p.validate_ok else f'{p.validate_problems} problem(s)'}, "
         f"{p.validate_warnings} warning(s)",
-        f"audit     : {p.contradictions} contradiction(s) · {p.advisories} advisory · {p.l2_claims} L2 claim(s)",
+        f"audit     : {p.contradictions} contradiction(s) · {p.audit_advisories} advisory · {p.l2_claims} L2 claim(s)",
         f"coverage  : {'n/a' if p.coverage_flags is None else p.coverage_flags} flag(s)",
         "```", "",
     ]

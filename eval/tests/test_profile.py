@@ -830,7 +830,7 @@ def test_read_before_create_shows_up_as_an_advisory() -> None:
     """The current audit rates a read-then-write ordering ADVISORY, not blocking — the profile counts
     it under `advisories`, leaving `contradictions` clean."""
     p = build_profile(make_read_before_create_map())
-    assert p.advisories >= 1 and p.contradictions == 0, p
+    assert p.audit_advisories >= 1 and p.contradictions == 0, p
 
 
 def test_l2_claims_counts_security_surfaces() -> None:
@@ -928,3 +928,17 @@ def _run() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(_run())
+
+
+def test_a_pre_rename_profile_is_refused_with_an_explanation():
+    """`advisories` counted AUDIT advisories only, while sitting beside `validate_warnings` — on a
+    map `finalize` called "12 advisory" it read 0, and a retrospective quoted it as "no advisories".
+    The rename has no alias by decision, so an old baseline must fail legibly rather than either
+    loading as 0 or dying on a bare TypeError."""
+    import json
+    import pytest
+    from coyodex_eval.profile import MapProfile
+    old = {"advisories": 3, "components": 10, "contradictions": 0}
+    with pytest.raises(ValueError) as e:
+        MapProfile.from_json(json.dumps(old))
+    assert "audit_advisories" in str(e.value) and "re-bless" in str(e.value)

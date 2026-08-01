@@ -728,3 +728,43 @@ def test_17_does_not_count_merely_naming_the_file_in_a_patch_script():
              make_turn(2, make_write("frag.json", record)))
     a = P.score_turns(turns).by_id()[17]
     assert (a.observed, a.of) == (0, 1)
+
+
+# ── coyodex_subcommands: the index truncated, and a real finding was published wrong ─────────────
+
+def test_a_subcommand_chained_behind_another_is_still_counted():
+    """The one-line index truncates at 100 chars, so a subcommand after a `;` or `&&` was invisible
+    there. A retrospective read the index, concluded `grounding write` "never ran", and published
+    that about a build which ran it at turn 489 chained behind an `assemble`."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(489, make_bash(
+        "/p/.venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex "
+        "--reconcile .coyodex/reconcile.json 2>&1 | tail -3; echo '=== grounding write ==='; "
+        "/p/.venv/bin/coyodex grounding write --worklist .coyodex/verify/worklist.json "
+        "--out .coyodex/build-fragments/grounding.json"))]
+    found = coyodex_subcommands(turns)
+    assert (489, "assemble") in found
+    assert (489, "grounding write") in found, found
+
+
+def test_an_aliased_binary_is_counted_but_prose_is_not():
+    """Builds alias the binary (`CX=…/coyodex; $CX audit …`), so the pattern must follow `$CX` — and
+    a pattern loose enough for that reads `$SP files` as a subcommand unless it is allowlisted.
+    The first cut reported `files`, `loc`, `map` and `runs` as coyodex subcommands."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(7, make_bash("CX=/p/.venv/bin/coyodex\n$CX audit map.json --json; "
+                                    "ls $SP files; wc -l $OUT map"))]
+    found = coyodex_subcommands(turns)
+    assert (7, "audit") in found
+    assert [n for _i, n in found] == ["audit"], found
+
+
+def test_the_four_fix_verbs_are_reported_apart():
+    """`fix dedup-edge` and `fix apply-drift` are different acts and a retro needs to tell them
+    apart; anything not a known sub-verb stays at subcommand granularity."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(1, make_bash("coyodex fix dedup-edge --map m.json --accept-suggested")),
+             make_turn(2, make_bash("coyodex fix apply-drift --map m.json --verdicts v.json")),
+             make_turn(3, make_bash("coyodex validate m.json --check-sources"))]
+    names = [n for _i, n in coyodex_subcommands(turns)]
+    assert names == ["fix dedup-edge", "fix apply-drift", "validate"]

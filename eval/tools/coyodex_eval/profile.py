@@ -54,7 +54,13 @@ class MapProfile:
     validate_warnings: int
     # ── self-consistency (coyodex audit) ──
     contradictions: int
-    advisories: int
+    #: Audit findings of ADVISORY severity — audit ONLY, which is why the name says so. It was
+    #: `advisories`, sitting next to `validate_warnings`, and on a map `finalize` called
+    #: "ADVISORIES — 12 advisory" this field read 0. A retrospective quoted it as "the map has no
+    #: advisories". Renamed with NO back-compat alias by operator decision: profiles written before
+    #: this fail to load rather than silently reading 0, and the eval baselines are git-ignored
+    #: artifacts that are cheap to re-bless.
+    audit_advisories: int
     audit_warnings: int
     l2_claims: int
     # ── coverage (None when scored without the repo) ──
@@ -116,8 +122,19 @@ class MapProfile:
         # Filter to KNOWN fields so a baseline written by a newer profile version (e.g. once the judge
         # layer adds scores) still loads instead of raising on an unexpected keyword. A missing field
         # falls back to its dataclass default.
+        raw = json.loads(s)
         known = {f.name for f in fields(cls)}
-        return cls(**{k: v for k, v in json.loads(s).items() if k in known})
+        # A profile written before `advisories` became `audit_advisories`. It is REFUSED, not
+        # adapted: the rename exists because the old name read as "the whole map's advisories" when
+        # it only ever counted audit's, and quietly accepting the old key would carry that
+        # misreading into the comparison. Baselines are git-ignored artifacts — re-score and re-bless.
+        if "advisories" in raw and "audit_advisories" not in raw:
+            raise ValueError(
+                "this profile predates the `advisories` -> `audit_advisories` rename. It counted "
+                "AUDIT advisories only, and the old name was being read as the map's total. "
+                "Re-score the map (`coyodex-eval score <map> --repo . --json`) and re-bless the "
+                "baseline; there is deliberately no back-compat alias.")
+        return cls(**{k: v for k, v in raw.items() if k in known})
 
 
 # ── the profile ─────────────────────────────────────────────────────────────────────────────────────
@@ -139,7 +156,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     # repo-hygiene signal, not map quality — it must not shift an eval profile
     findings = audit_model.audit_model(m)
     contradictions = sum(1 for f in findings if f.severity == audit_model.CONTRADICTION)
-    advisories = sum(1 for f in findings if f.severity == audit_model.ADVISORY)
+    audit_advisories = sum(1 for f in findings if f.severity == audit_model.ADVISORY)
     audit_warnings = sum(1 for f in findings if f.severity == audit_model.WARNING)
     l2_claims = len(audit_model.l2_worklist_model(m))
 
@@ -190,7 +207,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         validate_problems=len(problems),
         validate_warnings=len(warnings),
         contradictions=contradictions,
-        advisories=advisories,
+        audit_advisories=audit_advisories,
         audit_warnings=audit_warnings,
         l2_claims=l2_claims,
         coverage_flags=coverage_flags,
@@ -230,7 +247,7 @@ def _format(p: MapProfile) -> str:
         f"· D {p.deps} · E {p.entities} · edges {p.edges} · HP {p.hp_steps} · flows {p.flows} "
         f"· auth-surfaces {p.security_surfaces}",
         f"  validate    : {verdict}, {p.validate_warnings} warning(s)",
-        f"  audit       : {p.contradictions} contradiction(s) · {p.advisories} advisory · "
+        f"  audit       : {p.contradictions} contradiction(s) · {p.audit_advisories} advisory · "
         f"{p.audit_warnings} warning(s) · {p.l2_claims} L2 claim(s)",
         f"  coverage    : {cov} compression/absent flag(s)",
         f"  granularity : {gran}",

@@ -1,6 +1,19 @@
 # Harvest contract (Phase 1) — the copyable template
 
-**Copy this file; do not retype it from prose.** It used to live inline in `method.md`, and every
+**Copy this file; do not retype it from prose.** Which, taken literally, was impossible: the body
+below is a `>`-quoted skeleton full of «angle-bracket» slots, so it cannot be handed to an agent
+as-is, and every build has "copied" it by rewriting it — a live one produced 9.5 KB of replacement
+prose and dropped the AGENT_ID clause in the process, exactly the drift this file warns about. So
+the instruction is now mechanical:
+
+1. Take the quoted block below and strip the leading `> ` from every line.
+2. Fill ONLY the «angle-bracket» slots — per agent, that is the file list, the background blurb,
+   the component budget and the agent id; per build, the repo path and `COYODEX_HOME`.
+3. Change nothing else. If a rule reads wrong for this repo, fix it HERE, once, so the next build
+   inherits the fix instead of re-deriving it.
+
+Everything after the numbered list above is the template.
+ It used to live inline in `method.md`, and every
 build hand-copied ~5.6 KB of it into a scratchpad. That retyping is where the wording drifts: one
 live build's copy promised that a `.draft.json` suffix "keeps a half-written file out of the
 assemble glob", which was not true of the tool at the time and had to be fixed in both places.
