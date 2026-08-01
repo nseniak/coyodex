@@ -10,7 +10,7 @@ from pathlib import Path
 from coyodex import anchor_drift as ad
 from coyodex import audit_model
 from coyodex.audit_model import WorkItem, l2_worklist_model
-from coyodex.model import FORMAT, load_model
+from coyodex.model import FORMAT, ProjectModel, load_model
 
 
 def make_item(claim: str, anchor: str, drift_eligible: bool = True) -> WorkItem:
@@ -278,7 +278,7 @@ def test_a_split_vote_is_a_tie_in_either_order_and_votes_are_never_deduped():
 # anchor_drift.py to find out why.
 
 
-def make_map_with_drift_exceptions(body: str) -> "object":
+def make_map_with_drift_exceptions(body: str) -> ProjectModel:
     return load_model(json.dumps({
         "format": FORMAT, "title": "T", "goal": "g",
         "extras": [{"heading": ad.DRIFT_EXCEPTIONS_HEADING, "body": body}],

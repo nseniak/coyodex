@@ -157,6 +157,15 @@ DRIFT_EXCEPTIONS_HEADING = "Drift exceptions"
 #: containing the delimiter still parses — lazy backtracks FORWARD until the rest of the pattern
 #: matches — so nothing the greedy form bought is lost. Verified against all seven records of a live
 #: map (identical keys) and against the failing line above (only lazy recovers the true key).
+#:
+#: KNOWN RESIDUAL, deliberately not chased: a key holding the delimiter IMMEDIATELY followed by the
+#: separator — ``anchor-drift `Entry point [cron] `refresh_tokens`: hourly sweep …`: verified.`` —
+#: truncates at the inner backtick, and the line still parses, so it fails as silently as the bug
+#: above. Narrowing the separator class to `:` alone was considered and rejected: it truncates that
+#: same case identically (measured), so it buys nothing here, and over 444 real claims × 4 realistic
+#: why-shapes BOTH lazy forms scored zero wrong keys. There is no regex that reads an unescaped,
+#: unbalanced delimiter correctly. The real fix is for `apply_drift_exceptions` to report a recorded
+#: key that matches no finding — which it already does — and for the reader to check that count.
 _DRIFT_RECORD = re.compile(r"^\s*(?:[-*]\s+)?\**\s*anchor-drift\s+([`'\"])(.+?)\1\s*[:—-]\s*\S")
 
 #: A line that opens like a record but does not parse. Reported, never skipped: a silently-dropped

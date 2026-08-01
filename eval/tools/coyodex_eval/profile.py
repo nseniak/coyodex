@@ -169,9 +169,9 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
                   if m.entities and m.flows else None)
 
     # Linkage, not coverage: how many declared units any component actually claims to run in.
-    unit_names = [u.unit for u in m.deployment if getattr(u, "unit", None)]
+    unit_names = [u.unit for u in m.deployment if u.unit]
     claimed = {name for c in m.components for name in (c.runs_in or [])}
-    claimed |= {name for ep in m.entry_points for name in (getattr(ep, "runs_in", None) or [])}
+    claimed |= {name for ep in m.entry_points for name in (ep.runs_in or [])}
 
     return MapProfile(
         deployment_units=len(unit_names),

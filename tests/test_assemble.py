@@ -703,7 +703,7 @@ def test_a_draft_fragment_is_skipped_by_name():
 
 # ── one section per heading ──────────────────────────────────────────────────────────────────────
 
-def make_extras_fragment(name: str, heading: str, body: str) -> tuple[str, object]:
+def make_extras_fragment(name: str, heading: str, body: str) -> "tuple[str, ProjectModel]":
     from coyodex.model import ExtraSection, ProjectModel
     m = ProjectModel(title="T", goal="g")
     m.extras.append(ExtraSection(heading=heading, body=body))

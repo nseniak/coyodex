@@ -365,3 +365,43 @@ def test_dedup_edge_says_when_suggestions_are_unranked_for_want_of_repo(capsys):
         p = make_dup_edge_map(tmp)
         assert fix.main(["dedup-edge", "--map", str(p)]) == 0
         assert "no --repo" in capsys.readouterr().out
+
+
+def test_json_and_accept_suggested_are_refused_as_conflicting_intents():
+    """`--json` lists without writing, `--accept-suggested` writes. Together they printed the
+    listing, wrote nothing and exited 0 — a script asking to apply and report got a no-op that
+    looked like success."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        before = p.read_text()
+        assert fix.main(["dedup-edge", "--map", str(p), "--json", "--accept-suggested"]) == 2
+        assert p.read_text() == before
+
+
+def test_accept_suggested_never_silently_overrides_an_explicit_keep():
+    """A wrong drop is unrecoverable, so the blanket flag must not quietly beat a named choice."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        before = p.read_text()
+        assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested",
+                         "--keep", "C1:calls:C2:src/b.py:20"]) == 2
+        assert p.read_text() == before, "nothing may be dropped while the intent is ambiguous"
+
+
+def test_grounding_sub_verbs_also_answer_help(capsys):
+    """The same hole lived in a second dispatcher; only the `fix` half was covered by a test."""
+    from coyodex import grounding
+    for verb in ("write", "report"):
+        assert grounding.main([verb, "--help"]) == 0, verb
+        assert capsys.readouterr().out.strip(), f"grounding {verb} printed no help"
+
+
+def test_subverb_help_falls_back_to_the_whole_usage_when_no_block_matches():
+    """The fallback is the branch production actually takes for 2 of the 6 surfaces, so it is the
+    one that must never print nothing."""
+    from coyodex import subverb_help
+    usage = "usage: tool <verb>\n\n  alpha --x\n      does alpha\n  beta --y\n      does beta\n"
+    assert subverb_help.verb_block(usage, "alpha").strip().startswith("alpha")
+    assert subverb_help.verb_block(usage, "nosuchverb") is None
+    assert subverb_help.handle(usage, "nosuchverb", ["--help"]) == 0
+    assert subverb_help.handle(usage, "alpha", []) is None, "no help asked for → carry on parsing"

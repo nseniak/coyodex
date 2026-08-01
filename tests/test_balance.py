@@ -13,6 +13,7 @@ from coyodex.balance_lib import (
     _exceptions,
     balance_warnings,
     cc_pairs,
+    fanout_band,
     fanout_summary,
     is_homogeneous,
     modularity,
@@ -431,3 +432,51 @@ def test_the_report_and_the_eval_metric_share_one_band_definition():
     assert f"{in_band}/{total}" in balance._report(m)
     _root, _mx, pct, _d = fanout_summary(m)
     assert pct == round(in_band / total, 3), "one number, or the two reports disagree again"
+
+
+def make_subsystem_model(sizes: dict[str, int], homogeneous: set[str] | None = None) -> ProjectModel:
+    """Subsystems of the given sizes; those in `homogeneous` get all their files in one directory."""
+    homogeneous = homogeneous or set()
+    m = ProjectModel(title="T", goal="g")
+    i = 0
+    for sid, n in sizes.items():
+        m.subsystems.append(Group(id=sid, name=f"Box {sid}"))
+        for _ in range(n):
+            i += 1
+            src = f"pkg/same/f{i}.py:1" if sid in homogeneous else f"src/{sid}/d{i}/f{i}.py:1"
+            m.components.append(Component(id=f"C{i}", name=f"C{i}", subsystem=sid, source=src))
+    return m
+
+
+def test_the_out_of_band_line_uses_the_shared_predicate_not_a_second_one():
+    """The first cut of the "below the band" line tested `n < FANOUT_LO` by hand. It disagreed with
+    the shared rule on a 2-child HOMOGENEOUS subsystem — which the band counts as in-band — so the
+    report printed "4/4 diagrams in band" directly above "1 below the band". That is the same
+    contradiction the shared measurement was introduced to remove, two lines apart."""
+    from coyodex import balance
+    m = make_subsystem_model({"S1": 5, "S2": 5, "S3": 2}, homogeneous={"S3"})
+    text = balance._report(m)
+    in_band, total = fanout_band(m)
+    assert f"{in_band}/{total}" in text
+    assert "below the band" not in text, "a diagram the band counts IN cannot also be reported out"
+
+
+def test_a_real_finding_is_never_labelled_not_a_finding():
+    """SINGLE-CHILD is in `flagged`. The hand-rolled predicate did not exclude flagged rows, so the
+    header called a live finding "NOT a finding" while the per-diagram row showed it flagged."""
+    from coyodex import balance
+    m = make_subsystem_model({"S1": 5, "S2": 5, "S3": 1})
+    text = balance._report(m)
+    assert "SINGLE-CHILD" in text
+    thin_line = next((l for l in text.splitlines() if "NOT a finding" in l), "")
+    assert "S3" not in thin_line, f"S3 is flagged; it must not be listed as not-a-finding: {thin_line}"
+
+
+def test_an_empty_subsystem_is_described_as_empty_not_as_sparse():
+    """"Below the band" misdescribes a diagram with no children at all."""
+    from coyodex import balance
+    m = make_subsystem_model({"S1": 5, "S2": 5, "S3": 4})
+    m.subsystems.append(Group(id="S9", name="declared but never filled"))
+    text = balance._report(m)
+    assert "1 declared with no children at all: S9" in text
+    assert "S9" not in next((l for l in text.splitlines() if "below the band" in l), "")

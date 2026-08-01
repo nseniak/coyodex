@@ -114,8 +114,18 @@ def _report(m: ProjectModel) -> str:
     # finding. Naming those rows is what stops "14/15" reading as a contradiction of the verdict
     # line "No balance findings — every diagram reads at target density", which is what a live
     # report printed six lines below it.
-    thin = [r for r in rows if r[2] < balance_lib.FANOUT_LO and r[0] != "root"
-            and not r[3].startswith("exempt")]
+    #
+    # Derived from the SAME predicate, not a second one. The first cut of this tested `n <
+    # FANOUT_LO` by hand; it disagreed with the shared rule on a 2-child homogeneous subsystem and
+    # printed "4/4 diagrams in band" directly above "1 below the band", and it labelled a live
+    # SINGLE-CHILD finding "NOT a finding". Both are the bug this report exists to not have.
+    per_band = balance_lib.fanout_band_by_diagram(m)
+    flagged_ids = {r[0] for r in flagged}
+    unflagged_out = [r for r in rows
+                     if not per_band.get(None if r[0] == "root" else r[0], True)
+                     and r[0] not in flagged_ids]
+    empty = [r for r in unflagged_out if r[2] == 0]
+    thin = [r for r in unflagged_out if r[2] > 0]
 
     out: list[str] = []
     out.append(f"Balance report — {n} components, {len(m.subsystems)} subsystems, "
@@ -125,6 +135,9 @@ def _report(m: ProjectModel) -> str:
     if thin:
         out.append(f"  {len(thin)} below the band and NOT a finding (sparse counts only at the "
                    f"root): {', '.join(r[0] for r in thin)}")
+    if empty:
+        out.append(f"  {len(empty)} declared with no children at all: "
+                   f"{', '.join(r[0] for r in empty)}")
     out.append("")
     out.append("Per-diagram fan-out (target 5±2):")
     for sid, name, fan, flag in rows:
@@ -160,13 +173,14 @@ def _report(m: ProjectModel) -> str:
             next_id = _proposal_blocks(m, d, out, next_id)
     if not flagged:
         out.append("")
-        if thin:
+        gap = len(thin) + len(empty)
+        if gap:
             # The old wording claimed EVERY diagram was at target density while the headline said
             # otherwise. Say what is actually true: nothing is worth acting on, and here is the gap.
             out.append(f"No balance findings — nothing here is worth acting on. "
                        f"({in_band}/{in_band_total} diagrams sit inside the band; the "
-                       f"{len(thin)} below it {'is' if len(thin) == 1 else 'are'} non-root, "
-                       f"where sparse raises no finding.)")
+                       f"{gap} outside {'it is' if gap == 1 else 'them are'} non-root, "
+                       f"where a thin or empty diagram raises no finding.)")
         else:
             out.append("No balance findings — every diagram reads at target density.")
     return "\n".join(out)

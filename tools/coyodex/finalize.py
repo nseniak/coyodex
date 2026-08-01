@@ -265,7 +265,7 @@ def format_report(r: FinalizeReport) -> str:
     return "\n".join(out)
 
 
-def _shape_line(map_path: Path) -> str | None:
+def _shape_line(map_path: Path) -> str:
     """The map's own counts, for the commit message, read from the map the gate block hashes.
 
     A live commit claimed "416 backbone edges … 33 flows/sub-flows" for a map holding 365 and 36.
@@ -276,8 +276,10 @@ def _shape_line(map_path: Path) -> str | None:
     try:
         from coyodex.model import load_model
         m = load_model(map_path.read_text(encoding="utf-8"))
-    except Exception:
-        return None
+    except Exception as e:
+        # NOT a silent None. A gate block that quietly omits the shape sends the author straight
+        # back to hand-writing the numbers, which is the defect this line exists to remove.
+        return f"Shape: UNAVAILABLE — could not re-read {map_path}: {e}"
     flows = len(m.flows) + len(m.subflows)
     return (f"Shape: {len(m.components)} components in {len(m.subsystems)} subsystems, "
             f"{len(m.entities)} entities in {len(m.subdomains)} subdomains, {len(m.deps)} deps, "
@@ -285,7 +287,7 @@ def _shape_line(map_path: Path) -> str | None:
             f"{len(m.entry_points)} entry points, {len(m.security)} security rows.")
 
 
-def _grounding_line(map_path: Path) -> str | None:
+def _grounding_line(map_path: Path) -> str:
     """The map's grounding counts, so the commit cannot quote a friendlier number than the gate.
 
     A live commit said "all 446 L2 claims challenged" while the gate block it was pasted beside
@@ -294,8 +296,8 @@ def _grounding_line(map_path: Path) -> str | None:
     try:
         from coyodex.model import load_model
         g = load_model(map_path.read_text(encoding="utf-8")).grounding
-    except Exception:
-        return None
+    except Exception as e:
+        return f"Grounding: UNAVAILABLE — could not re-read {map_path}: {e}"
     if g is None:
         return "Grounding: NO RECORD — nothing in this map says what was challenged."
     return (f"Grounding (from the map): {g.claims_challenged} of {g.claims_total} claim(s) "

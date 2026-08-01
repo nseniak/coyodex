@@ -452,13 +452,24 @@ def _gr1_status(root: Path, out_path: Path) -> str:
         return ("  GR1 NOT MET: no .coyodex/build-fragments/ yet, so no behavioral draft exists. "
                 "Draft Goal -> Glossary -> Roles -> Use cases -> Happy-Path skeleton FIRST; the "
                 "structural slices exist to serve it.\n")
-    behavioral = sorted(f.name for f in frags.glob("*.json")
-                        if "behavioral" in f.name.lower() or "behaviour" in f.name.lower())
+    # By CONTENT, not by filename. `behavioral.json` is a habit, not a contract — the method names
+    # no such file, so a build that called it `L1-usecases.json` would get a false "NOT MET", which
+    # teaches readers to ignore the warning: exactly the failure this check is about. It is also
+    # trivially satisfied by an empty file. The behavioral layer IS these sections.
+    behavioral = []
+    for f in sorted(frags.glob("*.json")):
+        try:
+            doc = json.loads(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if isinstance(doc, dict) and any(doc.get(k) for k in
+                                         ("use_cases", "happy_path", "roles", "glossary")):
+            behavioral.append(f.name)
     if behavioral:
         return f"  GR1 met: behavioral draft present ({', '.join(behavioral)}).\n"
-    return ("  GR1 NOT MET: .coyodex/build-fragments/ holds no behavioral fragment. A live build "
-            "read this same NOTE, harvested 14 structural slices anyway, and wrote its behavioral "
-            "layer 79 turns later.\n")
+    return ("  GR1 NOT MET: no fragment in .coyodex/build-fragments/ carries use_cases, happy_path, "
+            "roles or glossary. A live build read this same NOTE, harvested 14 structural slices "
+            "anyway, and wrote its behavioral layer 79 turns later.\n")
 
 
 def main(argv: list[str] | None = None) -> int:

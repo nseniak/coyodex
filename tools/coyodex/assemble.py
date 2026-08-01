@@ -799,6 +799,8 @@ def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict
         ops.append(f"C→E edges derived {stats['entity_edges_derived']}")
     if stats.get("messaging_rows_collapsed"):
         ops.append(f"messaging rows collapsed {stats['messaging_rows_collapsed']}")
+    if stats.get("extras_sections_merged"):
+        ops.append(f"extras sections merged {stats['extras_sections_merged']}")
     sc = rec_stats.get("reconcile_set", {})
     if isinstance(sc, dict) and any(sc.values()):
         ops.append("reconcile set " + "/".join(f"{k}:{v}" for k, v in sc.items() if v))

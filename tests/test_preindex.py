@@ -455,7 +455,9 @@ def make_repo_with_fragments(*names: str) -> Path:
     frags = root / ".coyodex" / "build-fragments"
     frags.mkdir(parents=True)
     for n in names:
-        (frags / n).write_text("{}", encoding="utf-8")
+        body = ({"use_cases": [{"id": "UC1", "name": "Do it"}]}
+                if "behavioral" in n else {"components": []})
+        (frags / n).write_text(json.dumps(body), encoding="utf-8")
     return root
 
 
@@ -467,6 +469,22 @@ def test_gr1_reports_not_met_when_no_behavioral_draft_exists():
     root = make_repo_with_fragments("ep-routes.json", "sec.json")
     status = _gr1_status(root, root / ".coyodex" / "preindex.json")
     assert "GR1 NOT MET" in status
+
+
+def test_gr1_is_decided_by_content_not_by_filename():
+    """`behavioral.json` is a habit, not a contract — the method names no such file. Keying on the
+    name gives a false NOT MET to a build that called it something else, which teaches readers to
+    ignore the warning, and is satisfied by an empty file."""
+    from coyodex.preindex import _gr1_status
+    root = make_repo_with_fragments("sec.json")
+    frags = root / ".coyodex" / "build-fragments"
+    (frags / "L1-usecases.json").write_text(
+        json.dumps({"happy_path": [{"n": 1, "uc": "UC1", "text": "t"}]}), encoding="utf-8")
+    assert "GR1 met" in _gr1_status(root, root / ".coyodex" / "preindex.json")
+    (frags / "empty-behavioral.json").write_text("{}", encoding="utf-8")
+    root2 = make_repo_with_fragments("behavioral.json")
+    (root2 / ".coyodex" / "build-fragments" / "behavioral.json").write_text("{}", encoding="utf-8")
+    assert "GR1 NOT MET" in _gr1_status(root2, root2 / ".coyodex" / "preindex.json")
 
 
 def test_gr1_reports_met_when_the_behavioral_fragment_is_present():

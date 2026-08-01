@@ -263,6 +263,12 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
             notes.append("auth surfaces in baseline but not (by name) in candidate — names drift with "
                          f"LLM wording, so verify rather than trust: {', '.join(dropped)}")
 
+    if t.deployment_linkage_must_not_drop and not baseline.deployment_units:
+        # Silence here is indistinguishable from "the gate passed". A baseline blessed before this
+        # field existed carries 0, which turns the gate off invisibly — the coverage gate already
+        # prints a note for its own version of this and this one did not.
+        notes.append("deployment-linkage gate skipped — the baseline profile predates the "
+                     "deployment_units field (re-bless the baseline to enable it)")
     if t.deployment_linkage_must_not_drop and baseline.deployment_units:
         # LINKAGE, not coverage. A live rebuild kept all eight deployment units, dropped the two
         # components that owned the nginx and vector files, and filled `runs_in` by contiguous

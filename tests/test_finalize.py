@@ -250,3 +250,13 @@ def test_the_gate_block_says_so_when_the_map_carries_no_grounding_record():
     root, p = make_repo()
     report = finalize.build_report(p, root, [])
     assert "NO RECORD" in finalize.gate_block(report, report.map_sha256)
+
+
+def test_an_unreadable_map_says_so_instead_of_omitting_the_shape():
+    """A gate block that silently drops the Shape and Grounding lines sends the author back to
+    hand-writing the numbers, which is the defect those lines exist to remove."""
+    root, p = make_repo()
+    report = finalize.build_report(p, root, [])
+    p.write_text("{truncated", encoding="utf-8")          # as a concurrent write would leave it
+    block = finalize.gate_block(report, report.map_sha256)
+    assert "Shape: UNAVAILABLE" in block and "Grounding: UNAVAILABLE" in block

@@ -464,6 +464,19 @@ def dedup_edge(argv: list[str]) -> int:
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
         return 2
+    # These three express DIFFERENT intents and silently overrode each other. `--json
+    # --accept-suggested` printed the listing, wrote nothing and exited 0 — a script asking to apply
+    # and report got a no-op that looked like success. `--keep X --accept-suggested` threw away the
+    # operator's explicit choice in favour of the blanket one, which is the wrong direction for a
+    # flag whose whole point is that a wrong drop is unrecoverable. Refuse instead of guessing.
+    if accept_suggested and as_json:
+        print("ERROR: --json lists without writing; --accept-suggested writes. Pick one: run "
+              "--json to review, then --accept-suggested to apply.", file=sys.stderr)
+        return 2
+    if accept_suggested and keeps:
+        print("ERROR: --accept-suggested takes the suggestion for EVERY conflict, which would "
+              "override the --keep token(s) you named. Pass one or the other.", file=sys.stderr)
+        return 2
     m, present = _load(Path(map_path))
     conflicts = _conflicting_edges(m)
     if not conflicts:

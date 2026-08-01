@@ -565,15 +565,25 @@ def fanout_band(m: ProjectModel) -> tuple[int, int]:
     report must say which of the two it is printing; a live report put "14/15" directly above
     "No balance findings — every diagram reads at target density."
     """
+    per = fanout_band_by_diagram(m)
+    return sum(1 for ok in per.values() if ok), len(per)
+
+
+def fanout_band_by_diagram(m: ProjectModel) -> dict[str | None, bool]:
+    """`{diagram id (None = root): is it in band}` — the per-diagram half of `fanout_band`.
+
+    Exposed because the report needs to NAME the out-of-band diagrams, and the first attempt at that
+    hand-rolled a second predicate (`n < FANOUT_LO`). It disagreed with this one on a 2-child
+    homogeneous subsystem, so the report printed "4/4 diagrams in band" directly above "1 below the
+    band" — reintroducing, two lines apart, the contradiction the shared measurement removed. One
+    definition means one definition, including for the callers that only want a subset of it."""
     if not m.components and not m.subsystems:
-        return 0, 0
+        return {}
     children = subsystem_children(m)
-    fans = [(children.get(sid, []), len(children.get(sid, [])))
-            for sid in (None, *(s.id for s in m.subsystems))]
-    in_band = sum(1 for kids, n in fans
-                  if FANOUT_LO <= n <= FANOUT_SOFT_HI
-                  or (n <= FANOUT_HOMOG_HI and is_homogeneous(m, kids)))
-    return in_band, len(fans)
+    return {sid: (FANOUT_LO <= len(children.get(sid, [])) <= FANOUT_SOFT_HI
+                  or (len(children.get(sid, [])) <= FANOUT_HOMOG_HI
+                      and is_homogeneous(m, children.get(sid, []))))
+            for sid in (None, *(s.id for s in m.subsystems))}
 
 
 def fanout_summary(m: ProjectModel) -> tuple[int | None, int | None, float | None, int]:
