@@ -517,7 +517,10 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     """11 is RESERVED for the trapdoor golden-map comparison (L3-DESIGN.md: "11 is deliberately
     absent"), so a new transcript-only assertion takes 12 rather than filling the hole."""
     ids = [a.id for a in P.score_turns(()).assertions]
-    assert ids == [*range(1, 11), *range(12, 18)], ids
+    # 20 is also absent: "the lead re-verified every applied refutation" has no reliable transcript
+    # signature (a refutation is reconciled by an ordinary map write, and the read that justifies it
+    # is an ordinary file read), so the number is reserved rather than filled with a guess.
+    assert ids == [*range(1, 11), *range(12, 20), 21, 22], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
     assert len(ids) == len(set(ids))
 
@@ -768,3 +771,68 @@ def test_the_four_fix_verbs_are_reported_apart():
              make_turn(3, make_bash("coyodex validate m.json --check-sources"))]
     names = [n for _i, n in coyodex_subcommands(turns)]
     assert names == ["fix dedup-edge", "fix apply-drift", "validate"]
+
+
+# ── 18-22 ────────────────────────────────────────────────────────────────────────────────────────
+
+def test_a18_catches_a_commit_claiming_a_shape_the_map_does_not_have():
+    """A live commit claimed "416 backbone edges … 33 flows/sub-flows" for a map holding 365 and 36.
+    Both had been true earlier in the build; `fix dedup-edge` then dropped 49 duplicates."""
+    gate = ("Shape: 66 components in 14 subsystems, 55 entities in 8 subdomains, 40 deps, "
+            "26 use cases, 365 edges, 36 flows/sub-flows, 281 entry points, 26 security rows.")
+    turns = [make_turn(1, make_bash("coyodex finalize map.json --emit-gate-block g.txt", uid="u1"),
+                       results=(("u1", gate),)),
+             make_turn(2, make_bash("git commit -m 'map: 416 backbone edges, 36 flows/sub-flows'"))]
+    a = P.assert_18_commit_shape_matches_the_map(turns)
+    assert a.of == 2 and a.observed == 1, a
+    assert any("416" in str(e.detail) for e in a.evidence), a.evidence
+
+
+def test_a19_sees_an_inverting_grep_that_is_not_a_pipeline():
+    """The real shape redirects the gate to a file and inverts the grep on the FILE, so a
+    `gate | grep -v` pattern saw nothing. The full output being on disk does not help when the view
+    the agent reads is the inverted one."""
+    turns = [make_turn(1, make_bash(
+        "coyodex validate map.json --check-sources > /tmp/v5.txt 2>&1; echo \"exit=$?\"; "
+        "grep -v 'declared .* times with differing' /tmp/v5.txt | head -40"))]
+    a = P.assert_19_no_gate_output_inverted_grep(turns)
+    assert a.observed == 0 and a.of == 1, a
+
+
+def test_a19_leaves_an_ordinary_gate_run_alone():
+    turns = [make_turn(1, make_bash("coyodex validate map.json --check-sources --check-coverage"))]
+    a = P.assert_19_no_gate_output_inverted_grep(turns)
+    assert a.observed == 1 and a.of == 1
+
+
+def test_a21_reads_only_the_final_assemble():
+    """An unhealed count mid-build is expected and drains as the trace lands; only the last one
+    means anything. A live build was told UNHEALED 4 at four successive assembles and shipped."""
+    turns = [make_turn(1, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a1"),
+                       results=(("a1", "assembled — UNHEALED riding steps 4"),)),
+             make_turn(2, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a2"),
+                       results=(("a2", "assembled — dup-edges collapsed 3"),))]
+    assert P.assert_21_final_assemble_digest_is_clean(turns).observed == 1
+    turns.append(make_turn(3, make_bash("coyodex assemble f/*.json --out .coyodex", uid="a3"),
+                           results=(("a3", "assembled — UNHEALED riding steps 4"),)))
+    a = P.assert_21_final_assemble_digest_is_clean(turns)
+    assert a.observed == 0 and a.of == 1, a
+
+
+def test_a22_catches_a_structural_harvest_before_any_behavioral_draft():
+    """`preindex` prints GR1 on every run. A live build read it, harvested 14 structural slices, and
+    wrote its behavioral fragment 79 turns later."""
+    late = [make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json")),
+            make_turn(9, make_write(".coyodex/build-fragments/behavioral.json",
+                                    '{"use_cases": [{"id": "UC1"}]}'))]
+    assert P.assert_22_behavioral_draft_precedes_preindex(late).observed == 0
+    early = [make_turn(1, make_write(".coyodex/build-fragments/behavioral.json",
+                                     '{"use_cases": [{"id": "UC1"}]}')),
+             make_turn(9, make_bash("coyodex preindex --out .coyodex/preindex.json"))]
+    assert P.assert_22_behavioral_draft_precedes_preindex(early).observed == 1
+
+
+def test_the_new_assertions_are_all_registered():
+    ids = [a.id for a in P.score_turns(()).assertions]
+    for new in (18, 19, 21, 22):
+        assert new in ids, (new, ids)

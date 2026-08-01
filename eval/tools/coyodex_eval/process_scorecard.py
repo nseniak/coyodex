@@ -656,14 +656,28 @@ def _paths_read(call: ToolCall) -> set[str]:
         return set(_SOURCE_PATH.findall(call.command))
     return set()
 
-#: A recorded drift exception inside any tool input: ``anchor-drift `<key>` ``.
-_DRIFT_KEY_IN_TEXT = re.compile(r"anchor-drift\s+`([^`]+)`")
+#: A recorded drift-exception key as it appears in a COMMAND: ``anchor-drift `<key>`: <why>``.
+#:
+#: The delimiter may carry ANY run of backslashes. `coyodex record --line "anchor-drift \\`…"` is
+#: the documented way to write a record, which escapes the backtick once, and a live build's nested
+#: quoting doubled it again — the real bytes were `anchor-drift \\\\``. Requiring a bare backtick
+#: made three well-formed records invisible, so the assertion scored 0/2 for a behaviour the build
+#: had actually performed, and the retrospective reading that score had to go and find out why.
+#: Quote characters are accepted alongside backticks for the same reason `anchor_drift` accepts
+#: them: every cadence claim is phrased with them.
+_DRIFT_KEY_IN_TEXT = re.compile(r"anchor-drift\s+\\*([`'\"])(.+?)\\*\1")
 
 #: One drift FINDING as `anchor-drift` prints it: the claim, then `stored [path:line]`. The claim
 #: and the file arrive on the same line, which is what lets a recorded exception be paired with the
 #: file it should have been checked against — the exception KEY is the claim text and carries no
 #: path of its own.
 _DRIFT_FINDING_LINE = re.compile(r"([^\n]+?):\s*stored \[([\w./-]+\.\w+):\d+\]")
+
+#: One drift finding in the `--json` shape `{"claim": "...", "stored": "path:line", ...}`. Read as
+#: text rather than parsed, because the payload arrives inside a tool RESULT that may be truncated
+#: mid-object; a regex recovers the pairs that did land, where `json.loads` would recover none.
+_DRIFT_FINDING_JSON = re.compile(
+    r'"claim"\s*:\s*"((?:[^"\\]|\\.)*)"[^}]*?"stored"\s*:\s*"([\w./-]+\.\w+):\d+"')
 
 #: Launches more than this far apart belong to different fan-outs. A real batch dispatches ~10-20 s
 #: apart even when serialised one message at a time; separate phases sit minutes apart.
@@ -862,16 +876,25 @@ def assert_17_a_drift_exception_cites_a_file_that_was_read(turns: Sequence[Turn]
         for result in turn.tool_results:
             for claim, path in _DRIFT_FINDING_LINE.findall(result.content):
                 cited[claim.strip()] = path
+            # The same findings in their `--json` shape. A build that captured `anchor-drift --json`
+            # (or paged the text through `head`) produced no `stored [path:line]` line at all, so
+            # every record scored "(no matching drift finding)" — the assertion reporting 0 for a
+            # reason other than the behaviour it audits.
+            for claim, path in _DRIFT_FINDING_JSON.findall(result.content):
+                cited.setdefault(claim.strip(), path)
         for call in turn.tool_calls:
             # Only reads AFTER the finding count — a file opened earlier for unrelated reasons is
             # not evidence that anyone re-checked this drift.
             for got in _paths_read(call):
                 opened |= {p for p in cited.values() if p == got or got.endswith(p)}
             blob = call.text()
+            # NOT `"anchor-drift `" in blob`: the documented way to write a record is
+            # `coyodex record --line "anchor-drift \\`…"`, where the backtick is shell-escaped, so
+            # the bare-backtick guard skipped exactly the records the tool tells you to write.
             if (call.name not in ("Write", "Edit", "NotebookEdit", "Bash")
-                    or "anchor-drift `" not in blob):
+                    or "anchor-drift" not in blob):
                 continue
-            for key in _DRIFT_KEY_IN_TEXT.findall(blob):
+            for _delim, key in _DRIFT_KEY_IN_TEXT.findall(blob):
                 # pair the record with its own finding — exact claim, else the one it contains
                 path = cited.get(key.strip()) or next(
                     (p for c, p in cited.items() if key.strip() in c or c in key.strip()), "")
@@ -913,6 +936,147 @@ def read_score_context(map_path: str | Path | None) -> ScoreContext:
     return ScoreContext(map_path=p, grounding=g if isinstance(g, dict) else {})
 
 
+
+# ── 18-22: added after the 2026-08-01 retrospective, each pinning a defect no number watched ─────
+
+#: `git commit` prose claiming a shape: "416 backbone edges", "33 flows/sub-flows", "66 components".
+_COMMIT_SHAPE = re.compile(
+    r"(\d+)\s+(?:backbone\s+)?(components?|edges?|entities|use cases?|flows?/sub-flows?|"
+    r"subsystems?|entry points?|security rows?)")
+
+#: The same counts as `coyodex finalize --emit-gate-block` now generates them.
+_GATE_SHAPE = re.compile(
+    r"Shape:\s*(\d+) components in (\d+) subsystems, (\d+) entities in (\d+) subdomains, "
+    r"(\d+) deps, (\d+) use cases, (\d+) edges, (\d+) flows/sub-flows")
+
+
+def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
+    """A commit's shape numbers must match the map it describes.
+
+    A live commit claimed "416 backbone edges … 33 flows/sub-flows" for a map holding 365 and 36.
+    Neither was invented: both were true earlier in the build, and `fix dedup-edge` dropped 49
+    duplicate occurrences after they were written down. The commit is the artifact a future reader
+    trusts most, and nothing compared it against the file it names.
+
+    Scored against the generated `Shape:` line when one is present in the run (that is what
+    `finalize --emit-gate-block` emits). `of == 0` when the run has no commit carrying shape prose,
+    or no generated line to check it against — an opportunity that did not arise, not a miss."""
+    truth: dict[str, int] | None = None
+    hits: list[Evidence] = []
+    good = 0
+    results = results_by_tool_use_id(turns)
+    for turn in turns:
+        for call in turn.calls_named("Bash"):
+            blob = call.command + "\n" + results.get(call.id, "")
+            g = _GATE_SHAPE.search(blob)
+            if g:
+                truth = {"components": int(g.group(1)), "entities": int(g.group(3)),
+                         "use cases": int(g.group(6)), "edges": int(g.group(7)),
+                         "flows/sub-flows": int(g.group(8))}
+            if truth is None or not re.search(r"\bgit\s+commit\b", call.command):
+                continue
+            for n, word in _COMMIT_SHAPE.findall(call.command):
+                key = word.rstrip("s") + "s" if not word.endswith("s") else word
+                key = {"components": "components", "edges": "edges", "entities": "entities",
+                       "use cases": "use cases", "flows/sub-flows": "flows/sub-flows"}.get(
+                    word if word in truth else key, "")
+                if not key or key not in truth:
+                    continue
+                if int(n) == truth[key]:
+                    good += 1
+                else:
+                    hits.append(Evidence(turn.index, {"claimed": f"{n} {key}",
+                                                      "map holds": str(truth[key])}))
+    total = good + len(hits)
+    return Assertion(18, "commit shape numbers match the map", good, total, evidence=tuple(hits))
+
+
+#: An inverting grep anywhere in a shell block that also runs a gate. Deliberately NOT a pipeline
+#: pattern: the real shape on a live build was `coyodex validate … > /tmp/v5.txt 2>&1; echo …;
+#: grep -v 'declared .* times with differing' /tmp/v5.txt`, so a `gate | grep -v` regex saw nothing.
+#: The full output being on disk does not help when the VIEW the agent reads is the inverted one.
+#: Broad on purpose — a scorecard may under-credit, never over-credit.
+_INVERTING_GREP = re.compile(r"\bgrep\s+(?:-\w+\s+)*-\w*v\w*\b")
+
+
+def assert_19_no_gate_output_inverted_grep(turns: Sequence[Turn]) -> Assertion:
+    """No gate's output is piped through `grep -v`.
+
+    Assertion 15 catches a re-check narrowed by a pattern; it does not catch a family deleted from
+    the view. A live build ran `validate … | grep -v 'declared .* times with differing'`, hiding 38
+    duplicate-edge warnings that then stayed invisible across two assembles and a whole grounding
+    pass — the same 38 `fix dedup-edge` listed when it was finally run.
+
+    `observed` counts gate runs NOT inverted, so higher is better like every other line."""
+    clean = 0
+    hits: list[Evidence] = []
+    for turn in turns:
+        for call in turn.calls_named("Bash"):
+            if not re.search(r"\b(validate|audit|balance|finalize|anchor-drift)\b", call.command):
+                continue
+            if _INVERTING_GREP.search(call.command):
+                hits.append(Evidence(turn.index, {"command": call.command[:160]}))
+            else:
+                clean += 1
+    return Assertion(19, "no gate output filtered with `grep -v`", clean, clean + len(hits),
+                     evidence=tuple(hits))
+
+
+def assert_21_final_assemble_digest_is_clean(turns: Sequence[Turn]) -> Assertion:
+    """`assemble`'s digest lines are zero at the LAST assemble.
+
+    The digest reports what the auto-clean passes changed and what it could not heal. A live build
+    was told `UNHEALED riding steps 4` at four successive assembles and shipped without addressing
+    it; the digest was printed four times and read zero times.
+
+    Only the FINAL assemble counts: an unhealed count mid-build is expected and drains as the trace
+    lands. `of == 0` when the run never assembled."""
+    last: tuple[int, str] | None = None
+    results = results_by_tool_use_id(turns)
+    for turn in turns:
+        for call in turn.calls_named("Bash"):
+            if _invokes(call.command, "assemble"):
+                last = (turn.index, results.get(call.id, ""))
+    if last is None:
+        return Assertion(21, "final assemble digest is clean", 0, 0)
+    idx, out = last
+    unhealed = re.search(r"UNHEALED[^\n]*?(\d+)", out)
+    n = int(unhealed.group(1)) if unhealed else 0
+    ev = [] if not n else [Evidence(idx, {"unhealed_at_final_assemble": str(n)})]
+    return Assertion(21, "final assemble digest is clean", 0 if n else 1, 1, evidence=tuple(ev))
+
+
+def assert_22_behavioral_draft_precedes_preindex(turns: Sequence[Turn]) -> Assertion:
+    """GR1: the behavioral layer is drafted BEFORE the structural pre-index is used.
+
+    `preindex` prints this rule on every run. A live build read it and went straight into a
+    14-agent structural harvest; its behavioral fragment was written 79 turns later. The structural
+    slices exist to serve the behavioral layer, so the order is not decoration.
+
+    `of == 0` when the run never ran `preindex` — no opportunity."""
+    first_preindex: int | None = None
+    first_behavioral: int | None = None
+    for turn in turns:
+        for call in turn.tool_calls:
+            if first_behavioral is None and call.name in ("Write", "Edit", "Bash"):
+                blob = call.text()
+                # `\\?"` because a tool call's text is JSON-serialised, so the fragment's own keys
+                # arrive escaped (`\\"use_cases\\"`) rather than bare.
+                if "build-fragments" in blob and re.search(
+                        r'\\?"(use_cases|happy_path|roles|glossary)\\?"', blob):
+                    first_behavioral = turn.index
+            if (first_preindex is None and call.name == "Bash"
+                    and _invokes(call.command, "preindex")):
+                first_preindex = turn.index
+    if first_preindex is None:
+        return Assertion(22, "behavioral draft precedes preindex", 0, 0)
+    ok = first_behavioral is not None and first_behavioral < first_preindex
+    ev = [] if ok else [Evidence(first_preindex, {
+        "preindex_at": str(first_preindex),
+        "behavioral_draft_at": str(first_behavioral) if first_behavioral else "(never in this run)"})]
+    return Assertion(22, "behavioral draft precedes preindex", 1 if ok else 0, 1, evidence=tuple(ev))
+
+
 ASSERTIONS = (
     assert_1_preindex_report_used,
     assert_2_preindex_not_hand_parsed,
@@ -930,6 +1094,10 @@ ASSERTIONS = (
     assert_15_no_advisory_rechecked_with_a_narrower_filter,
     assert_16_longest_slice_dispatched_first,
     assert_17_a_drift_exception_cites_a_file_that_was_read,
+    assert_18_commit_shape_matches_the_map,
+    assert_19_no_gate_output_inverted_grep,
+    assert_21_final_assemble_digest_is_clean,
+    assert_22_behavioral_draft_precedes_preindex,
 )
 
 

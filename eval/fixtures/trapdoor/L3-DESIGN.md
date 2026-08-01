@@ -1,6 +1,6 @@
 # L3 — process assertions over a build transcript
 
-**Status: assertions 1–10 and 12–17 are IMPLEMENTED; 11 is not.** The reader is
+**Status: assertions 1–10, 12–19, 21 and 22 are IMPLEMENTED; 11 and 20 are not.** The reader is
 [eval/tools/coyodex_eval/transcript.py](../../tools/coyodex_eval/transcript.py), the assertions and
 the scorecard/diff CLI are
 [eval/tools/coyodex_eval/process_scorecard.py](../../tools/coyodex_eval/process_scorecard.py)
@@ -162,3 +162,18 @@ tool output over a real tree, but not the product of a live agent build. Asserti
 map produced by an actual `/coyodex` run over this fixture, reviewed and blessed. That first
 blessed build is the natural moment to implement L3, because it produces the first transcript
 worth asserting over.
+
+### 18–22, from the 2026-08-01 retrospective
+
+Each is a repeatable process defect a real build showed and no existing number watched.
+
+| # | assertion | the fix it audits |
+|---|---|---|
+| 18 | a commit's shape numbers match the map it describes | a commit claimed "416 backbone edges … 33 flows/sub-flows" for a map holding 365 and 36. Both had been true earlier in the build; `fix dedup-edge` then dropped 49 duplicate occurrences. Scored against the `Shape:` line `finalize --emit-gate-block` now generates |
+| 19 | no gate's output is filtered with an inverting `grep` | assertion 15 catches a re-check narrowed by a pattern; it does not catch a family DELETED from the view. A build hid 38 duplicate-edge warnings with `grep -v`, and they stayed invisible across two assembles and a whole grounding pass. Note the real shape is not a pipeline — the gate was redirected to a file and the inverting grep read the file |
+| 20 | *(reserved, NOT implemented)* the lead re-verified every refutation before applying it | three of one batch's eight adverse skeptic findings were false, including a 2-1 majority on the highest-risk claim in the map, and the lead caught all three on its own initiative. But a refutation is reconciled by an ordinary map write and justified by an ordinary file read, so there is no reliable transcript signature. Reserved rather than filled with a guess |
+| 21 | `assemble`'s digest is clean at the FINAL assemble | a build was told `UNHEALED riding steps 4` at four successive assembles and addressed it at none. Only the last assemble counts: a mid-build unhealed count is expected and drains as the trace lands. This measures whether the digest was READ, not whether the shipped map is broken |
+| 22 | the behavioral draft precedes `preindex` | `preindex` prints GR1 on every run. A build read it, harvested 14 structural slices, and wrote its behavioral fragment 79 turns later. The structural slices exist to serve the behavioral layer, so the order is not decoration |
+
+11 and 20 are both absent from the runner, for different reasons: 11 needs the fixture's golden map,
+20 needs a signature the transcript does not carry.
