@@ -428,6 +428,39 @@ CLI from somewhere other than the analysed repo — otherwise you read the CWD r
 The build-only flags (--out, --since, --pairs, --max-depth) are rejected under --report."""
 
 
+def _gr1_status(root: Path, out_path: Path) -> str:
+    """Whether a behavioral draft exists yet — GR1, checked instead of only announced.
+
+    The GR1 line above has been printed on every run for as long as it has existed, and a live
+    build read it and went straight into a 14-agent structural harvest anyway; its behavioral
+    fragment was written 79 turns later. The ordering matters because the behavioral layer is what
+    the structural slices are supposed to serve, and it is stated once, at method.md:582, in the
+    seam between two paged Reads of a 1553-line file.
+
+    A printed rule nobody reads is fixed by checking it, not by printing it louder. This is
+    deliberately a LOUD WARNING and not a refusal: `preindex` is also run outside a build (to size
+    a repo, to re-read a report), and a hard failure there would be wrong. What it removes is the
+    ability to walk past GR1 without being told, by name, that it has not been met.
+    """
+    # Keyed off the SCANNED ROOT, not `--out`'s parent: `--out` is routinely pointed somewhere
+    # else (a scratch path, a report copy), and keying off it reported "no build-fragments" for a
+    # repo that had 33 of them. The out-path's own `.coyodex/` is still consulted as a fallback for
+    # the case where the two genuinely differ.
+    candidates = [root / ".coyodex" / "build-fragments", out_path.parent / "build-fragments"]
+    frags = next((c for c in candidates if c.is_dir()), candidates[0])
+    if not frags.is_dir():
+        return ("  GR1 NOT MET: no .coyodex/build-fragments/ yet, so no behavioral draft exists. "
+                "Draft Goal -> Glossary -> Roles -> Use cases -> Happy-Path skeleton FIRST; the "
+                "structural slices exist to serve it.\n")
+    behavioral = sorted(f.name for f in frags.glob("*.json")
+                        if "behavioral" in f.name.lower() or "behaviour" in f.name.lower())
+    if behavioral:
+        return f"  GR1 met: behavioral draft present ({', '.join(behavioral)}).\n"
+    return ("  GR1 NOT MET: .coyodex/build-fragments/ holds no behavioral fragment. A live build "
+            "read this same NOTE, harvested 14 structural slices anyway, and wrote its behavioral "
+            "layer 79 turns later.\n")
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     # `--help` must never RUN the pre-index: it writes `.coyodex/preindex.json`, so a help request
@@ -530,6 +563,7 @@ def main(argv: list[str] | None = None) -> int:
         "  NOTE: draft the behavioral layer BEFORE using this (GR1); reconcile every item, "
         "never copy verbatim (GR2).\n"
     )
+    sys.stderr.write(_gr1_status(Path(root), out_path))
     if not ts_ok:
         sys.stderr.write(
             "  HINT: tree-sitter is not installed, so non-Python languages get no symbols/imports.\n"

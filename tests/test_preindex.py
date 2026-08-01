@@ -443,3 +443,43 @@ if __name__ == "__main__":
             print(f"FAIL {fn.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+# ── GR1, checked instead of only announced ───────────────────────────────────────────────────────
+
+def make_repo_with_fragments(*names: str) -> Path:
+    """A repo whose `.coyodex/build-fragments/` holds the named fragments."""
+    root = Path(tempfile.mkdtemp())
+    (root / "src").mkdir()
+    (root / "src" / "a.py").write_text("x = 1\n", encoding="utf-8")
+    frags = root / ".coyodex" / "build-fragments"
+    frags.mkdir(parents=True)
+    for n in names:
+        (frags / n).write_text("{}", encoding="utf-8")
+    return root
+
+
+def test_gr1_reports_not_met_when_no_behavioral_draft_exists():
+    """The NOTE has been printed on every run for as long as it has existed, and a live build read
+    it and went straight into a 14-agent structural harvest; its behavioral fragment landed 79
+    turns later. A printed rule nobody reads is fixed by checking it."""
+    from coyodex.preindex import _gr1_status
+    root = make_repo_with_fragments("ep-routes.json", "sec.json")
+    status = _gr1_status(root, root / ".coyodex" / "preindex.json")
+    assert "GR1 NOT MET" in status
+
+
+def test_gr1_reports_met_when_the_behavioral_fragment_is_present():
+    from coyodex.preindex import _gr1_status
+    root = make_repo_with_fragments("behavioral.json", "sec.json")
+    status = _gr1_status(root, root / ".coyodex" / "preindex.json")
+    assert "GR1 met" in status and "behavioral.json" in status
+
+
+def test_gr1_reads_the_scanned_root_not_the_out_path():
+    """`--out` is routinely pointed at a scratch path; keying off its parent reported
+    "no build-fragments" for a repo holding 33 of them."""
+    from coyodex.preindex import _gr1_status
+    root = make_repo_with_fragments("behavioral.json")
+    elsewhere = Path(tempfile.mkdtemp()) / "scratch" / "preindex.json"
+    assert "GR1 met" in _gr1_status(root, elsewhere)
