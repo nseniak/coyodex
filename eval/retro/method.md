@@ -22,7 +22,7 @@ complementary; neither replaces the other.
 **`dev-rebuilds/` is a coyodex-DEVELOPER convention and nothing a user of coyodex should have.** A
 user's map evolves incrementally with their code, so a from-scratch rebuild is a first-run event and
 they never accumulate previous maps. Rebuilding repeatedly is what someone changing coyodex does, and
-`eval/scripts/archive_map.py` is what files each snapshot. No production code path reads the
+`coyodex-eval archive` is what files each snapshot. No production code path reads the
 directory — a *build* compares against nothing, deliberately. So expect it in the coyodex author's own
 repos and expect it to be ABSENT everywhere else; when it is missing, say Step 1's comparison was
 skipped rather than treating it as a defect.
@@ -70,7 +70,7 @@ the project and refuses while that one is still being written; it also refuses a
 Do not hand-roll this wait. The one live attempt used `find -newermt '-120 seconds'`, which this
 platform's `find` rejects outright — so the idle test silently read as "always idle" — and it waited
 on a `dev-rebuilds/NNNN/` directory that **a build never creates** (archiving is
-`eval/scripts/archive_map.py`, a developer convention; see the note above). Both conditions were
+`coyodex-eval archive`, a developer convention; see the note above). Both conditions were
 unsatisfiable, and the finished build went unnoticed for ~90 minutes. Poll the command instead, from
 a background waiter, and read its exit code.
 
@@ -88,7 +88,7 @@ one is often the retro itself.
 Also locate, for comparison (all optional — say so when absent):
 
 - **the previous map** — the highest-numbered `.coyodex/dev-rebuilds/NNNN/project-map.json`. That is
-  where `archive_map.py` puts the map a from-scratch rebuild replaced. Names are zero-padded, so a
+  where `coyodex-eval archive` puts the map a from-scratch rebuild replaced. Names are zero-padded, so a
   plain sort is a numeric sort; take the last one.
 - **the previous transcript** — the `session_id` in that archive's own `provenance.json`.
 

@@ -23,6 +23,9 @@ Commands:
            — `--diff a.json b.json` compares two scorecards. A scorecard, never a gate.
   transcript  READ a build transcript in slices — an index by default, `--full` for one range.
            The retrospective's eye on what the agent actually did.
+  archive  Move a repo's coyodex map into .coyodex/dev-rebuilds/NNNN/ so the next run BUILDS
+           from scratch (dispatch reads the WORKING TREE to choose the mode). Moves, never
+           deletes — the old map is the baseline the new one is compared against.
   retro-precheck  Refuse to retrospect a build that has not finished. Exit 1 when another
            session is still writing a transcript — provenance is stamped near the END of a
            build, so mid-run it still names the PREVIOUS one and a retro reads the wrong run.
@@ -63,6 +66,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "process":
         from coyodex_eval import process_scorecard
         return process_scorecard.main(rest)
+    if cmd == "archive":
+        from coyodex_eval import archive
+        return archive.main(rest)
     if cmd == "retro-precheck":
         from coyodex_eval import retro_precheck
         return retro_precheck.main(rest)

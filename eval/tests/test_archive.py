@@ -1,34 +1,29 @@
 #!/usr/bin/env python3
-"""Tests for `eval/scripts/archive_map.py` — moving a map aside for a from-scratch rebuild.
+"""Tests for `coyodex-eval archive` — moving a map aside for a from-scratch rebuild.
 
-This script moves a repo's only copy of its map, so the tests are about not losing it: the archive
+This command moves a repo's only copy of its map, so the tests are about not losing it: the archive
 never nests inside itself, `.gitignore` stays where the next assemble expects it, an interrupted run
 puts everything back, and nothing is ever deleted.
 
 Run either way (needs an editable install: `make deps`):
-    python3 tests/test_archive_map.py
-    pytest tests/test_archive_map.py
+    python3 eval/tests/test_archive.py
+    pytest eval/tests/test_archive.py
 """
 from __future__ import annotations
 
-import importlib.util
 import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
-_SCRIPT = Path(__file__).resolve().parent.parent / "eval" / "scripts" / "archive_map.py"
-# A plain assert, not a skip: the script is TRACKED now, so its absence is a broken checkout rather
-# than an optional extra. It used to live under the git-ignored `internal/`, which made this import
-# fail at collection time in any clone but the author's — the project's own required gate, red for
-# everyone else, and invisible to the author.
-assert _SCRIPT.is_file(), f"{_SCRIPT} is missing — it is tracked, so this is a broken checkout"
-_spec = importlib.util.spec_from_file_location("archive_map", _SCRIPT)
-assert _spec and _spec.loader
-archive_map = importlib.util.module_from_spec(_spec)
-sys.modules["archive_map"] = archive_map
-_spec.loader.exec_module(archive_map)
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "eval" / "tools"))
+
+# A plain import now. This used to be an `importlib.util.spec_from_file_location` dance against an
+# absolute path, because the module was a loose script under `eval/scripts/` rather than part of a
+# package — the same pathness that made every caller spell the path out by hand.
+from coyodex_eval import archive as archive_map  # noqa: E402
 
 
 def make_repo(tmp: str, *, archives: tuple[str, ...] = ()) -> Path:

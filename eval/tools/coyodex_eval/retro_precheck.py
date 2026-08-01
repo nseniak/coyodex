@@ -14,7 +14,7 @@ is about the wrong run with nothing saying so. On a live session the operator ha
 wait procedure into the prompt to cover this, and that procedure carried two defects of its own: it
 used `find -newermt '-120 seconds'`, which this platform's `find` (bfs) rejects outright — so the
 idle test silently read as "always idle" — and it waited on a `dev-rebuilds/NNNN/` directory that a
-BUILD NEVER CREATES (archiving is `eval/scripts/archive_map.py`, a developer convention). Both
+BUILD NEVER CREATES (archiving is `coyodex-eval archive`, a developer convention). Both
 conditions were unsatisfiable; the finished build went unnoticed for ~90 minutes.
 
 The detection that actually works: the newest transcript in the project's `~/.claude/projects/<slug>/`

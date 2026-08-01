@@ -23,16 +23,13 @@ expects it) and `dev-rebuilds/` itself. That is deliberately a denylist, not a l
 filenames: a future artifact should be archived by default rather than silently left behind to
 confuse the next build.
 
-    eval/scripts/archive_map.py <repo-root> [--dry-run]
+    coyodex-eval archive <repo-root> [--dry-run]
 
-WHY IT LIVES UNDER `eval/`. This is a developer-only tool, and `eval/` is the developer-only tree
-(`eval/README.md` says so, as do the `/coyodex-eval` and `/coyodex-retro` skills). It used to sit in
-`internal/`, which the root `.gitignore` excludes — so the script that creates `dev-rebuilds/` was not
-in the repository at all, while `tests/test_archive_map.py` (tracked) imported it by path. A fresh
-clone therefore failed the project's own required tier-1 gate at collection time. Tracked here, the
-test and the script travel together.
-
-Stdlib-only, like the tools this sits beside.
+WHY IT IS A `coyodex-eval` SUBCOMMAND. It was a loose script under `eval/scripts/`, invoked by an
+absolute path that every caller had to spell out — the shape that makes a tool easy to hand-roll
+around instead. `coyodex-eval` is the developer-only CLI (`eval/` is the developer-only tree, and
+the `/coyodex-eval` and `/coyodex-retro` skills say so), so this belongs beside `retro-precheck`
+and `process`: discoverable from `coyodex-eval --help`, and reachable without knowing a path.
 """
 from __future__ import annotations
 
@@ -110,7 +107,7 @@ def archive(root: Path, dry_run: bool = False) -> tuple[Path | None, list[Path]]
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        prog="archive_map.py",
+        prog="coyodex-eval archive",
         description="Move a repo's coyodex map into .coyodex/dev-rebuilds/NNNN/ so the next run "
                     "builds from scratch (dispatch.md reads the WORKING TREE to choose the mode).")
     ap.add_argument("root", type=Path, help="the mapped repo's root directory")
@@ -121,16 +118,16 @@ def main(argv: list[str] | None = None) -> int:
     try:
         dest, entries = archive(root, dry_run=args.dry_run)
     except (FileNotFoundError, OSError) as exc:
-        print(f"archive_map: {exc}", file=sys.stderr)
+        print(f"archive: {exc}", file=sys.stderr)
         return 1
 
     if dest is None:
-        print(f"archive_map: nothing to archive in {root / '.coyodex'} "
+        print(f"archive: nothing to archive in {root / '.coyodex'} "
               "(already clear — a build here starts from scratch)")
         return 0
     verb = "would move" if args.dry_run else "moved"
     rel = dest.relative_to(root)
-    print(f"archive_map: {verb} {len(entries)} entry/entries -> {rel}/")
+    print(f"archive: {verb} {len(entries)} entry/entries -> {rel}/")
     for p in entries:
         # After a real move the source path is gone, so ask the side that now holds it.
         landed = p if args.dry_run else dest / p.name
