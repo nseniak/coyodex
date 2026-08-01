@@ -571,8 +571,11 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     # a better record than a heading because it travels with the thing it describes.
     "External deps with no incoming edge": "`deployment_linked: true` on the dep is the escape",
     "Deps marked `deployment_linked` but which are a code call target": "drop the marker",
-    "{} deployment advisory/advisories suppressed by the recorded `runs-in` exception":
+    "{} deployment advisory/advisories suppressed by recorded scoped exception(s)":
         "this IS the escape being reported; it must never be silenceable itself",
+    "a bare `runs-in` exception is recorded and silences NOTHING":
+        "the opposite of an advisory needing an escape — it exists to say the escape the operator "
+        "wrote does not work, and names the five scoped lines that do",
     "{} store-hygiene advisory/advisories suppressed by the recorded `store` exception":
         "same shape as the `runs-in` count above — a suppression report that can itself be "
         "suppressed reports nothing",

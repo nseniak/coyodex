@@ -52,9 +52,20 @@ _ROOT = "<root>"
 # `runs-in` most urgently of all — it now silences the entire deployment family, so one stray prose
 # mention would blank a dozen checks at once. ALL of them are now read LINE-LEADING, the same
 # `_RECORD_LINE` discipline `validate_model` uses for its recorded-id headings.
+#: The five SCOPED `runs_in` escapes, one per finding group in `validate_model._RUNS_IN_FAMILY`.
+#: A bare `runs-in` used to silence all five at once, which is the one thing the method says a
+#: record must never do ("silences exactly one (check, id) pair — never a family"). On a live map a
+#: record written about two test-profile containers thereby hid a real regression: six of eight
+#: deployment units had stopped hosting any component, and the advisory that says so was already
+#: switched off. Scoping is what makes the justification and the silence describe the same thing.
+RUNS_IN_SCOPES: tuple[str, ...] = (
+    "runs-in/quality", "runs-in/unlinked", "runs-in/unplaced",
+    "runs-in/entry-hosts", "runs-in/messaging",
+)
+
 _LITERAL_ESCAPES: tuple[str, ...] = (
     "cadence", "channel-ends", "channel-payload", "entity-flows", "entity-relations",
-    "granularity", "isolated", "messaging", "runs-in", "store",
+    "granularity", "isolated", "messaging", "runs-in", "store", *RUNS_IN_SCOPES,
 )
 
 # Line-leading literal + terminator. Longest-first alternation so a shorter bare alternative can
@@ -204,8 +215,10 @@ def _exceptions(m: ProjectModel) -> set[str]:
     silence the flow-length band; C ids silence the promote-to-subsystem altitude nudge; the
     literal `granularity` silences the component-count-vs-E advisory; the literal `entity-flows`
     silences the no-entity-in-any-flow canary (a map whose flows legitimately touch no entity —
-    a pure proxy with no domain layer traced); the literal `runs-in` silences the deployment-units-
-    enumerated-but-nothing-links advisory (code that truly runs as one unit); the literal `cadence`
+    a pure proxy with no domain layer traced); the FIVE SCOPED
+    `runs-in/…` literals each silence exactly one deployment finding group (`RUNS_IN_SCOPES`); a
+    bare `runs-in` silences nothing and is reported as a mistake, because it used to switch off all
+    five at once while the justification behind it was about one; the literal `cadence`
     silences the self-activated-entry-points-record-no-cadence advisory (loops that are all
     genuinely continuous / caller-shaped); the literal `store` silences the unstructured-entity-
     stores advisory (a map deliberately keeping notes-only stores); the literal `messaging`
@@ -215,9 +228,10 @@ def _exceptions(m: ProjectModel) -> set[str]:
     advisory (a channel whose other end lives outside the mapped repo); the literal
     `channel-payload` silences the no-channel-names-a-payload canary (channels that really are
     untyped); the literal `entity-relations` silences the isolated-entities advisory (a domain
-    whose cards legitimately carry no E↔E relation). `runs-in` additionally silences the two
-    placement advisories that live outside the deployment-quality family — an unplaced self-started
-    entry point, and a messaging channel no participant's `runs_in` can place. EVERY literal is
+    whose cards legitimately carry no E↔E relation). The two placement advisories that live
+    outside the deployment-quality family — an unplaced self-started entry point, and a messaging
+    channel no participant's `runs_in` can place — have their own scopes (`runs-in/entry-hosts`,
+    `runs-in/messaging`) rather than riding a shared literal. EVERY literal is
     read LINE-LEADING (`_LITERAL_LINE`: `granularity: <why>`), because every one of them is an
     ordinary prose word — a sentence merely using the word never silences anything. Ids keep the
     anywhere-in-body scan (`_EXCEPTION_IDS`), which prose cannot trip. All consumed only as

@@ -537,12 +537,15 @@ def test_d5_an_infra_unit_sharing_a_dependency_name_is_not_an_unlinked_unit():
     assert not has_warning(make_golden_warnings(), "run no traced component")
 
 
-def test_d6_one_runs_in_record_masks_the_whole_deployment_family_but_reports_the_count():
-    """D6 — the `runs-in` literal silences unit naming, formula-fill, unlinked units, thread
-    hosts AND variant tagging together, while the justification behind it usually covers one.
+def test_d6_a_bare_runs_in_record_no_longer_masks_the_whole_deployment_family():
+    """D6 — a bare `runs-in` used to silence unit naming, formula-fill, unlinked units, thread hosts
+    AND variant tagging together, while the justification behind it covered one of them.
 
-    The safe behaviour is what this pins: the detail goes, the COUNT stays. Suppression you
-    cannot see is indistinguishable from having no findings."""
+    That is the family escape the method forbids ("a recorded line silences exactly one (check, id)
+    pair — never a family"), and on a live map it hid a real regression: six of eight deployment
+    units had stopped hosting any component, and the advisory that says so was already off. So the
+    bare form now silences NOTHING and names the five scoped lines; a scoped line silences exactly
+    its own group."""
     trap("D6")
     before = [w for w in make_golden_warnings() if "variants" in w or "runs_in" in w]
     assert before, "the fixture must actually trip the deployment family for this to mean anything"
@@ -552,9 +555,18 @@ def test_d6_one_runs_in_record_masks_the_whole_deployment_family_but_reports_the
         if extra["heading"] == "Balance exceptions":
             extra["body"] += "\n- runs-in: the api and worker units are genuinely ungated."
     after = warnings_of(load_model(json.dumps(doc)))
-    assert has_warning(after, "suppressed by the recorded `runs-in` exception"), after
-    assert not has_warning(after, "carry no `variants` while others do"), (
-        "the family really is silenced wholesale — which is the risk the count exists to expose")
+    assert has_warning(after, "silences NOTHING"), after
+    assert has_warning(after, "carry no `variants` while others do"), (
+        "a bare record must no longer swallow the family")
+
+    scoped = json.loads(GOLDEN_MAP.read_text(encoding="utf-8"))
+    for extra in scoped["extras"]:
+        if extra["heading"] == "Balance exceptions":
+            extra["body"] += "\n- runs-in/quality: the api and worker units are genuinely ungated."
+    after2 = warnings_of(load_model(json.dumps(scoped)))
+    assert has_warning(after2, "suppressed by recorded scoped exception(s)"), after2
+    assert not has_warning(after2, "carry no `variants` while others do"), (
+        "a scoped record must silence its own group's detail, and report that it did")
 
 
 # --- G: altitude -----------------------------------------------------------------------

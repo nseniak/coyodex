@@ -1142,7 +1142,7 @@ def _messaging_placement_warnings(m: ProjectModel) -> list[str]:
     Same invisible outcome as a one-sided row, different cause, so a different fix (tag `runs_in`)
     and a different owner than `_check_messaging`.
 
-    A `runs_in`-tagging gap wearing a messaging hat: it answers to the recorded `runs-in` literal
+    A `runs_in`-tagging gap wearing a messaging hat: it answers to the recorded `runs-in/messaging` literal
     like every other `runs_in` advisory, which is why it is produced RAW here and routed through
     `_runs_in_family_warnings` — the one place that applies (and counts) that literal."""
     if not m.deployment:
@@ -1159,7 +1159,7 @@ def _messaging_placement_warnings(m: ProjectModel) -> list[str]:
                 f"messaging[{i}] ('{mr.name}'): no {' and no '.join(unplaced)} sets `runs_in`, so "
                 "the Deployment view cannot place this channel and draws no process→process arrow "
                 "— tag the participating component(s) with the unit whose process runs them, or "
-                "record the literal `runs-in` under a 'Balance exceptions' extras heading (the "
+                "record the literal `runs-in/messaging` under a 'Balance exceptions' extras heading (the "
                 "same literal that adjudicates the rest of this map's `runs_in` tagging)")
     return out
 
@@ -1743,11 +1743,11 @@ def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
     when the map has no deployment units, or when `runs_in` is nowhere used yet (un-adopted, not a gap).
 
     It is a `runs_in` advisory that happens to sit outside `_deployment_quality_warnings_raw`'
-    family, so it honours the SAME recorded `runs-in` literal: an operator who has decided this
+    family, so it honours the SAME recorded `runs-in/entry-hosts` literal: an operator who has decided this
     map's background threads are not worth placing has decided it once, and should not have to keep
     re-reading the consequence. It is produced RAW here — the literal is applied (and counted)
     exactly once, in `_runs_in_family_warnings`. It used to be applied here with a silent `return []`,
-    which is how a `runs-in` record written about something else swallowed this finding invisibly
+    which is how a `runs-in/entry-hosts` record written about something else swallowed this finding invisibly
     on two live maps."""
     if not m.deployment:
         return []
@@ -1767,7 +1767,7 @@ def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
     shown = _shown(unplaced, 8)
     return [f"{len(unplaced)} self-started entry point(s) have no deployment unit and will be "
             f"'Unplaced' in the Deployment view — tag `runs_in` on them or their component, or "
-            f"record the literal `runs-in` under a 'Balance exceptions' extras heading if these "
+            f"record the literal `runs-in/entry-hosts` under a 'Balance exceptions' extras heading if these "
             f"threads are deliberately unplaced: {shown}"]
 
 
@@ -1779,7 +1779,7 @@ def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
     exactly what happened on both fresh builds this check was added for. Fires only when units exist:
     no `deployment[]` means the dimension was legitimately not harvested (a different, coarser choice).
 
-    Raw, like its siblings: the recorded `runs-in` literal (deliberately unmapped — everything runs
+    Raw, like its siblings: the recorded `runs-in/unlinked` literal (deliberately unmapped — everything runs
     in one unit) is applied and COUNTED once, in `_runs_in_family_warnings`.
 
     The all-or-nothing test below leaves a graded hole, so a second, weaker canary follows it: ONE
@@ -1800,7 +1800,7 @@ def _deployment_unlinked_warning(m: ProjectModel) -> list[str]:
             f"`runs_in` — the Deployment view will have no code↔process mapping. On each component, "
             f"name the deployment unit(s) whose process runs it (method.md 'Deployment & topology'); "
             f"`runs` edges are then derived. If the code truly runs as one unit, record the literal "
-            f"`runs-in` under a 'Balance exceptions' extras heading to silence this."]
+            f"`runs-in/unlinked` under a 'Balance exceptions' extras heading to silence this."]
 
 
 #: Below this share of components carrying `runs_in`, the Deployment view is mostly empty and says so.
@@ -1819,7 +1819,7 @@ def _deployment_mostly_unplaced_warning(m: ProjectModel) -> list[str]:
     """Advisory: units exist and SOME component is placed, but most are not — the graded version of
     `_deployment_unlinked_warning`, whose `any(...)` early-return a single tagged component defeats.
 
-    Same family as its siblings, so the recorded `runs-in` literal silences it with them."""
+    Same family as its siblings, so the recorded `runs-in/unplaced` literal silences it with them."""
     if not m.deployment or not m.components:
         return []
     placed = sum(1 for c in m.components if c.runs_in)
@@ -1836,7 +1836,7 @@ def _deployment_mostly_unplaced_warning(m: ProjectModel) -> list[str]:
     return [f"only {placed} of {len(m.components)} component(s) set `runs_in` ({share:.0%}) across "
             f"{len(m.deployment)} deployment unit(s) — the Deployment view maps the other {unplaced} "
             f"to nothing. A partial tagging reads as a finished topology, so name the unit(s) for "
-            f"those {unplaced}, or record the literal `runs-in` under a 'Balance exceptions' extras "
+            f"those {unplaced}, or record the literal `runs-in/unplaced` under a 'Balance exceptions' extras "
             f"heading if they are deliberately unplaced."]
 
 
@@ -1845,7 +1845,7 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
     manifests), not formula-guessed. `validate` used to check only PRESENCE, so a hand-script that
     blanket-tagged every component to one unit (no manifest read, 0 entry points placed) passed clean.
     These four canaries catch the low-quality shapes — all in the deployment family, so the one recorded
-    `runs-in` literal silences them together (like `_deployment_unlinked_warning`):
+    `runs-in/quality` literal silences them together (like `_deployment_unlinked_warning`):
 
     - non-atomic unit NAME (S5): a `deployment[].unit` holding a separator — one row is one process;
     - formula-fill (S3): one unit blankets EVERY component AND another unit hosts nothing AND no entry
@@ -1867,12 +1867,12 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         warnings.append(f"{len(inferred)} deployment variant tag(s) are inferred (no manifest anchor): "
                         f"{shown} — cite the compose profile / overlay / stage line that places each unit "
                         f"in that environment (else confirm it's a real inference). Record the literal "
-                        f"`runs-in` under a 'Balance exceptions' extras heading to silence this.")
+                        f"`runs-in/quality` under a 'Balance exceptions' extras heading to silence this.")
     if m.environments and not any(d.variants for d in m.deployment):
         warnings.append(f"{len(m.environments)} environment(s) declared but no deployment unit is tagged "
                         f"with a `variants` value — the Deployment view can't split by environment "
                         f"(every unit shows in all). Tag each unit with the environment(s) it runs in. "
-                        f"Record the literal `runs-in` under a 'Balance exceptions' extras heading to "
+                        f"Record the literal `runs-in/quality` under a 'Balance exceptions' extras heading to "
                         f"silence this.")
     elif m.environments:
         # THE MIXED STATE, which the all-or-nothing check above cannot see. An empty `variants` means
@@ -1889,7 +1889,7 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
                 f"others do: {shown} — an untagged unit reads as 'runs in every environment' "
                 f"({', '.join(m.environments)}), so a forgotten tag becomes a claim rather than a gap. "
                 f"Tag the environment(s) each really runs in, or confirm it is genuinely ungated by "
-                f"recording the literal `runs-in` under a 'Balance exceptions' extras heading.")
+                f"recording the literal `runs-in/quality` under a 'Balance exceptions' extras heading.")
     # a real unit name may contain spaces ('api worker'); only a SEPARATOR (shared with the dep-match
     # guard) signals two units crammed into one row (S5)
     non_atomic = [d.unit for d in m.deployment
@@ -1898,7 +1898,7 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         warnings.append(f"Deployment unit name(s) look non-atomic (contain a separator): "
                         f"{', '.join(non_atomic)} — a unit is ONE process; split each '<a> / <b>' into "
                         f"separate `deployment[]` rows so a `runs_in` value resolves to exactly one host. "
-                        f"Record the literal `runs-in` under a 'Balance exceptions' extras heading if the "
+                        f"Record the literal `runs-in/quality` under a 'Balance exceptions' extras heading if the "
                         f"name really is one process.")
     used = any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)
     if not used:
@@ -1917,7 +1917,7 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         warnings.append(f"Deployment unit(s) run no traced component or entry point and match no known "
                         f"system dependency: {', '.join(orphan_units)} — is each infra (add it as a "
                         f"dependency), or an un-traced `runs_in` (tag the component/entry point that runs "
-                        f"there)? Record the literal `runs-in` under a 'Balance exceptions' extras heading "
+                        f"there)? Record the literal `runs-in/quality` under a 'Balance exceptions' extras heading "
                         f"if each is deliberately code-less.")
     # Formula-fill smell: every component crammed into ONE unit with NO real spread, while a REAL
     # (non-infra) process unit sits empty and no entry point is placed. Two guards keep a legitimately
@@ -1939,7 +1939,7 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
                         f"entry point carries `runs_in`. A per-component manifest read (docker-compose / "
                         f"Dockerfiles / Procfile) would spread components across their real processes and "
                         f"place the background threads — re-derive `runs_in` from the manifests "
-                        f"(method.md), or record `runs-in` under 'Balance exceptions' if it truly runs as "
+                        f"(method.md), or record `runs-in/quality` under 'Balance exceptions' if it truly runs as "
                         f"one unit.")
     ambiguous: list[str] = []
     for i, ep in enumerate(m.entry_points):
@@ -1954,30 +1954,35 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         warnings.append(f"{len(ambiguous)} self-started entry point(s) whose owning component runs in >1 "
                         f"unit but which set no `runs_in` — the host process is ambiguous (the view picks "
                         f"one). Set `runs_in` on the entry point to pin its exact process, or record the "
-                        f"literal `runs-in` under a 'Balance exceptions' extras heading if the ambiguity "
+                        f"literal `runs-in/quality` under a 'Balance exceptions' extras heading if the ambiguity "
                         f"is accepted: {shown}")
     return warnings
 
 
-#: EVERY advisory group the recorded `runs-in` literal silences, paired with the short label the
+#: EVERY advisory group the recorded `runs-in/quality` literal silences, paired with the short label the
 #: count line uses to name it. This tuple is the ONLY place that mapping exists: each producer is
 #: raw (it never reads the literal itself), and `_runs_in_family_warnings` below is the single exit
 #: that applies the literal and reports what it swallowed. A FIFTH group is added by appending a row
 #: here — there is no other wiring, so it cannot arrive with a private, uncounted `return []`.
 #:
 #: Why that matters: the literal used to be honoured at four separate sites and counted at ONE.
-#: On two live maps a `runs-in` record written about something else ("the Mongo units run no
+#: On two live maps a `runs-in/quality` record written about something else ("the Mongo units run no
 #: first-party code"; environment tags on one unit) silently swallowed unrelated placement
 #: findings, while the count line named a smaller number — and when the counted group happened to
 #: be empty the suppression was invisible entirely. `tests/test_validate_model.py` pins the
-#: invariant by AST: no other function in this module may read the `runs-in` literal.
-_RUNS_IN_FAMILY: tuple[tuple[str, Callable[[ProjectModel], list[str]]], ...] = (
-    ("deployment quality (unit naming, formula-filled `runs_in`, unlinked units, thread hosts, "
+#: invariant by AST: no other function in this module may read the `runs-in/quality` literal.
+_RUNS_IN_FAMILY: tuple[tuple[str, str, Callable[[ProjectModel], list[str]]], ...] = (
+    ("runs-in/quality",
+     "deployment quality (unit naming, formula-filled `runs_in`, unlinked units, thread hosts, "
      "variant tagging)", _deployment_quality_warnings_raw),
-    ("deployment units enumerated but nothing links code to them", _deployment_unlinked_warning),
-    ("most components unplaced across the enumerated units", _deployment_mostly_unplaced_warning),
-    ("self-started entry points with no host unit", _deployment_placement_warnings),
-    ("messaging channels no participant's `runs_in` can place", _messaging_placement_warnings),
+    ("runs-in/unlinked",
+     "deployment units enumerated but nothing links code to them", _deployment_unlinked_warning),
+    ("runs-in/unplaced",
+     "most components unplaced across the enumerated units", _deployment_mostly_unplaced_warning),
+    ("runs-in/entry-hosts",
+     "self-started entry points with no host unit", _deployment_placement_warnings),
+    ("runs-in/messaging",
+     "messaging channels no participant's `runs_in` can place", _messaging_placement_warnings),
 )
 
 
@@ -1991,22 +1996,38 @@ def _runs_in_family_warnings(m: ProjectModel) -> list[str]:
     thereby hid two unrelated findings, including a real variant-tagging gap. Suppression you cannot
     see is indistinguishable from having no findings, so the COUNT — and the name of every group it
     covered — stays visible even when the detail does not."""
-    found: list[tuple[str, list[str]]] = []
-    for label, produce in _RUNS_IN_FAMILY:
+    recorded = balance_lib._exceptions(m)
+    found: list[tuple[str, str, list[str]]] = []
+    for scope, label, produce in _RUNS_IN_FAMILY:
         group = produce(m)
         if group:
-            found.append((label, group))
-    if not found:
-        return []
-    if "runs-in" not in balance_lib._exceptions(m):
-        return [w for _, ws in found for w in ws]
-    total = sum(len(ws) for _, ws in found)
-    detail = "; ".join(f"{len(ws)} × {label}" for label, ws in found)
-    return [f"{total} deployment advisory/advisories suppressed by the recorded `runs-in` exception, "
-            f"across {len(found)} finding group(s) — {detail}. That one literal silences EVERY "
-            f"`runs_in` advisory in the map, not just the one it was written about; if the recorded "
-            f"justification only covered some of them, re-read the rest by validating a copy with "
-            f"the exception removed."]
+            found.append((scope, label, group))
+    out: list[str] = []
+    suppressed: list[tuple[str, str, int]] = []
+    for scope, label, group in found:
+        if scope in recorded:
+            suppressed.append((scope, label, len(group)))
+        else:
+            out.extend(group)
+    if suppressed:
+        detail = "; ".join(f"{n} × {label} (`{scope}`)" for scope, label, n in suppressed)
+        out.append(f"{sum(n for _, _, n in suppressed)} deployment advisory/advisories suppressed by "
+                   f"recorded scoped exception(s), across {len(suppressed)} finding group(s) — "
+                   f"{detail}. Each silences only its own group; re-read one by validating a copy "
+                   f"with that line removed.")
+    if "runs-in" in recorded:
+        # A BARE `runs-in` silences nothing, deliberately. It used to switch off all five groups at
+        # once while the justification behind it was about a single one — the family escape the
+        # method forbids ("a recorded line silences exactly one (check, id) pair — never a family").
+        # On a live map a record about two test-profile containers thereby hid a real regression:
+        # six of eight deployment units had stopped hosting any component. Rejecting the bare form
+        # is what makes the operator say which finding they actually judged.
+        out.append("a bare `runs-in` exception is recorded and silences NOTHING — it used to switch "
+                   "off every `runs_in` advisory in the map at once, while the justification behind "
+                   "it was about one of them. Replace it with the scoped line for the finding you "
+                   "actually judged: "
+                   + ", ".join(f"`{scope}` ({label})" for scope, label, _p in _RUNS_IN_FAMILY) + ".")
+    return out
 
 
 def unbacked_entity_steps(m: ProjectModel) -> list[tuple[str, FlowStep, str, str]]:

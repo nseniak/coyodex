@@ -16,6 +16,7 @@ import tempfile
 from pathlib import Path
 
 from coyodex import grammar, lint_fragment, reporting
+from coyodex import balance_lib as balance_lib_mod
 from coyodex import validate_model as validate_model_mod
 from coyodex.model import (
     ModelError,
@@ -1929,7 +1930,7 @@ def test_the_unplaced_self_thread_answers_to_the_runs_in_literal():
                                  component="C99", activation="self")]
     assert any("Unplaced" in w and "runs-in" in w for w in warnings_of(m))
     m.extras = [ExtraSection(heading="Balance exceptions",
-                             body="runs-in: the maintenance threads float by design.")]
+                             body="runs-in/entry-hosts: the maintenance threads float by design.")]
     assert not any("Unplaced" in w for w in warnings_of(m))
     # an unrelated literal under the same heading leaves it firing
     m.extras = [ExtraSection(heading="Balance exceptions", body="isolated: leaf plugins.")]
@@ -1947,14 +1948,15 @@ def test_formula_filled_runs_in_is_flagged_but_a_true_monolith_is_not():
     # a legit all-in-one app (single unit hosting everything, no empty peer) must NOT nag
     m.deployment = [DeploymentRow(unit="standalone")]
     assert not any("formula-filled" in w for w in warnings_of(m))
-    # The recorded `runs-in` exception silences the family's DETAIL even with the empty peer back —
-    # but the suppression itself stays visible, because one literal switches off five unrelated
-    # checks and a silence you cannot see reads exactly like having no findings.
+    # The SCOPED exception silences this group's detail even with the empty peer back — and the
+    # suppression itself stays visible, because a silence you cannot see reads exactly like having
+    # no findings. A BARE `runs-in` would silence nothing at all (see the bare-record test).
     m.deployment = [DeploymentRow(unit="standalone"), DeploymentRow(unit="worker")]
-    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in")]
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="runs-in/quality: it truly is one process.")]
     ws = warnings_of(m)
     assert not any("one unit blankets" in w or "per-id-range" in w for w in ws)   # detail gone
-    assert any("suppressed by the recorded `runs-in` exception" in w for w in ws)  # count kept
+    assert any("suppressed by recorded scoped exception(s)" in w for w in ws)   # count kept
 
 
 def test_formula_fill_silent_on_grounded_dual_deployment():
@@ -2049,10 +2051,10 @@ def test_inferred_variant_tag_warns_and_is_silenced_by_runs_in_exception():
     m.deployment = [DeploymentRow(unit="api", variants=[VariantTag(env="cloud")])]  # no source → inferred
     assert not any("inferred" in p for p in problems_of(m))       # advisory, never a problem
     assert any("inferred (no manifest anchor)" in w for w in warnings_of(m))
-    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: single unit")]
+    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in/quality: single unit")]
     ws = warnings_of(m)
     assert not any("inferred (no manifest anchor)" in w for w in ws)               # detail silenced
-    assert any("suppressed by the recorded `runs-in` exception" in w for w in ws)  # count kept
+    assert any("suppressed by recorded scoped exception(s)" in w for w in ws)   # count kept
 
 
 # --- the ONE counted exit for the whole `runs-in` family (adversarial finding F1) ----------
@@ -2083,24 +2085,24 @@ def test_every_runs_in_group_is_reported_before_the_exception_is_recorded():
     assert any("cannot place this channel" in w for w in ws)       # messaging placement
 
 
-def test_the_runs_in_count_covers_every_group_it_silenced_not_just_the_quality_one():
+def test_a_bare_runs_in_record_now_silences_nothing_and_says_why():
+    """It used to switch off all five groups at once while its justification was about one. On a
+    live map a record about two test-profile containers thereby hid a real regression: six of eight
+    deployment units had stopped hosting any component."""
     m = make_multi_family_runs_in_model()
     detail = [w for w in warnings_of(m) if "runs-in" in w]
     m.extras = [ExtraSection(heading="Balance exceptions",
                              body="runs-in: the Mongo units run no first-party code by design.")]
     ws = warnings_of(m)
-    hits = [w for w in ws if "suppressed by the recorded `runs-in` exception" in w]
+    hits = [w for w in ws if "silences NOTHING" in w]
     assert len(hits) == 1, ws
-    # the count is the TOTAL, not the deployment-quality subtotal
-    assert hits[0].startswith(f"{len(detail)} deployment advisory/advisories"), (hits[0], detail)
-    assert "across 3 finding group(s)" in hits[0]
-    # and it NAMES each group, so an operator can tell what a one-reason record swallowed
-    for label in ("deployment quality", "self-started entry points with no host unit",
-                  "messaging channels no participant's `runs_in` can place"):
-        assert label in hits[0], (label, hits[0])
+    for scope in balance_lib_mod.RUNS_IN_SCOPES:
+        assert scope in hits[0], (scope, hits[0])
+    # and every finding it used to swallow is still on screen
+    assert len([w for w in ws if "runs-in" in w]) >= len(detail)
     # every detail line really is gone
-    assert not any("non-atomic" in w or "Unplaced" in w or "cannot place this channel" in w
-                   for w in ws)
+    assert any("non-atomic" in w or "Unplaced" in w or "cannot place this channel" in w
+               for w in ws), "a bare record must swallow nothing"
 
 
 def test_the_count_is_visible_when_the_deployment_quality_group_is_empty():
@@ -2115,11 +2117,13 @@ def test_the_count_is_visible_when_the_deployment_quality_group_is_empty():
     assert not any("non-atomic" in w or "run no traced component" in w or "formula-filled" in w
                    for w in before), "the quality group must be EMPTY for this test to mean anything"
     assert any("Unplaced" in w for w in before)
-    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: threads float by design.")]
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="runs-in/entry-hosts: threads float by design.")]
     ws = warnings_of(m)
-    hits = [w for w in ws if "suppressed by the recorded `runs-in` exception" in w]
+    hits = [w for w in ws if "suppressed by recorded scoped exception(s)" in w]
     assert len(hits) == 1, ws
     assert hits[0].startswith("1 deployment advisory/advisories")
+    assert "runs-in/entry-hosts" in hits[0]
     assert "self-started entry points with no host unit" in hits[0]
 
 
@@ -2127,9 +2131,10 @@ def test_the_unlinked_units_group_is_counted_too():
     m = make_valid_model()
     m.deployment = [DeploymentRow(unit="api")]          # units exist, nothing sets runs_in
     assert any("no component or entry point sets" in w for w in warnings_of(m))
-    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: it truly runs as one unit.")]
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="runs-in/unlinked: it truly runs as one unit.")]
     ws = warnings_of(m)
-    hits = [w for w in ws if "suppressed by the recorded `runs-in` exception" in w]
+    hits = [w for w in ws if "suppressed by recorded scoped exception(s)" in w]
     assert len(hits) == 1, ws
     assert "deployment units enumerated but nothing links code to them" in hits[0]
     assert not any("no component or entry point sets" in w for w in ws)
@@ -2178,17 +2183,18 @@ def test_a_small_map_is_not_nagged_about_a_single_unplaced_component():
 def test_the_placement_share_group_is_silenced_and_counted_with_its_family():
     """It is a `runs_in` advisory, so the one recorded literal must swallow it — and SAY it did."""
     m = make_token_tagged_deployment_model(placed=1, total=12)
-    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: deliberately unplaced.")]
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="runs-in/unplaced: deliberately unplaced.")]
     ws = warnings_of(m)
     assert not any("component(s) set `runs_in`" in w for w in ws)
-    hits = [w for w in ws if "suppressed by the recorded `runs-in` exception" in w]
+    hits = [w for w in ws if "suppressed by recorded scoped exception(s)" in w]
     assert len(hits) == 1 and "most components unplaced" in hits[0], ws
 
 
 def test_no_runs_in_record_means_no_count_line_at_all():
     """The count reports a suppression; with nothing suppressed it must not appear."""
     m = make_multi_family_runs_in_model()
-    assert not any("suppressed by the recorded `runs-in` exception" in w for w in warnings_of(m))
+    assert not any("suppressed by recorded scoped exception(s)" in w for w in warnings_of(m))
 
 
 def test_only_one_function_may_read_the_runs_in_literal():
@@ -2211,13 +2217,17 @@ def test_every_runs_in_group_is_registered_in_the_family_table():
     """The table IS the wiring, so it must not go stale: each entry produces a list of strings and
     carries a label the count line can print."""
     m = make_multi_family_runs_in_model()
-    labels = [label for label, _ in validate_model_mod._RUNS_IN_FAMILY]
+    scopes = [scope for scope, _l, _p in validate_model_mod._RUNS_IN_FAMILY]
+    labels = [label for _s, label, _p in validate_model_mod._RUNS_IN_FAMILY]
     assert len(labels) == len(set(labels)) >= 4
-    produced = [produce(m) for _, produce in validate_model_mod._RUNS_IN_FAMILY]
+    assert len(scopes) == len(set(scopes)), "each group needs its OWN scoped escape"
+    assert set(scopes) == set(balance_lib_mod.RUNS_IN_SCOPES), (
+        "the scope table and the recognised literals must not drift apart")
+    produced = [produce(m) for _s, _l, produce in validate_model_mod._RUNS_IN_FAMILY]
     assert all(isinstance(ws, list) and all(isinstance(w, str) for w in ws) for ws in produced)
     # the raw producers no longer read the literal themselves: recording it changes nothing here
     m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: recorded.")]
-    assert [produce(m) for _, produce in validate_model_mod._RUNS_IN_FAMILY] == produced
+    assert [produce(m) for _s, _l, produce in validate_model_mod._RUNS_IN_FAMILY] == produced
 
 
 def test_environments_absent_is_silent_but_declared_untagged_advises():
@@ -2391,7 +2401,7 @@ def test_the_unplaced_channel_answers_to_the_runs_in_literal():
     # deployment family takes — one decision about this map's tagging, recorded once.
     m = make_channel_map(["C1"], ["C2"], runs_in=[])
     assert any("cannot place this channel" in w and "runs-in" in w for w in validate_model(m)[1])
-    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in: one process, no split.")]
+    m.extras = [ExtraSection(heading="Balance exceptions", body="runs-in/messaging: one process, no split.")]
     assert not any("cannot place this channel" in w for w in validate_model(m)[1])
     # an unrelated literal leaves it firing
     m.extras = [ExtraSection(heading="Balance exceptions", body="channel-ends: far ends external.")]
@@ -2761,3 +2771,18 @@ def test_ignore_exceptions_re_reads_the_map_with_every_recorded_line_dropped():
         # and it is a READ: the file on disk is untouched
         assert "Balance exceptions" in p.read_text()
         assert "recorded line(s) were dropped" not in plain.stdout
+
+
+def test_one_scoped_runs_in_record_does_not_silence_a_sibling_group():
+    """The whole point of scoping: a justification about one finding must not switch off another.
+    A live map recorded `runs-in` for two test-profile containers and thereby hid a real
+    regression — six of eight deployment units had stopped hosting any component."""
+    m = make_multi_family_runs_in_model()
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="runs-in/messaging: the bus lives outside this repo.")]
+    ws = warnings_of(m)
+    assert not any("cannot place this channel" in w for w in ws), "its OWN group is silenced"
+    assert any("Unplaced" in w for w in ws), "a sibling group must survive untouched"
+    hits = [w for w in ws if "suppressed by recorded scoped exception(s)" in w]
+    assert len(hits) == 1 and "runs-in/messaging" in hits[0]
+    assert "self-started entry points" not in hits[0], "only the silenced group is named"
