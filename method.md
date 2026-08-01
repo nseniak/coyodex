@@ -909,8 +909,9 @@ synthesis → parallel trace.**
   and any dep `bucket` fixes here — as a `--reconcile` file, NOT a hand-script.** Synthesis owns the
   finalized ids and has just seen the harvested `deployment[]` units, so this is where the grouping and
   the code↔process link the Deployment view needs get wired — no later phase does it, so if synthesis
-  skips it the view ships empty. Author these as a declarative **`.coyodex/reconcile.json`** (kept
-  OUTSIDE `build-fragments/` so the fragment glob does not sweep it) and re-run the assemble with it:
+  skips it the view ships empty. These live in a declarative **`.coyodex/reconcile.json`** (kept
+  OUTSIDE `build-fragments/` so the fragment glob does not sweep it) — **generate it with `coyodex
+  reconcile`, below; hand-author it only on a map small enough to type.** The shape it produces:
   ```json
   { "set": [ {"ids": ["C1","C2"], "subsystem": "S3"},
              {"ids": ["C40","C41"], "runs_in": ["worker"]},
@@ -926,14 +927,21 @@ synthesis → parallel trace.**
   `deployment[]` units exist but no component sets `runs_in`, and flags a formula-filled `runs_in`.
   Keep fragment argument order stable and author the reconcile ids against the assembled ids (dedup
   survivors are first-occurrence-in-argument-order, so reordering fragments can shift surviving ids).
-  - **Above ~30 assignments, generate the file — `coyodex reconcile`.** Authoring the JSON by hand is
-    fine for a small map, but it wants explicit id LISTS, and on a large map that is hundreds of ids
-    nobody types correctly. Write RULES against the fact you actually know — the source path — and let
-    the tool resolve them into ids against the real map:
+  - **Generate the file — `coyodex reconcile`.** Hand-authoring is fine below ~30 assignments; above
+    that it wants explicit id LISTS, and on a large map that is hundreds of ids nobody types
+    correctly. Write RULES against the fact you actually know — the source path — and let the tool
+    resolve them into ids. **Point it at the FRAGMENTS**: you are mid-build, so the map does not
+    exist yet, and it does not need to — `assemble` mints no ids, so the `(id, source)` pairs the
+    rules match are the same either way.
     ```
-    .venv/bin/coyodex reconcile --rules rules.json --map .coyodex/project-map.json \
+    .venv/bin/coyodex reconcile --rules rules.json --fragments .coyodex/build-fragments/*.json \
                                 --out .coyodex/reconcile.json [--dry-run]
     ```
+    (`--map .coyodex/project-map.json` instead, when re-assigning on a map that is already built.
+    Reaching for `--map` mid-build is the trap that made nine consecutive builds hand-write this
+    file: the reconcile file is an INPUT to `assemble`, and `assemble` is what writes the map, so
+    demanding a map first is a circle with no way in. If the command says the map is not found, you
+    wanted `--fragments`.)
     ```json
     { "rules": [ {"source_glob": "mee6/plugins/*",     "subsystem": "S12"},
                  {"source_glob": "gateway/**",         "runs_in": ["gateway"]},

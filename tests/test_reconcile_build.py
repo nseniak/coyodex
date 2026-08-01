@@ -191,3 +191,181 @@ def test_a_leading_double_star_rule_cannot_sweep_the_whole_map():
     # the end-to-end shape of the same bug: `**/*.md` must not reassign every component.
     doc, _ = expand(make_map(), [{"source_glob": "**/*.md", "subsystem": "S1"}])
     assert doc["set"] == []
+
+
+# --------------------------------------------------------------------------------------
+# Reading FRAGMENTS instead of a map.
+#
+# `--map` alone made this command unreachable at the one moment a build needs it: the reconcile
+# file is an INPUT to `assemble`, and `assemble` is what writes the map, so requiring a map first
+# is a circular dependency. Nine consecutive builds resolved it by hand-writing the file the
+# command exists to generate. These tests pin the escape and the message that names it.
+# --------------------------------------------------------------------------------------
+
+
+def make_fragment_dir(tmp: str) -> Path:
+    """Two harvest fragments, as an agent returns them: ids and sources, no assignments yet."""
+    frag_dir = Path(tmp) / ".coyodex" / "build-fragments"
+    frag_dir.mkdir(parents=True)
+    (frag_dir / "h-plugins.json").write_text(json.dumps({
+        "components": [
+            {"id": "C1", "name": "PluginA", "source": "app/plugins/a.py:1"},
+            {"id": "C2", "name": "PluginB", "source": "app/plugins/b.py:1"},
+        ],
+        "entities": [{"id": "E1", "name": "Invoice", "meaning": "m",
+                      "source": "app/plugins/models.py:3"}],
+    }), encoding="utf-8")
+    (frag_dir / "h-web.json").write_text(json.dumps({
+        "components": [{"id": "C4", "name": "Web", "source": "web/main.py:1"}],
+    }), encoding="utf-8")
+    return frag_dir
+
+
+def test_fragments_resolve_the_same_ids_a_map_would():
+    from coyodex.reconcile_build import load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        frag_dir = make_fragment_dir(tmp)
+        m, _ = load_elements(None, [str(p) for p in sorted(frag_dir.glob("*.json"))])
+        doc, report = expand(m, [{"source_glob": "app/plugins/**", "subsystem": "S1"}])
+        assert doc["set"] == [{"ids": ["C1", "C2"], "subsystem": "S1"}]
+        assert "2 element(s)" in report[0]
+
+
+def test_fragments_and_map_are_interchangeable_inputs():
+    # `assemble` mints no ids, so the (id, source) pairs the rules match are identical either way.
+    from coyodex.reconcile_build import load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        frag_dir = make_fragment_dir(tmp)
+        m, _ = load_elements(None, [str(p) for p in sorted(frag_dir.glob("*.json"))])
+        rules = [{"source_glob": "app/plugins/**", "subsystem": "S1"},
+                 {"source_glob": "web/**", "subsystem": "S2"}]
+        from_frags, _ = expand(m, rules)
+        from_map, _ = expand(make_map(), rules)
+        # make_map() carries C3 too; compare only the elements both inputs hold.
+        assert {s["subsystem"]: [i for i in s["ids"] if i != "C3"] for s in from_frags["set"]} == \
+               {s["subsystem"]: [i for i in s["ids"] if i != "C3"] for s in from_map["set"]}
+
+
+def test_a_missing_map_during_a_build_names_the_fragments_escape():
+    # the whole point: the error must not read as "your build is broken".
+    from coyodex.reconcile_build import load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        make_fragment_dir(tmp)
+        missing = str(Path(tmp) / ".coyodex" / "project-map.json")
+        try:
+            load_elements(missing, [])
+        except RuleError as exc:
+            assert "--fragments" in str(exc)
+            assert "does not exist yet" in str(exc)
+        else:
+            raise AssertionError("a missing map must raise")
+
+
+def test_a_missing_map_with_no_fragment_dir_stays_a_plain_not_found():
+    from coyodex.reconcile_build import load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            load_elements(str(Path(tmp) / "nope.json"), [])
+        except RuleError as exc:
+            assert "not found" in str(exc)
+            assert "--fragments" not in str(exc)
+        else:
+            raise AssertionError("a missing map must raise")
+
+
+def test_an_unreadable_fragment_fails_loudly_rather_than_resolving_nothing():
+    # the original sin this command exists to prevent: emitting assignments nothing checked.
+    from coyodex.reconcile_build import load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        frag_dir = make_fragment_dir(tmp)
+        (frag_dir / "broken.json").write_text("{not json", encoding="utf-8")
+        try:
+            load_elements(None, [str(p) for p in sorted(frag_dir.glob("*.json"))])
+        except RuleError as exc:
+            assert "broken.json" in str(exc)
+        else:
+            raise AssertionError("a malformed fragment must raise")
+
+
+def test_passing_both_sources_is_refused():
+    from coyodex.reconcile_build import main
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = write_rules([{"source_glob": "app/**", "subsystem": "S1"}], tmp)
+        assert main(["--rules", str(rules), "--map", "m.json", "--fragments", "a.json"]) == 2
+
+
+def test_main_writes_a_reconcile_file_from_fragments_alone():
+    from coyodex.reconcile_build import main
+    with tempfile.TemporaryDirectory() as tmp:
+        frag_dir = make_fragment_dir(tmp)
+        rules = write_rules([{"source_glob": "app/plugins/**", "subsystem": "S1"}], tmp)
+        out = Path(tmp) / "reconcile.json"
+        argv = ["--rules", str(rules), "--out", str(out), "--fragments"]
+        argv += [str(p) for p in sorted(frag_dir.glob("*.json"))]
+        assert main(argv) == 0
+        assert json.loads(out.read_text())["set"] == [{"ids": ["C1", "C2"], "subsystem": "S1"}]
+
+
+def make_round_trip_fragments(tmp: str) -> Path:
+    """Fragments carrying all three assignable element kinds — components, entities AND deps — so
+    the round-trip below can catch a fragment route that silently drops one."""
+    frag_dir = Path(tmp) / "build-fragments"
+    frag_dir.mkdir(parents=True)
+    (frag_dir / "header.json").write_text(json.dumps({
+        "title": "RT", "goal": "g",
+        "subsystems": [{"id": "S1", "name": "Plugins"}],
+        "subdomains": [{"id": "SD1", "name": "Billing"}],
+    }), encoding="utf-8")
+    (frag_dir / "h-plugins.json").write_text(json.dumps({
+        "components": [{"id": "C1", "name": "PluginA", "source": "app/plugins/a.py:1"}],
+        "entities": [{"id": "E1", "name": "Invoice", "meaning": "m",
+                      "source": "app/plugins/models.py:3"}],
+        "deps": [{"id": "D1", "name": "Redis", "type": "broker",
+                  "where_configured": "app/plugins/redis.py:2"}],
+    }), encoding="utf-8")
+    return frag_dir
+
+
+def test_the_same_rules_resolve_identically_from_fragments_and_from_their_own_assembled_map():
+    """The load-bearing claim: `assemble` mints no ids, so both inputs are the same id space.
+
+    This assembles the fragments and compares against the map they produce — the earlier test
+    compared two hand-built inputs and stayed green when the fragment route was mutated to drop
+    every entity and dep. Covers `subdomain` (entities) and `bucket` (deps), not just `subsystem`.
+    """
+    from coyodex.assemble import main as assemble_main
+    from coyodex.reconcile_build import load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        frag_dir = make_round_trip_fragments(tmp)
+        frags = [str(p) for p in sorted(frag_dir.glob("*.json"))]
+        out = Path(tmp) / "out"
+        assert assemble_main([*frags, "--out", str(out)]) == 0
+
+        rules = [{"source_glob": "app/plugins/**", "subsystem": "S1"},
+                 {"source_glob": "app/plugins/**", "subdomain": "SD1"},
+                 {"source_glob": "app/plugins/**", "bucket": "Data & storage"}]
+        from_frags, _ = expand(load_elements(None, frags)[0], rules)
+        from_map, _ = expand(load_elements(str(out / "project-map.json"), [])[0], rules)
+        assert from_frags == from_map
+        # and all three element kinds actually resolved — a route that dropped entities or deps
+        # would still satisfy the equality above if it dropped them on BOTH sides.
+        assigned = {f: ids for s in from_frags["set"] for f, ids in
+                    ((k, s["ids"]) for k in s if k != "ids")}
+        assert assigned == {"subsystem": ["C1"], "subdomain": ["E1"], "bucket": ["D1"]}
+
+
+def test_an_empty_fragments_glob_refuses_instead_of_reading_the_stale_map():
+    """nullglob + a glob that matches nothing left the flag with zero paths, and the command read
+    the previous build's map. Ids restart at C1 every build, so its C1 resolves and means something
+    else: the assignments landed on the wrong components and every stage exited 0."""
+    from coyodex.reconcile_build import load_elements, main
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            load_elements(None, [], want_fragments=True)
+        except RuleError as exc:
+            assert "expanded to no paths" in str(exc)
+        else:
+            raise AssertionError("an empty --fragments must raise, never fall back to the map")
+        rules = write_rules([{"source_glob": "app/**", "subsystem": "S1"}], tmp)
+        assert main(["--rules", str(rules), "--fragments"]) == 2
+        assert main(["--rules", str(rules), "--fragments", "--out", str(Path(tmp) / "r.json")]) == 2

@@ -40,8 +40,9 @@ Commands:
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
   reconcile  Expand path RULES into an explicit `reconcile.json` (the synthesis
-             assignment pass), resolving ids against a real map and reporting every
-             rule that matched nothing. Feed the result to `assemble --reconcile`.
+             assignment pass), resolving ids against the build's own --fragments
+             (or --map, once one exists) and reporting every rule that matched
+             nothing. Feed the result to `assemble --reconcile`.
   finalize   The pre-commit read: validate + audit + both anchor-drift passes,
              written to .coyodex/finalize-report.{json,md} with whole lists. Adds no
              check of its own and compares nothing against a previous map. A

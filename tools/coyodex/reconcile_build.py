@@ -9,12 +9,24 @@ because nothing checked the ids it emitted against the map.
 
 So this command does the expansion and the checking: rules match elements by SOURCE PATH (the fact a
 lead actually knows — "everything under mee6/plugins/ is the Plugins subsystem"), ids are resolved
-against a real map, and every rule that matches nothing is reported rather than silently emitting an
-empty assignment. Output is an ordinary reconcile file, so `assemble --reconcile` stays the one code
-path that writes.
+against real elements, and every rule that matches nothing is reported rather than silently emitting
+an empty assignment. Output is an ordinary reconcile file, so `assemble --reconcile` stays the one
+code path that writes.
+
+Read the FRAGMENTS during a build (the synthesis pass), a MAP when re-assigning on a built one:
+
+    coyodex reconcile --rules rules.json --fragments .coyodex/build-fragments/*.json \\
+                      --out .coyodex/reconcile.json [--dry-run]
 
     coyodex reconcile --rules rules.json --map .coyodex/project-map.json \\
                       --out .coyodex/reconcile.json [--dry-run]
+
+`--fragments` exists because `--map` alone made this command unreachable at the one moment a build
+needs it. The reconcile file is an INPUT to `assemble`, and `assemble` is what produces the map — so
+requiring a map first is a circular dependency, and nine consecutive builds resolved it the only way
+left to them: by hand-writing the file the command exists to generate. Nothing was lost by reading
+fragments instead; `assemble` mints no ids, so the `(id, source)` pairs the rules match against are
+byte-identical in both.
 
 rules.json:
     {"rules": [
@@ -34,8 +46,12 @@ import sys
 from pathlib import Path
 
 from coyodex.anchors import strip_anchor
+from coyodex.assemble import load_fragment_paths, merge_fragments
 from coyodex.model import Component, Dep, Entity, ProjectModel, load_model_path
 from coyodex.pathmatch import matches
+
+_DEFAULT_MAP = ".coyodex/project-map.json"
+_DEFAULT_RECONCILE = ".coyodex/reconcile.json"
 
 # field → the element type it may be set on (mirrors reconcile._SET_FIELD_OWNER, which validates
 # the emitted file again at assemble time — this is the early, friendlier report).
@@ -162,24 +178,90 @@ def _arg(argv: list[str], flag: str, default: str | None = None) -> str | None:
     return default
 
 
+def _args_after(argv: list[str], flag: str) -> list[str]:
+    """Every value following `flag` up to the next option — so a shell glob can be passed whole
+    (`--fragments .coyodex/build-fragments/*.json` arrives already expanded into N arguments)."""
+    if flag not in argv:
+        return []
+    out: list[str] = []
+    for a in argv[argv.index(flag) + 1:]:
+        if a.startswith("-"):
+            break
+        out.append(a)
+    return out
+
+
+def load_elements(map_path: str | None, frag_paths: list[str],
+                  want_fragments: bool = False) -> tuple[ProjectModel, list[str]]:
+    """The model the rules resolve against, from FRAGMENTS or from an assembled MAP.
+
+    Returns `(model, notes)`. Raises `RuleError` with a message the lead can act on — including the
+    one that matters most: a missing map during synthesis is not a broken build, it is the wrong
+    flag, because the map does not exist yet at that point by construction.
+
+    `want_fragments` is whether `--fragments` was GIVEN, which is not the same as whether it
+    resolved. Branching on the resolved list instead is a silent-corruption bug: under `nullglob` a
+    glob matching nothing leaves the flag with zero paths, the fragment intent evaporates, and the
+    command reads the default map — the STALE one from the previous build, still committed next to
+    the code. Ids restart at C1 every build, so its C1 resolves and means something else entirely;
+    every stage exits 0 and the assignments land on the wrong components."""
+    if want_fragments and not frag_paths:
+        raise RuleError("--fragments was given but expanded to no paths — the glob matched nothing "
+                        "(wrong directory, or the harvest fragments are not written yet). Refusing "
+                        "rather than falling back to the map, which during a build is the previous "
+                        "build's and whose ids mean something else.")
+    if frag_paths:
+        parts, notes, errors = load_fragment_paths([Path(p) for p in frag_paths])
+        if errors:
+            raise RuleError("cannot read the fragments:\n  " + "\n  ".join(errors))
+        if not parts:
+            raise RuleError(f"--fragments matched no readable fragment ({len(frag_paths)} path(s) "
+                            "given)")
+        model, problems = merge_fragments(parts)
+        if problems:
+            raise RuleError("the fragments do not merge:\n  " + "\n  ".join(problems))
+        return model, notes
+    path = Path(map_path or _DEFAULT_MAP)
+    if not path.exists():
+        frag_dir = path.parent / "build-fragments"
+        hint = (f"\n  During a build the map does not exist yet — the reconcile file is an INPUT to "
+                f"`assemble`, which is what writes the map. Read the fragments instead:\n"
+                f"    coyodex reconcile --rules <rules.json> --fragments {frag_dir}/*.json"
+                if frag_dir.is_dir() else "")
+        raise RuleError(f"{path} not found{hint}")
+    return load_model_path(str(path)), []
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or "-h" in argv or "--help" in argv:
         print(__doc__)
         return 0
     rules_path = _arg(argv, "--rules")
-    map_path = _arg(argv, "--map", ".coyodex/project-map.json") or ".coyodex/project-map.json"
-    out_path = _arg(argv, "--out", ".coyodex/reconcile.json") or ".coyodex/reconcile.json"
+    map_path = _arg(argv, "--map")
+    frag_paths = _args_after(argv, "--fragments")
+    out_path = _arg(argv, "--out", _DEFAULT_RECONCILE) or _DEFAULT_RECONCILE
     dry = "--dry-run" in argv
     if not rules_path:
         print("ERROR: --rules is required", file=sys.stderr)
         return 2
+    if map_path and frag_paths:
+        print("ERROR: pass --fragments OR --map, not both — they are two sources for the same "
+              "elements (fragments during a build, a map when re-assigning on a built one)",
+              file=sys.stderr)
+        return 2
     try:
         rules = load_rules(Path(rules_path))
-        m = load_model_path(map_path)
+        m, notes = load_elements(map_path, frag_paths, want_fragments="--fragments" in argv)
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
+    for note in notes:
+        print(note, file=sys.stderr)
+    # Say which source was read. Two inputs that resolve the same id space differently is exactly
+    # the class of mistake that stays invisible when the tool is silent about its own input.
+    print(f"reading {len(frag_paths)} fragment(s)" if frag_paths
+          else f"reading map {map_path or _DEFAULT_MAP}", file=sys.stderr)
 
     doc, report = expand(m, rules)
     for line in report:

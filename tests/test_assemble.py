@@ -604,3 +604,82 @@ def test_merging_does_not_mutate_the_input_fragments():
     assert parts[0][1].messaging[0].publishers == ["C1"], "the input fragment was mutated"
     second, _ = merge_fragments(parts, {})
     assert second.messaging[0].publishers == pubs_first
+
+
+# --- the fragment-reading loop (`load_fragment_paths`) --------------------------------------------
+#
+# Extracted from `main()` so `reconcile` reads fragments through the same code. It had NO coverage:
+# no test for a missing path, a malformed fragment, an unreadable path, or the verdicts skip — the
+# whole error half of the tool's only write path. An independent review flagged that "945 passed"
+# said nothing about the loop that moved.
+
+
+def make_fragment_file(dir_path: Path, name: str, body: dict) -> Path:
+    p = dir_path / name
+    p.write_text(json.dumps(body), encoding="utf-8")
+    return p
+
+
+def test_every_path_is_attempted_so_one_bad_fragment_does_not_hide_the_next():
+    from coyodex.assemble import load_fragment_paths
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        good = make_fragment_file(d, "good.json", {"components": [
+            {"id": "C1", "name": "A", "source": "a.py:1"}]})
+        broken = d / "broken.json"
+        broken.write_text("{not json", encoding="utf-8")
+        a_dir = d / "adir.json"
+        a_dir.mkdir()
+        missing = d / "missing.json"
+        parts, _notes, errors = load_fragment_paths([broken, a_dir, missing, good])
+        # the good one still loaded, and all three failures are reported — not just the first
+        assert [label for label, _ in parts] == ["good.json"]
+        assert len(errors) == 3, errors
+        assert any("broken.json" in e for e in errors)
+        assert any("adir.json" in e and "cannot read" in e for e in errors)
+        assert any("missing.json" in e and "not found" in e for e in errors)
+
+
+def test_a_verdicts_file_swept_into_the_glob_is_skipped_with_a_note():
+    # was: `_is_verdicts_file` keyed on "shares no ProjectModel field", but `grounding` IS one, so
+    # it was unconditionally False — the skip never fired and the build died on a schema error.
+    from coyodex.assemble import load_fragment_paths
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        good = make_fragment_file(d, "good.json", {"components": [
+            {"id": "C1", "name": "A", "source": "a.py:1"}]})
+        verdicts = make_fragment_file(d, "verdicts-security.json", {"grounding": [
+            {"claim": "C1 calls C2", "grounded": False, "evidence": "a.py:1"}]})
+        parts, notes, errors = load_fragment_paths([verdicts, good])
+        assert errors == []
+        assert [label for label, _ in parts] == ["good.json"]
+        assert len(notes) == 1 and "verdicts-security.json" in notes[0]
+
+
+def test_the_grounding_fragment_is_NOT_mistaken_for_a_verdicts_file():
+    # `grounding write` emits {"grounding": {record}} into build-fragments/ — an object, not a list.
+    # Skipping it would silently drop the map's grounding record.
+    from coyodex.assemble import load_fragment_paths
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        frag = make_fragment_file(d, "grounding.json", {"grounding": {
+            "claims_total": 10, "claims_challenged": 10, "claims_confirmed": 9,
+            "claims_refuted": 1, "claims_unverifiable": 0}})
+        parts, notes, errors = load_fragment_paths([frag])
+        assert errors == [] and notes == []
+        assert [label for label, _ in parts] == ["grounding.json"]
+        assert parts[0][1].grounding.claims_total == 10
+
+
+def test_assemble_fails_the_build_and_writes_nothing_when_a_fragment_is_bad():
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        make_fragment_file(d, "good.json", {"components": [
+            {"id": "C1", "name": "A", "source": "a.py:1"}]})
+        (d / "broken.json").write_text("{not json", encoding="utf-8")
+        out = d / "out"
+        r = subprocess.run([*ASSEMBLE, str(d / "broken.json"), str(d / "good.json"),
+                            "--out", str(out)], capture_output=True, text=True)
+        assert r.returncode == 1
+        assert "ASSEMBLY FAILED" in r.stderr
+        assert not (out / "project-map.json").exists()

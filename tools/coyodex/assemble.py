@@ -87,14 +87,22 @@ def _infer_ce_verb(phrase: str) -> str:
 
 
 def _is_verdicts_file(text: str) -> bool:
-    """A Phase-4 verdicts file ({"grounding": [...]}), not a build fragment — no fragment field is
-    present. (A real fragment that merely also carried a stray `grounding` key would still be caught,
-    because it WOULD share a fragment key and this returns False.)"""
+    """A Phase-4 verdicts file ({"grounding": [row, …]}), not a build fragment.
+
+    The discriminator is the TYPE of `grounding`, not its presence: a verdicts file holds a LIST of
+    per-claim rows, the grounding FRAGMENT `grounding write` emits holds the record OBJECT, and both
+    files carry that one key and nothing else. Keying on "shares no fragment field" instead — the
+    first attempt — made this unconditionally False, because `grounding` is itself a `ProjectModel`
+    field and so always intersected `_FRAGMENT_KEYS`: the skip below never once fired, and a verdicts
+    file swept into the glob failed the build with a confusing schema error rather than the note that
+    names it. (A real fragment carrying other sections alongside a stray `grounding` is still caught
+    by the second clause and treated as a fragment.)"""
     try:
         obj = json.loads(text)
     except ValueError:
         return False
-    return isinstance(obj, dict) and "grounding" in obj and not (set(obj) & _FRAGMENT_KEYS)
+    return (isinstance(obj, dict) and isinstance(obj.get("grounding"), list)
+            and not (set(obj) - {"grounding"}) & _FRAGMENT_KEYS)
 
 
 def _derive_entity_edges(m: ProjectModel, stats: dict[str, int]) -> list[str]:
@@ -175,6 +183,46 @@ def load_map_or_fragment(path: Path) -> tuple[ProjectModel, frozenset[str] | Non
     if "format" in data:
         return load_model(text), None
     return load_fragment(text, path.name), frozenset(data)
+
+
+def load_fragment_paths(paths: list[Path]) -> tuple[list[tuple[str, ProjectModel]],
+                                                    list[str], list[str]]:
+    """Read fragment FILES into `merge_fragments` parts. Returns `(parts, notes, errors)`.
+
+    Every path is attempted before returning, so one malformed fragment does not hide the next four —
+    the lead re-pings all the guilty agents in one round instead of discovering them one build cycle
+    at a time. Printing is the caller's job: `assemble` fails the build on `errors`, `reconcile` does
+    the same, and both surface `notes` unchanged.
+
+    Shared because `reconcile` reads the SAME fragments `assemble` does. It used to demand an
+    assembled map, which cannot exist yet at the moment a build needs the reconcile file — the
+    circular dependency that made every build hand-write `reconcile.json` instead (nine in a row).
+    One loader means the verdicts-file skip and the read errors can never drift between the two."""
+    parts: list[tuple[str, ProjectModel]] = []
+    notes: list[str] = []
+    errors: list[str] = []
+    for p in paths:
+        if not p.exists():
+            errors.append(f"{p} not found")
+            continue
+        try:
+            # Guarded on purpose: a directory swept up by the glob, a permission error or a bad
+            # encoding used to raise straight out of the loop, so every remaining path went
+            # unreported and the promise above ("every path is attempted") was false.
+            text = p.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as e:
+            errors.append(f"{p}: cannot read: {e}")
+            continue
+        try:
+            parts.append((p.name, load_fragment(text, p.name)))
+        except ModelError as e:
+            if _is_verdicts_file(text):
+                notes.append(f"note: skipping {p.name} — a Phase-4 verdicts file, not a build "
+                             f"fragment (keep verdicts out of build-fragments/ or feed them to "
+                             f"`anchor-drift` / `fix apply-drift`, not `assemble`)")
+                continue
+            errors.append(str(e))
+    return parts, notes, errors
 
 
 def _element_types() -> dict[str, type]:
@@ -587,25 +635,12 @@ def main(argv: list[str] | None = None) -> int:
     if not frags:
         print("ERROR: no fragments given", file=sys.stderr)
         return 2
-    parts: list[tuple[str, ProjectModel]] = []
-    bad = False
-    for p in frags:
-        if not p.exists():
-            print(f"ERROR: {p} not found", file=sys.stderr)
-            bad = True
-            continue
-        text = p.read_text(encoding="utf-8")
-        try:
-            parts.append((p.name, load_fragment(text, p.name)))
-        except ModelError as e:
-            if _is_verdicts_file(text):
-                print(f"note: skipping {p.name} — a Phase-4 verdicts file, not a build fragment "
-                      f"(keep verdicts out of build-fragments/ or feed them to `anchor-drift` / "
-                      f"`fix apply-drift`, not `assemble`)", file=sys.stderr)
-                continue
-            print(f"ERROR: {e}", file=sys.stderr)
-            bad = True
-    if bad:
+    parts, notes, errors = load_fragment_paths(frags)
+    for note in notes:
+        print(note, file=sys.stderr)
+    for err in errors:
+        print(f"ERROR: {err}", file=sys.stderr)
+    if errors:
         print("ASSEMBLY FAILED: fix (or re-request) the fragments above; nothing was written.",
               file=sys.stderr)
         return 1
