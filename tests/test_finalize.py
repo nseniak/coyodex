@@ -215,3 +215,38 @@ def test_a_map_with_no_grounding_record_is_not_flagged():
         p = Path(tmp) / "m.json"
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g"}), encoding="utf-8")
         assert _stale_grounding_pin(p, 415) is None
+
+
+# ── the commit message's two other lies ──────────────────────────────────────────────────────────
+
+def test_the_gate_block_states_the_shape_from_the_map_it_hashes():
+    """A live commit claimed "416 backbone edges … 33 flows/sub-flows" for a map holding 365 and 36.
+    Both numbers had been true earlier in the build; `fix dedup-edge` then dropped 49 duplicate
+    occurrences. Hand-copied shape numbers describe whatever the author last looked at."""
+    root, p = make_repo(components=4)
+    report = finalize.build_report(p, root, [])
+    block = finalize.gate_block(report, report.map_sha256)
+    doc = json.loads(p.read_text())
+    assert f"{len(doc['components'])} components" in block
+    assert f"{len(doc['edges'])} edges" in block
+
+
+def test_the_gate_block_states_grounding_from_the_map_not_from_memory():
+    """A live commit said "all 446 L2 claims challenged" beside a gate block reading
+    `challenged 440 of 444`. Both were minutes apart in one build; the durable one was the
+    flattering one."""
+    root, p = make_repo()
+    doc = json.loads(p.read_text())
+    doc["grounding"] = {"claims_total": 444, "claims_challenged": 440, "claims_confirmed": 430,
+                        "claims_refuted": 5, "claims_unverifiable": 5}
+    p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    report = finalize.build_report(p, root, [])
+    block = finalize.gate_block(report, report.map_sha256)
+    assert "440 of 444" in block, block
+
+
+def test_the_gate_block_says_so_when_the_map_carries_no_grounding_record():
+    """Silence would read as "not applicable" rather than "nobody challenged anything"."""
+    root, p = make_repo()
+    report = finalize.build_report(p, root, [])
+    assert "NO RECORD" in finalize.gate_block(report, report.map_sha256)

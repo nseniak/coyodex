@@ -265,6 +265,44 @@ def format_report(r: FinalizeReport) -> str:
     return "\n".join(out)
 
 
+def _shape_line(map_path: Path) -> str | None:
+    """The map's own counts, for the commit message, read from the map the gate block hashes.
+
+    A live commit claimed "416 backbone edges … 33 flows/sub-flows" for a map holding 365 and 36.
+    Neither number was invented: both were true earlier in the build, and `fix dedup-edge` dropped
+    49 duplicate occurrences after they were written down. Hand-copied shape numbers describe
+    whatever state the author last looked at, and the commit message is the artifact a future
+    reader trusts most, so these are generated from the same file the sha is taken over."""
+    try:
+        from coyodex.model import load_model
+        m = load_model(map_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    flows = len(m.flows) + len(m.subflows)
+    return (f"Shape: {len(m.components)} components in {len(m.subsystems)} subsystems, "
+            f"{len(m.entities)} entities in {len(m.subdomains)} subdomains, {len(m.deps)} deps, "
+            f"{len(m.use_cases)} use cases, {len(m.edges)} edges, {flows} flows/sub-flows, "
+            f"{len(m.entry_points)} entry points, {len(m.security)} security rows.")
+
+
+def _grounding_line(map_path: Path) -> str | None:
+    """The map's grounding counts, so the commit cannot quote a friendlier number than the gate.
+
+    A live commit said "all 446 L2 claims challenged" while the gate block it was pasted beside
+    said `challenged 440 of 444`. Both came out of the same build minutes apart; the one a reader
+    sees forever was the flattering one. Emitting it here removes the choice."""
+    try:
+        from coyodex.model import load_model
+        g = load_model(map_path.read_text(encoding="utf-8")).grounding
+    except Exception:
+        return None
+    if g is None:
+        return "Grounding: NO RECORD — nothing in this map says what was challenged."
+    return (f"Grounding (from the map): {g.claims_challenged} of {g.claims_total} claim(s) "
+            f"challenged — {g.claims_confirmed} confirmed, {g.claims_refuted} refuted, "
+            f"{g.claims_unverifiable} unverifiable.")
+
+
 def gate_block(report: FinalizeReport, map_sha: str) -> str:
     """A copy-pasteable gate summary for the COMMIT MESSAGE, generated from the report.
 
@@ -272,7 +310,11 @@ def gate_block(report: FinalizeReport, map_sha: str) -> str:
     pass"), and then wrote `validate … clean (1166 anchors resolved), audit reports no
     self-contradiction, anchor-drift clean` into the commit — three false clauses, with an anchor
     count copied from a validate run 32 minutes earlier. Chat is ephemeral; the commit is
-    the only record a future reader sees. So the durable half must be generated, not remembered."""
+    the only record a future reader sees. So the durable half must be generated, not remembered.
+
+    That covers the VERDICT. The two other things a commit reliably gets wrong are the map's shape
+    and its grounding coverage, for the same reason and with the same fix — see `_shape_line` and
+    `_grounding_line`."""
     lines = [f"Gates: finalize {report.verdict} — {report.blocking_total} blocking, "
              f"{report.advisory_total} advisory (map sha256 {map_sha[:12]}…)."]
     for leg in report.legs:
@@ -285,6 +327,9 @@ def gate_block(report: FinalizeReport, map_sha: str) -> str:
         lines.append("Advisories are NOT a pass. Some name an extras heading and can be recorded; "
                      "the rest name none (tests/test_method_contract.py KNOWN_NO_ESCAPE) and can only "
                      "be fixed or carried. State which of the two you did — neither is 'clean'.")
+    for extra in (_shape_line(Path(report.map_path)), _grounding_line(Path(report.map_path))):
+        if extra:
+            lines.append(extra)
     return "\n".join(lines)
 
 
