@@ -318,3 +318,22 @@ def test_a_key_alone_without_a_why_is_still_refused():
     m = make_map_with_drift_exceptions("- anchor-drift `C42 persists E6`:")
     recorded, malformed = ad.drift_exceptions(m)
     assert recorded == set() and len(malformed) == 1
+
+
+def test_a_why_containing_the_delimiter_does_not_swallow_the_key():
+    """The 2026-08-01 clobber. The key was greedy, so it bound the closing backtick of a code quote
+    inside the WHY (followed by an em dash, an accepted separator) instead of the key's own closing
+    backtick. 90 characters of prose ended up in the key, it matched no finding, and `fix
+    apply-drift` overwrote the security anchor the record existed to defend — while the line parsed
+    cleanly, so the malformed-record diagnostic never fired and three turns went into finding out
+    why. The sibling test above pins what greedy was chosen for: a delimiter INSIDE the key."""
+    claim = ("Auth surface 'Public org info endpoint (/api/orgs/{slug}/public) — the documented "
+             "anti-enumeration exception' is protected by: "
+             "backend/src/mcpolis/entrypoints/routes/org_routes.py:271")
+    why = ('the stored anchor is right. Line 271 is `return {"exists": True, "display_name": '
+           'org.display_name}` — the statement that LIMITS what this deliberately unauthenticated '
+           'endpoint discloses. The skeptics reported line 240, the route decorator.')
+    m = make_map_with_drift_exceptions(f"- anchor-drift `{claim}`: {why}")
+    recorded, malformed = ad.drift_exceptions(m)
+    assert recorded == {claim}, f"the key must stop at its own delimiter, got {recorded}"
+    assert malformed == []

@@ -139,9 +139,25 @@ DRIFT_EXCEPTIONS_HEADING = "Drift exceptions"
 #: `apply_drift_exceptions` early-returns on the empty set, and the "matched no finding" diagnostic
 #: never runs, so the operator watched the row re-fire with nothing said about why. A live build
 #: recorded two exceptions in the exact format the report prints, then had to read this file to find
-#: out they could never work. `.+` is greedy on purpose: it binds the LAST delimiter that a
-#: `: <why>` follows, so a key containing the delimiter character itself still parses.
-_DRIFT_RECORD = re.compile(r"^\s*(?:[-*]\s+)?\**\s*anchor-drift\s+([`'\"])(.+)\1\s*[:—-]\s*\S")
+#: out they could never work.
+#:
+#: The key is LAZY. It was greedy, reasoned as "binds the LAST delimiter that a `: <why>` follows, so
+#: a key containing the delimiter still parses" — and that reasoning is what broke it, because a WHY
+#: may contain the delimiter too. A live record read:
+#:
+#:   anchor-drift `Auth surface '…/public' is protected by: org_routes.py:271`: the stored anchor is
+#:   right. Line 271 is `return {"exists": True, …}` — the statement that LIMITS what it discloses…
+#:
+#: Greedy bound the closing backtick of the code quote in the WHY (followed by ` — `, an accepted
+#: separator), so the key swallowed 90 characters of prose, matched no finding, and `fix apply-drift`
+#: then overwrote the very anchor the record existed to defend. The line PARSED, so the malformed
+#: diagnostic stayed silent and three turns went into finding out why.
+#:
+#: Lazy takes the first delimiter followed by `: <why>`, which is the record's own shape. A key
+#: containing the delimiter still parses — lazy backtracks FORWARD until the rest of the pattern
+#: matches — so nothing the greedy form bought is lost. Verified against all seven records of a live
+#: map (identical keys) and against the failing line above (only lazy recovers the true key).
+_DRIFT_RECORD = re.compile(r"^\s*(?:[-*]\s+)?\**\s*anchor-drift\s+([`'\"])(.+?)\1\s*[:—-]\s*\S")
 
 #: A line that opens like a record but does not parse. Reported, never skipped: a silently-dropped
 #: exception is indistinguishable from one that matched nothing, which is how the bug above hid.
