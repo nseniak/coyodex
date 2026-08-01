@@ -85,8 +85,11 @@ def live_claims_digest(claims: "Iterable[str]") -> str:
     because `build_record` de-duplicates the pinned side, and two sides counted by different rules
     is how a check ends up measuring the rule instead of the map."""
     import hashlib
-    joined = "\n".join(sorted(set(claims)))
-    return hashlib.sha256(joined.encode("utf-8")).hexdigest()
+    # JSON-encoded, not newline-joined: a separator that can appear inside a claim makes the digest
+    # ambiguous, and `["a\nb"]` hashed identically to `["a", "b"]`. No claim carries a newline
+    # today, which is exactly why this is worth removing now rather than after one does.
+    payload = json.dumps(sorted(set(claims)), ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def build_record(worklist_claims: list[str], grounding_rows: list[dict],

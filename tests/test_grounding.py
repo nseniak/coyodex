@@ -195,3 +195,11 @@ def test_the_pinned_split_is_never_recomputed_against_the_live_map():
     rec, _ = build_record(pinned, rows, live_claims=["kept", "the rewritten form"])
     assert rec["claims_refuted"] == 1, "the refutation must survive the live comparison"
     assert rec["claims_superseded"] == 1
+
+
+def test_the_digest_is_not_ambiguous_about_where_a_claim_ends():
+    """A separator that can appear inside a claim makes the digest ambiguous: newline-joined,
+    `["a\\nb"]` hashed identically to `["a", "b"]`. No claim carries a newline today, which is why
+    it was worth removing before one does."""
+    from coyodex.grounding import live_claims_digest
+    assert live_claims_digest(["a\nb"]) != live_claims_digest(["a", "b"])
