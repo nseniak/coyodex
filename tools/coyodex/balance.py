@@ -107,14 +107,24 @@ def _report(m: ProjectModel) -> str:
     hi_ideal = math.log(n) / math.log(3) if n > 1 else 0.0
     rows = _fanout_rows(m)
     flagged = [r for r in rows if r[3] not in ("ok", "empty") and not r[3].startswith("exempt")]
-    in_band = sum(1 for r in rows if balance_lib.FANOUT_LO <= r[2] <= balance_lib.FANOUT_SOFT_HI
-                  or r[3].startswith("exempt"))
+    # One definition, shared with the eval profile's `fanout_in_band_pct` — see `fanout_band`.
+    in_band, in_band_total = balance_lib.fanout_band(m)
+    # The band is a MEASUREMENT; `flagged` is the POLICY, and they legitimately differ: SPARSE is an
+    # anti-pattern at the ROOT only, so a thin non-root diagram is out of band and still not a
+    # finding. Naming those rows is what stops "14/15" reading as a contradiction of the verdict
+    # line "No balance findings — every diagram reads at target density", which is what a live
+    # report printed six lines below it.
+    thin = [r for r in rows if r[2] < balance_lib.FANOUT_LO and r[0] != "root"
+            and not r[3].startswith("exempt")]
 
     out: list[str] = []
     out.append(f"Balance report — {n} components, {len(m.subsystems)} subsystems, "
                f"grouping depth {depth} (ideal ≈ {lo_ideal:.1f}–{hi_ideal:.1f} levels at "
                f"fan-out 3–6)")
-    out.append(f"  diagrams in the 3–9 band (incl. exemptions): {in_band}/{len(rows)}")
+    out.append(f"  diagrams in the 3–9 band (incl. exemptions): {in_band}/{in_band_total}")
+    if thin:
+        out.append(f"  {len(thin)} below the band and NOT a finding (sparse counts only at the "
+                   f"root): {', '.join(r[0] for r in thin)}")
     out.append("")
     out.append("Per-diagram fan-out (target 5±2):")
     for sid, name, fan, flag in rows:
@@ -150,7 +160,15 @@ def _report(m: ProjectModel) -> str:
             next_id = _proposal_blocks(m, d, out, next_id)
     if not flagged:
         out.append("")
-        out.append("No balance findings — every diagram reads at target density.")
+        if thin:
+            # The old wording claimed EVERY diagram was at target density while the headline said
+            # otherwise. Say what is actually true: nothing is worth acting on, and here is the gap.
+            out.append(f"No balance findings — nothing here is worth acting on. "
+                       f"({in_band}/{in_band_total} diagrams sit inside the band; the "
+                       f"{len(thin)} below it {'is' if len(thin) == 1 else 'are'} non-root, "
+                       f"where sparse raises no finding.)")
+        else:
+            out.append("No balance findings — every diagram reads at target density.")
     return "\n".join(out)
 
 

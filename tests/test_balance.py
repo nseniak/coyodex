@@ -400,3 +400,34 @@ def _run_all() -> None:
 
 if __name__ == "__main__":
     _run_all()
+
+
+# ── the retro finding: the headline and the verdict contradicted each other ───────────────────────
+
+def test_the_band_headline_and_the_verdict_cannot_contradict_each_other():
+    """A live report printed "diagrams in the 3–9 band: 14/15" six lines above "No balance findings
+    — every diagram reads at target density." Both were true under their own rule: the band is a
+    MEASUREMENT and the findings list is a POLICY that only treats sparse as an anti-pattern at the
+    root. The reader had no way to see that, so the report now names the gap."""
+    from coyodex import balance
+    m = make_grouped_model({"S1": 5, "S2": 5, "S3": 2})   # S3 is thin, non-root → no finding
+    text = balance._report(m)
+    assert "No balance findings" in text
+    assert "every diagram reads at target density" not in text, (
+        "that claim is false while a diagram sits below the band")
+    assert "S3" in text and "NOT a finding" in text
+    assert "sparse counts only at the root" in text
+
+
+def test_the_report_and_the_eval_metric_share_one_band_definition():
+    """They were computed twice and had drifted in two ways — the exempt test AND the denominator
+    (the report counted childless subsystems, the profile skipped them). A shared boolean would
+    have fixed only the first, so `fanout_band` returns the whole fraction."""
+    from coyodex import balance
+    from coyodex.balance_lib import fanout_band, fanout_summary
+    m = make_grouped_model({"S1": 5, "S2": 5, "S3": 2})
+    m.subsystems.append(Group(id="S9", name="empty on purpose"))
+    in_band, total = fanout_band(m)
+    assert f"{in_band}/{total}" in balance._report(m)
+    _root, _mx, pct, _d = fanout_summary(m)
+    assert pct == round(in_band / total, 3), "one number, or the two reports disagree again"

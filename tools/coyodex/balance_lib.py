@@ -541,24 +541,52 @@ def propose_split(m: ProjectModel, sid: str | None) -> list[Proposal]:
     return proposals
 
 
-def fanout_summary(m: ProjectModel) -> tuple[int | None, int | None, float | None, int]:
-    """(root_fanout, max_fanout, in_band_pct, nesting_depth) over the S-forest diagrams — the
-    eval profile's report-only balance fields. A diagram is in-band when its fan-out sits in
-    [FANOUT_LO, FANOUT_SOFT_HI] or it is an exempt homogeneous family (≤ FANOUT_HOMOG_HI)."""
+def fanout_band(m: ProjectModel) -> tuple[int, int]:
+    """(in_band, total) over the S-forest diagrams — the ONE definition of "reads at target density".
+
+    This was written twice: once for the `coyodex balance` headline and once for the eval profile's
+    `fanout_in_band_pct`. Both documented the same rule in prose ("diagrams in the 3–9 band,
+    exemptions included") over two different computations, and the two had already drifted in TWO
+    ways — which is why the whole measurement lives here and not just a membership predicate:
+
+      * the EXEMPT test — the report keyed off its own display flag, which is never `exempt` below
+        `FANOUT_SOFT_HI`, while the profile counted any homogeneous family at `≤ FANOUT_HOMOG_HI`.
+        A 2-child homogeneous subsystem was therefore in-band for one and out for the other.
+      * the DENOMINATOR — the report counts one row per subsystem INCLUDING childless ones; the
+        profile skipped them. On any map with an empty subsystem the two fractions differ for no
+        reason a reader could see.
+
+    A shared boolean would have fixed the first and left the second, so the fraction could still
+    disagree. Returning both halves is what makes them one number.
+
+    This is a MEASUREMENT, not a policy. What is worth flagging to a human is a separate decision
+    (`balance`'s findings list), and deliberately narrower: SPARSE is an anti-pattern at the root
+    only, so a thin non-root diagram is counted out-of-band here and still raises no finding. The
+    report must say which of the two it is printing; a live report put "14/15" directly above
+    "No balance findings — every diagram reads at target density."
+    """
     if not m.components and not m.subsystems:
-        return None, None, None, 0
+        return 0, 0
     children = subsystem_children(m)
-    fans: list[tuple[list[str], int]] = []
-    for sid in (None, *(s.id for s in m.subsystems)):
-        kids = children.get(sid, [])
-        if kids or sid is None:
-            fans.append((kids, len(kids)))
+    fans = [(children.get(sid, []), len(children.get(sid, [])))
+            for sid in (None, *(s.id for s in m.subsystems))]
     in_band = sum(1 for kids, n in fans
                   if FANOUT_LO <= n <= FANOUT_SOFT_HI
                   or (n <= FANOUT_HOMOG_HI and is_homogeneous(m, kids)))
+    return in_band, len(fans)
+
+
+def fanout_summary(m: ProjectModel) -> tuple[int | None, int | None, float | None, int]:
+    """(root_fanout, max_fanout, in_band_pct, nesting_depth) over the S-forest diagrams — the
+    eval profile's report-only balance fields. In-band is `fanout_band`, shared with the report."""
+    if not m.components and not m.subsystems:
+        return None, None, None, 0
+    children = subsystem_children(m)
+    in_band, total = fanout_band(m)
+    fans = [len(children.get(sid, [])) for sid in (None, *(s.id for s in m.subsystems))]
     return (len(children.get(None, [])),
-            max(n for _, n in fans),
-            round(in_band / len(fans), 3),
+            max(fans),
+            round(in_band / total, 3) if total else None,
             nesting_depth(m))
 
 
