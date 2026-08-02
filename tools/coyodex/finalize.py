@@ -180,8 +180,22 @@ def _recomputed_delta(g: dict, live: set[str], verdicts: list[Path]) -> str | No
     # because `grounding write` rejects a worklist with unvoted claims. A false accusation plus a
     # dead-end fix is worse than the gap this closes, so it stands down unless the counts line up.
     total = g.get("claims_total")
-    if not isinstance(total, int) or len(pinned) != total:
+    if not isinstance(total, int):
         return None
+    if len(pinned) < total:
+        # FEWER verdicts than the record was pinned to: the operator handed `finalize` a partial
+        # set, which is legitimate and common, and recomputing against it accuses an honest record.
+        return None
+    if len(pinned) > total:
+        # MORE verdicts than the record claims were pinned. That cannot be a partial set — it is the
+        # record understating its own worklist, and staying silent here is what made the first cut of
+        # this guard bypassable: fabricating the deltas AND lowering `claims_total` escaped the check
+        # entirely, so a MORE wrong record was safer than a less wrong one.
+        return (f"grounding: the record says {total} claim(s) were pinned, but the verdict files "
+                f"carry {len(pinned)} distinct claim(s). A verdict exists for a claim the record "
+                f"does not count, so `claims_total` understates the pinned worklist and every "
+                f"number derived from it is suspect. Re-run `coyodex grounding write` against the "
+                f"worklist the skeptics were actually given.")
     want_superseded, want_added = len(pinned - live), len(live - pinned)
     got_superseded = g.get("claims_superseded", 0)
     got_added = g.get("claims_added_since", 0)

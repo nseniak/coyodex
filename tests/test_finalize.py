@@ -346,3 +346,34 @@ def test_honest_delta_counts_pass_the_recomputation():
         p = make_grounding_map(tmp, live, claims_superseded=1, claims_added_since=1)
         v = make_verdicts_file(tmp, ["kept", "reconciled-away"])
         assert _stale_grounding_pin(p, live, [v]) is None
+
+
+def test_lowering_claims_total_cannot_buy_silence():
+    """The first cut of the partial-verdict guard was bypassable in the wrong direction: it stood
+    down whenever the verdict count differed from `claims_total`, so fabricating the deltas AND
+    lowering the total escaped the check entirely — a MORE wrong record was safer than a less wrong
+    one. Fewer verdicts than the record pinned is a partial set and stays silent; MORE cannot be."""
+    from coyodex.finalize import _stale_grounding_pin
+    with tempfile.TemporaryDirectory() as tmp:
+        live = ["kept", "added-since"]
+        pinned = ["kept", "reconciled-away"]
+        v = make_verdicts_file(tmp, pinned)
+        honest = make_grounding_map(tmp, live, claims_total=2,
+                                    claims_superseded=1, claims_added_since=1)
+        assert _stale_grounding_pin(honest, live, [v]) is None
+        cheat = make_grounding_map(tmp, live, claims_total=1,
+                                   claims_superseded=0, claims_added_since=0)
+        msg = _stale_grounding_pin(cheat, live, [v])
+        assert msg and "understates the pinned worklist" in msg, msg
+
+
+def test_a_partial_verdict_set_still_stays_silent():
+    """The honest case the guard exists for: `finalize` handed fewer files than the record was
+    written against must not accuse it."""
+    from coyodex.finalize import _stale_grounding_pin
+    with tempfile.TemporaryDirectory() as tmp:
+        live = ["kept", "added-since"]
+        v = make_verdicts_file(tmp, ["kept"])          # 1 of the 2 pinned claims
+        rec = make_grounding_map(tmp, live, claims_total=2,
+                                 claims_superseded=1, claims_added_since=1)
+        assert _stale_grounding_pin(rec, live, [v]) is None
