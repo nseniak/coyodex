@@ -45,7 +45,14 @@ PROJECTS = Path.home() / ".claude" / "projects"
 class Build:
     """One transcript in the corpus."""
 
-    era: str          # "post" (after the method changes) | "base" (the night before)
+    #: WHICH RUN this transcript came from, not which side of a boundary it sits on. The field was
+    #: called `era` and documented as holding one of two values — `"base"` (the night before the
+    #: 2026-07 method changes) and `"post"` (after them). That framing was true while the corpus was
+    #: a before/after pair and stopped being true the moment a third date landed: the 2026-08-02
+    #: build is neither, it is simply later. A corpus that grows by one build per retrospective
+    #: wants a run identifier, so dated values (`"0802"`) are the norm from here and the two
+    #: original names are kept for what they are — the labels that pair of runs already carries.
+    run: str
     repo: str
     relative: str
 
@@ -55,7 +62,7 @@ class Build:
 
     @property
     def label(self) -> str:
-        return f"{self.era}/{self.repo}"
+        return f"{self.run}/{self.repo}"
 
 
 CORPUS: tuple[Build, ...] = (
@@ -104,7 +111,8 @@ def observed_of(cards: dict[str, Scorecard], label: str, aid: int) -> tuple[int,
     return a.observed, a.of
 
 
-def era(cards: dict[str, Scorecard], name: str) -> list[Scorecard]:
+def run(cards: dict[str, Scorecard], name: str) -> list[Scorecard]:
+    """Every scorecard from one RUN of the corpus, by its label prefix."""
     return [c for label, c in cards.items() if label.startswith(name + "/")]
 
 
@@ -135,9 +143,9 @@ def test_the_preindex_read_command_was_adopted_after_the_method_change():
     if _skip():
         return
     cards = make_cards()
-    for c in era(cards, "post"):
+    for c in run(cards, "post"):
         assert c.by_id()[1].observed >= 1, f"{c.label}: no `preindex --report`"
-    for c in era(cards, "base"):
+    for c in run(cards, "base"):
         assert c.by_id()[1].observed == 0, f"{c.label}: baseline should predate the read command"
 
 
@@ -147,10 +155,10 @@ def test_hand_parsing_the_preindex_stopped_after_the_method_change():
     if _skip():
         return
     cards = make_cards()
-    for c in era(cards, "post"):
+    for c in run(cards, "post"):
         a = c.by_id()[2]
         assert a.observed == a.of, f"{c.label}: {a.of - a.observed} hand-parse(s) remain"
-    for c in era(cards, "base"):
+    for c in run(cards, "base"):
         a = c.by_id()[2]
         assert a.of > 0 and a.observed == 0, f"{c.label}: baseline should be all hand-parses"
 
@@ -188,9 +196,9 @@ def test_grounding_was_recorded_after_the_change_and_never_before():
     if _skip():
         return
     cards = make_cards()
-    for c in era(cards, "post"):
+    for c in run(cards, "post"):
         assert c.by_id()[6].observed >= 1, f"{c.label}: no grounding record"
-    for c in era(cards, "base"):
+    for c in run(cards, "base"):
         assert c.by_id()[6].observed == 0, f"{c.label}: baseline recorded grounding unexpectedly"
 
 
@@ -204,9 +212,9 @@ def test_the_shape_only_anchor_drift_pass_was_reached_by_three_of_four_post_buil
     if _skip():
         return
     cards = make_cards()
-    reached = [c.label for c in era(cards, "post") if c.by_id()[4].observed >= 1]
+    reached = [c.label for c in run(cards, "post") if c.by_id()[4].observed >= 1]
     assert len(reached) == 3, f"expected three post-change builds, got {reached}"
-    assert all(c.by_id()[4].observed == 0 for c in era(cards, "base"))
+    assert all(c.by_id()[4].observed == 0 for c in run(cards, "base"))
 
 
 def test_fan_outs_are_batched_in_seven_of_eight_builds():

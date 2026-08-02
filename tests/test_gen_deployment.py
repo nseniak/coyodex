@@ -737,3 +737,75 @@ def test_inheritance_is_not_process_topology():
     m.edges = [Edge(src="C1", verb="calls", dst="C2", why="w", where="p/a.py:9")]
     g = model_to_graph(m)
     assert G._call_process_links(g, uid_of, set(uid_of)) != {}
+
+
+# --- units that never run at the same time (2026-08-02) --------------------------
+
+def make_exclusive_shapes_model() -> ProjectModel:
+    """One monolith deployed three ways, plus a genuinely separate process.
+
+    `backend` (cloud + dev), `standalone` (standalone) and `e2e shard` (test) are three SHAPES of
+    the same code — you run one or the other. `web` shares the dev environment with `backend`, so
+    traffic between those two is real."""
+    m = ProjectModel(title="Shapes", goal="g")
+    m.components = [
+        Component(id="C1", name="Api", source="a.py:1",
+                  runs_in=["backend", "standalone", "e2e shard"]),
+        Component(id="C2", name="Events", source="b.py:1",
+                  runs_in=["backend", "standalone", "e2e shard"]),
+        Component(id="C3", name="Web", source="w.tsx:1", runs_in=["web"]),
+    ]
+    m.edges = [Edge(src="C3", verb="calls", dst="C1", why="the dashboard's REST calls",
+                    where="w.tsx:20")]
+    m.messaging = [MessagingRow(name="org events", kind="pubsub", publishers=["C1"],
+                                consumers=["C2"], source="b.py:9")]
+    m.deployment = [
+        DeploymentRow(unit="backend", variants=[VariantTag(env="cloud", source="compose.yml:1"),
+                                                VariantTag(env="dev", source="start.sh:2")]),
+        DeploymentRow(unit="standalone", variants=[VariantTag(env="standalone",
+                                                              source="compose.yml:9")]),
+        DeploymentRow(unit="e2e shard", variants=[VariantTag(env="test", source="run.py:3")]),
+        DeploymentRow(unit="web", variants=[VariantTag(env="dev", source="start.sh:8")]),
+    ]
+    m.environments = ["dev", "standalone", "cloud", "test"]
+    return m
+
+
+def _names(m: ProjectModel, fn) -> set[tuple[str, str]]:
+    g = model_to_graph(m)
+    ids = G._deployment_unit_ids(g)
+    uid_of = {unit: uid for uid, unit in ids}
+    name_of = {uid: unit for uid, unit in ids}
+    return {(name_of[a], name_of[b])
+            for (a, b) in fn(g, uid_of, G._process_unit_names(g))}
+
+
+def test_no_channel_arrow_between_units_that_never_run_together():
+    """A broker decouples publisher from consumer, so the async half deliberately does NOT subtract
+    co-resident hosts — but decoupling only reaches processes that are UP at the same time. On a
+    live map one Redis pub/sub channel produced SIX arrows between `backend`, `standalone` and
+    `e2e backend shard`: three deployment shapes of one monolith, never co-active."""
+    pairs = _names(make_exclusive_shapes_model(), G._channel_process_links)
+    assert pairs == set(), pairs
+
+
+def test_a_call_across_units_that_share_an_environment_survives():
+    """The guard must not erase real traffic: `web` and `backend` both run in dev."""
+    pairs = _names(make_exclusive_shapes_model(), G._call_process_links)
+    assert ("web", "backend") in pairs, pairs
+
+
+def test_an_untagged_unit_is_ungated_and_still_pairs_with_everything():
+    """`variants` empty means the unit appears in EVERY environment — the field's own documented
+    meaning — so a map with no variant axis behaves exactly as it did before this check existed."""
+    m = make_exclusive_shapes_model()
+    m.deployment = [DeploymentRow(unit=r.unit) for r in m.deployment]
+    pairs = _names(m, G._channel_process_links)
+    assert len(pairs) == 6, pairs
+
+
+def test_can_coexist_is_symmetric_and_open_on_an_untagged_side():
+    envs = {"a": frozenset({"cloud"}), "b": frozenset({"test"}), "c": frozenset()}
+    assert not G._can_coexist(envs, "a", "b") and not G._can_coexist(envs, "b", "a")
+    assert G._can_coexist(envs, "a", "c") and G._can_coexist(envs, "c", "a")
+    assert G._can_coexist(envs, "a", "a")

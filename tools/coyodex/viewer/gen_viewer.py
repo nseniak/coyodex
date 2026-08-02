@@ -1686,6 +1686,37 @@ def _deployment_edges(graph: GraphDict, uid_of: dict[str, str]
     return runs, infra, boxes_by_uid
 
 
+def _unit_environments(graph: GraphDict) -> dict[str, frozenset[str]]:
+    """`{unit: the environment(s) it belongs to}`, from each deployment row's `variants`.
+
+    An EMPTY set means UNGATED — the row's own documented meaning: the unit appears in every
+    environment (shared infra, or a map with no variant axis at all)."""
+    out: dict[str, frozenset[str]] = {}
+    for row in graph["deployment"]:
+        unit = str(row.get("unit", ""))
+        variants = row.get("variants")
+        out[unit] = frozenset(
+            str(v.get("env", "")) for v in (variants if isinstance(variants, list) else [])
+            if isinstance(v, dict) and v.get("env"))
+    return out
+
+
+def _can_coexist(envs: dict[str, frozenset[str]], a: str, b: str) -> bool:
+    """Whether two units can be RUNNING AT THE SAME TIME — i.e. share at least one environment.
+
+    Two units that never coexist cannot talk to each other, so an arrow between them is false
+    however the derivation reached it. On a live map `backend` (cloud, dev), `standalone`
+    (standalone) and `e2e backend shard` (test) are three deployment SHAPES of one monolith: you run
+    one or the other. Every backend component listed all three in `runs_in`, so ONE Redis pub/sub
+    channel produced SIX process→process arrows between processes that are never up together.
+
+    The data was already in the map and grounded in real manifest lines (`docker-compose.yml:117`,
+    `:96`, the e2e orchestrator) — the views simply were not reading it. An untagged unit is
+    ungated and pairs with everything, so a map with no variant axis behaves exactly as before."""
+    ea, eb = envs.get(a, frozenset()), envs.get(b, frozenset())
+    return not ea or not eb or bool(ea & eb)
+
+
 def _channel_units(graph: GraphDict, ch: dict[str, object], key: str, hosted: set[str]) -> set[str]:
     """The PROCESS units at one end of an async channel: each component id under `key`
     (`publishers`/`consumers`) resolved through its `runs_in`, keeping only units that actually host
@@ -1719,6 +1750,7 @@ def _channel_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set
     # — `serve` renders without validating). Such a unit has no id and no box, so drop it HERE rather
     # than letting the id lookup below fail: one bad name must not 500 the whole map.
     known = {u for u in hosted if u in uid_of}
+    envs = _unit_environments(graph)
     for ch in graph["messaging"]:
         pubs, cons = _channel_units(graph, ch, "publishers", known), _channel_units(graph, ch, "consumers", known)
         if not pubs or not cons:
@@ -1729,7 +1761,11 @@ def _channel_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set
                "source": str(ch.get("source") or "")}
         for p in sorted(pubs):
             for c in sorted(cons):
-                if p != c:
+                # `p != c` drops the self-loop; `_can_coexist` drops the pair that is two shapes of
+                # the same process. A broker really does decouple publisher from consumer — which is
+                # why this half deliberately does NOT subtract shared hosts the way the call half
+                # does — but decoupling only reaches processes that are up at the same time.
+                if p != c and _can_coexist(envs, p, c):
                     out.setdefault((uid_of[p], uid_of[c]), []).append(row)
     return out
 
@@ -1763,6 +1799,7 @@ def _call_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set[st
     self-pair."""
     out: dict[tuple[str, str], list[dict[str, str]]] = {}
     known = {u for u in hosted if u in uid_of}
+    envs = _unit_environments(graph)
     for e in graph["edges"]:
         sid, did = str(e["src"]), str(e["dst"])
         sn, dn = graph["nodes"].get(sid), graph["nodes"].get(did)
@@ -1786,7 +1823,10 @@ def _call_process_links(graph: GraphDict, uid_of: dict[str, str], hosted: set[st
                "where": str(e.get("where") or "")}
         for a in sorted(crossing_from):
             for b in sorted(dst_units):
-                if a != b:
+                # Same guard as the async half: a call cannot cross into a process that is never up
+                # at the same time. Subtracting co-resident hosts is not enough on its own, because
+                # two deployment SHAPES of one monolith are not co-resident — they are alternatives.
+                if a != b and _can_coexist(envs, a, b):
                     out.setdefault((uid_of[a], uid_of[b]), []).append(row)
     return out
 

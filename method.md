@@ -382,7 +382,17 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     object **`{env, source}`**: `env` names the environment, and `source` is a bare `path:line` anchor to
     the manifest line that places the unit there. Keep the unit name the process identity (`backend`),
     not the env (`backend (cloud/prod)`) — the env lives in `variants`. A component's environment is
-    **derived** from the variants of the units it `runs_in`. Two grounding rules keep the tags honest
+    **derived** from the variants of the units it `runs_in`.
+    **The tags GATE the Deployment view's process→process arrows**, so leaving them off is not
+    free: two units that share no environment can never be running at the same time, and an arrow
+    between them is false however the derivation reached it. A live map tagged `backend`
+    (cloud + dev), `standalone` (standalone) and `e2e backend shard` (test) correctly, but every
+    backend component listed all three in `runs_in` — so ONE Redis pub/sub channel produced SIX
+    arrows between three deployment shapes of the same monolith. The tags were already there and
+    already anchored; the view simply was not reading them. An untagged unit stays ungated and pairs
+    with everything, which is the right default for a map with no variant axis and the wrong one for
+    a map that has one and skipped it.
+    Two grounding rules keep the tags honest
     (both from a real mis-tag — a Vite dev server tagged into `standalone` + `cloud` where it does not
     run):
     1. **Ground each `variants` tag in the explicit profile axis; cite it, never invent one.** The
