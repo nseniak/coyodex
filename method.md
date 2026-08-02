@@ -1412,6 +1412,11 @@ git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is c
   Re-run the check after each round; only continue when the code is committed (A), the user
   explicitly chose B, **or** the auto-B trivial-diff rule above applied.
 
+  **Asked once, not twice.** [dispatch](method/dispatch.md) Step 0 puts this same A/B question to the
+  user BEFORE the build starts, off the `coyodex scope` briefing. If it was answered there, honour
+  that answer and record the pin — re-asking at the end, after the user already decided and waited
+  out a whole build, is the annoyance this gate is supposed to prevent.
+
 Write the pin into the model's **`commit`** / **`committed`** / **`built`** fields (sha · commit
 date · build time — the header fragment carries them; the generated views render them as the map's
 header line). For **Built**, capture the minute once —

@@ -9,18 +9,47 @@ The clone's `internal/` folder is design rationale, not the method — ignore it
 under the coyodex clone (`COYODEX_HOME` from the skill), **not** the repo you are mapping (your cwd).
 Read/run them with that absolute prefix. Only `.coyodex/...` paths are in the analyzed repo.
 
-## Step 0 — did the user name a mode?
+## Step 0 — brief the user BEFORE doing anything else
+
+The first thing the user sees must be what coyodex is about to read, and what the map will claim
+about the code. Run this immediately — before choosing a mode, before reading the repo:
+
+```
+.venv/bin/coyodex scope --repo <repo>
+```
+
+**Show its output verbatim.** Do not summarise, re-word or "the highlights are" it. It names the
+file set the entire map is measured against, and a paraphrase is exactly where "everything under
+`fixtures/` is out of scope" becomes silence — after which the map reads complete because the
+evidence of what it skipped never reached the person reading it.
+
+Then act on what it says about the pin:
+
+- **Uncommitted code, and the mode is Build (or a rebuild)** → ask before starting the work. This is
+  the same A/B choice `method.md`'s pin gate asks, moved from the END of the build to the front,
+  where changing your mind is free (a build once lost ~2 hours blocked on it after the fact):
+  - **A (recommended)** — commit or stash the code first; re-run `coyodex scope` and continue.
+  - **B** — continue as is. The pin is recorded `<sha>-dirty`, meaning "this map describes code that
+    is not in any commit".
+
+  Carry the answer forward: the pin gate in `method.md` **must not ask again**.
+- **Uncommitted code, and the mode is Analyze** → say so and continue, do NOT ask. Analysis is
+  designed to run on a dirty tree; that is the normal case, not a problem.
+- **No uncommitted code**, or **no git repo at all** → nothing to ask. The briefing already said what
+  that means.
+
+## Step 1 — did the user name a mode?
 
 If the invocation explicitly names a mode — **`build`**, **`analyze`**, or **`accept`** (the verbs
 the README teaches, e.g. `/coyodex analyze`) — do that mode directly: Build → `method.md`, Analyze /
-Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall through to Step 1.)
+Accept → `method/change-impact.md`. (Bare `/coyodex` names nothing, so fall through to Step 2.)
 
 A **plain-language request to change the map itself** ("move component X into subsystem Y", "rename
 this subsystem", "split this component", "add a use case for…") is also a recognized input, even
-without a verb — it is a **Direct map change** (Step 1, "Baseline exists", item 3), not Analyze. Do
+without a verb — it is a **Direct map change** (Step 2, "Baseline exists", item 3), not Analyze. Do
 not treat such a request as "nothing to analyze / baseline up to date".
 
-## Step 1 — is there already a baseline?
+## Step 2 — is there already a baseline?
 
 Look **only at the working tree** of the analyzed repo for `.coyodex/project-map.json`. If the file
 is not on disk, **there is no baseline — even if git history still has a committed copy.** A deleted

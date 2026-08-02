@@ -27,9 +27,10 @@ and then you find there's nothing under your feet. This is the Coyote Effect.
 
 coyodex helps you recover from this situation and oversee your agent's work moving forward.
 
-## Why not just generate mermaid diagrams from the code?
+## Why not just ask my agent to diagram the code?
 
-You could ask an agent to draw a mermaid diagram of your code. coyodex differs in three ways:
+Sure, you can ask your agent to analyze the code and draw mermaid diagrams. But coyodex differs in
+three ways:
 
 1. **Grounded, explorable map.** Every box is anchored to a real `file:line`, and explorable through
    an interactive UI: drillable top-down, from high level components to code locations, and back.
@@ -82,40 +83,6 @@ make start
 
 It serves a landing page at `http://127.0.0.1:8765/`. Every project you map shows up there as a card;
 click it to open the map. Leave the server running.
-
-### Leaving code out of the map
-
-Some committed code isn't part of what the map should describe — a vendored copy, generated output
-your build checks in, a fixture tree. Since it *is* committed, `.gitignore` can't say that. List it
-in `.coyodex/.ignore` instead:
-
-A `#` starts a comment only at the beginning of a line, so each comment goes on its own line —
-`pattern  # why` is read as one long pattern and matches nothing:
-
-```
-# .coyodex/.ignore — one pattern per line, gitignore-style
-# a plain name covers everything under it
-fixtures/broken_repo/
-# * stays inside one folder level, ** goes deeper
-generated/**
-# ! puts something back; the last matching line wins
-!generated/hand_written.py
-```
-
-Anything listed here is left out of the map's sizing and out of its coverage checks.
-
-Three things to know:
-
-- **It's not the same as mapping something coarsely.** If a folder is a real part of your product and
-  you just want it drawn as one box, that's a different setting the map records for you — don't put it
-  here. This file is for code the map isn't meant to describe at all.
-- **Some folders are already left out.** coyodex never walks `node_modules/`, `vendor/`,
-  `third_party/`, `dist/`, `build/`, `target/`, `.venv/` and friends, so naming one of those here does
-  nothing. If you do, coyodex says so (see the next point) rather than letting you believe it worked.
-- **coyodex tells you it's on.** Every time it measures your code it reports how many files this file
-  removed, pattern by pattern, and it flags a pattern that removed nothing. That's deliberate: the
-  checks that find gaps can't see inside what you exclude, so excluding too much would quietly make
-  the map look more complete than it is.
 
 ### Analyzing changes
 
@@ -182,7 +149,33 @@ Two things to know:
 - **A rebuild is a fresh start.** If you later rebuild the map from scratch (which you have to ask for
   explicitly), your manual tweaks aren't re-applied. Day to day you analyze and accept, which keeps them.
 
+## Which files are analyzed
 
+coyodex takes every file in your project, except two sets: what your `.gitignore` excludes, and what
+`.coyodex/.ignore` excludes. git decides the first one, so all the usual rules hold, including a
+`.gitignore` inside a subfolder.
+
+`.coyodex/.ignore` is for the other case: code that *is* committed, but that you don't want on the
+map — a vendored copy, checked-in build output, a fixture tree. One path per line, from the repo
+root, `*`/`**` wildcards, `!` to put something back:
+
+```
+fixtures/broken_repo/
+generated/**
+!generated/hand_written.py
+```
+
+Every run starts by telling you exactly what this came to: how many files will be analyzed, and what
+each ignore pattern removed.
+
+Two things to know:
+
+- **It's not the same as mapping something coarsely.** If a folder is a real part of your product and
+  you just want it drawn as one box, that's a different setting the map records for you — don't put it
+  here. This file is for code the map isn't meant to describe at all.
+- **coyodex tells you it's on.** Every time it measures your code it reports how many files this file
+  removed, pattern by pattern, and it flags a pattern that removed nothing — because excluding too
+  much would quietly make the map look more complete than it is.
 
 ## Status
 

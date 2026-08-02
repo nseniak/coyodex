@@ -156,7 +156,7 @@ def _excluded(rel: Path) -> bool:
 class WalkResult:
     files: list[Path]            # absolute paths of counted source files
     root: Path
-    used_git: bool               # True if the tracked-file set came from `git ls-files`
+    used_git: bool               # True if the file set came from git (`_git_rels`) rather than a walk
     skipped_excluded: int        # files dropped by the exclude rules
     # `.coyodex/.ignore` — counted SEPARATELY from the built-in excludes on purpose. The built-ins
     # are conventions nobody chose; these are a repo's own declaration, and the one input that can
@@ -170,27 +170,58 @@ class WalkResult:
     ignore_hits: tuple[int, ...] = ()
 
 
+def _git_rels(root: Path) -> list[Path] | None:
+    """Repo-relative paths git accounts for, or None when ``root`` is not a usable git repo.
+
+    TRACKED **plus** UNTRACKED-not-ignored — the same two questions `impact_git.diff_changes`
+    asks for a WORKTREE target, so building a map and analysing a change see one file set. Tracked
+    alone was the older rule and it silently dropped a file the author had created but never
+    `git add`-ed: invisible to the sizing and to the coverage checks (whose whole job is finding
+    unmapped code), yet visible to `analyze` as an addition. Ignoring is left entirely to git via
+    `--exclude-standard`, so every form of it holds — nested `.gitignore`, negations, the user's
+    global excludes file, `.git/info/exclude` — with no second implementation to drift from it.
+
+    Index entries are filtered to paths that EXIST: a file deleted from the working tree without
+    the delete being staged is still listed by `ls-files`, and every caller here goes on to read
+    the file.
+    """
+    def ls(*args: str) -> list[str] | None:
+        try:
+            out = subprocess.run(
+                ["git", "-C", str(root), "ls-files", "-z", *args],
+                capture_output=True, text=True, timeout=120,
+            )
+        except (OSError, subprocess.SubprocessError):
+            return None
+        return out.stdout.split("\0") if out.returncode == 0 else None
+
+    tracked = ls()
+    if tracked is None:
+        return None
+    untracked = ls("--others", "--exclude-standard") or []
+    seen: set[str] = set()
+    rels: list[Path] = []
+    for p in [*tracked, *untracked]:
+        if p and p not in seen:
+            seen.add(p)
+            if (root / p).is_file():
+                rels.append(Path(p))
+    return rels or None
+
+
 def iter_source_files(root: Path) -> WalkResult:
     """Enumerate authored source files under ``root``.
 
-    Prefers ``git ls-files`` (honors .gitignore, so generated output never inflates weight);
-    falls back to an ``os.walk`` with the default exclude list when ``root`` is not a git repo.
-    The exclude rules apply in both modes, so the file set is the same shape either way.
+    Prefers git (see ``_git_rels``: tracked + untracked, minus everything git ignores, so
+    generated output never inflates weight); falls back to an ``os.walk`` with the default
+    exclude list when ``root`` is not a git repo — that mode cannot honor `.gitignore`, since
+    there is no git to ask. The exclude rules apply in both modes, so the file set is the same
+    shape either way.
     """
     root = root.resolve()
-    used_git = False
-    rels: list[Path]
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "-z"],
-            capture_output=True, text=True, timeout=120,
-        )
-        if out.returncode == 0 and out.stdout:
-            rels = [Path(p) for p in out.stdout.split("\0") if p]
-            used_git = True
-        else:
-            rels = _walk_rels(root)
-    except (OSError, subprocess.SubprocessError):
+    rels = _git_rels(root)
+    used_git = rels is not None
+    if rels is None:
         rels = _walk_rels(root)
 
     ignore = load_ignore(root)

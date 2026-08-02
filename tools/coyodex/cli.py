@@ -52,6 +52,10 @@ Commands:
              check of its own and compares nothing against a previous map. A
              convenience wrapper, not an enforcement point — exit 1 for what
              validate/audit already block on, or when a check did not run.
+  scope      The up-front briefing, before any work: which files will be analyzed
+             (git decides — .gitignore is out), what `.coyodex/.ignore` removed, and
+             which commit the map will be pinned to, warning when uncommitted code
+             would put the map and its pin out of step.
   balance    Report per-diagram fan-out (target 5±2), the inter-subsystem edge
              matrix, and advisory split proposals for over-dense diagrams —
              apply accepted proposals via a Direct map change.
@@ -110,6 +114,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "dump":
         from coyodex import dump  # stdlib-only; defaults to .coyodex/project-map.json
         return dump.main(rest)
+    if cmd == "scope":
+        from coyodex import scope  # stdlib-only; the walk + git, no map needed
+        return scope.main(rest)
     if cmd == "balance":
         from coyodex import balance  # stdlib-only; defaults its own map path
         return balance.main(rest)

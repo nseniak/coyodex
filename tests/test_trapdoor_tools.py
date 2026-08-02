@@ -106,9 +106,10 @@ def has_warning(warnings: list[str], *needles: str) -> bool:
 # --- the fixture is intact -------------------------------------------------------------
 
 def test_the_fixture_is_tracked_so_the_walk_can_see_it():
-    """`iter_source_files` prefers `git ls-files`; an untracked fixture file is INVISIBLE to
-    every measurement in this file. Assert the whole fixture is tracked, and that git reports
-    it fixture-relative (which is what lets `--root <fixture>` treat it as a repo root)."""
+    """`iter_source_files` asks git, so a fixture file the repo IGNORES is invisible to every
+    measurement in this file. Assert the whole fixture is tracked (the strongest form of not
+    being ignored), and that git reports it fixture-relative (which is what lets
+    `--root <fixture>` treat it as a repo root)."""
     tracked = fixture_tracked_paths()
     assert "traps.yaml" in tracked and "src/auth/gate.py" in tracked, tracked[:10]
     assert not any(p.startswith("eval/") for p in tracked), (
