@@ -1263,14 +1263,23 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   **`grounding`** object: `claims_total` (the worklist size), `claims_challenged` (how many got a
   verdict), then the SPLIT of those verdicts — `claims_confirmed` / `claims_refuted` /
   `claims_unverifiable` — plus a `note` saying which claims were prioritized.
-  **How a partial pass is actually recorded.** `grounding write` REFUSES a worklist claim with no
-  verdict ("Ground them, or challenge a smaller worklist deliberately"), so you cannot hand it the
-  full worklist plus a subset of verdicts and get a `319 of 1608` record out — the command exits and
-  writes nothing. The deliberate path is the second half of its own message: cut the pinned worklist
-  file down to the claims you actually challenged, and write the record from THAT. `claims_total`
-  is then the reduced size, so the full surface exists nowhere in the counts — put it in the `note`
-  ("319 challenged, cut from a 1,608-claim worklist; ranked top-down"), or the record silently reads
-  as a complete pass over a small map. Record the split even
+  **How a partial pass is recorded: `--partial`.** `grounding write` refuses a worklist claim with
+  no verdict, because "we stopped at the top slice" and "a batch of skeptics died on the way home"
+  look identical from inside the tool. `--partial` is you saying which one it was — pass it with the
+  FULL pinned worklist and the verdicts you have:
+
+  ```
+  .venv/bin/coyodex grounding write --worklist .coyodex/verify/worklist.json \
+    --verdicts .coyodex/verify/*.json --partial \
+    --note '319 of 1,608 challenged: ranked top-down, stopped at the theme budget' --out …
+  ```
+
+  `claims_total` keeps the full 1,608 and `claims_challenged` says 319, so the unchallenged
+  remainder is visible in the record itself rather than in prose. The `--note` is required (the
+  counts say how many, never why those), and passing `--partial` on a pass that turns out to be
+  complete is refused too. **Never shrink the `--worklist` file to what you challenged** to get past
+  the refusal: that makes `claims_total` the reduced size, and a 319-of-1,608 pass ships looking like
+  a complete pass over a small map. Record the split even
   when it is boring: without it "challenged" is the only number, and a reader cannot tell how many
   claims actually HELD UP. A live map wrote `total 399, grounded 399, refuted 3`, which reads as
   "399 held up AND 3 were refuted out of 399"; `validate` now BLOCKS on counts that do not add up

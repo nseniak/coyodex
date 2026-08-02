@@ -34,7 +34,7 @@ from coyodex.anchor_drift import load_verdicts
 
 USAGE = """usage: coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
                                [--out <fragment.json>] [--note <text>] [--json]
-                               [--map <project-map.json>]
+                               [--map <project-map.json>] [--partial]
 coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--map <map>] [--json]
        coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--json]
 
@@ -50,7 +50,13 @@ applied). Writes a `{"grounding": {...}}` build fragment, or prints it with --js
 It REFUSES rather than guess:
   - a verdict whose claim is not in the pinned worklist  -> the worklist is the wrong snapshot
   - a worklist claim with no verdict at all              -> the pass did not challenge everything
-Both are the "gate did not run" failure wearing a different hat."""
+Both are the "gate did not run" failure wearing a different hat.
+
+--partial: record a DELIBERATE partial pass — the second refusal is lifted, `claims_total` keeps the
+FULL pinned surface and `claims_challenged` says how far you got. Needs a --note naming what was
+prioritized, and is refused when the pass turns out to be complete after all. Do NOT instead shrink
+the --worklist file to what you challenged: that makes `claims_total` the reduced size, so the real
+surface survives only in prose and a 319-of-1608 pass ships looking complete."""
 
 
 def _verdict_bucket(rows: list[dict]) -> str:
@@ -95,12 +101,18 @@ def live_claims_digest(claims: "Iterable[str]") -> str:
 
 def build_record(worklist_claims: list[str], grounding_rows: list[dict],
                  note: str = "", live_claims: "list[str] | None" = None,
+                 partial: bool = False,
                  ) -> tuple[dict[str, object], list[str]]:
     """The `grounding` block, plus the refusals that must stop it being written.
 
     `live_claims` is the worklist of the ASSEMBLED map, when the caller passed `--map`. It is what
     lets the record state how the pinned surface and the shipped one differ, instead of leaving a
-    build to argue with a staleness advisory that had no legal answer."""
+    build to argue with a staleness advisory that had no legal answer.
+
+    `partial` is the operator asserting that challenging only part of the worklist was DELIBERATE.
+    The counts never needed it — `claims_challenged` has always subtracted the unvoted — so what it
+    buys is the distinction the tool cannot make on its own: a ranked worklist worked top-down until
+    the budget ran out looks exactly like a batch of skeptics that died on the way home."""
     votes: dict[str, list[dict]] = {}
     for r in grounding_rows:
         claim = r.get("claim")
@@ -128,12 +140,34 @@ def build_record(worklist_claims: list[str], grounding_rows: list[dict],
             f"a DIFFERENT snapshot from the one the skeptics were given (it was probably re-derived "
             f"after the refutations were applied). Capture `audit --json` BEFORE the fixes. "
             f"First: {orphans[0][:100]}")
+    # An unvoted claim has TWO causes that look identical from here: a pass that deliberately
+    # challenged the top slice of a ranked worklist, and a pass whose skeptics silently died or that
+    # was handed the wrong snapshot. The second is the failure this whole record exists to catch, so
+    # the refusal stands by default and `partial` is the operator saying which one it is.
+    #
+    # It is NOT an accuracy problem: `claims_challenged` below already subtracts the unvoted, so the
+    # counts were always right for a partial pass — the refusal guarded intent, not arithmetic. The
+    # documented workaround (cut the pinned worklist down to what you challenged) is strictly worse:
+    # it makes `claims_total` the reduced size, so the real surface survives only in free-text prose
+    # where no gate can read it, and a 319-of-1608 pass ships looking like a complete pass over a
+    # small map.
     unvoted = [c for c in worklist_claims if c not in votes]
-    if unvoted:
+    if unvoted and not partial:
         errors.append(
             f"{len(unvoted)} worklist claim(s) have NO verdict — this pass did not challenge the "
-            f"whole surface, so `claims_challenged` would overstate it. Ground them, or challenge a "
-            f"smaller worklist deliberately. First: {unvoted[0][:100]}")
+            f"whole surface. Ground them, or pass `--partial` to record a DELIBERATE partial pass "
+            f"(`claims_total` then keeps the full surface and `claims_challenged` states how far you "
+            f"got; a `--note` saying what was prioritized is required). First: {unvoted[0][:100]}")
+    if partial and not unvoted:
+        errors.append(
+            "`--partial` was passed but every worklist claim has a verdict — this was a COMPLETE "
+            "pass. Drop the flag: a record that calls itself partial when it is not understates a "
+            "finished verification, and the next reader cannot tell which it was.")
+    if partial and not note.strip():
+        errors.append(
+            "`--partial` needs a `--note` saying which claims were prioritized and out of what — "
+            "the counts alone say how many were challenged, never why those ones, and an unexplained "
+            "partial pass is indistinguishable from an abandoned one.")
     counts = {"confirmed": 0, "refuted": 0, "unverifiable": 0}
     for claim in worklist_claims:
         rows = votes.get(claim)
@@ -148,10 +182,11 @@ def build_record(worklist_claims: list[str], grounding_rows: list[dict],
     }
     if live_claims is not None:
         live = set(live_claims)
-        # SIZES, and explicitly not a proof: `total - superseded + added_since == live` is a
-        # tautology given the two refusals above (they force `votes` == `pinned`), so it closes for
-        # every input and can never fail. It is here to tell a reader WHAT moved; the digest is what
-        # tells a gate whether anything moved.
+        # SIZES, and explicitly not a proof: `total - superseded + added_since == live` closes for
+        # every COMPLETE pass, because the orphan and unvoted refusals force `votes` == `pinned`
+        # there. Under `--partial` the unvoted refusal is lifted, so the identity stops being a
+        # tautology and starts measuring something. Either way it tells a reader WHAT moved; the
+        # digest is what tells a gate whether anything moved.
         record["claims_superseded"] = len(pinned - live)
         record["claims_added_since"] = len(live - pinned)
         record["live_claims_digest"] = live_claims_digest(live)
@@ -324,11 +359,14 @@ def main(argv: list[str] | None = None) -> int:
     verdicts: list[str] = []
     note = ""
     as_json = False
+    partial = False
     i = 0
     while i < len(rest):
         a = rest[i]
         if a == "--json":
             as_json = True
+        elif a == "--partial":
+            partial = True
         elif a in ("--worklist", "--verdicts", "--out", "--note", "--map"):
             i += 1
             if i >= len(rest):
@@ -376,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
     if verb == "report":
         print(format_report(claims, rows, as_json=as_json, live_claims=live_claims))
         return 0
-    record, errors = build_record(claims, rows, note, live_claims=live_claims)
+    record, errors = build_record(claims, rows, note, live_claims=live_claims, partial=partial)
     if errors:
         for e in errors:
             print(f"ERROR: {e}", file=sys.stderr)
