@@ -546,7 +546,11 @@ def dedup_edge(argv: list[str]) -> int:
                   file=sys.stderr)
             return 1
         drop_idx |= {i for i in idxs if i != keep[0]}
-        print(f"  kept {s} {v} {d} at {anchor}")
+        if not to_reconcile:
+            # Only when this run actually edits the map. Printing it up here made `--to-reconcile`
+            # announce `kept … at (no call site)` for a token it then silently skipped — the very
+            # "assert what the artifact does not support" shape the skip was added to stop.
+            print(f"  kept {s} {v} {d} at {anchor}")
     if to_reconcile:
         # DURABLE. Writing the decision into the assembled map is what made a shipped map
         # irreproducible from its own fragments: 365 edges committed, 416 on re-assemble, the
@@ -561,7 +565,7 @@ def dedup_edge(argv: list[str]) -> int:
         existing = doc.get("keep_edges") or []
         by_triple = {(k.get("src"), k.get("verb"), k.get("dst")): k for k in existing
                      if isinstance(k, dict)}
-        added = updated = 0
+        added = updated = skipped = 0
         for tok in keeps:
             parts = tok.split(":")
             s_, v_, d_, anchor = parts[0], parts[1], parts[2], ":".join(parts[3:])
@@ -576,7 +580,9 @@ def dedup_edge(argv: list[str]) -> int:
                       f"keep_edges directive matches on the anchor. Give it an anchor in the "
                       f"fragment, or pass an explicit --keep naming another occurrence.",
                       file=sys.stderr)
+                skipped += 1
                 continue
+            print(f"  kept {s_} {v_} {d_} at {anchor}")
             prior = by_triple.get((s_, v_, d_))
             if prior is None:
                 new = {"src": s_, "verb": v_, "dst": d_, "where": anchor}
@@ -593,10 +599,15 @@ def dedup_edge(argv: list[str]) -> int:
         doc["keep_edges"] = existing
         rec_path.parent.mkdir(parents=True, exist_ok=True)
         rec_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        if skipped:
+            print(f"  {skipped} conflict(s) were NOT recorded (see above) — they are still "
+                  f"duplicated in the map.")
         print(f"dedup-edge: recorded {added} new and updated {updated} keep_edges directive(s) in "
               f"{rec_path} ({len(existing)} total). Re-run assemble WITH --reconcile {rec_path}; the map is "
               f"not edited here, so the decision survives every rebuild.")
-        return 0
+        # Non-zero when a requested conflict went unrecorded: exit 0 with nothing written is the
+        # shape a script reads as success.
+        return 1 if skipped and not (added or updated) else 0
     m.edges = [e for i, e in enumerate(m.edges) if i not in drop_idx]
     _write(Path(map_path), m, present)
     print(f"dedup-edge: dropped {len(drop_idx)} duplicate occurrence(s) from the assembled map — "

@@ -335,8 +335,13 @@ def test_a_fabricated_delta_count_is_caught_when_the_verdicts_are_present():
         v = make_verdicts_file(tmp, pinned)
         assert _stale_grounding_pin(p, live) is None, "without verdicts there is nothing to check"
         msg = _stale_grounding_pin(p, live, [v])
-        assert msg and "claims_superseded` says 0, the verdicts say 1" in msg, msg
-        assert "claims_added_since` says 0, the verdicts say 1" in msg, msg
+        # Only the LOWER bound on superseded fires here. `claims_added_since: 0` sits BELOW the
+        # upper bound, which a partial verdict set legitimately permits — only a count ABOVE what
+        # the verdicts leave room for is provably wrong.
+        assert msg and "already name 1 pinned claim(s)" in msg, msg
+        over = make_grounding_map(tmp, live, claims_superseded=1, claims_added_since=9)
+        msg2 = _stale_grounding_pin(over, live, [v])
+        assert msg2 and "at most 1 live claim(s) can be new" in msg2, msg2
 
 
 def test_honest_delta_counts_pass_the_recomputation():
@@ -348,23 +353,30 @@ def test_honest_delta_counts_pass_the_recomputation():
         assert _stale_grounding_pin(p, live, [v]) is None
 
 
-def test_lowering_claims_total_cannot_buy_silence():
-    """The first cut of the partial-verdict guard was bypassable in the wrong direction: it stood
-    down whenever the verdict count differed from `claims_total`, so fabricating the deltas AND
-    lowering the total escaped the check entirely — a MORE wrong record was safer than a less wrong
-    one. Fewer verdicts than the record pinned is a partial set and stays silent; MORE cannot be."""
+def test_no_value_of_claims_total_can_buy_silence():
+    """Three escapes, one root. The first guard demanded the verdict set equal `claims_total`, so
+    LOWERING the total went quiet; patching that direction left RAISING it, and a digit STRING,
+    equally quiet — a more wrong record stayed safer than a less wrong one.
+
+    The bounds consult `claims_total` not at all. For any partial verdict set P of the true pinned
+    set T: `|P \\ L| <= |T \\ L|` and `|L \\ P| >= |L \\ T|`, so a superseded count BELOW what the
+    verdicts already name, or an added count ABOVE what they leave room for, is provably wrong
+    whatever subset was handed in."""
     from coyodex.finalize import _stale_grounding_pin
     with tempfile.TemporaryDirectory() as tmp:
         live = ["kept", "added-since"]
-        pinned = ["kept", "reconciled-away"]
-        v = make_verdicts_file(tmp, pinned)
+        v = make_verdicts_file(tmp, ["kept", "reconciled-away"])
         honest = make_grounding_map(tmp, live, claims_total=2,
                                     claims_superseded=1, claims_added_since=1)
         assert _stale_grounding_pin(honest, live, [v]) is None
-        cheat = make_grounding_map(tmp, live, claims_total=1,
-                                   claims_superseded=0, claims_added_since=0)
-        msg = _stale_grounding_pin(cheat, live, [v])
-        assert msg and "understates the pinned worklist" in msg, msg
+        for label, total in (("lowered", 1), ("raised", 17), ("digit string", "2"), ("zero", 0)):
+            cheat = Path(tmp) / f"cheat-{label}.json"
+            cheat.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {
+                "claims_total": total, "claims_challenged": 2, "claims_superseded": 0,
+                "claims_added_since": 0,
+                "live_claims_digest": __import__("coyodex.grounding", fromlist=["x"])
+                .live_claims_digest(live)}}), encoding="utf-8")
+            assert _stale_grounding_pin(cheat, live, [v]), f"{label} total bought silence"
 
 
 def test_a_partial_verdict_set_still_stays_silent():

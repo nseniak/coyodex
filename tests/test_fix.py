@@ -454,16 +454,22 @@ def test_to_reconcile_refuses_to_record_an_anchorless_winner():
         p = Path(tmp) / "m.json"
         p.write_text(json.dumps({
             "format": FORMAT, "title": "T", "goal": "g",
-            "components": [{"id": "C1", "name": "A", "source": "src/a.py:1"},
-                           {"id": "C2", "name": "B", "source": "src/b.py:1"}],
+            "components": [{"id": "C1", "name": "A", "source": "backend/src/a.py:1"},
+                           {"id": "C2", "name": "B", "source": "backend/src/b.py:1"}],
+            # The sibling path must sort LONGER than "(no call site)" (14 chars), or the ranking
+            # never selects the placeholder and this test passes without entering the branch —
+            # which is exactly how it first shipped.
             "edges": [{"src": "C1", "verb": "calls", "dst": "C2", "no_call_site": True},
-                      {"src": "C1", "verb": "calls", "dst": "C2", "where": "src/a.py:10"}],
+                      {"src": "C1", "verb": "calls", "dst": "C2", "where": "backend/src/a.py:10"}],
         }), encoding="utf-8")
         rec = Path(tmp) / "reconcile.json"
+        # NON-ZERO: every conflict in this map was skipped, so nothing was recorded and the
+        # duplicates remain. Exit 0 with an empty file is what a script reads as success.
         assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested",
-                         "--to-reconcile", str(rec)]) == 0
+                         "--to-reconcile", str(rec)]) == 1
         recorded = json.loads(rec.read_text()).get("keep_edges", [])
         assert all(k["where"] != "(no call site)" for k in recorded), recorded
+        assert not recorded, "the only conflict here has an anchorless winner — nothing to record"
 
 
 def test_to_reconcile_updates_a_triple_instead_of_silently_keeping_the_old_anchor(capsys):

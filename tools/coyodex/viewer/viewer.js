@@ -470,6 +470,88 @@ function applyTint(rect, kind) {
   if (tint.strokeWidth) rect.style.setProperty('stroke-width', tint.strokeWidth, 'important');
   if (tint.strokeDasharray) rect.style.setProperty('stroke-dasharray', tint.strokeDasharray, 'important');
 }
+// A sequence-diagram actor figure, given the SAME identity the Dependencies view gives that role, so the
+// two views speak ONE vocabulary: a person keeps the stick figure in the human tint; a SERVICE actor is
+// redrawn as the indigo hexagon the Dependencies view draws it as. The distinction is the method's, not
+// decoration — a service actor is an outside initiator with its own goal (a scheduled job, a poller, an
+// inbound caller), never the internal machinery that relays someone else's action, and a reader who
+// can't tell the two apart reads the delivery mechanism as the party who acted.
+//
+// Both sequence views call this (the Happy Path and the per-use-case flows) with the `kind` their actor
+// list already carries from the Roles table — build_graph normalizes it to exactly human/service, and an
+// actor with no matching role keeps Mermaid's default rather than being painted as a guess.
+const SEQ_ACTOR_TINT = { human: 'human', service: 'svc' };
+const HEX_ACTOR_PAD = 18;      // how much wider than the stick figure's own footprint the hexagon sits
+const HEX_ACTOR_RATIO = 0.72;  // its height, as a fraction of that width — the Dependencies view's squat shape
+function styleSeqActor(root, aid, kind) {
+  const tint = ELEMENT_TINT[SEQ_ACTOR_TINT[kind]];
+  if (!tint) return;
+  // Mermaid draws BOTH the top figure and its bottom mirror as `g.actor-man[name=<participant id>]`
+  // (only the top one carries data-id), so the name attribute reaches the pair in one query.
+  for (const g of root.querySelectorAll('g.actor-man[name="' + aid + '"]')) {
+    // Stroke on the GROUP, the way Mermaid itself sets it: the head, the limbs, the label outline and a
+    // part added below (the hexagon) all inherit it, so one property recolours the whole figure. FILL is
+    // set per shape instead — the label is a group child too, and filling it would repaint the text.
+    g.style.setProperty('stroke', tint.stroke, 'important');
+    if (kind === 'service') hexagonifyActor(g);
+    for (const shape of g.querySelectorAll('circle, polygon')) shape.style.setProperty('fill', tint.fill, 'important');
+  }
+}
+// Swap one stick figure for the hexagon outline, in place: the hexagon is centred on the figure's own
+// footprint and the label is left untouched, so the lifeline, the label and every message keep the exact
+// position Mermaid gave them — nothing is relaid out, so there is no second layout to keep in sync.
+function hexagonifyActor(g) {
+  if (g.querySelector('polygon')) return;  // already swapped (a re-bind over the same rendered scene)
+  // The head + the four limbs. The LIFELINE is a sibling of this group, not a child, so it cannot be
+  // caught here — the class guard states that anyway, since deleting it would erase the actor's column.
+  const parts = [...g.querySelectorAll('circle, line')].filter((el) => !el.classList.contains('actor-line'));
+  if (!parts.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const el of parts) {
+    let b; try { b = el.getBBox(); } catch (_) { return; }
+    x0 = Math.min(x0, b.x); y0 = Math.min(y0, b.y); x1 = Math.max(x1, b.x + b.width); y1 = Math.max(y1, b.y + b.height);
+  }
+  const w = (x1 - x0) + HEX_ACTOR_PAD, h = w * HEX_ACTOR_RATIO;
+  const hex = document.createElementNS(SVGNS, 'polygon');
+  hex.setAttribute('points', hexPoints((x0 + x1) / 2 - w / 2, (y0 + y1) / 2 - h / 2, w, h));
+  hex.setAttribute('stroke-width', '2');  // the weight Mermaid strokes the stick figure with
+  for (const el of parts) el.remove();
+  g.insertBefore(hex, g.firstChild);
+}
+// The flowchart half of the same vocabulary: a HUMAN actor box in the Dependencies view (and its
+// drill-downs) becomes the stick figure too, so a person looks like a person on every view that draws
+// one — a box, however rounded, read as another piece of the system. Mermaid has no person shape here,
+// so the node's own outline path is re-pathed in place: same element, same id, same tint, same handlers
+// — only its `d` changes. The room it needs was allocated up front by the generator's blank first label
+// line, so the name already sits BELOW the figure and nothing had to be moved.
+const STICK_NODE_INSET = 2;  // how far inside the box's top edge the head starts
+const STICK_NODE_GAP = 3;    // the breathing space the feet keep above the name
+function stickFigureNode(el) {
+  const label = el.querySelector('g.label');
+  // Mermaid draws this outline as TWO paths over the same geometry — one carrying the fill, one the
+  // stroke. Both have to become the figure, or the untouched one keeps drawing the box around it.
+  const paths = [...el.querySelectorAll('path')];
+  if (!label || !paths.length || paths[0].dataset.stick) return;
+  // The blank line IS the room. Without it (a diagram generated before this rule) the figure would be
+  // drawn straight over the name, so the box is left exactly as Mermaid drew it instead.
+  if (!/<br/i.test(label.innerHTML)) return;
+  let box = null;
+  for (const p of paths) {
+    let b; try { b = p.getBBox(); } catch (_) { continue; }
+    if (!box || b.height > box.height) box = b;
+  }
+  if (!box) return;
+  // The label is two lines — blank, then the name — and is centred on the node's origin, so the blank
+  // one owns the whole top half and the figure's feet stop just short of the origin.
+  const top = box.y + STICK_NODE_INSET, h = -STICK_NODE_GAP - top;
+  if (h <= 0) return;
+  const d = stickFigurePath(0, top, h);
+  for (const p of paths) {
+    p.setAttribute('d', d);
+    p.style.setProperty('stroke-width', '1.8', 'important');  // a box outline's hairline reads as a broken figure
+    p.dataset.stick = '1';
+  }
+}
 // Container kinds — the group boxes (subsystem/subdomain) the diagram draws with a thick dashed frame.
 const CONTAINER_KINDS = new Set(['subsystem', 'subdomain']);
 function isContainerKind(kind) { return CONTAINER_KINDS.has(kind); }
@@ -1537,6 +1619,7 @@ function bindFlow(uc) {
     const figB = bottoms.find((g) => (g.textContent || '').trim() === a.name) || null;
     const parts = [figT, figB, life].filter(Boolean);
     if (!parts.length) continue;
+    styleSeqActor(root, a.aid, a.kind);  // same person/service vocabulary as the Happy Path and Dependencies
     for (const el of parts) scene.dimEls.push(el);
     for (const i of a.stepIdx) (actorPartsByStep[i] || (actorPartsByStep[i] = [])).push(...parts);
     const stepEls = a.stepIdx.flatMap((i) => msgEls[i] || []);
@@ -1944,27 +2027,48 @@ const VIEW_Q = {
 // these styles at all. A single, complete vocabulary is right on every map by construction — the reader
 // looks up what they see, and simply never meets the rows their map has no use for.
 //
-// [tint kind, shape, label]. Colours come from ELEMENT_TINT — the SAME styles the generators paint the
-// boxes with — and the shape mirrors the generators' SHAPE map, so a swatch cannot claim a look the
-// diagrams never draw.
+// Rows are GROUPED BY THE VIEW THAT DRAWS THEM, because that is how they are looked up: the reader is
+// on one view, meets one shape, and scans for the heading naming the view they are already on. A flat
+// "Boxes" list made them read every row to find the one that applies. Sections are keyed by VIEW ID and
+// titled from the tab's own label (VIEW_LABEL), so a heading can never drift from the tab it names.
+// A shape drawn on two views is listed under both — each section has to be complete on its own, or the
+// reader who looks under their view and finds nothing concludes the legend has no answer.
+//
+// [view ids, [[tint kind, shape, label], …]]. Colours come from ELEMENT_TINT — the SAME styles the
+// generators paint the boxes with — and the shape mirrors the generators' SHAPE map, so a swatch cannot
+// claim a look the diagrams never draw. A row whose shape belongs to no diagram would go under a
+// trailing ['', …] section (rendered as "Boxes"); today every shape has a home view, so there is none.
 const LEGEND_SECTIONS = [
-  ['Boxes', [
+  // The two sequence views. Both draw a Role as a lifeline, and the kind is the whole point of the
+  // pair: a person acts, a service actor (a scheduled job, a poller, an inbound caller) starts on its
+  // own. Same hexagon, same indigo as the Dependencies view — one vocabulary across the two altitudes.
+  [['hp', 'usecases'], [
+    ['human', 'man', 'a person'],
+    ['svc', 'hex', 'a service actor'],
+  ]],
+  [['context'], [
     ['system', 'rect', 'the system'],
-    ['human', 'stadium', 'a person'],
-    ['svc', 'hex', 'an outside system or actor'],
-    ['subsystem', 'rect', 'subsystem'],
-    ['component', 'rect', 'component'],
-    ['subdomain', 'rect', 'subdomain'],
-    ['entity', 'rect', 'entity'],
+    ['human', 'man', 'a person'],
+    ['svc', 'hex', 'a service actor'],
     ['dep', 'cyl', 'dependency'],
-    ['process', 'rect', 'process'],
     ['bucketfold', 'rect', 'a collapsed group'],
   ]],
-  ['Infrastructure, by role', [
-    ['infraBus', 'cyl', 'message bus'],
-    ['infraStore', 'cyl', 'data store'],
-    ['infraSvc', 'cyl', 'service'],
-    ['infraSec', 'cyl', 'security'],
+  [['container'], [
+    ['subsystem', 'rect', 'subsystem'],
+    ['component', 'rect', 'component'],
+  ]],
+  [['domain'], [
+    ['subdomain', 'rect', 'subdomain'],
+    ['entity', 'rect', 'entity'],
+  ]],
+  // The infrastructure rows keep the wording of the lanes they label ("Used as a message bus"), which
+  // states what the band measures — a dep's DERIVED role — rather than claiming it as an identity.
+  [['deployment'], [
+    ['process', 'rect', 'process'],
+    ['infraBus', 'cyl', 'used as a message bus'],
+    ['infraStore', 'cyl', 'used as a data store'],
+    ['infraSvc', 'cyl', 'used as a service'],
+    ['infraSec', 'cyl', 'used for security'],
   ]],
 ];
 // The two stroke conventions. They carry meaning no colour can, and are the most misread part of the
@@ -1973,6 +2077,29 @@ const LEGEND_STROKES = [
   ['box', 'dashed border = collapsed; open it'],
   ['edge', 'dashed arrow = several links bundled; open it'],
 ];
+// The hexagon outline as polygon points for a box — ONE definition, shared by the legend swatch and the
+// sequence-diagram service-actor figure, so the two can't drift into drawing different hexagons for the
+// same meaning. The notch is a fifth of the width (capped at half the height, so a squat box stays a
+// hexagon instead of collapsing into a rhombus).
+function hexPoints(x, y, w, h) {
+  const n = Math.min(w * 0.2, h / 2), my = y + h / 2;
+  return [[x + n, y], [x + w - n, y], [x + w, my], [x + w - n, y + h], [x + n, y + h], [x, my]]
+    .map((p) => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' ');
+}
+// The stick figure as ONE path `d`, centred on `cx` and filling `h` downward from `top` — shared by the
+// legend swatch and the Dependencies view's human actor, so the two can't drift. Every limb is a single
+// straight subpath, which encloses no area: the path can therefore take a fill (it lands on the head
+// alone, like every other box's fill) without the limbs smearing into filled wedges. Proportions are
+// fractions of the height, so the same call draws a 13-unit swatch and a 27-unit node figure.
+function stickFigurePath(cx, top, h) {
+  const r = 0.17 * h, hip = top + 0.66 * h, arm = top + 0.40 * h;
+  const n = (v) => v.toFixed(2);
+  return `M${n(cx - r)},${n(top + r)}a${n(r)},${n(r)} 0 1,0 ${n(2 * r)},0a${n(r)},${n(r)} 0 1,0 ${n(-2 * r)},0Z`
+    + `M${n(cx)},${n(top + 2 * r)}L${n(cx)},${n(hip)}`
+    + `M${n(cx - 0.30 * h)},${n(arm)}L${n(cx + 0.30 * h)},${n(arm)}`
+    + `M${n(cx - 0.26 * h)},${n(top + h)}L${n(cx)},${n(hip)}`
+    + `M${n(cx)},${n(hip)}L${n(cx + 0.26 * h)},${n(top + h)}`;
+}
 function legendSwatch(kind, shape) {
   const t = (ELEMENT_TINT || {})[kind] || {};
   const svg = document.createElementNS(SVGNS, 'svg');
@@ -1986,7 +2113,11 @@ function legendSwatch(kind, shape) {
   };
   if (shape === 'hex') {
     const el = document.createElementNS(SVGNS, 'polygon');
-    el.setAttribute('points', '5.5,1.5 16.5,1.5 21,7.5 16.5,13.5 5.5,13.5 1,7.5');
+    el.setAttribute('points', hexPoints(1, 1.5, 20, 12));
+    svg.appendChild(paint(el));
+  } else if (shape === 'man') {
+    const el = document.createElementNS(SVGNS, 'path');
+    el.setAttribute('d', stickFigurePath(11, 1, 13));
     svg.appendChild(paint(el));
   } else if (shape === 'cyl') {
     const body = document.createElementNS(SVGNS, 'rect');
@@ -2061,7 +2192,10 @@ function buildLegend() {
   close.setAttribute('aria-label', 'Hide the legend');
   close.addEventListener('click', () => setLegendOpen(false));
   frag.appendChild(close);
-  for (const [title, rows] of LEGEND_SECTIONS) {
+  for (const [views, rows] of LEGEND_SECTIONS) {
+    // The heading IS the tab's own label (the same read as viewIntroHtml's title), so the reader looks
+    // up the word they clicked. A section naming no view holds the shapes no diagram owns — "Boxes".
+    const title = views.map((v) => VIEW_LABEL[v] || v).join(' & ') || 'Boxes';
     const h = document.createElement('div'); h.className = 'lgh'; h.textContent = title;
     frag.appendChild(h);
     for (const [kind, shape, label] of rows) frag.appendChild(legendRow(legendSwatch(kind, shape), label));
@@ -2446,6 +2580,9 @@ function bindNodes(scene, onActivate) {
     // members. (Their bridge/cross arrows are registered as edges, so focus resolves the connection.)
     scene.nodeEls[id] = el;
     el.style.cursor = 'pointer';
+    // Only the Context family draws a `human` box, so this reaches every view that has one (Dependencies
+    // itself, the Libraries drill, a bucket drill) and is a no-op on the rest.
+    if (el.classList.contains('human')) stickFigureNode(el);
     markOpenSrc(el, id);  // leaf with a source ref -> ⌘-held cursor shows the open-source affordance
     bindHoverGlow(scene, el, id);  // hover affordance — skip while this node is the active selection, so HILITE wins
     attachTip(el, () => actionTipNode(id));  // ⌘-hover shows the open-source action
@@ -3696,6 +3833,7 @@ function bindHP() {
     const els = [figT, figB, life].filter(Boolean);
     scene.hpActor[a.aid] = { els };
     for (const el of els) scene.dimEls.push(el);
+    styleSeqActor(root, a.aid, a.kind);  // person vs service actor, in the Dependencies view's vocabulary
   }
   const aidOfStep = {};  // step index -> driving actor id (keeps the actor lit when a step is selected)
   for (const a of HP_ACTORS) for (const i of a.stepIdx) aidOfStep[i] = a.aid;
@@ -6658,9 +6796,10 @@ if (lsGet(LS.searchOpen) === '1') setSearchOpen(true);  // collapsed by default;
 buildFileTree();
 initServerMode();  // probe for `coyodex serve`; on success reveal + wire the file browser and code viewer
 
-buildLegend();  // one legend, built once; syncLegend decides where it shows
-// The intro's title IS the tab's label — read it off the button so the two can never disagree.
+// The intro's title IS the tab's label — read it off the button so the two can never disagree. Read
+// BEFORE the legend is built: its section headings name views from the same map.
 viewsw.querySelectorAll('button[data-view]').forEach((b) => { VIEW_LABEL[b.dataset.view] = b.textContent.trim(); });
+buildLegend();  // one legend, built once; syncLegend decides where it shows
 viewsw.querySelectorAll('button').forEach((b) => {
   if (b.dataset.view === 'container' && !HAS_GROUPING) { b.style.display = 'none'; return; }
   if (b.dataset.view === 'domain' && !HAS_DOMAIN) { b.style.display = 'none'; return; }

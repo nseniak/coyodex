@@ -155,58 +155,49 @@ def _recomputed_delta(g: dict, live: set[str], verdicts: list[Path]) -> str | No
 
     The digest proves the record describes THIS map's claim surface. It says nothing about whether
     `claims_superseded` and `claims_added_since` are true — a record can carry a valid digest beside
-    two invented numbers, and every check still passes. That is a poor property for the two fields
-    whose only job is honesty.
+    two invented numbers, and every other check still passes. That is a poor property for the two
+    fields whose only job is honesty.
 
-    The verdict claims ARE the pinned set: `grounding write` refuses a verdict outside the pinned
-    worklist and refuses a pinned claim with no verdict, so anything that got written has
-    `votes == pinned`. That makes both counts recomputable here exactly, with no extra input beyond
-    the `--verdicts` this command already accepts. Absent verdicts, this is skipped rather than
-    guessed — a build may legitimately not keep them (they are untracked in most projects)."""
+    ONE-SIDED BOUNDS, not equality, and that distinction is the whole correctness argument. The
+    first version demanded that the verdict set exactly match `claims_total`, on the reasoning that
+    a partial set would accuse an honest record. True of an equality; false of a bound. For any
+    partial set `P` of the true pinned set `T`, and live set `L`:
+
+        P ⊆ T  ⇒  |P \\ L| ≤ |T \\ L|      so `claims_superseded` BELOW |P \\ L| is provably wrong
+        P ⊆ T  ⇒  |L \\ P| ≥ |L \\ T|      so `claims_added_since` ABOVE |L \\ P| is provably wrong
+
+    (Brute-forced over 200 000 random configurations: zero counterexamples.) Both hold whatever
+    subset of the verdict files `finalize` was handed, so no honest record can be accused — and
+    neither bound consults `claims_total`, which is what closes the three escapes the equality
+    version left: raising the total by one, setting it to a digit STRING, and the lower-total
+    bypass that an earlier commit patched one direction of.
+    """
     if not verdicts:
         return None
     try:
         from coyodex.anchor_drift import load_verdicts
         rows, _notes = load_verdicts([str(v) for v in verdicts])
-    except Exception:
+    except BaseException:
+        # BaseException on purpose: `load_verdicts` raises SystemExit on a malformed file, which an
+        # `except Exception` lets straight through a guard whose entire job is to stand down.
         return None
     pinned = {str(r.get("claim")) for r in rows if isinstance(r, dict) and r.get("claim")}
     if not pinned:
         return None
-    # The recomputation is only valid against the COMPLETE verdict set. `grounding write` guarantees
-    # `votes == pinned` for the files IT was given; nothing guarantees `finalize` was handed the same
-    # ones, and a one-character glob slip is enough. With 15 of 16 files this accused an honest
-    # record of saying 4 where "the verdicts say 14" — and the remedy it printed then refused to run,
-    # because `grounding write` rejects a worklist with unvoted claims. A false accusation plus a
-    # dead-end fix is worse than the gap this closes, so it stands down unless the counts line up.
-    total = g.get("claims_total")
-    if not isinstance(total, int):
-        return None
-    if len(pinned) < total:
-        # FEWER verdicts than the record was pinned to: the operator handed `finalize` a partial
-        # set, which is legitimate and common, and recomputing against it accuses an honest record.
-        return None
-    if len(pinned) > total:
-        # MORE verdicts than the record claims were pinned. That cannot be a partial set — it is the
-        # record understating its own worklist, and staying silent here is what made the first cut of
-        # this guard bypassable: fabricating the deltas AND lowering `claims_total` escaped the check
-        # entirely, so a MORE wrong record was safer than a less wrong one.
-        return (f"grounding: the record says {total} claim(s) were pinned, but the verdict files "
-                f"carry {len(pinned)} distinct claim(s). A verdict exists for a claim the record "
-                f"does not count, so `claims_total` understates the pinned worklist and every "
-                f"number derived from it is suspect. Re-run `coyodex grounding write` against the "
-                f"worklist the skeptics were actually given.")
-    want_superseded, want_added = len(pinned - live), len(live - pinned)
+    at_least_superseded = len(pinned - live)
+    at_most_added = len(live - pinned)
     got_superseded = g.get("claims_superseded", 0)
     got_added = g.get("claims_added_since", 0)
     wrong = []
-    if isinstance(got_superseded, int) and got_superseded != want_superseded:
-        wrong.append(f"`claims_superseded` says {got_superseded}, the verdicts say {want_superseded}")
-    if isinstance(got_added, int) and got_added != want_added:
-        wrong.append(f"`claims_added_since` says {got_added}, the verdicts say {want_added}")
+    if isinstance(got_superseded, int) and got_superseded < at_least_superseded:
+        wrong.append(f"`claims_superseded` says {got_superseded}, but the verdict files already "
+                     f"name {at_least_superseded} pinned claim(s) this map no longer carries")
+    if isinstance(got_added, int) and got_added > at_most_added:
+        wrong.append(f"`claims_added_since` says {got_added}, but at most {at_most_added} live "
+                     f"claim(s) can be new — the rest have verdicts")
     if not wrong:
         return None
-    return ("grounding: the record's delta counts disagree with the verdict files — "
+    return ("grounding: the record's delta counts contradict the verdict files — "
             + "; ".join(wrong) + ". These are the numbers a reader uses to judge whether the "
             "superseded claims were the refuted ones, so a wrong count is worse than none. Re-run "
             "`coyodex grounding write --worklist <pinned.json> --map <this map> --verdicts <…>`.")

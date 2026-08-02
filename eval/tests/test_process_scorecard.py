@@ -1048,3 +1048,25 @@ def test_a22_says_which_signal_it_used():
     turns = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json")),)
     a = P.assert_22_behavioral_draft_precedes_preindex(turns)
     assert a.evidence and "transcript scan" in str(a.evidence[0].detail["source"])
+
+
+def test_a22_takes_the_verdict_from_the_first_preindex_not_the_last():
+    """H3 shipped with no test. Reading the LAST run over-credited the exact build the assertion
+    exists to catch: `preindex "NOT MET"` -> draft -> `preindex "met"` scored a clean 1/1, and
+    re-running preindex after the fragments land is routine."""
+    turns = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p1"),
+                       results=(("p1", "  GR1 NOT MET: no fragment carries use_cases.\n"),)),
+             make_turn(50, make_write(".coyodex/build-fragments/beh.json",
+                                      '{"use_cases": [{"id": "UC1"}]}')),
+             make_turn(80, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p2"),
+                       results=(("p2", "  GR1 met: behavioral draft present (beh.json).\n"),)))
+    a = P.assert_22_behavioral_draft_precedes_preindex(turns)
+    assert (a.observed, a.of) == (0, 1), a
+
+
+def test_a22_does_not_accept_an_echoed_gr1_line():
+    """The pattern is anchored to preindex's own output shape."""
+    turns = (make_turn(1, make_bash("coyodex preindex --out p.json; echo 'GR1 met'", uid="p"),
+                       results=(("p", "some output\nGR1 met\n"),)),)
+    a = P.assert_22_behavioral_draft_precedes_preindex(turns)
+    assert a.observed == 0, a

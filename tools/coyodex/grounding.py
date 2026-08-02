@@ -179,6 +179,13 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
         claim = r.get("claim")
         if isinstance(claim, str):
             votes.setdefault(claim, []).append(r)
+    # De-duplicated exactly as `build_record` does (and for the same reason). Without it this
+    # report listed a repeated claim twice and counted it twice, so it disagreed with the record it
+    # exists to explain — first by listing FEWER than the record counted, then, once that was fixed,
+    # by listing MORE.
+    _seen: set[str] = set()
+    worklist_claims = [c for c in worklist_claims
+                       if not (c in _seen or _seen.add(c))]
     buckets: dict[str, list[dict[str, object]]] = {
         "refuted": [], "unverifiable": [], "tied": [], "unvoted": [], "confirmed": [],
         "superseded": []}

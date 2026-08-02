@@ -491,6 +491,27 @@ def main(argv: list[str] | None = None) -> int:
     if unknown:
         print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
         return 2
+    # A BARE POSITIONAL was silently discarded, and this command defaults `--root` to the CWD — so
+    # `coyodex preindex <some/repo>` scanned wherever you happened to be standing and said nothing.
+    # Live: it printed `GR1 met: behavioral draft present` for a path holding no fragments at all,
+    # having read a different repo. Assertion 22 calls that GR1 line the authoritative signal, so a
+    # silently-wrong root corrupts a measurement two layers away. The refusal above exists for
+    # exactly this class; it only ever looked at `-`-prefixed tokens.
+    valued = {"--root", "--out", "--since", "--pairs", "--max-depth", "--in", "--depth", "--top"}
+    positionals: list[str] = []
+    skip = False
+    for i, a in enumerate(argv):
+        if skip:
+            skip = False
+            continue
+        if a in valued:
+            skip = True
+        elif not a.startswith("-"):
+            positionals.append(a)
+    if positionals:
+        print(f"ERROR: unexpected argument(s): {', '.join(positionals)} — this command takes "
+              f"options only. Did you mean `--root {positionals[0]}`?", file=sys.stderr)
+        return 2
     root = Path(_arg(argv, "--root", ".") or ".").resolve()
     out_path = Path(_arg(argv, "--out", str(root / ".coyodex" / "preindex.json")) or "")
     since = _arg(argv, "--since")

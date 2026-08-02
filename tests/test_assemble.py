@@ -757,3 +757,15 @@ def test_a_heading_written_in_another_case_is_the_same_section():
     assert len(covers) == 1, [e.heading for e in out.extras]
     assert covers[0].heading == "Coverage exceptions", "the canonical spelling wins"
     assert "- one" in covers[0].body and "- two" in covers[0].body
+
+
+def test_the_keep_edges_count_reaches_the_assemble_digest():
+    """H1 shipped with no test: `keep_edges` removed 51 edges on a real map and the digest said
+    nothing, reproducing the exact silence the directive was added to stop."""
+    from coyodex.assemble import _assemble_digest
+    from coyodex.model import ProjectModel
+    line = _assemble_digest(ProjectModel(title="T", goal="g"), {},
+                            {"duplicate_edges_resolved": 51})
+    assert "keep_edges 51" in line, line
+    # and zero-suppressed like every other op
+    assert "keep_edges" not in _assemble_digest(ProjectModel(title="T", goal="g"), {}, {})

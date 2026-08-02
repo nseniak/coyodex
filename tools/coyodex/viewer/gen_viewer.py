@@ -1252,7 +1252,13 @@ def _context_head(graph: GraphDict) -> list[str]:
             lines.append(f'  {rid}{{{{"{label}"}}}}:::cy-{rid}')   # hexagon = service actor
             lines.append(f"  class {rid} svc")
         else:
-            lines.append(f'  {rid}(["{label}"]):::cy-{rid}')        # stadium = human actor
+            # Stick figure = human actor, the same figure the sequence views draw — but a flowchart has
+            # no such shape, so the viewer redraws this node's outline as one (`stickFigureNode`). The
+            # BLANK FIRST LINE is what makes room for it: the name then sits on the second line, and
+            # dagre allocates the taller box, so the figure can never be clipped at the diagram's edge
+            # or overlap the actor above. `<br/>` is deliberately outside `_safe_label` (which
+            # neutralises markup) — the same exception other callers use for an intentional break.
+            lines.append(f'  {rid}([" <br/>{label}"]):::cy-{rid}')
             lines.append(f"  class {rid} human")
         lines.append(f"  {rid} --> SYS")                            # direction says 'uses'; no label noise
     return lines
