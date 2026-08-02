@@ -372,7 +372,20 @@ def judge_cli(argv: list[str]) -> int:
             return 1
     repo = _opt(argv, "--repo")
     rubric_arg = _opt(argv, "--rubric")
-    rubric = Path(rubric_arg).read_text(encoding="utf-8") if rubric_arg and Path(rubric_arg).exists() else ""
+    # Fail CLOSED on a --rubric that was ASKED FOR but is not there. It used to fall back to "",
+    # which is not a harmless default: the rubric's sha is part of the judge-protocol fingerprint, so
+    # an unreadable path silently stamped the report `rubric_sha: ""` — a fingerprint claiming scores
+    # were produced under a rubric that was never read. `coyodex-eval protocol` already refuses the
+    # same missing path, so the pair disagreed: judge wrote the lie, protocol later called it a
+    # mismatch, and an expensive skeptic fan-out was thrown away with no explanation. Omitting
+    # --rubric entirely still means "no rubric" — that is a choice, not a typo.
+    rubric = ""
+    if rubric_arg:
+        if not (rpath := Path(rubric_arg)).exists():
+            print(f"ERROR: --rubric {rpath} not found. Refusing to record a judge-protocol "
+                  "fingerprint for a rubric that was never read.", file=sys.stderr)
+            return 1
+        rubric = rpath.read_text(encoding="utf-8")
     raw = json.loads(vpath.read_text(encoding="utf-8"))
     from coyodex.model import ModelError
     try:

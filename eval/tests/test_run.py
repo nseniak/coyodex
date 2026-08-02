@@ -22,6 +22,7 @@ RUN = [sys.executable, "-m", "coyodex_eval.cli", "run"]
 BLESS = [sys.executable, "-m", "coyodex_eval.cli", "bless"]
 HASH = [sys.executable, "-m", "coyodex_eval.cli", "hash"]
 CLAIMS = [sys.executable, "-m", "coyodex_eval.cli", "claims"]
+JUDGE = [sys.executable, "-m", "coyodex_eval.cli", "judge"]
 
 
 def make_map() -> str:
@@ -188,6 +189,25 @@ def test_cli_run_first_then_bless_then_run_again() -> None:
 def test_cli_run_requires_project_and_map() -> None:
     r = subprocess.run([*RUN, "--project", "p"], capture_output=True, text=True)
     assert r.returncode == 2 and "required" in (r.stdout + r.stderr)
+
+
+def test_cli_judge_refuses_a_rubric_that_is_not_there() -> None:
+    """Same bug class as the --baseline-dir one: a flag given, its target missing, the guard skipped.
+
+    The rubric's sha is part of the judge-protocol fingerprint. Falling back to "" stamped the report
+    `rubric_sha: ""` — a fingerprint claiming the scores came from a rubric that was never read.
+    `coyodex-eval protocol` refuses the same missing path, so the two disagreed and an expensive
+    skeptic fan-out got silently discarded as a protocol mismatch."""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        mp, vp = root / "map.json", root / "raw.json"
+        mp.write_text(make_map(), encoding="utf-8")
+        vp.write_text('{"grounding": [], "judges": []}', encoding="utf-8")
+        r = subprocess.run([*JUDGE, "--map", str(mp), "--verdicts", str(vp),
+                            "--rubric", str(root / "nosuch.md"), "--out", str(root / "j.json")],
+                           capture_output=True, text=True)
+        assert r.returncode == 1, r.stdout + r.stderr
+        assert not (root / "j.json").exists()
 
 
 def test_cli_run_refuses_a_baseline_dir_that_is_not_there() -> None:
