@@ -228,9 +228,29 @@ def load_reconcile(text: str, label: str) -> Reconcile:
 def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
     """Scoped, apply-time validation: every `set` id resolves and is the right KIND for the field, each
     `runs_in` value resolves to a `deployment[].unit`, each `subsystem`/`subdomain` value is a defined
-    parent of the right kind (reusing `check_hierarchy`). `drop_edges` are NOT existence-checked here
-    (a 0-match warns at apply time, never fails — S9b); only structural repoint sanity is checked."""
+    parent of the right kind (reusing `check_hierarchy`). `drop_edges` and `keep_edges` are NOT
+    existence-checked here (a 0-match warns at apply time, never fails — S9b); only structural
+    repoint sanity, and CONTRADICTIONS between directives, are checked. A contradiction is a
+    different thing from a stale directive: two `keep_edges` naming one triple with different
+    anchors cannot both be honoured, so it is the operator's mistake now, not drift to warn about
+    later — and at apply time it surfaced as the misleading "declared 1 time(s), nothing to
+    de-duplicate", because the first keep had already resolved the triple."""
     problems: list[str] = []
+    seen_keep: dict[tuple[str, str, str], str] = {}
+    for ki, ke in enumerate(rec.keep_edges):
+        triple = (ke.src, ke.verb, ke.dst)
+        prior = seen_keep.get(triple)
+        if prior is not None and prior != ke.where:
+            problems.append(f"reconcile keep_edges[{ki}]: {ke.src} {ke.verb} {ke.dst} is kept at "
+                            f"'{prior}' by an earlier directive and at '{ke.where}' here — one "
+                            f"triple can only survive at one anchor")
+        seen_keep[triple] = prior if prior is not None else ke.where
+    dropped = {(d.src, d.verb, d.dst) for d in rec.drop_edges}
+    for ki, ke in enumerate(rec.keep_edges):
+        if (ke.src, ke.verb, ke.dst) in dropped:
+            problems.append(f"reconcile keep_edges[{ki}]: {ke.src} {ke.verb} {ke.dst} is also in "
+                            f"`drop_edges` — keeping an anchor and removing the edge cannot both "
+                            f"be meant; the drop would win")
     elements = all_elements(m)
     defined = set(elements) | {g.id for g in m.happy_path}
     units = {d.unit for d in m.deployment}

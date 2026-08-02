@@ -400,3 +400,36 @@ def test_a_keep_edges_anchor_that_no_longer_exists_warns_and_keeps_everything():
         keep_edges=[KeepEdgeDirective("C1", "calls", "C2", "src/gone.py:1")]), {})
     assert len(m.edges) == 2
     assert any("none of" in n and "kept them all" in n for n in notes)
+
+
+def test_two_keep_edges_for_one_triple_are_a_contradiction_not_a_stale_directive():
+    """At apply time this surfaced as "declared 1 time(s) — nothing to de-duplicate", because the
+    first keep had already resolved the triple. That reads as drift, which is warned about and
+    tolerated; it is actually the operator asking for two incompatible things."""
+    from coyodex.model import Edge, ProjectModel
+    from coyodex.reconcile import KeepEdgeDirective, Reconcile, validate_reconcile
+    m = ProjectModel(title="T", goal="g")
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", where="a.py:1"),
+               Edge(src="C1", verb="calls", dst="C2", where="b.py:2")]
+    probs = validate_reconcile(m, Reconcile(keep_edges=[
+        KeepEdgeDirective("C1", "calls", "C2", "a.py:1"),
+        KeepEdgeDirective("C1", "calls", "C2", "b.py:2")]))
+    assert probs and "one triple can only survive at one anchor" in probs[0]
+    # the same anchor twice is harmless — a merge that recorded it twice, not a contradiction
+    assert not validate_reconcile(m, Reconcile(keep_edges=[
+        KeepEdgeDirective("C1", "calls", "C2", "a.py:1"),
+        KeepEdgeDirective("C1", "calls", "C2", "a.py:1")]))
+
+
+def test_keeping_and_dropping_the_same_triple_is_refused():
+    """Both are honoured in order — the keep narrows to one row and the drop then removes it — so
+    the edge vanishes and the keep directive reads as if it did nothing."""
+    from coyodex.model import Edge, ProjectModel
+    from coyodex.reconcile import (DropEdgeDirective, KeepEdgeDirective, Reconcile,
+                                   validate_reconcile)
+    m = ProjectModel(title="T", goal="g")
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", where="a.py:1")]
+    probs = validate_reconcile(m, Reconcile(
+        keep_edges=[KeepEdgeDirective("C1", "calls", "C2", "a.py:1")],
+        drop_edges=[DropEdgeDirective(src="C1", verb="calls", dst="C2")]))
+    assert probs and "the drop would win" in probs[0]
