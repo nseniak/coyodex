@@ -1404,8 +1404,9 @@ git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is c
   empty, and any untracked files are non-source) — do NOT block: proceed automatically as **B**
   below and note the pin choice + the trivial diff in your report (a build once lost ~2 hours
   blocked on a single stray scratch comment). Otherwise STOP and give the user a choice, then **loop**:
-  - **A (recommended)** — commit (or stash) the code first, so the baseline corresponds to a
-    real commit; then re-check and record the pin as above.
+  - **A (recommended)** — **the user** commits (or stashes) the code first, so the baseline
+    corresponds to a real commit; then you re-check and record the pin as above. Never commit or
+    stash their working tree yourself — this step is a question, not a mandate.
   - **B** — proceed without committing, but record that the code was dirty: pin the sha with a
     `-dirty` suffix (`<short-sha>-dirty`), date = HEAD's commit date.
 
