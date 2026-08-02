@@ -511,7 +511,13 @@ function styleSeqSystem(root) {
   const tint = ELEMENT_TINT.system;
   if (!tint) return;
   for (const rect of root.querySelectorAll('rect.actor[name="' + HP_SYS_ID + '"]')) applyTint(rect, 'system');
-  for (const t of root.querySelectorAll('text.actor-box')) t.style.setProperty('fill', tint.color, 'important');
+  // The label AND its tspans: Mermaid wraps the text in a `tspan` that carries its own (black) fill, so
+  // painting only the `text` leaves a black label on the dark box — the box read as empty. `fill` is not
+  // inherited past an element that sets it, so every drawn node in the label has to be told.
+  const color = tint.color || '#fff';   // a dark box with no colour to pair it with is unreadable, never bare
+  for (const t of root.querySelectorAll('text.actor-box')) {
+    for (const el of [t, ...t.querySelectorAll('tspan')]) el.style.setProperty('fill', color, 'important');
+  }
 }
 // Swap one stick figure for the hexagon outline, in place: the hexagon is centred on the figure's own
 // footprint and the label is left untouched, so the lifeline, the label and every message keep the exact
