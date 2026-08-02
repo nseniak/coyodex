@@ -241,13 +241,19 @@ def _stale_grounding_pin(map_path: Path, live_claims: list[str],
     g = doc.get("grounding") if isinstance(doc, dict) else None
     if not isinstance(g, dict):
         return None
-    pinned = g.get("claims_total")
-    if not isinstance(pinned, int) or pinned <= 0:
-        return None
     # Both sides over the DE-DUPLICATED claim set: `build_record` de-duplicates the pinned side, and
     # two sides counted by different rules measure the rule rather than the map.
     live_set = set(live_claims)
     stored_digest = g.get("live_claims_digest")
+    pinned_raw = g.get("claims_total")
+    pinned = pinned_raw if isinstance(pinned_raw, int) and pinned_raw > 0 else 0
+
+    # THE DIGEST IS CHECKED FIRST, and never gated on `claims_total`. It used to sit behind an early
+    # return for a missing or nonsensical total, so a record could buy silence by CORRUPTING that
+    # field: `claims_total` of 0, of -5, or of the string "446" all skipped the digest comparison
+    # entirely, even when the digest was provably a different map's. Corrupting a field must never be
+    # safer than filling it in — that is the same shape as the bypass fixed one commit earlier, and
+    # this is the third time it has appeared in this file's history.
     if isinstance(stored_digest, str) and stored_digest:
         from coyodex.grounding import live_claims_digest
         if live_claims_digest(live_set) == stored_digest:
@@ -263,6 +269,11 @@ def _stale_grounding_pin(map_path: Path, live_claims: list[str],
                 f"`grounding write` ran — re-run it as the last step before the final assemble:\n"
                 f"  coyodex grounding write --worklist <pinned.json> --map {map_path} "
                 f"--verdicts <…> --out .coyodex/build-fragments/grounding.json")
+    if not pinned:
+        # No digest AND no usable `claims_total`: there is nothing here to compare. `validate` owns
+        # the malformed-record complaint (negative counts, a split that does not add up); this
+        # command reports staleness, and a record with no total is not stale, it is unfinished.
+        return None
     if pinned == len(live_set):
         # Counts agree — which proves nothing. A 1-for-1 rewrite (the shape a reconcile actually
         # produces) leaves the count untouched, so this branch is silent EXACTLY where the digest

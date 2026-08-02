@@ -377,3 +377,33 @@ def test_a_partial_verdict_set_still_stays_silent():
         rec = make_grounding_map(tmp, live, claims_total=2,
                                  claims_superseded=1, claims_added_since=1)
         assert _stale_grounding_pin(rec, live, [v]) is None
+
+
+def test_corrupting_claims_total_cannot_hide_a_wrong_digest():
+    """The digest check used to sit BEHIND an early return for a missing or nonsensical
+    `claims_total`, so a record bought silence by corrupting that field: 0, -5 and the string "446"
+    all skipped the comparison even when the digest was provably another map's. Corrupting a field
+    must never be safer than filling it in — the third appearance of that shape in this file."""
+    from coyodex.finalize import _stale_grounding_pin
+    from coyodex.grounding import live_claims_digest
+    live = [f"claim {i}" for i in range(10)]
+    other = [f"other {i}" for i in range(10)]          # same SIZE, different claims
+    with tempfile.TemporaryDirectory() as tmp:
+        for bad_total in (0, -5, "446", None):
+            p = Path(tmp) / f"m{bad_total}.json"
+            p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {
+                "claims_total": bad_total, "claims_challenged": 10,
+                "live_claims_digest": live_claims_digest(other)}}), encoding="utf-8")
+            msg = _stale_grounding_pin(p, live)
+            assert msg and "live_claims_digest" in msg, (bad_total, msg)
+
+
+def test_a_record_with_no_numbers_at_all_is_not_called_stale():
+    """`validate` owns the malformed-record complaint. This command reports staleness, and a record
+    with nothing in it is unfinished, not stale."""
+    from coyodex.finalize import _stale_grounding_pin
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {}}),
+                     encoding="utf-8")
+        assert _stale_grounding_pin(p, ["a", "b"]) is None
