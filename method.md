@@ -971,9 +971,12 @@ synthesis → parallel trace.**
   `deployment[]` units exist but no component sets `runs_in`, and flags a formula-filled `runs_in`.
   Keep fragment argument order stable and author the reconcile ids against the assembled ids (dedup
   survivors are first-occurrence-in-argument-order, so reordering fragments can shift surviving ids).
-  - **A dedup decision belongs here too.** `coyodex fix dedup-edge --to-reconcile
-    .coyodex/reconcile.json` writes its choices as `keep_edges` instead of editing the assembled
-    map. Editing the map does not survive: a shipped map carried 365 edges while re-assembling its
+  - **A dedup decision belongs here too.** `coyodex fix dedup-edge --map .coyodex/project-map.json
+    --repo . --accept-suggested --to-reconcile .coyodex/reconcile.json` writes its choices as
+    `keep_edges` instead of editing the assembled map. **`--to-reconcile` needs a decision** —
+    `--accept-suggested`, or explicit `--keep` tokens after reading the listing (run it without
+    `--to-reconcile` to see that listing first). On its own it is refused: it used to print the
+    listing, write nothing and exit 0, and a build only noticed because it read the file back. Editing the map does not survive: a shipped map carried 365 edges while re-assembling its
     own committed fragments produced 416, because the next assemble restored 49 duplicates the fix
     had removed. A map that cannot be rebuilt from its fragments has quietly stopped being generated.
   - **Generate the file — `coyodex reconcile`.** Count IDS, not rules: a file of 25 rules can carry
@@ -1228,6 +1231,22 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
 
   Step 3 is safe because `assemble` is idempotent on claims — verified over a real build's
   fragments, three runs, 444 claims every time — so it cannot invalidate what step 2 measured.
+
+  **Then READ what the record only counts — `coyodex grounding report --map`, same arguments.**
+  `write` reduces the pass to four numbers plus a digest; `report` prints WHICH claims were
+  superseded, refuted, tied, unverifiable or unvoted. Read it before writing `grounding.note`, and
+  check two things the counts cannot show:
+
+  - **a SUPERSEDED claim that was CONFIRMED** — the build rewrote something the skeptics had
+    settled. That is a decision, not a fix; say so in the note.
+  - **a REFUTED claim that is NOT superseded** — the reconcile changed something the claim's text
+    does not name, so neither `claims_superseded` nor the digest can witness it. On a live build
+    `E35 (UpstreamState) has states […] with 10 transition(s)` was refuted, the wrong transition
+    was corrected, and the claim string came out identical: 5 refutations, 4 superseded. Check that
+    one by hand against the map, because nothing else will — `report` names it for you.
+
+  The assumption that "superseded" and "refuted" are the same set is false in BOTH directions, and
+  the counts alone cannot tell you which way a given build differs.
 
   **`claims_total` stays PINNED, and the pin is not a bug to fix.** Reconciling a refutation REWRITES the claim, which orphans its verdict, so a record
   written first describes a worklist that no longer exists. A live build wrote it, then reconciled

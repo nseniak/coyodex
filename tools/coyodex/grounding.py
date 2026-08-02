@@ -188,7 +188,7 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
                        if not (c in _seen or _seen.add(c))]
     buckets: dict[str, list[dict[str, object]]] = {
         "refuted": [], "unverifiable": [], "tied": [], "unvoted": [], "confirmed": [],
-        "superseded": []}
+        "superseded": [], "refuted_not_superseded": []}
     # SUPERSEDED — pinned claims the reconcile rewrote or removed, so the shipped map no longer
     # carries them. The record states how MANY; until now nothing could say WHICH, and the whole
     # design rests on those being the refuted ones. A superseded claim that was CONFIRMED is the
@@ -216,12 +216,18 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
                 "claim": claim, "verdict": bucket, "votes": len(rows),
                 "for": grounded, "against": refuted,
                 "notes": [str(r.get("note", "")) for r in rows if r.get("note")]})
-        buckets[bucket].append({
+        row = {
             "claim": claim, "votes": len(rows), "for": grounded, "against": refuted,
             "evidence": [str(r.get("evidence", "")) for r in rows if r.get("evidence")],
             "skeptics": sorted({str(r.get("skeptic", "")) for r in rows if r.get("skeptic")}),
             "notes": [str(r.get("note", "")) for r in rows if r.get("note")],
-        })
+        }
+        buckets[bucket].append(row)
+        # A refutation whose claim TEXT did not change is invisible to `claims_superseded` and to
+        # the digest. Bucketed here rather than derived in the text renderer, so `--json` — which
+        # this codebase tells readers to prefer over parsing the lines — carries it too.
+        if live is not None and bucket == "refuted" and claim in live:
+            buckets["refuted_not_superseded"].append(row)
     if as_json:
         return json.dumps(buckets, indent=2, ensure_ascii=False)
     out: list[str] = []
@@ -250,6 +256,29 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
             n = len(unsettled)
             out.append(f"  {n} {'was' if n == 1 else 'were'} never settled (tied / unverifiable / "
                        f"unvoted) — removing the claim ended the question rather than answering it.")
+        # The OTHER direction, and the one no number watches. `claims_superseded` counts pinned
+        # claims the shipped map no longer carries, and the design reads that as "the refutations
+        # landed". But a refutation can be reconciled WITHOUT changing the claim's rendered text: on
+        # a live build, `E35 (UpstreamState) has states […] with 10 transition(s)` was refuted, the
+        # wrong transition was corrected in the map, and the claim string — which names a COUNT, not
+        # the transitions — came out identical. So 5 refutations produced 4 superseded, and the
+        # digest cannot witness that fifth fix at all: a build that "corrected" it by doing nothing
+        # would produce the same digest. Name them, so the reader checks the map instead of the count.
+        still_live = buckets["refuted_not_superseded"]
+        if still_live:
+            # Its OWN section. Nested under `SUPERSEDED (N)` it made the heading's count disagree
+            # with the bullets below it, and on a map where nothing was superseded it printed
+            # "(none — the pinned worklist and the shipped map hold the same claims)" immediately
+            # above a list of claims — two lines that contradict each other, told apart only by
+            # indentation.
+            n = len(still_live)
+            out.append(f"\nREFUTED BUT NOT SUPERSEDED ({n}) — the map still carries "
+                       f"{'this claim' if n == 1 else 'these claims'} verbatim, so neither "
+                       f"`claims_superseded` nor the digest can witness the fix. Either the "
+                       f"reconcile changed something the claim text does not name (check the map by "
+                       f"hand), or it has not been applied:")
+            for row in still_live:
+                out.append(f"  * {row['claim']}")
     for name, label in (("refuted", "REFUTED — reconcile each into the map"),
                         ("tied", "TIED — the skeptics split; adjudicate against the code"),
                         ("unverifiable", "UNVERIFIABLE — a skeptic said the code cannot answer"),

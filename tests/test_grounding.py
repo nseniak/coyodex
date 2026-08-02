@@ -275,3 +275,31 @@ def test_the_superseded_list_shows_the_vote_split():
             {"claim": "c", "grounded": True, "evidence": "a.py:1"},
             {"claim": "c", "grounded": False}]
     assert "[2 for / 1 against]" in make_report(pinned, rows, live=[])
+
+
+def test_report_names_a_refutation_the_superseded_count_cannot_witness():
+    """`claims_superseded` counts pinned claims the shipped map no longer carries, and the design
+    reads that as "the refutations landed". A refutation can be reconciled WITHOUT changing the
+    claim's rendered text: on a live build `E35 (UpstreamState) has states […] with 10
+    transition(s)` was refuted, the wrong transition was corrected, and the claim string came out
+    identical — 5 refutations, 4 superseded. The digest cannot witness that fifth fix at all, so a
+    build that "corrected" it by doing nothing would produce the same digest."""
+    claims = ["C1 calls C2", "E35 has states [a, b] with 10 transition(s)"]
+    rows = [{"claim": "C1 calls C2", "grounded": False, "evidence": "a.py:1"},
+            {"claim": "E35 has states [a, b] with 10 transition(s)", "grounded": False,
+             "evidence": "s.py:41", "note": "the live -> deferred transition has no code path"}]
+    # C1 calls C2 was DROPPED by the reconcile; the E35 claim still renders identically.
+    live = ["E35 has states [a, b] with 10 transition(s)"]
+    out = G.format_report(claims, rows, live_claims=live)
+    assert "SUPERSEDED (1)" in out, out
+    assert "REFUTED BUT NOT SUPERSEDED (1)" in out, out
+    assert "E35 has states" in out.split("REFUTED BUT NOT SUPERSEDED")[1]
+
+
+def test_report_says_nothing_extra_when_every_refutation_was_superseded():
+    """The normal case must stay quiet, or the line becomes noise a build learns to skip."""
+    claims = ["C1 calls C2"]
+    rows = [{"claim": "C1 calls C2", "grounded": False, "evidence": "a.py:1"}]
+    out = G.format_report(claims, rows, live_claims=[])
+    assert "SUPERSEDED (1)" in out
+    assert "NOT SUPERSEDED" not in out

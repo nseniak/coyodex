@@ -191,6 +191,15 @@ def _args_after(argv: list[str], flag: str) -> list[str]:
     return out
 
 
+def count_fragment_files(frag_paths: list[str]) -> int:
+    """How many fragment FILES the arguments name, expanding a bare directory the way
+    `load_elements` does — so the reported count matches what was actually read."""
+    n = 0
+    for p in (Path(x) for x in frag_paths):
+        n += len(list(p.glob("*.json"))) if p.is_dir() and p.suffix != ".json" else 1
+    return n
+
+
 def load_elements(map_path: str | None, frag_paths: list[str],
                   want_fragments: bool = False) -> tuple[ProjectModel, list[str]]:
     """The model the rules resolve against, from FRAGMENTS or from an assembled MAP.
@@ -211,7 +220,37 @@ def load_elements(map_path: str | None, frag_paths: list[str],
                         "rather than falling back to the map, which during a build is the previous "
                         "build's and whose ids mean something else.")
     if frag_paths:
-        parts, notes, errors = load_fragment_paths([Path(p) for p in frag_paths])
+        # A bare DIRECTORY is what an operator types first, and it used to die with a raw
+        # "[Errno 21] Is a directory" from the fragment reader. The `--help` shows a glob but never
+        # says a directory is refused, so the failure reads as "this command is broken" rather than
+        # "add /*.json".
+        #
+        # Only a path that does NOT end in `.json` is expanded. A directory named `inner.json/`
+        # swept up by the caller's own glob must keep raising: `assemble` guards that case on
+        # purpose, and silently dropping it would make the two input forms disagree about the file
+        # set while both exit 0.
+        #
+        # `sorted()` is CODEPOINT order and the shell's glob is locale collation, so the two differ
+        # on any name leading with an uppercase letter or `_` (`Beta.json` sorts before `alpha.json`
+        # here, after it in zsh under en_US.UTF-8). Argument order is load-bearing — dedup survivors
+        # are first-occurrence-in-argument-order — so the expansion is REPORTED, letting a reader
+        # see the order that was actually used rather than trust a claim about matching the shell.
+        expanded: list[Path] = []
+        for p in (Path(x) for x in frag_paths):
+            expanded.extend(sorted(p.glob("*.json"))
+                            if p.is_dir() and p.suffix != ".json" else [p])
+        if not expanded:
+            raise RuleError(f"--fragments matched no readable fragment ({len(frag_paths)} path(s) "
+                            "given; a directory argument was expanded to its *.json children and "
+                            "held none)")
+        expansions = [(Path(x), n) for x in frag_paths
+                      if (p := Path(x)).is_dir() and p.suffix != ".json"
+                      and (n := len(sorted(p.glob('*.json'))))]
+        parts, notes, errors = load_fragment_paths(expanded)
+        for d, n in expansions:
+            notes.insert(0, f"--fragments {d} expanded to {n} file(s), in codepoint order — the "
+                            f"shell's glob may order them differently under a non-C locale, and "
+                            f"argument order decides which duplicate id survives")
         if errors:
             raise RuleError("cannot read the fragments:\n  " + "\n  ".join(errors))
         if not parts:
@@ -259,8 +298,10 @@ def main(argv: list[str] | None = None) -> int:
     for note in notes:
         print(note, file=sys.stderr)
     # Say which source was read. Two inputs that resolve the same id space differently is exactly
-    # the class of mistake that stays invisible when the tool is silent about its own input.
-    print(f"reading {len(frag_paths)} fragment(s)" if frag_paths
+    # the class of mistake that stays invisible when the tool is silent about its own input — so
+    # count the FRAGMENTS, not the argv entries. Once a bare directory could be passed, `--fragments
+    # <dir>` over 31 real fragments reported "reading 1 fragment(s)", which is the same silence.
+    print(f"reading {count_fragment_files(frag_paths)} fragment(s)" if frag_paths
           else f"reading map {map_path or _DEFAULT_MAP}", file=sys.stderr)
 
     doc, report = expand(m, rules)

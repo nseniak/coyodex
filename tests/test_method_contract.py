@@ -493,6 +493,12 @@ def test_a_mode_flag_does_not_silently_swallow_the_flags_its_mode_ignores():
 #: An entry here is a claim: "this is always fixable at the point it fires, so an operator never
 #: has to live with it." Adding a line to this list is a design decision, not a formality.
 KNOWN_NO_ESCAPE: dict[str, str] = {
+    # A META-advisory: its subject is a recorded exception that silences nothing, so "record an
+    # exception to silence it" is circular — the remedy is to delete the dead line or fix the key.
+    # Unsilenceable for the same reason the suppression-COUNT line is: a silence you cannot see is
+    # indistinguishable from having no findings.
+    "recorded `runs_in` exception(s) currently suppressing nothing":
+        "the finding IS a dead record; recording another one cannot answer it",
     # Row-local well-formedness: the fix is mechanical and local, there is no judgement to record.
     "{}: `no_call_site` is set but a `where` is present":
         "contradictory row; drop one field",

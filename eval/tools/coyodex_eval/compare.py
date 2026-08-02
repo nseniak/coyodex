@@ -295,7 +295,36 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         gates.append(GateResult("deployment-linkage-no-drop", ok,
             f"deployment units hosting a component "
             f"{baseline.deployment_units_linked}/{baseline.deployment_units} -> "
-            f"{candidate.deployment_units_linked}/{candidate.deployment_units}"))
+            f"{candidate.deployment_units_linked}/{candidate.deployment_units}"
+            f" · distinct hosted component sets "
+            f"{baseline.deployment_distinct_hosted_sets} -> "
+            f"{candidate.deployment_distinct_hosted_sets}"))
+        # Counting units let a hollow improvement pass: 2/8 -> 3/10 on a map whose three linked
+        # units hosted the identical 50 components. Adding a deployment SHAPE of the same process
+        # raises the unit count and cannot raise this one. Baselines written before the field carry
+        # 0, which makes the comparison vacuously true rather than falsely failing — the same
+        # direction the `deployment_units` skip above chose.
+        if not baseline.deployment_distinct_hosted_sets:
+            # Same hazard the `deployment_units` skip 15 lines above prints a note for: a baseline
+            # blessed before the field carries 0, `cand >= 0` is always true, and a HARD gate is off
+            # with nothing saying so. Silence here is indistinguishable from "the gate passed".
+            notes.append("deployment-distinct-hosts gate is vacuous — the baseline profile carries "
+                         "no `deployment_distinct_hosted_sets` (re-score and re-bless the baseline "
+                         "to enable it)")
+        sets_ok = (candidate.deployment_distinct_hosted_sets
+                   >= baseline.deployment_distinct_hosted_sets)
+        gates.append(GateResult("deployment-distinct-hosts-no-drop", sets_ok,
+            f"distinct component sets hosted across the units "
+            f"{baseline.deployment_distinct_hosted_sets} -> "
+            f"{candidate.deployment_distinct_hosted_sets}"))
+        if (candidate.deployment_units_linked > candidate.deployment_distinct_hosted_sets
+                and candidate.deployment_distinct_hosted_sets):
+            notes.append(
+                f"{candidate.deployment_units_linked} unit(s) host only "
+                f"{candidate.deployment_distinct_hosted_sets} distinct component set(s) — some units "
+                f"are deployment SHAPES of the same process, so linkage reads higher than the number "
+                f"of real placement decisions. Check that the components in no unit at all are "
+                f"deliberate")
         if not ok:
             notes.append("a unit nothing runs in is an empty box in the Deployment view — check "
                          "whether the components that owned those files were dropped, and whether "

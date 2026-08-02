@@ -2031,6 +2031,31 @@ def _runs_in_family_warnings(m: ProjectModel) -> list[str]:
                    f"recorded scoped exception(s), across {len(suppressed)} finding group(s) — "
                    f"{detail}. Each silences only its own group; re-read one by validating a copy "
                    f"with that line removed.")
+    # A correctly-spelled key whose group is EMPTY is the same failure wearing the other hat: it
+    # suppresses nothing, and the count line above cannot say so because it only reports what it
+    # swallowed. On a live map three scoped keys were recorded and the line named two groups; the
+    # third (`runs-in/unplaced`) matched no finding, and removing it changed no output at all — so
+    # a correct-but-inert record and a typo'd one were indistinguishable, and the build read that
+    # line three times without noticing. `assemble` already says "nothing to de-duplicate" for a
+    # keep_edges directive that matches nothing and `reconcile` reports every rule that matched
+    # nothing; this was the one escape family with no such signal.
+    fired = {scope for scope, _l, _g in found}
+    inert = [scope for scope, _label, _produce in _RUNS_IN_FAMILY
+             if scope in recorded and scope not in fired]
+    if inert:
+        # "Remove the line" was the first wording and it was WRONG ADVICE. These groups fire on
+        # thresholds, so a record can be DORMANT rather than dead: on a live map `runs-in/unplaced`
+        # suppressed nothing while sitting two components below the unplaced-share threshold, and
+        # the justification behind it ("the React dashboard runs in the browser, which is not a
+        # deployment process") was correct and would be needed the moment the map crossed it.
+        # Nothing here can tell a typo from a not-yet-firing group, so the line reports the fact and
+        # asks for a check — it does not prescribe a deletion it has no basis for.
+        out.append("recorded `runs_in` exception(s) currently suppressing nothing: "
+                   + ", ".join(f"`{s}`" for s in inert)
+                   + " — the advisory each one names is not firing on this map. Either the key is "
+                     "not the one you meant (an inert record and a typo look identical), or the "
+                     "group is simply below its threshold today and the record is holding a "
+                     "decision for later. Check which, and keep it if it is the latter.")
     # A near-miss key silences nothing and says nothing, so the operator believes the finding is
     # adjudicated while validate keeps firing. Scoping replaced one short word with five
     # slash-and-hyphen keys typed free-hand into `record --line`, which multiplies that surface.

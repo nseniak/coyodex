@@ -75,6 +75,16 @@ CORPUS: tuple[Build, ...] = (
                              "24905cb7-69ab-4af9-afd8-84625554dfe3.jsonl"),
     Build("base", "mee6", "-Users-nitsanseniak-mee6-repos-mee6/"
                           "23e4e486-86cb-44b5-984c-988f634fbbd3.jsonl"),
+    # The 2026-08-02 mcpolis build, added because an adversarial review of that day's detector
+    # repairs found three of them producing ZERO delta across the eight transcripts above: no build
+    # in the original corpus invokes `coyodex grounding` at all (assertion 13 scores 0/0 on every
+    # one), none redirects a gate to a file and reads it back with the Read tool (assertions 9 and
+    # 23's new path), and none runs `audit --batches` or `fix dedup-edge --to-reconcile`. The rule
+    # "measure a repaired detector against the corpus BOTH ways" was being satisfied vacuously.
+    # This build exercises all four, and is the negative case for assertion 10 — 0 idle polls
+    # against the 36 the other eight carry between them.
+    Build("0802", "mcpolis", "-Users-nitsanseniak-mee6-repos-mcpolis/"
+                             "e2f11ef1-2ef5-4117-bad1-61235a661a97.jsonl"),
 )
 
 
@@ -145,19 +155,31 @@ def test_hand_parsing_the_preindex_stopped_after_the_method_change():
         assert a.of > 0 and a.observed == 0, f"{c.label}: baseline should be all hand-parses"
 
 
-def test_the_reconcile_command_was_never_used_by_any_build():
-    """Assertion 7 — the headline class-2 defect, and the one number the brief and this checker
-    agree on exactly. Seven of the eight builds produced a `reconcile.json`; ZERO produced it with
-    `coyodex reconcile`. Every one wrote it by hand or generated it with a script."""
+def test_the_reconcile_command_went_from_never_used_to_used():
+    """Assertion 7 — the headline class-2 defect, and the one this corpus can now show being fixed.
+
+    Seven of the original eight builds produced a `reconcile.json` and ZERO produced it with
+    `coyodex reconcile`; every one wrote it by hand or generated it with a script. That held across
+    ten builds and is why the "~30 assignments" escape was deleted from method.md.
+
+    The `0802` build is the first to reach for the command — twice, at turns 147 and 149. This test
+    now pins BOTH halves, because a regression in either direction is the interesting event: the
+    historical builds must keep reading 0 (the reader still sees what it saw), and at least one
+    build must be using it (the fix stays reached)."""
     if _skip():
         return
     cards = make_cards()
-    produced = 0
+    produced = used = 0
     for label, c in cards.items():
         a = c.by_id()[7]
-        assert a.observed == 0, f"{label}: a build used `coyodex reconcile` — update this test"
+        if label.startswith("0802/"):
+            assert a.observed > 0, f"{label}: the command stopped being reached — regression"
+        else:
+            assert a.observed == 0, f"{label}: a historical build cannot have used it — reader bug"
+        used += a.observed
         produced += a.of
     assert produced >= 7, f"only {produced} reconcile.json production(s) seen across the corpus"
+    assert used >= 1, "no build in the corpus reaches `coyodex reconcile`"
 
 
 def test_grounding_was_recorded_after_the_change_and_never_before():

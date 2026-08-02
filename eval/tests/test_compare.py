@@ -481,3 +481,41 @@ def test_a_map_with_no_deployment_section_is_not_gated():
     cand = make_profile(deployment_units=0, deployment_units_linked=0)
     assert not [g for g in compare(base, cand, Thresholds()).gates
                 if g.name == "deployment-linkage-no-drop"]
+
+
+def test_adding_a_deployment_shape_of_the_same_process_does_not_buy_linkage():
+    """Linkage counts UNITS, and a unit is cheap to add. A live rebuild scored 2/8 -> 3/10 and the
+    gate passed — but the three linked units (`backend`, `standalone`, `e2e backend shard`) hosted
+    the IDENTICAL 50 components, one placement decision replicated across three deployment shapes,
+    while the other 30 (the whole frontend) sat in no unit at all. Counting DISTINCT hosted sets
+    cannot be moved by naming another shape of the same process."""
+    base = make_profile(deployment_units=8, deployment_units_linked=2,
+                        deployment_distinct_hosted_sets=2)
+    cand = make_profile(deployment_units=10, deployment_units_linked=3,
+                        deployment_distinct_hosted_sets=1)
+    report = compare(base, cand)
+    assert next(g for g in report.gates if g.name == "deployment-linkage-no-drop").passed
+    assert not next(g for g in report.gates
+                    if g.name == "deployment-distinct-hosts-no-drop").passed
+    assert any("deployment SHAPES of the same process" in n for n in report.notes), report.notes
+
+
+def test_distinct_hosts_gate_is_vacuous_on_a_baseline_that_predates_the_field():
+    """A profile blessed before the field carries 0, so the comparison is trivially satisfied rather
+    than falsely failing — the direction the `deployment_units` skip already chose."""
+    base = make_profile(deployment_units=8, deployment_units_linked=2)
+    cand = make_profile(deployment_units=8, deployment_units_linked=2,
+                        deployment_distinct_hosted_sets=1)
+    assert next(g for g in compare(base, cand).gates
+                if g.name == "deployment-distinct-hosts-no-drop").passed
+
+
+def test_a_stale_baseline_says_the_distinct_hosts_gate_is_off():
+    """A baseline blessed before the field carries 0, `cand >= 0` is always true, and a HARD gate is
+    off with nothing saying so — the identical hazard the `deployment_units` skip prints a note for
+    fifteen lines above."""
+    base = make_profile(deployment_units=8, deployment_units_linked=2)
+    cand = make_profile(deployment_units=8, deployment_units_linked=2,
+                        deployment_distinct_hosted_sets=1)
+    report = compare(base, cand)
+    assert any("deployment-distinct-hosts gate is vacuous" in n for n in report.notes), report.notes

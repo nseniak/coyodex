@@ -433,3 +433,52 @@ def test_keeping_and_dropping_the_same_triple_is_refused():
         keep_edges=[KeepEdgeDirective("C1", "calls", "C2", "a.py:1")],
         drop_edges=[DropEdgeDirective(src="C1", verb="calls", dst="C2")]))
     assert probs and "the drop would win" in probs[0]
+
+
+def test_a_bare_fragment_directory_is_expanded_instead_of_erroring():
+    """A directory is what an operator types first, and it used to die on the fragment reader's raw
+    `[Errno 21] Is a directory`. `--help` shows a glob but never says a bare directory is refused,
+    so the failure reads as "this command is broken" — a live build lost a turn to it. Expansion is
+    sorted, so the argument order stays the shell's glob order and a re-run assembles identically."""
+    from coyodex.reconcile_build import load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        frag_dir = make_fragment_dir(tmp)
+        from_dir, _ = load_elements(None, [str(frag_dir)], want_fragments=True)
+        from_glob, _ = load_elements(None, [str(p) for p in sorted(frag_dir.glob("*.json"))],
+                                     want_fragments=True)
+        assert [c.id for c in from_dir.components] == [c.id for c in from_glob.components]
+        assert [c.id for c in from_dir.components] == ["C1", "C2", "C4"]
+
+
+def test_an_empty_fragment_directory_still_refuses():
+    """Expanding must not turn "the harvest has not written anything yet" into a silent empty run —
+    that is the case `want_fragments` exists to refuse, and it still has to be refused."""
+    from coyodex.reconcile_build import RuleError, load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        empty = Path(tmp) / "build-fragments"
+        empty.mkdir()
+        try:
+            load_elements(None, [str(empty)], want_fragments=True)
+        except RuleError as e:
+            assert "no readable fragment" in str(e), e
+        else:
+            raise AssertionError("an empty directory must refuse, not read the map")
+
+
+def test_a_directory_named_something_json_still_raises():
+    """`assemble` guards a directory swept up by the caller's own glob on purpose. Expanding every
+    directory argument made that guard unreachable for `reconcile`: a nested `inner.json/` was
+    silently dropped instead of erroring, so the glob form and the bare-directory form disagreed
+    about the file set while both exited 0."""
+    from coyodex.reconcile_build import RuleError, load_elements
+    with tempfile.TemporaryDirectory() as tmp:
+        frag_dir = make_fragment_dir(tmp)
+        (frag_dir / "inner.json").mkdir()
+        paths = [str(p) for p in sorted(frag_dir.glob("*.json"))]
+        assert any(p.endswith("inner.json") for p in paths), paths
+        try:
+            load_elements(None, paths, want_fragments=True)
+        except RuleError as e:
+            assert "Is a directory" in str(e), e
+        else:
+            raise AssertionError("a directory named *.json must still raise, not vanish")

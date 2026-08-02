@@ -1,6 +1,6 @@
 # L3 — process assertions over a build transcript
 
-**Status: assertions 1–10, 12–18, 21, 22 and 23 are IMPLEMENTED; 11, 19 and 20 are not.** The reader is
+**Status: assertions 1–10, 12–18 and 21–25 are IMPLEMENTED; 11, 19 and 20 are not.** The reader is
 [eval/tools/coyodex_eval/transcript.py](../../tools/coyodex_eval/transcript.py), the assertions and
 the scorecard/diff CLI are
 [eval/tools/coyodex_eval/process_scorecard.py](../../tools/coyodex_eval/process_scorecard.py)
@@ -173,10 +173,53 @@ Each is a repeatable process defect a real build showed and no existing number w
 | 19 | *(WITHDRAWN — do not re-add without reading below)* no gate's output is filtered with an inverting `grep` | the defect is real: a build hid 38 duplicate-edge warnings behind `grep -v` and they stayed invisible across two assembles and a whole grounding pass. The MEASUREMENT was not. See the note under this table |
 | 20 | *(reserved, NOT implemented)* the lead re-verified every refutation before applying it | three of one batch's eight adverse skeptic findings were false, including a 2-1 majority on the highest-risk claim in the map, and the lead caught all three on its own initiative. But a refutation is reconciled by an ordinary map write and justified by an ordinary file read, so there is no reliable transcript signature. Reserved rather than filled with a guess |
 | 21 | `assemble`'s digest is clean at the FINAL assemble | a build was told `UNHEALED riding steps 4` at four successive assembles and addressed it at none. Only the last assemble counts: a mid-build unhealed count is expected and drains as the trace lands. This measures whether the digest was READ, not whether the shipped map is broken |
-| 22 | the behavioral draft precedes `preindex` | `preindex` prints GR1 on every run. A build read it, harvested 14 structural slices, and wrote its behavioral fragment 79 turns later. The structural slices exist to serve the behavioral layer, so the order is not decoration |
+| 22 | the behavioral draft precedes **the first structural fan-out** | `preindex` prints GR1 on every run. A build read it, harvested 14 structural slices, and wrote its behavioral fragment 79 turns later. The structural slices exist to serve the behavioral layer, so the order is not decoration. **Re-anchored 2026-08-02** — see below |
 
 11 and 20 are both absent from the runner, for different reasons: 11 needs the fixture's golden map,
 20 needs a signature the transcript does not carry.
+
+### Why 22 was re-anchored
+
+It shipped as `behavioral draft precedes preindex` and scored 0 on a build that obeyed the rule.
+That build ran `preindex` at turn 42, was told **GR1 NOT MET** by the tool's own line, drafted its
+behavioral fragment at turn 58, and only launched the 14-slice structural harvest at turn 76. Order
+respected; score identical to the build the assertion was written for, which harvested first and
+drafted 79 turns later.
+
+The harm GR1 names is **structural slices written before the behavioral layer exists**, because
+those slices are supposed to serve it. Running `preindex` early is not that harm — the tool prints
+GR1 precisely so a build can notice and draft before it harvests, which is what this one did. So
+the anchor is now the first turn launching ≥2 agents, with the `preindex` order and its GR1 verdict
+kept in the note. `preindex`'s own `GR1 met` line still settles the question wherever it ran before
+the harvest, because a fragment written by a SUB-AGENT is invisible to the transcript scan.
+
+### 24–25, from the 2026-08-02 retrospective
+
+| # | assertion | the fix it audits |
+|---|---|---|
+| 24 | the shipped map carries no recorded exception that suppresses nothing | a build recorded three scoped `runs-in/…` keys; `validate`'s count line named two groups, and deleting the third changed no output at all. A correctly-spelled inert record and a typo'd one were indistinguishable, and the build read that line three times without noticing. Needs `--map`; `n/a` without it |
+| 25 | every `fix dedup-edge --to-reconcile` run recorded a directive | the flag was ignored when neither `--keep` nor `--accept-suggested` was given: exit 0, a full listing, an untouched file. A build escaped only because it read the file back. The tool now refuses that combination; this is the regression watch |
+
+### What the 2026-08-02 retrospective taught about these detectors
+
+Three assertions **accused an honest build**, and the corpus had not caught any of them because the
+corpus test asserts structural invariants rather than per-command truth. Each failure is the same
+shape the table under "What building them taught" already records — a substring standing in for a
+parse:
+
+| the bug | what it did |
+|---|---|
+| `FRAGMENT_DIR in cmd and \b(ls\|find\|stat\|wc)\b` | the English word **"find"** inside `echo "…find a real operative line…"` and inside an extras body counted as a directory poll; so did an `ls` chained onto a real `assemble`. A build that cut idle polling from 88 tool calls to **0** scored 0.67 and was told a fan-out had breached the threshold |
+| `>>?\s*\S` as "writes a file" | `2>&1` (a stderr merge) and the `->` in `print(x, '->', y)` both matched, so a `render`+`finalize` turn and a read-only `python3 -c` were reported as map writes |
+| assertion 13's anchor moving without its evidence resetting | a build that re-ran `grounding write` after further edits — the method-compliant recovery — was reported as "written at turn 343; 14 later write(s)" with evidence starting at turn 313 |
+| assertions 9 and 23 reading only Bash stdout | a build that redirected every gate to a file and `Read` it whole — what the method asks for — scored `n/a — no validate output captured`, while the build that hid 38 warnings behind `grep -v` scored 0.95 and 1.00 |
+
+**The rule this hardens: measure a repaired detector against the corpus BOTH ways.** Counting only
+what it no longer flags hides the opposite error. The poll-detector repair went 51 → 18 flagged on
+its first cut, and auditing the 33 removals found real waits among them (`ls …/build-fragments/ |
+awk`, `ls -1 …/*.json | grep -v draft`, an `until [ "$(ls -1 …)" ]` spin loop). The shipped version
+is 51 → 37 with all 14 removals audited as genuine work (`mv`, `mkdir`, `rm`, `python3`,
+`lint-fragment`) and **0 newly flagged**.
 
 ### Why 19 was withdrawn
 

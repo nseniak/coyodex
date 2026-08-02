@@ -2826,3 +2826,45 @@ def test_a_record_carrying_only_a_pin_delta_still_reaches_the_checks():
     # passes even with the gate reverted, which is how this test first shipped proving nothing.
     assert any("`grounding`" in w for w in warnings_of(m)), (
         "a record carrying only a pin-delta must still reach the grounding checks")
+
+
+def test_a_recorded_runs_in_key_that_silences_nothing_is_named():
+    """A correctly spelled key whose advisory is NOT firing suppresses nothing and, until now, said
+    nothing — so an inert record and a typo'd one were indistinguishable. A live map recorded three
+    scoped keys; the count line named two groups, and removing the third changed no output at all.
+    The build read that line three times and never noticed.
+
+    `assemble` already reports a `keep_edges` directive that matches nothing, and `reconcile` every
+    rule that matched nothing; this was the one escape family with no such signal."""
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="standalone"), DeploymentRow(unit="worker")]
+    m.components[0].runs_in = ["standalone"]
+    # `runs-in/quality` is doing real work here; `runs-in/messaging` names a group with no findings.
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="runs-in/quality: it truly is one process.\n"
+                                  "runs-in/messaging: the far ends are all third-party.")]
+    ws = warnings_of(m)
+    inert = [w for w in ws if "currently suppressing nothing" in w]
+    assert len(inert) == 1, ws
+    assert "runs-in/messaging" in inert[0], inert
+    assert "runs-in/quality" not in inert[0], "the key that IS suppressing must not be named"
+
+
+def test_no_inert_line_when_every_recorded_key_suppresses_something():
+    """The line must stay quiet on an honest record, or it becomes noise every build learns to skip."""
+    m = make_valid_model()
+    m.deployment = [DeploymentRow(unit="standalone"), DeploymentRow(unit="worker")]
+    m.components[0].runs_in = ["standalone"]
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="runs-in/quality: it truly is one process.")]
+    assert not any("currently suppressing nothing" in w for w in warnings_of(m))
+
+
+def test_the_inert_record_phrase_has_exactly_one_producer():
+    """L3 assertion 24 recognises this finding by the literal phrase, so a second advisory using the
+    same words would make it report a silent false 0. Pinning the phrase here means the assertion
+    and its producer cannot drift apart unnoticed."""
+    src = (Path(__file__).resolve().parent.parent
+           / "tools" / "coyodex" / "validate_model.py").read_text(encoding="utf-8")
+    assert src.count("currently suppressing nothing") == 1, (
+        "assertion 24 keys on this phrase; a second producer makes its 0 ambiguous")

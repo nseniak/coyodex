@@ -486,3 +486,45 @@ def test_to_reconcile_updates_a_triple_instead_of_silently_keeping_the_old_ancho
         keeps = json.loads(rec.read_text())["keep_edges"]
         assert len(keeps) == 1 and keeps[0]["where"] == "tests/a.py:99", keeps
         assert "UPDATED" in out
+
+
+def test_to_reconcile_refuses_when_there_is_no_decision_to_record(capsys):
+    """`--to-reconcile` names an OUTPUT, and the listing path returned early without ever looking at
+    it: a live build ran `dedup-edge --map … --repo … --to-reconcile <file>`, got exit 0 and a full
+    conflict listing, and the file was untouched. It only noticed because it read the file back
+    afterwards; a build trusting the exit code ships a map whose fragments re-assemble to a
+    different edge count — the exact failure this flag exists to prevent."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        rec = Path(tmp) / "reconcile.json"
+        assert fix.main(["dedup-edge", "--map", str(p), "--to-reconcile", str(rec)]) == 2
+        assert not rec.exists(), "nothing may be written when the run is refused"
+        err = capsys.readouterr().err
+        assert "--accept-suggested" in err and "--keep" in err, err
+
+
+def test_to_reconcile_refuses_alongside_json(capsys):
+    """Same shape as the existing `--json --accept-suggested` refusal: one flag lists, the other
+    writes, and `--json` returns before the write path is ever reached."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        rec = Path(tmp) / "reconcile.json"
+        assert fix.main(["dedup-edge", "--map", str(p), "--json",
+                         "--to-reconcile", str(rec)]) == 2
+        assert not rec.exists()
+        assert "--json" in capsys.readouterr().err
+
+
+def test_a_map_with_no_conflicts_is_not_an_error_whatever_the_flags(capsys):
+    """The refusal was placed ABOVE the map load, so the healthy end state — nothing left to
+    de-duplicate — exited 2. A pipeline that runs the dedup step unconditionally (which is what a
+    durable-decision step should do) then broke precisely when the map was correct, and the message
+    pushed the operator toward `--accept-suggested` on a map with nothing to accept."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "clean.json"
+        p.write_text(json.dumps(make_map([
+            {"src": "C1", "verb": "calls", "dst": "C2", "why": "w", "where": "src/a.py:10"},
+        ])), encoding="utf-8")
+        rec = Path(tmp) / "reconcile.json"
+        assert fix.main(["dedup-edge", "--map", str(p), "--to-reconcile", str(rec)]) == 0
+        assert "no (src, verb, dst) edge is declared more than once" in capsys.readouterr().out

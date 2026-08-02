@@ -283,20 +283,96 @@ def _validate_warnings(turns: Sequence[Turn]) -> list[tuple[int, tuple[str, ...]
         reporting advisories as unresolved, which is the safe direction for a check about
         advisories being waved through: it can under-credit a build, never over-credit one."""
     results = results_by_tool_use_id(turns)
+    read_text = _read_tool_results_by_path(turns, results)
     outputs: list[tuple[int, tuple[str, ...]]] = []
     for turn in turns:
         for call in turn.calls_named("Bash"):
             if not _invokes(call.command, "validate") or "--emit-unclaimed" in call.command:
                 continue
             text = results.get(call.id, "")
-            if not text:
-                continue
-            body = text.split("VALIDATION WARNINGS", 1)[-1]
-            lines = tuple(ln.strip()[2:].strip() for ln in body.splitlines()
-                          if ln.strip().startswith("- "))
+            lines = _advisory_lines(text)
+            if not lines:
+                # The output may never have reached stdout at all. `validate … > v1.txt 2>&1` then
+                # `Read v1.txt` is the shape the method itself asks for ("read the REPORT FILE, not
+                # this stdout"), and it left both assertions blind: a build that ran validate five
+                # times and read every line whole scored `n/a — no validate output captured`, while
+                # the build that hid 38 warnings behind `grep -v` scored 0.95 and 1.00. The redirect
+                # target is right there in the command, so follow it.
+                for path in _redirect_targets(call.command):
+                    lines = _advisory_lines(_read_after(read_text, path, turn.index))
+                    if lines:
+                        break
             if lines:
                 outputs.append((turn.index, lines))
     return outputs
+
+
+def _advisory_lines(text: str) -> tuple[str, ...]:
+    """The `- …` advisory lines in a captured validate view (whole output, or a grepped slice)."""
+    if not text:
+        return ()
+    body = text.split("VALIDATION WARNINGS", 1)[-1]
+    return tuple(ln.strip()[2:].strip() for ln in body.splitlines()
+                 if ln.strip().startswith("- "))
+
+
+#: A `>`/`>>` redirect target in a shell command. Three lookbehinds, each for a real false match
+#: seen in a transcript: a digit (`2>&1` merges stderr, it writes no file), an `&` (`>&2`), and a
+#: HYPHEN — `print(x, '->', y)` inside a `python3 -c` is an arrow in a string, and reading it as a
+#: redirect is how assertion 13 came to call a read-only turn a map write.
+#: `1>` IS a redirect (stdout, written explicitly); the digit lookbehind above would eat it, so it
+#: is matched separately. `tee` is the other shape the method itself prints.
+_REDIRECT = re.compile(r"(?:(?<![0-9&\-])|(?<=\b1))>>?\s*([^\s;&|<>\"']+)"
+                       r"|\btee\s+(?:-a\s+)?([^\s;&|<>\"']+)")
+
+
+def _redirect_targets(cmd: str) -> list[str]:
+    """Every file a validate command sent its output to. Heredoc bodies are stripped first: a `>`
+    inside one is program text, not a redirect, and this was the only new parser in the module
+    skipping `_shell_only` — the exact gap that produced four of its earlier detector bugs."""
+    return [t or u for t, u in _REDIRECT.findall(_shell_only(cmd)) if (t or u)
+            and not (t or u).startswith("&")]
+
+
+def _read_tool_results_by_path(turns: Sequence[Turn],
+                               results: dict[str, str]) -> dict[str, list[tuple[int, str]]]:
+    """`{file_path: [(turn, the text the Read tool returned), …]}` — the other half of a
+    redirect-then-read, in turn order.
+
+    Keyed by the path as WRITTEN in the Read call, which is the same absolute string the redirect
+    used in every measured build. A build that redirects to a relative path and reads an absolute
+    one is not matched; that under-detects, which is the safe direction here.
+
+    The list, and not one merged string, is the whole point. A first version kept the LONGEST text
+    ever read for a path, which fabricated findings whenever a build reused one scratch path: run
+    validate to `/tmp/v.txt` and read it dirty, fix everything, re-run to the SAME path and read it
+    clean — and the old dirty text was attributed to the clean run as well, so assertion 9 reported
+    five unresolved advisories that had all been fixed. That is a 5-of-5 false line, past the bar
+    that got assertion 19 withdrawn."""
+    out: dict[str, list[tuple[int, str]]] = {}
+    for turn in turns:
+        for call in turn.calls_named("Read"):
+            path = str(call.input.get("file_path") or "")
+            text = _strip_line_numbers(results.get(call.id, ""))
+            if path and text:
+                out.setdefault(path, []).append((turn.index, text))
+    return out
+
+
+def _read_after(reads: dict[str, list[tuple[int, str]]], path: str, after: int) -> str:
+    """The FIRST read of `path` at a turn later than `after` — that run's own output, never a
+    later run's. Returns "" when nothing read it afterwards."""
+    return next((text for at, text in reads.get(path, ()) if at > after), "")
+
+
+#: The Read tool returns `cat -n` form — `     5\t  - Library bucket …`. Left in place, every
+#: advisory line starts with a digit instead of `- ` and the whole file reads as zero advisories,
+#: which is exactly how the first version of this fix appeared to change nothing.
+_LINE_NO = re.compile(r"^\s*\d+\t", re.M)
+
+
+def _strip_line_numbers(text: str) -> str:
+    return _LINE_NO.sub("", text) if text else ""
 
 
 # --- the ten assertions ----------------------------------------------------------------
@@ -468,10 +544,25 @@ def assert_8_audit_read_as_json(turns: Sequence[Turn]) -> Assertion:
     for idx, cmd in bash_commands(turns):
         if not _invokes(cmd, "audit"):
             continue
-        as_json = "--json" in cmd
-        paged = bool(_PAGERS.search(cmd))
-        target = good if (as_json and not paged) else bad
-        target.append(Evidence(idx, {"json": as_json, "paged": paged, "command": cmd[:120]}))
+        # `--batches` writes the claim files and prints a SUMMARY of what it wrote; the payload is
+        # on disk, not on stdout. Paging that summary hides nothing, and asking it for `--json` is
+        # meaningless. A live build ran the JSON form and the batches form in the same turn and
+        # scored 1/2 for the second one — an accusation about the very step the flag exists for.
+        #
+        # Judged PER SEGMENT. Skipping the whole call let a paged human-report read hide by having a
+        # `--batches` run chained after it — and the docstring's own motivating case is two audit
+        # forms in one turn, so same-command chaining is the shape actually observed.
+        # Split on command separators but NOT on `|`: a pipeline is ONE unit here, because the
+        # pager an audit is piped into is the whole subject. Splitting it off scored
+        # `audit --json | head -40` as unpaged.
+        for seg in re.split(r"&&|\|\||[;\n]", _shell_only(cmd)):
+            if not _invokes(seg, "audit") or "--batches" in seg:
+                continue
+            as_json = "--json" in seg
+            paged = bool(_PAGERS.search(seg))
+            target = good if (as_json and not paged) else bad
+            target.append(Evidence(idx, {"json": as_json, "paged": paged,
+                                         "command": seg.strip()[:120]}))
     return Assertion(8, "audit read as JSON, not paged", len(good), len(good) + len(bad),
                      tuple(bad or good))
 
@@ -517,6 +608,103 @@ def assert_9_no_advisory_waved_through(turns: Sequence[Turn]) -> Assertion:
                      evidence, note)
 
 
+#: Commands whose whole job is to look at a directory and report. A poll is one of these AND
+#: nothing else — the distinction the substring test could not make.
+_POLL_VERBS = ("ls", "find", "stat", "wc")
+
+#: Heads that carry no work of their own, so a turn made only of these plus a poll verb is still an
+#: idle turn. Anything NOT listed reads as work — the safe direction, since the failure being
+#: repaired is an assertion that accused a build with zero idle turns.
+#:
+#: The FILTERS (`grep`, `awk`, `sed`, `cut`, `head`, `tail`) and the LOOP keywords earn their place
+#: from the corpus: a first cut listing only `cd`/`echo`/`sleep` dropped 33 of 51 corpus hits, and
+#: among them were real waits — `ls -la build-fragments/ | awk '{print $5, $9}'`, `ls -1 …/*.json |
+#: grep -v draft`, and an `until [ "$(ls -1 …)" ]` spin loop. A poll piped into a formatter is still
+#: a poll. They are safe here only because a hit ALSO requires a poll-verb segment naming the
+#: fragment dir, so a bare `grep -n … fragment.json` or `sed -n '1,80p' pyproject.toml` never
+#: qualifies on its own.
+_WAITING_HEADS = frozenset({
+    "cd", "echo", "sleep", "date", "true", "false", ":", "printf", "sort", "uniq",
+    "head", "tail", "grep", "egrep", "rg", "awk", "sed", "cut", "tr", "column",
+    "until", "while", "do", "done", "if", "then", "else", "fi", "test", "[", "[[",
+})
+# `xargs` is deliberately ABSENT: it runs whatever it is handed, so `ls DIR | xargs rm` is a
+# deletion, not a wait. It was on the first version of this list and a reviewer used it to score a
+# destructive command as an idle turn.
+
+
+def _polls_the_fragment_dir(cmd: str) -> bool:
+    """Whether a command is an idle look at the fragment directory, and nothing more.
+
+    The first version was `FRAGMENT_DIR in cmd and re.search(r"\\b(ls|find|stat|wc)\\b", cmd)`, and
+    on a build with ZERO idle turns it produced six hits, every one false:
+
+      * `ls -la .coyodex/build-fragments/ && coyodex assemble …` — one listing, then real work;
+      * `echo "--- C21 port files, find a real operative line ---"` — the English word "find";
+      * `"…the screens a member uses to find their gateway URL…"` — the same word, inside an
+        extras body being written into a fragment;
+      * `wc -l < validate4.txt` — counting a gate's output, in a command that mentions the
+        fragment dir somewhere else entirely.
+
+    That build had cut idle polling from 88 tool calls to 0 — the batch's largest behaviour change
+    — and this assertion reported 0.67 and claimed a fan-out had breached the threshold. Accusing
+    an honest build is worse than missing a guilty one, so the test is now TWO conditions, both on
+    the command's segments: some segment must be a poll VERB applied to the fragment dir, and NO
+    segment may do anything else. A poll chained onto an `assemble` is not an idle turn — the turn
+    did something. Deliberately under-detects: an unrecognised head reads as work, so `ls dir | tail`
+    scores as work rather than as a poll, which is the direction this assertion family's own rule
+    demands."""
+    if FRAGMENT_DIR not in cmd:
+        return False
+    # THE WORK TEST RUNS ON THE RAW COMMAND, heredoc bodies and all. `_shell_only` strips embedded
+    # program text, and on a real transcript its multi-line-quote rule swallowed a
+    # `cd … && for f in a*.json; do python3 -c "…"` prefix along with the body — erasing the `for`
+    # and `python3` heads and scoring a per-fragment Python analysis as an idle wait. Raw text makes
+    # a heredoc body look like unknown commands, so the turn reads as WORK: under-detection, which
+    # is the direction this family's rule demands.
+    for seg in re.split(r"[;&|\n]+", _QUOTED.sub(" Q ", cmd)):
+        seg = seg.strip()
+        if not seg:
+            continue
+        head = seg.split()[0]
+        if head not in _POLL_VERBS and head not in _WAITING_HEADS:
+            return False                        # something real happened in this turn
+        # An allowlisted head can still MUTATE: `sed -i` edits in place, `awk … > out.json` and
+        # `grep -c … > count.txt` redirect, and `xargs` runs whatever it is handed (`ls DIR | xargs
+        # rm` deleted files and scored as an idle wait). A waiting turn writes nothing.
+        if _WRITES_A_FILE.search(seg) or re.search(r"(?:^|\s)-i\b", seg):
+            return False
+    # The poll itself must NAME the fragment directory — or follow a `cd` into it, which is how the
+    # corpus's spin loops are written. Requiring only that the command mention it SOMEWHERE let
+    # `wc -l /tmp/validate4.txt` (counting a gate's output) read as a directory poll.
+    segments = _poll_segments(cmd)
+    entered = any(seg.split()[0] == "cd" and FRAGMENT_DIR in seg for seg in segments)
+    return any(seg.split()[0] in _POLL_VERBS and (entered or FRAGMENT_DIR in seg)
+               for seg in segments)
+
+
+#: A quoted span. Masked before splitting, because `grep -E 'h10|h9a'` split on the `|` INSIDE the
+#: regex, leaving a segment headed `h9a'` that read as an unknown command — so two real corpus
+#: polls (`ls …/build-fragments/ | grep -E 'h10|h9a'`) scored as work.
+_QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"")
+#: A `$(…)` body, lifted out as its own segment: an `until [ "$(ls -1 …)" ]` spin loop keeps its
+#: poll inside a substitution, and that is the purest idle wait in the whole corpus.
+_SUBST = re.compile(r"\$\(([^()]*)\)")
+
+
+def _poll_segments(cmd: str) -> list[str]:
+    """The command's segments for the idle-poll test, plus the body of any `$(…)`.
+
+    Distinct from `_segments`, which answers 'was `coyodex X` run here'. This one additionally masks
+    single-line quoted spans (so a `|` inside a regex does not split a segment) and lifts command
+    substitutions (so an `until [ "$(ls -1 …)" ]` spin loop shows its poll). Both share
+    `_shell_only`, so a heredoc body is never mistaken for commands."""
+    shell = _shell_only(cmd)
+    subst = [b.strip() for b in _SUBST.findall(shell) if b.strip()]
+    masked = _QUOTED.sub("Q", _SUBST.sub(" Q ", shell))
+    return [s.strip() for s in re.split(r"[;&|\n]+", masked) + subst if s.strip()]
+
+
 def assert_10_idle_turns_at_a_barrier(turns: Sequence[Turn]) -> Assertion:
     """10 — turns burned waiting at a fan-out barrier stay under a threshold.
 
@@ -537,7 +725,7 @@ def assert_10_idle_turns_at_a_barrier(turns: Sequence[Turn]) -> Assertion:
     idle: dict[int, int] = {idx: 0 for idx in fanouts}
     evidence: list[Evidence] = []
     for idx, cmd in bash_commands(turns):
-        polls_dir = FRAGMENT_DIR in cmd and bool(re.search(r"\b(ls|find|stat|wc)\b", cmd))
+        polls_dir = _polls_the_fragment_dir(cmd)
         noop = _is_noop_wait(cmd)
         if not (polls_dir or noop):
             continue
@@ -633,7 +821,30 @@ def assert_12_commit_matches_the_finalize_verdict(turns: Sequence[Turn]) -> Asse
 # --- helpers for assertions 13-17 ---------------------------------------------------------------
 
 #: A shell command that writes a file — the shapes a build actually uses to patch a fragment.
-_WRITES_A_FILE = re.compile(r"(>>?\s*\S|\btee\b|json\.dump\b|\.write_text\b|\bcp\b|\bmv\b)")
+#: A command that WRITES a file. The redirect half carries `_REDIRECT`'s three lookbehinds, and it
+#: needs them: the bare `>>?\s*\S` it used to be matched `2>&1` (stderr merge, writes nothing) and
+#: the arrow in `print(x, '->', y)`. Both were live false positives — a `render` + `finalize` turn
+#: and a read-only `python3 -c` turn were both reported as map writes by assertion 13.
+_WRITES_A_FILE = re.compile(
+    r"((?<![0-9&\-])>>?\s*[^\s;&|<>]|\btee\b|json\.dump\b|\.write_text\b|\bcp\b|\bmv\b)")
+
+def _writes_the_grounding_record(command: str) -> bool:
+    """Whether a command runs `coyodex grounding WRITE` — the only form that produces the record.
+
+    `_invokes(cmd, "grounding")` matches the whole subcommand GROUP, so `grounding report` and
+    `grounding --help` counted too. Assertion 13 keys its anchor on this, so the group form let a
+    read-only command silently re-anchor and clear the evidence."""
+    return any(_invokes(seg, "grounding") and re.search(r"\bgrounding\s+write\b", seg)
+               for seg in _segments(command))
+
+
+#: Subcommands that READ the model and write only reports, and the git plumbing around a commit.
+#: An `assemble` after `grounding write` is prescribed and already carved out below; these are the
+#: same case. On a live build they produced seven of assertion 13's fourteen "later map writes":
+#: `render`+`finalize` (matched on `2>&1`), two `anchor-drift … > drift.txt`, two more `finalize`,
+#: a read-only `python3 -c` printing the grounding block, and `git add … && git commit`.
+_READ_ONLY_AFTER_GROUNDING = ("render", "finalize", "anchor-drift", "validate", "audit", "balance",
+                              "dump", "grounding")
 
 #: A content filter on a gate's output, as opposed to merely paging it.
 _GREP_FILTER = re.compile(r"\|\s*(?:grep|egrep|rg|ag)\b")
@@ -745,8 +956,23 @@ def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assert
     edited_after: list[Evidence] = []
     for turn in turns:
         for call in turn.tool_calls:
-            if call.name == "Bash" and _invokes(call.command, "grounding"):
+            if call.name == "Bash" and _writes_the_grounding_record(call.command):
                 wrote_at = turn.index
+                # The anchor MOVED, so everything gathered against the previous one is no longer
+                # "after the record". Leaving it made the assertion contradict its own output: a
+                # build that ran `grounding write` at 309, kept reconciling, then correctly re-ran
+                # it at 343 was reported as "written at turn 343; 14 later map/fragment write(s)"
+                # with evidence turns starting at 313 — twelve of them predating the turn the note
+                # named. Re-running the record after further edits is the method-compliant recovery;
+                # scoring it as the defect it repairs is backwards.
+                #
+                # ONLY `grounding write` may move it. Keying on the `grounding` GROUP made the
+                # assertion self-disarming: `grounding report` and even `grounding --help` reset the
+                # anchor and wiped the evidence, and method.md now PRESCRIBES running `report`
+                # straight after `write` — so every compliant build would have scored clean whatever
+                # it did. A transcript that only ever ran `--help` and `report` reported "written at
+                # turn 229" about a record that was never written.
+                edited_after.clear()
                 continue
             if wrote_at is None or turn.index <= wrote_at:
                 continue
@@ -764,8 +990,11 @@ def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assert
                 # use (`python3 - <<'EOF' … rewrite project-map.json … EOF; coyodex assemble …`).
                 # Newline is a separator too: the real shape is a heredoc followed on the NEXT
                 # LINE by the assemble, and splitting only on `;&|` left them in one segment.
-                rest = "; ".join(seg for seg in re.split(r"[;&|\n]+", call.command)
-                                 if not _invokes(seg, "assemble"))
+                rest = "; ".join(
+                    seg for seg in re.split(r"[;&|\n]+", call.command)
+                    if not _invokes(seg, "assemble")
+                    and not any(_invokes(seg, c) for c in _READ_ONLY_AFTER_GROUNDING)
+                    and not re.match(r"\s*git\s+(add|commit|status|diff|log|show)\b", seg))
                 if not rest.strip():
                     continue
                 touches = rest
@@ -987,6 +1216,9 @@ class ScoreContext:
     #: gate is measured against — see `assert_23_the_build_saw_the_whole_gate`. None when no map was
     #: given or it could not be read.
     map_warnings: int | None = None
+    #: The advisory TEXTS the committed map produces, for assertions that ask what KIND of advisory
+    #: shipped rather than how many. Empty when no map was given or it could not be read.
+    map_warning_lines: tuple[str, ...] = ()
 
 
 def read_score_context(map_path: str | Path | None) -> ScoreContext:
@@ -1001,17 +1233,19 @@ def read_score_context(map_path: str | Path | None) -> ScoreContext:
         return ScoreContext(map_path=p)
     g = doc.get("grounding") if isinstance(doc, dict) else None
     warnings: int | None = None
+    lines: tuple[str, ...] = ()
     try:
         from coyodex.model import load_model
         from coyodex.validate_model import validate_model
         _problems, warns = validate_model(load_model(p.read_text(encoding="utf-8")))
         warnings = len(warns)
+        lines = tuple(str(w) for w in warns)
     except BaseException:
         # The scorecard is never a gate: an unreadable or schema-invalid map degrades this one
         # assertion to n/a rather than failing the run.
         warnings = None
     return ScoreContext(map_path=p, grounding=g if isinstance(g, dict) else {},
-                        map_warnings=warnings)
+                        map_warnings=warnings, map_warning_lines=lines)
 
 
 
@@ -1132,6 +1366,11 @@ def assert_21_final_assemble_digest_is_clean(turns: Sequence[Turn]) -> Assertion
     return Assertion(21, "final assemble digest is clean", 0 if n else 1, 1, evidence=tuple(ev))
 
 
+#: Assertion 22's title. It names the HARVEST rather than `preindex` because that is what the rule
+#: protects; see the anchor comment in the body.
+_A22 = "behavioral draft precedes the structural harvest"
+
+
 def assert_22_behavioral_draft_precedes_preindex(turns: Sequence[Turn]) -> Assertion:
     """GR1: the behavioral layer is drafted BEFORE the structural pre-index is used.
 
@@ -1177,18 +1416,53 @@ def assert_22_behavioral_draft_precedes_preindex(turns: Sequence[Turn]) -> Asser
                 elif re.search(r"^\s*GR1 NOT MET:", out, re.M):
                     tool_verdict = False
     if first_preindex is None:
-        return Assertion(22, "behavioral draft precedes preindex", 0, 0)
-    if tool_verdict is not None:
-        ok = tool_verdict
-        detail = {"source": "preindex's own GR1 line"}
+        return Assertion(22, _A22, 0, 0)
+    # WHAT THE RULE PROTECTS is the harvest, not the pre-index. GR1's harm is structural slices
+    # written before the behavioral layer exists, because those slices are supposed to serve it.
+    # Scoring `behavioral < preindex` conflated that with a harmless ordering: a live build ran
+    # preindex at turn 42, was told "GR1 NOT MET", drafted at 58, and only fanned out its 14-slice
+    # harvest at 76 — it obeyed the rule and still scored 0, indistinguishable from the build this
+    # assertion was written for, which harvested first and drafted 79 turns later. So the anchor is
+    # the first HARVEST (the first turn launching ≥2 agents), with the preindex order kept only as
+    # a note. A serial build launches no fan-out, and there the old order test is still the best
+    # available signal — reported as such.
+    # The first AGENT DISPATCH, batched or not. Anchoring on the first turn launching >=2 agents
+    # made the score depend on how the harvest was batched rather than on when it ran: a build that
+    # dispatched its 14 structural slices one per turn — which is the failure assertion 3 measures,
+    # not a virtue — had no >=2-agent turn during the harvest at all, so the anchor slid forward to
+    # a later Phase-4 skeptic batch and the same build scored 1 instead of 0, with a note calling
+    # turn 200 "the first structural fan-out" when the harvest had run at turns 20-33.
+    # `is not None`, not truthiness: turn 0 is falsy and would silently read as "no dispatch".
+    first_dispatch = next((t.index for t in turns if t.agent_calls), None)
+    anchor, anchor_name = ((first_dispatch, "the first agent dispatch")
+                           if first_dispatch is not None
+                           else (first_preindex, "preindex (no agent dispatched in this run)"))
+    source = "transcript scan"
+    # `first_fanout is None` — no harvest to be early for, so the tool's verdict is the whole
+    # signal. Otherwise it only settles the question when preindex ran BEFORE the harvest; a
+    # preindex run afterwards says nothing about the state the harvest started from.
+    if tool_verdict and (first_dispatch is None or first_preindex < first_dispatch):
+        # `GR1 met` is the TOOL's own verdict, computed from the fragments on disk, and it settles
+        # that the draft existed before preindex ran. Preferring it here keeps the blind spot it was
+        # added for closed: a fragment written by a SUB-AGENT never appears as a write in the
+        # transcript, so `first_behavioral` is None for a build that had drafted the layer.
+        ok, source = True, "preindex's own GR1 line"
     else:
-        ok = first_behavioral is not None and first_behavioral < first_preindex
-        detail = {"preindex_at": str(first_preindex),
-                  "behavioral_draft_at": (str(first_behavioral) if first_behavioral
-                                          else "(not seen in this transcript)"),
-                  "source": "transcript scan — `preindex` printed no GR1 line to read"}
-    ev = () if ok else (Evidence(first_preindex, detail),)
-    return Assertion(22, "behavioral draft precedes preindex", 1 if ok else 0, 1, ev)
+        # `<=`, because an Agent that DRAFTS the behavioral layer sets both numbers to its own turn.
+        ok = first_behavioral is not None and first_behavioral <= anchor
+    detail = {
+        "source": source, "anchor": anchor_name, "anchor_at": str(anchor),
+        "preindex_at": str(first_preindex),
+        "behavioral_draft_at": (str(first_behavioral) if first_behavioral
+                                else "(not seen in this transcript)"),
+        "preindex_said": ("GR1 met" if tool_verdict else
+                          "GR1 NOT MET" if tool_verdict is False else "(no GR1 line captured)"),
+    }
+    note = (f"behavioral draft at {first_behavioral or '?'}, {anchor_name} at {anchor}"
+            + ("" if tool_verdict is None else
+               f"; preindex said {'GR1 met' if tool_verdict else 'GR1 NOT MET'} at {first_preindex}"))
+    ev = () if ok else (Evidence(anchor, detail),)
+    return Assertion(22, _A22, 1 if ok else 0, 1, ev, note)
 
 
 def assert_23_the_build_saw_the_whole_gate(turns: Sequence[Turn],
@@ -1236,6 +1510,67 @@ def assert_23_the_build_saw_the_whole_gate(turns: Sequence[Turn],
     return Assertion(23, "the build saw the whole gate output", 1 if ok else 0, 1, ev, note)
 
 
+def assert_24_no_inert_recorded_exception(turns: Sequence[Turn],
+                                          ctx: "ScoreContext | None" = None) -> Assertion:
+    """24 — the shipped map carries no recorded exception that suppresses nothing.
+
+    A recorded exception is a durable judgement: an operator looked at an advisory and said "this
+    one is fine, here is why". A record whose advisory is not firing says nothing about the map and
+    reads, to the next reader, exactly like a typo'd key that was MEANT to silence something and
+    silently does not.
+
+    A live build recorded three scoped `runs-in/…` keys; validate's count line named two groups, and
+    removing the third changed no output at all. The build read that line three times and never
+    noticed. `validate` now names inert records explicitly, and this counts them.
+
+    `of == 0` when no map was given or it could not be validated — nothing to measure."""
+    if ctx is None or ctx.map_warnings is None:
+        return Assertion(24, "no inert recorded exception", 0, 0, (),
+                         "no map given, so the shipped exceptions are unknown")
+    inert = [ln for ln in ctx.map_warning_lines if "currently suppressing nothing" in ln]
+    ev = tuple(Evidence(0, {"advisory": ln[:200]}) for ln in inert)
+    return Assertion(24, "no inert recorded exception", 0 if inert else 1, 1, ev,
+                     f"{len(inert)} recorded exception(s) silencing nothing")
+
+
+#: `fix dedup-edge --to-reconcile` announces what it recorded. Zero directives from a run that asked
+#: to record is the silent no-op this assertion watches for.
+_DEDUP_RECORDED = re.compile(r"dedup-edge: recorded (\d+) new and updated (\d+) keep_edges")
+
+
+def assert_25_dedup_to_reconcile_recorded_something(turns: Sequence[Turn]) -> Assertion:
+    """25 — every `fix dedup-edge --to-reconcile` run actually recorded a directive.
+
+    `--to-reconcile` is what makes a dedup decision survive re-assembly; without it the edit lives
+    only in the assembled map and the next `assemble` restores the duplicates (a shipped map carried
+    365 edges while its own fragments re-assembled to 416). The flag USED to be ignored when neither
+    `--keep` nor `--accept-suggested` was given: exit 0, a full listing, and an untouched file. One
+    build escaped only because it read the file back afterwards.
+
+    The tool now refuses that combination, so this is the regression watch: `of` counts the runs
+    that asked to record, `observed` counts those whose own output says it recorded something."""
+    good: list[Evidence] = []
+    bad: list[Evidence] = []
+    results = results_by_tool_use_id(turns)
+    for turn in turns:
+        for call in turn.calls_named("Bash"):
+            if "--to-reconcile" not in call.command or not _invokes(call.command, "fix"):
+                continue
+            out = results.get(call.id, "")
+            # Two innocent outcomes, neither of them the silent no-op. The tool now REFUSES a run
+            # with no decision to record (loudly, exit 2, nothing lost — scoring that as the defect
+            # it prevents is backwards), and a map with no duplicate edges has nothing to record at
+            # all. Both are "no opportunity", not a miss.
+            if "ERROR:" in out or "no (src, verb, dst) edge is declared more than once" in out:
+                continue
+            m = _DEDUP_RECORDED.search(out)
+            wrote = bool(m) and (int(m.group(1)) + int(m.group(2))) > 0
+            (good if wrote else bad).append(Evidence(turn.index, {
+                "recorded": m.group(0) if m else "(no 'recorded …' line in the output)"}))
+    return Assertion(25, "dedup --to-reconcile recorded a directive", len(good),
+                     len(good) + len(bad), tuple(bad or good))
+
+
 ASSERTIONS = (
     assert_1_preindex_report_used,
     assert_2_preindex_not_hand_parsed,
@@ -1257,6 +1592,8 @@ ASSERTIONS = (
     assert_21_final_assemble_digest_is_clean,
     assert_22_behavioral_draft_precedes_preindex,
     assert_23_the_build_saw_the_whole_gate,
+    assert_24_no_inert_recorded_exception,
+    assert_25_dedup_to_reconcile_recorded_something,
 )
 
 
@@ -1269,8 +1606,9 @@ def score_turns(turns: Sequence[Turn], *, transcript: str = "", label: str = "",
     # Assertion 6 is the one whose subject is the MAP rather than the run, so it alone is handed the
     # context. Passing it to every assertion would invite the rest to reach for the repo, and a
     # scorecard that needs the repo cannot score an archived corpus transcript.
-    # The two context-taking assertions: their subject is the committed MAP, not the run.
-    _needs_ctx = {assert_6_grounding_recorded, assert_23_the_build_saw_the_whole_gate}
+    # The context-taking assertions: their subject is the committed MAP, not the run.
+    _needs_ctx = {assert_6_grounding_recorded, assert_23_the_build_saw_the_whole_gate,
+                  assert_24_no_inert_recorded_exception}
     assertions = tuple(fn(turns, ctx) if fn in _needs_ctx else fn(turns)  # type: ignore[operator]
                        for fn in ASSERTIONS)
     return Scorecard(transcript=transcript, turns=len(turns), assertions=assertions,

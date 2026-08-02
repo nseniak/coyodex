@@ -483,6 +483,20 @@ def dedup_edge(argv: list[str]) -> int:
         print("ERROR: --accept-suggested takes the suggestion for EVERY conflict, which would "
               "override the --keep token(s) you named. Pass one or the other.", file=sys.stderr)
         return 2
+    # `--to-reconcile` names an OUTPUT, so a run that reaches neither write path silently produced
+    # nothing while exiting 0. Both no-write paths below return early — the listing (no `--keep`,
+    # no `--accept-suggested`) at "pick the true site for each", and `--json` — and each ignored the
+    # flag on the way out. A live build ran `dedup-edge --map … --repo … --to-reconcile <file>`,
+    # got exit 0 and a full listing, and the file was untouched; it only noticed because it read the
+    # file back afterwards. A build that trusted the exit code would ship a map whose fragments
+    # re-assemble to a different edge count — the exact failure `--to-reconcile` exists to prevent.
+    # Refuse rather than guess: implying `--accept-suggested` would apply a blanket choice nobody
+    # asked for, and a wrong drop is unrecoverable.
+    if to_reconcile and as_json:
+        print("ERROR: --json lists without writing; --to-reconcile writes. Pick one: run --json to "
+              "review, then re-run with --to-reconcile plus --keep or --accept-suggested.",
+              file=sys.stderr)
+        return 2
     m, present = _load(Path(map_path))
     conflicts = _conflicting_edges(m)
     if not conflicts:
@@ -491,6 +505,18 @@ def dedup_edge(argv: list[str]) -> int:
         else:
             print("dedup-edge: no (src, verb, dst) edge is declared more than once.")
         return 0
+    # AFTER the no-conflicts return, deliberately. Placed above it, this refusal failed the healthy
+    # end state: a map with nothing to de-duplicate exited 2, so a pipeline that runs the dedup step
+    # unconditionally — which is what a durable-decision step should do — broke precisely when the
+    # map was correct, and the message pushed the operator toward `--accept-suggested` on a map with
+    # nothing to accept.
+    if to_reconcile and not keeps and not accept_suggested:
+        print(f"ERROR: --to-reconcile needs a decision to record, and none was given — nothing was "
+              f"written, and {len(conflicts)} conflict(s) are still unresolved. Re-run with "
+              f"--accept-suggested to take every suggestion, or with the --keep token(s) for the "
+              f"conflicts you chose. Run without --to-reconcile to see the listing first.",
+              file=sys.stderr)
+        return 2
     # The suggestion ranking's first term is "exists under --repo"; with no --repo it is constant for
     # every candidate and the sort silently degrades to shortest-path. A live build passed --repo to
     # the listing it discarded and omitted it from the listing it applied, with nothing saying so.
@@ -630,11 +656,11 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       `coyodex anchor-drift` reads). Matches the full (src, verb, dst) triple; an ambiguous
       multi-site edge is skipped, not blind-rewritten.
 
-  dedup-edge --map <map> [--repo <root>] [--json] [--accept-suggested]
-             [--keep <src:verb:dst:path:line> ...] [--to-reconcile <reconcile.json>]
-      With no --keep, LIST every (src, verb, dst) edge declared more than once at DIFFERING call
-      sites — the conflict `validate` warns about — and suggest which anchor is the true one.
-      With --keep, drop every other occurrence of that triple.
+  dedup-edge --map <map> [--repo <root>] [--json]
+             (--accept-suggested | --keep <src:verb:dst:path:line> ...) [--to-reconcile <file>]
+      With neither --keep nor --accept-suggested, LIST every (src, verb, dst) edge declared more
+      than once at DIFFERING call sites — the conflict `validate` warns about — and suggest which
+      anchor is the true one. With --keep, drop every other occurrence of that triple.
       --accept-suggested takes the suggestion for EVERY conflict, which is what harvesting the
       printed --keep lines through a shell was trying to do (and got wrong twice: zsh does not
       word-split an unquoted expansion, and the surrounding prose also contains "--keep ").
@@ -643,6 +669,12 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       the map, so `assemble --reconcile` re-applies them on every rebuild. Without it the edit is
       lost at the next assemble — a shipped map carried 365 edges while its own fragments
       re-assembled to 416.
+      THE THREE MODES ARE EXCLUSIVE, and mixing them is refused rather than guessed at:
+        · --to-reconcile NEEDS a decision — pass --accept-suggested or --keep. On its own it used
+          to print the listing, write nothing, and exit 0, which reads as success.
+        · --json lists, --accept-suggested and --to-reconcile write. Never both.
+        · --accept-suggested overrides every --keep you named. Pass one or the other.
+      A map with no duplicate edges is not an error: it prints so and exits 0 whatever the flags.
       Pass --repo, or the "exists in the repo" rank term is constant and suggestions fall back to
       shortest-path.
 

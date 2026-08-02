@@ -522,7 +522,10 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # is an ordinary file read), so the number is reserved rather than filled with a guess.
     # 19 is WITHDRAWN (unmeasurable — see L3-DESIGN.md) and 20 is RESERVED (no transcript
     # signature). 23 replaces 19 by measuring the OUTCOME instead of the technique.
-    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23], ids
+    # 24 and 25 came from the 2026-08-02 retrospective: an inert recorded exception (a correctly
+    # spelled key silencing nothing, indistinguishable from a typo), and a `fix dedup-edge
+    # --to-reconcile` run that recorded no directive (the flag used to be a silent no-op).
+    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
     assert len(ids) == len(set(ids))
 
@@ -1108,3 +1111,266 @@ def test_23_is_not_applicable_without_a_map_or_without_output():
     assert P.assert_23_the_build_saw_the_whole_gate((make_advisory_run(1, 3),),
                                                     P.ScoreContext()).of == 0
     assert P.assert_23_the_build_saw_the_whole_gate((), P.ScoreContext(map_warnings=4)).of == 0
+
+
+# --- from the 2026-08-02 retrospective -------------------------------------------------
+# Every case below is a command a real build ran. Three of these assertions had accused an
+# honest build; two are new.
+
+def make_read(path: str, uid: str = "") -> ToolCall:
+    return ToolCall(name="Read", input={"file_path": path}, id=uid)
+
+
+def test_10_a_poll_chained_onto_real_work_is_not_an_idle_turn():
+    """`ls dir && coyodex assemble …` looks at the directory and then DOES something. Counting it
+    made assertion 10 report 0.67 for a build with zero idle turns — its 88-poll predecessor scored
+    the same 0.00, so the number could not tell the two apart."""
+    assert not P._polls_the_fragment_dir(
+        "ls -la .coyodex/build-fragments/ && cd /x && coyodex assemble "
+        ".coyodex/build-fragments/*.json --out .coyodex 2>&1 | tail -20")
+    assert not P._polls_the_fragment_dir(
+        "rm -f .coyodex/build-fragments/*.draft.json && ls .coyodex/build-fragments/")
+
+
+def test_10_the_english_word_find_in_prose_is_not_a_poll():
+    """Two live false positives, both the word `find` inside a quoted sentence — one in an `echo`
+    banner, one in an extras body being written into a fragment."""
+    assert not P._polls_the_fragment_dir(
+        'echo "--- C21 port files, find a real operative line ---"; '
+        "grep -n x .coyodex/build-fragments/gap-backend.json")
+
+
+def test_10_still_catches_the_shapes_a_build_actually_waits_with():
+    """A bare listing, a listing piped into a formatter, and an `until` spin loop whose poll hides
+    inside a `$(…)`. All three are in the corpus; dropping them was an over-correction the first
+    version of this fix shipped."""
+    assert P._polls_the_fragment_dir("ls .coyodex/build-fragments/")
+    assert P._polls_the_fragment_dir("ls -la .coyodex/build-fragments/ | wc -l")
+    assert P._polls_the_fragment_dir(
+        "sleep 1; ls /x/.coyodex/build-fragments/ | grep -E 'h10|h9a'")
+    assert P._polls_the_fragment_dir(
+        'cd /x/.coyodex/build-fragments && until [ "$(ls -1 a.json)" ]; do sleep 2; done')
+
+
+def test_9_and_23_follow_a_redirect_into_the_later_read():
+    """`validate … > v1.txt 2>&1` then `Read v1.txt` is what the method asks for ("read the REPORT
+    FILE, not this stdout"). Both assertions scored `n/a — no validate output captured` on a build
+    that ran validate five times and read every line of it."""
+    body = ("     1\tInventory — C:80\n"
+            "     4\tVALIDATION WARNINGS (non-blocking):\n"
+            "     5\t  - first advisory, record `granularity` to silence\n"
+            "     6\t  - second advisory, record `isolated` to silence\n")
+    turns = (make_turn(1, make_bash("coyodex validate m.json > /tmp/v1.txt 2>&1", uid="v"),
+                       results=(("v", "exit=0\n"),)),
+             make_turn(3, make_read("/tmp/v1.txt", uid="r"), results=(("r", body),)))
+    a = P.assert_23_the_build_saw_the_whole_gate(turns, P.ScoreContext(map_warnings=2))
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_the_read_tools_line_numbers_do_not_hide_the_advisories():
+    """The Read tool returns `cat -n` form. Left in place every advisory line starts with a digit,
+    the file reads as zero advisories, and the fix above appears to change nothing."""
+    raw = "     5\t  - an advisory\n"
+    assert P._advisory_lines(raw) == (), "the prefix must really hide it"
+    assert P._advisory_lines(P._strip_line_numbers(raw)) == ("an advisory",)
+
+
+def test_13_clears_its_evidence_when_the_record_is_written_again():
+    """Re-running `grounding write` after further edits is the METHOD-COMPLIANT recovery. A build
+    that did exactly that was reported as 'written at turn 343; 14 later map/fragment write(s)' with
+    evidence starting at turn 313 — twelve of them predating the turn the note named."""
+    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash("python3 -c \"open('.coyodex/project-map.json','w')\" "
+                                    "&& cp a .coyodex/project-map.json")),
+             make_turn(5, make_bash("coyodex grounding write --worklist w.json --map m --out g.json")),
+             make_turn(7, make_bash("coyodex assemble .coyodex/build-fragments/*.json --out .coyodex")))
+    a = P.assert_13_grounding_write_is_the_last_write(turns)
+    assert (a.observed, a.of) == (1, 1), a
+    assert not a.evidence, a.evidence
+
+
+def test_13_still_fires_on_a_real_edit_after_the_last_record():
+    """The defect itself must survive the repair."""
+    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash("cp fixed.json .coyodex/project-map.json")))
+    assert P.assert_13_grounding_write_is_the_last_write(turns).observed == 0
+
+
+def test_13_does_not_count_a_read_only_gate_or_the_commit_as_a_map_write():
+    """`render`+`finalize` matched on `2>&1`; a read-only `python3 -c` matched on the `->` in a
+    print; `git add … && git commit` named the map on the command line. None writes the model."""
+    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash("coyodex render .coyodex/project-map.json m.md 2>&1 | tail -2 "
+                                    "&& coyodex finalize .coyodex/project-map.json 2>&1 | tail -6")),
+             make_turn(5, make_bash("python3 -c \"import json; "
+                                    "m=json.load(open('.coyodex/project-map.json')); "
+                                    "print('flows', '->', len(m['flows']))\"")),
+             make_turn(7, make_bash("git add -f .coyodex/project-map.json && git commit -q -m x")))
+    a = P.assert_13_grounding_write_is_the_last_write(turns)
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_writes_a_file_ignores_a_stderr_merge_and_a_printed_arrow():
+    assert not P._WRITES_A_FILE.search("coyodex finalize m.json 2>&1 | tail -6")
+    assert not P._WRITES_A_FILE.search("print(sf['id'], '->', len(sf['steps']))")
+    assert P._WRITES_A_FILE.search("coyodex validate m.json > /tmp/v.txt")
+
+
+def test_22_anchors_on_the_harvest_not_on_preindex():
+    """GR1's harm is structural slices written before the behavioral layer exists. A build ran
+    preindex at 42, was told GR1 NOT MET, drafted at 58 and fanned out at 76 — it obeyed the rule
+    and still scored 0, indistinguishable from the build that harvested first and drafted 79 turns
+    later."""
+    drafted = make_write(".coyodex/build-fragments/behavioral.json", '{"use_cases": []}')
+    obeyed = (make_turn(4, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p"),
+                        results=(("p", "  GR1 NOT MET: no .coyodex/build-fragments/ yet\n"),)),
+              make_turn(6, drafted),
+              make_turn(8, make_agent(), make_agent()))
+    assert P.assert_22_behavioral_draft_precedes_preindex(obeyed).observed == 1
+    broke = (make_turn(4, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p"),
+                       results=(("p", "  GR1 NOT MET: no .coyodex/build-fragments/ yet\n"),)),
+             make_turn(6, make_agent(), make_agent()),
+             make_turn(8, drafted))
+    assert P.assert_22_behavioral_draft_precedes_preindex(broke).observed == 0
+
+
+def test_8_does_not_flag_the_batches_summary():
+    """`--batches` writes the claim FILES; its stdout is a summary, so paging it hides nothing and
+    `--json` is meaningless for it. A build that ran the JSON form and the batches form in one turn
+    scored 1/2 for the second."""
+    turns = (make_turn(1, make_bash("coyodex audit m.json --json > worklist.json")),
+             make_turn(3, make_bash("coyodex audit m.json --batches .coyodex/verify --cap 40 "
+                                    "2>&1 | tail -20")))
+    a = P.assert_8_audit_read_as_json(turns)
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_24_flags_a_recorded_exception_that_silences_nothing():
+    """A correctly spelled key whose advisory is not firing reads exactly like a typo. A live map
+    carried three scoped `runs-in/…` records and validate's count line named two."""
+    inert = P.ScoreContext(map_warnings=3, map_warning_lines=(
+        "recorded `runs_in` exception(s) currently suppressing nothing: `runs-in/unplaced` — …",))
+    assert P.assert_24_no_inert_recorded_exception((), inert).observed == 0
+    clean = P.ScoreContext(map_warnings=2, map_warning_lines=("some ordinary advisory",))
+    assert P.assert_24_no_inert_recorded_exception((), clean).observed == 1
+    assert P.assert_24_no_inert_recorded_exception((), P.ScoreContext()).of == 0
+
+
+def test_25_flags_a_to_reconcile_run_that_recorded_nothing():
+    """`--to-reconcile` used to be ignored without `--keep`/`--accept-suggested`: exit 0, a full
+    listing, an untouched file. One build escaped only because it read the file back."""
+    turns = (make_turn(1, make_bash("coyodex fix dedup-edge --map m.json --to-reconcile r.json",
+                                    uid="a"),
+                       results=(("a", "46 edge(s) declared more than once…\n"),)),
+             make_turn(3, make_bash("coyodex fix dedup-edge --map m.json --accept-suggested "
+                                    "--to-reconcile r.json", uid="b"),
+                       results=(("b", "dedup-edge: recorded 46 new and updated 0 keep_edges "
+                                      "directive(s) in r.json (46 total).\n"),)))
+    a = P.assert_25_dedup_to_reconcile_recorded_something(turns)
+    assert (a.observed, a.of) == (1, 2), a
+
+
+# --- regression pins from the adversarial review of the 2026-08-02 repairs ---------------
+# Every one of these was a defect the first version of those repairs shipped.
+
+def test_13_is_not_disarmed_by_a_read_only_grounding_command():
+    """`edited_after.clear()` keyed on the `grounding` GROUP, so `grounding report` — which
+    method.md now PRESCRIBES running straight after `write` — reset the anchor and wiped the
+    evidence. Every compliant build would have scored clean whatever it did."""
+    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash("cp fixed.json .coyodex/project-map.json")),
+             make_turn(5, make_bash("coyodex grounding report --worklist w.json --map m")))
+    a = P.assert_13_grounding_write_is_the_last_write(turns)
+    assert (a.observed, a.of) == (0, 1), a
+    assert a.evidence[0].turn == 3, a.evidence
+
+
+def test_13_does_not_invent_a_record_from_a_help_call():
+    """A transcript that only ran `grounding --help` and `grounding report` reported "written at
+    turn 229" about a record that was never written."""
+    turns = (make_turn(1, make_bash("coyodex grounding --help | head -80")),
+             make_turn(3, make_bash("coyodex grounding report --worklist w.json")),
+             make_turn(5, make_bash("cp fixed.json .coyodex/project-map.json")))
+    a = P.assert_13_grounding_write_is_the_last_write(turns)
+    assert a.of == 0, a
+
+
+def test_9_does_not_attribute_an_earlier_dirty_view_to_a_later_clean_run():
+    """Keeping the LONGEST text ever read for a path fabricated findings whenever a build reused one
+    scratch path: read it dirty, fix everything, re-run to the SAME path and read it clean, and the
+    old dirty text was attributed to the clean run too — five unresolved advisories that had all
+    been fixed."""
+    dirty = ("     1\tVALIDATION WARNINGS (non-blocking):\n"
+             "     2\t  - first, record `granularity` to silence\n"
+             "     3\t  - second, record `isolated` to silence\n")
+    clean = "     1\tSchema OK — structure valid.\n"
+    turns = (make_turn(1, make_bash("coyodex validate m.json > /tmp/v.txt 2>&1", uid="v1"),
+                       results=(("v1", "exit=0\n"),)),
+             make_turn(3, make_read("/tmp/v.txt", uid="r1"), results=(("r1", dirty),)),
+             make_turn(5, make_bash("coyodex validate m.json > /tmp/v.txt 2>&1", uid="v2"),
+                       results=(("v2", "exit=0\n"),)),
+             make_turn(7, make_read("/tmp/v.txt", uid="r2"), results=(("r2", clean),)))
+    runs = P._validate_warnings(turns)
+    assert [at for at, _ in runs] == [1], runs
+    assert P.assert_9_no_advisory_waved_through(turns).of == 0, "the clean re-run resolved them"
+
+
+def test_22_is_not_flipped_by_how_the_harvest_was_batched():
+    """Anchoring on the first turn launching >=2 agents made the score depend on batching: a build
+    that dispatched its slices one per turn — the failure assertion 3 measures, not a virtue — had
+    no >=2-agent turn during the harvest, so the anchor slid to a later skeptic batch and the same
+    build scored 1 instead of 0."""
+    drafted = make_write(".coyodex/build-fragments/behavioral.json", '{"use_cases": []}')
+    preindex = make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p")
+    res = (("p", "  GR1 NOT MET: no .coyodex/build-fragments/ yet\n"),)
+    serial = (make_turn(4, preindex, results=res),
+              *[make_turn(20 + i, make_agent()) for i in range(14)],   # one slice per turn
+              make_turn(100, drafted),
+              make_turn(200, make_agent(), make_agent()))              # Phase-4 skeptics
+    assert P.assert_22_behavioral_draft_precedes_preindex(serial).observed == 0
+    batched = (make_turn(4, preindex, results=res),
+               make_turn(20, make_agent(), make_agent()),
+               make_turn(100, drafted))
+    assert P.assert_22_behavioral_draft_precedes_preindex(batched).observed == 0
+
+
+def test_10_does_not_score_a_mutating_command_as_a_wait():
+    """`sed -i` edits in place, `awk … > out` and `grep -c … > count.txt` redirect, and `xargs` runs
+    whatever it is handed — `ls DIR | xargs rm` deleted files and scored as an idle wait."""
+    for cmd in ("sed -i s/a/b/ .coyodex/build-fragments/h1.json; ls .coyodex/build-fragments",
+                "ls .coyodex/build-fragments/*.json | xargs rm",
+                "ls .coyodex/build-fragments; awk 1 x.json > out.json",
+                "grep -c x .coyodex/build-fragments/a.json > count.txt; ls .coyodex/build-fragments",
+                "ls .coyodex/build-fragments; xargs -I{} cp {} /tmp/backup/"):
+        assert not P._polls_the_fragment_dir(cmd), cmd
+
+
+def test_10_requires_the_poll_itself_to_name_the_directory():
+    """Requiring only that the command mention the dir SOMEWHERE let `wc -l /tmp/validate4.txt` —
+    counting a gate's output — read as a directory poll."""
+    assert not P._polls_the_fragment_dir(
+        "sed -n 1,5p .coyodex/build-fragments/h1.json; wc -l /tmp/v.txt")
+
+
+def test_25_does_not_accuse_the_tools_own_refusal_or_a_clean_map():
+    """The same batch made `--to-reconcile` without a decision exit 2 with an ERROR. A build that
+    trips that guard, reads it and re-runs correctly is the opposite of the silent no-op. A map with
+    no duplicate edges has nothing to record either."""
+    refused = (make_turn(1, make_bash("coyodex fix dedup-edge --map m --to-reconcile r.json",
+                                      uid="a"),
+                         results=(("a", "ERROR: --to-reconcile needs a decision to record\n"),)),)
+    assert P.assert_25_dedup_to_reconcile_recorded_something(refused).of == 0
+    clean = (make_turn(1, make_bash("coyodex fix dedup-edge --map m --accept-suggested "
+                                    "--to-reconcile r.json", uid="b"),
+                       results=(("b", "dedup-edge: no (src, verb, dst) edge is declared more than "
+                                      "once.\n"),)),)
+    assert P.assert_25_dedup_to_reconcile_recorded_something(clean).of == 0
+
+
+def test_8_batches_skip_does_not_erase_a_paged_read_chained_beside_it():
+    """Skipping the whole Bash call let a paged human-report read hide behind a `--batches` run
+    chained after it — and two audit forms in one turn is the observed shape."""
+    turns = (make_turn(1, make_bash("coyodex audit m.json | head -40; "
+                                    "coyodex audit m.json --batches .coyodex/verify --cap 40")),)
+    a = P.assert_8_audit_read_as_json(turns)
+    assert (a.observed, a.of) == (0, 1), a

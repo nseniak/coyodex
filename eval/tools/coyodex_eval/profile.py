@@ -108,6 +108,13 @@ class MapProfile:
     # a perfect score produced by dumping everything into two units. Coverage is not linkage.
     deployment_units: int = 0
     deployment_units_linked: int = 0             # units named by at least one component's runs_in
+    # Linkage counts UNITS, and a unit is cheap to add. A live map scored 3/10 linked where the
+    # three linked units — `backend`, `standalone`, `e2e backend shard` — hosted the IDENTICAL 50
+    # components: one placement decision, replicated across three deployment shapes of the same
+    # process, while the other 30 components (the whole frontend) sat in no unit at all. The gate
+    # passed on 2/8 -> 3/10 because a unit had been ADDED, not because code had been placed. This
+    # counts DISTINCT non-empty component sets instead, so replicating a shape cannot move it.
+    deployment_distinct_hosted_sets: int = 0
 
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
@@ -189,10 +196,18 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     unit_names = [u.unit for u in m.deployment if u.unit]
     claimed = {name for c in m.components for name in (c.runs_in or [])}
     claimed |= {name for ep in m.entry_points for name in (ep.runs_in or [])}
+    # Which components each unit hosts, as a set — two units hosting the same set are one placement
+    # decision wearing two names, and only the distinct sets are evidence the view says anything.
+    hosted: dict[str, frozenset[str]] = {}
+    for u in unit_names:
+        members = frozenset(c.id for c in m.components if u in (c.runs_in or []))
+        if members:
+            hosted[u] = members
 
     return MapProfile(
         deployment_units=len(unit_names),
         deployment_units_linked=sum(1 for u in unit_names if u in claimed),
+        deployment_distinct_hosted_sets=len(set(hosted.values())),
         use_cases=len({u.id for u in m.use_cases}),
         subsystems=len({s.id for s in m.subsystems}),
         subdomains=len({s.id for s in m.subdomains}),

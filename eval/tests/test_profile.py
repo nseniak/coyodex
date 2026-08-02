@@ -942,3 +942,42 @@ def test_a_pre_rename_profile_is_refused_with_an_explanation():
     with pytest.raises(ValueError) as e:
         MapProfile.from_json(json.dumps(old))
     assert "audit_advisories" in str(e.value) and "re-bless" in str(e.value)
+
+
+def make_replicated_shapes_map() -> str:
+    """Three deployment units hosting the IDENTICAL component set — a monolith in three shapes —
+    plus one unit hosting nothing, and one component placed nowhere."""
+    return json.dumps({
+        "format": "coyodex-map", "title": "", "goal": "", "commit": None, "committed": None,
+        "built": None, "roles": [], "glossary": [], "use_cases": [], "happy_path": [],
+        "subsystems": [], "deps": [], "entry_points": [], "subdomains": [], "entities": [],
+        "flows": [], "subflows": [], "edges": [], "messaging": [], "environments": [],
+        "observability": [], "security": [], "config": [], "tests": [], "extras": [],
+        "components": [
+            {"id": "C1", "name": "Api", "purpose": "p", "source": "a.py:1",
+             "runs_in": ["backend", "standalone", "e2e shard"]},
+            {"id": "C2", "name": "Svc", "purpose": "p", "source": "b.py:1",
+             "runs_in": ["backend", "standalone", "e2e shard"]},
+            {"id": "C3", "name": "Web", "purpose": "p", "source": "c.tsx:1"},
+        ],
+        "deployment": [{"unit": "backend"}, {"unit": "standalone"}, {"unit": "e2e shard"},
+                       {"unit": "nginx"}],
+    })
+
+
+def test_distinct_hosted_sets_sees_through_replicated_deployment_shapes():
+    """`deployment_units_linked` counts three here and reads as good coverage. It is ONE placement
+    decision wearing three names, and a fourth shape would raise the number again without placing a
+    single new component."""
+    p = build_profile(make_replicated_shapes_map())
+    assert p.deployment_units == 4
+    assert p.deployment_units_linked == 3
+    assert p.deployment_distinct_hosted_sets == 1, "three shapes of one process are one set"
+
+
+def test_distinct_hosted_sets_counts_genuinely_different_placements():
+    doc = json.loads(make_replicated_shapes_map())
+    doc["components"][2]["runs_in"] = ["nginx"]
+    p = build_profile(json.dumps(doc))
+    assert p.deployment_units_linked == 4
+    assert p.deployment_distinct_hosted_sets == 2, "the monolith set, and nginx's own"
