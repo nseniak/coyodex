@@ -59,6 +59,21 @@ def test_extra_has_no_fixed_properties():
     assert "properties" not in comp_extra and "additionalProperties" not in comp_extra
 
 
+def test_the_capability_pointer_fields_carry_their_id_patterns():
+    """The published schema must constrain the new cross-references, not just carry them.
+
+    `test_committed_schema_is_not_stale` only pins the committed file to the generator — delete an
+    annotation and regenerate, and the two still agree. These fields shipped with no annotation at
+    all, so `"capability": "banana"` validated."""
+    schema = generate_schema()
+    uc = schema["$defs"]["UseCase"]["properties"]
+    assert uc["capability"]["pattern"] == r"^CAP\d+$"
+    assert uc["entry_points"]["items"]["pattern"] == r"^EP\d+$"
+    assert schema["$defs"]["EntryPoint"]["properties"]["id"]["pattern"] == r"^EP\d+$"
+    label = schema["$defs"]["Group"]["properties"]["label"]
+    assert set(label["enum"]) == {"", "core", "supporting", "platform"}
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):

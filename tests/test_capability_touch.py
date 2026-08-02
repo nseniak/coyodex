@@ -277,6 +277,19 @@ def test_a_cycle_in_the_capability_forest_does_not_hang() -> None:
     assert vm.capability_members(m)["CAP1"] == {"UC1"}
 
 
+def test_the_standalone_runner_is_the_last_block_in_this_file() -> None:
+    """The module docstring advertises `python3 tests/test_capability_touch.py`, and that runner
+    must see the whole file. It once sat MID-file and, calling `sys.exit()`, never even DEFINED the
+    seven tests below it: 10 of 17 ran and it printed "ok". Nothing caught that, because under
+    pytest all 17 run.
+
+    Asserted statically rather than by running the file — a subprocess self-check would re-enter
+    this same test and recurse forever (it did)."""
+    src = Path(__file__).read_text(encoding="utf-8")
+    guard = src.index('if __name__ == "__main__":')
+    assert "\ndef test_" not in src[guard:], "a test is defined AFTER the runner — it will be skipped"
+
+
 if __name__ == "__main__":
     # MUST stay at the END of the file. It sat mid-file once, and since it calls sys.exit(),
     # every test defined below it was never even defined under the standalone runner: it ran
