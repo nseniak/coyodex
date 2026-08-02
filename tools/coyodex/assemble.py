@@ -26,7 +26,6 @@ from pathlib import Path
 from typing import get_args, get_origin, get_type_hints
 
 from coyodex import grammar
-from coyodex.anchors import strip_anchor
 from coyodex.model import (
     FORMAT,
     ID_ARRAYS,
@@ -533,14 +532,26 @@ def _merge_duplicate_deps(m: ProjectModel) -> None:
         e.dst = remap.get(e.dst, e.dst)
 
 
-def _entry_point_identity(ep: EntryPoint) -> tuple[str, str]:
-    """An entry point's CONTENT identity: its source anchor plus its trigger, both normalized.
+def _entry_point_identity(ep: EntryPoint) -> tuple[str, str, str, str]:
+    """An entry point's CONTENT identity — the FULL anchor (line included), the trigger, the owning
+    component and the kind, all normalized.
 
-    Source alone is what change-impact keys on (`ep:{source}`), but two rows can legitimately share
-    one anchor (several routes registered on the same line), so the trigger joins the key — the same
-    "only an exact identity match merges" discipline `_dep_identity` uses. Over-merging here would
-    silently delete a real surface from the completeness check."""
-    return (strip_anchor(ep.source or "").strip().lower(), " ".join((ep.trigger or "").split()).lower())
+    Every part of that is load-bearing, and the first revision of this function had none of it right.
+    It called `strip_anchor`, which DROPS the line (`routes.py:40` -> `routes.py`), so identity was
+    really `(file, trigger)` — while the docstring claimed the trigger was there to separate rows
+    "registered on the same line". Two genuinely different surfaces anywhere in one router file with
+    the same trigger text therefore merged, and the survivor kept only ONE component, kind and
+    activation: a `[cron] POST /jobs @ routes.py:99` on C2 vanished behind a `[http-route] POST /jobs
+    @ routes.py:40` on C1. A deleted row can never be reported as unclaimed, never appears under
+    "Triggered by", and never reaches `--emit-unclaimed`.
+
+    Over-merging is the dangerous direction here — a lost surface is invisible, a duplicated one is
+    merely noisy — so the key is deliberately conservative, the same "only an exact identity match
+    merges" discipline `_dep_identity` uses."""
+    return (ep.source.strip().lower(),
+            " ".join((ep.trigger or "").split()).lower(),
+            ep.component.strip(),
+            " ".join((ep.kind or "").split()).lower())
 
 
 def _mint_entry_point_ids(m: ProjectModel) -> None:
@@ -555,10 +566,21 @@ def _mint_entry_point_ids(m: ProjectModel) -> None:
     Dedup matters independently: unlike components, deps, messaging and edges, entry points were
     simply concatenated, so two harvest slices covering the same router shipped the same route twice.
 
-    Ordering caveat (shared with every other dedup survivor): ids follow first-occurrence-in-argument
-    order, so REORDERING fragments can shift them — author a reconcile file against the ids the
-    assemble it feeds actually produced."""
-    seen: dict[tuple[str, str], EntryPoint] = {}
+    NUMBERING IS BY CONTENT, NOT ARGUMENT ORDER. The first revision numbered survivors in
+    first-occurrence order like every other dedup, and that made the ids depend on the order the
+    fragments happened to be passed in. Since `use_case.entry_points` is authored SEPARATELY (via
+    `reconcile`, against the ids a previous assemble produced), swapping two fragments silently
+    re-pointed a use case at a different front door — measured: `POST /orders` and
+    `DELETE /admin/wipe-database` traded ids, the use case claimed the wrong one, validate resolved
+    it happily and the warning count did not move. Sorting by the content key removes that whole
+    class: the same set of surfaces gets the same ids however the fragments are ordered.
+
+    RESIDUAL RISK, deliberately left: the ids are order-independent, not ADD-stable. Harvesting a
+    NEW surface that sorts before an existing one still shifts the numbers after it, so a reconcile
+    file authored against an older harvest can still mis-point. The durable fix is a content witness
+    beside the id (`{"id": "EP1", "source": "orders.py:9"}`) that `validate_reconcile` checks — until
+    that lands, re-author `entry_points` whenever the entry-point set changes."""
+    seen: dict[tuple[str, str, str, str], EntryPoint] = {}
     kept: list[EntryPoint] = []
     for ep in m.entry_points:
         ident = _entry_point_identity(ep)
@@ -569,9 +591,15 @@ def _mint_entry_point_ids(m: ProjectModel) -> None:
             continue                # exact same surface, already recorded
         seen[ident] = ep
         kept.append(ep)
-    for n, ep in enumerate(kept, start=1):
+    # Anchorless rows have no content key to sort by, so they keep authored order and go last —
+    # they are the un-identifiable tail, and giving them low numbers would let an unanchored row
+    # shuffle the ids of every real surface.
+    anchored = sorted((ep for ep in kept if ep.source.strip()), key=_entry_point_identity)
+    loose = [ep for ep in kept if not ep.source.strip()]
+    ordered = anchored + loose
+    for n, ep in enumerate(ordered, start=1):
         ep.id = f"EP{n}"
-    m.entry_points = kept
+    m.entry_points = ordered
 
 
 def _merge_duplicate_edges(m: ProjectModel) -> None:

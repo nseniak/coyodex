@@ -247,7 +247,7 @@
         "id": {
           "type": "string",
           "pattern": "^(UC|HP|SD|SF|CAP|EP|C|D|E|S|R)\\d+$",
-          "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[] \u2014 same dataclass, two id forests."
+          "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[], `CAP<n>` in capabilities[] \u2014 same dataclass, three id forests."
         },
         "name": {
           "type": "string"
@@ -261,10 +261,17 @@
             "null"
           ],
           "pattern": "^(UC|HP|SD|SF|CAP|EP|C|D|E|S|R)\\d+$",
-          "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD parents an SD), or null for top-level."
+          "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD an SD, a CAP a CAP), or null for top-level."
         },
         "label": {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "",
+            "core",
+            "supporting",
+            "platform"
+          ],
+          "description": "CAPABILITY-ONLY: an authored judgement about the use cases in this capability \u2014 core is the product and the Happy Path walks every core capability. Nothing derives it, and `validate` blocks it on a subsystem or a subdomain."
         },
         "source": {
           "type": [
@@ -321,13 +328,16 @@
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "pattern": "^CAP\\d+$",
+          "description": "the capability this use case belongs to, or null. Assigned at synthesis via `reconcile` (a `CAP<n>` does not exist when the behavioral fragment is written)."
         },
         "entry_points": {
           "type": "array",
           "items": {
-            "type": "string"
-          }
+            "pattern": "^EP\\d+$"
+          },
+          "description": "the TRIGGER arm of entry-point claiming: the front door(s) an actor hits to START this use case. Empty is legitimate \u2014 the surface may sit inside a coarse T4 row a sibling already names."
         }
       },
       "required": [
@@ -618,7 +628,9 @@
       "type": "object",
       "properties": {
         "id": {
-          "type": "string"
+          "type": "string",
+          "pattern": "^EP\\d+$",
+          "description": "MINTED BY `assemble` from content (source + trigger + owner + kind), never authored \u2014 leave it out of a fragment. Change-impact keeps its own content key (`ep:{source}`), which is stable across rebuilds where a minted number is not."
         },
         "kind": {
           "type": "string",

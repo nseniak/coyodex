@@ -3122,3 +3122,75 @@ def test_self_activated_surfaces_are_no_longer_exempt() -> None:
     assert any("often has no actor to claim it" in w for w in ws)
     m.extras = [ExtraSection(heading="Unclaimed surfaces", body="C2: nightly rollup, no actor")]
     assert not unclaimed(warnings_of(m))
+
+
+def test_a_use_case_in_no_capability_is_reported() -> None:
+    """The silent-loss regression. Once capabilities exist EVERY coverage check keys off membership,
+    so a use case with an empty or typo'd `capability` fell through all of them AND out of the
+    counts — reported by nothing at all. That is not the documented trade (an off-spine member of a
+    CORE capability is counted instead of warned); it is a hole. The other two forests have had the
+    symmetric advisory all along ("Entities with no SUBDOMAIN")."""
+    m = make_capability_model()
+    m.use_cases[1].capability = None
+    assert any("no capability" in w and "UC2" in w for w in warnings_of(m))
+
+
+def test_a_dangling_capability_or_entry_point_reference_blocks() -> None:
+    """All three new pointers were wired into the readers and into none of the validators, so a typo
+    silently turned the coverage check off for that use case instead of failing loudly."""
+    m = make_capability_model()
+    m.use_cases[0].capability = "CAP99"
+    assert any("CAP99" in p for p in problems_of(m))
+    m = make_capability_model()
+    m.capabilities.append(Group(id="CAP3", name="Orphan", parent="CAP404", label="core"))
+    assert any("CAP404" in p for p in problems_of(m))
+    m = make_capability_model()
+    m.use_cases[0].entry_points = ["EP7"]
+    assert any("EP7" in p for p in problems_of(m))
+
+
+def test_a_cycle_in_the_capability_forest_blocks() -> None:
+    """`capability_members` guards against hanging, but a cycle is a MAP defect and validate owns
+    it — as it already does for the subsystem and subdomain forests."""
+    m = make_capability_model()
+    m.capabilities[0].parent = "CAP2"
+    m.capabilities[1].parent = "CAP1"
+    assert any("cycle" in p.lower() for p in problems_of(m))
+
+
+def test_a_stale_record_cannot_silence_the_other_capability_check() -> None:
+    """One record silences exactly one (check, id) pair. Sharing the `recorded` test across both
+    branches meant a line written about a SUPPORTING capability's off-spine members kept hiding a
+    real core-coverage gap after the capability was relabelled core."""
+    m = make_capability_model()
+    m.extras = [ExtraSection(heading="Happy Path coverage",
+                             body="CAP2: reporting is supporting work, deliberately off the walk")]
+    assert not any("CAP2" in w and "off-spine use case" in w for w in warnings_of(m))
+    m.capabilities[1].label = "core"          # relabelled; the old record must not cover this
+    m.happy_path = [HappyStep(id="HP1", title="Place", uc="UC1")]
+    assert any("CAP2" in w and "no Happy-Path step reaches" in w for w in warnings_of(m))
+
+
+def test_an_unreached_core_subtree_reports_once_at_its_highest_ancestor() -> None:
+    """A three-node core tree with nothing on the walk is ONE absence, not three warnings — and a
+    record on the root retires the whole subtree, which is what "one line covers it" has to mean."""
+    m = make_capability_model()
+    m.capabilities = [Group(id="CAP1", name="Commerce", label="core"),
+                      Group(id="CAP2", name="Ordering", parent="CAP1", label="core"),
+                      Group(id="CAP3", name="Fulfilment", parent="CAP1", label="core")]
+    m.use_cases = [UseCase(id="UC1", name="Order", actors=["R1"], capability="CAP2"),
+                   UseCase(id="UC2", name="Ship", actors=["R1"], capability="CAP3")]
+    m.flows = [Flow(uc=u.id, title=u.name,
+                    steps=[FlowStep(n=1, src="R1", dst="C1", phrase="does")]) for u in m.use_cases]
+    # a walk exists (an empty one would trip the additivity guard and skip the family) but it
+    # reaches nothing in the core subtree
+    m.use_cases.append(UseCase(id="UC9", name="Elsewhere", actors=["R1"], capability="CAP1x"))
+    m.capabilities.append(Group(id="CAP1x", name="Other", label="supporting"))
+    m.flows.append(Flow(uc="UC9", title="Elsewhere",
+                        steps=[FlowStep(n=1, src="R1", dst="C1", phrase="does")]))
+    m.happy_path = [HappyStep(id="HP1", title="Elsewhere", uc="UC9")]
+    hits = [w for w in warnings_of(m) if "no Happy-Path step reaches" in w]
+    assert len(hits) == 1 and "CAP1" in hits[0], hits
+    m.extras = [ExtraSection(heading="Happy Path coverage",
+                             body="CAP1/spine: pre-launch, the walk does not cover commerce yet")]
+    assert not [w for w in warnings_of(m) if "no Happy-Path step reaches" in w]

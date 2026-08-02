@@ -189,20 +189,6 @@ def test_a_capability_naming_no_use_cases_is_empty_not_missing() -> None:
     assert vm.capability_elements(m)["CAP3"] == set()
 
 
-if __name__ == "__main__":
-    import sys
-    fails = 0
-    for name, fn in sorted(globals().items()):
-        if name.startswith("test_") and callable(fn):
-            try:
-                fn()
-            except AssertionError as e:                       # pragma: no cover - stdlib runner
-                fails += 1
-                print(f"FAIL {name}: {e}")
-    print("FAILED" if fails else "ok")
-    sys.exit(1 if fails else 0)
-
-
 # --- completeness counts: the numbers that replace a wall of advisories -------------------------
 
 def test_completeness_counts_on_the_fixture() -> None:
@@ -289,3 +275,21 @@ def test_a_cycle_in_the_capability_forest_does_not_hang() -> None:
     m = make_nested_model()
     m.capabilities[0].parent = "CAP2"          # CAP1 -> CAP2 -> CAP1
     assert vm.capability_members(m)["CAP1"] == {"UC1"}
+
+
+if __name__ == "__main__":
+    # MUST stay at the END of the file. It sat mid-file once, and since it calls sys.exit(),
+    # every test defined below it was never even defined under the standalone runner: it ran
+    # 10 of 17 and printed "ok". The count is printed now so a silent shortfall is visible.
+    import sys
+    tests = sorted((n, f) for n, f in globals().items()
+                   if n.startswith("test_") and callable(f))
+    fails = 0
+    for name, fn in tests:
+        try:
+            fn()
+        except AssertionError as e:                       # pragma: no cover - stdlib runner
+            fails += 1
+            print(f"FAIL {name}: {e}")
+    print(f"FAILED ({fails} of {len(tests)})" if fails else f"ok ({len(tests)} tests)")
+    sys.exit(1 if fails else 0)

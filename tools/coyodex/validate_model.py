@@ -103,8 +103,14 @@ def _strings(value: object, skip_keys: frozenset[str] = frozenset({"format"})) -
 
 
 def _parents(m: ProjectModel) -> dict[str, str]:
-    """child id -> parent id, across both forests (C→S, S→S, SD→SD, E→SD) — single-source, on the
-    child."""
+    """child id -> parent id, across all THREE forests (C→S, S→S, SD→SD, E→SD, UC→CAP, CAP→CAP) —
+    single-source, on the child.
+
+    The capability arms were missing when capabilities shipped, and everything downstream of this
+    map went with them: an undefined `capability`, an undefined capability `parent` and a CYCLE in
+    the capability forest were all accepted in silence, while the exact same mistakes are blocking
+    on the other two forests. That is the worst direction for this particular field — a typo'd
+    capability turns the Happy-Path coverage check OFF for that use case rather than failing loudly."""
     out: dict[str, str] = {}
     for c in m.components:
         if c.subsystem:
@@ -118,6 +124,12 @@ def _parents(m: ProjectModel) -> dict[str, str]:
     for e in m.entities:
         if e.subdomain:
             out[e.id] = e.subdomain
+    for cap in m.capabilities:
+        if cap.parent:
+            out[cap.id] = cap.parent
+    for u in m.use_cases:
+        if u.capability:
+            out[u.id] = u.capability
     return out
 
 
@@ -168,6 +180,9 @@ def _check_ids(m: ProjectModel) -> list[str]:
         + [(s.id, "parent", s.parent) for s in m.subsystems]
         + [(sd.id, "parent", sd.parent) for sd in m.subdomains]
         + [(e.id, "subdomain", e.subdomain) for e in m.entities]
+        + [(c.id, "parent", c.parent) for c in m.capabilities]
+        + [(u.id, "capability", u.capability) for u in m.use_cases]
+        + [(u.id, "entry_points", ep) for u in m.use_cases for ep in u.entry_points]
         + [(g.id, "uc", g.uc) for g in m.happy_path]
         + [(e.id, "relation target", r.target) for e in m.entities for r in e.relations]
         + [(f"{f.uc} step {st.n}", "subflow", st.subflow) for f in m.flows for st in f.steps]
@@ -218,6 +233,12 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
             refs.add(g.uc)
     for u in m.use_cases:
         refs.update(u.actors)                        # a use case's actors are role ids
+        if u.capability:
+            refs.add(u.capability)
+        refs.update(u.entry_points)                  # EPn — resolved against the minted T4 ids below
+    for cap in m.capabilities:
+        if cap.parent:
+            refs.add(cap.parent)
     for f in m.flows:
         if f.uc:
             refs.add(f.uc)
@@ -270,7 +291,11 @@ def _check_references(m: ProjectModel) -> list[str]:
     fields + `[[ID]]` markers (`_referenced_ids`), never scanned out of prose/anchors — so a domain
     string shaped like an id (`S256`, `D3`) is never a false dangling ref. Additivity: stray S/SD refs
     are ignored while the map has no grouping/subdomains."""
-    defined = set(all_elements(m)) | {g.id for g in m.happy_path}
+    # Entry points are not an `ID_ARRAYS` family (their ids are minted by `assemble`, not authored),
+    # so they are not in `all_elements` — but a use case's trigger link references them, and a
+    # reference that resolves to nothing is the same defect here as anywhere else.
+    defined = (set(all_elements(m)) | {g.id for g in m.happy_path}
+               | {ep.id for ep in m.entry_points if ep.id})
     referenced = _referenced_ids(m)
     parents = _parents(m)
     grouping_present = (any(_is_subsystem_id(i) for i in defined)
@@ -784,11 +809,18 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
 # `CAP` and `EP` lead the alternation for the usual first-match reason (`CAP3` also starts with "C",
 # `EP1` with "E") — without that, a recorded `CAP3: <why>` line matched the `C` branch, failed on
 # "AP3", and silently adjudicated nothing.
-_RECORD_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*((?:CAP|EP|UC|HP|R|C|E)\d+)\**\s*[:(—–-]")
+_RECORD_LINE = re.compile(
+    r"^\s*(?:[-*]\s+)?\**\s*((?:CAP|EP|UC|HP|R|C|E)\d+(?:/[a-z-]+)?)\**\s*[:(—–-]")
 
 
 def _recorded_ids(m: ProjectModel, heading: str, prefixes: tuple[str, ...]) -> set[str]:
-    """Ids adjudicated under a machine-read extras heading, read from line-leading tokens only."""
+    """Ids adjudicated under a machine-read extras heading, read from line-leading tokens only.
+
+    A token MAY carry a `/scope` suffix (`CAP4/spine`) when one id is the subject of two different
+    checks — the same device `balance_lib.RUNS_IN_SCOPES` already uses, and for the same reason it
+    was introduced there: a bare token silenced a whole family at once, which is the one thing the
+    method says a record must never do. Both the bare and the scoped form are returned verbatim, so
+    each caller asks for exactly the token its own check honours."""
     out: set[str] = set()
     for body in balance_lib.extras_bodies(m, heading):
         for line in body.splitlines():
@@ -962,6 +994,17 @@ def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
                 for u in m.use_cases if u.id not in on_spine and u.id not in recorded]
     warnings: list[str] = []
     caps = {c.id: c for c in m.capabilities}
+    # A use case in NO capability falls through every check below, because all of them key off
+    # membership — so an off-spine use case with an empty or typo'd `capability` was reported by
+    # nothing at all, and was not counted either. That is a silent loss, not the documented trade
+    # (which is "an off-spine member of a CORE capability is counted instead of warned"). The
+    # symmetric advisory already exists for the other two forests ("Entities with no SUBDOMAIN").
+    if ungrouped := [u for u in m.use_cases
+                     if (u.capability or "").strip() not in caps and u.id not in recorded]:
+        warnings.append(
+            f"Use cases in no capability: {_shown([u.id for u in ungrouped], 8)} — the map groups use "
+            "cases, and an ungrouped one is invisible to every Happy-Path coverage check; assign a "
+            "capability (via `reconcile`), or record it under a 'Happy Path coverage' extras heading")
     by_id = {u.id: u for u in m.use_cases}
     # The forward check reads the WHOLE SUBTREE — a parent capability is reached when any descendant's
     # use case is on the walk. The non-core check below deliberately reads DIRECT membership instead:
@@ -972,20 +1015,45 @@ def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
     for u in m.use_cases:
         if (cap := (u.capability or "").strip()) in caps:
             direct.setdefault(cap, []).append(u)
+    # The highest core ancestor that no spine step reaches — reporting a whole unreached subtree once
+    # instead of at every level. Without this a three-node core tree produced three warnings for one
+    # absence, and a record on the root silenced only the root while its children kept firing, which
+    # breaks the "one line covers it" promise exactly where the tree is deepest.
+    # The forward (core-off-the-walk) check honours a SCOPED record, `CAPn/spine`. The non-core check
+    # keeps the bare `CAPn`. Sharing one token let a line written about a supporting capability's
+    # off-spine members keep hiding a real core-coverage gap after that capability was relabelled
+    # core — one record silencing a check it was never written for.
+    unreached_core = {cid for cid, c in caps.items()
+                      if (c.label or "").strip().lower() == "core"
+                      and subtree.get(cid) and not any(uc in on_spine for uc in subtree[cid])}
+    spine_recorded = {r[:-len("/spine")] for r in recorded if r.endswith("/spine")}
+    covered_by_ancestor: set[str] = set()
+    for cid in unreached_core:
+        anc, guard = caps[cid].parent, 0
+        while anc and guard < 12:
+            if anc in unreached_core or anc in spine_recorded:
+                covered_by_ancestor.add(cid)
+                break
+            anc, guard = (caps[anc].parent if anc in caps else None), guard + 1
     for cap_id, cap in caps.items():
         label = (cap.label or "").strip().lower()
         mine = direct.get(cap_id, [])
-        if not subtree.get(cap_id) or cap_id in recorded:
+        if not subtree.get(cap_id):
             continue
         if label == "core":
-            if not any(uc in on_spine for uc in subtree.get(cap_id, ())):
+            # The `recorded` test is INSIDE each branch, not above them. Sharing it let one `CAPn`
+            # line silence both checks: record a supporting capability's off-spine members, later
+            # relabel it core, and the stale record went on hiding a genuine core-coverage gap.
+            # One record silences exactly one (check, id) pair — the rule the HP-step case follows.
+            if (cap_id in unreached_core and cap_id not in spine_recorded
+                    and cap_id not in covered_by_ancestor):
                 mine = [by_id[uc] for uc in sorted(subtree.get(cap_id, ())) if uc in by_id]
                 warnings.append(
                     f"{cap_id} ({cap.name}) is a core capability that no Happy-Path step reaches — "
                     f"the walk traverses all main functionality: give one of its {len(mine)} use "
-                    f"case(s) a spine step, or record '{cap_id}: <why>' under a 'Happy Path "
+                    f"case(s) a spine step, or record '{cap_id}/spine: <why>' under a 'Happy Path "
                     "coverage' extras heading")
-        elif off := [u for u in mine if u.id not in on_spine]:
+        elif (cap_id not in recorded) and (off := [u for u in mine if u.id not in on_spine]):
             warnings.append(
                 f"{cap_id} ({cap.name}) is labelled '{label or 'unlabelled'}' and holds "
                 f"{len(off)} off-spine use case(s) — one record covers them all: write "

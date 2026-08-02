@@ -1098,9 +1098,11 @@ synthesis → parallel trace.**
   at ~669 k per use case. Nor are the leftovers cheap: they are usually the CRUD variants, but a
   variant with no traced sibling is new ground, and each trace is its own agent context, so nothing
   is carried over. Where budget genuinely runs out, the shortfall is **reported as debt**
-  (`use_cases_untraced`), and an untraced use case is either traced or recorded as deliberately
-  untraced — never left ambiguous. Where a trace would truly duplicate a sibling, check whether the
-  two are really ONE use case (the one-actor-one-goal test) rather than leaving one untraced.
+  (`use_cases_untraced`). **There is deliberately NO "recorded as deliberately untraced" escape** —
+  the no-T6-flow advisory is one of the few with no way to record it away, because an untraced use
+  case is a claim with nothing behind it and the two honest remedies are both cheap: trace it, or
+  drop it. Where a trace would truly duplicate a sibling, check whether the two are really ONE use
+  case (the one-actor-one-goal test) rather than leaving one untraced.
   Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps —
   **including the flow's central entity touches as `C→E` steps**, the entity-steps rule under T6)
   and also records the **`C→E` edges** for the components in its slice — the entities they

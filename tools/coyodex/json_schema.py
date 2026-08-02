@@ -55,13 +55,29 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("HappyStep", "why"): {"description": "the prerequisite that fixes this step's position — "
                              "why it can't come earlier in the walk."},
     ("Group", "id"): {"pattern": ID_SHAPE.pattern, "description": "`S<n>` in subsystems[], "
-                       "`SD<n>` in subdomains[] — same dataclass, two id forests."},
+                       "`SD<n>` in subdomains[], `CAP<n>` in capabilities[] — same dataclass, "
+                       "three id forests."},
     ("Group", "parent"): {"pattern": ID_SHAPE.pattern, "description": "the enclosing group's id, "
-                           "in the SAME forest (an S parents an S, an SD parents an SD), or null "
-                           "for top-level."},
+                           "in the SAME forest (an S parents an S, an SD an SD, a CAP a CAP), or "
+                           "null for top-level."},
+    ("Group", "label"): {"enum": ["", *grammar.CAP_LABELS], "description": "CAPABILITY-ONLY: an "
+                          "authored judgement about the use cases in this capability — core is the "
+                          "product and the Happy Path walks every core capability. Nothing derives "
+                          "it, and `validate` blocks it on a subsystem or a subdomain."},
     ("Group", "source"): {"description": _DIR_OR_FILE_DESC + " The group's home directory (or a "
                            "representative file)."},
     ("UseCase", "id"): {"pattern": r"^UC\d+$"},
+    ("UseCase", "capability"): {"pattern": r"^CAP\d+$", "description": "the capability this use "
+                                "case belongs to, or null. Assigned at synthesis via `reconcile` "
+                                "(a `CAP<n>` does not exist when the behavioral fragment is written)."},
+    ("UseCase", "entry_points"): {"items": {"pattern": r"^EP\d+$"}, "description": "the TRIGGER "
+                                   "arm of entry-point claiming: the front door(s) an actor hits to "
+                                   "START this use case. Empty is legitimate — the surface may sit "
+                                   "inside a coarse T4 row a sibling already names."},
+    ("EntryPoint", "id"): {"pattern": r"^EP\d+$", "description": "MINTED BY `assemble` from content "
+                            "(source + trigger + owner + kind), never authored — leave it out of a "
+                            "fragment. Change-impact keeps its own content key (`ep:{source}`), "
+                            "which is stable across rebuilds where a minted number is not."},
     ("Role", "id"): {"pattern": r"^R\d+$", "description": "a role is a first-class element (`R<n>`), "
                      "referenced by id — a use case's `actors` and a flow's actor steps carry role ids."},
     ("EvidenceItem", "file"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC},

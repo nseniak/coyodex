@@ -808,14 +808,15 @@ def test_a_directory_named_json_still_raises_from_assemble():
 # ── entry-point ids: minted by assemble, never authored (Step 1 of plan/60-capabilities) ──────────
 
 def make_entry_point_slice(cid: str, own_route: str) -> str:
-    """One harvest slice. Every slice records the SHARED `/health` route it happened to walk past,
-    plus one route of its own — the duplicate-surface case that nothing collapsed before, because
-    entry points were the one element family assemble simply concatenated."""
+    """One harvest slice. Every slice records the SHARED `/health` route it walked past — same file,
+    same line, same owner, because it IS one surface — plus one route of its own. The
+    duplicate-surface case nothing collapsed before, entry points being the one element family
+    assemble simply concatenated."""
     return json.dumps({
         "components": [{"id": cid, "name": cid, "purpose": "p", "source": f"{cid}.py:1"}],
         "entry_points": [
             {"kind": "HTTP route", "trigger": "GET /health", "source": "app/health.py:10",
-             "component": cid, "activation": "external"},
+             "component": "C1", "activation": "external"},
             {"kind": "HTTP route", "trigger": f"GET {own_route}", "source": f"{cid}.py:5",
              "component": cid, "activation": "external"},
         ],
@@ -926,3 +927,65 @@ def test_reconcile_refuses_capability_on_a_non_use_case():
                               capture_output=True, text=True)
         assert proc.returncode != 0, proc.stdout
         assert "can only be set on a use case" in (proc.stdout + proc.stderr)
+
+
+def test_two_surfaces_in_one_file_are_never_merged_away():
+    """The dedup key must keep the LINE, and the owner and kind with it.
+
+    The first revision keyed on `strip_anchor(source)`, which drops the line — so identity was
+    really `(file, trigger)` and any two rows anywhere in one router file with the same trigger text
+    collapsed, silently deleting a real surface along with its component, kind and activation. A
+    deleted row can never be reported as unclaimed, never appears under "Triggered by", and never
+    reaches `--emit-unclaimed`. Over-merging is the dangerous direction here, so the key is
+    deliberately conservative."""
+    with tempfile.TemporaryDirectory() as td:
+        frag = Path(td) / "f.json"
+        frag.write_text(json.dumps({
+            "components": [{"id": "C1", "name": "A", "purpose": "p", "source": "a.py:1"},
+                           {"id": "C2", "name": "B", "purpose": "p", "source": "b.py:1"}],
+            "entry_points": [
+                {"kind": "HTTP route", "trigger": "POST /jobs", "source": "routes.py:40",
+                 "component": "C1", "activation": "external"},
+                # same file, same trigger text — a DIFFERENT line, owner, kind and activation
+                {"kind": "cron job", "trigger": "POST /jobs", "source": "routes.py:99",
+                 "component": "C2", "activation": "self"},
+            ],
+        }), encoding="utf-8")
+        out = Path(td) / "map"
+        proc = subprocess.run(ASSEMBLE + [str(frag), "--out", str(out)],
+                              capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        m = load_model((out / "project-map.json").read_text(encoding="utf-8"))
+        assert len(m.entry_points) == 2, [(e.kind, e.source) for e in m.entry_points]
+        assert {e.activation for e in m.entry_points} == {"external", "self"}
+
+
+def test_entry_point_ids_do_not_depend_on_fragment_order():
+    """Ids are numbered by CONTENT, so the same surfaces get the same ids however the fragments are
+    passed in.
+
+    Numbering in first-occurrence order made the ids depend on argument order — and because
+    `use_case.entry_points` is authored separately (via reconcile, against a previous assemble's
+    ids), swapping two fragments silently re-pointed a use case at a different front door. Measured
+    before the fix: `POST /orders` and `DELETE /admin/wipe-database` traded ids, the use case
+    claimed the wrong one, and validate resolved it happily."""
+    a = json.dumps({"components": [{"id": "C1", "name": "A", "purpose": "p", "source": "a.py:1"}],
+                    "entry_points": [{"kind": "HTTP route", "trigger": "POST /orders",
+                                      "source": "orders.py:9", "component": "C1",
+                                      "activation": "external"}]})
+    b = json.dumps({"components": [{"id": "C2", "name": "B", "purpose": "p", "source": "b.py:1"}],
+                    "entry_points": [{"kind": "HTTP route", "trigger": "DELETE /admin/wipe",
+                                      "source": "admin.py:3", "component": "C2",
+                                      "activation": "external"}]})
+    def ids_for(order: list[str]) -> dict[str, str]:
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "a.json").write_text(a, encoding="utf-8")
+            (Path(td) / "b.json").write_text(b, encoding="utf-8")
+            out = Path(td) / "map"
+            proc = subprocess.run(
+                ASSEMBLE + [str(Path(td) / f) for f in order] + ["--out", str(out)],
+                capture_output=True, text=True)
+            assert proc.returncode == 0, proc.stderr
+            m = load_model((out / "project-map.json").read_text(encoding="utf-8"))
+            return {ep.id: ep.trigger for ep in m.entry_points}
+    assert ids_for(["a.json", "b.json"]) == ids_for(["b.json", "a.json"])
