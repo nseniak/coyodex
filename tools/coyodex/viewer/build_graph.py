@@ -137,10 +137,6 @@ class GraphDict(TypedDict):
     capability_touch: dict[str, list[str]]      # element id -> the capability ids whose flows reach
                                                 # it. Absent = no capability reaches it (untraced, or
                                                 # touched by no flow) — the overlay dims those.
-    capability_lives: dict[str, list[dict[str, object]]]  # capability id -> its subsystems, ranked by
-                                                # how much of each it touches: {id, name, touched,
-                                                # total}. The "where it lives" list and its one-line
-                                                # alignment verdict both read this.
     completeness: dict[str, int]                # the four-state counts (traced / untraced / claimed /
                                                 # off-spine-in-core) shown on the System tab
     non_entity_types: list[dict[str, str]]  # deliberately-unmodelled types: {name, source, why}

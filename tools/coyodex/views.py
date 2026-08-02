@@ -643,44 +643,6 @@ def _ce_access(m: ProjectModel, name_of: "dict[str, str]") -> dict[str, dict[str
     return acc
 
 
-def _capability_lives(m: ProjectModel) -> dict[str, list[dict[str, object]]]:
-    """Per capability: WHERE it lives in the architecture — its top-level subsystems, ranked by how
-    many of each one's components its flows reach, as `{id, name, touched, total}`.
-
-    Rolled up to the TOP level because that is the altitude the Subsystems overview draws, and it is
-    the altitude the question is asked at ("which parts of the machine serve this?"). A component's
-    own subsystem may be nested three deep; ranking those would answer a question nobody asked.
-
-    This replaces the capability x subsystem matrix the design first reached for. The matrix carried
-    the right information and was the wrong UI: 7x12 is already dense, a real map is ~800 cells, and
-    no cell drills anywhere. One capability's ranked list says the same thing at the moment you are
-    looking at that capability."""
-    subs = {s.id: s for s in m.subsystems}
-
-    def root_of(sid: str | None) -> str | None:
-        seen: set[str] = set()
-        while sid and sid in subs and subs[sid].parent and sid not in seen:
-            seen.add(sid)
-            sid = subs[sid].parent
-        return sid
-
-    comps = {c.id: c for c in m.components}
-    total_by_root: dict[str, int] = {}
-    for c in m.components:
-        if (r := root_of(c.subsystem)):
-            total_by_root[r] = total_by_root.get(r, 0) + 1
-    out: dict[str, list[dict[str, object]]] = {}
-    for cap, ends in capability_elements(m).items():
-        touched: dict[str, int] = {}
-        for eid in ends:
-            if (c := comps.get(eid)) and (r := root_of(c.subsystem)):
-                touched[r] = touched.get(r, 0) + 1
-        out[cap] = [{"id": r, "name": subs[r].name if r in subs else r,
-                     "touched": n, "total": total_by_root.get(r, 0)}
-                    for r, n in sorted(touched.items(), key=lambda kv: (-kv[1], kv[0]))]
-    return out
-
-
 def _build_data_view(m: ProjectModel, nodes: dict[str, Node]) -> dict[str, object]:
     """The store-centric Data view payload (rides in the GraphDict like `messaging`). Every list is
     built in model order or sorted, so the output is deterministic. Physical stores = deps classified
@@ -1003,7 +965,6 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         # implementation in JS is exactly the drift this repo keeps paying for elsewhere.
         "capability_touch": {eid: sorted(caps)
                              for eid, caps in element_capabilities(m).items()},
-        "capability_lives": _capability_lives(m),
         "completeness": completeness_counts(m),
         # ── reference collections (System / Tests tabs) — carried straight from the model ──
         "run_commands": [asdict(r) for r in m.run_commands],

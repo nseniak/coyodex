@@ -20,7 +20,6 @@ let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E
 let MERMAID_DEPLOYMENT;    // Deployment overview (the "All" view): processes + infra + derived `runs` edges
 let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of the subsystems it runs
 let CAPABILITY_TOUCH = {};    // element id -> the capability ids whose flows reach it
-let CAPABILITY_LIVES = {};    // capability id -> its subsystems, ranked {id, name, touched, total}
 let COMPLETENESS = {};        // the four-state counts shown on the System tab
 let HAS_CAPABILITIES = false;
 let CAP_OF_UC = {};           // use-case id -> its capability NODE (names on screen, never ids)
@@ -95,7 +94,6 @@ function applyBundle(b) {
   // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
   // helper; a second implementation here is the drift this repo keeps paying for elsewhere.
   CAPABILITY_TOUCH = GRAPH.capability_touch || {};
-  CAPABILITY_LIVES = GRAPH.capability_lives || {};
   COMPLETENESS = GRAPH.completeness || {};
   HAS_CAPABILITIES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'capability');
   CAP_OF_UC = {};
@@ -1061,9 +1059,11 @@ function usedInHtml(id) {
   // guess what kind of thing the list held (processes? subsystems? files?). The label names the list.
   return '<dt>In use cases</dt><dd>' + links + '</dd>';
 }
-// "Serves" — the REVERSE of a capability's "where it lives": given this box, which parts of the
-// product does it serve? Same data read backwards (`CAPABILITY_TOUCH` is the inverse of the
-// per-capability element sets), so the two views can never disagree.
+// "Serves" — given this box, which parts of the product does it serve? Derived from
+// `CAPABILITY_TOUCH`, the inverse of the per-capability element sets. (Its forward twin, a
+// "where this capability lives" panel on the Use Cases tab, was removed as not worth its space: a
+// capability spanning four subsystems is normal, so the ranked bars rarely changed a reader's mind.
+// The question is worth answering on the box you are looking at, not as a standing summary.)
 //
 // Shown at BOTH altitudes. A component looks itself up directly; a subsystem rolls up its whole
 // subtree, because a container holds no code of its own — its answer is the union of its
@@ -4719,32 +4719,6 @@ function roleKindOf(n) {
   return (k === 'human' || k === 'service') ? k : 'human';
 }
 
-function whereItLivesHtml(capId) {
-  // WHERE this capability lives: its top-level subsystems, ranked, with a proportion bar — plus a
-  // one-line verdict, which is the actual finding ("lives in X" vs "spread across N, no home").
-  // This is what replaced the capability x subsystem matrix: the matrix held the right information
-  // and was the wrong UI (7x12 is already dense, a real map is ~800 cells, no cell drills).
-  const rows = CAPABILITY_LIVES[capId] || [];
-  if (!rows.length) {
-    return '<p class="uc-lives uc-lives-empty">No traced use cases — this capability has no'
-      + ' components, so nothing on the architecture lights up for it.</p>';
-  }
-  const top = rows[0];
-  const share = top.total ? top.touched / top.total : 0;
-  const verdict = (rows.length <= 2 || share >= 0.5)
-    ? `lives in ${esc(top.name)}`
-    : `spread across ${rows.length} subsystems, no home`;
-  const bars = rows.slice(0, 5).map((r) => {
-    const pct = r.total ? Math.round(100 * r.touched / r.total) : 0;
-    return '<li><span class="uc-lives-name">' + esc(r.name) + '</span>'
-      + `<span class="uc-lives-bar"><i style="width:${pct}%"></i></span>`
-      + `<span class="uc-lives-n">${r.touched} of ${r.total}</span></li>`;
-  }).join('');
-  const more = rows.length > 5 ? `<li class="uc-lives-more">+ ${rows.length - 5} more</li>` : '';
-  return `<div class="uc-lives"><p class="uc-lives-verdict">${verdict}</p>`
-    + `<ul class="uc-lives-list">${bars}${more}</ul></div>`;
-}
-
 function capabilityGroups() {
   // Capability order is the model's (importance), and membership rides `parent` — the same channel a
   // component uses for its subsystem — so no second lookup table travels beside the nodes.
@@ -4839,12 +4813,11 @@ function renderUseCases() {
       // completeness check now demands would bury the product screen — the very complaint that
       // started this work, one tab over.
       const shut = (g.label || '').toLowerCase() === 'platform';
-      const lives = g.cap ? whereItLivesHtml(g.cap.id) : '';
       return `<section class="uc-group${shut ? ' uc-shut' : ''}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
         + `<h3 class="uc-actor uc-caphead" tabindex="0" role="button" aria-expanded="${shut ? 'false' : 'true'}">`
         + `<span class="uc-twist">&#9662;</span>${esc(title)}${lab}`
         + `<span class="uc-actor-wants">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span></h3>`
-        + `<div class="uc-capbody">${lives}<ul class="uc-list">${rows}</ul></div></section>`;
+        + `<div class="uc-capbody"><ul class="uc-list">${rows}</ul></div></section>`;
     }
     return '<section class="uc-group">'
       + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}${wants}</h3>`

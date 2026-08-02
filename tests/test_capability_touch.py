@@ -208,29 +208,16 @@ def test_completeness_counts_on_the_fixture() -> None:
 # --- the viewer transport (Step 6a): the frontend cannot call Python -----------------------------
 
 def test_graph_carries_the_overlay_data() -> None:
-    """`capability_touch`, `capability_lives` and `completeness` ride in the graph because
-    `viewer.js` cannot call the Python helper — and a second implementation in JS is exactly the
-    drift this repo pays for elsewhere."""
+    """`capability_touch` and `completeness` ride in the graph because `viewer.js` cannot call the
+    Python helper — and a second implementation in JS is exactly the drift this repo pays for
+    elsewhere."""
     from coyodex.views import model_to_graph
     m = load_fixture()
     g = model_to_graph(m)
-    assert g["capability_touch"] and g["capability_lives"] and g["completeness"]
+    assert g["capability_touch"] and g["completeness"]
     # the touch map is the helper's inverse, verbatim
     assert {k: set(v) for k, v in g["capability_touch"].items()} == vm.element_capabilities(m)
     assert g["completeness"] == vm.completeness_counts(m)
-
-
-def test_where_it_lives_ranks_top_level_subsystems() -> None:
-    """Rolled up to the TOP level — the altitude the Subsystems overview draws and the altitude the
-    question is asked at. Ranked by how much of each subsystem the capability reaches."""
-    from coyodex.views import model_to_graph
-    lives = model_to_graph(load_fixture())["capability_lives"]
-    gw = lives["CAP4"]                                     # Tool access via gateway
-    assert [r["touched"] for r in gw] == sorted((r["touched"] for r in gw), reverse=True)
-    by_name = {r["name"]: r for r in gw}
-    assert by_name["Gateway (MCP protocol surface)"]["touched"] == 5
-    assert by_name["Gateway (MCP protocol surface)"]["total"] == 9
-    assert lives["CAP5"] == []                              # untraced capability lives nowhere
 
 
 def test_use_case_nodes_carry_their_capability_as_parent() -> None:
