@@ -84,6 +84,21 @@ make start
 It serves a landing page at `http://127.0.0.1:8765/`. Every project you map shows up there as a card;
 click it to open the map. Leave the server running.
 
+### Asking for map changes
+
+You can also **just ask for changes** in plain language, and coyodex edits the map for you:
+
+```
+/coyodex move the payments module into a new "Billing" subsystem
+/coyodex the "utils" component is really two things, split it
+/coyodex rename the "API" subsystem to "Public API"
+/coyodex add a use case for an admin resetting a user's password
+/coyodex drill deeper into the "Billing" subsystem — I need more detail there
+```
+
+**A rebuild is a fresh start.** If you later rebuild the map from scratch (which you have to ask for
+explicitly), your manual tweaks aren't re-applied.
+
 ### Analyzing changes
 
 **1. Edit your code.** Work as usual.
@@ -127,27 +142,6 @@ edit code
 ```
 
 The map is committed *with* the code, so the baseline commit and the code commit stay in step.
-
-## Asking for map changes
-
-You can also **just ask for changes** in plain language, and coyodex edits the map for you:
-
-```
-/coyodex move the payments module into a new "Billing" subsystem
-/coyodex the "utils" component is really two things, split it
-/coyodex rename the "API" subsystem to "Public API"
-/coyodex add a use case for an admin resetting a user's password
-```
-
-coyodex makes the edit directly to the map, runs the same checks as any other change
-(validate → audit → render), and commits it. Same map, edited on request; no special mode.
-
-Two things to know:
-
-- **It stays grounded in the code.** coyodex will reorganize or rename what's there, but it won't
-  invent things the code doesn't do; an "add a use case" only sticks if there's real code behind it.
-- **A rebuild is a fresh start.** If you later rebuild the map from scratch (which you have to ask for
-  explicitly), your manual tweaks aren't re-applied. Day to day you analyze and accept, which keeps them.
 
 ## Which files are analyzed
 
