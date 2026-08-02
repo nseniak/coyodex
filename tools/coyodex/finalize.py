@@ -126,7 +126,7 @@ def _validate_leg(map_path: Path, repo: Path | None) -> Leg:
                note=payload.get("checked") or None)
 
 
-def _audit_leg(map_path: Path) -> Leg:
+def _audit_leg(map_path: Path, verdicts: list[Path] | None = None) -> Leg:
     code, out, err = _run_leg("audit", [str(map_path), "--json"])
     try:
         payload = json.loads(out)
@@ -144,13 +144,53 @@ def _audit_leg(map_path: Path) -> Leg:
     live_worklist = len(live_claims)
     note = (f"{live_worklist} L2 claims on the grounding worklist"
             + (f" ({', '.join(f'{k}:{v}' for k, v in counts.items())})" if counts else ""))
-    stale = _stale_grounding_pin(map_path, live_claims)
+    stale = _stale_grounding_pin(map_path, live_claims, verdicts or [])
     if stale:
         advisory.append(stale)
     return Leg("audit", RAN, blocking=blocking, advisory=advisory, note=note)
 
 
-def _stale_grounding_pin(map_path: Path, live_claims: list[str]) -> str | None:
+def _recomputed_delta(g: dict, live: set[str], verdicts: list[Path]) -> str | None:
+    """Check the record's two delta counts against the verdicts, when they are available.
+
+    The digest proves the record describes THIS map's claim surface. It says nothing about whether
+    `claims_superseded` and `claims_added_since` are true — a record can carry a valid digest beside
+    two invented numbers, and every check still passes. That is a poor property for the two fields
+    whose only job is honesty.
+
+    The verdict claims ARE the pinned set: `grounding write` refuses a verdict outside the pinned
+    worklist and refuses a pinned claim with no verdict, so anything that got written has
+    `votes == pinned`. That makes both counts recomputable here exactly, with no extra input beyond
+    the `--verdicts` this command already accepts. Absent verdicts, this is skipped rather than
+    guessed — a build may legitimately not keep them (they are untracked in most projects)."""
+    if not verdicts:
+        return None
+    try:
+        from coyodex.anchor_drift import load_verdicts
+        rows, _notes = load_verdicts([str(v) for v in verdicts])
+    except Exception:
+        return None
+    pinned = {str(r.get("claim")) for r in rows if isinstance(r, dict) and r.get("claim")}
+    if not pinned:
+        return None
+    want_superseded, want_added = len(pinned - live), len(live - pinned)
+    got_superseded = g.get("claims_superseded", 0)
+    got_added = g.get("claims_added_since", 0)
+    wrong = []
+    if isinstance(got_superseded, int) and got_superseded != want_superseded:
+        wrong.append(f"`claims_superseded` says {got_superseded}, the verdicts say {want_superseded}")
+    if isinstance(got_added, int) and got_added != want_added:
+        wrong.append(f"`claims_added_since` says {got_added}, the verdicts say {want_added}")
+    if not wrong:
+        return None
+    return ("grounding: the record's delta counts disagree with the verdict files — "
+            + "; ".join(wrong) + ". These are the numbers a reader uses to judge whether the "
+            "superseded claims were the refuted ones, so a wrong count is worse than none. Re-run "
+            "`coyodex grounding write --worklist <pinned.json> --map <this map> --verdicts <…>`.")
+
+
+def _stale_grounding_pin(map_path: Path, live_claims: list[str],
+                         verdicts: list[Path] | None = None) -> str | None:
     """The map's `grounding` record no longer describes the map's claim surface.
 
     `grounding write` PINS `claims_total` to the worklist the skeptics were given, and that pin is
@@ -188,7 +228,9 @@ def _stale_grounding_pin(map_path: Path, live_claims: list[str]) -> str | None:
     if isinstance(stored_digest, str) and stored_digest:
         from coyodex.grounding import live_claims_digest
         if live_claims_digest(live_set) == stored_digest:
-            return None
+            # The surface matches. The COUNTS beside it are still unverified — check them when the
+            # verdicts are at hand, because a valid digest and two invented numbers coexist happily.
+            return _recomputed_delta(g, live_set, verdicts or [])
         superseded = g.get("claims_superseded", 0)
         added = g.get("claims_added_since", 0)
         return (f"grounding: the record's `live_claims_digest` does not match this map's claim "
@@ -243,7 +285,7 @@ def _drift_leg(map_path: Path, repo: Path, verdicts: list[Path]) -> Leg:
 def build_report(map_path: Path, repo: Path, verdicts: list[Path]) -> FinalizeReport:
     legs = [
         _validate_leg(map_path, repo),
-        _audit_leg(map_path),
+        _audit_leg(map_path, verdicts),
         _drift_leg(map_path, repo, []),
         *([_drift_leg(map_path, repo, verdicts)] if verdicts else []),
     ]

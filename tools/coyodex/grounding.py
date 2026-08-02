@@ -35,6 +35,7 @@ from coyodex.anchor_drift import load_verdicts
 USAGE = """usage: coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
                                [--out <fragment.json>] [--note <text>] [--json]
                                [--map <project-map.json>]
+coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--map <map>] [--json]
        coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--json]
 
 `report` prints WHICH claims were refuted, tied, unverifiable or unvoted — the reconcile worklist
@@ -160,7 +161,7 @@ def build_record(worklist_claims: list[str], grounding_rows: list[dict],
 
 
 def format_report(worklist_claims: list[str], grounding_rows: list[dict],
-                  as_json: bool = False) -> str:
+                  as_json: bool = False, live_claims: list[str] | None = None) -> str:
     """WHICH claims landed in each bucket — the half `write` computes and then throws away.
 
     `write` resolves every claim to confirmed / refuted / unverifiable and emits only the four
@@ -179,7 +180,13 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
         if isinstance(claim, str):
             votes.setdefault(claim, []).append(r)
     buckets: dict[str, list[dict[str, object]]] = {
-        "refuted": [], "unverifiable": [], "tied": [], "unvoted": [], "confirmed": []}
+        "refuted": [], "unverifiable": [], "tied": [], "unvoted": [], "confirmed": [],
+        "superseded": []}
+    # SUPERSEDED — pinned claims the reconcile rewrote or removed, so the shipped map no longer
+    # carries them. The record states how MANY; until now nothing could say WHICH, and the whole
+    # design rests on those being the refuted ones. A superseded claim that was CONFIRMED is the
+    # interesting case: it means the build overrode a verdict three skeptics agreed on.
+    live = set(live_claims) if live_claims is not None else None
     for claim in worklist_claims:
         rows = votes.get(claim)
         if not rows:
@@ -191,6 +198,11 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
         stated = any(isinstance(r.get("grounded"), str) for r in rows)
         if bucket == "unverifiable" and not stated:
             bucket = "tied"
+        if live is not None and claim not in live:
+            buckets["superseded"].append({
+                "claim": claim, "verdict": bucket, "votes": len(rows),
+                "for": grounded, "against": refuted,
+                "notes": [str(r.get("note", "")) for r in rows if r.get("note")]})
         buckets[bucket].append({
             "claim": claim, "votes": len(rows), "for": grounded, "against": refuted,
             "evidence": [str(r.get("evidence", "")) for r in rows if r.get("evidence")],
@@ -200,6 +212,19 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
     if as_json:
         return json.dumps(buckets, indent=2, ensure_ascii=False)
     out: list[str] = []
+    if live is not None:
+        sup = buckets["superseded"]
+        out.append(f"\nSUPERSEDED ({len(sup)}) — pinned claims the shipped map no longer carries.")
+        if not sup:
+            out.append("  (none — the pinned worklist and the shipped map hold the same claims)")
+        for row in sup:
+            mark = "" if row["verdict"] == "refuted" else f"   <- was {str(row['verdict']).upper()}"
+            out.append(f"  * {row['claim']}{mark}")
+        overridden = [r for r in sup if r["verdict"] != "refuted"]
+        if overridden:
+            out.append(f"  {len(overridden)} of these were NOT refuted — the build rewrote a claim "
+                       f"the skeptics had settled. That is a decision, not a fix; say so in "
+                       f"`grounding.note`.")
     for name, label in (("refuted", "REFUTED — reconcile each into the map"),
                         ("tied", "TIED — the skeptics split; adjudicate against the code"),
                         ("unverifiable", "UNVERIFIABLE — a skeptic said the code cannot answer"),
@@ -269,15 +294,6 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: unknown option(s): {a}", file=sys.stderr)
             return 2
         i += 1
-    if verb == "report" and map_path:
-        # Accepted and silently discarded before — including a path that does not exist, where
-        # `write` exits 2. `report`'s job is WHICH claim landed in which bucket, against the pinned
-        # worklist; it has no use for the live map, and accepting the flag implied the superseded
-        # SET can be listed somewhere. It cannot, yet — only its count, via `write --map`.
-        print("ERROR: `grounding report` takes no --map. It lists which claims landed in which "
-              "bucket, against the pinned worklist. (The superseded SET is not listable anywhere "
-              "yet — only its count, via `grounding write --map`.)", file=sys.stderr)
-        return 2
     if not worklist_path or not verdicts:
         print(f"ERROR: --worklist and at least one --verdicts are required\n\n{USAGE}",
               file=sys.stderr)
@@ -290,9 +306,6 @@ def main(argv: list[str] | None = None) -> int:
     rows, notes = load_verdicts(verdicts)
     for n in notes:
         print(n, file=sys.stderr)
-    if verb == "report":
-        print(format_report(claims, rows, as_json=as_json))
-        return 0
     live_claims = None
     if map_path:
         # The LIVE claim surface, read from the assembled map this record describes. Not a second
@@ -306,6 +319,9 @@ def main(argv: list[str] | None = None) -> int:
         except Exception as e:
             print(f"ERROR: --map {map_path} could not be read as a map ({e})", file=sys.stderr)
             return 2
+    if verb == "report":
+        print(format_report(claims, rows, as_json=as_json, live_claims=live_claims))
+        return 0
     record, errors = build_record(claims, rows, note, live_claims=live_claims)
     if errors:
         for e in errors:

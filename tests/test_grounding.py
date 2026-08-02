@@ -205,15 +205,34 @@ def test_the_digest_is_not_ambiguous_about_where_a_claim_ends():
     assert live_claims_digest(["a\nb"]) != live_claims_digest(["a", "b"])
 
 
-def test_report_refuses_map_instead_of_swallowing_it():
-    """It was accepted and discarded — including a path that does not exist, where `write` exits 2.
-    A flag that does nothing is worse than one that is rejected: it implies the superseded SET can
-    be listed, and it cannot be anywhere yet."""
+def test_report_lists_which_claims_were_superseded():
+    """The record says how MANY claims the reconcile removed; nothing could say WHICH, and the whole
+    design rests on those being the refuted ones. `--map` used to be accepted and discarded here."""
     import contextlib
     import io
+    import json as _json
+    import tempfile
+    from pathlib import Path
     from coyodex import grounding
-    buf = io.StringIO()
-    with contextlib.redirect_stderr(buf):
-        code = grounding.main(["report", "--worklist", "/nonexistent/wl.json",
-                               "--verdicts", "/nonexistent/v.json", "--map", "/nonexistent/m.json"])
-    assert code == 2 and "takes no --map" in buf.getvalue()
+    with tempfile.TemporaryDirectory() as tmp:
+        wl = Path(tmp) / "wl.json"
+        wl.write_text(_json.dumps({"worklist": [{"claim": c} for c in
+                                                ("kept", "reconciled-away", "confirmed-then-cut")]}))
+        v = Path(tmp) / "v.json"
+        v.write_text(_json.dumps({"grounding": [
+            {"claim": "kept", "grounded": True, "evidence": "f.py:1"},
+            {"claim": "reconciled-away", "grounded": False, "note": "wrong"},
+            {"claim": "confirmed-then-cut", "grounded": True, "evidence": "g.py:2"}]}))
+        m = Path(tmp) / "m.json"
+        m.write_text(_json.dumps({"format": "coyodex-map", "title": "T", "goal": "g",
+                                  "components": [{"id": "C1", "name": "A", "source": "f.py:1"}]}))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = grounding.main(["report", "--worklist", str(wl), "--verdicts", str(v),
+                                   "--map", str(m)])
+        out = buf.getvalue()
+    assert code == 0, out
+    assert "SUPERSEDED (3)" in out, out
+    # the one that was CONFIRMED and cut anyway is the interesting case, and is called out
+    assert "confirmed-then-cut" in out and "was CONFIRMED" in out, out
+    assert "were NOT refuted" in out, out

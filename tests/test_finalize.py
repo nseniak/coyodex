@@ -301,3 +301,48 @@ def test_the_digest_catches_a_one_for_one_rewrite_that_the_counts_cannot():
         assert len(swapped) == len(live), "the count must be unchanged, or this proves nothing"
         msg = _stale_grounding_pin(p, swapped)
         assert msg and "live_claims_digest" in msg, msg
+
+
+def make_verdicts_file(tmp: str, claims: list[str]) -> Path:
+    """A verdicts file whose claims are the PINNED set — which is what `grounding write`'s two
+    refusals guarantee, and what makes the delta counts recomputable."""
+    p = Path(tmp) / "verdicts.json"
+    p.write_text(json.dumps({"grounding": [
+        {"claim": c, "grounded": True, "evidence": "f.py:1"} for c in claims]}), encoding="utf-8")
+    return p
+
+
+def make_grounding_map(tmp: str, live: list[str], **grounding: object) -> Path:
+    from coyodex.grounding import live_claims_digest
+    p = Path(tmp) / "m.json"
+    rec = {"claims_total": len(live), "claims_challenged": len(live),
+           "live_claims_digest": live_claims_digest(live)}
+    rec.update(grounding)
+    p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": rec}),
+                 encoding="utf-8")
+    return p
+
+
+def test_a_fabricated_delta_count_is_caught_when_the_verdicts_are_present():
+    """The digest proves the record describes THIS map. It says nothing about whether the two delta
+    counts are true — a valid digest and two invented numbers coexist happily, which is a poor
+    property for the fields whose only job is honesty."""
+    from coyodex.finalize import _stale_grounding_pin
+    with tempfile.TemporaryDirectory() as tmp:
+        live = ["kept", "added-since-the-pin"]
+        pinned = ["kept", "reconciled-away"]
+        p = make_grounding_map(tmp, live, claims_superseded=0, claims_added_since=0)
+        v = make_verdicts_file(tmp, pinned)
+        assert _stale_grounding_pin(p, live) is None, "without verdicts there is nothing to check"
+        msg = _stale_grounding_pin(p, live, [v])
+        assert msg and "claims_superseded` says 0, the verdicts say 1" in msg, msg
+        assert "claims_added_since` says 0, the verdicts say 1" in msg, msg
+
+
+def test_honest_delta_counts_pass_the_recomputation():
+    from coyodex.finalize import _stale_grounding_pin
+    with tempfile.TemporaryDirectory() as tmp:
+        live = ["kept", "added-since-the-pin"]
+        p = make_grounding_map(tmp, live, claims_superseded=1, claims_added_since=1)
+        v = make_verdicts_file(tmp, ["kept", "reconciled-away"])
+        assert _stale_grounding_pin(p, live, [v]) is None
