@@ -81,7 +81,9 @@ def test_small_flat_map_is_silent() -> None:
 def test_large_flat_map_gets_one_grouping_nudge() -> None:
     m = make_model(n_components=20)                    # no subsystems, >15
     ws = balance_warnings(m)
-    assert len(ws) == 1 and "no subsystems" in ws[0] and "capability" in ws[0]
+    # "product area", not "capability": the word now names the use-case grouping, and the subsystem
+    # axis was renamed so the two senses can never blur (plan/60-capabilities).
+    assert len(ws) == 1 and "no subsystems" in ws[0] and "product area" in ws[0]
 
 
 # --- root rules ------------------------------------------------------------------

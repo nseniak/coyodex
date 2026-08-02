@@ -48,6 +48,12 @@
         "$ref": "#/$defs/GlossaryRow"
       }
     },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Group"
+      }
+    },
     "use_cases": {
       "type": "array",
       "items": {
@@ -235,6 +241,63 @@
       ],
       "additionalProperties": false
     },
+    "Group": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^(UC|HP|SD|SF|CAP|EP|C|D|E|S|R)\\d+$",
+          "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[] \u2014 same dataclass, two id forests."
+        },
+        "name": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "parent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(UC|HP|SD|SF|CAP|EP|C|D|E|S|R)\\d+$",
+          "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD parents an SD), or null for top-level."
+        },
+        "label": {
+          "type": "string"
+        },
+        "source": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. The group's home directory (or a representative file)."
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "inferred",
+            ""
+          ],
+          "description": "verified = read in the code; inferred = deduced. '' = unstated."
+        },
+        "tech": {
+          "type": "string",
+          "description": "SUBSYSTEM-ONLY: one honest stack label ('Python/FastAPI', 'Go', 'Elixir') read off the manifests \u2014 not a stack essay. validate blocks it on a subdomain (a bounded context has no stack)."
+        },
+        "tech_source": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "optional bare path:line anchor to the manifest line proving the tech label (go.mod, package.json, pyproject.toml)."
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
     "UseCase": {
       "type": "object",
       "properties": {
@@ -253,6 +316,18 @@
         },
         "trigger_outcome": {
           "type": "string"
+        },
+        "capability": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "entry_points": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "required": [
@@ -291,60 +366,6 @@
       "required": [
         "id",
         "title"
-      ],
-      "additionalProperties": false
-    },
-    "Group": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "pattern": "^(UC|HP|SD|SF|C|D|E|S|R)\\d+$",
-          "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[] \u2014 same dataclass, two id forests."
-        },
-        "name": {
-          "type": "string"
-        },
-        "purpose": {
-          "type": "string"
-        },
-        "parent": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "pattern": "^(UC|HP|SD|SF|C|D|E|S|R)\\d+$",
-          "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD parents an SD), or null for top-level."
-        },
-        "source": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "description": "either a bare file `path:line` anchor (see `evidence[].file`'s description) or a bare directory ref ending in `/`. The group's home directory (or a representative file)."
-        },
-        "confidence": {
-          "type": "string",
-          "enum": [
-            "verified",
-            "inferred",
-            ""
-          ],
-          "description": "verified = read in the code; inferred = deduced. '' = unstated."
-        },
-        "tech": {
-          "type": "string",
-          "description": "SUBSYSTEM-ONLY: one honest stack label ('Python/FastAPI', 'Go', 'Elixir') read off the manifests \u2014 not a stack essay. validate blocks it on a subdomain (a bounded context has no stack)."
-        },
-        "tech_source": {
-          "type": "string",
-          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
-          "description": "optional bare path:line anchor to the manifest line proving the tech label (go.mod, package.json, pyproject.toml)."
-        }
-      },
-      "required": [
-        "id",
-        "name"
       ],
       "additionalProperties": false
     },
@@ -596,6 +617,9 @@
     "EntryPoint": {
       "type": "object",
       "properties": {
+        "id": {
+          "type": "string"
+        },
         "kind": {
           "type": "string",
           "description": "what the entry point IS \u2014 a SEEDED-OPEN vocabulary (never blocking): prefer a seed (http-route, ui-route, cli, webhook, mcp-tool, middleware, job, poller, event-consumer, startup-hook, signal-handler); mint a project-specific kind only when none fits, and reuse the exact spelling on rebuild (validate folds known drift like 'http'\u2192'http-route' and nudges the rest)."
@@ -638,9 +662,7 @@
           "description": "bare path:line anchor to the line DECLARING the schedule (beat/cron config, compose, the loop's sleep) \u2014 often a different line than `source`; '' on a set cadence = inferred (advisory)."
         }
       },
-      "required": [
-        "kind"
-      ],
+      "required": [],
       "additionalProperties": false
     },
     "Entity": {

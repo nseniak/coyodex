@@ -165,6 +165,7 @@
       "source": "method/model.md:351"
     }
   ],
+  "capabilities": [],
   "use_cases": [
     {
       "id": "UC1",
@@ -172,7 +173,9 @@
       "actors": [
         "R1"
       ],
-      "trigger_outcome": "A developer clones coyodex and runs `make install` → the skill manifest, with this clone's path baked into it, sits in every coding agent's skills folder, and a repo-local virtualenv holds the `coyodex` command; typing `/coyodex` in any agent now reaches the method."
+      "trigger_outcome": "A developer clones coyodex and runs `make install` → the skill manifest, with this clone's path baked into it, sits in every coding agent's skills folder, and a repo-local virtualenv holds the `coyodex` command; typing `/coyodex` in any agent now reaches the method.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC2",
@@ -180,7 +183,9 @@
       "actors": [
         "R2"
       ],
-      "trigger_outcome": "The developer types `/coyodex` in a repo that has no map → the agent reads the method, sizes the code tree, fans out to read the repo, and leaves a validated, commit-pinned map (the JSON model, its markdown view and the pre-index) committed in `.coyodex/`."
+      "trigger_outcome": "The developer types `/coyodex` in a repo that has no map → the agent reads the method, sizes the code tree, fans out to read the repo, and leaves a validated, commit-pinned map (the JSON model, its markdown view and the pre-index) committed in `.coyodex/`.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC3",
@@ -188,7 +193,9 @@
       "actors": [
         "R1"
       ],
-      "trigger_outcome": "The developer runs `make start` in the coyodex clone → a small local server is listening on 127.0.0.1, offering a landing page that lists every project they have mapped."
+      "trigger_outcome": "The developer runs `make start` in the coyodex clone → a small local server is listening on 127.0.0.1, offering a landing page that lists every project they have mapped.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC4",
@@ -196,7 +203,9 @@
       "actors": [
         "R1"
       ],
-      "trigger_outcome": "The developer opens a project in the viewer → they read the goal, the Happy Path and the diagrams, and drill from one screen of boxes into the level beneath it, seeing each element's plain-language annotation as they go."
+      "trigger_outcome": "The developer opens a project in the viewer → they read the goal, the Happy Path and the diagrams, and drill from one screen of boxes into the level beneath it, seeing each element's plain-language annotation as they go.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC5",
@@ -204,7 +213,9 @@
       "actors": [
         "R1"
       ],
-      "trigger_outcome": "The developer clicks the code anchor on a box, arrow or flow step → the exact file and line that grounds the claim appears in the code viewer, read from git at the commit the map is pinned to, with the option to hand it off to their editor or GitHub."
+      "trigger_outcome": "The developer clicks the code anchor on a box, arrow or flow step → the exact file and line that grounds the claim appears in the code viewer, read from git at the commit the map is pinned to, with the option to hand it off to their editor or GitHub.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC6",
@@ -212,7 +223,9 @@
       "actors": [
         "R2"
       ],
-      "trigger_outcome": "The developer edits code and types `/coyodex analyze` → the agent diffs the working tree against the map's pinned commit and writes an uncommitted report saying which mapped elements the change modifies, adds and deletes, and what those ripple to."
+      "trigger_outcome": "The developer edits code and types `/coyodex analyze` → the agent diffs the working tree against the map's pinned commit and writes an uncommitted report saying which mapped elements the change modifies, adds and deletes, and what those ripple to.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC7",
@@ -220,7 +233,9 @@
       "actors": [
         "R2"
       ],
-      "trigger_outcome": "The developer is satisfied with the report and types `/coyodex accept` → the agent patches the model in place, re-pins it to the new commit, re-runs the gates, regenerates the markdown view and pre-index, and commits the map beside the code."
+      "trigger_outcome": "The developer is satisfied with the report and types `/coyodex accept` → the agent patches the model in place, re-pins it to the new commit, re-runs the gates, regenerates the markdown view and pre-index, and commits the map beside the code.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC8",
@@ -228,7 +243,9 @@
       "actors": [
         "R2"
       ],
-      "trigger_outcome": "The developer asks in plain language for a map change (\"split this component\", \"rename that subsystem\") → the agent edits the stored model surgically, refusing anything the code does not back, passes the same gates as any other write, and commits the result."
+      "trigger_outcome": "The developer asks in plain language for a map change (\"split this component\", \"rename that subsystem\") → the agent edits the stored model surgically, refusing anything the code does not back, passes the same gates as any other write, and commits the result.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC9",
@@ -236,7 +253,9 @@
       "actors": [
         "R3"
       ],
-      "trigger_outcome": "A maintainer runs the eval on a project that already has a map → a fresh map is built with the current method, scored on grounding and a rubric, and compared against the committed baseline, so a method change is reported as an improvement or a regression instead of a hunch."
+      "trigger_outcome": "A maintainer runs the eval on a project that already has a map → a fresh map is built with the current method, scored on grounding and a rubric, and compared against the committed baseline, so a method change is reported as an improvement or a regression instead of a hunch.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC10",
@@ -244,7 +263,9 @@
       "actors": [
         "R1"
       ],
-      "trigger_outcome": "The developer runs the backup script against a mapped repo → the map is bundled together with the exact conversation that produced it, found through the session id the build stamped into the map's provenance file."
+      "trigger_outcome": "The developer runs the backup script against a mapped repo → the map is bundled together with the exact conversation that produced it, found through the session id the build stamped into the map's provenance file.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC11",
@@ -252,7 +273,9 @@
       "actors": [
         "R1"
       ],
-      "trigger_outcome": "The developer opens the impact explorer and picks two commits → the diagrams light up with what the diff touched and what that reaches through the map's edges and flows, and each changed file can be read as a diff in place."
+      "trigger_outcome": "The developer opens the impact explorer and picks two commits → the diagrams light up with what the diff touched and what that reaches through the map's edges and flows, and each changed file can be read as a diff in place.",
+      "capability": null,
+      "entry_points": []
     }
   ],
   "happy_path": [
@@ -329,6 +352,7 @@
       "name": "Method & skill",
       "purpose": "The prose program a coding agent executes: the method docs that tell it how to build, check and maintain a map, plus the small manifest that makes /coyodex reach them. This is shipped as markdown rather than code, and it is as much the product as the tools are.",
       "parent": null,
+      "label": "",
       "source": null,
       "confidence": "verified",
       "tech": "",
@@ -339,6 +363,7 @@
       "name": "Map authoring",
       "purpose": "Everything that turns an agent's reading of a repo into the stored map: sizing the code tree first, then defining what a map IS and merging the agents' fragments into one canonical document.",
       "parent": null,
+      "label": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -349,6 +374,7 @@
       "name": "Map model",
       "purpose": "The definition of a map: the typed document, the vocabularies its fields may use, the anchor format every claim is written in, and the published JSON schema derived from all of it.",
       "parent": "S2",
+      "label": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -359,6 +385,7 @@
       "name": "Fragment assembly",
       "purpose": "The build path from many agents to one file: each agent self-checks its fragment, the assembler merges them by id, and reconcile/fix apply the assignments and corrections that must survive a re-assemble.",
       "parent": "S2",
+      "label": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -369,6 +396,7 @@
       "name": "Map checking",
       "purpose": "The gates a map must pass before anyone trusts it: is it well-formed and do all its references and anchors resolve, do its cited lines really exist in the code, is it self-contradictory, and is it readable at each altitude.",
       "parent": null,
+      "label": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -379,6 +407,7 @@
       "name": "Map viewing",
       "purpose": "How a reader actually consumes a map: the model turned into diagrams and tables, served locally, and explored in the browser down to the source line each box stands for.",
       "parent": null,
+      "label": "",
       "source": "tools/coyodex/viewer/",
       "confidence": "inferred",
       "tech": "",
@@ -389,6 +418,7 @@
       "name": "Diagram generation",
       "purpose": "Builds, from the stored model, every diagram and side-panel payload the viewer shows — the context and subsystem drills, the domain class diagrams, the deployment and channel views, and the Happy Path and use-case sequences.",
       "parent": "S7",
+      "label": "",
       "source": "tools/coyodex/viewer/",
       "confidence": "inferred",
       "tech": "Python",
@@ -399,6 +429,7 @@
       "name": "Browser viewer",
       "purpose": "The single-page app the reader works in: the diagram canvas and its drill navigation, the info pane for a selected element, the file browser and code viewer, search, and the change-impact overlay.",
       "parent": "S7",
+      "label": "",
       "source": "tools/coyodex/viewer/",
       "confidence": "inferred",
       "tech": "JavaScript (browser)",
@@ -409,6 +440,7 @@
       "name": "Map serving",
       "purpose": "The small local HTTP server that fronts every mapped project — serving each map's diagram data built on demand, and reading the mapped repo's files from git at the commit the map is pinned to.",
       "parent": "S7",
+      "label": "",
       "source": "tools/coyodex/viewer/",
       "confidence": "inferred",
       "tech": "Python",
@@ -419,6 +451,7 @@
       "name": "Map lifecycle",
       "purpose": "Keeping a map true over time: working out what a code diff does to the map and what that ripples to, and preserving a map together with the exact conversation that built it.",
       "parent": null,
+      "label": "",
       "source": null,
       "confidence": "inferred",
       "tech": "Python",
@@ -429,6 +462,7 @@
       "name": "Method-quality eval",
       "purpose": "coyodex measuring itself: rebuild a map with the current method, judge it on grounding and a rubric, and compare it against the project's committed baseline to say whether the method got better or worse.",
       "parent": null,
+      "label": "",
       "source": "eval/tools/coyodex_eval/",
       "confidence": "verified",
       "tech": "Python",
@@ -439,6 +473,7 @@
       "name": "Command front door",
       "purpose": "The single `coyodex` command every other part is reached through, and the read-only lookup that answers questions about a stored map without opening it by hand.",
       "parent": null,
+      "label": "",
       "source": "tools/coyodex/",
       "confidence": "inferred",
       "tech": "Python",
@@ -2432,6 +2467,7 @@
   ],
   "entry_points": [
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer or coding agent runs `coyodex preindex` to build the structural pre-index next to the map",
       "source": "tools/coyodex/cli.py:79",
@@ -2442,6 +2478,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer or coding agent runs `coyodex validate` to check a map is well-formed",
       "source": "tools/coyodex/cli.py:82",
@@ -2452,6 +2489,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer or coding agent runs `coyodex audit` for the adversarial pass over a built map",
       "source": "tools/coyodex/cli.py:85",
@@ -2462,6 +2500,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer or coding agent runs `coyodex render` to write the map's committed markdown view",
       "source": "tools/coyodex/cli.py:88",
@@ -2472,6 +2511,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer runs `coyodex serve` to start the local map server",
       "source": "tools/coyodex/cli.py:91",
@@ -2482,6 +2522,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `coyodex assemble` to merge the build agents' fragments into the canonical map",
       "source": "tools/coyodex/cli.py:94",
@@ -2492,6 +2533,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer or coding agent runs `coyodex dump` to read the model back as JSON, whole or sliced",
       "source": "tools/coyodex/cli.py:97",
@@ -2502,6 +2544,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer or coding agent runs `coyodex balance` to report per-diagram fan-out and split proposals",
       "source": "tools/coyodex/cli.py:100",
@@ -2512,6 +2555,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `coyodex reconcile` to expand path rules into an explicit reconcile assignment file",
       "source": "tools/coyodex/cli.py:103",
@@ -2522,6 +2566,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a build agent runs `coyodex lint-fragment` to self-check one fragment before returning it",
       "source": "tools/coyodex/cli.py:106",
@@ -2532,6 +2577,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `coyodex anchor-drift` to flag claims whose stored line drifted from the line the skeptics found",
       "source": "tools/coyodex/cli.py:109",
@@ -2542,6 +2588,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `coyodex fix`, which hands the rest of the command line to the fix module's own verb dispatch",
       "source": "tools/coyodex/cli.py:112",
@@ -2552,6 +2599,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `coyodex fix apply-drift` to move a claim's stored line to the line the drift check found",
       "source": "tools/coyodex/fix.py:281",
@@ -2562,6 +2610,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `coyodex fix drop-edge` to delete or repoint one relation in the map",
       "source": "tools/coyodex/fix.py:281",
@@ -2572,6 +2621,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `coyodex fix dedup-relation` to drop duplicated or reciprocal entity relations",
       "source": "tools/coyodex/fix.py:281",
@@ -2582,6 +2632,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a method maintainer runs `coyodex-eval score` to emit a map's deterministic quality profile",
       "source": "eval/tools/coyodex_eval/cli.py:32",
@@ -2592,6 +2643,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a method maintainer runs `coyodex-eval run` to profile a fresh map, compare it against its baseline, and archive the run",
       "source": "eval/tools/coyodex_eval/cli.py:35",
@@ -2602,6 +2654,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a method maintainer runs `coyodex-eval hash` to print a map artifact's freeze hash",
       "source": "eval/tools/coyodex_eval/cli.py:38",
@@ -2612,6 +2665,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a method maintainer runs `coyodex-eval claims` to print the audit worklist the judge scores",
       "source": "eval/tools/coyodex_eval/cli.py:41",
@@ -2622,6 +2676,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a method maintainer runs `coyodex-eval judge` to aggregate the orchestrated judge verdicts into one file",
       "source": "eval/tools/coyodex_eval/cli.py:44",
@@ -2632,6 +2687,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a method maintainer runs `coyodex-eval protocol` to print or guard the judge-protocol fingerprint",
       "source": "eval/tools/coyodex_eval/cli.py:47",
@@ -2642,6 +2698,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a method maintainer runs `coyodex-eval bless` to promote a run to the baseline",
       "source": "eval/tools/coyodex_eval/cli.py:50",
@@ -2652,6 +2709,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a method maintainer runs `coyodex-eval compare` to apply the relative regression gates between a candidate and a baseline",
       "source": "eval/tools/coyodex_eval/cli.py:53",
@@ -2662,6 +2720,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "installing the package puts the `coyodex` command on the PATH, pointing at the CLI dispatcher",
       "source": "pyproject.toml:30",
@@ -2672,6 +2731,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "installing the package puts the `coyodex-eval` command on the PATH, pointing at the eval dispatcher",
       "source": "pyproject.toml:32",
@@ -2682,6 +2742,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `python tools/map_backup.py stamp <repo>` to record the session id and build time into the map's provenance",
       "source": "tools/map_backup.py:568",
@@ -2692,6 +2753,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a coding agent runs `python tools/map_backup.py backup <repo>` to bundle the map files plus the build conversation into map-backups/",
       "source": "tools/map_backup.py:594",
@@ -2702,6 +2764,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer runs `python -m coyodex.json_schema` to print the map's JSON schema (no `coyodex` subcommand exposes it)",
       "source": "tools/coyodex/json_schema.py:291",
@@ -2712,6 +2775,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "cli",
       "trigger": "a developer runs `python -m coyodex.viewer.gen_viewer` to dump the view bundle for a graph file — the frontend's data, for debugging",
       "source": "tools/coyodex/viewer/gen_viewer.py:2877",
@@ -2722,6 +2786,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "agent-skill",
       "trigger": "a coding agent picks up the `/coyodex` skill (or matches its triggers, e.g. \"map this repo\") and starts reading the method from the manifest",
       "source": "skill/coyodex/SKILL.md:2",
@@ -2732,6 +2797,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "agent-skill",
       "trigger": "a coding agent picks up the `/coyodex-eval` skill (or matches \"eval this map\") and starts the method-quality regression run",
       "source": "eval/SKILL.md:2",
@@ -2742,6 +2808,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "a browser requests the server root and gets the landing page listing the recent projects",
       "source": "tools/coyodex/viewer/serve.py:518",
@@ -2752,6 +2819,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the landing page asks `GET /api/recents` for the recent project folders, re-reading the recents file so a just-built map appears without a restart",
       "source": "tools/coyodex/viewer/serve.py:548",
@@ -2762,6 +2830,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the landing page's folder picker asks `GET /api/browse?path=` for a directory's subfolders and which of them hold a map",
       "source": "tools/coyodex/viewer/serve.py:556",
@@ -2772,6 +2841,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the browser requests `GET /static/viewer.js` or `/static/viewer.css` — the shared frontend assets, served from an exact-name whitelist",
       "source": "tools/coyodex/viewer/serve.py:521",
@@ -2782,6 +2852,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "a reader opens a project's map URL `/p/<project>/` and the server returns the generic viewer shell",
       "source": "tools/coyodex/viewer/serve.py:605",
@@ -2792,6 +2863,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the browser app probes `GET /p/<project>/api/health` at boot to confirm the server is reachable before revealing the file and code panes",
       "source": "tools/coyodex/viewer/serve.py:609",
@@ -2802,6 +2874,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the browser requests a project's whole view bundle — the graph plus every pre-rendered diagram — at `GET /p/<project>/api/view`",
       "source": "tools/coyodex/viewer/serve.py:611",
@@ -2812,6 +2885,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the file browser requests `GET /p/<project>/api/tree` for the repo's file tree at the map's commit, overlaid with map coverage",
       "source": "tools/coyodex/viewer/serve.py:620",
@@ -2822,6 +2896,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the search box lazily requests `GET /p/<project>/api/symbols` for the code symbols taken from the pre-index",
       "source": "tools/coyodex/viewer/serve.py:625",
@@ -2832,6 +2907,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the code viewer requests one file's text at `GET /p/<project>/api/src?path=&at=` — from git at the map's commit by default, or from the working tree",
       "source": "tools/coyodex/viewer/serve.py:629",
@@ -2842,6 +2918,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the impact explorer requests `GET /p/<project>/api/impact?base=&target=&…` to project a code diff onto the map",
       "source": "tools/coyodex/viewer/serve.py:655",
@@ -2852,6 +2929,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the impact picker requests `GET /p/<project>/api/impactcommits` for the commits around the map's pin",
       "source": "tools/coyodex/viewer/serve.py:666",
@@ -2862,6 +2940,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the impact code view requests `GET /p/<project>/api/impactsrcdiff?path=&base=&target=` for one file's inline diff across any two refs",
       "source": "tools/coyodex/viewer/serve.py:669",
@@ -2872,6 +2951,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the landing page posts a folder to `POST /api/open` to add a project to the served list",
       "source": "tools/coyodex/viewer/serve.py:543",
@@ -2882,6 +2962,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the landing page posts a folder to `POST /api/forget` to remove a project from the recents list",
       "source": "tools/coyodex/viewer/serve.py:543",
@@ -2892,6 +2973,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "the landing page posts the dragged card order to `POST /api/reorder` to persist the recents order",
       "source": "tools/coyodex/viewer/serve.py:541",
@@ -2902,6 +2984,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "middleware",
       "trigger": "every GET first passes the loopback-Host check, so a page on another domain that re-points its name at 127.0.0.1 is refused",
       "source": "tools/coyodex/viewer/serve.py:512",
@@ -2912,6 +2995,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "middleware",
       "trigger": "every POST must carry the `X-Coyodex: serve` header, which a cross-origin page cannot set — the CSRF gate before any recents change",
       "source": "tools/coyodex/viewer/serve.py:535",
@@ -2922,6 +3006,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "middleware",
       "trigger": "every request under `/p/<project>/` first re-checks the map file's timestamp and drops the cached diagrams when the map changed on disk",
       "source": "tools/coyodex/viewer/serve.py:527",
@@ -2932,6 +3017,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "ui-route",
       "trigger": "the reader clicks a project card on the landing page, which navigates the browser to that map's URL",
       "source": "tools/coyodex/viewer/serve.py:910",
@@ -2942,6 +3028,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "ui-route",
       "trigger": "the reader clicks a top-bar tab to switch view — Happy Path, Use Cases, Subsystems, Entities, Dependencies, Data, Deployment, System, Glossary, Tests (each hidden when the map has nothing for it)",
       "source": "tools/coyodex/viewer/viewer.js:6674",
@@ -2952,6 +3039,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "ui-route",
       "trigger": "the reader opens the search overlay (the magnifier button, or the `/` key) to jump to any map element, file, or code symbol",
       "source": "tools/coyodex/viewer/viewer.js:6641",
@@ -2962,6 +3050,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "ui-route",
       "trigger": "the reader opens the Impact popover to pick two commits and project that diff onto the map",
       "source": "tools/coyodex/viewer/viewer.js:6906",
@@ -2972,6 +3061,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "ui-route",
       "trigger": "the reader switches the side pane between the file browser and the code viewer",
       "source": "tools/coyodex/viewer/viewer.js:6178",
@@ -2982,6 +3072,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "ui-route",
       "trigger": "the reader clicks the page title to go back to the server's landing page listing all maps",
       "source": "tools/coyodex/viewer/viewer.js:5234",
@@ -2992,6 +3083,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "startup-hook",
       "trigger": "the serve command finishes loading the projects and the HTTP server starts accepting connections on 127.0.0.1, handing each one to its own worker thread",
       "source": "tools/coyodex/viewer/serve.py:734",
@@ -3002,6 +3094,7 @@
       "cadence_source": "tools/coyodex/viewer/serve.py:742"
     },
     {
+      "id": "",
       "kind": "startup-hook",
       "trigger": "with `coyodex serve --open`, the server opens the landing page in the developer's browser by itself as it starts listening",
       "source": "tools/coyodex/viewer/serve.py:740",
@@ -3012,6 +3105,7 @@
       "cadence_source": "tools/coyodex/viewer/serve.py:739"
     },
     {
+      "id": "",
       "kind": "startup-hook",
       "trigger": "the landing page's script runs itself as soon as the page loads, fetching the home folder and the recents list",
       "source": "tools/coyodex/viewer/serve.py:1040",
@@ -3022,6 +3116,7 @@
       "cadence_source": "tools/coyodex/viewer/serve.py:1040"
     },
     {
+      "id": "",
       "kind": "startup-hook",
       "trigger": "the browser app fetches the map's view bundle at module load, before any other statement runs — nothing in the app can start without it",
       "source": "tools/coyodex/viewer/viewer.js:107",
@@ -3032,6 +3127,7 @@
       "cadence_source": "tools/coyodex/viewer/viewer.js:107"
     },
     {
+      "id": "",
       "kind": "startup-hook",
       "trigger": "the browser app probes the server once at load and, on success, reveals and wires the file browser and code viewer",
       "source": "tools/coyodex/viewer/viewer.js:6659",
@@ -3048,6 +3144,7 @@
       "name": "Map document",
       "purpose": "The committed map document as a whole — the typed record every other layer reads, plus the declarative directives and proposals that edit it between builds.",
       "parent": null,
+      "label": "",
       "source": "tools/coyodex/model.py:418",
       "confidence": "high",
       "tech": "",
@@ -3058,6 +3155,7 @@
       "name": "Behavioral layer",
       "purpose": "The part of the map that answers 'what does this system do, for whom, in what order' — roles, glossary, use cases, the Happy Path spine, and the use-case flows.",
       "parent": "SD1",
+      "label": "",
       "source": "tools/coyodex/model.py:38",
       "confidence": "high",
       "tech": "",
@@ -3068,6 +3166,7 @@
       "name": "Structural layer",
       "purpose": "The machine behind the behavior — components, their groups, external dependencies, entry points, the backbone edge list, the async channel catalog, and the citations grounding them.",
       "parent": "SD1",
+      "label": "",
       "source": "tools/coyodex/model.py:99",
       "confidence": "high",
       "tech": "",
@@ -3078,6 +3177,7 @@
       "name": "Domain-model layer",
       "purpose": "The map's own picture of the mapped project's data — entity cards with their fields, relations, storage and lifecycles, and the plumbing types deliberately left unmodelled.",
       "parent": "SD1",
+      "label": "",
       "source": "tools/coyodex/model.py:244",
       "confidence": "high",
       "tech": "",
@@ -3088,6 +3188,7 @@
       "name": "Operational & quality layer",
       "purpose": "How the mapped system is deployed, watched, secured and configured, plus the map's honesty record — test-coverage gaps, grounding coverage, and preserved freeform sections.",
       "parent": "SD1",
+      "label": "",
       "source": "tools/coyodex/model.py:338",
       "confidence": "high",
       "tech": "",
@@ -3098,6 +3199,7 @@
       "name": "Code pre-index",
       "purpose": "The mechanical reading of the source tree handed to a build — the file walk, the symbols and imports found in each file, and the component-count expectation derived from directory size.",
       "parent": null,
+      "label": "",
       "source": "tools/coyodex/preindex_lib.py:253",
       "confidence": "high",
       "tech": "",
@@ -3108,6 +3210,7 @@
       "name": "Viewer graph & file browser",
       "purpose": "The shape the map takes on its way to the screen — drawable nodes and arrows, flows, the change-impact report, the coverage-tagged file tree, and the list of recently opened projects.",
       "parent": null,
+      "label": "",
       "source": "tools/coyodex/viewer/build_graph.py:111",
       "confidence": "high",
       "tech": "",
@@ -3118,6 +3221,7 @@
       "name": "Change impact",
       "purpose": "What a code change does to an existing map — the raw diff pieces, the per-file picture of which pinned lines moved, each anchor it hits, and the ripple out to neighbouring elements.",
       "parent": null,
+      "label": "",
       "source": "tools/coyodex/impact_lib.py:170",
       "confidence": "high",
       "tech": "",
@@ -3128,6 +3232,7 @@
       "name": "Method-quality eval",
       "purpose": "The measurements that say whether a rebuilt map got better or worse — the deterministic profile, the judged semantic scores, and the gated comparison against the blessed baseline.",
       "parent": null,
+      "label": "",
       "source": "eval/tools/coyodex_eval/profile.py:37",
       "confidence": "high",
       "tech": "",
@@ -5195,27 +5300,33 @@
       "fields": [
         {
           "name": "claims_total",
-          "type": "int"
+          "type": "int",
+          "markers": []
         },
         {
           "name": "claims_challenged",
-          "type": "int"
+          "type": "int",
+          "markers": []
         },
         {
           "name": "claims_confirmed",
-          "type": "int"
+          "type": "int",
+          "markers": []
         },
         {
           "name": "claims_refuted",
-          "type": "int"
+          "type": "int",
+          "markers": []
         },
         {
           "name": "claims_unverifiable",
-          "type": "int"
+          "type": "int",
+          "markers": []
         },
         {
           "name": "note",
-          "type": "string"
+          "type": "string",
+          "markers": []
         }
       ],
       "relations": [],
@@ -11706,6 +11817,9 @@
     "claims_confirmed": 182,
     "claims_refuted": 3,
     "claims_unverifiable": 0,
+    "claims_superseded": 0,
+    "claims_added_since": 0,
+    "live_claims_digest": "",
     "note": "Full Phase-4 coverage: all 185 L2 claims from the audit worklist were challenged by 8 fresh-context skeptics that never saw the build reasoning, batched by theme (security, external dependencies + persistence, domain ownership x2, backbone edges x2) and told to default to refuted on doubt. The 14 security claims were judged three times independently with different lenses — read-the-check, attack-the-surface, and prove-the-call-chain — and decided by majority; one skeptic verified them against a live throwaway server rather than by reading. 3 claims were refuted and reconciled: the /api/browse route has no containment of its own (re-anchored to the loopback Host guard that is its real barrier, with the gap stated), the pre-index builds rather than owns its per-directory expectation record, and the backup script copies the map folder without owning the map document (edge dropped). The ref-injection guard was confirmed real but anchored at a copy that never sees user input; its anchor was repointed. All 5 state machines were checked against their declaring lines and none was invented."
   },
   "extras": [

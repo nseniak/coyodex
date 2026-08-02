@@ -283,7 +283,7 @@ def _forest_warnings(m: ProjectModel, children: dict[str | None, list[str]],
         if n_leaves > SUBSYSTEMS_RECOMMENDED_ABOVE and "root" not in skip:
             out.append(f"Balance: {n_leaves} {leaf_word} with no {group_word} — the root diagram "
                        f"shows all of them ungrouped; {group_word} are recommended above "
-                       f"~{SUBSYSTEMS_RECOMMENDED_ABOVE} (cluster by capability, target 5±2 "
+                       f"~{SUBSYSTEMS_RECOMMENDED_ABOVE} (cluster by product area, target 5±2 "
                        f"boxes per diagram)")
         return out
 
@@ -293,11 +293,11 @@ def _forest_warnings(m: ProjectModel, children: dict[str | None, list[str]],
         if n_root < FANOUT_LO and n_leaves >= SUBSYSTEMS_RECOMMENDED_ABOVE:
             out.append(f"Balance: the root diagram shows only {n_root} top-level boxes for "
                        f"{n_leaves} {leaf_word} — a sparse (often tech-tier) root wastes the first "
-                       f"screen; lead with capability groups (target 5±2)")
+                       f"screen; lead with product-area groups (target 5±2)")
         elif n_root > FANOUT_HARD_HI and not (
                 is_homogeneous(m, root_kids) and n_root <= FANOUT_HOMOG_HI):
             out.append(f"Balance: the root diagram shows {n_root} top-level boxes (target 5±2) — "
-                       f"group them into fewer capability {group_word}")
+                       f"group them into fewer product-area {group_word}")
 
     for gid, kids in children.items():
         if gid is None or gid in skip or not kids:
@@ -635,8 +635,8 @@ def fanout_summary(m: ProjectModel) -> tuple[int | None, int | None, float | Non
 
 
 def next_free_group_id(m: ProjectModel, prefix: str = "S") -> str:
-    """The next unused numeric id for the given group prefix ('S' or 'SD')."""
-    arr = m.subdomains if prefix == "SD" else m.subsystems
+    """The next unused numeric id for the given group prefix ('S', 'SD' or 'CAP')."""
+    arr = ({"SD": m.subdomains, "CAP": m.capabilities}).get(prefix, m.subsystems)
     pat = re.compile(rf"^{prefix}(\d+)$")
     used = [int(match.group(1)) for g in arr if (match := pat.match(g.id))]
     return f"{prefix}{max(used, default=0) + 1}"

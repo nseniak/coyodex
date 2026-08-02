@@ -12,7 +12,9 @@ from dataclasses import dataclass
 
 # IDs by prefix. Multi-letter prefixes (UC, HP, SD, SF) must precede the single-letter ones (so `SD1`
 # never reads as `S` + stray text).
-ID_TOKEN = re.compile(r"\b(?:UC\d+|HP\d+|SD\d+|SF\d+|C\d+|D\d+|E\d+|S\d+)\b")
+# Multi-letter prefixes lead: `CAP3` would otherwise fall through every alternative (`C\d+` fails on
+# the "A"), and `EP1` likewise. Same first-match rule as model.ID_SHAPE.
+ID_TOKEN = re.compile(r"\b(?:CAP\d+|EP\d+|UC\d+|HP\d+|SD\d+|SF\d+|C\d+|D\d+|E\d+|S\d+)\b")
 
 # Grouping: membership is ONE parent pointer carried on the child.
 # Nesting depth is ADVISORY, not capped: the viewer renders arbitrary depth, and the cycle check (not a
@@ -223,6 +225,17 @@ def order_buckets(names: Iterable[str], is_library: bool) -> list[str]:
 # Authored in an OPTIONAL T4 `activation` column; when absent, classify_activation() infers it from
 # `kind`. Lets a reader answer "what runs with no user?" at a glance.
 ACTIVATIONS = ("self", "external")
+
+# A CAPABILITY's label — a closed vocabulary, authored on the capability (never on a subsystem or a
+# subdomain, which `validate` blocks). It says what kind of thing this group of use cases IS, and it
+# is the whole reason Happy-Path membership can be a rule instead of a written justification per
+# off-spine use case: "core" capabilities are the product and belong on the walk; "supporting" and
+# "platform" ones are legitimately off it and need no per-use-case record.
+# Deliberately NOT derived. The touch-count primitive answers "which elements does this capability
+# reach"; it does not answer "is this component platform machinery" — measured on the only fixture
+# available, the maximum spread was 4 of 7 capabilities, so no threshold separates machinery from
+# product, and the derived classification was dropped rather than tuned.
+CAP_LABELS = ("core", "supporting", "platform")
 
 # Keyword signatures for a SELF-starting entry point, matched case-insensitively as substrings of
 # the free-text `kind`. Deliberately excludes "webhook" (an external caller invokes it).

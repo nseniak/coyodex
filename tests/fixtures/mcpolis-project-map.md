@@ -70,35 +70,85 @@ who want a curated, governed set of MCP tools shared across their AI assistants.
 
 ---
 
+## Capabilities — what this product does
+
+The use-case grouping. `label` is an authored judgement about the use cases in each capability
+(core = the product, and the Happy Path walks every core capability); nothing derives it.
+
+| ID | Capability | Label | Purpose | Parent |
+|---|---|---|---|---|
+| **CAP1** | Organizations & teams | core | Creating an org, growing the team around it, and winding it down. |  |
+| **CAP2** | Upstream MCPs | core | Adding upstream MCP servers, authorizing them, and keeping their config current. |  |
+| **CAP3** | Access control | core | Who may call which tools: roles, per-tool rules, and the tokens that carry them. |  |
+| **CAP4** | Tool access via gateway | core | The runtime path a client takes to list and call tools through the gateway. |  |
+| **CAP5** | Secrets & variables | supporting | Template variables, passwords and sandbox credential files behind upstream config. |  |
+| **CAP6** | Audit & oversight | supporting | Reading back what happened in an org. |  |
+| **CAP7** | Admin surfaces & ops | platform | Alternative management channels and operator support paths. |  |
+
+---
+
 ## Use cases
+
+### Organizations & teams *(CAP1)*
 
 | ID | Use case | Actor | Trigger → Outcome |
 |---|---|---|---|
 | **UC1** | Sign up and create an organization | Org creator | Google sign-in first time → name the org, land on Upstream MCPs |
-| **UC2** | Add a remote HTTP upstream MCP | Org admin | Paste URL, pick auth mode → upstream added, tools discovered |
-| **UC3** | Add a hosted stdio upstream MCP | Org admin | Paste command JSON, fill variables, size sandbox → upstream added |
-| **UC4** | Connect or start an upstream | Org admin | Click Connect / Start / Authenticate → live session, tools light up |
-| **UC5** | Configure roles and per-MCP access | Org admin | Create role, toggle MCP enabled per role → role scoped to chosen MCPs |
-| **UC6** | Configure per-tool access and argument checks | Org admin | Set 3-state tool toggles and regex allow/forbid → tool calls constrained |
-| **UC7** | Connect human AI client via Google OAuth | Team member | Point client at gateway URL, sign in → role's tools usable |
-| **UC8** | Per-user OAuth to an upstream | Team member | Click Authenticate, consent in popup → personal upstream tokens stored encrypted |
-| **UC9** | Shared / admin OAuth to an upstream | Org admin | Sign in once on team's behalf → every member's call goes out as admin |
-| **UC10** | Mint a service token | Org admin | New token, pick name and role → `svct_` value shown once, JSON snippet given |
-| **UC11** | Headless agent calls tools via service token | Headless agent | Send Bearer `svct_` to org gateway URL → tools at token's role, no sign-in |
-| **UC12** | List and call tools through the gateway | Team member | Ask client to list/call tools → prefixed upstream tools returned and forwarded |
 | **UC13** | Invite a team member | Org admin | Add Google email, pick role, share invite link → member joins on sign-in |
 | **UC14** | Change a member's role | Org admin | Edit member, pick new role → access updates on next request |
 | **UC15** | Remove a team member | Org admin | Remove member → tokens revoked, per-user sessions dropped |
+| **UC25** | Delete an organization | Org admin | Delete org → org and all its scoped data purged |
+
+### Upstream MCPs *(CAP2)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC2** | Add a remote HTTP upstream MCP | Org admin | Paste URL, pick auth mode → upstream added, tools discovered |
+| **UC3** | Add a hosted stdio upstream MCP | Org admin | Paste command JSON, fill variables, size sandbox → upstream added |
+| **UC4** | Connect or start an upstream | Org admin | Click Connect / Start / Authenticate → live session, tools light up |
+| **UC8** | Per-user OAuth to an upstream | Team member | Click Authenticate, consent in popup → personal upstream tokens stored encrypted |
+| **UC9** | Shared / admin OAuth to an upstream | Org admin | Sign in once on team's behalf → every member's call goes out as admin |
+| **UC20** | Import multiple MCPs at once | Org admin | Paste mcpServers JSON, pick entries → upstreams created in one go |
+| **UC24** | Edit or remove an upstream | Org admin | Edit config or delete → config/variables/files/tools removed, dirty banner on edit |
+
+### Access control *(CAP3)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC5** | Configure roles and per-MCP access | Org admin | Create role, toggle MCP enabled per role → role scoped to chosen MCPs |
+| **UC6** | Configure per-tool access and argument checks | Org admin | Set 3-state tool toggles and regex allow/forbid → tool calls constrained |
+| **UC10** | Mint a service token | Org admin | New token, pick name and role → `svct_` value shown once, JSON snippet given |
 | **UC16** | Revoke or rotate a service token | Org admin | Revoke / create-new-then-revoke → agent's next request fails |
-| **UC17** | View and filter the audit log | Org admin | Open Audit, set filters → matching entries, live SSE tail |
+
+### Tool access via gateway *(CAP4)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC7** | Connect human AI client via Google OAuth | Team member | Point client at gateway URL, sign in → role's tools usable |
+| **UC11** | Headless agent calls tools via service token | Headless agent | Send Bearer `svct_` to org gateway URL → tools at token's role, no sign-in |
+| **UC12** | List and call tools through the gateway | Team member | Ask client to list/call tools → prefixed upstream tools returned and forwarded |
+
+### Secrets & variables *(CAP5)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
 | **UC18** | Manage template variables and passwords | Org admin | Add NAME values, toggle Treat-as-password → secrets encrypted and redacted |
 | **UC19** | Manage sandbox credential files | Org admin | Upload file, set target path → file written into sandbox at session start |
-| **UC20** | Import multiple MCPs at once | Org admin | Paste mcpServers JSON, pick entries → upstreams created in one go |
 | **UC21** | Extract an inline secret into a variable | Org admin | Paste JSON with raw token → dialog offers extraction, config rewritten to NAME |
+
+### Audit & oversight *(CAP6)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
+| **UC17** | View and filter the audit log | Org admin | Open Audit, set filters → matching entries, live SSE tail |
+
+### Admin surfaces & ops *(CAP7)*
+
+| ID | Use case | Actor | Trigger → Outcome |
+|---|---|---|---|
 | **UC22** | Manage MCP Hero via the Admin MCP | Org admin | Connect AI client to `/admin-mcp` → conversational management tools usable |
 | **UC23** | Operator steps into an org for support | Superadmin | Enter org, end sessions or clear stuck connection → recorded, no secrets seen |
-| **UC24** | Edit or remove an upstream | Org admin | Edit config or delete → config/variables/files/tools removed, dirty banner on edit |
-| **UC25** | Delete an organization | Org admin | Delete org → org and all its scoped data purged |
+
 
 ---
 

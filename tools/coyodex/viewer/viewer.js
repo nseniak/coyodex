@@ -19,8 +19,13 @@ let BRIDGE_EDGES;               // flat list of every component->entity edge (st
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
 let MERMAID_DEPLOYMENT;    // Deployment overview (the "All" view): processes + infra + derived `runs` edges
 let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of the subsystems it runs
-let DEPLOYMENT_GROUP_CARDS;   // capability container id -> its members' diagram (the container drill)
-let DEPLOYMENT_GROUP_MEMBERS; // capability container id -> the unit names inside it
+let CAPABILITY_TOUCH = {};    // element id -> the capability ids whose flows reach it
+let CAPABILITY_LIVES = {};    // capability id -> its subsystems, ranked {id, name, touched, total}
+let COMPLETENESS = {};        // the four-state counts shown on the System tab
+let HAS_CAPABILITIES = false;
+let CAP_OF_UC = {};           // use-case id -> its capability NODE (names on screen, never ids)
+let DEPLOYMENT_GROUP_CARDS;   // product-area container id -> its members' diagram (the container drill)
+let DEPLOYMENT_GROUP_MEMBERS; // product-area container id -> the unit names inside it
 let DEPLOYMENT_EDGES;      // process->process arrow 'U_a>U_b' -> [async channels it carries]
 let DEPLOYMENT_INFRA_EDGES;  // process->infra arrow 'U_a>Dn' -> [component->dep calls behind it]
 let DEPLOYMENT_CALL_EDGES;   // process->process arrow 'U_a>U_b' -> [synchronous cross-process calls]
@@ -85,6 +90,18 @@ function applyBundle(b) {
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
+  // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
+  // helper; a second implementation here is the drift this repo keeps paying for elsewhere.
+  CAPABILITY_TOUCH = GRAPH.capability_touch || {};
+  CAPABILITY_LIVES = GRAPH.capability_lives || {};
+  COMPLETENESS = GRAPH.completeness || {};
+  HAS_CAPABILITIES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'capability');
+  CAP_OF_UC = {};
+  for (const n of Object.values(GRAPH.nodes || {})) {
+    if (n.kind === 'usecase' && n.parent && (GRAPH.nodes[n.parent] || {}).kind === 'capability') {
+      CAP_OF_UC[n.id] = GRAPH.nodes[n.parent];
+    }
+  }
   // `deployment` / `messaging` are deliberately absent: the tab no longer tables them (each is drawn
   // and paned in the Deployment / Data views), so a map carrying only those must NOT open an empty tab.
   HAS_SYSTEM = ['run_commands', 'entry_points', 'non_entity_types', 'observability',
@@ -694,7 +711,7 @@ function styleDeploymentLanes(root) {
 // stays the reliably-discoverable path regardless of whether anyone ever notices the icon.
 function isDeploymentGroup(id) { return !!(DEPLOYMENT_GROUP_MEMBERS && DEPLOYMENT_GROUP_MEMBERS[id]); }
 function primaryActionFor(id) {
-  // A capability container is drawn by the deployment renderer, not the model, so it has no GRAPH
+  // A product-area container is drawn by the deployment renderer, not the model, so it has no GRAPH
   // node — match it by id before the node lookup below bails out.
   if (isDeploymentGroup(id)) return { kind: 'drill', run: () => go({ kind: 'deploymentGroup', gid: id }) };
   if (id === 'SYS') { const t = sysDrillTarget(); return t ? { kind: 'drill', run: () => go(t) } : null; }
@@ -1037,6 +1054,54 @@ function usedInHtml(id) {
   // guess what kind of thing the list held (processes? subsystems? files?). The label names the list.
   return '<dt>In use cases</dt><dd>' + links + '</dd>';
 }
+// "Serves" — the REVERSE of a capability's "where it lives": given this box, which parts of the
+// product does it serve? Same data read backwards (`CAPABILITY_TOUCH` is the inverse of the
+// per-capability element sets), so the two views can never disagree.
+//
+// Shown at BOTH altitudes. A component looks itself up directly; a subsystem rolls up its whole
+// subtree, because a container holds no code of its own — its answer is the union of its
+// descendants', exactly as the overlay's own subtree roll-up works.
+//
+// The reading is at the extremes: served by ONE capability means this box belongs to one part of the
+// product (change it and you know what you touch); served by nearly all means shared machinery. The
+// third case is the one worth spelling out — served by NONE is ambiguous between "genuinely
+// cross-cutting, no scenario walks through it" and "no trace ever reached it", so the row says so
+// rather than guessing, and points at the trace debt that would settle it.
+function servesHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || !HAS_CAPABILITIES) return '';
+  if (!['component', 'subsystem', 'entity', 'subdomain', 'dep'].includes(n.kind)) return '';
+  const caps = new Set(CAPABILITY_TOUCH[id] || []);
+  if (n.kind === 'subsystem' || n.kind === 'subdomain') {
+    for (const eid in CAPABILITY_TOUCH) {
+      let cur = GRAPH.nodes[eid];
+      for (let guard = 0; cur && guard < 12; guard++) {
+        if (cur.parent === id) { (CAPABILITY_TOUCH[eid] || []).forEach((c) => caps.add(c)); break; }
+        cur = GRAPH.nodes[cur.parent];
+      }
+    }
+  }
+  if (!caps.size) {
+    // Only say this where a capability COULD have reached — an untouched box on a map with traces is
+    // a real signal; on an untraced map it would just be noise about the whole map.
+    const debt = (COMPLETENESS || {}).use_cases_untraced || 0;
+    return '<dt>Serves</dt><dd><span class="serves-none">no capability reaches it</span>'
+      + (debt ? ` — cross-cutting, or never traced (${debt} use case${debt > 1 ? 's' : ''} untraced)`
+              : ' — cross-cutting: no traced scenario walks through it') + '</dd>';
+  }
+  const total = Object.values(GRAPH.nodes || {}).filter((x) => x.kind === 'capability').length;
+  const chips = [...caps].sort((a, b) => Number(a.slice(3)) - Number(b.slice(3))).map((c) =>
+    `<button type="button" class="serves-chip" data-cap="${esc(c)}"`
+    + ' title="Show everything this capability touches">'
+    + esc(GRAPH.nodes[c] ? GRAPH.nodes[c].name : c) + '</button>').join(' ');
+  // Shared machinery is worth naming, not just counting — but only as an observation about REACH.
+  // Nothing here classifies the box as "platform": measured on the reference map the maximum spread
+  // was 4 capabilities of 7, so no threshold separates machinery from product, and that
+  // classification was dropped from the design rather than tuned.
+  const note = (total >= 4 && caps.size >= total - 1)
+    ? '<span class="serves-note">reached by nearly every capability — shared machinery</span>' : '';
+  return `<dt>Serves</dt><dd>${chips}${note}</dd>`;
+}
 // The "Triggered by" forward view for a component: its T4 entry points — how the outside world reaches
 // it (an HTTP route, a CLI command, a cron, an event). Like the arrow/crossing rows, each entry point is
 // a SELECTABLE paragraph (no source pill): selecting it highlights the paragraph and — when it has a
@@ -1193,7 +1258,7 @@ function nodeDetailHtml(id) {
   // code viewer, which carry the path and the sole "open externally" control.
   return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`
     + explain
-    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
+    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${servesHtml(id)}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
     + impactSectionHtml(id);
 }
 // Wire the interactive bits inside the just-written detail panel: the use-case-flow refs and the
@@ -1215,6 +1280,14 @@ function bindNodeDetailHandlers(root) {
     const st = { kind: 'data', store: a.getAttribute('data-store') };
     if (a.getAttribute('data-entity')) st.entity = a.getAttribute('data-entity');
     go(st);
+  }));
+  // A "Serves" chip sets the overlay to that capability — the whole point of the reverse view is to
+  // go straight from "this box serves ordering" to "show me everything ordering touches".
+  root.querySelectorAll('.serves-chip[data-cap]').forEach((b) => b.addEventListener('click', () => {
+    CAP_OVERLAY = { kind: 'capability', id: b.getAttribute('data-cap') };
+    applyCapOverlay(mainScene);
+    const sel = document.querySelector('#capsel');
+    if (sel) sel.value = 'capability:' + b.getAttribute('data-cap');
   }));
   bindTriggeredBy(root);
   bindImpactSection(root);
@@ -3247,7 +3320,7 @@ function bindComponent() {
 function bindGroupContainer(drillFor, edgeBinder, noDrillId) {
   mainScene.root.querySelectorAll('g.node').forEach((el) => {
     const id = idOf(el);
-    // A capability container is drawn by the deployment renderer, not the model, so it has no
+    // A product-area container is drawn by the deployment renderer, not the model, so it has no
     // GRAPH node — without this it fell through the gate and got no handler at all, leaving the
     // box inert (visible, but neither selectable nor drillable).
     if (!id || !(GRAPH.nodes[id] || isDeploymentGroup(id))) return;
@@ -3395,7 +3468,7 @@ function threadHostUnits(ep) {
   const c = ep.component && GRAPH.nodes[ep.component];
   return (c && Array.isArray(c.runs_in)) ? c.runs_in : [];
 }
-// The capability container a unit belongs to (null when it is drawn as its own box).
+// The product-area container a unit belongs to (null when it is drawn as its own box).
 function groupOfUnit(unit) {
   for (const gid in (DEPLOYMENT_GROUP_MEMBERS || {}))
     if ((DEPLOYMENT_GROUP_MEMBERS[gid] || []).indexOf(unit) >= 0) return gid;
@@ -3458,6 +3531,121 @@ function applyEnvDim(scene) {
     if (e.label) e.label.classList.toggle('envout', off);
   }
 }
+// ── the capability overlay ────────────────────────────────────────────────────────────────────────
+// Select a capability (or one use case, or the Happy Path) and everything the selection does not
+// touch fades. ALWAYS DIM, NEVER FILTER, at every altitude — one behaviour to learn.
+//
+// Dimming rather than filtering is the same call the environment filter already made above: "not
+// part of this" is information, and a filtered view deletes it. The objection that dimming a large
+// screen is unreadable does not apply here — the viewer deliberately has no flat whole-repo
+// component map, so every screen is one drill level (the busiest card in the reference map draws 19
+// boxes). A screen too crowded to dim is a balance finding to fix in the model, not a second
+// interaction mode to design around.
+//
+// This is the THIRD dim channel (selection focus writes inline opacity + `.dim`; the environment
+// filter writes `.envout`). Precedence, highest first:
+//   1. environment exclusion — a hard "this does not run here"
+//   2. capability overlay    — a scope the reader chose
+//   3. selection focus       — a transient highlight
+// So the overlay never un-dims something the environment excluded, and a selection never un-dims
+// something outside the chosen capability.
+let CAP_OVERLAY = null;   // {kind:'capability'|'usecase'|'hp', id} — module-level, like DEPLOY_ENV
+
+function capOverlayElements() {
+  // The selection's element set, as a UNION — a capability is exactly the union of its use cases,
+  // and the Happy Path the union of its spine, so one code path serves all three scopes.
+  if (!CAP_OVERLAY) return null;
+  const hit = new Set();
+  const add = (capId) => {
+    for (const eid in CAPABILITY_TOUCH) {
+      if ((CAPABILITY_TOUCH[eid] || []).includes(capId)) hit.add(eid);
+    }
+  };
+  if (CAP_OVERLAY.kind === 'capability') { add(CAP_OVERLAY.id); return hit; }
+  const ucs = CAP_OVERLAY.kind === 'hp'
+    ? (GRAPH.happy_path || []).map((g) => g.uc).filter(Boolean)
+    : [CAP_OVERLAY.id];
+  for (const uc of ucs) {
+    for (const st of ucSteps(uc)) {
+      for (const end of [st.src, st.dst]) if (end && GRAPH.nodes[end]) hit.add(end);
+    }
+  }
+  return hit;
+}
+
+function ucSteps(uc) {
+  // A use case's own flow steps, sub-flows expanded — the same expansion the server-side helper
+  // does, because a step hidden behind an `SFn` still touches what it touches.
+  const f = (GRAPH.flows || []).find((x) => x.uc === uc);
+  if (!f) return [];
+  const sf = {};
+  for (const s of (GRAPH.subflows || [])) sf[s.id] = s;
+  const out = [];
+  for (const st of (f.steps || [])) {
+    if (st.subflow && sf[st.subflow]) out.push(...(sf[st.subflow].steps || []));
+    else out.push(st);
+  }
+  return out;
+}
+
+function applyCapOverlay(scene) {
+  if (!scene) return;
+  const hit = capOverlayElements();
+  const off = new Set();
+  for (const id in scene.nodeEls) {
+    // A CONTAINER is lit when any descendant is — the subtree roll-up that makes the overlay work on
+    // the Subsystems overview, which draws only subsystem boxes and no components at all.
+    const on = !hit || hit.has(id) || subtreeTouched(id, hit);
+    scene.nodeEls[id].classList.toggle('capout', !on);
+    if (!on) off.add(id);
+  }
+  for (const e of scene.edgeEls) {
+    const dim = !!hit && (off.has(e.e.src) || off.has(e.e.dst));
+    e.path.classList.toggle('capout', dim);
+    if (e.label) e.label.classList.toggle('capout', dim);
+  }
+}
+
+// The overlay's picker. Floats bottom-LEFT over the diagram like the environment filter, and for the
+// same reason: it changes what the diagram says, so it belongs beside it rather than in a pane that
+// vanishes the moment something is selected. Shown on the structural views, where "which parts of the
+// machine serve this?" is a question you can actually ask.
+function syncCapPicker(s) {
+  const el = document.getElementById('cappicker');
+  if (!el) return;
+  const structural = s && ['container', 'base', 'context', 'domain'].includes(s.kind);
+  const on = HAS_CAPABILITIES && structural;
+  el.hidden = !on;
+  if (!on) { el.innerHTML = ''; return; }
+  const caps = Object.values(GRAPH.nodes || {}).filter((n) => n.kind === 'capability');
+  const opt = (v, label, sel) => `<option value="${esc(v)}"${sel ? ' selected' : ''}>${esc(label)}</option>`;
+  const cur = CAP_OVERLAY ? CAP_OVERLAY.kind + ':' + CAP_OVERLAY.id : '';
+  el.innerHTML = '<label class="cappick-lbl">Serving</label>'
+    + '<select id="capsel">'
+    + opt('', 'Everything', !cur)
+    + (HAS_HP ? opt('hp:*', 'The Happy Path', cur === 'hp:*') : '')
+    + caps.map((c) => opt('capability:' + c.id, c.name, cur === 'capability:' + c.id)).join('')
+    + '</select>';
+  el.querySelector('#capsel').addEventListener('change', (ev) => {
+    const v = ev.target.value;
+    CAP_OVERLAY = v ? { kind: v.split(':')[0], id: v.split(':').slice(1).join(':') } : null;
+    applyCapOverlay(mainScene);   // re-dim in place: no re-render, no layout jump
+  });
+}
+
+function subtreeTouched(id, hit) {
+  if (!hit) return true;
+  for (const eid of hit) {
+    let cur = GRAPH.nodes[eid];
+    let guard = 0;
+    while (cur && guard++ < 12) {
+      if (cur.parent === id) return true;
+      cur = GRAPH.nodes[cur.parent];
+    }
+  }
+  return false;
+}
+
 // Draw (or hide) the environment filter. It sits OVER THE DIAGRAM, not in the info pane: it changes
 // what the diagram draws, so it belongs beside it — and in the pane it disappeared as soon as anything
 // was selected, leaving a filtered diagram with no visible way back to `All`. Shown only on the
@@ -3480,14 +3668,14 @@ function syncEnvPicker(s) {
   }));
 }
 // A process card's default panel: the process node's own detail + the threads/loops it hosts.
-// A capability container's panel: what it is, and every process inside it. Each member row opens
+// A product-area container's panel: what it is, and every process inside it. Each member row opens
 // that process's own card, so the container is a way IN rather than a wall.
 function showDeploymentGroup(gid) {
   const members = (DEPLOYMENT_GROUP_MEMBERS && DEPLOYMENT_GROUP_MEMBERS[gid]) || [];
   const rows = members.map((u) =>
     `<tr><td><a href="#" class="procref" data-unit="${esc(u)}">${esc(u)}</a></td></tr>`).join('');
   panel.innerHTML = `<section class="uc-group"><h3 class="uc-actor">${esc(groupTitle(gid))}</h3>`
-    + `<div class="gloss-plain">Processes running the same capability, grouped so the overview stays `
+    + `<div class="gloss-plain">Processes running the same product area, grouped so the overview stays `
     + `readable. The arrows on the overview are the sum of these processes' own arrows; open a `
     + `process for its real ones.</div>`
     + `<table class="glossary"><tbody>${rows}</tbody></table></section>`;
@@ -4118,7 +4306,7 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'deployment') return [{ kind: 'deployment' }];
   if (s.kind === 'deploymentGroup') return [{ kind: 'deployment' }, { kind: 'deploymentGroup', gid: s.gid }];
   if (s.kind === 'deploymentUnit') {
-    // A member's card sits under its container, so the trail reads overview -> capability -> process.
+    // A member's card sits under its container, so the trail reads overview -> product area -> process.
     const gid = groupOfUnit(s.unit);
     const trail = [{ kind: 'deployment' }];
     if (gid) trail.push({ kind: 'deploymentGroup', gid });
@@ -4273,6 +4461,73 @@ function renderGlossary() {
 // shows its trigger → outcome and, when it sits on the Happy Path, an `HPn` pill (all positions when it
 // recurs) that jumps to that step. Off-spine use cases have NO pill — that absence is the on/off-spine
 // signal in the catalog. A non-diagram HTML view rendered straight into #diagram, like the Glossary.
+// The Use Cases catalog groups two ways, and BOTH are kept. "What can this role do?" and "what does
+// this product do?" are different questions, and neither derives the other — replacing the actor
+// grouping with the capability one would have been a silent downgrade for anyone reading the map to
+// answer a permissions question. Only the heading key changes; rows, badges and behaviour do not.
+let UC_GROUP_BY = 'capability';   // 'capability' | 'actor'; falls back to actor on a map with none
+
+function ucGroupBy() {
+  // A map that never adopted capabilities has nothing to group by — never show an empty switch.
+  return HAS_CAPABILITIES ? UC_GROUP_BY : 'actor';
+}
+
+function actorTextOf(n) {
+  return ((n.fields && n.fields.Actor) || (n.actors || []).join(', ') || 'Other').trim();
+}
+
+function roleKindOf(n) {
+  const names = (n.actors && n.actors.length ? n.actors : []).map((s) => String(s).trim().toLowerCase());
+  const kinds = new Set(names.map((nm) => ((ROLE_BY_NAME[nm] || {}).kind || '').trim().toLowerCase()));
+  const k = kinds.size === 1 ? [...kinds][0] : '';
+  return (k === 'human' || k === 'service') ? k : 'human';
+}
+
+function whereItLivesHtml(capId) {
+  // WHERE this capability lives: its top-level subsystems, ranked, with a proportion bar — plus a
+  // one-line verdict, which is the actual finding ("lives in X" vs "spread across N, no home").
+  // This is what replaced the capability x subsystem matrix: the matrix held the right information
+  // and was the wrong UI (7x12 is already dense, a real map is ~800 cells, no cell drills).
+  const rows = CAPABILITY_LIVES[capId] || [];
+  if (!rows.length) {
+    return '<p class="uc-lives uc-lives-empty">No traced use cases — this capability has no'
+      + ' components, so nothing on the architecture lights up for it.</p>';
+  }
+  const top = rows[0];
+  const share = top.total ? top.touched / top.total : 0;
+  const verdict = (rows.length <= 2 || share >= 0.5)
+    ? `lives in ${esc(top.name)}`
+    : `spread across ${rows.length} subsystems, no home`;
+  const bars = rows.slice(0, 5).map((r) => {
+    const pct = r.total ? Math.round(100 * r.touched / r.total) : 0;
+    return '<li><span class="uc-lives-name">' + esc(r.name) + '</span>'
+      + `<span class="uc-lives-bar"><i style="width:${pct}%"></i></span>`
+      + `<span class="uc-lives-n">${r.touched} of ${r.total}</span></li>`;
+  }).join('');
+  const more = rows.length > 5 ? `<li class="uc-lives-more">+ ${rows.length - 5} more</li>` : '';
+  return `<div class="uc-lives"><p class="uc-lives-verdict">${verdict}</p>`
+    + `<ul class="uc-lives-list">${bars}${more}</ul></div>`;
+}
+
+function capabilityGroups() {
+  // Capability order is the model's (importance), and membership rides `parent` — the same channel a
+  // component uses for its subsystem — so no second lookup table travels beside the nodes.
+  const groups = [];
+  const byCap = {};
+  for (const n of Object.values(GRAPH.nodes || {})) {
+    if (n.kind !== 'capability') continue;
+    byCap[n.id] = { cap: n, label: (n.fields && n.fields.Label) || '', ucs: [] };
+    groups.push(byCap[n.id]);
+  }
+  const loose = { cap: null, label: '', ucs: [] };
+  for (const n of UC_NODES) {
+    const g = byCap[n.parent];
+    (g || loose).ucs.push(n);
+  }
+  if (loose.ucs.length) groups.push(loose);
+  return groups.filter((g) => g.ucs.length);
+}
+
 function renderUseCases() {
   // Group by ACTOR, keeping model (importance) order within a group and first-appearance order of the
   // actors. A use case may name several INTERCHANGEABLE actors (either can start it) — that pair is a
@@ -4314,29 +4569,68 @@ function renderUseCases() {
     return `<button type="button" class="uc-hp-pill" data-uc="${esc(uc)}"`
       + ' title="On the Happy Path — click to jump there">Happy Path</button>';
   };
-  const sections = groups.map((g) => {
+  const byCapability = ucGroupBy() === 'capability';
+  const shown = byCapability ? capabilityGroups() : groups;
+  const sections = shown.map((g) => {
     // One actor: its kind and what it wants, as before. SEVERAL interchangeable actors: the kind only
     // when they agree on it (they normally do — a human "or" a service is the method's tell that one of
     // them isn't really an actor), and no "wants", because each of them wants something of their own and
     // one header cannot speak for both. Clicking either name's own group still shows theirs.
-    const kinds = new Set(g.roles.map((r) => (r.kind || '').trim().toLowerCase()));
+    const kinds = new Set((g.roles || []).map((r) => (r.kind || '').trim().toLowerCase()));
     const kind = kinds.size === 1 ? [...kinds][0] : '';
-    const w = g.roles.length === 1 ? g.roles[0].wants : '';
+    const w = (g.roles || []).length === 1 ? g.roles[0].wants : '';
     const wants = w ? `<span class="uc-actor-wants">${mdInline(w)}</span>` : '';
     const rows = g.ucs.map((n) => {
       const to = (n.fields && n.fields['Trigger → Outcome']) || '';
       // In diff mode, flag a use case whose flow touches changed code (derived from the element diff).
       const changed = (mode === 'diff' && hasDiff() && usecaseDiffState(n.id)) ? '<span class="badge modified">changed</span>' : '';
+      // The badge on the row is whichever axis is NOT the heading — actor when grouped by
+      // capability, capability when grouped by actor — so the other dimension stays visible either way.
+      const cross = byCapability
+        ? `<span class="uc-kind uc-kind-${esc(roleKindOf(n))}">${esc(actorTextOf(n))}</span>`
+        : (CAP_OF_UC[n.id] ? `<span class="uc-caplabel">${esc(CAP_OF_UC[n.id].name)}</span>` : '');
+      const untraced = FLOWS_MM && FLOWS_MM[n.id] ? ''
+        : '<span class="uc-untraced" title="Described, but no flow was traced — the map cannot say how it works">not traced</span>';
       return `<li class="uc-row${changed ? ' uc-changed' : ''}" data-uc="${esc(n.id)}" tabindex="0">`
-        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${changed}${pill(n.id)}</span>`
+        + `<span class="uc-head"><span class="uc-name">${esc(n.name)}</span>${cross}${changed}${pill(n.id)}${untraced}</span>`
         + (to ? `<span class="uc-to">${mdInline(to)}</span>` : '')
         + '</li>';
     }).join('');
+    if (byCapability) {
+      const title = g.cap ? g.cap.name : 'Not assigned to a capability';
+      const lab = g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '';
+      // A `platform` capability starts collapsed. Without that, the background use cases the
+      // completeness check now demands would bury the product screen — the very complaint that
+      // started this work, one tab over.
+      const shut = (g.label || '').toLowerCase() === 'platform';
+      const lives = g.cap ? whereItLivesHtml(g.cap.id) : '';
+      return `<section class="uc-group${shut ? ' uc-shut' : ''}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
+        + `<h3 class="uc-actor uc-caphead" tabindex="0" role="button" aria-expanded="${shut ? 'false' : 'true'}">`
+        + `<span class="uc-twist">&#9662;</span>${esc(title)}${lab}`
+        + `<span class="uc-actor-wants">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span></h3>`
+        + `<div class="uc-capbody">${lives}<ul class="uc-list">${rows}</ul></div></section>`;
+    }
     return '<section class="uc-group">'
       + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}${wants}</h3>`
       + `<ul class="uc-list">${rows}</ul></section>`;
   }).join('');
-  diagram.innerHTML = `<div class="usecases-wrap">${sections || '<p class="empty">No use cases recorded.</p>'}</div>`;
+  const sw = HAS_CAPABILITIES ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
+    + `<span class="uc-seg"><button type="button" data-gb="capability"${byCapability ? ' class="on"' : ''}>Capability</button>`
+    + `<button type="button" data-gb="actor"${byCapability ? '' : ' class="on"'}>Actor</button></span>`
+    + `<span class="uc-groupby-why">${byCapability ? 'What does this product do?' : 'What can each role do?'}</span></div>` : '';
+  diagram.innerHTML = `<div class="usecases-wrap">${sw}${sections || '<p class="empty">No use cases recorded.</p>'}</div>`;
+  diagram.querySelectorAll('.uc-seg button').forEach((b) => {
+    b.addEventListener('click', () => { UC_GROUP_BY = b.getAttribute('data-gb'); renderUseCases(); });
+  });
+  diagram.querySelectorAll('.uc-caphead').forEach((h) => {
+    const toggle = () => {
+      const sec = h.closest('.uc-group');
+      sec.classList.toggle('uc-shut');
+      h.setAttribute('aria-expanded', String(!sec.classList.contains('uc-shut')));
+    };
+    h.addEventListener('click', toggle);
+    h.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } });
+  });
   // A row opens the use case's flow — the SAME detail a Happy Path step drills into (one home).
   const openUc = (li) => go({ kind: 'usecase', uc: li.getAttribute('data-uc') });
   diagram.querySelectorAll('.uc-row').forEach((li) => {
@@ -4398,6 +4692,38 @@ function renderSystem() {
     return `<section class="uc-group" id="${id}"><h3 class="uc-actor">${esc(title)}</h3>${inner}</section>`;
   };
   const parts = [];
+  // Map completeness — NUMBERS, not a wall of advisories. Two of these deliberately do not warn
+  // anywhere: trace debt (the target is every use case traced; the shortfall is reported rather than
+  // redefined as acceptable) and off-spine use cases inside a CORE capability (the give-up of moving
+  // the spine check to capability altitude, kept visible so it stays a trade, not a silent loss).
+  const C = COMPLETENESS || {};
+  if (Object.keys(C).length) {
+    const tile = (k, v, of, sub, tone) => {
+      const pct = of ? Math.round(100 * v / of) : 0;
+      return `<div class="sys-tile${tone ? ' sys-' + tone : ''}"><div class="sys-k">${esc(k)}</div>`
+        + `<div class="sys-v">${v}${of ? `<span class="sys-of"> / ${of}</span>` : ''}</div>`
+        + (of ? `<div class="sys-bar"><i style="width:${pct}%"></i></div>` : '')
+        + (sub ? `<div class="sys-s">${esc(sub)}</div>` : '') + '</div>';
+    };
+    const tiles = [
+      tile('Use cases traced', C.use_cases_traced || 0, C.use_cases || 0,
+           (C.use_cases_untraced || 0) ? `${C.use_cases_untraced} untraced — trace debt` : 'no debt',
+           (C.use_cases_untraced || 0) ? 'warn' : 'ok'),
+      HAS_CAPABILITIES ? tile('Capabilities traced',
+           (C.capabilities || 0) - (C.capabilities_untraced || 0), C.capabilities || 0,
+           (C.capabilities_untraced || 0) ? 'a whole capability was never walked' : 'all reached',
+           (C.capabilities_untraced || 0) ? 'warn' : 'ok') : '',
+      tile('External surfaces unclaimed', C.entry_points_unclaimed_external || 0,
+           C.entry_points_external || 0, 'no use case reaches them',
+           (C.entry_points_unclaimed_external || 0) ? 'warn' : 'ok'),
+      tile('Self-started unclaimed', C.entry_points_unclaimed_self || 0, 0,
+           'crons / workers / boot hooks — often a record, not a use case',
+           (C.entry_points_unclaimed_self || 0) ? 'warn' : 'ok'),
+      HAS_CAPABILITIES ? tile('Off-spine in a core capability', C.off_spine_in_core_capabilities || 0, 0,
+           'reported, not warned — the capability-level check does not see these', '') : '',
+    ].join('');
+    parts.push(sec('Map completeness', `<div class="sys-tiles">${tiles}</div>`));
+  }
   // Entry points — grouped by CANONICAL kind (the server folds alias spellings: `http` and
   // `http-route` rows land in one group, WS-A8); each kind heading carries a small self/external
   // tag, and the self-starting kinds are listed first so "what runs with no user?" clusters at the
@@ -4827,6 +5153,11 @@ async function render(sArg, transient) {
   // selection (pendingSelect below) instead runs through updateFolderPeek, which browses only for a folder.
   if (!transient && !pendingSelect && !willRestore) { applyDefaultPanel(s); setBrowsing(true); }
   if (mode === 'diff' && hasDiff()) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
+  // The capability overlay re-applies on EVERY render, so it survives a drill, a dive, back/forward
+  // and a tab restore — unlike the environment filter, which is re-applied from its own screen only
+  // because it is scoped to that screen. A scope the reader chose should not evaporate on navigation.
+  applyCapOverlay(mainScene);
+  syncCapPicker(s);
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
   // pendingMatchTextId: a node reached this way ALWAYS gets the zoom-to-match-sidebar-text-size move

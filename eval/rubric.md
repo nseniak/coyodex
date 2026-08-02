@@ -14,7 +14,11 @@ be scored **down**, not guessed.
    claim-by-claim check can't.)
 
 2. **Completeness** — does the map cover the system's real surface area, or are whole modules / entry
-   points / entities missing? Cross-check against the repo's top-level structure.
+   points / entities missing? Cross-check against the repo's top-level structure. Two specific gaps
+   to look for, because the map now makes both visible: an **untraced use case** (described but with
+   no flow — indistinguishable from a feature that no longer exists, so it is a real defect, not a
+   stylistic one), and a **capability none of whose use cases is traced**, which means a whole part
+   of the product was never walked.
 
 3. **Drill accuracy** — do the drill anchors (`file:line`, links) resolve to the code they claim to
    explain? Sample anchors and open them. Anchor-line EXACTNESS lives here — a stale or drifted line
@@ -23,7 +27,7 @@ be scored **down**, not guessed.
 4. **Altitude discipline** — is each element at the right zoom (a component is a component, not a whole
    subsystem folded into one box; the domain model is not under-harvested)? And do the diagrams read at
    that zoom: is the tree balanced (each screen near the 5±2 fan-out target), is the top level grouped by
-   capability rather than tech tier, and is no level a single-child wrapper?
+   product area rather than tech tier, and is no level a single-child wrapper?
 
 5. **Happy-Path coherence** — does the ordered spine read as a real end-to-end walk, with each step's
    `why:` precondition satisfied by an earlier step?

@@ -94,6 +94,23 @@ class MapProfile:
     unclaimed_entry_points: int | None = None  # external EPs whose component no flow reaches;
     #                                            None when the map has no entry points or no flows
     off_spine_ucs: int | None = None           # use cases with no HP position; None when HP empty
+    unclaimed_self_entry_points: int | None = None  # SELF-activated EPs (crons, workers, consumers,
+    #                                            startup hooks) no use case reaches. These used to be
+    #                                            exempt automatically, which could hide a whole
+    #                                            background capability; they are now a decision, and
+    #                                            this is the number that shows whether it was taken.
+    capabilities: int | None = None            # size of the use-case grouping; None on a map that
+    #                                            has not adopted it (the field is additive)
+    capabilities_untraced: int | None = None   # capabilities NONE of whose use cases is traced — an
+    #                                            empty box in the overlay, i.e. a real part of the
+    #                                            product nobody traced. Invisible before this existed.
+    use_cases_untraced: int | None = None      # trace debt. The target is 100 %; measured on a real
+    #                                            build, closing a 15-of-25 gap costs ~12 % of build
+    #                                            tokens, so the shortfall is reported, never redefined
+    #                                            as correct.
+    off_spine_in_core_capabilities: int | None = None  # the deliberate give-up of the capability-level
+    #                                            spine check, made countable: use cases off the walk
+    #                                            inside a CORE capability, which no longer warn.
     entities_in_flows: int | None = None       # distinct entities appearing as a flow-step
     #                                            endpoint (sub-flows expanded) — the flow-derived
     #                                            'Used in UC' coverage of the domain model
@@ -191,6 +208,13 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
                  if m.happy_path else None)
     e_in_flows = (len(validate_model.flow_touched_entities(m))
                   if m.entities and m.flows else None)
+    unclaimed_self = (len(validate_model.unclaimed_self_entry_points(m))
+                      if m.entry_points and m.flows else None)
+    counts = validate_model.completeness_counts(m)
+    n_caps = len(m.capabilities) or None      # None on a map that has not adopted the grouping
+    caps_untraced = counts["capabilities_untraced"] if m.capabilities else None
+    ucs_untraced = counts["use_cases_untraced"] if m.use_cases else None
+    off_spine_core = counts["off_spine_in_core_capabilities"] if m.capabilities and m.happy_path else None
 
     # Linkage, not coverage: how many declared units any component actually claims to run in.
     unit_names = [u.unit for u in m.deployment if u.unit]
@@ -247,6 +271,11 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         external_entry_points=n_external,
         unclaimed_entry_points=unclaimed,
         off_spine_ucs=off_spine,
+        unclaimed_self_entry_points=unclaimed_self,
+        capabilities=n_caps,
+        capabilities_untraced=caps_untraced,
+        use_cases_untraced=ucs_untraced,
+        off_spine_in_core_capabilities=off_spine_core,
         entities_in_flows=e_in_flows,
         entities_in_flows_pct=(round(100 * e_in_flows / len(m.entities), 1)
                                if e_in_flows is not None else None),

@@ -26,11 +26,13 @@ from pathlib import Path
 from typing import get_args, get_origin, get_type_hints
 
 from coyodex import grammar
+from coyodex.anchors import strip_anchor
 from coyodex.model import (
     FORMAT,
     ID_ARRAYS,
     ID_SHAPE,
     Edge,
+    EntryPoint,
     ExtraSection,
     Flow,
     FlowStep,
@@ -369,12 +371,15 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
     chan_merged = _merge_duplicate_messaging(out, problems)   # two agents, same example row
     edges_before_dup = len(out.edges)
     _merge_duplicate_edges(out)  # LAST: dep-merge / actor-strip / component re-point can create exact dups
+    eps_before_dup = len(out.entry_points)
+    _mint_entry_point_ids(out)   # after every merge, so the minted range has no gaps
     extras_merged = _merge_extras_headings(out)
     if stats is not None:
         stats["actor_edges_stripped"] = actor_stripped
         stats["components_merged"] = comp_merged
         stats["messaging_rows_collapsed"] = chan_merged
         stats["duplicate_edges_collapsed"] = edges_before_dup - len(out.edges)
+        stats["duplicate_entry_points_collapsed"] = eps_before_dup - len(out.entry_points)
         stats["extras_sections_merged"] = extras_merged
     return out, problems
 
@@ -526,6 +531,47 @@ def _merge_duplicate_deps(m: ProjectModel) -> None:
     for e in m.edges:               # edges are the only refs into a dep id (C→D)
         e.src = remap.get(e.src, e.src)
         e.dst = remap.get(e.dst, e.dst)
+
+
+def _entry_point_identity(ep: EntryPoint) -> tuple[str, str]:
+    """An entry point's CONTENT identity: its source anchor plus its trigger, both normalized.
+
+    Source alone is what change-impact keys on (`ep:{source}`), but two rows can legitimately share
+    one anchor (several routes registered on the same line), so the trigger joins the key — the same
+    "only an exact identity match merges" discipline `_dep_identity` uses. Over-merging here would
+    silently delete a real surface from the completeness check."""
+    return (strip_anchor(ep.source or "").strip().lower(), " ".join((ep.trigger or "").split()).lower())
+
+
+def _mint_entry_point_ids(m: ProjectModel) -> None:
+    """Dedup entry points by content, then assign `EPn` in surviving order.
+
+    Entry points are the one element family whose ids are NOT authored. Harvest agents already juggle
+    pre-allocated C/D/E/SF ranges, and nothing references an entry point until synthesis — the
+    `use_case.entry_points` trigger link is written by `reconcile`, after this runs — so a fifth range
+    would buy nothing and make an overlap a hard build failure. Instead fragments leave `id` empty and
+    assembly mints it here, deterministically from argument order.
+
+    Dedup matters independently: unlike components, deps, messaging and edges, entry points were
+    simply concatenated, so two harvest slices covering the same router shipped the same route twice.
+
+    Ordering caveat (shared with every other dedup survivor): ids follow first-occurrence-in-argument
+    order, so REORDERING fragments can shift them — author a reconcile file against the ids the
+    assemble it feeds actually produced."""
+    seen: dict[tuple[str, str], EntryPoint] = {}
+    kept: list[EntryPoint] = []
+    for ep in m.entry_points:
+        ident = _entry_point_identity(ep)
+        if not ident[0]:            # no source anchor → not identifiable, keep as its own row
+            kept.append(ep)
+            continue
+        if ident in seen:
+            continue                # exact same surface, already recorded
+        seen[ident] = ep
+        kept.append(ep)
+    for n, ep in enumerate(kept, start=1):
+        ep.id = f"EP{n}"
+    m.entry_points = kept
 
 
 def _merge_duplicate_edges(m: ProjectModel) -> None:

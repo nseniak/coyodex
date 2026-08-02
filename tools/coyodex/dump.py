@@ -35,7 +35,8 @@ from coyodex.model import (
 
 _PREFIX = re.compile(r"^[A-Z]+")
 _KIND = {"UC": "use_case", "HP": "happy_path_step", "S": "subsystem", "C": "component",
-         "D": "dep", "SD": "subdomain", "E": "entity", "R": "role"}
+         "D": "dep", "SD": "subdomain", "E": "entity", "R": "role", "CAP": "capability",
+         "EP": "entry_point"}
 _MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
@@ -54,10 +55,14 @@ def _href(cell: str | None) -> str | None:
 
 def _group_member_ids(m: ProjectModel, gid: str) -> list[str]:
     """A group's DERIVED members (membership is single-source on the child): a subsystem holds its
-    components + child subsystems; a subdomain holds its entities + child subdomains."""
+    components + child subsystems; a subdomain holds its entities + child subdomains; a capability
+    holds its use cases + child capabilities."""
     if gid.startswith("SD"):
         return ([e.id for e in m.entities if e.subdomain == gid]
                 + [sd.id for sd in m.subdomains if sd.parent == gid])
+    if gid.startswith("CAP"):
+        return ([u.id for u in m.use_cases if u.capability == gid]
+                + [c.id for c in m.capabilities if c.parent == gid])
     return ([c.id for c in m.components if c.subsystem == gid]
             + [s.id for s in m.subsystems if s.parent == gid])
 

@@ -30,10 +30,16 @@ from coyodex.model import FlowStep, ProjectModel
 RANK_DIRECT = {"line": 1, "symbol": 2, "file": 3}
 R_STRUCTURAL, R_BEHAVIORAL, R_DATA, R_CALLGRAPH, R_TERRITORY = 4, 5, 6, 7, 8
 
-_ID_RE = re.compile(r"^(SD|SF|UC|HP|C|D|E|S)(\d+)$")
+# `CAP` and `EP` lead for the same first-match reason as model.ID_SHAPE.
+_ID_RE = re.compile(r"^(CAP|EP|SD|SF|UC|HP|C|D|E|S)(\d+)$")
 
+# NOTE `EP` maps to the same bucket as the synthetic `ep:` key below. They are two spellings of one
+# element family: `ep:{source}` is change-impact's own CONTENT key (stable across rebuilds, which an
+# assemble-minted `EPn` is not), while `EPn` is how the map's own references spell it. Both must
+# resolve to `entry_points` so a reference and an impact row name the same thing.
 _KIND_BY_PREFIX = {"C": "components", "D": "deps", "E": "entities", "S": "subsystems",
-                   "SD": "subdomains", "SF": "subflows", "UC": "use_cases", "HP": "happy_path"}
+                   "SD": "subdomains", "SF": "subflows", "UC": "use_cases", "HP": "happy_path",
+                   "CAP": "capabilities", "EP": "entry_points"}
 _KIND_BY_SYNTH = {"edge": "edges", "ep": "entry_points", "step": "flow_steps",
                   "glossary": "glossary", "security": "security", "run": "run_commands",
                   "net": "non_entity_types"}
@@ -126,6 +132,8 @@ class _Maps:
         for hp in model.happy_path:
             if hp.uc:
                 self.hp_of.setdefault(hp.uc, []).append(hp.id)
+        # use case -> its capability, so a code change ripples all the way to the product screen
+        self.cap_of: dict[str, str] = {u.id: u.capability for u in model.use_cases if u.capability}
 
         # data: C→E ownership vs consumption, both directions
         self.owned_entities: dict[str, set[str]] = {}
@@ -219,6 +227,12 @@ def build_impact_result(model: ProjectModel, core: ImpactCore,
                 for hp in maps.hp_of.get(uc, ()):
                     register_ripple(hp, R_BEHAVIORAL, 1,
                                     via + [{"from": uc, "relation": "happy-path"}], files)
+                # …and on to the use case's capability, the same one more hop the happy-path step
+                # gets. Without it a code change reaches the use case but stops short of the screen
+                # that says what the product does — the one a reader opens first.
+                if cap := maps.cap_of.get(uc):
+                    register_ripple(cap, R_BEHAVIORAL, 1,
+                                    via + [{"from": uc, "relation": "capability"}], files)
 
         if eid.startswith("edge:"):
             src, _verb, dst = eid.removeprefix("edge:").split(">", 2)

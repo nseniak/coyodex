@@ -1842,17 +1842,17 @@ DEPLOYMENT_GROUP_MIN = 13
 # THIS view answers is which infrastructure couples the MOST processes, so the lane keeps the heaviest
 # and says how many it dropped.
 INFRA_LANE_MAX = 8
-# A container is only worth drawing if it can be NAMED. Processes running one capability ("the 14
+# A container is only worth drawing if it can be NAMED. Processes running one product area ("the 14
 # social connectors") make a box a reader understands at a glance; a process running seven is a
 # monolith whose identity IS the process, and folding two of them together produced a real box
 # labelled "AI & media services + Core platform + Discord bot experience + Discord connectivity +
 # Monetization + Social content connectors + Web platform API (2)" — while hiding `api` and `bot`,
-# the two processes the reader most wants to see. Above this many capabilities the members stay
+# the two processes the reader most wants to see. Above this many product areas the members stay
 # individual boxes.
 DEPLOYMENT_GROUP_MAX_CAPS = 2
 
 
-def _unit_capabilities(graph: GraphDict) -> dict[str, frozenset[str]]:
+def _unit_product_areas(graph: GraphDict) -> dict[str, frozenset[str]]:
     """`unit name → the top-level subsystems whose components run in that process`.
 
     The grouping key for the overview. It is SEMANTIC (what the process runs) rather than structural
@@ -1866,7 +1866,7 @@ def _unit_capabilities(graph: GraphDict) -> dict[str, frozenset[str]]:
     30 groups but the groups stop being nameable, a group arrow becomes false for some members, and
     the whole grouping reshuffles whenever one edge is added (which makes every diagram diff
     unreadable). Capability signature gives 12 NAMED groups over the same 51 processes, changes only
-    when a component is re-assigned, and matches the method's own capability-first grouping rule."""
+    when a component is re-assigned, and matches the method's own product-area-first grouping rule."""
     caps: dict[str, set[str]] = {}
     for nid, node in graph["nodes"].items():
         if str(node.get("kind")) != "component":
@@ -1881,14 +1881,14 @@ def _unit_capabilities(graph: GraphDict) -> dict[str, frozenset[str]]:
 
 def deployment_groups(graph: GraphDict, process_units: set[str]
                       ) -> tuple[dict[str, list[str]], dict[str, str]]:
-    """`({group_id: [unit names]}, {unit name: group_id})` — capability containers for the overview.
+    """`({group_id: [unit names]}, {unit name: group_id})` — product-area containers for the overview.
 
     A signature with only ONE process is not a container: it is drawn as the process itself, which is
-    why a monolith's `api`/`bot`/`worker` (each running five capabilities) stay their own boxes. Empty
+    why a monolith's `api`/`bot`/`worker` (each running five product areas) stay their own boxes. Empty
     on a map below `DEPLOYMENT_GROUP_MIN`, so small maps render exactly as before."""
     if len(process_units) < DEPLOYMENT_GROUP_MIN:
         return {}, {}
-    caps = _unit_capabilities(graph)
+    caps = _unit_product_areas(graph)
     by_sig: dict[frozenset[str], list[str]] = {}
     for unit in sorted(process_units):
         sig = caps.get(unit)
@@ -1909,8 +1909,8 @@ def deployment_groups(graph: GraphDict, process_units: set[str]
 
 
 def deployment_group_label(graph: GraphDict, members: list[str]) -> str:
-    """A container's display text: the capability names its processes run, plus the member count."""
-    caps = _unit_capabilities(graph)
+    """A container's display text: the product-area names its processes run, plus the member count."""
+    caps = _unit_product_areas(graph)
     sig = caps.get(members[0], frozenset())
     # Names only — an id that leaked into a box label would be meaningless on screen (the same rule
     # the info pane and every other view follow: ids are navigation, never display).
@@ -2075,7 +2075,7 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
         shared_infra = {b: shared_infra[b] for b in keep}
     infra_boxes = sorted(shared_infra)
 
-    # CAPABILITY CONTAINERS: above the readable cap, processes running the same capabilities collapse
+    # PRODUCT-AREA CONTAINERS: above the readable cap, processes running the same product areas collapse
     # into one drillable box (see `deployment_groups`). Members keep their own card; the container
     # carries the synthesized arrows.
     groups, group_of = deployment_groups(graph, process_units)
@@ -2088,7 +2088,7 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
     lines = ["flowchart TB"]
     class_lines: list[str] = []
     label_of = {uid: unit for uid, unit in units}  # process ids aren't in the clean graph — label from units
-    label_of.update(group_label)                   # …and a container is labelled by its capabilities
+    label_of.update(group_label)                   # …and a container is labelled by its product areas
     allinone_label = {uid: f"{label_of.get(uid, uid)} — all-in-one: runs every subsystem" for uid in fold}
 
     def _decl(nid: str, default_kind: str, cls_override: str | None = None) -> tuple[str, str]:
@@ -2186,7 +2186,7 @@ def gen_deployment_mermaid(graph: GraphDict) -> str:
 
 
 def gen_deployment_group_card_mermaid(graph: GraphDict, gid: str) -> str:
-    """A capability container's card: its member processes, with the REAL arrows between them.
+    """A product-area container's card: its member processes, with the REAL arrows between them.
 
     The container hides nothing — it defers. The overview shows one synthesized arrow per container
     pair; opening the container shows which members actually carry it, and each member still drills to
@@ -2247,7 +2247,7 @@ def gen_deployment_group_card_mermaid(graph: GraphDict, gid: str) -> str:
 
 
 def deployment_group_cards(graph: GraphDict) -> dict[str, str]:
-    """`{group_id: card mermaid}` for every capability container on the overview."""
+    """`{group_id: card mermaid}` for every product-area container on the overview."""
     groups, _ = deployment_groups(graph, _process_unit_names(graph))
     return {gid: gen_deployment_group_card_mermaid(graph, gid) for gid in groups}
 
@@ -2843,7 +2843,7 @@ class ViewBundle(TypedDict):
     domainContainerEdges: dict[str, list[dict[str, str]]]
     mermaidDeployment: str
     deploymentCards: dict[str, str]
-    deploymentGroupCards: dict[str, str]      # capability container id -> its members' diagram
+    deploymentGroupCards: dict[str, str]      # product-area container id -> its members' diagram
     deploymentGroupMembers: dict[str, list[str]]  # container id -> the unit names inside it
     deploymentEdges: dict[str, list[dict[str, str]]]  # process→process arrow 'U_a>U_b' -> the async
                                      # channels it carries (the arrow's select panel)

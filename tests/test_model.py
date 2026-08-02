@@ -30,11 +30,14 @@ from coyodex.model import (
     TestRow as _TestRow,  # aliased: a bare `TestRow` name makes pytest try to collect it as a test class
     UseCase,
     VariantTag,
+    ID_ARRAYS,
+    ID_SHAPE,
     all_elements,
     load_model,
     remap_element_ids,
     to_canonical_json,
 )
+from coyodex import grammar
 
 
 # --- id remap (the mutable twin of validate_model._referenced_ids) --------------
@@ -312,3 +315,29 @@ if __name__ == "__main__":
                 failures += 1
                 print(f"FAIL {name}: {e}")
     raise SystemExit(1 if failures else 0)
+
+
+# ── id namespaces for capabilities + entry points (plan/60-capabilities Step 1) ───────────────────
+
+def test_id_shape_accepts_the_new_namespaces_without_shadowing_the_old() -> None:
+    """First-match alternation: `CAP3` also starts with "C" and `EP1` with "E", so the multi-letter
+    prefixes must lead. Before they did, `CAP3` matched the `C` branch and then failed on "AP3" —
+    a shape error on a perfectly good id."""
+    for good in ("CAP1", "CAP42", "EP1", "EP99", "C3", "E7", "UC12", "SD2", "SF9", "S1", "R4", "HP1", "D2"):
+        assert ID_SHAPE.match(good), good
+    for bad in ("CAP", "EP", "CAPX1", "EPP1", "cap1", "ep1", "X1"):
+        assert not ID_SHAPE.match(bad), bad
+
+
+def test_grammar_id_token_finds_the_new_namespaces_in_prose() -> None:
+    """The prose scanner shares ID_SHAPE's ordering problem: with `C\\d+` first, "CAP3" matched
+    nothing at all, so a `why:` or a note citing a capability read as citing no element."""
+    found = grammar.ID_TOKEN.findall("see CAP3 and EP1 alongside C5, UC2 and SD4")
+    assert set(found) == {"CAP3", "EP1", "C5", "UC2", "SD4"}, found
+
+
+def test_capabilities_are_an_id_array_and_entry_points_are_not() -> None:
+    """Entry-point ids are minted by `assemble` from content, so a fragment carries none — registering
+    them here would make every pre-assembly fragment a shape error and every rebuild a false duplicate."""
+    assert ID_ARRAYS["capabilities"] == "CAP"
+    assert "entry_points" not in ID_ARRAYS

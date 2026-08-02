@@ -28,11 +28,15 @@ from coyodex.model import (
     StateMachine,
     Store,
     TestRow,
-    UseCase,
     all_elements,
 )
 from coyodex.validate_analysis import strip_anchor
-from coyodex.validate_model import unexplained_persistence_pairs
+from coyodex.validate_model import (
+    capability_elements,
+    completeness_counts,
+    element_capabilities,
+    unexplained_persistence_pairs,
+)
 from coyodex.viewer.build_graph import (
     LINK,
     Edge as GraphEdge,
@@ -282,12 +286,44 @@ def model_to_markdown(m: ProjectModel) -> str:
         section("Roles (actors)",
                 _table(["Role", "Kind", "What they want", "Use cases they drive"],
                        [[f"**{r.name}**", r.kind, r.wants, r.drives] for r in m.roles]))
+    if m.capabilities:
+        cap_parent = {c.id: c.name for c in m.capabilities}
+        section("Capabilities — what this product does",
+                ["The use-case grouping. `label` is an authored judgement about the use cases in "
+                 "each capability", "(core = the product, and the Happy Path walks every core "
+                 "capability); nothing derives it.", ""]
+                + _table(["ID", "Capability", "Label", "Purpose", "Parent"],
+                         [[f"**{c.id}**", c.name, c.label,
+                           c.purpose, cap_parent.get(c.parent or "", "")]
+                          for c in m.capabilities]))
     if m.use_cases:
         rn = {r.id: r.name for r in m.roles}  # render actors as role NAMES, resolved from their ids
-        section("Use cases",
-                _table(["ID", "Use case", "Actor", "Trigger → Outcome"],
-                       [[f"**{u.id}**", u.name, and_list([rn.get(a, a) for a in u.actors]),
-                         u.trigger_outcome] for u in m.use_cases]))
+        if m.capabilities:
+            # Grouped by capability — the reader's first question is "what does this product do?",
+            # and a flat 25-row table never answered it. One sub-table per capability, in
+            # capabilities[] order, with any unassigned use cases last so they are visible rather
+            # than silently dropped.
+            cap_names = {c.id: c.name for c in m.capabilities}
+            uc_body: list[str] = []
+            groups = [(c.id, c.name, [u for u in m.use_cases if (u.capability or "") == c.id])
+                      for c in m.capabilities]
+            loose = [u for u in m.use_cases if (u.capability or "") not in cap_names]
+            if loose:
+                groups.append(("", "Not assigned to a capability", loose))
+            for cid, cname, members in groups:
+                if not members:
+                    continue
+                uc_body += [f"### {cname}" + (f" *({cid})*" if cid else ""), ""]
+                uc_body += _table(["ID", "Use case", "Actor", "Trigger → Outcome"],
+                                  [[f"**{u.id}**", u.name,
+                                    and_list([rn.get(a, a) for a in u.actors]),
+                                    u.trigger_outcome] for u in members]) + [""]
+            section("Use cases", uc_body)
+        else:
+            section("Use cases",
+                    _table(["ID", "Use case", "Actor", "Trigger → Outcome"],
+                           [[f"**{u.id}**", u.name, and_list([rn.get(a, a) for a in u.actors]),
+                             u.trigger_outcome] for u in m.use_cases]))
     if m.happy_path:
         body = ["The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag",
                 "names it); the step's detail lives in that use case's T6 flow. An optional `why:`",
@@ -607,6 +643,44 @@ def _ce_access(m: ProjectModel, name_of: "dict[str, str]") -> dict[str, dict[str
     return acc
 
 
+def _capability_lives(m: ProjectModel) -> dict[str, list[dict[str, object]]]:
+    """Per capability: WHERE it lives in the architecture — its top-level subsystems, ranked by how
+    many of each one's components its flows reach, as `{id, name, touched, total}`.
+
+    Rolled up to the TOP level because that is the altitude the Subsystems overview draws, and it is
+    the altitude the question is asked at ("which parts of the machine serve this?"). A component's
+    own subsystem may be nested three deep; ranking those would answer a question nobody asked.
+
+    This replaces the capability x subsystem matrix the design first reached for. The matrix carried
+    the right information and was the wrong UI: 7x12 is already dense, a real map is ~800 cells, and
+    no cell drills anywhere. One capability's ranked list says the same thing at the moment you are
+    looking at that capability."""
+    subs = {s.id: s for s in m.subsystems}
+
+    def root_of(sid: str | None) -> str | None:
+        seen: set[str] = set()
+        while sid and sid in subs and subs[sid].parent and sid not in seen:
+            seen.add(sid)
+            sid = subs[sid].parent
+        return sid
+
+    comps = {c.id: c for c in m.components}
+    total_by_root: dict[str, int] = {}
+    for c in m.components:
+        if (r := root_of(c.subsystem)):
+            total_by_root[r] = total_by_root.get(r, 0) + 1
+    out: dict[str, list[dict[str, object]]] = {}
+    for cap, ends in capability_elements(m).items():
+        touched: dict[str, int] = {}
+        for eid in ends:
+            if (c := comps.get(eid)) and (r := root_of(c.subsystem)):
+                touched[r] = touched.get(r, 0) + 1
+        out[cap] = [{"id": r, "name": subs[r].name if r in subs else r,
+                     "touched": n, "total": total_by_root.get(r, 0)}
+                    for r, n in sorted(touched.items(), key=lambda kv: (-kv[1], kv[0]))]
+    return out
+
+
 def _build_data_view(m: ProjectModel, nodes: dict[str, Node]) -> dict[str, object]:
     """The store-centric Data view payload (rides in the GraphDict like `messaging`). Every list is
     built in model order or sorted, so the output is deterministic. Physical stores = deps classified
@@ -715,6 +789,7 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     nodes: dict[str, Node] = {}
     subsystem_names = {s.id: s.name for s in m.subsystems}
     subdomain_names = {sd.id: sd.name for sd in m.subdomains}
+    capability_names = {c.id: c.name for c in m.capabilities}
     role_names = {r.id: r.name for r in m.roles}  # role ids → display names (the frontend sees names)
     for u in m.use_cases:
         # BOTH forms: the readable one for display, and the LIST for every view that needs to know who
@@ -722,9 +797,15 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         # reached the frontend as one unsplittable name — it matched no role, and the Happy Path drew a
         # lifeline for a person who does not exist while the Use-cases catalog filed it under "Other".
         actor_names = [role_names.get(a, a) for a in u.actors]
+        # `parent` = the use case's capability, exactly as a component's parent is its subsystem.
+        # Reusing the existing membership channel is what lets the frontend group by capability
+        # without a second lookup table travelling beside the nodes.
         node = _node(u, "usecase", u.name, _first_href(u.trigger_outcome),
                      {"Use case": u.name, "Actor": and_list(actor_names),
-                      "Trigger → Outcome": u.trigger_outcome}, None)
+                      "Trigger → Outcome": u.trigger_outcome,
+                      **({"Capability": capability_names.get(u.capability or "", u.capability or "")}
+                         if u.capability else {})},
+                     u.capability)
         node.actors = actor_names
         nodes[u.id] = node
     for s in m.subsystems:
@@ -735,6 +816,17 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                              # subdomain population below deliberately does NOT mirror this row.
                              **({"Tech": s.tech} if s.tech else {})},
                             s.parent)
+    # Capabilities: the use-case forest. A capability is never DRAWN as a box — it groups behavior,
+    # not code — but it must reach the browser as a node all the same: the Use Cases tab groups by it,
+    # the overlay selects by it, and both show its NAME, never its id. `label` rides along because it
+    # is what the Happy-Path membership rule reads.
+    for cap in m.capabilities:
+        parent_name = capability_names.get(cap.parent, cap.parent) if cap.parent else ""
+        nodes[cap.id] = _node(cap, "capability", cap.name, None,
+                              {"Capability": cap.name, "Purpose": cap.purpose,
+                               "Parent": parent_name,
+                               **({"Label": cap.label} if cap.label else {})},
+                              cap.parent)
     # T4 entry points grouped by the component they name — surfaced as each component's "Triggered by"
     # list in the info pane (the standalone table also lives on the System tab). Each flat entry point
     # also carries `index` = its position within its component's list, so the viewer's search hits and
@@ -905,6 +997,14 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                   for r in m.roles],
         "glossary": [{"term": g.term, "meaning": g.meaning, "source": g.source or ""}
                      for g in m.glossary],
+        # ── the capability overlay's data (plan/60-capabilities Step 6) ──
+        # Computed HERE because the typed model is in hand and `validate_model` owns the one
+        # implementation of the touch primitive — the frontend cannot call Python, and a second
+        # implementation in JS is exactly the drift this repo keeps paying for elsewhere.
+        "capability_touch": {eid: sorted(caps)
+                             for eid, caps in element_capabilities(m).items()},
+        "capability_lives": _capability_lives(m),
+        "completeness": completeness_counts(m),
         # ── reference collections (System / Tests tabs) — carried straight from the model ──
         "run_commands": [asdict(r) for r in m.run_commands],
         "entry_points": flat_entry_points,

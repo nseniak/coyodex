@@ -43,6 +43,7 @@
       "source": "traps.yaml:1"
     }
   ],
+  "capabilities": [],
   "use_cases": [
     {
       "id": "UC1",
@@ -50,7 +51,9 @@
       "actors": [
         "R2"
       ],
-      "trigger_outcome": "An agent asks for a tenant's queue, optionally filtered by state -> they get the list of tickets they are allowed to see, each with its state and comment count."
+      "trigger_outcome": "An agent asks for a tenant's queue, optionally filtered by state -> they get the list of tickets they are allowed to see, each with its state and comment count.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC2",
@@ -58,7 +61,9 @@
       "actors": [
         "R2"
       ],
-      "trigger_outcome": "Someone opens a ticket by id -> they see its title, state, assignee and its comment thread, or a 404 when the ticket belongs to another tenant."
+      "trigger_outcome": "Someone opens a ticket by id -> they see its title, state, assignee and its comment thread, or a 404 when the ticket belongs to another tenant.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC3",
@@ -66,7 +71,9 @@
       "actors": [
         "R2"
       ],
-      "trigger_outcome": "An agent posts a target state -> the transition is checked against the declared table, the ticket is stored in its new state, re-indexed, and a state-change event is published."
+      "trigger_outcome": "An agent posts a target state -> the transition is checked against the declared table, the ticket is stored in its new state, re-indexed, and a state-change event is published.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC4",
@@ -74,7 +81,9 @@
       "actors": [
         "R1"
       ],
-      "trigger_outcome": "A reporter posts text on a ticket they may write -> the comment is appended to the ticket document and the thread comes back one longer."
+      "trigger_outcome": "A reporter posts text on a ticket they may write -> the comment is appended to the ticket document and the thread comes back one longer.",
+      "capability": null,
+      "entry_points": []
     },
     {
       "id": "UC5",
@@ -82,7 +91,9 @@
       "actors": [
         "R2"
       ],
-      "trigger_outcome": "An operator claims a named lock before a bulk job -> the lock row records the holder, so a second claim can see who holds it."
+      "trigger_outcome": "An operator claims a named lock before a bulk job -> the lock row records the holder, so a second claim can see who holds it.",
+      "capability": null,
+      "entry_points": []
     }
   ],
   "happy_path": [
@@ -117,6 +128,7 @@
       "name": "Ticket workflow",
       "purpose": "Everything that answers a ticket request end to end: the HTTP handlers, the application service that orchestrates them, and the repository that is the system of record. This is where traps O1 and O2 live: the handlers look like they own the datastore and do not.",
       "parent": null,
+      "label": "",
       "source": "src/api/",
       "confidence": "verified",
       "tech": "Python",
@@ -127,6 +139,7 @@
       "name": "Eventing",
       "purpose": "The asynchronous half: the publisher that names three channels, the one consumer that drains a channel, and the plugin family that reacts. Traps M1-M4 are all here.",
       "parent": null,
+      "label": "",
       "source": "src/messaging/",
       "confidence": "verified",
       "tech": "",
@@ -137,6 +150,7 @@
       "name": "Notification plugins",
       "purpose": "Eight identically-shaped plugin directories, each listening on one channel and forwarding a shaped payload to the analytics sink. A homogeneous family: it reads as a list, not as eight decisions.",
       "parent": "S2",
+      "label": "",
       "source": "src/plugins/",
       "confidence": "verified",
       "tech": "",
@@ -147,6 +161,7 @@
       "name": "Platform runtime",
       "purpose": "The cross-cutting machinery every request and every worker pass runs through: authorisation, the lifecycle table, escalation policy, the worker template and its one concrete worker, the client factory, and the two process entry points.",
       "parent": null,
+      "label": "",
       "source": "src/auth/",
       "confidence": "inferred",
       "tech": "",
@@ -157,6 +172,7 @@
       "name": "Shared validation",
       "purpose": "A flat toolkit of value validators. Past both leaf caps with no subdirectory to recurse into, so it is split into two cohesive components rather than folded into one box (trap G2).",
       "parent": null,
+      "label": "",
       "source": "src/flatpack/",
       "confidence": "verified",
       "tech": "",
@@ -167,6 +183,7 @@
       "name": "Web UI",
       "purpose": "The browser half: a file-per-component presentational tree plus its hyperscript runtime. The FILE cap binds here, so the code-derived expectation E lands far above the honest altitude (trap G1).",
       "parent": null,
+      "label": "",
       "source": "web/src/",
       "confidence": "verified",
       "tech": "TypeScript",
@@ -767,6 +784,7 @@
   ],
   "entry_points": [
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "GET /tickets/{id} — an agent opens one ticket",
       "source": "src/entrypoints/http.py:37",
@@ -779,6 +797,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "GET /tickets — an agent lists a tenant's queue",
       "source": "src/entrypoints/http.py:38",
@@ -791,6 +810,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "GET /tickets/{id}/comments — an agent reads a thread",
       "source": "src/entrypoints/http.py:39",
@@ -803,6 +823,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "POST /tickets/{id}/transition — an agent moves a ticket",
       "source": "src/entrypoints/http.py:40",
@@ -815,6 +836,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "POST /tickets/{id}/comments — a reporter appends a comment",
       "source": "src/entrypoints/http.py:41",
@@ -827,6 +849,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "http-route",
       "trigger": "POST /locks/{key} — an operator claims an advisory lock",
       "source": "src/entrypoints/http.py:42",
@@ -839,6 +862,7 @@
       "cadence_source": ""
     },
     {
+      "id": "",
       "kind": "event-consumer",
       "trigger": "the comment channel delivers a message to the continuous drain loop",
       "source": "src/messaging/consumer.py:33",
@@ -851,6 +875,7 @@
       "cadence_source": "src/messaging/consumer.py:36"
     },
     {
+      "id": "",
       "kind": "job",
       "trigger": "the supervisor fires the report rollup on its cron schedule",
       "source": "src/base/report_worker.py:18",
@@ -869,6 +894,7 @@
       "name": "Ticket thread",
       "purpose": "The ticket and everything embedded in it — the comment thread and the attachments hanging off each comment.",
       "parent": null,
+      "label": "",
       "source": "src/domain/models.py:21",
       "confidence": "verified",
       "tech": "",
@@ -879,6 +905,7 @@
       "name": "Operational records",
       "purpose": "Rows the product writes for its own operation rather than for a user: the audit trail and the advisory locks.",
       "parent": null,
+      "label": "",
       "source": "src/domain/models.py:66",
       "confidence": "verified",
       "tech": "",
@@ -2090,6 +2117,9 @@
     "claims_confirmed": 42,
     "claims_refuted": 0,
     "claims_unverifiable": 0,
+    "claims_superseded": 0,
+    "claims_added_since": 0,
+    "live_claims_digest": "",
     "note": "Every backbone edge in this map was authored directly against the fixture's own source, which is 1.5 kLOC of hand-written code the author of the map also wrote. That makes the grounding complete but NOT independent — there was no fresh-context skeptic pass, and this map has not been through Phase 4. Treat the number as a statement about coverage, not about adversarial confidence."
   },
   "extras": [

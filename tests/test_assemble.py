@@ -803,3 +803,126 @@ def test_a_directory_named_json_still_raises_from_assemble():
         (d / "inner.json").mkdir()
         _parts, _notes, errors = load_fragment_paths(sorted(d.glob("*.json")))
         assert any("Is a directory" in e for e in errors), errors
+
+
+# ── entry-point ids: minted by assemble, never authored (Step 1 of plan/60-capabilities) ──────────
+
+def make_entry_point_slice(cid: str, own_route: str) -> str:
+    """One harvest slice. Every slice records the SHARED `/health` route it happened to walk past,
+    plus one route of its own — the duplicate-surface case that nothing collapsed before, because
+    entry points were the one element family assemble simply concatenated."""
+    return json.dumps({
+        "components": [{"id": cid, "name": cid, "purpose": "p", "source": f"{cid}.py:1"}],
+        "entry_points": [
+            {"kind": "HTTP route", "trigger": "GET /health", "source": "app/health.py:10",
+             "component": cid, "activation": "external"},
+            {"kind": "HTTP route", "trigger": f"GET {own_route}", "source": f"{cid}.py:5",
+             "component": cid, "activation": "external"},
+        ],
+    })
+
+
+def test_entry_point_ids_are_minted_and_duplicate_surfaces_collapse():
+    """Ids are assigned by assemble from content, and the same surface harvested twice becomes ONE
+    row — otherwise the completeness check would count a duplicated route as two unclaimed surfaces."""
+    with tempfile.TemporaryDirectory() as td:
+        a, b = Path(td) / "a.json", Path(td) / "b.json"
+        a.write_text(make_entry_point_slice("C1", "/orders"), encoding="utf-8")
+        b.write_text(make_entry_point_slice("C2", "/users"), encoding="utf-8")
+        out = Path(td) / "map"
+        proc = subprocess.run(ASSEMBLE + [str(a), str(b), "--out", str(out)],
+                              capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        m = load_model((out / "project-map.json").read_text(encoding="utf-8"))
+        triggers = [ep.trigger for ep in m.entry_points]
+        assert triggers.count("GET /health") == 1, triggers      # collapsed, not concatenated
+        assert [ep.id for ep in m.entry_points] == ["EP1", "EP2", "EP3"], triggers
+        assert all(ep.id for ep in m.entry_points)
+
+
+def test_entry_points_without_a_source_are_never_merged():
+    """No anchor → not identifiable. Merging on trigger text alone would delete a real surface, so
+    an unanchored row keeps its own id (the same rule `_dep_identity` uses for a nameless dep)."""
+    with tempfile.TemporaryDirectory() as td:
+        frag = Path(td) / "f.json"
+        frag.write_text(json.dumps({
+            "components": [{"id": "C1", "name": "A", "purpose": "p", "source": "a.py:1"}],
+            "entry_points": [{"kind": "CLI", "trigger": "run", "component": "C1"},
+                             {"kind": "CLI", "trigger": "run", "component": "C1"}],
+        }), encoding="utf-8")
+        out = Path(td) / "map"
+        proc = subprocess.run(ASSEMBLE + [str(frag), "--out", str(out)],
+                             capture_output=True, text=True)
+        assert proc.returncode == 0, proc.stderr
+        m = load_model((out / "project-map.json").read_text(encoding="utf-8"))
+        assert [ep.id for ep in m.entry_points] == ["EP1", "EP2"]
+
+
+def make_capability_fragment() -> str:
+    """A behavioral fragment plus the T4 rows a synthesis-time reconcile will link it to."""
+    return json.dumps({
+        "title": "Demo", "goal": "g",
+        "capabilities": [{"id": "CAP1", "name": "Ordering", "label": "core"},
+                         {"id": "CAP2", "name": "Ops", "label": "platform"}],
+        "use_cases": [{"id": "UC1", "name": "Place an order"},
+                      {"id": "UC2", "name": "Rotate the keys"}],
+        "components": [{"id": "C1", "name": "A", "purpose": "p", "source": "a.py:1"}],
+        "entry_points": [{"kind": "HTTP route", "trigger": "POST /orders",
+                          "source": "a.py:9", "component": "C1", "activation": "external"}],
+    })
+
+
+def test_reconcile_sets_capability_and_entry_points_and_survives_reassemble():
+    """The authoring path for both new fields. Neither can be written in the behavioral fragment:
+    `CAPn` is assigned at synthesis and `EPn` does not exist until assemble mints it, so reconcile
+    is the only mechanism — and it must re-apply on every assemble, like the other set fields."""
+    rec = {"set": [{"ids": ["UC1"], "capability": "CAP1", "entry_points": ["EP1"]},
+                   {"ids": ["UC2"], "capability": "CAP2"}]}
+    with tempfile.TemporaryDirectory() as td:
+        frag = Path(td) / "frag.json"
+        frag.write_text(make_capability_fragment(), encoding="utf-8")
+        rp = Path(td) / "reconcile.json"
+        rp.write_text(json.dumps(rec), encoding="utf-8")
+        out = Path(td) / "map"
+        for _ in range(2):                       # re-assemble: the assignment must not wash out
+            proc = subprocess.run(ASSEMBLE + [str(frag), "--out", str(out), "--reconcile", str(rp)],
+                                  capture_output=True, text=True)
+            assert proc.returncode == 0, proc.stderr
+            m = load_model((out / "project-map.json").read_text(encoding="utf-8"))
+            by_id = {u.id: u for u in m.use_cases}
+            assert by_id["UC1"].capability == "CAP1"
+            assert by_id["UC1"].entry_points == ["EP1"]
+            assert by_id["UC2"].capability == "CAP2"
+            assert by_id["UC2"].entry_points == []
+
+
+def test_reconcile_rejects_an_unknown_capability_or_entry_point():
+    """A typo must fail loudly at apply time. The EP case is the one that bites: ids are minted
+    from fragment order, so a stale reconcile file silently pointing at the wrong surface would
+    otherwise mis-claim a front door."""
+    with tempfile.TemporaryDirectory() as td:
+        frag = Path(td) / "frag.json"
+        frag.write_text(make_capability_fragment(), encoding="utf-8")
+        out = Path(td) / "map"
+        for bad, needle in (({"ids": ["UC1"], "capability": "CAP9"}, "not a defined capability"),
+                            ({"ids": ["UC1"], "entry_points": ["EP7"]}, "unknown entry point")):
+            rp = Path(td) / "reconcile.json"
+            rp.write_text(json.dumps({"set": [bad]}), encoding="utf-8")
+            proc = subprocess.run(ASSEMBLE + [str(frag), "--out", str(out), "--reconcile", str(rp)],
+                                  capture_output=True, text=True)
+            assert proc.returncode != 0, proc.stdout
+            assert needle in (proc.stdout + proc.stderr), proc.stdout + proc.stderr
+
+
+def test_reconcile_refuses_capability_on_a_non_use_case():
+    """`capability` targets a use case, exactly as `subsystem` targets a component."""
+    with tempfile.TemporaryDirectory() as td:
+        frag = Path(td) / "frag.json"
+        frag.write_text(make_capability_fragment(), encoding="utf-8")
+        rp = Path(td) / "reconcile.json"
+        rp.write_text(json.dumps({"set": [{"ids": ["C1"], "capability": "CAP1"}]}), encoding="utf-8")
+        out = Path(td) / "map"
+        proc = subprocess.run(ASSEMBLE + [str(frag), "--out", str(out), "--reconcile", str(rp)],
+                              capture_output=True, text=True)
+        assert proc.returncode != 0, proc.stdout
+        assert "can only be set on a use case" in (proc.stdout + proc.stderr)

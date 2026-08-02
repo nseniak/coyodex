@@ -25,7 +25,9 @@ FORMAT = "coyodex-map"
 
 # Each element array's required id prefix — structural (a `Cn` in `deps` is a shape error, caught at
 # load), while uniqueness/resolution stay semantic (validate_model).
-ID_SHAPE = re.compile(r"^(UC|HP|SD|SF|C|D|E|S|R)\d+$")
+# ORDER MATTERS: the alternation is first-match, so a multi-letter prefix must precede any prefix it
+# starts with — `CAP` before `C`, `EP` before `E` — else `CAP3` matches `C` and then fails on `AP3`.
+ID_SHAPE = re.compile(r"^(UC|HP|SD|SF|CAP|EP|C|D|E|S|R)\d+$")
 
 
 class ModelError(ValueError):
@@ -59,6 +61,18 @@ class UseCase:
     actors: list[str] = field(default_factory=list)  # the role ids that drive this use case (was a
                                                      # single free-text `actor` name in the pre-role-id format)
     trigger_outcome: str = ""
+    capability: str | None = None    # CAPn — the capability this use case belongs to. Symmetric with
+                                     # Component.subsystem / Entity.subdomain: authored once, and every
+                                     # capability-derived view (the overlay, the Use-cases grouping, the
+                                     # Happy-Path membership rule) reads it rather than re-deciding.
+    entry_points: list[str] = field(default_factory=list)  # EPn — the TRIGGER arm of entry-point
+                                     # claiming: the front door(s) an actor hits to START this use case.
+                                     # 0, 1, or a few; EMPTY IS LEGITIMATE (the front door may sit inside
+                                     # a coarse T4 row a sibling already names, or the row may not be
+                                     # recorded at that granularity). The other arm — surfaces the
+                                     # scenario merely PASSES THROUGH — stays derived from the flow's
+                                     # component reach, which remains the primary claim (see
+                                     # validate_model's front-door family).
 
 
 @dataclass
@@ -71,11 +85,18 @@ class HappyStep:
 
 @dataclass
 class Group:
-    """A subsystem (S) or subdomain (SD) — same shape, two forests."""
+    """A subsystem (S), a subdomain (SD), or a capability (CAP) — same shape, three forests."""
     id: str
     name: str
     purpose: str = ""
     parent: str | None = None
+    label: str = ""            # CAPABILITY-ONLY: core | supporting | platform (grammar.CAP_LABELS).
+                               # An authored judgement about the USE CASES in this capability — it is
+                               # what makes Happy-Path membership a rule instead of a written record
+                               # per off-spine use case. Nothing derives it: the touch-count primitive
+                               # says which elements a capability reaches, never whether a component or
+                               # a subsystem is "platform". `validate` blocks it on a subsystem or a
+                               # subdomain, which have no such judgement to carry.
     source: str | None = None  # bare path anchor to the group's home: a file `path:line`, or a
                                # directory ref ending in `/` (like Component.source / Entity.source)
     confidence: str = ""
@@ -148,7 +169,16 @@ class RunRow:                        # T3
 
 @dataclass
 class EntryPoint:                    # T4
-    kind: str
+    id: str = ""                     # EPn — MINTED BY `assemble`, never authored in a fragment. Entry
+                                     # points are identified by CONTENT (their `source` anchor), not by
+                                     # a per-agent id range: change-impact already keys them that way
+                                     # (`ep:{source}`, stable across rebuilds), harvest agents already
+                                     # juggle C/D/E/SF ranges, and a 4th range would make an overlap a
+                                     # hard build failure for ids nobody needs before synthesis. So
+                                     # fragments leave this empty, assemble dedups by source and mints
+                                     # ids in argument order, and `use_case.entry_points` — authored at
+                                     # synthesis via `reconcile`, once T4 exists — is what references them.
+    kind: str = ""
     trigger: str = ""
     source: str = ""                 # md link to the code entity — where the entry point LIVES
     component: str = ""              # the owning C id
@@ -468,6 +498,9 @@ class ProjectModel:
     built: str | None = None
     roles: list[Role] = field(default_factory=list)
     glossary: list[GlossaryRow] = field(default_factory=list)
+    capabilities: list[Group] = field(default_factory=list)  # the use-case forest — the container
+                                     # precedes its members here exactly as `subsystems` precedes
+                                     # `components` and `subdomains` precedes `entities`.
     use_cases: list[UseCase] = field(default_factory=list)
     happy_path: list[HappyStep] = field(default_factory=list)
     subsystems: list[Group] = field(default_factory=list)
@@ -502,9 +535,14 @@ class ProjectModel:
 
 # The element arrays that DEFINE ids, with each one's required prefix. `S` must not match `SD` (both
 # start with "S"), so validation matches the WHOLE id against ID_SHAPE and then the exact prefix.
+# `entry_points` is deliberately ABSENT: its ids are minted by `assemble` from content (see
+# EntryPoint.id), so a fragment carries none and there is nothing for the load-time shape check —
+# or the merge-time duplicate-id check — to read. Registering it would turn every pre-assembly
+# fragment into a shape error and every post-assembly rebuild into a false duplicate.
 ID_ARRAYS: dict[str, str] = {
-    "use_cases": "UC", "happy_path": "HP", "subsystems": "S", "components": "C",
-    "deps": "D", "subdomains": "SD", "entities": "E", "roles": "R", "subflows": "SF",
+    "use_cases": "UC", "happy_path": "HP", "capabilities": "CAP", "subsystems": "S",
+    "components": "C", "deps": "D", "subdomains": "SD", "entities": "E", "roles": "R",
+    "subflows": "SF",
 }
 
 

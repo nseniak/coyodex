@@ -33,7 +33,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
-from coyodex.model import Component, Dep, Entity, FlowStep, ProjectModel, all_elements
+from coyodex.model import Component, Dep, Entity, FlowStep, ProjectModel, UseCase, all_elements
 from coyodex.validate_analysis import check_hierarchy
 
 
@@ -43,9 +43,16 @@ class ReconcileError(Exception):
 
 
 # field name → (target element type, human label) — a `set` field is legal only on its owner type.
+# `capability` and `entry_points` target a USE CASE, and both exist here for the same reason the
+# others do: they are synthesis-time assignments over ~every element of their kind, and the ids they
+# reference (`CAPn`, and especially `EPn`, which assemble mints from content) do not exist when the
+# behavioral fragment is authored. Hand-writing them into fragments is the circle `reconcile` was
+# built to break.
 _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     "subsystem": (Component, "component"),
     "subdomain": (Entity, "entity"),
+    "capability": (UseCase, "use case"),
+    "entry_points": (UseCase, "use case"),
     "runs_in": (Component, "component"),
     "bucket": (Dep, "dependency"),
 }
@@ -56,6 +63,8 @@ class SetDirective:
     ids: list[str]
     subsystem: str | None = None
     subdomain: str | None = None
+    capability: str | None = None
+    entry_points: list[str] | None = None
     runs_in: list[str] | None = None
     bucket: str | None = None
 
@@ -171,13 +180,15 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         if not ids:
             raise ReconcileError(f"{label}: set[{i}].ids: must name at least one element")
         sd = SetDirective(ids=ids)
-        for fld in ("subsystem", "subdomain", "bucket"):
+        for fld in ("subsystem", "subdomain", "capability", "bucket"):
             if fld in d:
                 if not isinstance(d[fld], str):
                     raise ReconcileError(f"{label}: set[{i}].{fld}: expected a string")
                 setattr(sd, fld, d[fld])
         if "runs_in" in d:
             sd.runs_in = _as_str_list(d["runs_in"], f"{label}: set[{i}].runs_in")
+        if "entry_points" in d:
+            sd.entry_points = _as_str_list(d["entry_points"], f"{label}: set[{i}].entry_points")
         if not sd.assigned_fields():
             raise ReconcileError(f"{label}: set[{i}]: assigns no field — give at least one of "
                                  f"{', '.join(_SET_FIELD_OWNER)}")
@@ -254,6 +265,8 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
     elements = all_elements(m)
     defined = set(elements) | {g.id for g in m.happy_path}
     units = {d.unit for d in m.deployment}
+    cap_ids = {c.id for c in m.capabilities}
+    ep_ids = {ep.id for ep in m.entry_points if ep.id}
     hier_parents: dict[str, str] = {}                # touched child → intended parent, for check_hierarchy
     for si, sd in enumerate(rec.sets):
         for eid in sd.ids:
@@ -271,6 +284,21 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                     hier_parents[eid] = sd.subsystem  # type: ignore[assignment]
                 elif fld == "subdomain":
                     hier_parents[eid] = sd.subdomain  # type: ignore[assignment]
+                elif fld == "capability":
+                    # A capability is a Group like a subsystem, but `check_hierarchy` reads the
+                    # child's own kind to pick the expected parent prefix — a use case is not a
+                    # component, so resolve it here instead: the target must be a defined CAP id.
+                    cap = (sd.capability or "").strip()
+                    if cap not in cap_ids:
+                        problems.append(f"reconcile set[{si}] {eid}: capability '{cap}' is not a "
+                                        f"defined capability (a `CAPn` in `capabilities[]`)")
+                elif fld == "entry_points":
+                    bad_eps = [e for e in (sd.entry_points or []) if e not in ep_ids]
+                    if bad_eps:
+                        problems.append(f"reconcile set[{si}] {eid}: entry_points names unknown entry "
+                                        f"point(s): {', '.join(bad_eps)} — ids are minted by "
+                                        f"`assemble` from the harvested T4 rows, so author them "
+                                        f"against the ids THIS assemble produces")
                 elif fld == "runs_in":
                     bad = [u for u in (sd.runs_in or []) if u not in units]
                     if bad:
@@ -329,6 +357,12 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             if sd.subdomain is not None and isinstance(el, Entity):
                 el.subdomain = sd.subdomain
                 set_counts["subdomain"] += 1
+            if sd.capability is not None and isinstance(el, UseCase):
+                el.capability = sd.capability
+                set_counts["capability"] += 1
+            if sd.entry_points is not None and isinstance(el, UseCase):
+                el.entry_points = list(sd.entry_points)    # REPLACE the list → idempotent re-run
+                set_counts["entry_points"] += 1
             if sd.runs_in is not None and isinstance(el, Component):
                 el.runs_in = list(sd.runs_in)              # REPLACE the list → idempotent re-run (S9c)
                 set_counts["runs_in"] += 1

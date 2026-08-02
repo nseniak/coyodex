@@ -14,8 +14,8 @@ non-exempt diagram, proposes a split:
 
 Every proposal prints as a Direct-map-change block (exact field edits, the next free S id
 precomputed). Proposals are STARTING POINTS for judgment, not ready-to-apply facts — and
-coverage/Q are split-context numbers only: a capability-first ROOT legitimately scores a
-low top-cut Q (modularity rewards tech-tier cuts; do not "fix" a capability root to please
+coverage/Q are split-context numbers only: a product-area-first ROOT legitimately scores a
+low top-cut Q (modularity rewards tech-tier cuts; do not "fix" a product-area root to please
 the metric). Advisory tool: exit 0 always. Stdlib-only.
 """
 from __future__ import annotations
@@ -154,7 +154,7 @@ def _report(m: ProjectModel) -> str:
         out.append("")
         out.append(f"C→C graph: {len(pairs)} pairs across {n} components; top-cut intra-group "
                    f"share {cov:.2f}. (No Q here on purpose — modularity rewards tech-tier cuts; "
-                   f"a capability root legitimately scores lower.)")
+                   f"a product-area root legitimately scores lower.)")
         if cross:
             out.append("  busiest cross-subsystem seams:")
             for (a, b), w in cross[:6]:

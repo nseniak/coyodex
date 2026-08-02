@@ -489,6 +489,36 @@ def test_tech_on_subdomain_blocks_and_on_subsystem_is_clean() -> None:
     assert any("SD1" in p and "subsystem field" in p for p in problems_of(m))
 
 
+# --- label on capabilities (plan/60-capabilities Step 1) --------------------------------
+
+def test_label_on_a_capability_is_clean_and_on_a_subsystem_blocks() -> None:
+    """The mirror of the `tech` rule: one Group dataclass, three forests. `label` is an authored
+    judgement about USE CASES; on a subsystem it would assert that some CODE is platform machinery,
+    and nothing derives or checks such a claim."""
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", label="core")]
+    m.use_cases[0].capability = "CAP1"
+    assert not any("label" in p.lower() for p in problems_of(m))
+    m.subsystems = [Group(id="S1", name="Core", purpose="core", label="platform")]
+    m.components[0].subsystem = "S1"
+    assert any("S1" in p and "capability field" in p for p in problems_of(m))
+
+
+def test_label_outside_the_closed_vocabulary_blocks() -> None:
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", label="essential")]
+    m.use_cases[0].capability = "CAP1"
+    assert any("CAP1" in p and "unknown `label`" in p for p in problems_of(m))
+
+
+def test_tech_on_a_capability_blocks() -> None:
+    """A capability groups use cases, so it has no stack — same argument as the subdomain."""
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", purpose="orders", tech="Python")]
+    m.use_cases[0].capability = "CAP1"
+    assert any("CAP1" in p and "subsystem field" in p for p in problems_of(m))
+
+
 def test_bad_tech_source_anchor_blocks_and_cited_joins_check_sources() -> None:
     m = make_valid_model()
     m.subsystems = [Group(id="S1", name="Core", purpose="core", tech="Go",
@@ -2868,3 +2898,98 @@ def test_the_inert_record_phrase_has_exactly_one_producer():
            / "tools" / "coyodex" / "validate_model.py").read_text(encoding="utf-8")
     assert src.count("currently suppressing nothing") == 1, (
         "assertion 24 keys on this phrase; a second producer makes its 0 ambiguous")
+
+
+# --- capability-level spine membership + two-arm entry-point claiming (plan/60 Step 3) ----------
+
+def make_capability_model() -> ProjectModel:
+    """Two capabilities, one core and one supporting, each with an on-spine and an off-spine member."""
+    m = make_valid_model()
+    m.capabilities = [Group(id="CAP1", name="Ordering", label="core"),
+                      Group(id="CAP2", name="Reporting", label="supporting")]
+    m.use_cases = [UseCase(id="UC1", name="Place order", actors=["R1"], capability="CAP1"),
+                   UseCase(id="UC2", name="Amend order", actors=["R1"], capability="CAP1"),
+                   UseCase(id="UC3", name="Read report", actors=["R1"], capability="CAP2")]
+    m.happy_path = [HappyStep(id="HP1", title="Place", uc="UC1")]
+    m.flows = [Flow(uc=u.id, title=u.name, steps=[FlowStep(n=1, src="R1", dst="C1", phrase="does")])
+               for u in m.use_cases]
+    return m
+
+
+def test_a_core_capability_off_the_spine_warns_once_not_per_use_case() -> None:
+    m = make_capability_model()
+    m.happy_path = [HappyStep(id="HP1", title="Read", uc="UC3")]   # only the supporting one walks
+    ws = warnings_of(m)
+    assert any("CAP1" in w and "core capability that no Happy-Path step reaches" in w for w in ws)
+    # the two CAP1 members are NOT each nagged about — that is the whole point of moving altitude
+    assert not any("off the Happy-Path spine and unrecorded" in w for w in ws)
+
+
+def test_off_spine_members_of_a_core_capability_are_silent_when_the_capability_walks() -> None:
+    """UC2 is off the walk and produces no warning — accepted, and counted instead."""
+    m = make_capability_model()
+    ws = warnings_of(m)
+    assert not any("UC2" in w and "spine" in w for w in ws)
+    assert validate_model_mod.completeness_counts(m)["off_spine_in_core_capabilities"] == 1
+
+
+def test_a_spine_step_in_a_non_core_capability_warns_and_can_be_recorded() -> None:
+    """The converse direction — the one a single-direction check cannot produce."""
+    m = make_capability_model()
+    m.happy_path.append(HappyStep(id="HP2", title="Read", uc="UC3"))
+    assert any("HP2" in w and "not core" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Happy Path coverage",
+                             body="HP2: the operator reads the report as part of the main walk")]
+    assert not any("HP2" in w and "not core" in w for w in warnings_of(m))
+
+
+def test_a_non_core_capability_holding_off_spine_use_cases_needs_one_record() -> None:
+    m = make_capability_model()
+    ws = warnings_of(m)
+    assert any("CAP2" in w and "off-spine use case" in w for w in ws)
+    m.extras = [ExtraSection(heading="Happy Path coverage",
+                             body="CAP2: reporting is supporting work, deliberately off the walk")]
+    assert not any("CAP2" in w and "off-spine use case" in w for w in warnings_of(m))
+
+
+def test_without_capabilities_the_per_use_case_off_spine_check_still_runs() -> None:
+    """Additivity: a map that has not adopted the grouping keeps exactly the old behaviour."""
+    m = make_capability_model()
+    m.capabilities = []
+    for u in m.use_cases:
+        u.capability = None
+    ws = warnings_of(m)
+    assert sum("off the Happy-Path spine and unrecorded" in w for w in ws) == 2   # UC2, UC3
+
+
+def make_entry_point_model() -> ProjectModel:
+    """C2 owns an external surface and NO flow reaches it — the unclaimed case."""
+    m = make_valid_model()
+    m.components.append(Component(id="C2", name="Admin", purpose="admin", source="src/adm.py:1"))
+    m.entry_points = [EntryPoint(id="EP1", kind="HTTP route", trigger="GET /admin",
+                                 source="src/adm.py:9", component="C2", activation="external")]
+    return m
+
+
+def test_the_trigger_arm_claims_a_surface_no_flow_reaches() -> None:
+    """Two arms: the flow's component reach is primary, and a use case naming the entry point
+    claims it too — which is what lets the cross-check run before any tracing exists."""
+    m = make_entry_point_model()
+    assert any("C2" in w and "unclaimed by any use case" in w for w in warnings_of(m))
+    m.use_cases[0].entry_points = ["EP1"]
+    assert not any("C2" in w and "unclaimed by any use case" in w for w in warnings_of(m))
+
+
+def test_self_activated_surfaces_are_no_longer_exempt() -> None:
+    """A cron used to be silently exempt, which hid whole background capabilities. Now it is a
+    decision — and the warning says plainly that a record is often the honest answer."""
+    m = make_entry_point_model()
+    m.entry_points = [EntryPoint(id="EP1", kind="cron job", trigger="nightly rollup",
+                                 source="src/adm.py:9", component="C2", activation="self")]
+    def unclaimed(ws: list[str]) -> list[str]:   # not the cadence advisory, which also says "self-activated"
+        return [w for w in ws if "no use case reaches" in w]
+    ws = warnings_of(m)
+    assert any("C2" in w and "self-activated" in w for w in unclaimed(ws))
+    assert any("often has no actor to claim it" in w for w in ws)
+    m.extras = [ExtraSection(heading="Unclaimed surfaces", body="C2: nightly rollup, no actor")]
+    assert not unclaimed(warnings_of(m))

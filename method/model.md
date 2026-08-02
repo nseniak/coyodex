@@ -20,12 +20,16 @@ Every element has a stable, unique ID by prefix:
 | Prefix | Element |
 |---|---|
 | `UC` | Use case |
+| `CAP` | Capability — a group of use cases and/or nested capabilities (optional) |
 | `HP` | Happy Path step (a use-case occurrence — a position in the ordered walk) |
 | `C` | Component |
 | `S` | Subsystem — a group of components and/or nested subsystems (optional) |
 | `D` | External dependency |
 | `E` | Domain-model entity |
 | `SD` | Domain subdomain — a group of entities and/or nested subdomains (optional) |
+| `SF` | Sub-flow — a named, reusable step sequence shared by ≥2 flows |
+| `R` | Role — a primary actor |
+| `EP` | Entry point. **Minted by `assemble` from content, never authored** — fragments leave it empty, assembly dedups T4 rows by source anchor and numbers the survivors. Change-impact keeps its own content key (`ep:{source}`), which is stable across rebuilds where a minted number is not. |
 
 An ID is a **prefix + digits only** — `C1`, `S12`, `SD3` — never a letter-suffixed variant like
 `S12a`. To split a subsystem into sub-subsystems, give each a **new numeric `S` ID** and nest it
@@ -48,7 +52,11 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
 
   "roles":       [ { "id": "Rn", "name", "kind": "human|service", "wants", "drives" } ],
   "glossary":    [ { "term", "meaning", "source": "<path:line|path/|null>" } ],
-  "use_cases":   [ { "id": "UCn", "name", "actors": ["Rn", ...], "trigger_outcome" } ],
+  "capabilities": [ { "id": "CAPn", "name", "purpose", "parent": "CAPn|null",
+                      "label": "core|supporting|platform" } ],  // capability-only; blocked on S/SD
+  "use_cases":   [ { "id": "UCn", "name", "actors": ["Rn", ...], "trigger_outcome",
+                     "capability": "CAPn|null",                 // assigned at synthesis via reconcile
+                     "entry_points": ["EPn", …] } ],            // the TRIGGER arm; empty is legitimate
   "happy_path": [ { "id": "HPn", "title", "uc": "UCn", "why": "<prerequisite or null>" } ],
 
   "subsystems":  [ { "id": "Sn",  "name", "purpose", "parent": "Sn|null", "source", "confidence",
@@ -66,7 +74,8 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "alternative": "<fallback used instead, and when>",
                      "evidence": [ { "file": "<path:line>", "why" }, … ], "extra": {…} } ],
   "run_commands":  [ { "action", "command", "source" } ],                       // T3
-  "entry_points":  [ { "kind": "<seeded-open vocab — see the entry_points[].kind bullet>",
+  "entry_points":  [ { "id": "EPn",   // MINTED BY assemble from content — leave it out of a fragment
+                       "kind": "<seeded-open vocab — see the entry_points[].kind bullet>",
                        "trigger", "source": "<path:line>", "component": "Cn",
                        "activation": "<self|external|'' → inferred from kind>",
                        "runs_in": [ "<deployment[].unit>", … ],   // optional: a self-started loop's PRECISE host unit(s); else its component's runs_in
@@ -240,9 +249,15 @@ Semantics, stated on the fields:
   A deliberately-kept flow duplication is
   recorded under an **"Accepted duplications"** heading as `UCa & UCb: <why>`. Two more machine-read
   headings serve the **use-case & Happy-Path completeness** advisories: **"Unclaimed surfaces"**
-  (`Cn: <why>` lines — this component's externally-activated entry points are a deliberate
-  ops/debug/infra surface, not a missing use case) and **"Happy Path coverage"** (`UCn: <why>` — a
-  use case deliberately off the spine; `Rn: <why>` — a role deliberately without a spine position).
+  (`Cn: <why>` lines — this component's entry points are a deliberate ops/debug/infra surface, not a
+  missing use case; self-activated rows land here too, since a cron often has no actor able to claim
+  it) and **"Happy Path coverage"**, which now carries four subjects: `CAPn: <why>` — a core
+  capability deliberately off the spine, OR a non-core capability whose off-spine members are
+  deliberate (ONE line covers its whole membership); `HPn: <why>` — a spine step in a non-core
+  capability that belongs on the walk anyway; `UCn: <why>` — a use case deliberately off the spine
+  (the pre-capability form, still read); `Rn: <why>` — a role deliberately without a spine position.
+  A record silences exactly one `(check, id)` pair — `CAPn` and `HPn` are different judgements about
+  the same capability and never substitute for each other.
   These two read ids from **line-leading tokens only, one id per line, followed by a separator**
   — write `C713: <why>` / `- R4: <why>` (an `UC15 (name) — why` form also reads) — so prose that
   merely mentions another id, or a sentence that starts with one, never silences it. A pair form
@@ -255,7 +270,7 @@ Semantics, stated on the fields:
   (no `persists`/`writes` `C→E` edge): a read-only projection, an external type, a value object.
   The two never collide — each rule filters the heading by its own id prefix, so a `Cn` line can
   never quiet an ownership gap and an `En` line can never quiet a writer gap. All
-  six headings are machine-read by `validate`,
+  of these headings are machine-read by `validate`,
   so an adjudicated advisory goes quiet instead of re-firing forever.
 - **`edges` is ONE project-wide backbone list** (`C↔C`, `C↔D`, `C→E`; `E↔E` stays on the cards).
   Duplicated authored rows are preserved as authored (the graph views de-duplicate by

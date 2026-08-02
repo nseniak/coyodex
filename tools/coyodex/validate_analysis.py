@@ -35,11 +35,21 @@ def _is_subsystem_id(i: str) -> bool:  # an `S` id, never a subdomain (`SD1` als
 
 def _expected_parent_kind(child: str) -> str:
     """The KIND a child's parent must be: entities (`E`) and subdomains (`SD`) nest under a SUBDOMAIN;
-    components (`C`) and subsystems (`S`) nest under a SUBSYSTEM."""
+    use cases (`UC`) and capabilities (`CAP`) nest under a CAPABILITY; components (`C`) and
+    subsystems (`S`) nest under a SUBSYSTEM.
+    Prefix order matters: `CAP1` also starts with "C" and `EP1` with "E", so the multi-letter
+    namespaces are tested first (an entry point never has a parent, but it must not be mistaken
+    for an entity if one is ever passed in)."""
+    if child.startswith(("CAP", "UC")):
+        return "capability"
+    if child.startswith("EP"):
+        return "subsystem"       # entry points do not nest; never treat `EP1` as an entity
     return "subdomain" if child.startswith(("E", "SD")) else "subsystem"
 
 
 def _is_parent_kind(par: str, kind: str) -> bool:  # par's id-prefix matches the expected parent kind
+    if kind == "capability":
+        return par.startswith("CAP")
     return par.startswith("SD") if kind == "subdomain" else _is_subsystem_id(par)
 
 

@@ -600,19 +600,19 @@ def test_partial_overlap_keeps_the_arrow_from_the_non_hosting_unit():
     assert list(links) == [(uid_of["vite-dev"], uid_of["backend"])]
 
 
-# --- capability containers: grouping the overview above the readable cap -------------------------
+# --- product-area containers: grouping the overview above the readable cap -------------------------
 
 def make_big_deploy_model(n_connectors: int = 14) -> ProjectModel:
-    """A monolith shape: two all-capability processes plus a fleet of single-capability satellites."""
+    """A monolith shape: two all-area processes plus a fleet of single-area satellites."""
     m = ProjectModel(title="Big", goal="g")
     m.subsystems = [Group(id="S1", name="Connectors"), Group(id="S2", name="Billing"),
                     Group(id="S3", name="Core")]
     m.components, m.deployment = [], []
-    for i in range(n_connectors):                       # one capability each -> one container
+    for i in range(n_connectors):                       # one product area each -> one container
         m.components.append(Component(id=f"C{i+1}", name=f"conn{i}", subsystem="S1",
                                       source=f"conn/{i}.py:1", runs_in=[f"conn-{i}"]))
         m.deployment.append(DeploymentRow(unit=f"conn-{i}"))
-    for j, unit in enumerate(("api", "bot")):           # every capability -> stays its own box
+    for j, unit in enumerate(("api", "bot")):           # every product area -> stays its own box
         for k, sub in enumerate(("S1", "S2", "S3")):
             m.components.append(Component(id=f"M{j}{k}", name=f"{unit}-{sub}", subsystem=sub,
                                           source=f"{unit}/{sub}.py:1", runs_in=["api", "bot"]))
@@ -626,7 +626,7 @@ def test_small_maps_are_not_grouped_at_all():
     assert G.deployment_groups(g, G._process_unit_names(g)) == ({}, {})
 
 
-def test_same_capability_processes_collapse_into_one_named_container():
+def test_same_product_area_processes_collapse_into_one_named_container():
     m = make_big_deploy_model()
     g = model_to_graph(m)
     groups, group_of = G.deployment_groups(g, G._process_unit_names(g))
@@ -637,9 +637,9 @@ def test_same_capability_processes_collapse_into_one_named_container():
     assert group_of["conn-3"] == gid
 
 
-def test_a_multi_capability_process_stays_its_own_box():
+def test_a_multi_product_area_process_stays_its_own_box():
     # `api`/`bot` run everything. Folding them into one container produced a box labelled with seven
-    # capability names while hiding the two processes a reader most wants to see.
+    # product-area names while hiding the two processes a reader most wants to see.
     m = make_big_deploy_model()
     g = model_to_graph(m)
     _, group_of = G.deployment_groups(g, G._process_unit_names(g))

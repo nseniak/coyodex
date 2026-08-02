@@ -23,7 +23,7 @@ import ast
 import json
 import re
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Container, Sequence
 from pathlib import Path
 
 from coyodex import balance_lib, grammar
@@ -47,6 +47,7 @@ from coyodex.model import (
     MessagingRow,
     ModelError,
     ProjectModel,
+    UseCase,
     all_elements,
     expanded_flow_steps,
     load_model,
@@ -520,15 +521,32 @@ def external_entry_points(m: ProjectModel) -> list[EntryPoint]:
             if grammar.effective_activation(ep.activation, ep.kind) == "external"]
 
 
+def flow_endpoint_ids_by_uc(m: ProjectModel) -> dict[str, set[str]]:
+    """Per use case, the element ids its flow touches — sub-flow references expanded
+    (`model.expanded_flow_steps`), so machinery hidden behind an `SFn` is never invisible.
+
+    The per-use-case grain is the primitive everything capability-shaped is built from: union it
+    over a capability's members and you have that capability's element set; invert it and you have
+    how many capabilities touch an element. Use cases with NO flow are absent (not empty) — an
+    untraced use case must stay distinguishable from one whose flow touches nothing."""
+    out: dict[str, set[str]] = {}
+    for f in m.flows:
+        if not f.uc:
+            continue
+        ends = out.setdefault(f.uc, set())
+        for st in expanded_flow_steps(m, f):
+            for end in (st.src, st.dst):
+                if grammar.is_step_id(end):
+                    ends.add(end)
+    return out
+
+
 def flow_endpoint_ids(m: ProjectModel) -> set[str]:
     """Every element id appearing as a step endpoint in any flow, sub-flow references expanded
     (`model.expanded_flow_steps`) — what the traced use cases actually touch."""
     out: set[str] = set()
-    for f in m.flows:
-        for st in expanded_flow_steps(m, f):
-            for end in (st.src, st.dst):
-                if grammar.is_step_id(end):
-                    out.add(end)
+    for ends in flow_endpoint_ids_by_uc(m).values():
+        out |= ends
     return out
 
 
@@ -539,27 +557,136 @@ def flow_touched_entities(m: ProjectModel) -> set[str]:
     return {end for end in flow_endpoint_ids(m) if end.startswith("E")}
 
 
+# ── the capability touch primitive (plan/60-capabilities Step 2) ──────────────────────────────────
+# ONE implementation, shared by the completeness checks, the viewer transport and the eval profile.
+# Scope note: this covers whatever the flows actually touch — components, and entities/deps where
+# the trace authored them as steps. An earlier revision restricted it to components, justified by
+# "0 of 35 entities are flow endpoints" on the mcpolis fixture; that number measures a fixture
+# `validate` itself flags (its own no-entity-in-any-flow canary fires there), not a structural fact.
+# This repo's own map has 12 of 74 entities and 9 of 18 deps as flow endpoints.
+#
+# What this primitive does NOT do: decide that a component is "platform machinery". Measured on the
+# reference map, the maximum spread was 4 capabilities of 7, so no threshold separates machinery
+# from product, and that classification was dropped rather than tuned. Touch counts answer "which
+# capabilities reach this element" and nothing more.
+
+def capability_members(m: ProjectModel) -> dict[str, set[str]]:
+    """Per capability, the use cases it holds INCLUDING those of its nested capabilities.
+
+    Capabilities are a forest like subsystems and subdomains, so a parent may hold no use case
+    directly and still own everything under it. Reading direct membership only made such a parent
+    look empty — its overlay lit nothing, and it counted as 'untraced', which is the one signal that
+    is supposed to mean a real part of the product was never walked."""
+    kids: dict[str, list[str]] = {}
+    for c in m.capabilities:
+        if c.parent:
+            kids.setdefault(c.parent, []).append(c.id)
+    direct: dict[str, set[str]] = {c.id: set() for c in m.capabilities}
+    for u in m.use_cases:
+        if (cap := (u.capability or "").strip()) in direct:
+            direct[cap].add(u.id)
+
+    def walk(cid: str, seen: set[str]) -> set[str]:
+        if cid in seen:                      # cycle-safe (a cycle is validate's problem, not ours)
+            return set()
+        seen = seen | {cid}
+        out = set(direct.get(cid, ()))
+        for k in kids.get(cid, ()):
+            out |= walk(k, seen)
+        return out
+
+    return {c.id: walk(c.id, set()) for c in m.capabilities}
+
+
+def capability_elements(m: ProjectModel) -> dict[str, set[str]]:
+    """Per capability, the element ids its use cases' flows touch — its whole subtree's union.
+    Every DEFINED capability appears, including one whose use cases are all untraced: that empty
+    set is the signal that a real part of the product was never traced, so it must not vanish."""
+    by_uc = flow_endpoint_ids_by_uc(m)
+    return {cap: {e for uc in ucs for e in by_uc.get(uc, set())}
+            for cap, ucs in capability_members(m).items()}
+
+
+def element_capabilities(m: ProjectModel) -> dict[str, set[str]]:
+    """The inverse: per element id, the capabilities whose flows touch it. Absent = touched by no
+    capability, which means untraced or reached by no flow — reported as a number, never a warning."""
+    out: dict[str, set[str]] = {}
+    for cap, ends in capability_elements(m).items():
+        for eid in ends:
+            out.setdefault(eid, set()).add(cap)
+    return out
+
+
+def triggered_entry_point_ids(m: ProjectModel) -> set[str]:
+    """Entry-point ids named by some use case's `entry_points` — the TRIGGER arm of claiming."""
+    return {e.strip() for u in m.use_cases for e in u.entry_points if e.strip()}
+
+
 def unclaimed_external_entry_points(m: ProjectModel) -> list[EntryPoint]:
-    """Externally-activated entry points whose owning component appears as an endpoint in NO
-    flow — each is a missing use case or a dead surface. Empty when the map has no flows yet
-    (additivity: an untraced map is 'not yet traced', not 'all unclaimed'). Rows whose component
-    is empty (its own advisory) or dangling (the blocking reference check owns those) are
-    skipped. Shared by the validate advisory and the eval profile — one implementation."""
-    if not m.flows:
+    """Externally-activated entry points that NEITHER arm of claiming reaches.
+
+    Two arms, because one cannot carry it. A use case relates to the entry surface in two different
+    ways, and an earlier revision of this design conflated them:
+
+      * **trigger** — the front door an actor hits to START the use case. Authored on the use case
+        (`entry_points`), so it can be cross-checked right after the harvest, before any tracing.
+      * **traversal** — surfaces the scenario merely passes THROUGH. Derived from the flow's
+        component reach, and this arm stays PRIMARY.
+
+    Making the authored link the only test inverts on real maps. On this repo's own map ~16 of 61
+    entry points are not triggers of anything a person does (fetches the browser app makes after the
+    reader already clicked, plus middleware); a per-entry-point trigger test reports every one as a
+    missing use case. On the mcpolis map the harvest recorded route GROUPS — the whole SPA is one
+    row — so a dozen use cases would have to name zero surfaces, which the forward rule reads as
+    "stale docs, drop it". The signal swings ~5x on granularity nothing regulates, so the derived
+    arm carries the check and the authored arm refines it.
+
+    Empty when the map has no flows AND no use case names a surface (additivity: an untraced map is
+    'not yet traced', not 'all unclaimed'). Rows whose component is empty (its own advisory) or
+    dangling (the blocking reference check owns those) are skipped."""
+    triggered = triggered_entry_point_ids(m)
+    if not m.flows and not triggered:
         return []
     claimed = flow_endpoint_ids(m)
     comp_ids = {c.id for c in m.components}
     return [ep for ep in external_entry_points(m)
-            if (comp := ep.component.strip()) and comp in comp_ids and comp not in claimed]
+            if (comp := ep.component.strip()) and comp in comp_ids and comp not in claimed
+            and not (ep.id and ep.id in triggered)]
 
 
-def unclaimed_surface_components(m: ProjectModel) -> list[tuple[str, list[EntryPoint]]]:
-    """Components with externally-activated entry points no use-case flow reaches, MINUS the ones
-    already adjudicated (a `Cn` recorded under an 'Unclaimed surfaces' heading) or folded under a
-    recorded 'Coverage exceptions' dir — i.e. the surfaces that would still WARN. Shared by the
-    completeness warning and `validate --emit-unclaimed`, which prints this same set as a ready
-    extras block so the lead adjudicates ~a hundred surfaces at once instead of hand-typing them."""
-    if not (m.entry_points and m.flows):
+def unclaimed_self_entry_points(m: ProjectModel) -> list[EntryPoint]:
+    """Self-activated entry points (crons, workers, consumers, startup hooks) that no flow reaches.
+
+    These used to be exempt automatically, on the reasoning that nobody outside asks so no use case
+    has to claim them. That exemption hid a whole class: a scheduled job IS an actor with a goal by
+    the method's own Roles rule, and a background capability could be missing from the use-case list
+    with no signal at all.
+
+    But the honest half matters too, and the warning says it: for a cron or a startup hook there is
+    often NO actor to claim it, so the answer is frequently a recorded line rather than a use case.
+    Dropping the exemption makes that a decision instead of a silence."""
+    if not m.flows and not triggered_entry_point_ids(m):
+        return []
+    triggered = triggered_entry_point_ids(m)
+    claimed = flow_endpoint_ids(m)
+    comp_ids = {c.id for c in m.components}
+    return [ep for ep in m.entry_points
+            if grammar.effective_activation(ep.activation, ep.kind) == "self"
+            and (comp := ep.component.strip()) and comp in comp_ids and comp not in claimed
+            and not (ep.id and ep.id in triggered)]
+
+
+def _group_unclaimed_by_component(m: ProjectModel, eps: list[EntryPoint]
+                                  ) -> list[tuple[str, list[EntryPoint]]]:
+    """Group unclaimed entry points by owning component, MINUS the ones already adjudicated (a `Cn`
+    recorded under an 'Unclaimed surfaces' heading) or folded under a recorded 'Coverage exceptions'
+    dir — i.e. the surfaces that would still WARN.
+
+    The escape stays keyed on the owning component's directory, which is coarser than the finding
+    now is: with the trigger arm in play a single component can hold both a claimed and an unclaimed
+    surface. That is deliberate — the escape exists to let an operator retire a whole area in one
+    line, and narrowing it to the entry point would put the wall of records back."""
+    if not (m.entry_points and eps):
         return []
     accepted = _recorded_ids(m, "unclaimed surfaces", ("C",))
     cov_dirs = _recorded_coverage_dirs(m)  # a 'Coverage exceptions' dir also silences its components
@@ -569,16 +696,67 @@ def unclaimed_surface_components(m: ProjectModel) -> list[tuple[str, list[EntryP
             rel = strip_anchor(c.source).rstrip("/")
             comp_dir[c.id] = rel.rsplit("/", 1)[0] if "/" in rel else rel
     by_comp: dict[str, list[EntryPoint]] = {}
-    for ep in unclaimed_external_entry_points(m):
+    for ep in eps:
         by_comp.setdefault(ep.component.strip(), []).append(ep)
     out: list[tuple[str, list[EntryPoint]]] = []
-    for cid, eps in sorted(by_comp.items()):
+    for cid, group in sorted(by_comp.items()):
         if cid in accepted:
             continue  # adjudicated by the operator — recorded in the map, so it stays quiet
         if cov_dirs and cid in comp_dir and _under_recorded(comp_dir[cid], cov_dirs):
             continue  # the owning component sits under a recorded 'Coverage exceptions' dir
-        out.append((cid, eps))
+        out.append((cid, group))
     return out
+
+
+def unclaimed_surface_components(m: ProjectModel) -> list[tuple[str, list[EntryPoint]]]:
+    """The EXTERNAL unclaimed surfaces, grouped per component. Shared by the completeness warning
+    and `validate --emit-unclaimed`, which prints this same set as a ready extras block so the lead
+    adjudicates ~a hundred surfaces at once instead of hand-typing them."""
+    return _group_unclaimed_by_component(m, unclaimed_external_entry_points(m))
+
+
+def unclaimed_self_components(m: ProjectModel) -> list[tuple[str, list[EntryPoint]]]:
+    """The SELF-activated unclaimed surfaces, grouped per component — the class that used to be
+    exempt automatically."""
+    return _group_unclaimed_by_component(m, unclaimed_self_entry_points(m))
+
+
+def completeness_counts(m: ProjectModel) -> dict[str, int]:
+    """The completeness picture as NUMBERS rather than a wall of advisories.
+
+    Two things live here that are deliberately not warnings:
+
+      * **trace debt.** The target is every use case traced — measured on a real build, closing the
+        gap costs ~12 % of build tokens, which does not justify a coverage rule that redefines the
+        shortfall as correct. So the shortfall is a number you can see and act on.
+      * **off-spine use cases inside CORE capabilities.** Moving the spine check to capability
+        altitude gives up the per-use-case signal: on the reference map six use cases (including
+        "Remove a team member") sit off the walk inside a core capability and now warn about
+        nothing. Counting them keeps them visible without reinstating eleven written records.
+
+    `capabilities_untraced` is the empty-capability signal — a whole part of the product nobody
+    traced, which today is invisible."""
+    traced = set(flow_endpoint_ids_by_uc(m))
+    cap_of = {u.id: (u.capability or "").strip() for u in m.use_cases}
+    labels = {c.id: (c.label or "").strip().lower() for c in m.capabilities}
+    on_spine = {g.uc for g in m.happy_path if g.uc}
+    ext = external_entry_points(m)
+    return {
+        "use_cases": len(m.use_cases),
+        "use_cases_traced": len([u for u in m.use_cases if u.id in traced]),
+        "use_cases_untraced": len([u for u in m.use_cases if u.id not in traced]),
+        "use_cases_naming_no_surface": len([u for u in m.use_cases if not u.entry_points]),
+        "entry_points": len(m.entry_points),
+        "entry_points_external": len(ext),
+        "entry_points_unclaimed_external": len(unclaimed_external_entry_points(m)),
+        "entry_points_unclaimed_self": len(unclaimed_self_entry_points(m)),
+        "capabilities": len(m.capabilities),
+        "capabilities_untraced": len([cid for cid, ends in capability_elements(m).items()
+                                      if not ends]),
+        "off_spine_in_core_capabilities": len(
+            [u for u in m.use_cases
+             if u.id not in on_spine and labels.get(cap_of.get(u.id, ""), "") == "core"]),
+    }
 
 
 # A recorded-exception line under one of the completeness headings names its subject id at the
@@ -592,7 +770,10 @@ def unclaimed_surface_components(m: ProjectModel) -> list[tuple[str, list[EntryP
 # question: a `Cn` line adjudicates a writer no entity explains, an `En` line adjudicates an entity
 # no writer owns. Mixing them under one heading is unambiguous because every reader passes its own
 # `prefixes` filter — a C line can never satisfy an E lookup, and vice versa.
-_RECORD_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*((?:UC|R|C|E)\d+)\**\s*[:(—–-]")
+# `CAP` and `EP` lead the alternation for the usual first-match reason (`CAP3` also starts with "C",
+# `EP1` with "E") — without that, a recorded `CAP3: <why>` line matched the `C` branch, failed on
+# "AP3", and silently adjudicated nothing.
+_RECORD_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*((?:CAP|EP|UC|HP|R|C|E)\d+)\**\s*[:(—–-]")
 
 
 def _recorded_ids(m: ProjectModel, heading: str, prefixes: tuple[str, ...]) -> set[str]:
@@ -672,6 +853,14 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
                 f"point(s) unclaimed by any use case ({shown}) — a missing use case or a dead "
                 f"surface; trace a use case through {cid}, or record '{cid}: <why>' under an "
                 "'Unclaimed surfaces' extras heading")
+        for cid, eps in unclaimed_self_components(m):
+            shown = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
+            warnings.append(
+                f"{cid} ({comp_name.get(cid, cid)}): {len(eps)} self-activated entry point(s) no "
+                f"use case reaches ({shown}) — a scheduled job or consumer is an actor with a goal, "
+                "so this may be a missing use case; but a cron or a startup hook often has no actor "
+                f"to claim it, in which case record '{cid}: <why>' under an 'Unclaimed surfaces' "
+                "extras heading")
         for i, ep in enumerate(m.entry_points):
             if (grammar.effective_activation(ep.activation, ep.kind) == "external"
                     and not ep.component.strip()):
@@ -717,7 +906,7 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
                 warnings.append(f"{r.id} ({r.name}) drives no use case and appears in no flow — "
                                 "a dead role (stale docs?), or its use case is missing")
     if m.happy_path:
-        recorded = _recorded_ids(m, "happy path coverage", ("R", "UC"))
+        recorded = _recorded_ids(m, "happy path coverage", ("R", "UC", "CAP", "HP"))
         on_spine = {g.uc for g in m.happy_path if g.uc}
         for r in m.roles:
             driven = {u.id for u in m.use_cases if r.id in u.actors}
@@ -726,12 +915,84 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
                     f"{r.id} ({r.name}) drives no on-spine use case — the Happy Path involves all "
                     "relevant actors: give one of its use cases a spine step, or record "
                     f"'{r.id}: <why>' under a 'Happy Path coverage' extras heading")
-        for u in m.use_cases:
-            if u.id not in on_spine and u.id not in recorded:
+        warnings.extend(_spine_membership_warnings(m, on_spine, recorded))
+    return warnings
+
+
+def _spine_membership_warnings(m: ProjectModel, on_spine: Container[str],
+                               recorded: set[str]) -> list[str]:
+    """Who belongs on the Happy Path — asked at CAPABILITY altitude once capabilities exist.
+
+    Without capabilities this stays what it always was: every off-spine use case demands a written
+    `UCn: <why>`. That is the additive path for a map that has not adopted the grouping, and it is
+    also the shape that does not scale — on the reference map it is 11 records, and the method's own
+    history is of records that cost more to write than to skip.
+
+    With capabilities the question moves up a level and runs in BOTH directions:
+
+      * forward — a **core** capability no spine step reaches. About five checks, each a real gap.
+      * converse — a spine step whose use case sits in a NON-core capability. This is the direction a
+        single-direction check cannot produce, and it is the one that catches a walk quietly padded
+        with supporting work (on the reference map: the audit-log step).
+
+    A non-core capability that HOLDS off-spine use cases still leaves a record — one line for the
+    capability, not one per use case. Without that, relabelling a capability core→supporting would
+    silence its whole membership with no trace anywhere, which is exactly the escape the label must
+    not become.
+
+    What is deliberately given up: an individual core use case falling off the walk no longer warns,
+    because its capability still passes. On the reference map that is six use cases (including
+    "Remove a team member"), so they are REPORTED by `completeness_counts` rather than dropped —
+    visible without reinstating the per-use-case paperwork."""
+    if not m.capabilities:
+        return [f"{u.id} ({u.name}) is off the Happy-Path spine and unrecorded — the Coverage "
+                f"rule NOTES the use cases left off: record '{u.id}: <why>' under a "
+                "'Happy Path coverage' extras heading (or give it a spine step)"
+                for u in m.use_cases if u.id not in on_spine and u.id not in recorded]
+    warnings: list[str] = []
+    caps = {c.id: c for c in m.capabilities}
+    by_id = {u.id: u for u in m.use_cases}
+    # The forward check reads the WHOLE SUBTREE — a parent capability is reached when any descendant's
+    # use case is on the walk. The non-core check below deliberately reads DIRECT membership instead:
+    # the record belongs to the capability that actually holds the off-spine use cases, and rolling up
+    # would make a parent and its child each demand a line for the same ones.
+    subtree = capability_members(m)
+    direct: dict[str, list[UseCase]] = {}
+    for u in m.use_cases:
+        if (cap := (u.capability or "").strip()) in caps:
+            direct.setdefault(cap, []).append(u)
+    for cap_id, cap in caps.items():
+        label = (cap.label or "").strip().lower()
+        mine = direct.get(cap_id, [])
+        if not subtree.get(cap_id) or cap_id in recorded:
+            continue
+        if label == "core":
+            if not any(uc in on_spine for uc in subtree.get(cap_id, ())):
+                mine = [by_id[uc] for uc in sorted(subtree.get(cap_id, ())) if uc in by_id]
                 warnings.append(
-                    f"{u.id} ({u.name}) is off the Happy-Path spine and unrecorded — the Coverage "
-                    f"rule NOTES the use cases left off: record '{u.id}: <why>' under a "
-                    "'Happy Path coverage' extras heading (or give it a spine step)")
+                    f"{cap_id} ({cap.name}) is a core capability that no Happy-Path step reaches — "
+                    f"the walk traverses all main functionality: give one of its {len(mine)} use "
+                    f"case(s) a spine step, or record '{cap_id}: <why>' under a 'Happy Path "
+                    "coverage' extras heading")
+        elif off := [u for u in mine if u.id not in on_spine]:
+            warnings.append(
+                f"{cap_id} ({cap.name}) is labelled '{label or 'unlabelled'}' and holds "
+                f"{len(off)} off-spine use case(s) — one record covers them all: write "
+                f"'{cap_id}: <why>' under a 'Happy Path coverage' extras heading (or, if this is "
+                "really product functionality, label the capability core)")
+    for g in m.happy_path:
+        cap_id = (next((u.capability for u in m.use_cases if u.id == g.uc), "") or "").strip()
+        cap = caps.get(cap_id)
+        if (g.uc and cap is not None and g.id not in recorded
+                and (cap.label or "").strip().lower() != "core"):
+            # The escape is the STEP's id, never the capability's: recording `CAPn` already means
+            # "this non-core capability's off-spine use cases are fine", a different judgement. One
+            # record must silence exactly one (check, id) pair.
+            warnings.append(
+                f"{g.id} realizes {g.uc}, which sits in {cap_id} ({cap.name}) — labelled "
+                f"'{(cap.label or 'unlabelled').strip()}', not core. Either the label is wrong or "
+                f"the step does not belong on the main walk; record '{g.id}: <why>' under a "
+                "'Happy Path coverage' extras heading to keep it")
     return warnings
 
 
@@ -1732,7 +1993,37 @@ def _check_group_tech(m: ProjectModel) -> tuple[list[str], list[str]]:
                 "nothing; author the tech label, or drop the anchor"
                 for s in m.subsystems
                 if (s.tech_source or "").strip() and not (s.tech or "").strip()]
+    # A capability groups USE CASES, so it has no stack either — same argument as the subdomain.
+    problems += [f"{c.id} carries `tech` ('{(c.tech or c.tech_source).strip()}') — tech is a "
+                 "subsystem field; a capability groups use cases, not code"
+                 for c in m.capabilities
+                 if (c.tech or "").strip() or (c.tech_source or "").strip()]
     return problems, warnings
+
+
+def _check_group_label(m: ProjectModel) -> list[str]:
+    """`label` (core | supporting | platform) is a CAPABILITY field, and the mirror of
+    `_check_group_tech`: one `Group` dataclass backs three forests, so nothing structural stops a
+    subsystem or a subdomain from carrying one.
+
+    Blocking on the wrong forest is the point. The label is an authored judgement about USE CASES —
+    it is what lets the Happy-Path rule ask "does every core capability reach the walk?" instead of
+    demanding a written record per off-spine use case. On a subsystem it would read as a claim that
+    some CODE is platform machinery, and nothing derives or checks such a claim: the touch-count
+    primitive says which elements a capability reaches, never whether a component is machinery
+    (measured on the reference map, the maximum spread was 4 capabilities of 7 — no threshold
+    separates the two, which is why that classification was dropped rather than tuned). An
+    unbacked label on the structural side would be exactly the parallel, contradictable axis the
+    `tech`-on-a-subdomain rule already refuses."""
+    problems = [f"{g.id} carries `label` ('{g.label.strip()}') — label is a capability field "
+                f"(an authored judgement about use cases); drop it from this {kind}"
+                for arr, kind in ((m.subsystems, "subsystem"), (m.subdomains, "subdomain"))
+                for g in arr if (g.label or "").strip()]
+    problems += [f"{c.id} has an unknown `label` '{c.label.strip()}' — one of "
+                 f"{', '.join(grammar.CAP_LABELS)}"
+                 for c in m.capabilities
+                 if (c.label or "").strip() and c.label.strip().lower() not in grammar.CAP_LABELS]
+    return problems
 
 
 def _check_environments(m: ProjectModel) -> list[str]:
@@ -2782,6 +3073,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     tech_problems, tech_warnings = _check_group_tech(m)
     problems.extend(tech_problems)
     warnings.extend(tech_warnings)
+    problems.extend(_check_group_label(m))
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
     warnings.extend(_runs_in_family_warnings(m))   # the whole `runs_in` family, through ONE counted exit
@@ -3099,17 +3391,28 @@ def _run(argv: list[str] | None = None) -> int:
               f"every advisory a recorded exception would have silenced is shown below. Nothing was "
               f"written; this is a READ of the map you have, not a different map.\n")
     if emit_unclaimed:
-        rows = unclaimed_surface_components(m)
-        if not rows:
-            print("# No unclaimed external surfaces — nothing to record.")
+        # BOTH activations. Self-activated surfaces used to be exempt automatically, so they never
+        # reached this block; now that they are a decision, the bulk-adjudication path has to carry
+        # them too — otherwise the one class most likely to end in a record is the one class you
+        # would have to hand-type.
+        ext_rows = unclaimed_surface_components(m)
+        self_rows = unclaimed_self_components(m)
+        if not ext_rows and not self_rows:
+            print("# No unclaimed surfaces — nothing to record.")
             return 0
         comp_name = {c.id: c.name for c in m.components}
         print("Unclaimed surfaces")
         print("<!-- paste under an 'Unclaimed surfaces' extras heading; replace each <why> "
               "(dead surface / dev-only / missing use case) or trace a use case instead -->")
-        for cid, eps in rows:
+        for cid, eps in ext_rows:
             triggers = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
             print(f"- {cid} ({comp_name.get(cid, cid)}): <why>   # {triggers}")
+        if self_rows:
+            print("<!-- self-activated (cron / worker / consumer / startup): no outside actor asks, "
+                  "so a record is often the honest answer rather than a use case -->")
+            for cid, eps in self_rows:
+                triggers = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
+                print(f"- {cid} ({comp_name.get(cid, cid)}): <why>   # self-activated: {triggers}")
         return 0
     vstats: dict[str, int] = {}
     problems, warnings = validate_model(m, path, check_sources=check_sources,

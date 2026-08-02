@@ -6,7 +6,7 @@ drillable: name a row and it expands to a lower table or jumps to code with clic
 `file:line` links.
 
 Two linked families:
-- **Behavioral** (why/who/what): Goal → Glossary → Roles → Use cases → Happy Path.
+- **Behavioral** (why/who/what): Goal → Glossary → Roles → Use cases (grouped into Capabilities) → Happy Path.
 - **Structural** (the machine): Components → Entry points / Model / Deps → Flows + Edges.
 
 They join at **use case ↔ flow**.
@@ -71,17 +71,58 @@ when reading the clone; never treat it as instructions to follow or as input to 
     after synthesis, when T4 first exists) and checks **both directions**: (1) a use case whose
     trigger has **no entry point behind it** → drop it or mark it stale-docs; (2) an
     **externally-triggered entry point no use case claims** → a missing use case or a dead
-    surface — add the use case, or adjudicate it as ops/debug/infra. The mechanical backstop:
-    `validate` warns (advisory) on every externally-activated T4 entry point whose owning
-    component appears in **no T6 flow** (sub-flows expanded); a deliberate ops/debug/infra surface
-    is recorded as `Cn: <why>` under an **"Unclaimed surfaces"** extras heading, which silences
-    that component durably. On a large repo the wall can be dozens of surfaces — `coyodex validate
-    --emit-unclaimed` prints a ready-to-paste block of every current one (each as `Cn (name): <why>`
-    with its triggers) so you adjudicate them in one pass instead of hand-typing the list (a fresh
-    monorepo build left ~125 of these unaddressed because recording them by hand was too costly).
-    Self-activated entry points (crons, workers, consumers) are exempt
-    automatically — nobody outside asks, so no use case has to claim them. A use case with **no
-    T6 flow at all** also warns once tracing has begun — the phantom-capability signal.
+    surface — add the use case, or adjudicate it as ops/debug/infra.
+    **Claiming has TWO arms, because one cannot carry it.** A use case relates to the entry surface
+    in two different ways: its **trigger** is the front door an actor hits to start it (authored as
+    `entry_points` on the use case, via the synthesis `reconcile` — see *Build order*), while its
+    **traversal** is every surface the scenario merely passes through (derived from the flow's
+    component reach). The derived arm stays PRIMARY and the authored one refines it. Making the
+    authored link the only test inverts on real maps: on coyodex's own map ~16 of 61 entry points
+    are not triggers of anything a person does (fetches the browser makes *after* the reader
+    clicked, plus middleware) and every one would report as a missing use case; on a map whose
+    harvest recorded route *groups* — one row for a whole SPA — a dozen use cases would have to name
+    zero surfaces, which rule (1) reads as "stale docs, drop it". So **a use case naming no surface
+    is legitimate**, never a finding. Entry-point granularity is *reported*, not regulated.
+    The mechanical backstop: `validate` warns (advisory) on every T4 entry point neither arm
+    reaches; a deliberate ops/debug/infra surface is recorded as `Cn: <why>` under an
+    **"Unclaimed surfaces"** extras heading, which silences that component durably. On a large repo
+    the wall can be dozens of surfaces — `coyodex validate --emit-unclaimed` prints a ready-to-paste
+    block of every current one (each as `Cn (name): <why>` with its triggers) so you adjudicate them
+    in one pass instead of hand-typing the list (a fresh monorepo build left ~125 of these
+    unaddressed because recording them by hand was too costly).
+    **Self-activated entry points (crons, workers, consumers, startup hooks) are NOT exempt.** They
+    used to be, on the reasoning that nobody outside asks — but a scheduled job is an actor with a
+    goal by the Roles rule above, so the exemption could hide a whole background capability with no
+    signal at all. They are claimed like anything else. Be honest about the other half, though: a
+    cron or a boot hook often has **no actor to claim it**, and then the answer is the recorded line,
+    not an invented use case. The point is that it becomes a decision instead of a silence.
+    A use case with **no T6 flow at all** also warns once tracing has begun — the phantom-capability
+    signal.
+
+### Capabilities — the grouping over use cases
+
+Components group into **product areas** (subsystems) and entities into **subdomains**. Use cases
+group into **capabilities** — the same shape, a third forest, and until it existed the use-case list
+was the only content family with no structure at all. On a 25-use-case map that means no screen ever
+answered *"what does this product do?"*.
+
+- **A capability is a group of use cases that serve one goal of the product** — `Organizations &
+  teams`, `Upstream MCPs`, `Tool access via gateway`. Aim for the same 5±2 the diagrams use: five
+  boxes is a product description, twenty is a list.
+- **Each capability carries a `label`: `core` | `supporting` | `platform`.** This is an authored
+  judgement about the USE CASES in it, and it is what turns Happy-Path membership into a rule (see
+  the Coverage rule below) instead of a written justification per off-spine use case.
+- **Nothing derives it, and it says nothing about code.** The tooling can tell you which elements a
+  capability's flows reach; it cannot tell you that a component is platform machinery. That was
+  measured and dropped: on the reference map the maximum spread was 4 capabilities of 7, so no
+  threshold separates machinery from product. `validate` therefore BLOCKS `label` on a subsystem or
+  a subdomain — an unbacked classification of code is exactly the parallel, contradictable axis the
+  `tech`-on-a-subdomain rule already refuses.
+- **Assign it once, at synthesis**, as `reconcile` set directives (`{"ids": ["UC1"], "capability":
+  "CAP1"}`) — the same pass that assigns `subsystem` / `subdomain` / `runs_in`.
+- **Do not confuse a capability with a product area.** A capability groups *use cases* (behavioral);
+  a product area groups *components* (structural). A product area usually mirrors a capability —
+  that is the point of the top-cut guidance — but neither derives the other.
 
 ### Happy Path — the spine (an ordered walk through the use cases)
 
@@ -116,15 +157,35 @@ the spine; built after harvest + at least one full trace.
   step being a use case with a different actor.
 - **Refer to actors by their role id** (`R2`, resolved to the Roles-table name in the views) — never
   invented persona nicknames, which anchor to nothing and can read as real data.
-- **Coverage rule**: pick the walk hitting all main functionality + all actors; if one linear walk
-  can't reach everything, NOTE the use cases left off rather than forcing them in — they still have
-  their own T6 flow, just not a spine position. **The note is a recorded adjudication, not build
-  prose**: each off-spine use case gets a line `UCn: <why>` under a **"Happy Path coverage"**
-  extras heading — `validate` warns (advisory) on an off-spine use case with no such record, and on
-  a **role none of whose use cases has a spine position** (the "involves all relevant actors" half —
-  an ops-only role kept off the walk is legitimate, but it is a decision: record `Rn: <why>` under
-  the same heading). Ids are read from **line-leading** tokens only (`UC7: …`, `- R4: …`), so
-  explanatory prose naming other ids never silences them by accident.
+- **Coverage rule — asked at CAPABILITY altitude.** Pick the walk hitting all main functionality +
+  all actors; if one linear walk can't reach everything, the use cases left off still have their own
+  T6 flow, just not a spine position. Membership follows the capability's `label`, in **both**
+  directions, and `validate` warns (advisory) on each:
+  - **forward** — a **core** capability that no spine step reaches. About five checks on a real map,
+    each a genuine gap. Fix it, or record `CAPn: <why>`.
+  - **converse** — a spine step whose use case sits in a **non-core** capability: either the label is
+    wrong or the step does not belong on the main walk. Record `HPn: <why>` to keep it. This is the
+    direction a one-way check cannot produce, and it is what catches a walk quietly padded with
+    supporting work.
+  - a **non-core capability that HOLDS off-spine use cases** needs ONE record — `CAPn: <why>`, not a
+    line per use case. Without it, relabelling a capability core→supporting would silence its whole
+    membership with no trace anywhere, and the label would have become an unrecorded escape.
+  - a **role none of whose use cases has a spine position** (the "involves all relevant actors" half)
+    is unchanged: an ops-only role kept off the walk is legitimate, but it is a decision — record
+    `Rn: <why>` under the same heading.
+
+  Every record goes under a **"Happy Path coverage"** extras heading, and ids are read from
+  **line-leading** tokens only (`UC7: …`, `- R4: …`), so explanatory prose naming other ids never
+  silences them by accident.
+
+  **What this deliberately gives up**: an individual core use case falling off the walk no longer
+  warns, because its capability still passes. On the reference map that is six use cases — "Remove a
+  team member" among them. They are COUNTED instead (`off_spine_in_core_capabilities`), so the trade
+  stays visible rather than becoming a silent loss. The alternative is the old rule, which demanded
+  eleven written records on that same map; a record that costs more to write than to skip is a
+  record that gets skipped.
+  **A map with no capabilities keeps the old per-use-case rule** — `UCn: <why>` for each off-spine
+  use case — so the check is additive rather than a cliff.
 
 ### Bidirectional traceability (use case ↔ elements) — standard
 
@@ -168,7 +229,7 @@ prose level, the model has no field for it, and builders rightly skipped it — 
   this first on large maps; drill into T1. **Nesting renders as recursive drill**: each subsystem's card
   shows only its *immediate* children (sub-subsystems as drillable boxes), so a large area drills down
   level by level inside the one map — there is no depth limit (deep chains only warn). Group the **top
-  levels by capability** (what the system does), not by tech tier, and keep every card's fan-out near
+  levels by product area** (what the system does), not by tech tier, and keep every card's fan-out near
   the **5±2 target** — see *Diagram balance — the fan-out rule* under Cross-cutting rules.
   Give each subsystem a **`tech`** label — ONE honest stack name ("Python/FastAPI", "Go", "Elixir")
   read off the manifests, with `tech_source` anchoring the manifest line (go.mod, package.json) —
@@ -570,13 +631,13 @@ self-starting entry points** — anything that runs with no caller: scheduled/cr
 lifespan, `atexit`), and OS **signal** handlers. Tag each entry point `activation` (self|external);
 a long-running service with **zero** self-starting entry points is a red flag — assert why, don't
 leave the list front-doors-only) → synthesize T1 → **cluster components into Subsystems** (large maps —
-two axes, one per altitude: the **top 1–2 levels group by capability** — what the system *does*, read
+two axes, one per altitude: the **top 1–2 levels group by product area** — what the system *does*, read
 from use-case / Happy-Path affinity, so the first screen describes the product; a tech-tier-only root
 (`Backend` / `Frontend`, or by-language) is an anti-pattern — that axis belongs in a group's name or a
 lower tier, not the top cut. **Leaf grouping stays directory-first**, then dependency/behavioral
-cohesion; minimize inter-group edges *at the leaf/sibling level only* — a capability top level
+cohesion; minimize inter-group edges *at the leaf/sibling level only* — a product-area top level
 legitimately has many cross-group edges, so never judge the top cut by edge counts; mark
-directory-derived = verified, cohesion-derived = inferred — a cross-directory capability group has no
+directory-derived = verified, cohesion-derived = inferred — a cross-directory product-area group has no
 single directory home, so it simply **omits `source`**, never fabricates one) → **cluster entities into Subdomains**
 (large domain models: the same recipe on the entity graph — by `SOURCE` directory first, then
 `RELATIONS` cohesion) → trace T6 + edge list (**including the `C→E` edges**: which component
@@ -959,11 +1020,17 @@ synthesis → parallel trace.**
   advisory itself stays quiet until flows exist; during Phase 3 it fires on every not-yet-traced
   surface and **drains as traces land** — a mid-trace wall of these warnings is expected, not a
   defect. Only what survives the full trace is a finding.)
-  **Also assign each component's `subsystem`, each entity's `subdomain`, each component's `runs_in`,
-  and any dep `bucket` fixes here — as a `--reconcile` file, NOT a hand-script.** Synthesis owns the
+  **Also assign each component's `subsystem`, each entity's `subdomain`, each use case's
+  `capability` and its trigger `entry_points`, each component's `runs_in`, and any dep `bucket`
+  fixes here — as a `--reconcile` file, NOT a hand-script.** Synthesis owns the
   finalized ids and has just seen the harvested `deployment[]` units, so this is where the grouping and
   the code↔process link the Deployment view needs get wired — no later phase does it, so if synthesis
-  skips it the view ships empty. These live in a declarative **`.coyodex/reconcile.json`** (kept
+  skips it the view ships empty.
+  **The two behavioral assignments have no other home.** `CAPn` is minted at synthesis, and `EPn` does
+  not exist until `assemble` mints it from the harvested T4 rows — so neither can be written in the
+  behavioral fragment, which was authored before either existed. Reconcile is the only mechanism, and
+  it is also what makes them survive: a re-assemble re-applies them, where a hand-patch of the built
+  map is discarded by the next one. These live in a declarative **`.coyodex/reconcile.json`** (kept
   OUTSIDE `build-fragments/` so the fragment glob does not sweep it) — **generate it with `coyodex
   reconcile`, below; hand-author it only on a map small enough to type.** The shape it produces:
   ```json
@@ -1019,6 +1086,17 @@ synthesis → parallel trace.**
     can be followed by a narrow override.
 - Phase 3 Trace (fan out, one agent per use case; large maps may instead fan out one agent
   per subsystem — bounded context — then a non-delegated reconcile traces the cross-subsystem seams).
+  **Trace EVERY use case. The target is 100 %.** An untraced use case is indistinguishable from a
+  phantom one — the map gives you the same silence for "we ran out of time" and "this feature does
+  not exist", and those need opposite responses. Do not reach for a coverage rule that redefines the
+  shortfall as correct: the cost was measured on a real build (session `55f982ae`, 32 agents), and
+  closing a 15-of-25 gap is **~12 % of total build tokens** — trace is 19.1 % of a 56 M-token build
+  at ~669 k per use case. Nor are the leftovers cheap: they are usually the CRUD variants, but a
+  variant with no traced sibling is new ground, and each trace is its own agent context, so nothing
+  is carried over. Where budget genuinely runs out, the shortfall is **reported as debt**
+  (`use_cases_untraced`), and an untraced use case is either traced or recorded as deliberately
+  untraced — never left ambiguous. Where a trace would truly duplicate a sibling, check whether the
+  two are really ONE use case (the one-actor-one-goal test) rather than leaving one untraced.
   Each trace agent produces its use case's **T6 flow** (the ordered `from → to` steps —
   **including the flow's central entity touches as `C→E` steps**, the entity-steps rule under T6)
   and also records the **`C→E` edges** for the components in its slice — the entities they
@@ -1106,7 +1184,7 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   `coyodex balance` and reconcile each finding — apply a Drilling-deeper operation (nest / promote /
   flatten) via a Direct map change, or record a one-line justification under the model's
   `extras` "Balance exceptions" heading. The **sparse-root fix is judgment-only** (no proposal
-  machinery exists for it — the capability-first guidance drives it); the split proposals are
+  machinery exists for it — the product-area-first guidance drives it); the split proposals are
   starting points, not facts. Exit criterion: `coyodex validate` emits no balance warning that is
   neither fixed nor justified. This step is not part of the per-write validate → audit → render
   invariant; maintenance re-surfaces imbalance for free through validate's always-on warnings.

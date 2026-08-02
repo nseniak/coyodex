@@ -1251,6 +1251,16 @@ SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:91)
 
 ---
 
+## Grounding — how much of this map was challenged
+
+**185 of 185 claim(s) challenged** by fresh-context skeptics — 182 confirmed, 3 refuted, 0 unverifiable.
+
+> No `live_claims_digest`: nothing can confirm this record describes the map as it now stands.
+
+Full Phase-4 coverage: all 185 L2 claims from the audit worklist were challenged by 8 fresh-context skeptics that never saw the build reasoning, batched by theme (security, external dependencies + persistence, domain ownership x2, backbone edges x2) and told to default to refuted on doubt. The 14 security claims were judged three times independently with different lenses — read-the-check, attack-the-surface, and prove-the-call-chain — and decided by majority; one skeptic verified them against a live throwaway server rather than by reading. 3 claims were refuted and reconciled: the /api/browse route has no containment of its own (re-anchored to the loopback Host guard that is its real barrier, with the gap stated), the pre-index builds rather than owns its per-directory expectation record, and the backup script copies the map folder without owning the map document (edge dropped). The ref-injection guard was confirmed real but anchored at a copy that never sees user input; its anchor was repointed. All 5 state machines were checked against their declaring lines and none was invented.
+
+---
+
 ## Balance exceptions
 
 - granularity: 36 components against a code-derived expectation of ~11 (band 6–16). The expectation is bound by the LOC ceiling over a 294-LOC median file, which reads a toolkit of single-purpose stdlib modules as far fewer units than it has. Each component here is one module or one clearly separable unit inside an oversized file (the 2.5 kLOC validator is four; the 2.9 kLOC viewer generator is five; the 6.9 kLOC browser app is five), each with its own job, its own command or view, and its own tests. Folding them to reach the band would hide exactly the pipeline this map exists to explain — the altitude is deliberate.

@@ -36,8 +36,8 @@ def test_every_ref_resolves_to_a_def():
 def test_id_fields_carry_their_arrays_prefix_pattern():
     schema = generate_schema()
     for attr, prefix in ID_ARRAYS.items():
-        if attr in ("subsystems", "subdomains"):
-            continue  # Group is shared by both forests — see its own pattern/description
+        if attr in ("subsystems", "subdomains", "capabilities"):
+            continue  # Group is shared by all THREE forests — see its own pattern/description
         item_def = schema["properties"][attr]["items"]["$ref"].rsplit("/", 1)[-1]
         pattern = schema["$defs"][item_def]["properties"]["id"]["pattern"]
         assert pattern == f"^{prefix}\\d+$", (attr, pattern)
