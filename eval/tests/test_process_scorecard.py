@@ -520,7 +520,9 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # 20 is also absent: "the lead re-verified every applied refutation" has no reliable transcript
     # signature (a refutation is reconciled by an ordinary map write, and the read that justifies it
     # is an ordinary file read), so the number is reserved rather than filled with a guess.
-    assert ids == [*range(1, 11), *range(12, 19), 21, 22], ids
+    # 19 is WITHDRAWN (unmeasurable — see L3-DESIGN.md) and 20 is RESERVED (no transcript
+    # signature). 23 replaces 19 by measuring the OUTCOME instead of the technique.
+    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
     assert len(ids) == len(set(ids))
 
@@ -1070,3 +1072,39 @@ def test_a22_does_not_accept_an_echoed_gr1_line():
                        results=(("p", "some output\nGR1 met\n"),)),)
     a = P.assert_22_behavioral_draft_precedes_preindex(turns)
     assert a.observed == 0, a
+
+
+# ── 23: the outcome-based replacement for the withdrawn 19 ───────────────────────────────────────
+
+def make_advisory_run(index: int, advisories: int, uid: str = "v"):
+    body = "VALIDATION WARNINGS (non-blocking):\n" + "\n".join(
+        f"  - advisory number {i}" for i in range(advisories))
+    return make_turn(index, make_bash("coyodex validate map.json --check-sources", uid=uid),
+                     results=((uid, body),))
+
+
+def test_23_flags_a_build_that_never_saw_the_whole_gate():
+    """The defect the withdrawn assertion 19 aimed at, measured by OUTCOME. 19 tried to detect the
+    ACT of hiding and could not be made precise; this asks only whether the build ever looked at the
+    advisories the map it committed actually carries — so `grep -v`, `head`, `tail`, `> /dev/null`
+    and a summary written from memory are all caught by the same check."""
+    turns = (make_advisory_run(1, 3),)
+    ctx = P.ScoreContext(map_warnings=12)
+    a = P.assert_23_the_build_saw_the_whole_gate(turns, ctx)
+    assert (a.observed, a.of) == (0, 1), a
+    assert a.evidence[0].detail["never_seen"] == "9", a.evidence
+
+
+def test_23_passes_when_some_run_showed_the_whole_set():
+    """The WIDEST view, not the last: narrowing a re-check is assertion 15's subject, and a build
+    that legitimately fixes advisories shows more of them earlier than the final map holds."""
+    turns = (make_advisory_run(1, 20, uid="a"), make_advisory_run(9, 2, uid="b"))
+    ctx = P.ScoreContext(map_warnings=10)
+    assert P.assert_23_the_build_saw_the_whole_gate(turns, ctx).observed == 1
+
+
+def test_23_is_not_applicable_without_a_map_or_without_output():
+    """Both are genuinely nothing to measure — n/a, never a zero."""
+    assert P.assert_23_the_build_saw_the_whole_gate((make_advisory_run(1, 3),),
+                                                    P.ScoreContext()).of == 0
+    assert P.assert_23_the_build_saw_the_whole_gate((), P.ScoreContext(map_warnings=4)).of == 0

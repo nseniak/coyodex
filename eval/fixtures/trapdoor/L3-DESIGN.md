@@ -1,6 +1,6 @@
 # L3 — process assertions over a build transcript
 
-**Status: assertions 1–10, 12–18, 21 and 22 are IMPLEMENTED; 11, 19 and 20 are not.** The reader is
+**Status: assertions 1–10, 12–18, 21, 22 and 23 are IMPLEMENTED; 11, 19 and 20 are not.** The reader is
 [eval/tools/coyodex_eval/transcript.py](../../tools/coyodex_eval/transcript.py), the assertions and
 the scorecard/diff CLI are
 [eval/tools/coyodex_eval/process_scorecard.py](../../tools/coyodex_eval/process_scorecard.py)
@@ -205,3 +205,23 @@ that before it is worth a line.**
 
 The number 19 stays retired, like 11 and 20. Re-using it would make two different measurements share
 an id across archived scorecards.
+
+### 23 — what replaced it
+
+The defect 19 aimed at is covered by **assertion 23**, which measures the OUTCOME instead of the
+technique.
+
+| # | assertion | the fix it audits |
+|---|---|---|
+| 23 | the widest view of `validate` the build ever captured shows at least as many advisories as the map it committed actually carries | the same defect 19 could not detect. A build hid 38 duplicate-edge warnings from itself and shipped. Asking "did you ever LOOK at the whole thing" needs no theory about HOW the output was narrowed, so `grep -v`, `head`, `tail`, `> /dev/null` and a summary written from memory are all caught by one check. Needs `--map`; `n/a` without it |
+
+Why this works where 19 did not: 19 had to recognise an act, and the act has no reliable signature in
+shell text. 23 compares two counts that both exist as facts — what the map holds, and the most the
+build ever saw. Deliberately the WIDEST view rather than the last, because narrowing a re-check is
+assertion 15's subject and a build that legitimately fixes advisories sees more of them earlier than
+the final map holds.
+
+Its one limitation is stated in the code and worth repeating: the truth is computed without the
+repo-reading checks, since the scorecard has no repo. So the count can only be too small, and the
+assertion under-detects rather than falsely accusing — the direction this family's own rule
+demands.

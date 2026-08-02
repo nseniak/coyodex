@@ -983,6 +983,10 @@ class ScoreContext:
     transcript whose repo has moved on. `grounding` is None when no map was given."""
     map_path: Path | None = None
     grounding: dict[str, EvidenceValue] | None = None
+    #: How many advisories the COMMITTED map actually carries. The truth a build's own view of the
+    #: gate is measured against — see `assert_23_the_build_saw_the_whole_gate`. None when no map was
+    #: given or it could not be read.
+    map_warnings: int | None = None
 
 
 def read_score_context(map_path: str | Path | None) -> ScoreContext:
@@ -996,7 +1000,18 @@ def read_score_context(map_path: str | Path | None) -> ScoreContext:
     except (OSError, ValueError):
         return ScoreContext(map_path=p)
     g = doc.get("grounding") if isinstance(doc, dict) else None
-    return ScoreContext(map_path=p, grounding=g if isinstance(g, dict) else {})
+    warnings: int | None = None
+    try:
+        from coyodex.model import load_model
+        from coyodex.validate_model import validate_model
+        _problems, warns = validate_model(load_model(p.read_text(encoding="utf-8")))
+        warnings = len(warns)
+    except BaseException:
+        # The scorecard is never a gate: an unreadable or schema-invalid map degrades this one
+        # assertion to n/a rather than failing the run.
+        warnings = None
+    return ScoreContext(map_path=p, grounding=g if isinstance(g, dict) else {},
+                        map_warnings=warnings)
 
 
 
@@ -1176,6 +1191,51 @@ def assert_22_behavioral_draft_precedes_preindex(turns: Sequence[Turn]) -> Asser
     return Assertion(22, "behavioral draft precedes preindex", 1 if ok else 0, 1, ev)
 
 
+def assert_23_the_build_saw_the_whole_gate(turns: Sequence[Turn],
+                                           ctx: "ScoreContext | None" = None) -> Assertion:
+    """Did the build ever LOOK at the whole gate output for the map it shipped?
+
+    This replaces the withdrawn assertion 19, and it measures the OUTCOME instead of the technique.
+    19 tried to detect the act of hiding — an inverting `grep` on a check's output. That could not
+    be made precise: across a real corpus, 39 commands mentioned a check and used a removing filter
+    and exactly 2 were the defect, while the narrow "check piped straight into a filter" form
+    matched neither of those 2. Either shape was useless, so 19 was withdrawn.
+
+    The outcome is measurable and technique-agnostic. The committed map carries N advisories. If the
+    widest single view of `validate` the build ever captured showed fewer than N, then the build
+    committed a map whose advisories it never once saw in full — whether it used `grep -v`, `head`,
+    `tail`, `> /dev/null`, or wrote its summary from memory. All of those have been observed.
+
+    Deliberately the WIDEST view, not the last: narrowing a re-check is assertion 15's subject, and
+    a build that legitimately fixes advisories shows more of them earlier than the final map holds.
+    Only never having seen them at all is this assertion's business.
+
+    ONE LIMITATION, stated rather than hidden: the truth is computed WITHOUT the repo-reading
+    checks (`--check-sources`, `--check-coverage`), because the scorecard has no repo. A build that
+    ran those flags saw a superset, so the truth here can only be too SMALL — which makes this
+    assertion under-detect and never falsely accuse. That is the direction the scorecard's own rule
+    demands, and it is why the number is a floor rather than an equality.
+
+    `of == 0` when no map was given, when the map could not be read, or when the transcript captured
+    no validate output — all genuinely nothing to measure, not a miss."""
+    truth = ctx.map_warnings if ctx else None
+    if truth is None:
+        return Assertion(23, "the build saw the whole gate output", 0, 0, (),
+                         "no map given, so the committed advisory count is unknown")
+    runs = _validate_warnings(turns)
+    if not runs:
+        return Assertion(23, "the build saw the whole gate output", 0, 0, (),
+                         "no validate output captured in this transcript")
+    widest_at, widest_lines = max(runs, key=lambda r: len(r[1]))
+    widest = len(widest_lines)
+    ok = widest >= truth
+    note = f"map carries {truth} advisory/advisories; widest captured view showed {widest}"
+    ev = () if ok else (Evidence(widest_at, {
+        "map_advisories": str(truth), "widest_view": str(widest),
+        "never_seen": str(truth - widest)}),)
+    return Assertion(23, "the build saw the whole gate output", 1 if ok else 0, 1, ev, note)
+
+
 ASSERTIONS = (
     assert_1_preindex_report_used,
     assert_2_preindex_not_hand_parsed,
@@ -1196,6 +1256,7 @@ ASSERTIONS = (
     assert_18_commit_shape_matches_the_map,
     assert_21_final_assemble_digest_is_clean,
     assert_22_behavioral_draft_precedes_preindex,
+    assert_23_the_build_saw_the_whole_gate,
 )
 
 
@@ -1208,8 +1269,9 @@ def score_turns(turns: Sequence[Turn], *, transcript: str = "", label: str = "",
     # Assertion 6 is the one whose subject is the MAP rather than the run, so it alone is handed the
     # context. Passing it to every assertion would invite the rest to reach for the repo, and a
     # scorecard that needs the repo cannot score an archived corpus transcript.
-    assertions = tuple(assert_6_grounding_recorded(turns, ctx)
-                       if fn is assert_6_grounding_recorded else fn(turns)
+    # The two context-taking assertions: their subject is the committed MAP, not the run.
+    _needs_ctx = {assert_6_grounding_recorded, assert_23_the_build_saw_the_whole_gate}
+    assertions = tuple(fn(turns, ctx) if fn in _needs_ctx else fn(turns)  # type: ignore[operator]
                        for fn in ASSERTIONS)
     return Scorecard(transcript=transcript, turns=len(turns), assertions=assertions,
                      grouping_consistent=grouping_consistent, label=label)
