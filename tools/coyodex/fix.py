@@ -3,8 +3,8 @@
 the stored model IN PLACE so they are never hand-scripted (a hand script that matched edges by
 endpoints-only once swapped a paired `persists`/`reads` edge — the class this command exists to kill).
 
-Three verbs, each loading `project-map.json`, mutating the dataclass tree, and writing it back through
-the one canonical serializer (validity guaranteed by the serializer, never by hand):
+Each verb loads `project-map.json`, mutates the dataclass tree, and writes it back through the one
+canonical serializer (validity guaranteed by the serializer, never by hand):
 
   fix apply-drift   — write the grounding skeptics' corrected `where` line into each drifted edge
                       (consumes the same verdicts `coyodex anchor-drift` reads). Matches on the FULL
@@ -13,6 +13,13 @@ the one canonical serializer (validity guaranteed by the serializer, never by ha
   fix dedup-relation — resolve the blocking "relation declared on both cards" / "declared twice"
                       domain-card duplicates by dropping ONE human-chosen occurrence (never silent —
                       a wrong drop deletes a real domain fact).
+  fix security-row  — rewrite a REFUTED security surface's text (and/or anchor), selected exactly.
+                      0 or >1 matches is a refusal, not a "first match": the hand script this
+                      replaces matched a substring, hit two rows, and clobbered a CONFIRMED claim.
+  fix dedup-security — drop security rows authored twice under the same surface (two fragments
+                      harvesting one auth check). Rows merely SHARING an anchor are reported, never
+                      dropped — that is legal, and treating it as duplication is how the clobber
+                      above got mistaken for a de-duplication.
 
 After any fix, re-run the invariant: validate --check-sources → audit → render. Stdlib-only.
 """
@@ -26,35 +33,28 @@ from pathlib import Path
 from coyodex import subverb_help
 from coyodex.anchor_drift import (apply_drift_exceptions, drift_findings, drift_records,
                                   load_verdicts)
-from coyodex.audit_model import _claim_text, l2_worklist_model
+from coyodex.audit_model import (EDGE_CLAIM as _EDGE_CLAIM, apply_anchor_corrections,
+                                 l2_worklist_model, security_claim as _security_claim)
 from coyodex.model import ProjectModel
 from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
 
 #: The listing's display text for an edge carrying no anchor. Never a value to RECORD.
 _NO_CALL_SITE = "(no call site)"
 
-_EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2` — excludes security claims
-
 #: The claim themes `apply-drift` has a writer for: an edge's `where` and a security row's `source`.
 #: `security` covers BOTH the auth-surface rows and the `enforces`/`encrypts` edges — `_EDGE_CLAIM`
 #: sorts those two apart, so this set alone does not choose the writer.
 #:
-#: What actually reaches the not-applicable branch is `cadence` and `lifecycle`: those claims are
-#: drift-ELIGIBLE (the skeptic is sent to the same declaring line the anchor holds) but have no writer
-#: here, so they are re-authored by hand. `persistence` and `messaging` never arrive at all —
+#: What reaches the not-applicable branch is `lifecycle`: those claims are drift-ELIGIBLE (the
+#: skeptic is sent to the same declaring line the anchor holds) but have no writer here, so they are
+#: re-authored by hand. `cadence` used to be in that bucket and no longer is — a live build had five
+#: cadence drifts refused and hand-typed them back through a bespoke script. `persistence` and `messaging` never arrive at all —
 #: `anchor_drift._confirmed_drifts` filters them out upstream as report-only.
 #:
 #: A theme added to `audit_model._THEMES` and not classified here silently becomes "not applicable",
 #: which would stop `apply-drift` writing a kind it should write. `tests/test_fix.py` pins the
 #: partition against `_THEMES` for exactly that.
-_WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone"})
-
-
-def _security_claim(surface: str, source: str) -> str:
-    """Rebuild a security row's L2 grounding claim EXACTLY as `l2_worklist_model` (audit_model.py) —
-    the one string a drift record's `claim` is matched back against. Recomputed (never regex-parsed
-    off the drift record), so a surface containing the claim's delimiters can't corrupt the match."""
-    return f"Auth surface '{surface}' is protected by: {_claim_text(source)}"
+_WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone", "cadence"})
 
 
 def _load(map_path: Path) -> tuple[ProjectModel, frozenset[str] | None]:
@@ -122,11 +122,12 @@ def _need(argv: list[str], i: int, flag: str) -> str:
 def apply_drift(argv: list[str]) -> int:
     map_path = None
     verdicts_paths: list[str] = []
+    to_reconcile: str | None = None
     tolerance = 2
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a in ("--map", "--verdicts", "--tolerance", "--repo"):
+        if a in ("--map", "--verdicts", "--tolerance", "--repo", "--to-reconcile"):
             i += 1
             val = _need(argv, i, a)
             if a == "--repo":
@@ -138,6 +139,8 @@ def apply_drift(argv: list[str]) -> int:
                 pass
             elif a == "--map":
                 map_path = val
+            elif a == "--to-reconcile":
+                to_reconcile = val
             elif a == "--verdicts":
                 # REPEATABLE, and it must stay in lockstep with `anchor-drift`. This used to bind a
                 # scalar, so fixing only `anchor-drift`'s arity would have been worse than fixing
@@ -168,71 +171,72 @@ def apply_drift(argv: list[str]) -> int:
     keep_claims = {w.claim for w, _d in kept}
     records = [r for r in drift_records(worklist, grounding, tolerance)
                if r["claim"] in keep_claims]
-    edges_applied = 0
-    sec_applied = 0
     not_applicable: list[tuple[str, str]] = []
     unparseable: list[tuple[str, str]] = []
+    corrections: list[tuple[str, str]] = []
     for rec in records:
-        corrected = rec.get("corrected")
-        mo = _EDGE_CLAIM.match(rec["claim"])
-        if mo:                                        # an edge claim — rewrite the edge `where`
-            src, verb, dst = mo.group(1), mo.group(2).lower(), mo.group(3)
-            if not corrected:
-                print(f"note: no consensus line for '{rec['claim']}' — left unchanged", file=sys.stderr)
-                continue
-            matches = [e for e in m.edges
-                       if e.src == src and e.verb.strip().lower() == verb and e.dst == dst]
-            if len(matches) != 1:                     # 0 (gone) or >1 (same triple, different call sites)
-                print(f"WARNING: '{rec['claim']}' matches {len(matches)} edges — skipped (resolve by "
-                      f"hand: an ambiguous multi-site edge must not be blind-rewritten).", file=sys.stderr)
-                continue
-            e = matches[0]
-            if e.where != corrected:
-                print(f"  {rec['claim']}: where {e.where!r} → {corrected!r}")
-                e.where = corrected
-                edges_applied += 1
-            continue
-        # NOT an edge claim. Before assuming it is a security surface, check whether this command can
-        # rewrite its kind AT ALL. `apply-drift` writes exactly two things — an edge `where` and a
-        # `security[].source` — so a cadence, store, messaging or lifecycle claim has no writer here.
-        # It used to fall straight through to the security branch and report "matches 0 security
-        # surfaces — skipped (resolve by hand)", which named the wrong kind and implied a row had
-        # vanished; on one map that was every single one of its 17 findings, while the summary line
-        # then said "no drifted edge or security anchors to rewrite". Both statements were true and
-        # together they were misleading.
+        claim = rec["claim"]
         theme = rec.get("theme") or "unknown"
+        # Partition BEFORE writing. `apply_anchor_corrections` dispatches on the claim's shape, so
+        # everything it cannot place comes back as "matches nothing" — true, and useless to a reader
+        # holding a cadence claim. The theme says which kind the claim IS, so an unwritable kind and
+        # a malformed edge claim get their own accurate message here.
+        if _EDGE_CLAIM.match(claim):
+            corrections.append((claim, rec.get("corrected") or ""))
+            continue
         if theme not in _WRITABLE_THEMES:
-            not_applicable.append((theme, rec["claim"]))
+            not_applicable.append((theme, claim))
             continue
-        if theme != "security":
+        if theme not in ("security", "cadence"):
             # An EDGE-themed claim that `_EDGE_CLAIM` could not parse. Letting it reach the security
-            # writer below reproduces the bug this dispatch exists to kill: `validate` accepts a
-            # multi-word verb (`C1 writes to E1`), the regex's `(\S+)` cannot match it, and the
-            # operator was told the claim "matches 0 security surfaces". It is not a security claim
-            # and there is nothing to look for — say that instead.
-            unparseable.append((theme, rec["claim"]))
+            # writer reproduces the bug this dispatch exists to kill: `validate` accepts a multi-word
+            # verb (`C1 writes to E1`), the regex's `(\S+)` cannot match it, and the operator was
+            # told the claim "matches 0 security surfaces". It is not a security claim and there is
+            # nothing to look for — say that instead.
+            unparseable.append((theme, claim))
             continue
-        # a security-surface claim — rewrite the drifted `security[].source` anchor. Match by
-        # recomputing each row's claim (never regex-parsing the drift record), same multiplicity guard
-        # as the edge path: 0 (gone) or >1 (two rows can share a surface) → skip + warn.
-        if not corrected:
-            print(f"note: no consensus line for '{rec['claim']}' — left unchanged", file=sys.stderr)
-            continue
-        sec_matches = [s for s in m.security if _security_claim(s.surface, s.source) == rec["claim"]]
-        if len(sec_matches) != 1:
-            print(f"WARNING: '{rec['claim']}' matches {len(sec_matches)} security surfaces — skipped "
-                  f"(resolve by hand).", file=sys.stderr)
-            continue
-        s = sec_matches[0]
-        if s.source != corrected:
-            print(f"  {rec['claim']}: source {s.source!r} → {corrected!r}")
-            s.source = corrected
-            sec_applied += 1
+        corrections.append((claim, rec.get("corrected") or ""))
+    _report_stuck(unparseable, not_applicable)
+    if to_reconcile:
+        # DURABLE. Writing anchors into the ASSEMBLED map is exactly what the note below warns
+        # about, and a live build walked into it: 14 anchors corrected here, the map re-assembled to
+        # pick up a fragment edit, and all 14 silently reverted — then re-typed by hand, from the
+        # human-readable listing, into two bespoke python scripts. `set_anchors` is read by
+        # `assemble --reconcile`, so the correction survives every rebuild.
+        return _anchors_to_reconcile(Path(to_reconcile), corrections, not_applicable, unparseable)
+    counts, notes = apply_anchor_corrections(m, corrections)
+    for n in notes:
+        # An applied rewrite is indented and is the RESULT (stdout); a skip is a warning (stderr).
+        print(n, file=sys.stdout if n.startswith("  ") else sys.stderr)
+    edges_applied, sec_applied, cadence_applied = counts["edge"], counts["security"], counts["cadence"]
+    stuck = len(not_applicable) + len(unparseable)
+    # The counts ride the LAST line, including the not-applicable one. A live build read this output
+    # with `| tail -12`, so a total that is not on the final line is a total the reader never sees.
+    tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (named above) and still "
+            f"unreconciled." if stuck else "")
+    if edges_applied or sec_applied or cadence_applied:
+        _write(Path(map_path), m, _present)
+        print(f"apply-drift: rewrote {edges_applied} edge `where`, {sec_applied} security anchor(s) "
+              f"and {cadence_applied} cadence anchor(s).{tail} "
+              f"Re-run: validate --check-sources → audit → render.")
+    else:
+        print(f"apply-drift: rewrote nothing — no drifted edge, security or cadence anchor to "
+              f"fix.{tail}")
+    return 0
+
+
+def _report_stuck(unparseable: list[tuple[str, str]],
+                  not_applicable: list[tuple[str, str]]) -> None:
+    """Name every drift this command cannot write, BEFORE either write path returns.
+
+    It used to run only on the in-place path, so `--to-reconcile` ended with
+    "N drift(s) NOT APPLICABLE to this command (see above)" and nothing above — the claims needing
+    a hand re-anchor were counted and never named."""
     if unparseable:
-        print(f"WARNING: {len(unparseable)} confirmed drift(s) are edge claims this command could not "
-              f"parse back to an edge — an edge claim must read `<Id> <verb> <Id>`, and a multi-word "
-              f"verb does not. Fix the edge's `where` by hand, or give the verb a single word:",
-              file=sys.stderr)
+        print(f"WARNING: {len(unparseable)} confirmed drift(s) are edge claims this command could "
+              f"not parse back to an edge — an edge claim must read `<Id> <verb> <Id>`, and a "
+              f"multi-word verb does not. Fix the edge's `where` by hand, or give the verb a single "
+              f"word:", file=sys.stderr)
         for kind, claim in unparseable:
             print(f"    [{kind}] {claim}", file=sys.stderr)
     if not_applicable:
@@ -241,21 +245,64 @@ def apply_drift(argv: list[str]) -> int:
             by_kind[kind] = by_kind.get(kind, 0) + 1
         print(f"note: {len(not_applicable)} confirmed drift(s) are of a kind this command cannot "
               f"rewrite ({', '.join(f'{k}: {n}' for k, n in sorted(by_kind.items()))}) — "
-              f"`apply-drift` writes only edge `where` and `security[].source`. Re-anchor each by "
-              f"hand, or record why it stands; they do NOT go away by re-running this:", file=sys.stderr)
+              f"`apply-drift` writes an edge `where`, a `security[].source` and an entry point's "
+              f"`cadence_source`. Re-anchor each by hand, or record why it stands; they do NOT go "
+              f"away by re-running this:", file=sys.stderr)
         for kind, claim in not_applicable:
             print(f"    [{kind}] {claim}", file=sys.stderr)
-    # The counts ride the LAST line, including the not-applicable one. A live build read this output
-    # with `| tail -12`, so a total that is not on the final line is a total the reader never sees.
+
+
+def _anchors_to_reconcile(rec_path: Path, corrections: list[tuple[str, str]],
+                          not_applicable: list[tuple[str, str]],
+                          unparseable: list[tuple[str, str]]) -> int:
+    """Record the corrected anchors as `set_anchors` in the reconcile file instead of editing the map.
+
+    Keyed by CLAIM, which is what a verdict carries and what `apply_anchor_corrections` matches on,
+    so the durable record and the in-place edit cannot drift apart. Re-recording the same claim with
+    a different anchor UPDATES it and says so — silently discarding a changed mind is how a durable
+    record ends up asserting what the artifact does not do."""
+    try:
+        doc = json.loads(rec_path.read_text(encoding="utf-8")) if rec_path.exists() else {}
+    except ValueError as e:
+        print(f"ERROR: {rec_path} is not valid JSON ({e})", file=sys.stderr)
+        return 2
+    existing = doc.get("set_anchors") or []
+    by_claim = {a.get("claim"): a for a in existing if isinstance(a, dict)}
+    added = updated = 0
+    for claim, corrected in corrections:
+        if not corrected:
+            print(f"  SKIPPED (no corrected line): {claim}", file=sys.stderr)
+            continue
+        prior = by_claim.get(claim)
+        if prior is None:
+            new = {"claim": claim, "corrected": corrected}
+            existing.append(new)
+            by_claim[claim] = new
+            added += 1
+            print(f"  recorded {claim} → {corrected}")
+        elif prior.get("corrected") != corrected:
+            print(f"  UPDATED {claim}: {prior.get('corrected')} -> {corrected}")
+            prior["corrected"] = corrected
+            updated += 1
     stuck = len(not_applicable) + len(unparseable)
-    tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (see above) and still unreconciled."
-            if stuck else "")
-    if edges_applied or sec_applied:
-        _write(Path(map_path), m, _present)
-        print(f"apply-drift: rewrote {edges_applied} edge `where` and {sec_applied} security anchor(s)."
-              f"{tail} Re-run: validate --check-sources → audit → render.")
-    else:
-        print(f"apply-drift: rewrote nothing — no drifted edge or security anchor to fix.{tail}")
+    stuck_tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (named above) and still "
+                  f"unreconciled." if stuck else "")
+    if not added and not updated and "set_anchors" not in doc:
+        # Nothing to record and no prior key: writing would re-serialise (and reformat) a committed
+        # artifact to say nothing. The stuck count still rides the last line — it is the half of the
+        # result that is not "nothing happened".
+        print(f"apply-drift: no anchor correction to record — the reconcile file was not "
+              f"touched.{stuck_tail}")
+        return 0
+    doc["set_anchors"] = existing
+    rec_path.parent.mkdir(parents=True, exist_ok=True)
+    # indent=2 + ensure_ascii=False, matching `dedup-edge --to-reconcile`; two writers of one file
+    # that disagree on formatting churn it on every alternating run (a claim holding an em dash
+    # came out `\u2014`-escaped by one and literal by the other).
+    rec_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"apply-drift: recorded {added} new and {updated} updated anchor correction(s) in "
+          f"{rec_path} — the MAP was not edited. Re-run `assemble … --reconcile {rec_path}` to "
+          f"apply them, then validate --check-sources → audit → render.{stuck_tail}")
     return 0
 
 
@@ -642,19 +689,353 @@ def dedup_edge(argv: list[str]) -> int:
     return 0
 
 
+# ── fix security-row ─────────────────────────────────────────────────────────────────────────────
+# The Phase-4 writer for a REFUTED security surface. `apply-drift` rewrites a security row's
+# `source` when the skeptics agree the anchor moved; it has no answer to the other half of the
+# refutation — "that anchor guards nothing, the real gate is elsewhere and your surface/risk text is
+# wrong". A live build had to hand-roll that edit, selected the row with
+# `'admin' in surface.lower() and source.startswith(…)`, matched TWO rows, and overwrote a CONFIRMED
+# claim with the refuted one's replacement text. Nothing caught it but `grounding report`.
+#
+# So the selector here is EXACT and the multiplicity guard is a refusal, never a "first match":
+# every one of `--claim` / `--surface` / `--at` must resolve to exactly one row or the command
+# prints the candidates and writes nothing.
+
+
+def _row_claims(m: ProjectModel) -> list[tuple[int, str]]:
+    """Every security row as `(index, its L2 grounding claim)` — the same string
+    `l2_worklist_model` pins and a skeptic verdict carries back."""
+    return [(i, _security_claim(s.surface, s.source)) for i, s in enumerate(m.security)]
+
+
+def _select_security_rows(m: ProjectModel, claim: str | None, surface: str | None,
+                          at: str | None) -> list[int]:
+    """Indexes of the rows matching the given selector(s). Every comparison is EXACT and every
+    selector given must hold (they intersect), so `--surface X --at path:line` disambiguates two
+    rows sharing a surface without anyone having to invent a regex."""
+    idxs = list(range(len(m.security)))
+    if claim is not None:
+        by_claim = {i for i, c in _row_claims(m) if c == claim}
+        idxs = [i for i in idxs if i in by_claim]
+    if surface is not None:
+        idxs = [i for i in idxs if m.security[i].surface == surface]
+    if at is not None:
+        idxs = [i for i in idxs if m.security[i].source == at]
+    return idxs
+
+
+def security_row(argv: list[str]) -> int:
+    """Rewrite ONE security row's text, selected exactly, or list the rows when no selector is given."""
+    map_path = None
+    claim = surface = at = None
+    sets: dict[str, str] = {}
+    as_json = False
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--json":
+            as_json = True
+        elif a in ("--map", "--claim", "--surface", "--at",
+                   "--set-surface", "--set-risk", "--set-source", "--set-who"):
+            i += 1
+            val = _need(argv, i, a)
+            if a == "--map":
+                map_path = val
+            elif a == "--claim":
+                claim = val
+            elif a == "--surface":
+                surface = val
+            elif a == "--at":
+                at = val
+            else:
+                sets[a[len("--set-"):]] = val
+        else:
+            print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
+            return 2
+        i += 1
+    if not map_path:
+        print("ERROR: --map is required", file=sys.stderr)
+        return 2
+    m, present = _load(Path(map_path))
+    if not m.security:
+        print("security-row: this map holds no security rows.")
+        return 0
+    selectors = {"--claim": claim, "--surface": surface, "--at": at}
+    given = {k: v for k, v in selectors.items() if v is not None}
+    if not given:
+        if sets:
+            print("ERROR: --set-* needs a row to write to. Pass --claim (exact L2 claim), "
+                  "--surface (exact surface text) or --at <path:line>. Run without --set-* to "
+                  "list the rows and their claims.", file=sys.stderr)
+            return 2
+        rows = [{"index": i, "surface": s.surface, "source": s.source, "who": s.who,
+                 "risk": s.risk, "claim": c}
+                for (i, c), s in zip(_row_claims(m), m.security)]
+        if as_json:
+            print(json.dumps({"security": rows}, indent=1))
+        else:
+            print(f"{len(rows)} security row(s). Select one with --claim / --surface / --at:")
+            for r in rows:
+                print(f"  [{r['index']}] {r['surface']}\n        at {r['source'] or _NO_CALL_SITE}")
+        return 0
+    idxs = _select_security_rows(m, claim, surface, at)
+    if len(idxs) != 1:
+        # The refusal IS the feature. A substring-matching hand script silently took both rows here.
+        print(f"ERROR: that selector matches {len(idxs)} security row(s); exactly one is required, "
+              f"and nothing was written.", file=sys.stderr)
+        for i2 in idxs:
+            s = m.security[i2]
+            print(f"    [{i2}] surface={s.surface!r} at={s.source!r}", file=sys.stderr)
+        if len(idxs) > 1:
+            unused = [flag for flag, val in selectors.items() if val is None]
+            print(f"Narrow it with {' or '.join(unused)}." if unused else
+                  "Every selector is already given and they still match more than one row, so the "
+                  "rows are indistinguishable by text.", file=sys.stderr)
+            print("If the rows are true duplicates, resolve them with `coyodex fix dedup-security`.",
+                  file=sys.stderr)
+        return 2
+    if not sets:
+        s = m.security[idxs[0]]
+        print(f"[{idxs[0]}] surface: {s.surface!r}\n     source: {s.source!r}\n"
+              f"     who:     {s.who!r}\n     risk:    {s.risk!r}\n"
+              f"     claim:   {_security_claim(s.surface, s.source)!r}")
+        print("Pass --set-surface / --set-risk / --set-source / --set-who to rewrite it.")
+        return 0
+    s = m.security[idxs[0]]
+    if "surface" in sets and not sets["surface"].strip():
+        # The surface IS the row's identity: it keys `dedup-security`, the impact graph's
+        # `security:<surface>` reference and the L2 grounding claim. An unset shell variable in
+        # `--set-surface "$NEW"` would otherwise anonymise a security row, and no gate catches it.
+        print("ERROR: --set-surface cannot be empty — the surface is the row's identity (it keys "
+              "dedup-security, the impact reference and the L2 claim). Nothing written.",
+              file=sys.stderr)
+        return 2
+    changed = 0
+    for fieldname, val in sets.items():
+        before = getattr(s, fieldname)
+        if before == val:
+            continue
+        print(f"  [{idxs[0]}] {fieldname}: {before!r} → {val!r}")
+        setattr(s, fieldname, val)
+        changed += 1
+    if not changed:
+        print("security-row: every --set-* value already matched — nothing written.")
+        return 0
+    _write(Path(map_path), m, present)
+    # A rewritten `surface` or `source` CHANGES the row's L2 claim, so the grounding record now
+    # pins a claim string that no longer exists. Say it here: the build that hit this learned it
+    # from `finalize`, several turns and one re-assemble later.
+    if "surface" in sets or "source" in sets:
+        print("note: this row's L2 claim changed, so the pinned grounding record no longer names "
+              "it. Re-run `coyodex grounding write` (its --keep-note preserves the note) after the "
+              "final assemble.")
+    print(f"security-row: rewrote {changed} field(s) on 1 row. "
+          f"Re-run: validate --check-sources → audit → render.")
+    return 0
+
+
+# ── fix dedup-security ───────────────────────────────────────────────────────────────────────────
+
+
+def _duplicate_surfaces(m: ProjectModel) -> dict[str, list[int]]:
+    """Security rows whose SURFACE text is identical, keyed by that surface.
+
+    Two fragments harvesting the same auth check is the ordinary cause (one build had `fe-pages`
+    and `fe-shared` both claiming the same sidebar gate). Identity is the surface, not the anchor:
+    two different surfaces legitimately share one anchor, and treating that as a duplicate is what
+    a hand script did just before it deleted a real claim."""
+    by_surface: dict[str, list[int]] = {}
+    for i, s in enumerate(m.security):
+        by_surface.setdefault(s.surface, []).append(i)
+    return {k: v for k, v in sorted(by_surface.items()) if len(v) > 1}
+
+
+def _shared_anchors(m: ProjectModel) -> dict[str, list[int]]:
+    """Rows sharing one `source` anchor under DIFFERENT surfaces — reported, never dropped."""
+    by_anchor: dict[str, list[int]] = {}
+    for i, s in enumerate(m.security):
+        if s.source:
+            by_anchor.setdefault(s.source, []).append(i)
+    return {k: v for k, v in sorted(by_anchor.items())
+            if len({m.security[i].surface for i in v}) > 1}
+
+
+def _fullness(s) -> int:
+    """How much a row actually says — the tiebreak when two duplicates differ only in detail."""
+    return sum(1 for v in (s.who, s.risk, s.source) if v)
+
+
+def dedup_security(argv: list[str]) -> int:
+    """List, or resolve, security rows authored twice under the same surface."""
+    map_path = None
+    repo: Path | None = None
+    keeps: list[str] = []
+    as_json = False
+    accept_suggested = False
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--json":
+            as_json = True
+        elif a == "--accept-suggested":
+            accept_suggested = True
+        elif a in ("--map", "--repo", "--keep"):
+            i += 1
+            val = _need(argv, i, a)
+            if a == "--map":
+                map_path = val
+            elif a == "--repo":
+                repo = Path(val)
+            else:
+                keeps.append(val)
+        else:
+            print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
+            return 2
+        i += 1
+    if not map_path:
+        print("ERROR: --map is required", file=sys.stderr)
+        return 2
+    # Same exclusivity as `dedup-edge`, for the same reason: a run that both lists and writes
+    # silently did neither.
+    if as_json and (accept_suggested or keeps):
+        print("ERROR: --json lists without writing; --accept-suggested and --keep write. Pick one: "
+              "run --json to review, then re-run with the decision.", file=sys.stderr)
+        return 2
+    if accept_suggested and keeps:
+        print("ERROR: --accept-suggested takes the suggestion for EVERY duplicate, which would "
+              "override the --keep token(s) you named. Pass one or the other.", file=sys.stderr)
+        return 2
+    m, present = _load(Path(map_path))
+    dups = _duplicate_surfaces(m)
+    shared = _shared_anchors(m)
+    ranked = {surface: min(idxs, key=lambda i2: (-_fullness(m.security[i2]),
+                                                 _own_code_rank(m.security[i2].source, repo)))
+              for surface, idxs in dups.items()}
+    if as_json:
+        print(json.dumps({
+            "duplicate_surfaces": [
+                {"surface": surface, "anchors": [m.security[i2].source for i2 in idxs],
+                 "suggested": m.security[ranked[surface]].source,
+                 "keep_token": f"{surface}::{m.security[ranked[surface]].source}"}
+                for surface, idxs in dups.items()],
+            "shared_anchors": [
+                {"source": src, "surfaces": [m.security[i2].surface for i2 in idxs]}
+                for src, idxs in shared.items()],
+        }, indent=1))
+        return 0
+    if shared:
+        # Not a defect and never dropped here — but it is the shape that hid a clobbered claim, so
+        # it is printed every run, including the clean one.
+        print(f"note: {len(shared)} anchor(s) carry MORE THAN ONE surface. That is legal (one line "
+              f"can guard two things) and nothing below touches them; edit one with "
+              f"`fix security-row --at <path:line> --surface <exact text>`:")
+        for src, idxs in shared.items():
+            print(f"    {src}")
+            for i2 in idxs:
+                print(f"      · {m.security[i2].surface}")
+    if not dups:
+        print("dedup-security: no security surface is authored more than once.")
+        return 0
+    if not keeps and not accept_suggested:
+        print(f"{len(dups)} security surface(s) authored more than once. Keep one anchor per "
+              f"surface, then re-run with the token(s):")
+        for surface, idxs in dups.items():
+            print(f"  {surface}")
+            for i2 in idxs:
+                s = m.security[i2]
+                mark = " (suggested)" if i2 == ranked[surface] else ""
+                print(f"      · {s.source or _NO_CALL_SITE}{mark}  risk={s.risk or '—'!r}")
+            print(f"      --keep '{surface}::{m.security[ranked[surface]].source}'")
+        if not repo:
+            print("Pass --repo <root> so the suggestion can prefer an anchor that exists in the "
+                  "repo; without it, ranking falls back to path length.")
+        return 0
+    # DECISIONS are (surface, anchor) pairs. `--accept-suggested` builds them directly; a `--keep`
+    # token is RESOLVED against the real candidates rather than split on "::". Splitting was a bug
+    # of exactly the kind this command exists to prevent: with a surface named `A::B` present,
+    # `partition("::")` read the token the tool itself had printed as surface `A`, and dropped a row
+    # belonging to a different surface while reporting success.
+    decisions: list[tuple[str, str]] = []
+    if accept_suggested:
+        decisions = [(surface, m.security[ranked[surface]].source) for surface in dups]
+        print(f"dedup-security: accepting the suggested anchor for all {len(decisions)} duplicate(s)"
+              f"{'' if repo else ' — WITHOUT --repo, so suggestions are ranked by path length only'}.")
+    for token in keeps:
+        candidates = [(surface, m.security[i2].source) for surface, idxs in dups.items()
+                      for i2 in idxs if token == f"{surface}::{m.security[i2].source}"]
+        uniq = sorted(set(candidates))
+        if not uniq:
+            print(f"ERROR: --keep token {token!r} names no duplicate row. Run without --keep to "
+                  f"see the tokens — nothing written.", file=sys.stderr)
+            return 2
+        if len(uniq) > 1:
+            print(f"ERROR: --keep token {token!r} is ambiguous — it reads as "
+                  + " and as ".join(f"surface {s!r} at {a!r}" for s, a in uniq)
+                  + ". A surface containing '::' cannot be named by a token; resolve these rows by "
+                    "hand. Nothing written.", file=sys.stderr)
+            return 2
+        decisions.append(uniq[0])
+    drop: set[int] = set()
+    for surface, anchor in decisions:
+        idxs = dups.get(surface)
+        if not idxs:
+            print(f"ERROR: {surface!r} is not authored more than once — nothing written.",
+                  file=sys.stderr)
+            return 2
+        keep_idx = [i2 for i2 in idxs if m.security[i2].source == anchor]
+        if not keep_idx:
+            print(f"ERROR: {anchor!r} is not one of the anchors for {surface!r} — nothing written.",
+                  file=sys.stderr)
+            return 2
+        if len(keep_idx) > 1:
+            # The ORDINARY duplicate: two fragments harvested one auth check, so the rows share the
+            # surface AND the anchor. Refusing here made the command unable to resolve the very case
+            # it exists for, and the advisory that sends the operator here had no other answer than
+            # the hand script this replaces. Rows that are byte-identical are not a choice; rows
+            # that differ elsewhere still are.
+            rows = [m.security[i2] for i2 in keep_idx]
+            first = rows[0]
+            identical = all((r.surface, r.source, r.who, r.risk)
+                            == (first.surface, first.source, first.who, first.risk) for r in rows)
+            if not identical:
+                print(f"ERROR: {len(keep_idx)} rows for {surface!r} share the anchor {anchor!r} but "
+                      f"differ in `who`/`risk`, so which one survives IS a decision — resolve them "
+                      f"with `fix security-row`. Nothing written.", file=sys.stderr)
+                for i2 in keep_idx:
+                    s = m.security[i2]
+                    print(f"    [{i2}] who={s.who!r} risk={s.risk!r}", file=sys.stderr)
+                return 2
+            print(f"  {len(keep_idx)} identical rows for {surface!r} at {anchor!r} — keeping one.")
+        drop.update(i2 for i2 in idxs if i2 != keep_idx[0])
+    for i2 in sorted(drop):
+        s = m.security[i2]
+        print(f"  dropping duplicate: {s.surface} at {s.source or _NO_CALL_SITE}")
+    m.security = [s for i2, s in enumerate(m.security) if i2 not in drop]
+    _write(Path(map_path), m, present)
+    print(f"dedup-security: dropped {len(drop)} duplicate row(s), {len(m.security)} remain. "
+          f"Re-run: validate --check-sources → audit → render.")
+    return 0
+
+
 # ── dispatch ─────────────────────────────────────────────────────────────────────────────────────
 
 _VERBS = {"apply-drift": apply_drift, "drop-edge": drop_edge, "dedup-relation": dedup_relation,
-          "dedup-edge": dedup_edge}
+          "dedup-edge": dedup_edge, "security-row": security_row,
+          "dedup-security": dedup_security}
 
 _USAGE = """usage: coyodex fix <verb> [args...]
 
 Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
 
-  apply-drift --map <map> --verdicts <raw.json>... [--tolerance N]
-      Write the grounding skeptics' corrected `where` line into each drifted edge (same verdicts
-      `coyodex anchor-drift` reads). Matches the full (src, verb, dst) triple; an ambiguous
-      multi-site edge is skipped, not blind-rewritten.
+  apply-drift --map <map> --verdicts <raw.json>... [--tolerance N] [--to-reconcile <file>]
+      Write the grounding skeptics' corrected anchor into each drifted element: an edge `where`, a
+      `security[].source`, or an entry point's `cadence_source`. Same verdicts `coyodex
+      anchor-drift` reads. Matches the full (src, verb, dst) triple (or the row's exact L2 claim);
+      an ambiguous multi-site target is skipped, not blind-rewritten.
+      --to-reconcile records the corrections as `set_anchors` in the reconcile file INSTEAD of
+      editing the map, so `assemble --reconcile` re-applies them on every rebuild. Without it the
+      edit is lost at the next assemble — a live build corrected 14 anchors, re-assembled for one
+      fragment edit, lost all 14, and re-typed them by hand.
 
   dedup-edge --map <map> [--repo <root>] [--json]
              (--accept-suggested | --keep <src:verb:dst:path:line> ...) [--to-reconcile <file>]
@@ -685,6 +1066,33 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
   dedup-relation --map <map> [--drop <En:verb:Em> ...]
       With no --drop, LIST the blocking "declared on both cards" / "declared twice" domain-card
       duplicates and the token to resolve each. With --drop, remove ONE chosen occurrence.
+
+  security-row --map <map> [--claim <exact claim> | --surface <exact text> | --at <path:line>]
+               [--set-surface T] [--set-risk T] [--set-source path:line] [--set-who T] [--json]
+      The writer for a REFUTED security surface — when the skeptics say the anchor guards nothing
+      and the surface/risk text is wrong. `apply-drift` only moves a row's `source`; this rewrites
+      the text too. With no selector it LISTS every row with its exact L2 claim; with a selector
+      and no --set-* it prints that one row.
+      EVERY selector is an exact match and they intersect, and a selector resolving to 0 or >1 rows
+      is REFUSED with the candidates printed — nothing is written. That refusal is the whole point:
+      the hand script this replaces matched `'admin' in surface.lower()`, hit two rows, and
+      overwrote a CONFIRMED claim with the refuted one's text. Two rows sharing an anchor is legal,
+      so disambiguate with --at plus --surface, or use --claim (unique per row).
+
+  dedup-security --map <map> [--repo <root>] [--json] [--accept-suggested | --keep <surface::anchor> ...]
+      Resolve security rows authored more than once under the SAME surface (two fragments
+      harvesting one auth check). Identity is the surface, never the anchor — two different
+      surfaces sharing one anchor is legal and is reported, not dropped.
+      With neither --keep nor --accept-suggested it LISTS the duplicates and suggests which anchor
+      to keep (pass --repo, or the "exists in the repo" rank term is constant and the suggestion
+      degrades to shortest-path). --json emits the same listing as data.
+      Rows that are byte-identical are not a choice — one is kept. Rows sharing surface AND anchor
+      but differing in `who`/`risk` ARE a choice, and are refused: use `security-row`.
+
+NOTE — `security-row` and `dedup-security` edit the ASSEMBLED map and have no `--to-reconcile`
+form, so their edit is DISCARDED by the next `assemble` (every write prints that warning). Run them
+after the last assemble, or make the same change in the owning fragment. `apply-drift` is the one
+verb here with a durable form.
 
 After any fix, re-run the invariant: validate --check-sources → audit → render."""
 

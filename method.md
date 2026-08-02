@@ -999,8 +999,26 @@ synthesis → parallel trace.**
   **deployment/ops backfill** WHILE the lead authors the reconcile assignments
   (subsystem/subdomain/runs_in/bucket) — a live build spent 13 lead-only minutes here with every
   agent idle, then ran tests/backfill serially after the traces; a later one repeated it for ~6.
-  **Treat this as a launch STEP, not advice**: dispatch those agents before you start authoring, and
-  **put the gap-fill slice in the SAME batch as the Phase-3 trace fan-out.** Slicing the trace by use
+  **Treat this as a launch STEP, not advice** — it is step 1 of synthesis, before you author a
+  single rule:
+
+  ```
+  1. dispatch the test-completeness + deployment/ops backfill agents      <- FIRST, always
+  2. THEN author the reconcile assignments while they run
+  ```
+
+  A third build has now paid this: nine minutes, no agent running, while the lead fixed cards,
+  authored `rules.json` and `structure.json`, and wrote the trace contract. Three builds, ~28
+  minutes, one sentence buried mid-paragraph. Dispatch those agents before you start authoring.
+
+  **Run every sub-flow name you PRESCRIBE past the naming heuristic before you dispatch it.** A slice
+  brief that hands agents `SF20 — Validate and store the token` freezes a fused-goal name into a
+  shared id contract: the sub-agents hit the lint warning, correctly refuse to rename (renaming
+  breaks the contract), report it in prose, and the same four warnings resurface at the lead's
+  `validate` and end up written as exceptions. The lead pays for its own naming twice. Name them the
+  way you would name a use case — one goal, no "and" — or expect to record them.
+
+  **Put the gap-fill slice in the SAME batch as the Phase-3 trace fan-out.** Slicing the trace by use
   case structurally guarantees that components off every traced flow get no edges, so the gap-fill is
   predictable, not a surprise — a live build found 18 of 96 components (19 %) edgeless AFTER nine
   trace agents had finished, and paid for it with a serial dispatch plus two turns of rework on an
@@ -1178,6 +1196,13 @@ synthesis → parallel trace.**
     `source` is the line that DECLARES the channel name, its `broker` is the dep that line connects
     to (not the one the component happens to use elsewhere), and a channel already in the catalog is
     never added twice under a second spelling.
+    **NAME THE OWNER in the slice brief.** That rule lives here and never reached the dispatched
+    contract, so four trace agents were each told to record the same channel row and each complied:
+    three spellings of `kind` (`pubsub`, `pub-sub`, and a free-text sentence) and two of `name`.
+    `assemble` hard-failed twice ("nothing was written"), and it took two hand-normalisations and
+    four assemble rounds to clear. Every one of those fragments linted CLEAN on its own — a
+    cross-fragment conflict is invisible per fragment by construction. One fragment owns each
+    catalog row; the others reference it.
 
 ### After the trace — EVERY build (serial included)
 
@@ -1233,8 +1258,12 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   themed skeptics (e.g. security/auth, money, core data-flow, inferred dep-usage), one
   fresh-context skeptic per batch — hand each one
   [method/templates/skeptic-contract.md](method/templates/skeptic-contract.md), the copyable
-  contract, rather than composing one from this section (a live build wrote ~5 KB of it into a
-  scratchpad, as every build before it had) — and for the riskiest claims (auth, scoping, encryption) run **N
+  contract, rather than composing one from this section. **Copy it with a command, not by reading and
+  retyping** — `cp COYODEX_HOME/method/templates/skeptic-contract.md <scratch>/skeptic-contract.md`,
+  then fill the «angle-bracket» slots. Three builds in a row have now composed it from prose while
+  the template's own header told them not to, which says the instruction is not the missing piece:
+  a `Read` followed by a `Write` is one keystroke away from a rewrite, and `cp` is not.
+  For the riskiest claims (auth, scoping, encryption) run **N
   skeptics + majority vote — with N ODD, and N ≥ 3.** Two skeptics cannot form a majority: a live
   build ran exactly two on its security claims, they split, and the lead broke the tie by hand
   against the code — which is the build-context blind spot the fresh-context rule exists to break,
@@ -1380,6 +1409,39 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   **refuted** edge as a terminal post-assemble fix, `coyodex fix drop-edge` removes it and reports (or,
   with `--repoint`/`--drop-steps`, heals) the flow steps that rode it. Reconcile every refutation and
   every drift (fix the map, or justify and record why); this reconcile is **not delegated**.
+
+  **EVERY skeptic outcome has a destination, and the one without a tool is the one that gets lost.**
+  A batch comes back with four kinds of answer, not two. Name the destination for each before you
+  start reconciling, or the ones with no verb attached evaporate into the notification prose:
+
+  | what came back | where it goes |
+  | --- | --- |
+  | refuted, an edge | `coyodex fix drop-edge` (or repoint) |
+  | refuted, an anchor moved | `coyodex fix apply-drift` |
+  | refuted, a security surface's TEXT is wrong ("that line guards nothing, the real gate is X") | `coyodex fix security-row --claim <exact claim> --set-surface/--set-risk/--set-source` |
+  | two fragments harvested one auth check | `coyodex fix dedup-security` |
+  | **true, but your note / list / transition is wrong** | fix the fragment, or `coyodex record` the decision — it is NOT a refutation and no counter will miss it |
+  | unverifiable | the `unverifiable` verdict, and a line in `grounding.note` |
+
+  The fifth row is the one that disappears. On a live build three of those — an incomplete
+  messaging publisher list, a wrong state transition, a store note naming a field that is never
+  stored — were read, agreed with, and then reached neither the map nor any record, because
+  "confirmed" was treated as "nothing to do". The verdict counts cannot witness this: all three
+  claims stayed CONFIRMED and the record read 100% clean.
+
+  **Never hand-script a security-row edit.** `fix security-row` selects EXACTLY (by claim, by
+  surface, by anchor) and refuses on 0 or >1 matches. The hand script it replaces selected with
+  `'admin' in surface.lower()`, matched two rows, and overwrote a CONFIRMED claim with the refuted
+  one's replacement text; the lead then read the two identical rows as a duplicate and deleted one.
+  Only `grounding report` caught it, three assembles later. Two rows sharing an anchor is legal and
+  is not duplication — `dedup-security` keys on the surface for exactly that reason.
+
+  **The vote is advisory; your re-read decides.** When N skeptics split and you open the file
+  yourself, what you find outranks the majority — a live build correctly applied a 1-of-3 minority
+  refutation after verifying the dissenter was right about an inert constructor guard. Say so in
+  `grounding.note` (`report` will flag it as a CONFIRMED claim you overrode). This is not a licence
+  to overrule a vote you merely dislike: the re-read wins because it is evidence, so it only wins
+  when you actually did it.
   Two **behavioral-consistency items** ride the same fresh-context pass (judgment calls no
   mechanical gate can make): (1) for each Happy Path step, does its **title contradict its use
   case's name or outcome**? (the "signs in; the organization exists" vs "create an organization"
@@ -1388,14 +1450,31 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   same run to 3)? — the mechanical duplication detector only catches *identical* runs, so
   depth-inconsistent retellings are found here; fix by extracting a sub-flow or aligning the depths.
   Re-validate → re-audit → render after fixes.
-  - **Ordering — `coyodex fix` is the FINAL write; do NOT `assemble` after it.** The `fix` verbs edit
-    the assembled `project-map.json` in place, but the build's source of truth is the fragments, so a
-    later `assemble` rebuilds the map from them and silently DISCARDS every `fix` edit. Both fresh
-    builds hit exactly this (ran `fix drop-edge`, re-assembled, then hand-scripted the same drop into a
-    fragment — pure wasted work). So: finish all structural/fragment changes and run your **last
-    `assemble` FIRST**; then do the Phase-4 grounding reconcile (`anchor-drift` → `fix apply-drift` /
-    `fix drop-edge`) as the **terminal** writes, and end with re-validate → re-audit → render — no
-    re-assemble. If Phase 4 surfaces a change that must live in a fragment, edit the fragment,
+  - **Ordering — ONE sequence, and `grounding write` is second-to-last.** This used to be stated in
+    two places that could not both hold: "`grounding write` runs after the final reconcile edit,
+    followed by ONE assemble" here, and "the anchor-drift reconcile is the TERMINAL write, no
+    re-assemble" below. A live build followed the second, `finalize` then raised
+    `live_claims_digest does not match this map`, and the whole tail — drift fixes, record, assemble
+    — was redone by hand. The rule below is the single one; where an older note disagrees, this wins.
+
+    ```
+    1. every structural / fragment change, including the refutation reconcile
+    2. coyodex anchor-drift --map … --verdicts …            # what drifted
+    3. coyodex fix apply-drift … --to-reconcile <file>      # RECORD it; the map is not edited
+    4. coyodex assemble … --reconcile <file>                # last STRUCTURAL assemble; applies set_anchors
+    5. coyodex grounding write …                            # measured against the map it describes
+    6. coyodex assemble … --reconcile <file>                # carries the RECORD in; idempotent, and
+                                                            #   not optional — skip it and the
+                                                            #   grounding record never reaches the map
+    7. coyodex validate --check-sources → coyodex audit → coyodex render → coyodex finalize
+    ```
+
+    Steps 3 and 4 are the change. `fix` edits the ASSEMBLED map, and the source of truth is the
+    fragments, so a later `assemble` silently discards every `fix` edit — three builds hit that, one
+    of them re-typing 14 anchors by hand. `--to-reconcile` makes the correction durable instead, so
+    the drift fix no longer has to be last and the grounding record can be measured against the map
+    that ships. Use bare `fix apply-drift` (no `--to-reconcile`) only for a genuinely terminal touch-up
+    after step 6, and re-run `grounding write` if you do. If Phase 4 surfaces a change that must live in a fragment, edit the fragment,
     re-assemble, and re-run the grounding reconcile after (never the other way round). Keep the
     **verdicts file OUT of `build-fragments/`** (e.g. under `.coyodex/verify/`) so a `*.json` glob into
     `assemble` can't pick it up — `assemble` now skips a stray verdicts file with a note, but keeping
@@ -1409,10 +1488,14 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
     drop that must survive a rebuild → reconcile file; a terminal anchor fix after the last assemble →
     `fix`. `--reconcile drop_edges` runs after the entity-edge derivation and heals the riding flow
     steps exactly like `fix drop-edge`, so a dropped `C→E` edge is not silently re-derived.
+    `set_anchors` is the third directive and the one that makes an anchor correction survive a
+    rebuild — `fix apply-drift --to-reconcile` writes it, keyed by the claim, and `assemble
+    --reconcile` applies it through the same writer.
     The directive shape (also in `assemble --help`; a live build had to read `reconcile.py`'s source
     to find these field names, because nothing wrote them down):
     ```json
-    { "drop_edges": [ {"src": "C21", "verb": "persists", "dst": "E33"},
+    { "set_anchors": [ {"claim": "C21 persists E33", "corrected": "backend/store.py:88"} ],
+      "drop_edges": [ {"src": "C21", "verb": "persists", "dst": "E33"},
                       {"src": "C7",  "verb": "calls",    "dst": "C9", "drop_steps": true},
                       {"src": "C4",  "verb": "reads",    "dst": "E2", "repoint": "E5"} ] }
     ```
@@ -1444,8 +1527,12 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
 **Harvest-prompt template (Phase 1).** The copyable contract is
 [method/templates/harvest-contract.md](method/templates/harvest-contract.md) — hand every
 harvest agent that file's contents, changing only the file list and the background blurb.
-Copy it; do not retype it from this document. A live build retyped 5.6 KB of it into a
-scratchpad and the copy drifted from the tool it described.
+**Copy it with a command:** `cp COYODEX_HOME/method/templates/harvest-contract.md
+<scratch>/harvest-contract.md`, then fill the «angle-bracket» slots in place. Do not `Read` it and
+`Write` your own — that is one keystroke from a rewrite, and it keeps happening: one build retyped
+5.6 KB into a scratchpad and the copy drifted from the tool it described; the next produced 11 KB
+against a 5.6 KB body, silently dropping the template's anchor rules for `edges[].where`,
+`subsystems[].source` and `tests[].file` from the contract all twelve agents were handed.
 
 **Completeness check before the barrier (lead, not delegated).** Before the Phase 2 synthesis, the
 lead confirms **every prescribed slice came back with its sections** — in particular that the T5 owner
@@ -1627,7 +1714,19 @@ It adds no check of its own. What it adds is a record and an answer:
   filter narrower than the run that surfaced it** — the same build re-checked with a grep whose
   pattern no longer matched the wording, the finding vanished from view, and it shipped unrecorded
   and unfixed. Narrowing the view is what a waved-through advisory looks like from the inside. (L3
-  assertion 15 watches this.) **`grep -v` on a gate's output is the same move in disguise:**
+  assertion 15 watches this.)
+  **A COUNT is the narrowest view of all, and it is not a read.** A later build ended with
+  `validate … | grep -ciE '^  - '` and the answer `11`; everything after — the audit, a 548-claim
+  pin, an 18-skeptic fan-out, the commit — rested on a warning list nobody had looked at, and three
+  advisories went into Phase 4 neither fixed nor recorded. The count was even *identical* before and
+  after the record it was meant to verify, so "11 then, 11 now" read as "nothing changed" when
+  checking exactly that was the point. (L3 assertion 26 watches this, for `validate`, `audit` AND
+  `finalize`.)
+  **`audit` gets the same treatment as `validate`.** The same build ran `audit --json`, printed
+  `len(worklist)` and the theme table from it, and never read the `findings` key of the file it had
+  just written — which on that map carried a WARNING naming its own four freshly-written exception
+  lines, three of them sharing one key. Piping a gate into a length is the same move as piping it
+  into a grep. **`grep -v` on a gate's output is the same move in disguise:**
   filtering a family out of your own view is not reconciling it. A later build piped `validate`
   through `grep -v 'declared .* times with differing'`, hiding 38 duplicate-edge warnings that then
   stayed invisible across two assembles and an entire grounding pass — the same 38 `fix dedup-edge`
@@ -1671,6 +1770,15 @@ cadence claim — always phrased `runs on cadence '<x>'` — could never be reco
 was silent: an unparsed line yields no key, and a line that silences nothing looked exactly like no
 line at all. A live build wrote two exceptions in the printed format, watched them do nothing, and
 had to read `anchor_drift.py` to find out why.)
+**A bucket the seed list does not have has its own escape: `Bucket vocabulary`.** A project whose
+real vocabulary needs a bucket the library seeds never named (an MCP gateway genuinely has an "MCP
+protocol" bucket) was told to rename it on every rebuild, forever — and the advice pulled against
+itself, because reusing the previous map's spelling for stability is what earned the warning. Record
+``coyodex record --map .coyodex/build-fragments/extras.json --heading "Bucket vocabulary" --line
+"MCP protocol: <why this project needs it>"`` — **name the FRAGMENT**, not the assembled map:
+`--map` defaults to `.coyodex/project-map.json`, and `record --help` calls that "the edit the next
+assemble discards". A record written into the map is a decision that silently un-records itself.
+and the nudge stops for that bucket only; a summary line still reports what the record silenced.
 **OPEN THE FILE before recording one.** The escape is for "the skeptics read a sibling file and the
 stored anchor is right" — a claim about what is at a `path:line`, which you cannot know without
 looking. A live build recorded both of its drift findings as false alarms with no `Read` and no
@@ -1680,8 +1788,10 @@ standard. (L3 assertion 17 watches this.) Write the record with **`coyodex recor
 exceptions" --line "…"`** rather than a hand-rolled append: it checks the heading is one a check
 actually reads, refuses a key with no why, and `--replace <prefix>` is how you correct a record
 whose facts moved. `finalize` exits non-zero for what validate and audit already block on, and for
-`INCOMPLETE`; unapplied anchor drift is reported and never gates, because `fix apply-drift` cannot fix
-an entry-point cadence anchor and a gate with no remedy is a false failure. It is a convenience
+`INCOMPLETE`; unapplied anchor drift is reported and never gates, because a `lifecycle` claim still
+has no writer and a gate with no remedy is a false failure. (`cadence` DID have no writer and now
+does — `fix apply-drift` rewrites an entry point's `cadence_source` alongside an edge `where` and a
+`security[].source`.) It is a convenience
 wrapper and a durable record, not a gate that can force anything.
 **Then render the markdown view** — once the
 map validates and the adversarial pass has no blocking contradiction (advisories reconciled),

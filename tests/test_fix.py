@@ -176,12 +176,13 @@ if __name__ == "__main__":
             print(f"ok {name}")
 
 
-def test_a_claim_kind_apply_drift_cannot_write_is_named_not_mislabelled(capsys):
-    """The defect: `apply-drift` writes an edge `where` and a `security[].source`, and everything else
-    fell through to its security branch — so an entry-point CADENCE claim was reported as a security
-    surface that matched 0 rows, then the summary said "no drifted edge or security anchors to
-    rewrite". On one live map that was all 17 of its findings: two true statements that together told
-    the operator nothing about what was actually wrong."""
+def test_a_drifted_cadence_anchor_is_written_not_refused(capsys):
+    """Two defects, one fixture. FIRST: a cadence claim fell through to the security branch and was
+    reported as a security surface matching 0 rows, while the summary said "no drifted edge or
+    security anchors to rewrite" — two true statements that together told the operator nothing.
+    THEN, once it was named correctly, it was still REFUSED: `cadence_source` is a real schema field
+    and `apply-drift` had no writer for it, so a live build had five cadence drifts handed back and
+    re-typed them through a bespoke script."""
     m = make_map([], entities=[{"id": "E1", "name": "Thing"}])
     m["entry_points"] = [{"kind": "job", "trigger": "nightly sweep", "component": "C1",
                           "source": "a.py:1", "cadence": "every 24h", "cadence_source": "a.py:2"}]
@@ -191,18 +192,19 @@ def test_a_claim_kind_apply_drift_cannot_write_is_named_not_mislabelled(capsys):
         mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:30")]})
         assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp]) == 0
         out = capsys.readouterr()
+        assert load_model_path(Path(mp)).entry_points[0].cadence_source == "a.py:30"
     combined = out.out + out.err
     assert "matches 0 security surfaces" not in combined, combined
-    assert "[cadence]" in combined and "cadence: 1" in combined
+    assert "cadence_source" in combined and "1 cadence anchor(s)" in combined
 
 
 def test_the_not_applicable_count_rides_the_final_line(capsys):
     """A live build read this output with `| tail -12`, so a total that is not on the last line is a
     total the reader never sees — the same lesson as assemble's unhealed-riding-step count."""
-    m = make_map([], entities=[{"id": "E1", "name": "Thing"}])
-    m["entry_points"] = [{"kind": "job", "trigger": "sweep", "component": "C1", "source": "a.py:1",
-                          "cadence": "every 24h", "cadence_source": "a.py:2"}]
-    claim = "Entry point [job] sweep runs on cadence 'every 24h'"
+    m = make_map([], entities=[{"id": "E1", "name": "Thing", "states": {
+        "source": "a.py:2", "states": ["NEW", "DONE"],
+        "transitions": [{"src": "NEW", "dst": "DONE", "on": "finish"}]}}])
+    claim = "E1 (Thing) has states [NEW, DONE] with 1 transition(s)"
     with tempfile.TemporaryDirectory() as td:
         (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
         mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:30")]})
@@ -234,7 +236,7 @@ def test_the_writable_theme_partition_covers_every_theme_the_audit_emits():
     assert fix._WRITABLE_THEMES <= known, fix._WRITABLE_THEMES - known
     # Every theme is on exactly one side, and the split is the documented one.
     unwritable = known - fix._WRITABLE_THEMES
-    assert unwritable == {"persistence", "messaging", "lifecycle", "cadence"}, unwritable
+    assert unwritable == {"persistence", "messaging", "lifecycle"}, unwritable
 
 
 def test_an_unparseable_edge_claim_is_not_reported_as_a_missing_security_row(capsys):
@@ -528,3 +530,309 @@ def test_a_map_with_no_conflicts_is_not_an_error_whatever_the_flags(capsys):
         rec = Path(tmp) / "reconcile.json"
         assert fix.main(["dedup-edge", "--map", str(p), "--to-reconcile", str(rec)]) == 0
         assert "no (src, verb, dst) edge is declared more than once" in capsys.readouterr().out
+
+
+# --- security-row ---------------------------------------------------------------
+# The regression these two verbs exist for: a hand script selected a refuted security row with
+# `'admin' in surface.lower() and source.startswith(…)`, matched TWO rows, and overwrote a
+# CONFIRMED claim with the refuted one's replacement text. Only `grounding report` caught it.
+
+
+def make_security_map(rows: list[dict]) -> dict:
+    return make_map([{"src": "C1", "verb": "calls", "dst": "C1", "where": "a.py:1"}], security=rows)
+
+
+def test_security_row_refuses_a_selector_matching_two_rows(capsys):
+    """THE headline regression, as a refusal. Two DIFFERENT surfaces share one anchor — legal — and
+    a selector that cannot tell them apart must write nothing rather than take the first."""
+    m = make_security_map([
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97", "risk": "hidden only"},
+        {"surface": "Role-gated navigation", "source": "ui/Sidebar.tsx:97", "risk": "real"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["security-row", "--map", str(p), "--at", "ui/Sidebar.tsx:97",
+                         "--set-risk", "rewritten"]) == 2
+        err = capsys.readouterr().err
+        assert "matches 2 security row(s)" in err
+        after = load_model_path(p)
+        assert [s.risk for s in after.security] == ["hidden only", "real"]
+
+
+def test_security_row_writes_one_row_when_the_selector_is_unambiguous(capsys):
+    m = make_security_map([
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97", "risk": "hidden only"},
+        {"surface": "Role-gated navigation", "source": "ui/Sidebar.tsx:97", "risk": "real"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["security-row", "--map", str(p), "--at", "ui/Sidebar.tsx:97",
+                         "--surface", "Admin pages", "--set-source", "api/routes.py:12",
+                         "--set-risk", "backend 403 is the real gate"]) == 0
+        after = load_model_path(p)
+        admin = [s for s in after.security if s.surface == "Admin pages"][0]
+        other = [s for s in after.security if s.surface == "Role-gated navigation"][0]
+        assert admin.source == "api/routes.py:12"
+        assert admin.risk == "backend 403 is the real gate"
+        # The claim that must NOT have moved.
+        assert (other.source, other.risk) == ("ui/Sidebar.tsx:97", "real")
+        assert "grounding record no longer names it" in capsys.readouterr().out
+
+
+def test_security_row_selects_by_the_exact_l2_claim(capsys):
+    """The claim string is what a skeptic verdict carries back, so it is the natural selector —
+    and it is unique per row even when surfaces or anchors collide."""
+    m = make_security_map([
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97"},
+        {"surface": "Admin pages", "source": "api/routes.py:12"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        claim = fix._security_claim("Admin pages", "ui/Sidebar.tsx:97")
+        assert fix.main(["security-row", "--map", str(p), "--claim", claim,
+                         "--set-risk", "nothing guards the route"]) == 0
+        after = load_model_path(p)
+        by_anchor = {s.source: s.risk for s in after.security}
+        assert by_anchor["ui/Sidebar.tsx:97"] == "nothing guards the route"
+        assert by_anchor["api/routes.py:12"] == ""
+
+
+def test_security_row_refuses_a_set_with_no_selector(capsys):
+    m = make_security_map([{"surface": "Admin pages", "source": "ui/Sidebar.tsx:97"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["security-row", "--map", str(p), "--set-risk", "x"]) == 2
+        assert "needs a row to write to" in capsys.readouterr().err
+
+
+# --- dedup-security -------------------------------------------------------------
+
+
+def test_dedup_security_keys_on_the_surface_not_the_anchor(capsys):
+    """Two surfaces sharing one anchor is LEGAL and must not be offered for de-duplication —
+    treating it as duplication is what made a hand script delete a real claim."""
+    m = make_security_map([
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97"},
+        {"surface": "Role-gated navigation", "source": "ui/Sidebar.tsx:97"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["dedup-security", "--map", str(p)]) == 0
+        out = capsys.readouterr().out
+        assert "no security surface is authored more than once" in out
+        assert "carry MORE THAN ONE surface" in out          # reported, never dropped
+        assert len(load_model_path(p).security) == 2
+
+
+def test_dedup_security_drops_the_duplicate_surface_and_keeps_the_chosen_anchor(capsys):
+    m = make_security_map([
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97"},
+        {"surface": "Admin pages", "source": "api/routes.py:12", "risk": "the real gate"},
+        {"surface": "Login", "source": "api/auth.py:5"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["dedup-security", "--map", str(p),
+                         "--keep", "Admin pages::api/routes.py:12"]) == 0
+        after = load_model_path(p)
+        assert [(s.surface, s.source) for s in after.security] == [
+            ("Admin pages", "api/routes.py:12"), ("Login", "api/auth.py:5")]
+
+
+def test_dedup_security_refuses_an_anchor_that_names_no_row(capsys):
+    m = make_security_map([
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97"},
+        {"surface": "Admin pages", "source": "api/routes.py:12"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["dedup-security", "--map", str(p),
+                         "--keep", "Admin pages::nowhere.py:1"]) == 2
+        assert "names no duplicate row" in capsys.readouterr().err
+        assert len(load_model_path(p).security) == 2
+
+
+# --- apply-drift --to-reconcile --------------------------------------------------
+# An anchor written into the ASSEMBLED map is discarded by the next assemble. A live build
+# corrected 14 anchors, re-assembled to pick up one fragment edit, lost all 14, and re-typed them
+# by hand out of the human-readable listing.
+
+
+def test_apply_drift_to_reconcile_records_instead_of_editing_the_map():
+    m = make_map([{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"}])
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote("C1 reads E1", True, "a.py:30")]})
+        rec = Path(td) / "reconcile.json"
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp,
+                         "--to-reconcile", str(rec)]) == 0
+        # the MAP is untouched …
+        assert load_model_path(Path(mp)).edges[0].where == "a.py:1"
+        # … and the decision is durable
+        doc = json.loads(rec.read_text(encoding="utf-8"))
+        assert doc["set_anchors"] == [{"claim": "C1 reads E1", "corrected": "a.py:30"}]
+
+
+def test_a_recorded_anchor_is_applied_by_the_reconcile_pass():
+    """The round trip: what `--to-reconcile` records, `assemble --reconcile` must apply — through
+    the SAME writer, so the durable record and the in-place edit cannot disagree."""
+    from coyodex.model import load_model
+    from coyodex.reconcile import apply_reconcile, load_reconcile
+    m = load_model(json.dumps(make_map(
+        [{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"}])))
+    rec = load_reconcile(json.dumps(
+        {"set_anchors": [{"claim": "C1 reads E1", "corrected": "a.py:30"}]}), "rec")
+    apply_reconcile(m, rec, {})
+    assert m.edges[0].where == "a.py:30"
+
+
+def test_a_recorded_anchor_whose_claim_is_gone_notes_and_never_fails():
+    """A reconcile file must not rot when a later fragment edit rewrites the claim it was keyed on —
+    the same 0-match rule `drop_edges` and `keep_edges` already follow."""
+    from coyodex.model import load_model
+    from coyodex.reconcile import apply_reconcile, load_reconcile
+    m = load_model(json.dumps(make_map(
+        [{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"}])))
+    rec = load_reconcile(json.dumps(
+        {"set_anchors": [{"claim": "Auth surface 'gone' is protected by: nothing",
+                          "corrected": "b.py:9"}]}), "rec")
+    notes = apply_reconcile(m, rec, {})
+    assert m.edges[0].where == "a.py:1"
+    assert any("matches no edge, security surface or cadenced entry point" in n for n in notes)
+
+
+def test_dedup_security_resolves_rows_that_share_surface_AND_anchor(capsys):
+    """The ORDINARY duplicate: two fragments harvested one auth check, so the rows agree on
+    everything. Refusing it made the command unable to resolve the case it exists for — and
+    `validate`'s advisory points the operator straight here, with no other answer than the hand
+    script this replaces."""
+    m = make_security_map([
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97", "risk": "hidden only"},
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97", "risk": "hidden only"},
+        {"surface": "Login", "source": "api/auth.py:5"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["dedup-security", "--map", str(p), "--accept-suggested"]) == 0
+        after = load_model_path(p)
+        assert [(s.surface, s.source) for s in after.security] == [
+            ("Admin pages", "ui/Sidebar.tsx:97"), ("Login", "api/auth.py:5")]
+        assert "identical rows" in capsys.readouterr().out
+
+
+def test_dedup_security_refuses_same_anchor_rows_that_differ(capsys):
+    """Byte-identical rows are not a choice; rows differing in `who`/`risk` still are."""
+    m = make_security_map([
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97", "risk": "hidden only"},
+        {"surface": "Admin pages", "source": "ui/Sidebar.tsx:97", "risk": "the real gate"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["dedup-security", "--map", str(p), "--accept-suggested"]) == 2
+        assert "IS a decision" in capsys.readouterr().err
+        assert len(load_model_path(p).security) == 2
+
+
+def test_a_keep_token_never_drops_a_row_of_another_surface(capsys):
+    """`partition("::")` read the token the tool ITSELF printed for surface `A::B` as surface `A`,
+    dropped a row under `A`, and reported success — the original wrong-row-deletion bug class,
+    reproduced inside its own fix. Tokens are resolved against the real candidates now."""
+    m = make_security_map([
+        {"surface": "A", "source": "n.ts:1"},
+        {"surface": "A", "source": "B::m.ts:2"},
+        {"surface": "A::B", "source": "m.ts:2"},
+        {"surface": "A::B", "source": "z.ts:3"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["dedup-security", "--map", str(p), "--keep", "A::B::m.ts:2"]) == 2
+        assert "ambiguous" in capsys.readouterr().err
+        assert len(load_model_path(p).security) == 4      # nothing dropped
+
+
+def test_dedup_security_json_with_a_decision_is_refused(capsys):
+    m = make_security_map([{"surface": "A", "source": "a.ts:1"},
+                           {"surface": "A", "source": "b.ts:2"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["dedup-security", "--map", str(p), "--json",
+                         "--keep", "A::a.ts:1"]) == 2
+        assert "Pick one" in capsys.readouterr().err
+        assert len(load_model_path(p).security) == 2
+
+
+def test_apply_drift_to_reconcile_names_the_drifts_it_cannot_write(capsys):
+    """The tail said "N drift(s) NOT APPLICABLE … (see above)" with nothing above: the report ran
+    only on the in-place path, so the claims needing a hand re-anchor were counted, never named."""
+    m = make_map([], entities=[{"id": "E1", "name": "Thing", "states": {
+        "source": "a.py:2", "states": ["NEW", "DONE"],
+        "transitions": [{"src": "NEW", "dst": "DONE", "on": "finish"}]}}])
+    claim = "E1 (Thing) has states [NEW, DONE] with 1 transition(s)"
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:30")]})
+        rec = Path(td) / "reconcile.json"
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp,
+                         "--to-reconcile", str(rec)]) == 0
+        out = capsys.readouterr()
+    combined = out.out + out.err
+    assert "NOT APPLICABLE" in combined
+    assert "[lifecycle]" in combined and "E1 (Thing) has states" in combined
+
+
+def test_apply_drift_to_reconcile_leaves_the_file_alone_when_there_is_nothing_to_record(capsys):
+    m = make_map([{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:30"}])
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote("C1 reads E1", True, "a.py:30")]})
+        rec = Path(td) / "reconcile.json"
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp,
+                         "--to-reconcile", str(rec)]) == 0
+        assert not rec.exists()
+        assert "was not touched" in capsys.readouterr().out
+
+
+def test_security_row_refuses_an_empty_surface(capsys):
+    """The surface is the row's identity; an unset shell variable would anonymise it silently."""
+    m = make_security_map([{"surface": "/signup", "source": "api/signup.py:1"}])
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "m.json"
+        p.write_text(json.dumps(m), encoding="utf-8")
+        assert fix.main(["security-row", "--map", str(p), "--surface", "/signup",
+                         "--set-surface", ""]) == 2
+        assert "cannot be empty" in capsys.readouterr().err
+        assert load_model_path(p).security[0].surface == "/signup"
+
+
+def test_two_corrections_landing_on_one_row_are_both_refused():
+    """A single-pass writer matched against the model it was mutating, so the outcome depended on
+    worklist order: one order applied both corrections, the other skipped the second and left two
+    byte-identical security rows behind."""
+    from coyodex.audit_model import apply_anchor_corrections, security_claim
+    from coyodex.model import load_model
+    m = load_model(json.dumps(make_security_map([
+        {"surface": "S", "source": "a.py:1"}, {"surface": "S", "source": "b.py:2"}])))
+    c0 = (security_claim("S", "a.py:1"), "b.py:2")
+    c1 = (security_claim("S", "b.py:2"), "c.py:3")
+    counts, notes = apply_anchor_corrections(m, [c0, c1])
+    assert counts["security"] == 2
+    assert [s.source for s in m.security] == ["b.py:2", "c.py:3"]
+    # and the reverse order gives the SAME map
+    m2 = load_model(json.dumps(make_security_map([
+        {"surface": "S", "source": "a.py:1"}, {"surface": "S", "source": "b.py:2"}])))
+    apply_anchor_corrections(m2, [c1, c0])
+    assert [s.source for s in m2.security] == ["b.py:2", "c.py:3"]
+
+
+def test_two_corrections_targeting_the_same_element_are_skipped_not_ordered():
+    from coyodex.audit_model import apply_anchor_corrections
+    from coyodex.model import load_model
+    m = load_model(json.dumps(make_map(
+        [{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"}])))
+    counts, notes = apply_anchor_corrections(
+        m, [("C1 reads E1", "b.py:2"), ("C1 reads E1", "c.py:3")])
+    assert counts["edge"] == 0
+    assert m.edges[0].where == "a.py:1"
+    assert any("accident of order" in n for n in notes)

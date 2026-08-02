@@ -182,7 +182,7 @@ def _segments(command: str) -> list[str]:
 #: variable (`$CX audit`), where the binary's identity cannot be read off the command itself.
 _COYODEX_SUBCOMMANDS = frozenset({
     "preindex", "validate", "audit", "render", "serve", "assemble", "lint-fragment",
-    "anchor-drift", "fix", "dump", "reconcile", "balance",
+    "anchor-drift", "fix", "dump", "reconcile", "balance", "provenance",
 })
 
 
@@ -1571,6 +1571,335 @@ def assert_25_dedup_to_reconcile_recorded_something(turns: Sequence[Turn]) -> As
                      len(good) + len(bad), tuple(bad or good))
 
 
+# ── assertions added by the 2026-08-02 retrospective ─────────────────────────────────────────────
+
+#: A gate read reduced to a NUMBER. `grep -c` / `wc -l` / a bare `| head -1` answers "how many"
+#: without ever showing WHICH — and the identity of the findings is the whole content of a gate.
+#:
+#: The flag half must match a real OPTION. A first cut allowed any hyphenated word containing a `c`
+#: after the dash, so `validate … | grep 'cross-cutting'`, `| grep -E 'not-connected'` and
+#: `| grep --color=always 'runs-in'` all read as counts — three ordinary greps accused.
+_COUNT_ONLY = re.compile(r"\|\s*(?:grep\s+(?:--?[\w-]+\s+)*-\w*c"
+                         r"|wc\s+-[lwc]\b|head\s+-n?\s*1\s*$)")
+
+
+#: Statement separators. Deliberately NOT `|`: a pipeline is ONE statement, and the whole point of
+#: reading a gate statement is to see what its output was piped INTO.
+_STATEMENT_SPLIT = re.compile(r"\n|;|&&|\|\|")
+
+
+def _statements(command: str) -> list[str]:
+    """A Bash call split into statements, keeping each pipeline intact."""
+    return [s.strip() for s in _STATEMENT_SPLIT.split(_shell_only(command)) if s.strip()]
+
+
+def _gate_statements(command: str) -> list[str]:
+    """The statements of a Bash call that invoke a gate, each WITH its pipeline.
+
+    Two errors this replaces, both verified against real transcripts. Scanning the whole blob:
+    a full, unfiltered `coyodex validate` on one line and an unrelated `ls … | wc -l` on the next
+    scored as a count-only read, and a real bare-count read escaped whenever any redirect appeared
+    anywhere else in the same call. Scanning `_segments` instead: that splits pipelines, so the
+    gate stage lost the `| grep -c` that is the entire finding."""
+    return [s for s in _statements(command)
+            if any(_invokes(seg, g) for seg in _segments(s)
+                   for g in ("validate", "audit", "finalize"))]
+
+
+def _raw_blob(call: ToolCall) -> str:
+    """Every string value in a tool call's input, joined RAW.
+
+    `ToolCall.text()` is `json.dumps(input)`, which escapes a newline to a literal backslash-n — so
+    any pattern spanning lines (a path bound on one line and written on the next) silently never
+    matched. That is how a detector for hand-written map edits missed the very script that
+    prompted it."""
+    parts: list[str] = []
+
+    def walk(value: object) -> None:
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, dict):
+            for v in value.values():
+                walk(v)
+        elif isinstance(value, list):
+            for v in value:
+                walk(v)
+
+    walk(call.input)
+    return "\n".join(parts)
+
+
+def assert_26_gate_output_not_reduced_to_a_count(turns: Sequence[Turn]) -> Assertion:
+    """26 — no `validate` / `audit` / `finalize` run was read as a bare COUNT.
+
+    Assertion 9 already notices when the FINAL validate view was narrowed, and says the score above
+    it is optimistic. This one makes the narrowing itself the number, and covers `audit` and
+    `finalize` too.
+
+    The build that prompted it ran `coyodex validate … | grep -ciE '^  - '` as its last validate and
+    read the answer `11`. Everything after — the audit, the 548-claim pin, an 18-skeptic fan-out,
+    the commit — rested on a warning list nobody had looked at, and three advisories went into
+    Phase 4 neither fixed nor recorded. The count was even identical before and after a record was
+    fixed, so "11 then, 11 now" read as "nothing changed" when the point was to check exactly that.
+
+    `of` counts gate runs whose output was consumed inline; `observed` counts those NOT reduced to a
+    count. A run redirected to a file is not counted at all — reading the report file is what the
+    method asks for."""
+    good: list[Evidence] = []
+    bad: list[Evidence] = []
+    for turn in turns:
+        for call in turn.calls_named("Bash"):
+            for seg in _gate_statements(call.command):
+                if _redirect_targets(seg):
+                    continue                  # went to a file; assertion 23 covers reading it
+                (bad if _COUNT_ONLY.search(seg) else good).append(
+                    Evidence(turn.index, {"command": seg[:160]}))
+    return Assertion(26, "no gate output read as a bare count", len(good), len(good) + len(bad),
+                     tuple(bad or good))
+
+
+#: The artifacts a `fix` verb owns. A hand script that writes one of these is the class of edit the
+#: `fix` verbs exist to make impossible.
+_MODEL_ARTIFACTS = ("project-map.json", "build-fragments/")
+
+#: A python write whose TARGET is bound to a variable first — `p = pathlib.Path(<artifact>)` then
+#: `p.write_text(...)`. The script that clobbered a confirmed claim had exactly that shape, so an
+#: adjacency rule could not see it; but "any write verb anywhere in the blob" over-fired instead,
+#: calling a scratchpad report a map mutation. This pairs the two: a variable BOUND to the artifact,
+#: then written through.
+_VAR_BOUND_WRITE = (r"(\w+)\s*=\s*[^\n]*{art}[^\n]*\n(?:.*\n)*?.*?\1\s*\.write_text\s*\(")
+
+#: Shell writers: a redirect, a `tee`, or an in-place `sed`/`perl`.
+_SHELL_WRITE = (r"(?:>>?\s*|tee\s+(?:-a\s+)?)[^\s;&|]*{art}"
+                r"|sed\s+-i[^;&|]*{art}|perl\s+-[^;&|]*i[^;&|]*{art}")
+
+#: The coyodex verbs that legitimately write a map or a fragment.
+_MODEL_WRITERS = ("fix", "record", "assemble", "grounding", "reconcile")
+
+
+def _program_rewrites(blob: str, artifact: str) -> bool:
+    """Does an ad-hoc PROGRAM in this blob write `artifact`?
+
+    Three shapes, all seen live: `open(<art>, 'w')`; a path bound to a variable and written through
+    it a few lines later (`p = pathlib.Path(<art>)` … `p.write_text(...)`, which is what the script
+    that clobbered a confirmed claim did); and a shell redirect / `tee` / `sed -i`."""
+    if artifact not in blob:
+        return False
+    esc = re.escape(artifact)
+    return bool(_python_write(blob, artifact)
+                or re.search(_VAR_BOUND_WRITE.format(art=esc), blob)
+                or re.search(_SHELL_WRITE.format(art=esc), blob))
+
+
+def _hand_written_artifact(call: ToolCall) -> str | None:
+    """The model artifact this call writes in a way the method forbids, or None.
+
+    The two artifacts have DIFFERENT rules, and conflating them accused an honest build of its own
+    method. `project-map.json` is GENERATED — only `assemble` and the `fix` verbs may write it, so
+    any hand write at all is the defect. A build fragment is AUTHORED — the lead writes
+    `behavioral.json`, `header.json`, `structure.json` by hand and that IS the method, so a plain
+    `Write`/`Edit` there is not a finding. What is a finding on a fragment is an ad-hoc PROGRAM
+    that loads it, mutates it and writes it back: that is the shape that matched two rows by
+    substring and overwrote a claim nobody meant to touch."""
+    blob = _raw_blob(call)
+    if call.name in ("Write", "Edit", "NotebookEdit"):
+        target = call.input.get("file_path")
+        if isinstance(target, str) and "project-map.json" in target:
+            return "project-map.json"
+        return None
+    if _program_rewrites(blob, "project-map.json"):
+        return "project-map.json"
+    if _program_rewrites(blob, "build-fragments/"):
+        return "build-fragments/"
+    return None
+
+
+def assert_27_no_hand_script_mutated_the_model(turns: Sequence[Turn]) -> Assertion:
+    """27 — the map and its fragments were written by tools, not by hand-rolled scripts.
+
+    `coyodex fix` exists so these edits "are never hand-scripted". A live build still had to
+    hand-script one — there was no verb for rewriting a refuted security row — and its script
+    selected the target with `'admin' in surface.lower()`, matched TWO rows, and overwrote a
+    CONFIRMED grounding claim with the refuted one's replacement text. The lead then read the two
+    identical rows as a duplicate and deleted one. Only `grounding report` caught it, three
+    assembles later.
+
+    `fix security-row` and `fix dedup-security` close that gap, so this is the regression watch.
+    `of` counts calls that wrote a map or fragment; `observed` counts the ones that went through a
+    `coyodex` verb. A call carrying an inline writer is counted as hand-written even if it also
+    invokes a command — chaining one behind the other is how the hand edit hid.
+    """
+    good: list[Evidence] = []
+    bad: list[Evidence] = []
+    for turn in turns:
+        for call in turn.tool_calls:
+            art = _hand_written_artifact(call)
+            if art is not None:
+                bad.append(Evidence(turn.index, {"artifact": art, "tool": call.name,
+                                                 "text": _raw_blob(call)[:160]}))
+            elif call.name == "Bash" and any(_invokes(call.command, v) for v in _MODEL_WRITERS):
+                good.append(Evidence(turn.index, {"command": call.command[:160]}))
+    return Assertion(27, "no hand script mutated the map or a fragment", len(good),
+                     len(good) + len(bad), tuple(bad or good))
+
+
+#: The extras headings the tools actually READ — the ones `coyodex record` knows. Matching the bare
+#: words "extras" or "exceptions" instead would fire on any scratch report that happens to contain
+#: the word, and on a fragment being authored rather than a decision being recorded.
+_EXTRAS_MARKERS = ("Balance exceptions", "Audit exceptions", "Drift exceptions",
+                   "Accepted duplications", "Unclaimed surfaces", "Happy Path coverage",
+                   "Entry-point coverage", "Coverage exceptions", "Persistence exceptions",
+                   "Bucket vocabulary")
+
+
+def assert_28_extras_written_with_record(turns: Sequence[Turn]) -> Assertion:
+    """28 — every recorded exception was written with `coyodex record`.
+
+    `record` checks the heading is one a check actually reads, refuses a key with no why, and
+    `--replace <prefix>` corrects a record whose facts moved. A live build hand-edited its extras
+    three times instead — and the third edit was a `.replace()` fixing the formatting of the first
+    two so the parser would key them at all, which is exactly the failure `record --help`
+    describes.
+
+    `of` counts writes that touch an extras heading; `observed` counts the ones that went through
+    the command."""
+    good: list[Evidence] = []
+    bad: list[Evidence] = []
+    for turn in turns:
+        for call in turn.tool_calls:
+            blob = _raw_blob(call)
+            if not any(marker in blob for marker in _EXTRAS_MARKERS):
+                continue
+            if call.name == "Bash" and _invokes(call.command, "record"):
+                good.append(Evidence(turn.index, {"how": "coyodex record"}))
+            elif _hand_written_artifact(call) is not None:
+                bad.append(Evidence(turn.index, {"how": call.name, "text": blob[:160]}))
+    return Assertion(28, "extras written with `coyodex record`", len(good), len(good) + len(bad),
+                     tuple(bad or good))
+
+
+#: Where `coyodex-eval archive` files the map a from-scratch rebuild replaced. Reading one during a
+#: rebuild is what makes the "independent" second map partly a copy of the first.
+_ARCHIVE_DIR = "dev-rebuilds/"
+
+#: A READ of something under that directory: a read verb naming the path on the SAME line.
+#:
+#: Both halves are load-bearing, and each was wrong once. Requiring only "the path appears
+#: somewhere in the call" made `mkdir -p …/dev-rebuilds/0017` two lines below an unrelated `pytest`
+#: read as "the archive was consulted". Requiring the verb to START its segment then missed the
+#: real case, where the path sits inside a `python -c` body — `json.load(open('…/dev-rebuilds/
+#: 0016/project-map.json'))` — several lines below the `python` that runs it. What identifies a
+#: read is the verb NEXT TO the path, whatever launched the program around it.
+_ARCHIVE_READ = re.compile(
+    r"(?:open|read_text|read_bytes|json\.load|loads|cat|head|tail|less|jq|grep|diff|"
+    r"Read)\b[^\n;&|]*" + re.escape(_ARCHIVE_DIR))
+
+
+def assert_29_previous_map_not_read_during_the_build(turns: Sequence[Turn]) -> Assertion:
+    """29 — the previous map was not opened while building the new one.
+
+    A from-scratch rebuild that reads the map it is replacing is not independent of it. On a live
+    build the lead opened `dev-rebuilds/0016/project-map.json`, printed its title and goal, and the
+    new goal then reproduced the old one near-verbatim for two sentences; the dep buckets were
+    inherited on purpose as well. Any eval comparing two maps of one repo reads that agreement as
+    convergence when it is copying.
+
+    ARCHIVING is not reading: `coyodex-eval archive` moves the old map into that directory and is
+    exempt. `of` is 1 for any run that archived or assembled (i.e. a build); `observed` is 1 when no
+    archived map was read."""
+    bad: list[Evidence] = []
+    built = False
+    for turn in turns:
+        for call in turn.tool_calls:
+            if call.name == "Bash" and any(_invokes(call.command, v)
+                                           for v in ("assemble", "preindex", "archive")):
+                built = True
+            blob = call.text()
+            if _ARCHIVE_DIR not in blob:
+                continue
+            if call.name == "Bash" and _invokes(call.command, "archive"):
+                continue                       # filing the old map, not consulting it
+            if call.name == "Read" or (call.name == "Bash"
+                                       and _ARCHIVE_READ.search(_raw_blob(call))):
+                bad.append(Evidence(turn.index, {"tool": call.name, "text": blob[:160]}))
+    if not built:
+        return Assertion(29, "previous map not read during the build", 0, 0)
+    return Assertion(29, "previous map not read during the build", 0 if bad else 1, 1, tuple(bad))
+
+
+def assert_30_grounding_write_follows_the_drift_fix(turns: Sequence[Turn]) -> Assertion:
+    """30 — `grounding write` ran AFTER the last anchor-drift fix, not before it.
+
+    The record is measured against a map; fixing anchors afterwards moves that map, and `finalize`
+    then raises `live_claims_digest does not match`. A live build hit exactly that and redid its
+    whole tail — drift fixes, record, assemble — by hand, ~14 turns. The method now states one
+    order (`apply-drift --to-reconcile` → final assemble → `grounding write`), and this watches it.
+
+    `of` is 1 when both ran; `observed` is 1 when the last `fix apply-drift` precedes the last
+    `grounding write`."""
+    # Ordered by (turn, position within the command), because the prescribed sequence is most
+    # naturally run as ONE pasted block: with turn index alone, both markers landed on the same
+    # turn and a build that followed the new rule perfectly scored 0.
+    last_drift = last_write = None
+    for turn in turns:
+        for call in turn.calls_named("Bash"):
+            cmd = call.command
+            for i, seg in enumerate(_segments(cmd)):
+                if _invokes(seg, "fix") and "apply-drift" in seg:
+                    last_drift = (turn.index, i)
+                # `_writes_the_grounding_record` and not `"write" in cmd`: the loose form counted
+                # `grounding report … # read this before you write the note` as a write, which is
+                # the read-only command the method tells you to run in between.
+                if _writes_the_grounding_record(seg):
+                    last_write = (turn.index, i)
+    if last_drift is None or last_write is None:
+        return Assertion(30, "grounding write follows the drift fix", 0, 0)
+    ok = last_drift <= last_write
+    return Assertion(30, "grounding write follows the drift fix", 1 if ok else 0, 1,
+                     (Evidence(last_write[0], {"last apply-drift turn": last_drift[0],
+                                               "last grounding write turn": last_write[0]}),))
+
+
+#: A behavioral-layer id. If the structural slice briefs cite none of these, the slicing was cut
+#: from the file tree alone and the behavioral draft informed nothing.
+_BEHAVIORAL_ID = re.compile(r"\b(?:UC\d+|CAP\d+|HP\d+|R\d+)\b")
+
+
+def assert_31_harvest_briefs_cite_the_behavioral_draft(turns: Sequence[Turn]) -> Assertion:
+    """31 — the structural slice briefs actually cite the behavioral layer.
+
+    Assertion 22 asks whether the behavioral draft was WRITTEN before the harvest dispatch, which is
+    a proxy: a build can write the draft first and still cut its slices from the directory census
+    alone. This asks the load-bearing question instead.
+
+    On the build that prompted it, the ordering proxy scored 0 and the sharper question failed
+    harder — the twelve harvest prompts mention no use case, capability, happy-path step or role
+    anywhere, and every slice boundary is a directory boundary from the pre-index weight map. The
+    glossary, itself a behavioral table, was one of the twelve dispatches and landed AFTER the use
+    cases were named.
+
+    `of` is 1 for the first agent fan-out; `observed` is 1 when at least one of its prompts cites a
+    behavioral id."""
+    # The HARVEST fan-out is the one before the first `assemble` — not simply the first fan-out of
+    # two or more agents, which on a live run was a repo-survey errand, so the assertion scored the
+    # errand and never looked at the harvest. Among the candidates, take the LARGEST (the harvest is
+    # the widest fan-out of the phase) and credit it if any brief cites a behavioral id.
+    candidates: list[Turn] = []
+    for turn in turns:
+        if any(call.name == "Bash" and _invokes(call.command, "assemble")
+               for call in turn.tool_calls):
+            break
+        if len(turn.agent_calls) >= 2:
+            candidates.append(turn)
+    if not candidates:
+        return Assertion(31, "harvest briefs cite the behavioral draft", 0, 0)
+    best = max(candidates, key=lambda t: len(t.agent_calls))
+    cited = [c for c in best.agent_calls if _BEHAVIORAL_ID.search(c.text())]
+    return Assertion(31, "harvest briefs cite the behavioral draft", 1 if cited else 0, 1,
+                     (Evidence(best.index, {"agents": len(best.agent_calls),
+                                            "citing": len(cited)}),))
+
+
 ASSERTIONS = (
     assert_1_preindex_report_used,
     assert_2_preindex_not_hand_parsed,
@@ -1594,6 +1923,12 @@ ASSERTIONS = (
     assert_23_the_build_saw_the_whole_gate,
     assert_24_no_inert_recorded_exception,
     assert_25_dedup_to_reconcile_recorded_something,
+    assert_26_gate_output_not_reduced_to_a_count,
+    assert_27_no_hand_script_mutated_the_model,
+    assert_28_extras_written_with_record,
+    assert_29_previous_map_not_read_during_the_build,
+    assert_30_grounding_write_follows_the_drift_fix,
+    assert_31_harvest_briefs_cite_the_behavioral_draft,
 )
 
 
@@ -1764,6 +2099,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if "--diff" in args:
+        # REFUSE the flags this path cannot honour, rather than dropping them. Same class as the
+        # `--from`/`--to` bug in `transcript --commands`: a flag accepted and silently ignored lets
+        # a caller believe it asked for something. Worse here, because `--out x.json` would also
+        # leave `x.json` looking like a third scorecard path and produce a confusing arity error.
+        stray = [a for a in args if a.startswith("--") and a not in ("--diff", "--json")]
+        if stray:
+            print(f"ERROR: --diff compares two existing scorecards; it cannot honour "
+                  f"{', '.join(stray)}. Drop them, or run without --diff to score a transcript.",
+                  file=sys.stderr)
+            return 2
         rest = [a for a in args if a != "--diff" and not a.startswith("--")]
         if len(rest) != 2:
             print("ERROR: --diff needs exactly two scorecard paths\n", file=sys.stderr)

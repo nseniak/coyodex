@@ -33,8 +33,9 @@ from coyodex import subverb_help
 from coyodex.anchor_drift import load_verdicts
 
 USAGE = """usage: coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
-                               [--out <fragment.json>] [--note <text>] [--json]
-                               [--map <project-map.json>] [--partial]
+                               [--out <fragment.json>] [--json] [--partial]
+                               [--note <text> | --note-file <path> | --keep-note]
+                               [--map <project-map.json>]
 coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--map <map>] [--json]
        coyodex grounding report --worklist <audit.json> --verdicts <raw.json>... [--json]
 
@@ -51,6 +52,12 @@ It REFUSES rather than guess:
   - a verdict whose claim is not in the pinned worklist  -> the worklist is the wrong snapshot
   - a worklist claim with no verdict at all              -> the pass did not challenge everything
 Both are the "gate did not run" failure wearing a different hat.
+
+The note: `--note` takes it inline, `--note-file` reads it from a file, `--keep-note` reuses the
+note already in `--out`. The last two exist because a re-run (the ordinary case — the record is
+re-measured after a late fix) had to re-supply the whole note, and a live build did that through a
+nested `$(python -c …)` re-extracting ~1900 characters back through the shell. It survived; a note
+containing a quote or a backtick would not have.
 
 --partial: record a DELIBERATE partial pass — the second refusal is lifted, `claims_total` keeps the
 FULL pinned surface and `claims_challenged` says how far you got. Needs a --note naming what was
@@ -358,6 +365,8 @@ def main(argv: list[str] | None = None) -> int:
     worklist_path = out_path = map_path = None
     verdicts: list[str] = []
     note = ""
+    note_file: str | None = None
+    keep_note = False
     as_json = False
     partial = False
     i = 0
@@ -367,7 +376,9 @@ def main(argv: list[str] | None = None) -> int:
             as_json = True
         elif a == "--partial":
             partial = True
-        elif a in ("--worklist", "--verdicts", "--out", "--note", "--map"):
+        elif a == "--keep-note":
+            keep_note = True
+        elif a in ("--worklist", "--verdicts", "--out", "--note", "--note-file", "--map"):
             i += 1
             if i >= len(rest):
                 print(f"ERROR: {a} needs a value", file=sys.stderr)
@@ -380,6 +391,8 @@ def main(argv: list[str] | None = None) -> int:
                 verdicts.append(rest[i])
             elif a == "--out":
                 out_path = rest[i]
+            elif a == "--note-file":
+                note_file = rest[i]
             else:
                 note = rest[i]
         else:
@@ -390,6 +403,47 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: --worklist and at least one --verdicts are required\n\n{USAGE}",
               file=sys.stderr)
         return 2
+    # `--note` is required for a real record, and a re-run therefore had to re-supply a note that
+    # already existed. A live build did it through a nested `$(python -c …)` that re-extracted a
+    # ~1900-character note out of the previous fragment and pushed it back through the shell — it
+    # survived, but a note containing a quote or a backtick would not have. Two ways out that never
+    # touch the shell: read it from a file, or keep the one already in `--out`.
+    if keep_note and (note_file or note):
+        other = "--note-file" if note_file else "--note"
+        print(f"ERROR: --keep-note reuses the note already in --out; {other} supplies a new one. "
+              f"Pick one — silently discarding the note you typed is worse than refusing.",
+              file=sys.stderr)
+        return 2
+    if note_file:
+        try:
+            note = Path(note_file).read_text(encoding="utf-8").strip()
+        except OSError as e:
+            print(f"ERROR: --note-file {note_file} could not be read ({e})", file=sys.stderr)
+            return 2
+        if not note:
+            print(f"ERROR: --note-file {note_file} is empty", file=sys.stderr)
+            return 2
+    if keep_note:
+        if not out_path:
+            print("ERROR: --keep-note reads the note from the existing --out fragment, so --out is "
+                  "required.", file=sys.stderr)
+            return 2
+        prior = Path(out_path)
+        existing = ""
+        if prior.exists():
+            try:
+                doc = json.loads(prior.read_text(encoding="utf-8"))
+                existing = str((doc.get("grounding") or {}).get("note") or "")
+            except ValueError as e:
+                print(f"ERROR: {out_path} is not valid JSON ({e})", file=sys.stderr)
+                return 2
+        if not existing:
+            print(f"ERROR: --keep-note found no note in {out_path} — pass --note or --note-file "
+                  f"for the first write.", file=sys.stderr)
+            return 2
+        note = existing
+        print(f"note: reusing the {len(existing)}-character note already in {out_path}.",
+              file=sys.stderr)
     claims = _worklist_claims(Path(worklist_path))
     if not claims:
         print(f"ERROR: {worklist_path} holds no worklist claims — pass `coyodex audit <map> --json`",

@@ -200,6 +200,21 @@ the harvest, because a fragment written by a SUB-AGENT is invisible to the trans
 | 24 | the shipped map carries no recorded exception that suppresses nothing | a build recorded three scoped `runs-in/…` keys; `validate`'s count line named two groups, and deleting the third changed no output at all. A correctly-spelled inert record and a typo'd one were indistinguishable, and the build read that line three times without noticing. Needs `--map`; `n/a` without it |
 | 25 | every `fix dedup-edge --to-reconcile` run recorded a directive | the flag was ignored when neither `--keep` nor `--accept-suggested` was given: exit 0, a full listing, an untouched file. A build escaped only because it read the file back. The tool now refuses that combination; this is the regression watch |
 
+### 26–31, from the SECOND 2026-08-02 retrospective (the mcpolis rebuild at 075ba0a)
+
+| # | assertion | the fix it audits |
+|---|---|---|
+| 26 | no `validate` / `audit` / `finalize` run was read as a bare COUNT | the build's last validate was `\| grep -ciE '^  - '` → the number `11`. Everything after it — the audit, the 548-claim pin, an 18-skeptic fan-out, the commit — rested on a warning list nobody had looked at, and three advisories went into Phase 4 neither fixed nor recorded. The count was even identical before and after a record was repaired, so "11 then, 11 now" read as "nothing changed" when checking that was the point. Assertion 9 already *notes* a narrowed final view; this makes it a number, and covers `audit` and `finalize` too |
+| 27 | the map and its fragments were written by tools, not hand-rolled scripts | there was no verb for rewriting a REFUTED security row, so the build hand-scripted it: the selector `'admin' in surface.lower()` matched two rows and overwrote a CONFIRMED claim with the refuted one's text. The lead then read the two identical rows as a duplicate and deleted one. `fix security-row` / `fix dedup-security` close the gap; this is the watch |
+| 28 | every recorded exception was written with `coyodex record` | three hand edits into extras, the third a `.replace()` repairing the formatting of the first two so the parser would key them — the exact failure `record --help` describes |
+| 29 | the previous map was not read during a from-scratch rebuild | the lead opened `dev-rebuilds/0016/project-map.json` and the new goal then reproduced the old one near-verbatim for two sentences; dep buckets were inherited deliberately. Any eval comparing two maps of one repo reads that as convergence when it is copying. Archiving is exempt — `coyodex-eval archive` files the old map, it does not consult it |
+| 30 | `grounding write` ran AFTER the last anchor-drift fix | the record is measured against a map, and fixing anchors afterwards moves it. `finalize` raised `live_claims_digest does not match` and the whole tail was redone by hand, ~14 turns. The method now states one order; `apply-drift --to-reconcile` is what makes it possible |
+| 31 | the harvest briefs cite the behavioral layer | 22 asks whether the behavioral draft was WRITTEN first, which a build can satisfy and still cut its slices from the directory census alone — which this one did: twelve harvest prompts, not one `UC`/`CAP`/`HP`/`R` id among them, every boundary a directory boundary. 31 asks the load-bearing question; 22 stays as the cheap ordering proxy |
+
+Note 30's shape: it scores the FINAL order, not the churn. The build that prompted it ends at 1.00
+because it recovered — by hand, over fourteen turns. What that costs shows up in wall-clock, not
+here; an assertion that fired on the recovery would punish the fix.
+
 ### What the 2026-08-02 retrospective taught about these detectors
 
 Three assertions **accused an honest build**, and the corpus had not caught any of them because the
@@ -220,6 +235,31 @@ its first cut, and auditing the 33 removals found real waits among them (`ls …
 awk`, `ls -1 …/*.json | grep -v draft`, an `until [ "$(ls -1 …)" ]` spin loop). The shipped version
 is 51 → 37 with all 14 removals audited as genuine work (`mv`, `mkdir`, `rm`, `python3`,
 `lint-fragment`) and **0 newly flagged**.
+
+### What the adversarial review of 26-31 caught, before they ever ran on a build
+
+All six were written, tested green, scored against two real transcripts — and then handed to two
+fresh-context reviewers whose brief was to break them. Five of the six accused an honest build.
+Every failure is the same family the table above already records, which is the point: the family is
+not a bug you fix once, it is the standing cost of matching text instead of parsing it.
+
+| the bug | what it did |
+|---|---|
+| `_segments` splits pipelines | 26 read the gate stage WITHOUT the `\| grep -c` that consumes it, so the finding was in a different segment from the gate. Scanning the whole blob instead — the first attempt — convicted a full read because an unrelated `ls \| wc -l` sat two lines below. Fixed by splitting into STATEMENTS (`;`, `&&`, newline, but never `\|`) |
+| `grep\s+[^\|]*-[a-zA-Z]*c` as "a count flag" | any hyphenated word containing a `c` matched: `grep 'cross-cutting'`, `grep -E 'not-connected'`, `grep --color=always`. Three ordinary greps read as counts |
+| `ToolCall.text()` is `json.dumps(input)` | a newline becomes a literal backslash-n, so every multi-line pattern silently never matched — 27 missed the very script that prompted it (path bound on one line, written on the next). Raw input values are joined instead |
+| "the artifact appears in the blob" as "the artifact was written" | 27 called a heredoc that READ the map and wrote a scratchpad legend a map mutation, and flagged a `cp` of a contract template because a `lint-fragment` was chained after it |
+| conflating the two artifacts | 27 then flagged `Write behavioral.json` — which IS the method. `project-map.json` is GENERATED (any hand write is the defect); a fragment is AUTHORED (only an ad-hoc program that loads-mutates-writes it is) |
+| `[^\|;&]*` includes the NEWLINE | 29 read `pytest` on one line plus `mkdir …/dev-rebuilds/0017` on the next as "the archive was consulted". Tightening it to "the verb starts its segment" then missed the REAL case, where the path sits inside a `python -c` body several lines below the `python`. What identifies a read is the verb NEXT TO the path |
+| turn index as the ordering key | 30 failed the sequence `method.md` itself prescribes, because that sequence is most naturally pasted as ONE command and both markers then land on one turn |
+| `"write" in command` | 30 counted `grounding report … # read this before you write the note` as a write. `_writes_the_grounding_record` already existed for exactly this |
+| "the first fan-out of ≥2 agents" | 31 scored a two-agent repo-survey errand and never looked at the harvest three turns later |
+
+**The rule this adds to the one above.** Measuring a repaired detector against the corpus both ways
+is necessary and not sufficient: every one of these survived that, because the corpus is two builds
+by one author and the false positives lived in shapes those builds happened not to contain. What
+found them was writing the ADVERSARIAL transcript — an honest build deliberately shaped to look
+guilty — for each assertion, before trusting the number. Those probes are now unit tests.
 
 ### Why 19 was withdrawn
 

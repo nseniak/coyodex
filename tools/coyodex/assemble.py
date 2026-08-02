@@ -857,8 +857,9 @@ def main(argv: list[str] | None = None) -> int:
             if isinstance(unhealed, int) and unhealed else "")
         print(f"note: reconcile applied — set {{{set_summary}}}; "
               f"drop_edges: {rec_stats.get('reconcile_edges_dropped', 0)} edge(s); "
-              f"keep_edges: {rec_stats.get('duplicate_edges_resolved', 0)} duplicate(s) "
-              f"resolved.{unhealed_tail}")
+              f"keep_edges: {rec_stats.get('duplicate_edges_resolved', 0)} duplicate(s) resolved; "
+              f"set_anchors: {rec_stats.get('anchors_corrected', 0)} anchor(s) "
+              f"corrected.{unhealed_tail}")
     elif out_dir is not None and (out_dir / "reconcile.json").exists():
         # S8: a reconcile file is present but was NOT passed — an assemble without it silently reverts
         # every synthesis/trace assignment. Nudge, don't guess (the lead may have meant to omit it).
@@ -916,6 +917,10 @@ def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict
         ops.append(f"reconcile keep_edges {rec_stats['duplicate_edges_resolved']}")
     if rec_stats.get("reconcile_edges_dropped"):
         ops.append(f"reconcile drop_edges {rec_stats['reconcile_edges_dropped']}")
+    if rec_stats.get("anchors_corrected"):
+        # Same reason as keep_edges above. `set_anchors` exists because 14 corrected anchors were
+        # once lost silently; applying them silently is the same failure with the sign flipped.
+        ops.append(f"reconcile set_anchors {rec_stats['anchors_corrected']}")
     # Unhealed riding steps belong HERE, in the digest, not on the reconcile note further up: the
     # note is line 9 of 13 on a fresh assemble, so `| tail -4` (how a live build read this output)
     # cuts it, while the digest is always in the last three lines. A report-only `drop_edges` that

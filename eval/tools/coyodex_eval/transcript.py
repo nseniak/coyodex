@@ -108,6 +108,13 @@ class Turn:
     line: int = -1
     is_sidechain: bool = False
     timestamp: str = ""
+    #: (visible characters, signature bytes) summed over this turn's `thinking` blocks. A block can
+    #: carry a multi-KB signature and an EMPTY body — the reasoning is redacted at write time. The
+    #: reader used to drop those blocks entirely, so a retrospective could not tell "the agent did
+    #: not reason here" from "the reasoning is withheld", and three of its findings had to be
+    #: downgraded from certain to likely for want of that distinction.
+    thinking_chars: int = 0
+    thinking_signature_bytes: int = 0
 
     def calls_named(self, *names: str) -> tuple[ToolCall, ...]:
         wanted = frozenset(names)
@@ -159,6 +166,8 @@ class _Group:
     calls: list[ToolCall] = field(default_factory=list)
     results: list[ToolResult] = field(default_factory=list)
     usage_conflicts: int = 0
+    thinking_chars: int = 0
+    thinking_signature_bytes: int = 0
 
 
 def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterator[Turn]:
@@ -190,7 +199,9 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
         nonlocal index
         turn = Turn(index=index, role=g.role, tool_calls=tuple(g.calls),
                     tool_results=tuple(g.results), message_id=g.key, line=g.line,
-                    is_sidechain=g.is_sidechain, timestamp=g.timestamp)
+                    is_sidechain=g.is_sidechain, timestamp=g.timestamp,
+                    thinking_chars=g.thinking_chars,
+                    thinking_signature_bytes=g.thinking_signature_bytes)
         index += 1
         return turn
 
@@ -226,6 +237,7 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
 
             calls: list[ToolCall] = []
             results: list[ToolResult] = []
+            think_chars = think_sig = 0
             for block in blocks:
                 if not isinstance(block, dict):
                     continue
@@ -237,6 +249,11 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                     calls.append(ToolCall(name=name if isinstance(name, str) else "",
                                           input=args if isinstance(args, dict) else {},
                                           id=uid if isinstance(uid, str) else ""))
+                elif btype in ("thinking", "redacted_thinking"):
+                    body = block.get("thinking")
+                    sig = block.get("signature") or block.get("data")
+                    think_chars += len(body) if isinstance(body, str) else 0
+                    think_sig += len(sig) if isinstance(sig, str) else 0
                 elif btype == "tool_result":
                     tid = block.get("tool_use_id")
                     results.append(ToolResult(
@@ -252,7 +269,8 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
             if kind == USER:
                 pending.append(_Group(key=f"@{lineno}", role=USER, line=lineno,
                                       is_sidechain=sidechain, timestamp=timestamp, usage="",
-                                      results=results))
+                                      results=results, thinking_chars=think_chars,
+                                      thinking_signature_bytes=think_sig))
                 continue
 
             key = mid if isinstance(mid, str) and mid else f"@{lineno}"
@@ -262,12 +280,15 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                     group.usage_conflicts += 1
                 group.calls.extend(calls)
                 group.results.extend(results)
+                group.thinking_chars += think_chars
+                group.thinking_signature_bytes += think_sig
                 continue
 
             yield from flush()
             group = _Group(key=key, role=ASSISTANT, line=lineno, is_sidechain=sidechain,
                            timestamp=timestamp, usage=_usage_signature(message),
-                           calls=calls, results=results)
+                           calls=calls, results=results, thinking_chars=think_chars,
+                           thinking_signature_bytes=think_sig)
 
     yield from flush()
 
@@ -321,8 +342,8 @@ def bash_commands(turns: Sequence[Turn]) -> tuple[tuple[int, str], ...]:
 _COYODEX_SUBCOMMANDS = frozenset({
     "anchor-drift", "archive", "assemble", "audit", "balance", "bless", "claims", "compare",
     "dump", "finalize", "fix", "grounding", "hash", "judge", "lint-fragment", "preindex",
-    "process", "protocol", "reconcile", "record", "render", "retro-precheck", "run", "score",
-    "scope", "serve", "transcript", "validate",
+    "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
+    "run", "score", "scope", "serve", "transcript", "validate",
 })
 
 #: Sub-verbs worth reporting separately: `grounding write` and `grounding report` are different
@@ -371,7 +392,7 @@ def summarise_call(call: ToolCall, width: int = 100) -> str:
 
 
 def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str, str] | None = None,
-                 width: int = 100, result_chars: int = 600) -> str:
+                 width: int = 100, result_chars: int = 600, result_lines: int = 20) -> str:
     """Render turns as readable text.
 
     Two densities, for two readers. The compact form is an INDEX — one line per tool call — so a
@@ -381,9 +402,17 @@ def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str
     This exists because a retrospective has to READ the transcript, and a 3 MB JSONL is not
     readable: opening one whole is both useless and expensive."""
     lines: list[str] = []
+    unlimited = result_chars < 0
     for turn in turns:
         if turn.role != ASSISTANT or not turn.tool_calls:
             continue
+        if full and turn.thinking_signature_bytes and not turn.thinking_chars:
+            # SAY that reasoning existed and was withheld. Dropping the block silently made
+            # "the agent did not consider X" indistinguishable from "the agent's reasoning is
+            # redacted", and a retrospective had to downgrade three findings for want of the
+            # difference.
+            lines.append(f"[{turn.index:>4}] (thinking redacted — "
+                         f"{turn.thinking_signature_bytes} signature byte(s), no visible text)")
         for call in turn.tool_calls:
             head = f"[{turn.index:>4}] {call.name:<14}"
             if full:
@@ -393,10 +422,16 @@ def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str
                     lines.append("        | " + "\n        | ".join(body.splitlines()[:40]))
                 out = (results or {}).get(call.id, "")
                 if out:
-                    snippet = out[:result_chars]
-                    lines.append("        > " + "\n        > ".join(snippet.splitlines()[:20]))
-                    if len(out) > result_chars:
-                        lines.append(f"        > … {len(out) - result_chars} more char(s)")
+                    snippet = out if unlimited else out[:result_chars]
+                    body_lines = snippet.splitlines()
+                    shown = body_lines if unlimited else body_lines[:result_lines]
+                    lines.append("        > " + "\n        > ".join(shown))
+                    if not unlimited and len(out) > len(snippet):
+                        lines.append(f"        > … {len(out) - len(snippet)} more char(s) "
+                                     f"(--result-chars N, or --full-output for all of it)")
+                    elif not unlimited and len(body_lines) > len(shown):
+                        lines.append(f"        > … {len(body_lines) - len(shown)} more line(s) "
+                                     f"(--full-output for all of it)")
                 lines.append("")
             else:
                 lines.append(f"{head} {summarise_call(call, width)}")
@@ -420,8 +455,8 @@ def results_by_tool_use_id(turns: Sequence[Turn]) -> dict[str, str]:
 # --- CLI -------------------------------------------------------------------------------
 
 USAGE = """usage: coyodex-eval transcript <transcript.jsonl> [--from N] [--to N]
-                                 [--tool NAME] [--grep PATTERN] [--full] [--stats]
-                                 [--commands]
+                                 [--tool NAME] [--grep PATTERN] [--stats] [--commands]
+                                 [--full] [--full-output] [--result-chars N]
 
 READ a build transcript in slices — the retrospective's eye on what the agent actually did.
 A 3 MB JSONL cannot be opened whole, so this prints an INDEX by default (one line per tool
@@ -431,10 +466,20 @@ call, with its turn number) and the FULL text of a range with --full.
   --tool NAME   only turns using that tool (Bash, Agent, Write, …)
   --grep PAT    only tool calls whose text matches (case-insensitive substring)
   --full        include the whole command and a slice of what it printed
+  --full-output --full with NO truncation of tool results (implies --full). Use it when the
+                answer lives in the output — sub-agent returns and long listings are clipped at
+                600 chars otherwise, which sent one reviewer back to parsing the raw JSONL.
+  --result-chars N  raise (or lower) that per-result cap instead of removing it
   --stats       tool counts and fan-out sizes instead of a listing
   --commands    every `coyodex` subcommand run, with turn numbers and a total per subcommand —
                 found ANYWHERE in a command, so one chained behind `;` or `&&` is not missed
-                (the one-line index truncates, and that once produced a false "never ran")"""
+                (the one-line index truncates, and that once produced a false "never ran")
+
+`--from`/`--to` apply to EVERY mode, including --commands and --stats. They used to be accepted
+and silently ignored by those two, so a reviewer reading one slice was handed whole-transcript
+numbers with nothing saying so.
+A turn whose reasoning is REDACTED (a signature with no visible text) is marked in --full, so
+"did not reason here" and "reasoning withheld" stay distinguishable."""
 
 
 def _stats(turns: Sequence[Turn]) -> str:
@@ -463,7 +508,7 @@ def main(argv: list[str] | None = None) -> int:
     def opt(flag: str) -> str | None:
         return args[args.index(flag) + 1] if flag in args and args.index(flag) + 1 < len(args) else None
 
-    consumed = {opt(f) for f in ("--from", "--to", "--tool", "--grep")}
+    consumed = {opt(f) for f in ("--from", "--to", "--tool", "--grep", "--result-chars")}
     positional = [a for a in args if not a.startswith("--") and a not in consumed]
     if not positional:
         print("ERROR: give a transcript path\n", file=sys.stderr)
@@ -475,14 +520,32 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     turns = read_turns(src)
+    # PARSE AND APPLY THE RANGE FIRST. `--commands` and `--stats` used to run on the whole file
+    # while accepting `--from`/`--to` and silently discarding them, so a sliced reviewer — told to
+    # say "not in my range" rather than "the build skipped it" — was handed whole-transcript data
+    # with nothing saying so. That is the exact failure the sliced-review protocol exists to
+    # prevent, in the tool the protocol runs on.
+    try:
+        lo = int(opt("--from") or 0)
+        hi = int(opt("--to") or 10**9)
+    except ValueError:
+        print("ERROR: --from and --to take an integer", file=sys.stderr)
+        return 2
+    ranged = tuple(t for t in turns if lo <= t.index <= hi)
+    scope = "" if (lo == 0 and hi == 10**9) else f" in turns {lo}-{hi}"
+    if scope and not ranged:
+        print(f"no turns{scope} (the transcript holds {len(turns)} turn(s), indices 0-"
+              f"{turns[-1].index if turns else 0})")
+        return 0
     if "--commands" in args:
         from collections import Counter
-        found = coyodex_subcommands(turns)
+        found = coyodex_subcommands(ranged)
         counts = Counter(name for _i, name in found)
         by_name: dict[str, list[int]] = {}
         for i, name in found:
             by_name.setdefault(name, []).append(i)
-        print(f"{len(found)} coyodex invocation(s) across {len(counts)} subcommand(s)\n")
+        print(f"{len(found)} coyodex invocation(s) across {len(counts)} subcommand(s)"
+              f"{scope}\n")
         print(f"{'subcommand':28} {'runs':>5}  turns")
         for name, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
             turns_s = ", ".join(str(t) for t in by_name[name][:12])
@@ -491,22 +554,16 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {name:26} {n:>5}  {turns_s}")
         return 0
     if "--stats" in args:
-        print(_stats(turns))
+        if scope:
+            print(f"(turns {lo}-{hi} only)")
+        print(_stats(ranged))
         return 0
-    try:
-        lo = int(opt("--from") or 0)
-        hi = int(opt("--to") or 10**9)
-    except ValueError:
-        print("ERROR: --from and --to take an integer", file=sys.stderr)
-        return 2
     tool, pattern = opt("--tool"), (opt("--grep") or "").lower()
     # Filter the CALLS, not just the turns: one turn can carry a dozen calls, and keeping all of
     # them because one matched is not what `--grep` promises. A turn left with no matching call
     # drops out entirely.
     picked: list[Turn] = []
-    for t in turns:
-        if not (lo <= t.index <= hi):
-            continue
+    for t in ranged:
         calls = t.tool_calls
         if tool:
             calls = tuple(c for c in calls if c.name == tool)
@@ -514,8 +571,22 @@ def main(argv: list[str] | None = None) -> int:
             calls = tuple(c for c in calls if pattern in c.text().lower())
         if calls:
             picked.append(replace(t, tool_calls=calls))
-    print(format_turns(picked, full="--full" in args,
-                       results=results_by_tool_use_id(turns) if "--full" in args else None))
+    try:
+        result_chars = -1 if "--full-output" in args else int(opt("--result-chars") or 600)
+    except ValueError:
+        print("ERROR: --result-chars takes an integer", file=sys.stderr)
+        return 2
+    full = "--full" in args or "--full-output" in args
+    if not picked and (tool or pattern):
+        # The empty-RANGE case says so; a filter that matches nothing used to print one blank line,
+        # which reads exactly like "the range is empty" and exactly like a crash.
+        print(f"no tool call matches {'--tool ' + tool if tool else ''}"
+              f"{' and ' if tool and pattern else ''}"
+              f"{'--grep ' + repr(pattern) if pattern else ''}"
+              f"{scope or ' in this transcript'}")
+        return 0
+    print(format_turns(picked, full=full, result_chars=result_chars,
+                       results=results_by_tool_use_id(turns) if full else None))
     return 0
 
 

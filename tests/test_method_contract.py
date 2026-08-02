@@ -79,6 +79,7 @@ MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "audit exceptions", "balance exceptions", "coverage exceptions",
     "accepted duplications", "entry-point coverage", "happy path coverage",
     "persistence exceptions", "unclaimed surfaces", "drift exceptions",
+    "bucket vocabulary",
 )
 
 
@@ -642,10 +643,16 @@ def test_every_validator_advisory_names_a_way_to_record_the_decision():
 def _reads_heading(src: str, heading: str) -> bool:
     """Does this source READ the extras heading — not merely mention it in a message?
 
-    A read is a call into the two readers the tools own (`_recorded_ids` / `extras_bodies`) with
-    the heading as its literal argument. 'Balance exceptions' is also reachable through
-    `balance_lib`'s own `_exceptions()`, which carries the heading in a module constant."""
-    reader = re.compile(r"(?:_recorded_ids|extras_bodies)\(\s*\w+\s*,\s*[\"']"
+    A read is a call into the readers the tools own (`_recorded_ids` / `extras_bodies` /
+    `_recorded_line_keys`) with the heading as its literal argument. 'Balance exceptions' is also
+    reachable through `balance_lib`'s own `_exceptions()`, which carries the heading in a module
+    constant.
+
+    `_recorded_line_keys` joined the list when the duplicate-security and bucket-vocabulary escapes
+    moved to exact prefix-and-colon keying: it wraps `extras_bodies` and takes the heading as a
+    PARAMETER, so neither the direct pattern nor the transitive walk could see the literal, which
+    sits at the call site."""
+    reader = re.compile(r"(?:_recorded_ids|extras_bodies|_recorded_line_keys)\(\s*\w+\s*,\s*[\"']"
                         + re.escape(heading) + r"[\"']", re.I)
     if reader.search(src):
         return True
@@ -808,7 +815,8 @@ def test_the_machine_read_heading_list_matches_the_validator():
     # Case-folded: `extras_bodies` matches headings case-insensitively, so a constant written in
     # title case ("Audit exceptions") and a call-site literal in lower case name the same heading.
     found = {h.lower() for h in
-             re.findall(r'(?:extras_bodies\(m,|_recorded_ids\(m,)\s*"([^"]+)"', src)}
+             re.findall(r'(?:extras_bodies\(m,|_recorded_ids\(m,|_recorded_line_keys\(m,)'
+                        r'\s*"([^"]+)"', src)}
     found |= {h.lower() for h in re.findall(r'_EXCEPTIONS_HEADING\s*=\s*"([^"]+)"', src)}
     assert found == set(MACHINE_READ_HEADINGS), (
         f"MACHINE_READ_HEADINGS is stale: the tools read {sorted(found)}")

@@ -33,6 +33,8 @@ from coyodex.validate_model import (
     check_anchor_existence_model,
     check_domain_relations,
     check_entity_sources_model,
+    domain_card_shape_problems,
+    duplicate_security_warnings,
     roleless_cd_verb_warnings,
     subflow_refcount_warnings,
 )
@@ -122,6 +124,11 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
     problems += extra_problems
     rel_problems, _rel_warnings = check_domain_relations(m.entities)
     problems += rel_problems
+    # The per-card SHAPE rules (meaning / source / fields / field types), shared verbatim with
+    # `validate`. Every one is row-local, so a fragment CAN answer them — they simply ran only on
+    # the assembled map, which is how a T5 fragment linted clean and then failed the lead's
+    # `validate` a phase later, eight cards at a time.
+    problems += domain_card_shape_problems(m.entities)
     problems += _check_stores(m)  # row-local store-shape rules (dep id shape, closed mode); the
     # folded-dep check self-disables when the fragment doesn't define the dep (it can't resolve it)
     state_problems, _state_warnings = _check_states(m)  # row-local machine rules (empty list, dup
@@ -176,9 +183,11 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     # The sub-flow refcount nudge rides here too — it is judgment-shaped AND per-fragment blind
     # (the other reference may live in a sibling fragment); promoting it to blocking made a live
     # rebuild inline three legitimate sub-flows and ship a fragment its author believed had passed.
+    # `duplicate_security_warnings` rides here too: WITHIN one fragment a repeated surface is
+    # answerable now, and the cross-fragment case (the common one) still surfaces at validate.
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
             + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m)
-            + confidence_warnings(m))
+            + duplicate_security_warnings(m) + confidence_warnings(m))
 
 
 # DELIBERATELY ABSENT: a per-fragment nudge about the entry-point per-kind COMPLETENESS statement.

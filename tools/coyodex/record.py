@@ -45,6 +45,7 @@ KNOWN_HEADINGS = (
     "Unclaimed surfaces",
     "Happy Path coverage",
     "Entry-point coverage",
+    "Bucket vocabulary",
 )
 
 

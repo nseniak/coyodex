@@ -482,3 +482,29 @@ def test_a_directory_named_something_json_still_raises():
             assert "Is a directory" in str(e), e
         else:
             raise AssertionError("a directory named *.json must still raise, not vanish")
+
+
+def test_reconcile_carries_forward_directives_it_does_not_author(tmp_path):
+    """`coyodex reconcile` writes only `set`, and the write is whole-file — so a `set_anchors`
+    block recorded by `fix apply-drift --to-reconcile` (into the SAME default file) was silently
+    deleted by the next ordinary reconcile, and the map reverted to the drifted anchors with
+    nothing said. That is the exact durability those flags exist to provide."""
+    import json
+    from coyodex import reconcile_build
+    from coyodex.model import to_canonical_json
+    map_path = tmp_path / "map.json"
+    map_path.write_text(to_canonical_json(make_map()), encoding="utf-8")
+    rules = tmp_path / "rules.json"
+    rules.write_text(json.dumps({"rules": [
+        {"subsystem": "S1", "source_glob": "app/plugins/**"}]}), encoding="utf-8")
+    out = tmp_path / "reconcile.json"
+    out.write_text(json.dumps({
+        "set_anchors": [{"claim": "C1 reads E1", "corrected": "a.py:9"}],
+        "keep_edges": [{"src": "C1", "verb": "reads", "dst": "E1", "where": "a.py:9"}],
+    }), encoding="utf-8")
+    assert reconcile_build.main(["--rules", str(rules), "--map", str(map_path),
+                                 "--out", str(out)]) == 0
+    doc = json.loads(out.read_text(encoding="utf-8"))
+    assert doc["set_anchors"] == [{"claim": "C1 reads E1", "corrected": "a.py:9"}]
+    assert len(doc["keep_edges"]) == 1
+    assert doc["set"]                      # and the regenerated assignments are there too

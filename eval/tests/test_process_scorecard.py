@@ -21,6 +21,7 @@ bug in this module, and it produced exactly the wrong answer for the assertion t
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
@@ -525,7 +526,12 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # 24 and 25 came from the 2026-08-02 retrospective: an inert recorded exception (a correctly
     # spelled key silencing nothing, indistinguishable from a typo), and a `fix dedup-edge
     # --to-reconcile` run that recorded no directive (the flag used to be a silent no-op).
-    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25], ids
+    # 26-31 came from the SECOND retrospective (the 2026-08-02 mcpolis rebuild): a gate read as a
+    # bare count, a hand script that clobbered a confirmed claim, an extras write that bypassed
+    # `coyodex record`, a from-scratch rebuild reading the map it replaced, `grounding write` run
+    # before the drift fix it had to be measured after, and harvest briefs that cite no behavioral
+    # id (the load-bearing version of 22's ordering proxy).
+    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25, *range(26, 32)], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
     assert len(ids) == len(set(ids))
 
@@ -1374,3 +1380,217 @@ def test_8_batches_skip_does_not_erase_a_paged_read_chained_beside_it():
                                     "coyodex audit m.json --batches .coyodex/verify --cap 40")),)
     a = P.assert_8_audit_read_as_json(turns)
     assert (a.observed, a.of) == (0, 1), a
+
+
+def test_every_assertion_is_documented_in_l3_design():
+    """The design doc must name every assertion the scorecard runs.
+
+    This gate exists because the drift already happened twice, in the same direction: the retro
+    method told agents to read "the ten assertions" while the scorecard ran fifteen, and the six the
+    doc did not cover were three of the four a live build scored zero on — the retrospective had to
+    read the source to learn what they meant. A doc that lags the code is worse than no doc, because
+    a reader trusts it."""
+    design = (Path(__file__).resolve().parents[1] / "fixtures" / "trapdoor" / "L3-DESIGN.md")
+    text = design.read_text(encoding="utf-8")
+    ids = [a.id for a in P.score_turns(()).assertions]
+    # A row in one of the tables: `| 26 | …`, or a heading naming the number.
+    missing = [i for i in ids if not re.search(rf"^\|\s*{i}\s*\|", text, re.M)
+               and not re.search(rf"^#+.*\b{i}\b", text, re.M)]
+    assert not missing, (
+        f"assertion(s) the scorecard runs and {design.name} never names: {missing}. "
+        f"Add a row saying what each audits — a reader who trusts a stale doc is worse off than "
+        f"one who has none.")
+
+
+# --- 26-31, from the second 2026-08-02 retrospective ------------------------------
+
+
+def make_bash_turn(index: int, command: str, result: str = "") -> P.Turn:
+    call = P.ToolCall(name="Bash", input={"command": command}, id=f"t{index}")
+    return P.Turn(index=index, role="assistant", tool_calls=(call,))
+
+
+def test_26_flags_a_gate_read_as_a_bare_count():
+    turns = (make_bash_turn(1, "coyodex validate map.json | grep -ciE '^  - '"),
+             make_bash_turn(2, "coyodex audit map.json --json"))
+    a = P.assert_26_gate_output_not_reduced_to_a_count(turns)
+    assert (a.observed, a.of) == (1, 2)
+
+
+def test_26_ignores_a_gate_redirected_to_a_file():
+    """Reading the REPORT FILE is what the method asks for — scoring it as a narrowed read would
+    punish the prescribed behaviour."""
+    turns = (make_bash_turn(1, "coyodex validate map.json > v.txt 2>&1"),)
+    a = P.assert_26_gate_output_not_reduced_to_a_count(turns)
+    assert a.of == 0
+
+
+def test_27_flags_an_inline_program_that_writes_a_fragment():
+    """The clobber script assigned the path on one line and wrote on another, so an adjacency rule
+    could not see it."""
+    script = ("python3 -c \"\nimport json,pathlib\n"
+              "p=pathlib.Path('.coyodex/build-fragments/extras.json')\n"
+              "m=json.loads(p.read_text())\np.write_text(json.dumps(m))\n\"")
+    turns = (make_bash_turn(1, script),
+             make_bash_turn(2, "coyodex fix security-row --map .coyodex/project-map.json "
+                               "--claim 'x' --set-risk y"))
+    a = P.assert_27_no_hand_script_mutated_the_model(turns)
+    assert (a.observed, a.of) == (1, 2)
+
+
+def test_27_counts_a_chained_hand_edit_as_hand_written():
+    """Chaining the script behind a real command is how the hand edit hid."""
+    turns = (make_bash_turn(1, "coyodex assemble f.json --out .coyodex; python3 -c \""
+                               "import json;json.dump(m, open('.coyodex/project-map.json','w'))\""),)
+    a = P.assert_27_no_hand_script_mutated_the_model(turns)
+    assert (a.observed, a.of) == (0, 1)
+
+
+def test_28_prefers_the_record_command_over_a_hand_edit():
+    turns = (make_bash_turn(1, "coyodex record --map .coyodex/build-fragments/extras.json "
+                               "--heading 'Audit exceptions' --line 'HP4: why'"),
+             make_bash_turn(2, "python3 -c \"import json,pathlib\n"
+                               "p=pathlib.Path('.coyodex/build-fragments/extras.json')\n"
+                               "p.write_text('Audit exceptions')\""))
+    a = P.assert_28_extras_written_with_record(turns)
+    assert (a.observed, a.of) == (1, 2)
+
+
+def test_29_flags_reading_the_archived_map_but_not_archiving_it():
+    archive_read = P.Turn(index=2, role="assistant", tool_calls=(P.ToolCall(
+        name="Read", input={"file_path": ".coyodex/dev-rebuilds/0016/project-map.json"},
+        id="r"),))
+    turns = (make_bash_turn(1, "coyodex-eval archive . "), archive_read,
+             make_bash_turn(3, "coyodex assemble f.json --out .coyodex"))
+    a = P.assert_29_previous_map_not_read_during_the_build(turns)
+    assert (a.observed, a.of) == (0, 1)
+    clean = (make_bash_turn(1, "coyodex-eval archive ."),
+             make_bash_turn(2, "coyodex assemble f.json --out .coyodex"))
+    b = P.assert_29_previous_map_not_read_during_the_build(clean)
+    assert (b.observed, b.of) == (1, 1)
+
+
+def test_30_flags_a_record_written_before_the_drift_fix():
+    early = (make_bash_turn(1, "coyodex grounding write --worklist w.json --verdicts v.json"),
+             make_bash_turn(2, "coyodex fix apply-drift --map m.json --verdicts v.json"))
+    a = P.assert_30_grounding_write_follows_the_drift_fix(early)
+    assert (a.observed, a.of) == (0, 1)
+    ordered = (make_bash_turn(1, "coyodex fix apply-drift --map m.json --verdicts v.json"),
+               make_bash_turn(2, "coyodex grounding write --worklist w.json --verdicts v.json"))
+    b = P.assert_30_grounding_write_follows_the_drift_fix(ordered)
+    assert (b.observed, b.of) == (1, 1)
+
+
+def test_31_asks_whether_the_briefs_cite_a_behavioral_id():
+    def fanout(prompts: list[str]) -> P.Turn:
+        return P.Turn(index=1, role="assistant", tool_calls=tuple(
+            P.ToolCall(name="Agent", input={"prompt": p}, id=f"a{i}")
+            for i, p in enumerate(prompts)))
+    blind = P.assert_31_harvest_briefs_cite_the_behavioral_draft(
+        (fanout(["Harvest components under backend/", "Harvest deps under frontend/"]),))
+    assert (blind.observed, blind.of) == (0, 1)
+    cited = P.assert_31_harvest_briefs_cite_the_behavioral_draft(
+        (fanout(["Harvest the components serving UC12 and UC13", "Harvest deps"]),))
+    assert (cited.observed, cited.of) == (1, 1)
+
+
+def test_diff_refuses_a_flag_it_cannot_honour(capsys):
+    """Same class as `transcript --commands` ignoring `--from`: a flag accepted and silently
+    dropped lets a caller believe it asked for something. Here it is worse — `--out x.json` would
+    also leave `x.json` looking like a third scorecard path."""
+    assert P.main(["--diff", "a.json", "b.json", "--map", "m.json"]) == 2
+    assert "cannot honour --map" in capsys.readouterr().err
+
+
+# --- what the adversarial review taught these six detectors ------------------------
+# Every test below is a probe that scored an HONEST build badly, or missed a real defect, before
+# the repair. The repo's rule: measure a repaired detector BOTH ways.
+
+
+def test_26_keeps_the_pipeline_with_its_gate():
+    """Splitting on `|` put the gate in one segment and the `| grep -c` that reads it in another,
+    so the finding vanished; scanning the whole blob instead let an unrelated `wc -l` two lines
+    away convict a full read."""
+    honest = (make_bash_turn(1, "coyodex validate map.json --check-sources\n"
+                                "ls .coyodex/build-fragments/*.json | wc -l"),)
+    assert P.assert_26_gate_output_not_reduced_to_a_count(honest).score == 1.0
+    guilty = (make_bash_turn(1, "coyodex validate map.json | grep -c '^  - '\n"
+                                "echo done > /tmp/marker.txt"),)
+    assert P.assert_26_gate_output_not_reduced_to_a_count(guilty).score == 0.0
+
+
+def test_26_does_not_call_an_ordinary_grep_a_count():
+    turns = (make_bash_turn(1, "coyodex validate map.json | grep 'cross-cutting'"),
+             make_bash_turn(2, "coyodex validate map.json | grep -E 'not-connected'"),
+             make_bash_turn(3, "coyodex validate map.json | grep --color=always 'runs-in'"))
+    a = P.assert_26_gate_output_not_reduced_to_a_count(turns)
+    assert (a.observed, a.of) == (3, 3)
+
+
+def test_27_treats_authoring_a_fragment_differently_from_rewriting_one():
+    """`project-map.json` is GENERATED, so any hand write is the defect. A fragment is AUTHORED —
+    the lead writes behavioral.json by hand and that IS the method — so only an ad-hoc program that
+    loads, mutates and writes one back is a finding."""
+    authoring = P.Turn(index=1, role="assistant", tool_calls=(P.ToolCall(
+        name="Write", input={"file_path": ".coyodex/build-fragments/behavioral.json",
+                             "content": "{}"}, id="w"),))
+    assert P.assert_27_no_hand_script_mutated_the_model((authoring,)).of == 0
+    hand_map = P.Turn(index=1, role="assistant", tool_calls=(P.ToolCall(
+        name="Write", input={"file_path": ".coyodex/project-map.json", "content": "{}"}, id="w"),))
+    assert P.assert_27_no_hand_script_mutated_the_model((hand_map,)).score == 0.0
+
+
+def test_27_reads_the_raw_input_not_its_json_escaping():
+    """`ToolCall.text()` is `json.dumps(input)`, which turns a newline into a literal backslash-n —
+    so a pattern spanning lines never matched, and the detector missed the very script that
+    prompted it (path bound on one line, written on the next)."""
+    script = ("python3 - <<'PY'\nimport json,pathlib\n"
+              "p = pathlib.Path('.coyodex/build-fragments/extras.json')\n"
+              "m = json.loads(p.read_text())\np.write_text(json.dumps(m))\nPY")
+    a = P.assert_27_no_hand_script_mutated_the_model((make_bash_turn(1, script),))
+    assert a.score == 0.0
+
+
+def test_27_ignores_a_program_that_only_READS_the_map():
+    honest = ("coyodex assemble f.json --out .coyodex\npython3 - <<'PY'\nimport json,pathlib\n"
+              "m = json.loads(pathlib.Path('.coyodex/project-map.json').read_text())\n"
+              "pathlib.Path('/tmp/legend.txt').write_text(str(len(m)))\nPY")
+    a = P.assert_27_no_hand_script_mutated_the_model((make_bash_turn(1, honest),))
+    assert (a.observed, a.of) == (1, 1)
+
+
+def test_29_sees_a_read_inside_a_program_body_and_not_a_mkdir():
+    real = ("python -c \"\nimport json\n"
+            "m=json.load(open('.coyodex/dev-rebuilds/0016/project-map.json'))\nprint(m['goal'])\n\"")
+    turns = (make_bash_turn(1, real), make_bash_turn(2, "coyodex assemble f.json --out .coyodex"))
+    assert P.assert_29_previous_map_not_read_during_the_build(turns).score == 0.0
+    honest = (make_bash_turn(1, ".venv/bin/python -m pytest -q\n"
+                                "mkdir -p .coyodex/dev-rebuilds/0017"),
+              make_bash_turn(2, "coyodex assemble f.json --out .coyodex"))
+    assert P.assert_29_previous_map_not_read_during_the_build(honest).score == 1.0
+
+
+def test_30_accepts_the_prescribed_order_run_as_one_block():
+    """The sequence method.md prescribes is most naturally pasted as one command. With turn index
+    alone both markers landed on the same turn and a build following the rule scored 0."""
+    block = ("coyodex fix apply-drift --map m.json --verdicts v.json --to-reconcile r.json\n"
+             "coyodex assemble f.json --out .coyodex --reconcile r.json\n"
+             "coyodex grounding write --worklist w.json --verdicts v.json --out g.json")
+    assert P.assert_30_grounding_write_follows_the_drift_fix((make_bash_turn(1, block),)).score == 1.0
+
+
+def test_30_does_not_count_grounding_report_as_a_write():
+    turns = (make_bash_turn(1, "coyodex grounding write --worklist w.json --verdicts v.json"),
+             make_bash_turn(2, "coyodex fix apply-drift --map m.json --verdicts v.json"),
+             make_bash_turn(3, "coyodex grounding report --worklist w.json --verdicts v.json"))
+    assert P.assert_30_grounding_write_follows_the_drift_fix(turns).score == 0.0
+
+
+def test_31_scores_the_harvest_not_the_first_errand():
+    survey = P.Turn(index=1, role="assistant", tool_calls=tuple(
+        P.ToolCall(name="Agent", input={"prompt": f"survey {i}"}, id=f"s{i}") for i in range(2)))
+    harvest = P.Turn(index=2, role="assistant", tool_calls=tuple(
+        P.ToolCall(name="Agent", input={"prompt": f"Harvest slice {i} serving UC3 and CAP2"},
+                   id=f"h{i}") for i in range(3)))
+    a = P.assert_31_harvest_briefs_cite_the_behavioral_draft((survey, harvest))
+    assert a.score == 1.0

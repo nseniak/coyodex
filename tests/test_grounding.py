@@ -382,3 +382,62 @@ def test_report_says_nothing_extra_when_every_refutation_was_superseded():
     out = G.format_report(claims, rows, live_claims=[])
     assert "SUPERSEDED (1)" in out
     assert "NOT SUPERSEDED" not in out
+
+
+# --- the note, without the shell -------------------------------------------------
+# `--note` is required, so a re-run (the ordinary case: the record is re-measured after a late fix)
+# had to re-supply the whole note. A live build did it through a nested `$(python -c …)` that
+# pushed ~1900 characters back through the shell — it survived, but a note containing a quote or a
+# backtick would not have.
+
+
+def make_write_inputs(td: str) -> tuple[str, str]:
+    wl = Path(td) / "worklist.json"
+    wl.write_text(json.dumps({"worklist": [{"claim": "C1 calls C2"}]}), encoding="utf-8")
+    vd = Path(td) / "verdicts.json"
+    vd.write_text(json.dumps({"grounding": [
+        {"claim": "C1 calls C2", "grounded": True, "evidence": "a.py:1"}]}), encoding="utf-8")
+    return str(wl), str(vd)
+
+
+def test_note_file_carries_a_note_the_shell_would_have_mangled():
+    tricky = 'has a "quote", a `backtick` and a $(subshell)'
+    with tempfile.TemporaryDirectory() as td:
+        wl, vd = make_write_inputs(td)
+        nf = Path(td) / "note.txt"
+        nf.write_text(tricky, encoding="utf-8")
+        out = Path(td) / "grounding.json"
+        assert main(["write", "--worklist", wl, "--verdicts", vd, "--out", str(out),
+                     "--note-file", str(nf)]) == 0
+        assert json.loads(out.read_text())["grounding"]["note"] == tricky
+
+
+def test_keep_note_reuses_the_note_already_written():
+    with tempfile.TemporaryDirectory() as td:
+        wl, vd = make_write_inputs(td)
+        out = Path(td) / "grounding.json"
+        assert main(["write", "--worklist", wl, "--verdicts", vd, "--out", str(out),
+                     "--note", "the original reasoning"]) == 0
+        # the re-run, with no note re-supplied
+        assert main(["write", "--worklist", wl, "--verdicts", vd, "--out", str(out),
+                     "--keep-note"]) == 0
+        assert json.loads(out.read_text())["grounding"]["note"] == "the original reasoning"
+
+
+def test_keep_note_refuses_when_there_is_no_prior_note(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        wl, vd = make_write_inputs(td)
+        out = Path(td) / "grounding.json"
+        assert main(["write", "--worklist", wl, "--verdicts", vd, "--out", str(out),
+                     "--keep-note"]) == 2
+        assert "found no note" in capsys.readouterr().err
+
+
+def test_keep_note_and_note_file_together_are_refused(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        wl, vd = make_write_inputs(td)
+        nf = Path(td) / "note.txt"
+        nf.write_text("x", encoding="utf-8")
+        assert main(["write", "--worklist", wl, "--verdicts", vd, "--out",
+                     str(Path(td) / "g.json"), "--keep-note", "--note-file", str(nf)]) == 2
+        assert "Pick one" in capsys.readouterr().err

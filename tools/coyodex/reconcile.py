@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 
+from coyodex.audit_model import apply_anchor_corrections
 from coyodex.model import Component, Dep, Entity, FlowStep, ProjectModel, UseCase, all_elements
 from coyodex.validate_analysis import check_hierarchy
 
@@ -98,13 +99,29 @@ class KeepEdgeDirective:
 
 
 @dataclass
+class AnchorDirective:
+    """A skeptic-corrected anchor, keyed by the CLAIM it belongs to.
+
+    `fix apply-drift` writes anchors into the ASSEMBLED map, and the next assemble rebuilds that map
+    from fragments — discarding them. A live build corrected 14 anchors, re-assembled to pick up one
+    fragment edit, lost all 14, and re-typed them by hand out of the human-readable listing into a
+    bespoke script. Recorded here, the correction re-applies on every rebuild, exactly as
+    `keep_edges` does for a de-duplication and `drop_edges` for a refuted edge."""
+
+    claim: str
+    corrected: str
+
+
+@dataclass
 class Reconcile:
     sets: list[SetDirective] = field(default_factory=list)
     drop_edges: list[DropEdgeDirective] = field(default_factory=list)
     keep_edges: list[KeepEdgeDirective] = field(default_factory=list)
+    set_anchors: list[AnchorDirective] = field(default_factory=list)
 
     def is_empty(self) -> bool:
-        return not self.sets and not self.drop_edges and not self.keep_edges
+        return (not self.sets and not self.drop_edges and not self.keep_edges
+                and not self.set_anchors)
 
 
 # ── shared riding-step helpers (also used by `fix drop-edge`) ──────────────────────────────────────
@@ -160,10 +177,11 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         raise ReconcileError(f"{label}: not valid JSON: {e}") from e
     if not isinstance(data, dict):
         raise ReconcileError(f"{label}: top level: expected an object")
-    unknown = set(data) - {"set", "drop_edges", "keep_edges"}
+    unknown = set(data) - {"set", "drop_edges", "keep_edges", "set_anchors"}
     if unknown:
         raise ReconcileError(f"{label}: unknown top-level key(s): {', '.join(sorted(unknown))} "
-                             f"(only 'set', 'drop_edges' and 'keep_edges' are allowed)")
+                             f"(only 'set', 'drop_edges', 'keep_edges' and 'set_anchors' "
+                             f"are allowed)")
     sets: list[SetDirective] = []
     raw_sets = data.get("set", [])
     if not isinstance(raw_sets, list):
@@ -231,7 +249,22 @@ def load_reconcile(text: str, label: str) -> Reconcile:
                     f"{label}: keep_edges[{i}]: '{req}' is required (a non-empty string)")
         keeps.append(KeepEdgeDirective(src=d["src"], verb=d["verb"], dst=d["dst"],
                                        where=d["where"]))
-    return Reconcile(sets=sets, drop_edges=drops, keep_edges=keeps)
+    raw_anchors = data.get("set_anchors", [])
+    if not isinstance(raw_anchors, list):
+        raise ReconcileError(f"{label}: 'set_anchors': expected a list")
+    anchors: list[AnchorDirective] = []
+    for i, d in enumerate(raw_anchors):
+        if not isinstance(d, dict):
+            raise ReconcileError(f"{label}: set_anchors[{i}]: expected an object")
+        unk = set(d) - {"claim", "corrected"}
+        if unk:
+            raise ReconcileError(f"{label}: set_anchors[{i}]: unknown key(s): {', '.join(sorted(unk))}")
+        for req in ("claim", "corrected"):
+            if not isinstance(d.get(req), str) or not d[req].strip():
+                raise ReconcileError(
+                    f"{label}: set_anchors[{i}]: '{req}' is required (a non-empty string)")
+        anchors.append(AnchorDirective(claim=d["claim"], corrected=d["corrected"]))
+    return Reconcile(sets=sets, drop_edges=drops, keep_edges=keeps, set_anchors=anchors)
 
 
 # ── validate (scoped to the touched fields) ────────────────────────────────────────────────────────
@@ -345,6 +378,17 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
         kept_total += len(drop)
     if kept_total:
         stats["duplicate_edges_resolved"] = kept_total
+    # Anchor corrections, through the SAME writer `fix apply-drift` uses — one matching rule, so the
+    # durable record and the in-place edit cannot disagree about which element a claim names. A
+    # claim that no longer matches anything NOTES and never fails, like the two directives above: a
+    # reconcile file must not rot when a later fragment edit rewrites the claim it was keyed on.
+    if rec.set_anchors:
+        counts, anchor_notes = apply_anchor_corrections(
+            m, [(a.claim, a.corrected) for a in rec.set_anchors])
+        notes.extend(n.strip() for n in anchor_notes if not n.startswith("  "))
+        applied = sum(counts.values())
+        if applied:
+            stats["anchors_corrected"] = applied
     set_counts: dict[str, int] = {f: 0 for f in _SET_FIELD_OWNER}
     for sd in rec.sets:
         for eid in sd.ids:

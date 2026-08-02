@@ -1182,15 +1182,31 @@ def _check_dep_buckets(m: ProjectModel) -> tuple[list[str], list[str]]:
     # specific (Payments, Social, Blockchain…), so minting one is EXPECTED, not a smell — the only
     # concern is spelling stability across rebuilds. Treating them the same is what pushed a fresh
     # build to dump 35 services into the 'Integrations' catch-all rather than split by purpose.
+    # A project whose real vocabulary needs a bucket the seed list does not have (an MCP gateway
+    # genuinely has an 'MCP protocol' bucket) would otherwise be told to rename it on EVERY rebuild,
+    # forever, with no way to say "this one is deliberate". Worse, the stable-spelling advice and the
+    # nudge pull against each other: a build that reuses last map's spelling for stability earns the
+    # warning for doing so. `Bucket vocabulary` is the escape — one `<bucket>: <why>` line per
+    # project-specific bucket, read here.
+    declared = _recorded_line_keys(m, "bucket vocabulary")
+    silenced_buckets = [b for b in minted if _records_key(declared, b)]
     for bucket, is_lib in minted.items():
+        if _records_key(declared, bucket):
+            continue
         if is_lib:
             warnings.append(f"Library bucket '{bucket}' is minted (not a seed) — a synonym of a seed? "
-                            f"Reuse the exact spelling on rebuild (seeds: "
+                            f"Reuse the exact spelling on rebuild, or record "
+                            f"'{bucket}: <why this project needs it>' under a 'Bucket vocabulary' "
+                            f"extras heading (seeds: "
                             f"{', '.join(grammar.DEP_BUCKET_SEEDS_LIBRARY)}).")
         else:
             warnings.append(f"External bucket '{bucket}' is minted (not a seed) — fine if it's a real "
                             f"product purpose (splitting the '{grammar.DEP_BUCKET_CATCHALL_EXTERNAL}' "
                             f"catch-all this way is encouraged); reuse the exact spelling on rebuild.")
+    if silenced_buckets:
+        warnings.append(f"{len(silenced_buckets)} minted bucket(s) declared under 'Bucket "
+                        f"vocabulary' and NOT re-nudged: {', '.join(sorted(silenced_buckets))}. "
+                        f"Re-read one by validating a copy with that line removed.")
     # Bloated catch-all — the mirror of the proliferation cap. The catch-all is the "no specific
     # purpose" bucket, so a large one is guaranteed heterogeneous: real sub-purposes are hiding in it.
     for label, catchall in (("external systems", grammar.DEP_BUCKET_CATCHALL_EXTERNAL),
@@ -2523,6 +2539,63 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
+def _recorded_line_keys(m: ProjectModel, heading: str) -> list[str]:
+    """The non-empty lines recorded under an extras heading, stripped of list bullets."""
+    return [ln.strip().lstrip("-*").strip()
+            for body in balance_lib.extras_bodies(m, heading)
+            for ln in body.splitlines() if ln.strip()]
+
+
+def _records_key(lines: list[str], key: str) -> bool:
+    """Is `key` the KEY of one of these recorded lines — i.e. does a line read `<key>: <why>`?
+
+    Prefix-and-colon, never a substring, and never `split(':')[0]`. A substring test let one
+    adjudication silence a DIFFERENT finding (recording `Admin pages (/orgs/:slug/admin/**)`
+    suppressed an un-adjudicated duplicate of `Admin pages`, the shorter being a substring of the
+    longer line). Splitting on the first colon breaks the opposite way, on every key that CONTAINS
+    one — and a URL-shaped auth surface usually does."""
+    k = key.strip()
+    return any(ln.startswith(f"{k}:") for ln in lines)
+
+
+def duplicate_security_warnings(m: ProjectModel) -> list[str]:
+    """Advisory (NON-BLOCKING): the same auth SURFACE authored more than once.
+
+    Two fragments harvesting one auth check is the ordinary cause, and it survives assembly because
+    security rows carry no id to collide on. It matters more than it looks: a duplicate surface is
+    the shape that made a live build read two DISTINCT rows as one and hand-delete a CONFIRMED
+    grounding claim. `coyodex fix dedup-security` resolves it.
+
+    Rows merely sharing an ANCHOR are deliberately not flagged — one line can legitimately guard two
+    surfaces, and calling that a duplicate is the mistake this warning exists to prevent.
+
+    The escape is the existing 'Accepted duplications' extras heading, keyed by the surface text —
+    the same heading and the same shape the UC/SF duplication advisory already uses. A suppression
+    is reported on its own line, never silently: a silence you cannot see reads as no finding."""
+    by_surface: dict[str, list[str]] = {}
+    for s in m.security:
+        by_surface.setdefault(s.surface, []).append(s.source or "(no anchor)")
+    accepted = _recorded_line_keys(m, "accepted duplications")
+    out: list[str] = []
+    silenced: list[str] = []
+    for surface, anchors in sorted(by_surface.items()):
+        if len(anchors) <= 1:
+            continue
+        if surface and _records_key(accepted, surface):
+            silenced.append(surface)
+            continue
+        out.append(f"security surface '{surface}' is authored {len(anchors)} times "
+                   f"({', '.join(sorted(set(anchors)))}) — two fragments harvested the same auth "
+                   f"check; resolve with `coyodex fix dedup-security`, or record "
+                   f"'{surface}: <why>' under an 'Accepted duplications' extras heading. Identity "
+                   f"is the surface, not the anchor: two surfaces sharing one anchor is legal.")
+    if silenced:
+        out.append(f"{len(silenced)} duplicate security surface(s) suppressed by a recorded "
+                   f"'Accepted duplications' line: {', '.join(silenced)}. Re-read one by validating "
+                   f"a copy with that line removed.")
+    return out
+
+
 def roleless_cd_verb_warnings(m: ProjectModel) -> list[str]:
     """Advisory (NON-BLOCKING): a C→D edge (dst is a dep) whose verb names no role — `C uses D` erases
     whether D is a bus, a store, or a service. Surface the roleless edges so the author picks a
@@ -2639,19 +2712,39 @@ def check_domain_relations(entities: list[Entity]) -> tuple[list[str], list[str]
     return problems, warnings
 
 
-def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
-    problems, warnings = check_domain_relations(m.entities)
-    directed: set[tuple[str, str]] = set()
-    for e in m.entities:
+def domain_card_shape_problems(entities: list[Entity]) -> list[str]:
+    """BLOCKING per-card shape: a meaning, a source, fields, and a type on every field.
+
+    Shared with `lint_fragment` on purpose. It lived only here, on the ASSEMBLED map, so a T5 agent
+    could lint its fragment clean, hand it back, and blow the lead's `validate` a phase later — one
+    live build lost seven turns to eight cards failing this after the fragment had passed its own
+    self-check. The check the agent cannot run is the check the agent cannot fix cheaply.
+
+    An `enum` card is EXEMPT from the fields rule: `store.mode == "enum"` says the card describes a
+    closed value set, whose members are its relations/meaning, not typed fields. Requiring fields
+    there is asking for a shape the thing does not have — the same eight cards were "fixed" by
+    hand-injecting the enum members into `fields` to get past the gate, which is the tool teaching
+    the map to lie."""
+    problems: list[str] = []
+    for e in entities:
         if not e.meaning:
             problems.append(f"Domain card {e.id} is missing a MEANING line")
         if not e.source:
             problems.append(f"Domain card {e.id} is missing a SOURCE link")
-        if not e.fields:
+        is_enum = bool(e.store and e.store.mode == "enum")
+        if not e.fields and not is_enum:
             problems.append(f"Domain card {e.id} has no FIELDS")
         for f in e.fields:
             if not f.type:
                 problems.append(f"Domain card {e.id} field '{f.name}' has no type")
+    return problems
+
+
+def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
+    problems, warnings = check_domain_relations(m.entities)
+    problems.extend(domain_card_shape_problems(m.entities))
+    directed: set[tuple[str, str]] = set()
+    for e in m.entities:
         for r in e.relations:
             directed.add((e.id, r.target))
     for a, b in directed:
@@ -3214,6 +3307,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(edge_problems)
     warnings.extend(edge_warnings)
     warnings.extend(roleless_cd_verb_warnings(m))
+    warnings.extend(duplicate_security_warnings(m))
     card_problems, card_warnings = _check_domain_cards(m)
     problems.extend(card_problems)
     warnings.extend(card_warnings)

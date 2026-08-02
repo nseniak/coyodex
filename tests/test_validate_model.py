@@ -3194,3 +3194,88 @@ def test_an_unreached_core_subtree_reports_once_at_its_highest_ancestor() -> Non
     m.extras = [ExtraSection(heading="Happy Path coverage",
                              body="CAP1/spine: pre-launch, the walk does not cover commerce yet")]
     assert not [w for w in warnings_of(m) if "no Happy-Path step reaches" in w]
+
+
+# --- project-extensible bucket vocabulary ----------------------------------------
+# A project whose real vocabulary needs a bucket the library seeds never named was told to rename it
+# on EVERY rebuild, forever — and the advice contradicted itself, because reusing the previous map's
+# spelling for stability is exactly what earned the warning.
+
+
+def make_bucket_model(bucket: str, extras: list[dict] | None = None) -> dict:
+    return {
+        "format": FORMAT, "title": "t", "goal": "g",
+        "use_cases": [{"id": "UC1", "name": "Do"}],
+        "components": [{"id": "C1", "name": "A", "source": "a.py:1"}],
+        "deps": [{"id": "D1", "name": "somelib", "kind": "library", "bucket": bucket,
+                  "used_for": "things"}],
+        "extras": extras or [],
+    }
+
+
+def test_a_minted_library_bucket_still_nudges_by_default():
+    m = load_model(json.dumps(make_bucket_model("MCP protocol")))
+    _problems, warnings = validate_model_mod._check_dep_buckets(m)
+    assert any("'MCP protocol' is minted" in w for w in warnings)
+    assert any("Bucket vocabulary" in w for w in warnings)
+
+
+def test_a_declared_bucket_stops_nudging_and_says_it_was_silenced():
+    m = load_model(json.dumps(make_bucket_model("MCP protocol", extras=[
+        {"heading": "Bucket vocabulary",
+         "body": "MCP protocol: this product IS an MCP gateway; the seeds name nothing close"}])))
+    _problems, warnings = validate_model_mod._check_dep_buckets(m)
+    assert not any("'MCP protocol' is minted" in w for w in warnings)
+    # A silence you cannot see reads exactly like having no findings.
+    assert any("NOT re-nudged" in w and "MCP protocol" in w for w in warnings)
+
+
+def test_declaring_one_bucket_does_not_silence_another():
+    m = load_model(json.dumps(make_bucket_model("MCP protocol", extras=[
+        {"heading": "Bucket vocabulary", "body": "Build & tooling: the repo's own toolchain"}])))
+    _problems, warnings = validate_model_mod._check_dep_buckets(m)
+    assert any("'MCP protocol' is minted" in w for w in warnings)
+
+
+def make_security_dup_model(rows: list[dict], extras: list[dict] | None = None) -> dict:
+    return {
+        "format": FORMAT, "title": "t", "goal": "g",
+        "use_cases": [{"id": "UC1", "name": "Do"}],
+        "components": [{"id": "C1", "name": "A", "source": "a.py:1"}],
+        "security": rows, "extras": extras or [],
+    }
+
+
+def test_an_accepted_duplication_silences_only_its_own_surface():
+    """A substring test let ONE adjudication silence a DIFFERENT duplicate: recording the long
+    URL-shaped surface also suppressed an un-adjudicated duplicate of the short one, because the
+    short name is a substring of the long line."""
+    long_surface = "Admin pages (/orgs/:slug/admin/**)"
+    m = load_model(json.dumps(make_security_dup_model(
+        [{"surface": long_surface, "source": "a.tsx:1"},
+         {"surface": long_surface, "source": "b.tsx:2"},
+         {"surface": "Admin pages", "source": "c.tsx:3"},
+         {"surface": "Admin pages", "source": "d.tsx:4"}],
+        extras=[{"heading": "Accepted duplications",
+                 "body": f"{long_surface}: two fragments, both anchors real"}])))
+    warnings = validate_model_mod.duplicate_security_warnings(m)
+    # The recorded one is silenced (and the silence is reported) …
+    assert any("suppressed by a recorded" in w and long_surface in w for w in warnings)
+    # … and the OTHER duplicate still fires. A surface that contains a colon must still key.
+    assert any(w.startswith("security surface 'Admin pages' is authored 2 times") for w in warnings)
+
+
+def test_a_duplicate_security_surface_warns_and_names_the_verb():
+    m = load_model(json.dumps(make_security_dup_model(
+        [{"surface": "Login", "source": "a.py:1"}, {"surface": "Login", "source": "b.py:2"}])))
+    warnings = validate_model_mod.duplicate_security_warnings(m)
+    assert any("fix dedup-security" in w for w in warnings)
+
+
+def test_two_surfaces_sharing_one_anchor_are_not_a_duplicate():
+    """One line can legitimately guard two things; calling that duplication is the mistake that
+    let a hand script delete a real claim."""
+    m = load_model(json.dumps(make_security_dup_model(
+        [{"surface": "Admin pages", "source": "ui/Sidebar.tsx:97"},
+         {"surface": "Role-gated navigation", "source": "ui/Sidebar.tsx:97"}])))
+    assert validate_model_mod.duplicate_security_warnings(m) == []

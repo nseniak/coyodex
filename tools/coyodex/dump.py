@@ -103,6 +103,55 @@ def edges_of(m: ProjectModel, eid: str) -> dict[str, list[dict[str, object]]]:
             "out": [asdict(e) for e in m.edges if e.src == eid]}
 
 
+def legend_of(m: ProjectModel) -> list[dict[str, object]]:
+    """The `--legend` slice: every element as `id · name · kind · subsystem/subdomain · source`.
+
+    The id universe a fan-out has to share. Every build re-invents it — one hand-wrote a 25-line
+    python walk of `project-map.json` to produce the frozen legend it then handed to eleven trace
+    agents, in the same turn as a contract telling them "use `coyodex dump`, don't hand-parse it".
+    The tool asked for the discipline it did not supply."""
+    out: list[dict[str, object]] = []
+    for c in m.components:
+        out.append({"id": c.id, "name": c.name, "kind": "component",
+                    "parent": c.subsystem or "", "source": _href(c.source) or ""})
+    for d in m.deps:
+        out.append({"id": d.id, "name": d.name, "kind": "dep", "parent": d.bucket or "",
+                    "source": ""})
+    for e in m.entities:
+        out.append({"id": e.id, "name": e.name, "kind": "entity", "parent": e.subdomain or "",
+                    "source": _href(e.source) or ""})
+    for g in m.subsystems:
+        out.append({"id": g.id, "name": g.name, "kind": "subsystem", "parent": g.parent or "",
+                    "source": _href(g.source) or ""})
+    for g in m.subdomains:
+        out.append({"id": g.id, "name": g.name, "kind": "subdomain", "parent": g.parent or "",
+                    "source": _href(g.source) or ""})
+    for uc in m.use_cases:
+        out.append({"id": uc.id, "name": uc.name, "kind": "use_case", "parent": "", "source": ""})
+    for sf in m.subflows:
+        out.append({"id": sf.id, "name": sf.name, "kind": "sub_flow", "parent": "", "source": ""})
+    for r in m.roles:
+        out.append({"id": r.id, "name": r.name, "kind": "role", "parent": "", "source": ""})
+    for cap in m.capabilities:
+        out.append({"id": cap.id, "name": cap.name, "kind": "capability", "parent": "",
+                    "source": ""})
+    return out
+
+
+def counts_of(m: ProjectModel) -> dict[str, int]:
+    """The `--counts` slice: how many rows each array holds.
+
+    `assemble` prints C/D/E and `validate` prints its own inventory line, and neither covers every
+    array — so builds keep answering "how big is this map?" with a throwaway `python -c` that walks
+    the JSON. Three separate live turns did exactly that, one of them two turns after `assemble`
+    had printed half the same numbers."""
+    counts: dict[str, int] = {}
+    for name, value in vars(m).items():
+        if isinstance(value, list):
+            counts[name] = len(value)
+    return counts
+
+
 def members_of(m: ProjectModel, gid: str) -> list[dict[str, object]]:
     """The `--members` slice: a group's member RECORDS (where `--id` gives their ids)."""
     elements = all_elements(m)
@@ -111,7 +160,9 @@ def members_of(m: ProjectModel, gid: str) -> list[dict[str, object]]:
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 
-_USAGE = """usage: coyodex dump [<project-map.json>] [--id <ID> | --record <ID> | --edges <ID> | --members <Sn|SDn>]
+_USAGE = """usage: coyodex dump [<project-map.json>]
+                    [--id <ID> | --record <ID> | --edges <ID> | --members <Sn|SDn>
+                     | --legend | --counts]
 
 Emit the parsed model as JSON — whole (no flag), or one FIXED slice:
   --id <ID>       resolve an id: kind, display name, canonical source, members
@@ -119,11 +170,16 @@ Emit the parsed model as JSON — whole (no flag), or one FIXED slice:
   --record <ID>   the element's full stored record
   --edges <ID>    the backbone edges into/out of a node: {"in": [...], "out": [...]}
   --members <ID>  a subsystem's / subdomain's member records
+  --legend        every element as id · name · kind · parent · source — the shared id universe a
+                  fan-out needs (builds kept hand-writing this walk and handing it to sub-agents)
+  --counts        how many rows each array holds — the whole inventory, not assemble's C/D/E subset
 Reads an assembled map OR a build FRAGMENT, so it works during Phases 1-3 as well as after
 assembly (the help never said so, and a build spent a turn on `dump --help` finding out).
 Read-only; complements reading the map, never replaces the whole-map read."""
 
 _SLICES = ("--id", "--record", "--edges", "--members")
+#: Slices that take no argument — they describe the WHOLE map, not one element.
+_WHOLE_MAP_SLICES = ("--legend", "--counts")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -136,7 +192,9 @@ def main(argv: list[str] | None = None) -> int:
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a in _SLICES:
+        if a in _WHOLE_MAP_SLICES:
+            slices.append((a, ""))
+        elif a in _SLICES:
             i += 1
             if i >= len(argv):
                 print(f"ERROR: {a} needs an element ID", file=sys.stderr)
@@ -149,8 +207,8 @@ def main(argv: list[str] | None = None) -> int:
             positional.append(a)
         i += 1
     if len(slices) > 1:
-        print("ERROR: give at most ONE slice flag (--id/--record/--edges/--members)",
-              file=sys.stderr)
+        print("ERROR: give at most ONE slice flag "
+              "(--id/--record/--edges/--members/--legend/--counts)", file=sys.stderr)
         return 2
     path = Path(positional[0] if positional else ".coyodex/project-map.json")
     if not path.exists():
@@ -169,7 +227,11 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(to_canonical_json(m))
         return 0
     flag, eid = slices[0]
-    if flag == "--edges":
+    if flag == "--legend":
+        out: object = legend_of(m)
+    elif flag == "--counts":
+        out = counts_of(m)
+    elif flag == "--edges":
         out: object = edges_of(m, eid)
     elif flag == "--members":
         if _kind_of(eid) not in ("subsystem", "subdomain"):

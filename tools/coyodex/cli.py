@@ -35,9 +35,14 @@ Commands:
              PINNED audit worklist (`grounding write`). The four counts are what `validate`
              blocks on, so they are never hand-tallied.
   fix        Apply a reconcile edit to the model in place (apply-drift / drop-edge /
-             dedup-relation / dedup-edge) — the mechanical fixes the method's Phase-3/4
+             dedup-relation / dedup-edge / security-row / dedup-security) — the mechanical
+             fixes the method's Phase-3/4
              reconcile needs, so they are never hand-scripted. Re-run validate → audit →
              render after.
+  provenance Stamp WHICH session built this map and WHEN into .coyodex/provenance.json — the
+             file `finalize` requires before the map is committed. It used to be produced only by
+             a script in the coyodex clone that the shipped CLI does not install, so a build could
+             be told to produce an artifact no command could make.
   record     Append (or --replace) one `<id>: <why>` line under a recorded-exception extras
              heading — the one writer for an advisory an operator judged acceptable, so a
              record is never a hand-rolled string append into the wrong heading.
@@ -142,6 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "record":
         from coyodex import record  # stdlib-only; the one writer for a recorded exception
         return record.main(rest)
+    if cmd == "provenance":
+        from coyodex import provenance  # stdlib-only; the file finalize requires before a commit
+        return provenance.main(rest)
 
     print(f"coyodex: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)

@@ -291,8 +291,30 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\n(dry run — {total} assignment(s) in {len(doc['set'])} group(s); "
               f"re-run without --dry-run to write {out_path})", file=sys.stderr)
         return 0
-    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(out_path).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+    # CARRY FORWARD the directives this command does not author. It writes only `set`, and the
+    # write is whole-file — so a `set_anchors` / `keep_edges` / `drop_edges` block recorded by
+    # `fix apply-drift --to-reconcile` or `fix dedup-edge --to-reconcile` was silently deleted by
+    # the next ordinary `coyodex reconcile`, into the SAME default file. The map then reverted to
+    # the drifted anchors or the restored duplicates with nothing said, which is precisely the
+    # durability those flags exist to provide.
+    out = Path(out_path)
+    carried: dict[str, object] = {}
+    if out.exists():
+        try:
+            prior = json.loads(out.read_text(encoding="utf-8"))
+        except ValueError as e:
+            print(f"ERROR: {out_path} already exists and is not valid JSON ({e}) — refusing to "
+                  f"overwrite it. Fix or delete it, then re-run.", file=sys.stderr)
+            return 2
+        if isinstance(prior, dict):
+            carried = {k: v for k, v in prior.items() if k != "set" and v}
+    if carried:
+        doc.update(carried)
+        print("reconcile: carried forward " + ", ".join(
+            f"{k} ({len(v) if isinstance(v, list) else 1})" for k, v in sorted(carried.items()))
+            + f" already recorded in {out_path} — only `set` is regenerated.", file=sys.stderr)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
     print(f"reconcile -> {out_path}  ({total} assignment(s) in {len(doc['set'])} group(s))")
     print(f"Next: coyodex assemble <fragments…> --out .coyodex --reconcile {out_path}")
     return 0

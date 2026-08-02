@@ -535,10 +535,21 @@ def main(argv: list[str] | None = None) -> int:
         # missing artifact into a shorter, still-copyable line. A live build ran finalize before
         # stamping provenance, and the hint it printed would have committed the map WITHOUT it: the
         # exact omission the hint exists to prevent. The operator caught it by hand.
+        # NAME THE COMMAND for each, too. Telling a build to "produce them" without saying how
+        # cost a live run two extra finalize rounds: it re-ran finalize unchanged, got the identical
+        # complaint, and only then went hunting — provenance was, at the time, produced by a script
+        # in the coyodex clone that the shipped CLI does not install. It is `coyodex provenance
+        # stamp` now, and the hint says so.
+        how = {"provenance.json": "coyodex provenance stamp .",
+               "preindex.json": "coyodex preindex . --report"}
         print(f"finalize: NOT in that command, because {'it does' if len(missing) == 1 else 'they do'}"
               f" not exist yet — {', '.join(str(p) for p in missing)}. method.md requires the "
               f"pre-index and provenance to ship WITH the map; produce them and re-run finalize "
               f"rather than committing the shorter line above.")
+        for p_missing in missing:
+            cmd = how.get(p_missing.name)
+            if cmd:
+                print(f"  {p_missing.name}: {cmd}")
     unran = [f"{l.name} ({l.status})" for l in report.legs if not l.ran]
     print(f"finalize: {report.verdict} — {report.blocking_total} blocking, "
           f"{report.advisory_total} advisory"

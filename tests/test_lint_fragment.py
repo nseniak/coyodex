@@ -257,3 +257,35 @@ def test_an_unreadable_path_is_not_reported_as_a_rule_violation():
         assert "cannot read" in r.stderr
         assert "LINT DID NOT RUN" in r.stderr
         assert "LINT FAILED" not in r.stderr
+
+
+# --- domain-card shape, shifted left ---------------------------------------------
+# The per-card shape rules (meaning / source / fields / field types) ran only on the ASSEMBLED map,
+# so a T5 fragment linted clean and then failed the lead's `validate` a phase later — eight cards
+# at once on a live build, and seven turns of sed/awk/python to recover.
+
+
+def make_card(**over) -> dict:
+    card = {"id": "E1", "name": "Thing", "meaning": "a thing", "source": "a.py:1",
+            "fields": [{"name": "id", "type": "str"}]}
+    card.update(over)
+    return card
+
+
+def test_a_field_less_domain_card_now_fails_the_fragment_lint():
+    m = make_fragment({"entities": [make_card(fields=[])]})
+    problems = lint_fragment.lint_fragment_problems(m, None)
+    assert any("has no FIELDS" in p for p in problems)
+
+
+def test_an_enum_card_is_exempt_from_the_fields_rule():
+    """`store.mode == "enum"` says the card describes a closed value set, which has members, not
+    typed fields. Requiring fields there taught a live build to hand-inject the enum members into
+    `fields` to get past the gate — the tool teaching the map to lie."""
+    m = make_fragment({"entities": [make_card(fields=[], store={"mode": "enum"})]})
+    assert not any("has no FIELDS" in p for p in lint_fragment.lint_fragment_problems(m, None))
+
+
+def test_a_meaning_less_card_fails_the_fragment_lint():
+    m = make_fragment({"entities": [make_card(meaning="")]})
+    assert any("missing a MEANING" in p for p in lint_fragment.lint_fragment_problems(m, None))

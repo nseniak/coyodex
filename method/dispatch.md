@@ -80,6 +80,18 @@ copy as the baseline when the working-tree file is gone.** Fall through to Build
 Create it. Read `method.md` (+ `method/model.md`, `method/domain-cards.md`): agents return
 structured rows and `coyodex assemble` writes the model + views.
 
+**Do not open a previous map while building.** Not the one git still has, and not one filed under
+`.coyodex/dev-rebuilds/` (the coyodex author's own archive; a user of coyodex never has that
+directory). A build that reads the map it is replacing is no longer independent of it: on a live
+rebuild the lead printed the archived map's title and goal, and the new goal then reproduced the old
+one near-verbatim for two sentences, while the dep buckets were inherited on purpose "for stability".
+Both may even be the right text — the problem is that nobody can tell any more, and an eval
+comparing two maps of one repo reads the agreement as convergence when it is copying. Archiving the
+old map (`coyodex-eval archive`) is filing it, not consulting it, and stays fine. If a project
+genuinely needs a vocabulary to stay stable across rebuilds, record it in the map (`Bucket
+vocabulary`) so the next build inherits it from a DECLARATION rather than by reading the artifact.
+(L3 assertion 29 watches this.)
+
 ### Baseline exists → default to Analyze (never silently rebuild)
 
 A rebuild regenerates the map from scratch and **overwrites the curated, reviewed baseline** — it

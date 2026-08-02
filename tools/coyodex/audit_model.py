@@ -72,6 +72,122 @@ def _claim_text(cell: str) -> str:
     return m.group(1) if m else cell
 
 
+# ── claim identity, and the one writer that acts on it ────────────────────────────────────────────
+# A CLAIM string is the only handle a skeptic verdict carries back, so it is the handle every
+# anchor-correction path uses. These recompute it from the model (never regex-parse it off a
+# verdict), and `apply_anchor_corrections` is the single writer both `fix apply-drift` and
+# `assemble --reconcile set_anchors` go through — the second exists because the first wrote only
+# into the assembled map, so a live build's 19 corrected anchors were discarded by the next
+# assemble and re-typed by hand from the human-readable listing.
+
+EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2`
+
+
+def security_claim(surface: str, source: str) -> str:
+    """A security row's L2 claim, EXACTLY as `l2_worklist_model` builds it."""
+    return f"Auth surface '{surface}' is protected by: {_claim_text(source)}"
+
+
+def cadence_claim(kind: str, trigger: str, cadence: str) -> str:
+    """An entry point's cadence claim, EXACTLY as `l2_worklist_model` builds it."""
+    return f"Entry point [{kind}] {trigger} runs on cadence '{cadence}'"
+
+
+def apply_anchor_corrections(m: ProjectModel,
+                             corrections: list[tuple[str, str]]) -> tuple[dict[str, int], list[str]]:
+    """Write each `(claim, corrected anchor)` onto the element its claim identifies.
+
+    Three kinds, matched by recomputing every candidate's claim: an edge's `where`, a security
+    row's `source`, an entry point's `cadence_source`. Returns per-kind counts and the notes to
+    print. A claim matching 0 or >1 elements is NEVER blind-written — it is reported and skipped,
+    the same multiplicity rule `fix security-row` enforces, and for the same reason: two rows can
+    share a surface, two edges can share a triple, and picking "the first" is how a hand script
+    overwrote a claim nobody meant to touch.
+
+    RESOLVE EVERYTHING FIRST, THEN WRITE. A single pass that matched against the model it was
+    mutating made the result depend on worklist order: correcting `S@a.py:1 -> b.py:2` and
+    `S@b.py:2 -> c.py:3` in one order applied both, and in the other order the second correction
+    re-matched the row the first had just moved, saw two candidates, skipped — and left two
+    byte-identical security rows behind. Same inputs, two different maps. Two corrections that land
+    on ONE element are refused for the same reason: whichever won would be an accident of order."""
+    counts = {"edge": 0, "security": 0, "cadence": 0}
+    notes: list[str] = []
+    # Pass 1 — resolve every claim against the UNTOUCHED model.
+    resolved: list[tuple[str, str, str, int]] = []      # (claim, corrected, kind, index)
+    for claim, corrected in corrections:
+        if not corrected:
+            notes.append(f"note: no corrected line for '{claim}' — left unchanged")
+            continue
+        mo = EDGE_CLAIM.match(claim)
+        if mo:
+            src, verb, dst = mo.group(1), mo.group(2).lower(), mo.group(3)
+            hits = [i for i, e in enumerate(m.edges)
+                    if e.src == src and e.verb.strip().lower() == verb and e.dst == dst]
+            if len(hits) != 1:
+                notes.append(f"WARNING: '{claim}' matches {len(hits)} edges — skipped (resolve "
+                             f"by hand: an ambiguous multi-site edge must not be blind-rewritten).")
+                continue
+            resolved.append((claim, corrected, "edge", hits[0]))
+            continue
+        sec = [i for i, s in enumerate(m.security)
+               if security_claim(s.surface, s.source) == claim]
+        if sec:
+            if len(sec) != 1:
+                notes.append(f"WARNING: '{claim}' matches {len(sec)} security surfaces — skipped "
+                             f"(resolve by hand).")
+                continue
+            resolved.append((claim, corrected, "security", sec[0]))
+            continue
+        eps = [i for i, ep in enumerate(m.entry_points)
+               if (ep.cadence or "").strip()
+               and cadence_claim(ep.kind, ep.trigger, ep.cadence) == claim]
+        if eps:
+            if len(eps) != 1:
+                notes.append(f"WARNING: '{claim}' matches {len(eps)} entry points — skipped "
+                             f"(resolve by hand).")
+                continue
+            resolved.append((claim, corrected, "cadence", eps[0]))
+            continue
+        notes.append(f"WARNING: '{claim}' matches no edge, security surface or cadenced entry "
+                     f"point in this map — skipped (the claim may have been rewritten since).")
+    # Two corrections resolving to ONE element cannot both be honoured; order must not decide.
+    # Keyed on the CORRECTED value, not the claim: the same claim listed twice with two different
+    # anchors is the same conflict wearing one name, and comparing claims missed it entirely.
+    seen: dict[tuple[str, int], str] = {}
+    contested: set[tuple[str, int]] = set()
+    for _claim, corrected, kind, idx in resolved:
+        prior = seen.get((kind, idx))
+        if prior is not None and prior != corrected:
+            contested.add((kind, idx))
+        seen.setdefault((kind, idx), corrected)
+    # Pass 2 — write.
+    for claim, corrected, kind, idx in resolved:
+        if (kind, idx) in contested:
+            notes.append(f"WARNING: '{claim}' and another correction both resolve to the same "
+                         f"{kind} — skipped BOTH (whichever won would be an accident of order; "
+                         f"resolve by hand).")
+            continue
+        if kind == "edge":
+            e = m.edges[idx]
+            if e.where != corrected:
+                notes.append(f"  {claim}: where {e.where!r} → {corrected!r}")
+                e.where = corrected
+                counts["edge"] += 1
+        elif kind == "security":
+            s = m.security[idx]
+            if s.source != corrected:
+                notes.append(f"  {claim}: source {s.source!r} → {corrected!r}")
+                s.source = corrected
+                counts["security"] += 1
+        else:
+            ep = m.entry_points[idx]
+            if ep.cadence_source != corrected:
+                notes.append(f"  {claim}: cadence_source {ep.cadence_source!r} → {corrected!r}")
+                ep.cadence_source = corrected
+                counts["cadence"] += 1
+    return counts, notes
+
+
 @dataclass(frozen=True)
 class Finding:
     check: str
@@ -532,7 +648,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     items: list[WorkItem] = []
     for s in m.security:
         items.append(WorkItem(
-            claim=f"Auth surface '{s.surface}' is protected by: {_claim_text(s.source)}",
+            claim=security_claim(s.surface, s.source),
             anchor=_anchor(s.source), theme="security",
             why_risky="security boundary — a false claim here is an access-control hole."))
     dep_items: list[WorkItem] = []
@@ -649,7 +765,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             # the schedule — send the skeptic hunting, don't imply the line says it (review #5).
             cited = bool((ep.cadence_source or "").strip())
             items.append(WorkItem(
-                claim=f"Entry point [{ep.kind}] {ep.trigger} runs on cadence '{ep.cadence}'",
+                claim=cadence_claim(ep.kind, ep.trigger, ep.cadence),
                 anchor=_anchor(ep.cadence_source if cited else ep.source),
                 drift_eligible=cited, theme="cadence",
                 why_risky=("a schedule is config-tuned and drifts silently — verify the declaring "

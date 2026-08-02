@@ -27,7 +27,6 @@ import dataclasses
 import json
 import os
 import shutil
-import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -52,106 +51,20 @@ SESSION_ENV = "CLAUDE_CODE_SESSION_ID"
 # ---------------------------------------------------------------------------
 
 
-@dataclasses.dataclass
-class SessionEntry:
-    session_id: str
-    built_at: str  # local wall-clock, minute precision: "YYYY-MM-DD HH:MM"
-    mode: str  # build | accept | rebuild
-    code_commit: str | None = None  # short sha of the analyzed repo at build time
-    code_committed: str | None = None  # that commit's date, YYYY-MM-DD
-
-    @staticmethod
-    def from_dict(d: dict[str, object]) -> "SessionEntry":
-        def s(key: str) -> str:
-            v = d.get(key)
-            return v if isinstance(v, str) else ""
-
-        def opt(key: str) -> str | None:
-            v = d.get(key)
-            return v if isinstance(v, str) else None
-
-        return SessionEntry(
-            session_id=s("session_id"),
-            built_at=s("built_at"),
-            mode=s("mode") or "build",
-            code_commit=opt("code_commit"),
-            code_committed=opt("code_committed"),
-        )
-
-
-@dataclasses.dataclass
-class Provenance:
-    project: str
-    repo_path: str
-    sessions: list[SessionEntry] = dataclasses.field(default_factory=list)
-    schema: str = PROVENANCE_SCHEMA
-
-    def latest(self) -> SessionEntry | None:
-        return self.sessions[-1] if self.sessions else None
-
-    def upsert(self, entry: SessionEntry) -> None:
-        """Add the entry, or update the existing entry for the same session id."""
-        for i, existing in enumerate(self.sessions):
-            if existing.session_id == entry.session_id:
-                self.sessions[i] = entry
-                return
-        self.sessions.append(entry)
-
-    def to_json(self) -> str:
-        payload: dict[str, object] = {
-            "schema": self.schema,
-            "project": self.project,
-            "repo_path": self.repo_path,
-            "sessions": [dataclasses.asdict(s) for s in self.sessions],
-        }
-        return json.dumps(payload, indent=2) + "\n"
-
-    @staticmethod
-    def load(path: Path) -> "Provenance | None":
-        """Parse provenance.json. Raises ValueError on a corrupt/non-object file."""
-        if not path.is_file():
-            return None
-        try:
-            raw: object = json.loads(path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as exc:
-            raise ValueError(f"{path} is not readable JSON: {exc}") from exc
-        if not isinstance(raw, dict):
-            raise ValueError(f"{path} does not contain a JSON object")
-        sessions_raw = raw.get("sessions")
-        sessions: list[SessionEntry] = []
-        if isinstance(sessions_raw, list):
-            for item in sessions_raw:
-                if isinstance(item, dict):
-                    sessions.append(SessionEntry.from_dict(item))
-        project = raw.get("project")
-        repo_path = raw.get("repo_path")
-        return Provenance(
-            project=project if isinstance(project, str) else "",
-            repo_path=repo_path if isinstance(repo_path, str) else "",
-            sessions=sessions,
-            schema=raw.get("schema")
-            if isinstance(raw.get("schema"), str)
-            else PROVENANCE_SCHEMA,  # type: ignore[arg-type]
-        )
+# The provenance MODEL now lives in the installed package (coyodex.provenance) so that
+# `coyodex provenance stamp` and this script cannot drift into two shapes of one file. It was
+# defined here, which meant `finalize` demanded an artifact the shipped CLI could not produce.
+# Re-exported below under the old names so the rest of this script is unchanged.
+from coyodex.provenance import (  # noqa: E402
+    Provenance,
+    SessionEntry,
+    stamp as _stamp_pkg,
+)
 
 
 # ---------------------------------------------------------------------------
 # Small helpers
 # ---------------------------------------------------------------------------
-
-
-def _run_git(repo: Path, *args: str) -> str | None:
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(repo), *args],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return None
-    value = out.stdout.strip()
-    return value or None
 
 
 def _now_minute() -> str:
@@ -373,53 +286,24 @@ def _copy_transcripts(
 
 
 def cmd_stamp(args: argparse.Namespace) -> int:
+    """Thin wrapper over `coyodex.provenance.stamp` — the same code `coyodex provenance stamp`
+    runs, so the two entry points cannot write different shapes of one file."""
     repo = Path(args.repo).resolve()
-    coyodex_dir = _resolve_coyodex_dir(repo)
-
-    session_id = args.session_id or os.environ.get(SESSION_ENV)
-    if not session_id:
-        _die(
-            f"no session id: set ${SESSION_ENV} (present inside a Claude Code session) "
-            f"or pass --session-id"
-        )
-    assert session_id is not None  # for the type checker; _die never returns
-
-    built_at = args.built_at or _now_minute()
-    entry = SessionEntry(
-        session_id=session_id,
-        built_at=built_at,
-        mode=args.mode,
-        code_commit=_run_git(repo, "rev-parse", "--short", "HEAD"),
-        code_committed=_run_git(repo, "show", "-s", "--format=%cs", "HEAD"),
-    )
-
-    prov_path = coyodex_dir / PROVENANCE_NAME
     try:
-        prov = Provenance.load(prov_path)
-    except ValueError as exc:
-        # Corrupt file: warn and start fresh so this stamp repairs it.
-        print(f"map_backup: warning: {exc}; rewriting from scratch", file=sys.stderr)
-        prov = None
-    if prov is None:
-        prov = Provenance(project=repo.name, repo_path=str(repo))
-    # keep project/repo_path fresh in case the repo moved
-    prov.project = prov.project or repo.name
-    prov.repo_path = str(repo)
-    prov.upsert(entry)
-    prov_path.write_text(prov.to_json(), encoding="utf-8")
-
+        prov_path, entry, warnings = _stamp_pkg(
+            repo, mode=args.mode, session_id=args.session_id, built_at=args.built_at)
+    except (FileNotFoundError, ValueError) as exc:
+        _die(str(exc))
+        return 2                                        # unreachable; _die raises
+    for w in warnings:
+        print(f"map_backup: {w}", file=sys.stderr)
     # Emit the timestamp so the build can copy it verbatim into the map header
     # (the "Built:" cell), keeping header and provenance in lock-step to the minute.
-    print(f"built_at={built_at}")
+    print(f"built_at={entry.built_at}")
     print(
-        f"stamped {prov_path} (session {session_id}, mode {args.mode})", file=sys.stderr
+        f"stamped {prov_path} (session {entry.session_id}, mode {entry.mode})", file=sys.stderr
     )
     return 0
-
-
-# ---------------------------------------------------------------------------
-# backup
-# ---------------------------------------------------------------------------
 
 
 def cmd_backup(args: argparse.Namespace) -> int:

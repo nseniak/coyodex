@@ -142,22 +142,37 @@ LLM builds of one repo never match.
 What the RUN did, as opposed to what it produced.
 
 ```
-coyodex-eval process <transcript> --out .coyodex-eval/retro/<ts>/process.json
+coyodex-eval process <transcript> --map .coyodex/project-map.json \
+    --out .coyodex-eval/retro/<ts>/process.json
 coyodex-eval transcript <transcript> --stats
 ```
+
+**`--map` is not optional here.** Without it, assertion 6 falls back to transcript inference and
+assertions 23 and 24 report `n/a` — three of the scorecard's lines quietly stop measuring, and `n/a`
+reads as "no opportunity" rather than "you did not pass the map". This command line omitted it, and
+the retro that found the omission had to re-run the whole scorecard.
 
 If the previous transcript exists:
 
 ```
-coyodex-eval process <prev-transcript> --out .../prev-process.json
+coyodex-eval process <prev-transcript> --map <archive>/project-map.json \
+    --out .../prev-process.json
 coyodex-eval process --diff .../prev-process.json .../process.json
 ```
 
+Pass each transcript the map IT produced — the archived one for the previous run — or the diff
+compares a scorecard that could read the map against one that could not, and three assertions move
+for that reason alone.
+
 The assertions and what each audits are in
 `COYODEX_HOME/eval/fixtures/trapdoor/L3-DESIGN.md` — **all of them, so check the doc against
-`coyodex-eval process` output rather than against this sentence.** It said "the ten assertions"
-while the scorecard ran fifteen, and the six the doc did not cover were three of the four a live
-build scored zero on; the retro had to read the source to learn what they meant.
+`coyodex-eval process` output rather than against any count written here.** This file said "the ten
+assertions" while the scorecard ran fifteen, and the six the doc did not cover were three of the
+four a live build scored zero on; the retro had to read the source to learn what they meant. Then it
+happened AGAIN, in the same file, two paragraphs later — the report template below still said "the
+ten L3 assertions" while twenty-two ran. Never write the count here; say "every assertion the
+scorecard prints". (`eval/tests/test_process_scorecard.py` now fails when L3-DESIGN.md is missing
+one, which is the half of this that a doc sentence cannot enforce.)
 
 **Read the scores with their notes** — several carry a caveat that changes their meaning
 (assertion 9 says so when the final validate view was narrowed by a grep), and `n/a` means the run
@@ -267,7 +282,7 @@ blocking problems · advisories surviving · components vs E · grounding covera
 · deltas vs the previous map
 
 ## Process signals
-the ten L3 assertions, with the diff against the previous build
+every L3 assertion the scorecard printed, with the diff against the previous build
 
 ## Findings
 ranked; each with turn number, class, where the fix belongs, confidence
@@ -290,6 +305,6 @@ say it plainly
 
 ### Feed it back
 
-Any finding that is a REPEATABLE process defect is a candidate eleventh L3 assertion — the
+Any finding that is a REPEATABLE process defect is a candidate NEW L3 assertion — the
 scorecard exists to turn a one-off discovery into a number that gets watched. Name those
 explicitly in the proposals section; that loop is how the retro stops being a one-off read.

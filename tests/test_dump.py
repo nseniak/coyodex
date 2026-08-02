@@ -177,3 +177,47 @@ if __name__ == "__main__":
                 failures += 1
                 print(f"FAIL {name}: {e}")
     raise SystemExit(1 if failures else 0)
+
+
+# --- --legend / --counts ---------------------------------------------------------
+# The two views every build hand-wrote a `python -c` walk for: the shared id universe a fan-out
+# needs, and "how big is this map?". One build produced the legend with a 25-line script in the
+# same turn as a contract telling its agents "use `coyodex dump`, don't hand-parse it".
+
+
+def test_legend_covers_every_element_kind_with_its_parent_and_source():
+    from coyodex.dump import legend_of
+    rows = legend_of(make_model())
+    by_id = {r["id"]: r for r in rows}
+    assert by_id["C1"] == {"id": "C1", "name": "Viewer", "kind": "component", "parent": "S1",
+                           "source": "backend/viewer.py#L1"}
+    assert by_id["E1"]["kind"] == "entity" and by_id["E1"]["parent"] == "SD1"
+    assert by_id["S2"]["kind"] == "subsystem" and by_id["S2"]["parent"] == "S1"
+    assert by_id["UC1"]["kind"] == "use_case"
+    # A markdown-link source is reduced to its href, like every other dump slice.
+    assert by_id["S1"]["source"] == "backend/core/"
+
+
+def test_counts_covers_every_array_not_just_assembles_three():
+    from coyodex.dump import counts_of
+    counts = counts_of(make_model())
+    assert counts["components"] == 3 and counts["entities"] == 1 and counts["edges"] >= 1
+    # The point of the slice: arrays `assemble`'s C/D/E summary never mentions.
+    assert "entry_points" in counts and counts["entry_points"] == 2
+    assert "use_cases" in counts and "subsystems" in counts
+
+
+def test_a_whole_map_slice_takes_no_id(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "map.json"
+        p.write_text(to_canonical_json(make_model()), encoding="utf-8")
+        assert main([str(p), "--counts"]) == 0
+        assert json.loads(capsys.readouterr().out)["components"] == 3
+
+
+def test_two_slice_flags_are_still_refused(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "map.json"
+        p.write_text(to_canonical_json(make_model()), encoding="utf-8")
+        assert main([str(p), "--counts", "--legend"]) == 2
+        assert "at most ONE slice flag" in capsys.readouterr().err
