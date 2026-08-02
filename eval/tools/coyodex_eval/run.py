@@ -35,9 +35,9 @@ _EXIT = {"PASS": 0, "REGRESSED": 1, "DRIFT": 2, BASELINE: 0}
 
 
 def map_sha256(path: Path) -> str:
-    """The freeze hash of a map artifact (sha256 of the file bytes). The build step writes it to
-    `runs/<ts>/map-hash` via `coyodex-eval hash`; `run --expect-map-hash` recomputes it and hard-fails
-    on mismatch — any post-freeze edit invalidates the run."""
+    """The freeze hash of a map artifact (sha256 of the file bytes). The eval writes it to
+    `runs/<ts>/map-hash` via `coyodex-eval hash` when it picks the map; `run --expect-map-hash`
+    recomputes it and hard-fails on mismatch — any post-freeze edit invalidates the run."""
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -193,7 +193,7 @@ def run_cli(argv: list[str]) -> int:
               "       [--thresholds <file>] [--project-key <name>] [--out <run-dir>] [--json]\n\n"
               "Profile a built map, attach a pre-computed judge report, compare vs the baseline, and\n"
               "archive to --out. --expect-map-hash is the freeze guard: the run REFUSES if the map on\n"
-              "disk no longer matches the hash written at build time (any post-build edit invalidates\n"
+              "disk no longer matches the hash written at freeze time (any later edit invalidates\n"
               "the run). Exit: 0 PASS/BASELINE · 2 DRIFT · 1 REGRESSED.")
         return 0
     project = _opt(argv, "--project")
@@ -231,8 +231,22 @@ def run_cli(argv: list[str]) -> int:
         judge_report = JudgeReport.from_json(Path(jp).read_text(encoding="utf-8"))
 
     baseline_profile = baseline_judge = None
-    if (bd := _opt(argv, "--baseline-dir")) is not None and Path(bd).exists():
-        baseline_profile, baseline_judge = load_baseline(Path(bd))
+    if (bd := _opt(argv, "--baseline-dir")) is not None:
+        # Fail CLOSED. This used to skip a missing dir silently, which turned the whole comparison
+        # off: with no baseline profile the verdict is BASELINE and the exit code is 0 — a caller
+        # that mistyped the path (the eval's cache dirs are named by a 12-char map hash, so it is
+        # one transposed character away) got "nothing got worse" from a run that compared nothing.
+        # A caller who asks for a baseline must get one or an error, never a silent non-comparison.
+        if not (bl := Path(bd)).exists():
+            print(f"ERROR: --baseline-dir {bl} not found. Refusing to run WITHOUT a comparison: "
+                  "omit --baseline-dir to establish a baseline on purpose.", file=sys.stderr)
+            return 2
+        baseline_profile, baseline_judge = load_baseline(bl)
+        if baseline_profile is None:
+            print(f"ERROR: --baseline-dir {bl} holds no profile.json, so there is nothing to "
+                  "compare against. Refusing to report a verdict from an empty baseline.",
+                  file=sys.stderr)
+            return 2
 
     thresholds: Thresholds | None = None
     if (tp := _opt(argv, "--thresholds")) is not None:
@@ -321,8 +335,8 @@ def claims_cli(argv: list[str]) -> int:
 def hash_cli(argv: list[str]) -> int:
     if "-h" in argv or "--help" in argv or not argv:
         print("usage: coyodex-eval hash <file>\n\n"
-              "Print the sha256 freeze hash of an artifact. The build step writes it:\n"
-              "  coyodex-eval hash runs/<ts>/project-map.md > runs/<ts>/map-hash\n"
+              "Print the sha256 freeze hash of an artifact. The eval writes it when it picks a map:\n"
+              "  coyodex-eval hash .coyodex/project-map.json > runs/<ts>/map-hash\n"
               "and `coyodex-eval run --expect-map-hash \"$(cat .../map-hash)\"` enforces it.")
         return 0 if ("-h" in argv or "--help" in argv) else 2
     path = Path(argv[0])

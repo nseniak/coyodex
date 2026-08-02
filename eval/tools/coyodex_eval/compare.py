@@ -382,7 +382,8 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         notes.append("judge-protocol fingerprint differs between baseline and candidate "
                      f"(baseline {baseline_judge.protocol.__dict__} vs candidate "
                      f"{candidate_judge.protocol.__dict__}) — re-judge the baseline under the "
-                     "current protocol (delete .coyodex-eval/baseline/judge.json)")
+                     "current protocol (delete the baseline map's "
+                     ".coyodex-eval/cache/<map sha12>/judge.json)")
     if baseline_judge is not None and candidate_judge is None:
         # NOT a skippable comparison: the baseline was judged, the candidate wasn't — leaving the
         # semantic gates out entirely would let an unjudged (or judge-crashed) run PASS. Breach → DRIFT.

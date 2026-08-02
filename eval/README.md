@@ -91,11 +91,11 @@ Run them with the CLI from the repo venv (`.venv/bin/coyodex-eval …`, or `pyth
 
 | command | what it does |
 |---|---|
-| `coyodex-eval score <map.md> [--repo <src>] [--json]` | print a map's deterministic profile (structure / validate / audit / coverage). `--repo` adds coverage. |
-| `coyodex-eval run --project <name> --map <map.md> [--repo <src>] [--expect-map-hash <sha256>] [--judge <judge.json>] [--baseline-dir <dir>] [--thresholds <file>] [--out <run-dir>]` | profile a built map, compare it to the baseline, archive the run (map + HTML view + profile + delta). `--expect-map-hash` is the freeze guard: it refuses a map edited after build. |
-| `coyodex-eval hash <file>` | print a map artifact's sha256 freeze hash — written to `runs/<ts>/map-hash` at build time, enforced by `run --expect-map-hash`. |
-| `coyodex-eval claims <map.md> [--top <K>] [--json]` | print the audit's risk-ranked L2 worklist — the claims the judge grounds. `--top K` keeps the grounding sample; `--json` is the judge orchestration's input. |
-| `coyodex-eval judge --map <map.md> --verdicts <raw.json> --out <judge.json> [--repo <src>] [--rubric <file>]` | aggregate raw judge verdicts (from the sub-agents) into a `judge.json`, via the tested math. |
+| `coyodex-eval score <map.json> [--repo <src>] [--json]` | print a map's deterministic profile (structure / validate / audit / coverage). `--repo` adds coverage. |
+| `coyodex-eval run --project <name> --map <map.json> [--repo <src>] [--expect-map-hash <sha256>] [--judge <judge.json>] [--baseline-dir <dir>] [--thresholds <file>] [--out <run-dir>]` | profile a map, compare it to the baseline, archive the run (map + md view + view-bundle snapshot + profile + delta). `--expect-map-hash` is the freeze guard: it refuses a map edited after freeze. A `--baseline-dir` that is missing or empty is REFUSED, so a mistyped path can never become a silent non-comparison. |
+| `coyodex-eval hash <file>` | print a map artifact's sha256 freeze hash — written to `runs/<ts>/map-hash` when the eval picks the map, enforced by `run --expect-map-hash`. |
+| `coyodex-eval claims <map.json> [--top <K>] [--json]` | print the audit's risk-ranked L2 worklist — the claims the judge grounds. `--top K` keeps the grounding sample; `--json` is the judge orchestration's input. |
+| `coyodex-eval judge --map <map.json> --verdicts <raw.json> --out <judge.json> [--repo <src>] [--rubric <file>]` | aggregate raw judge verdicts (from the sub-agents) into a `judge.json`, via the tested math. |
 | `coyodex-eval bless <run-dir> <baseline-dir>` | copy a run's artifacts into a baseline dir (used to seed a cache entry by hand; the normal baseline is an archive under `.coyodex/dev-rebuilds/`). |
 | `coyodex-eval archive <repo-root> [--dry-run]` | move the current map to `.coyodex/dev-rebuilds/NNNN/` so the next `/coyodex` builds from scratch — and so the eval has a baseline to compare against. Moves, never deletes. |
 | `coyodex-eval compare <baseline.json> <candidate.json> [--thresholds] [--baseline-judge] [--candidate-judge]` | low-level: compare two profiles directly. `eval run` uses this under the hood. |

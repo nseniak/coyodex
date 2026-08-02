@@ -34,8 +34,10 @@ The eval scores maps. It cannot see how they were made, and two preconditions ar
 - **Both maps must describe the same code.** That one the eval does enforce — Step 1.
 
 ## Rules that keep a run honest
-1. **Both maps are READ-ONLY.** They are hashed before anything scores them and the hash is verified
-   at the comparison. Never edit a map to improve a number; a map edited mid-run voids the run.
+1. **Both maps are READ-ONLY.** Never edit a map to improve a number; a map edited mid-run voids the
+   run. Know what is actually enforced, though: `run --expect-map-hash` guards **only the candidate**,
+   and only at the comparison. The baseline map file is never re-opened there — only its cached
+   scores are read — so the baseline's freeze is yours to hold, via the cache check in Step 3.1.
 2. **A validity failure is a FINDING, never a fixup.** If a map fails `validate` or `audit`, that IS
    a result — "the method produced an invalid map". Report it; never repair the map, and never
    rebuild to get a cleaner one.
@@ -66,55 +68,95 @@ REGRESSED.
    **Either side may be overridden with an explicit map path** — that is how a map built by
    `blind-build.md`, or any two archives, get compared.
 3. **Distinctness.** `coyodex-eval hash` both. Identical hashes → the same map twice; say so and stop.
-4. **Same-code guard.** Read the bare short sha from each map's `commit` / `committed` header field.
-   All three must hold:
-   - the two maps record the **same commit** `P`;
+4. **Same-code guard.** Read each map's pin from its `commit` / `committed` header field — call them
+   `P_base` and `P_cand`.
+
+   **First, refuse a `-dirty` pin outright.** A build over uncommitted code records its pin as
+   `<short-sha>-dirty` (`method.md`, the scope step), and that suffix is the ONLY record that the map
+   describes code no commit contains. Do **not** strip it to compare bare shas: stripping turns
+   "describes code that exists nowhere" into "describes `abc123`", which then matches a clean
+   checkout of `abc123` and sails through every check below. The map's anchors would point at code
+   that is not there, inflating its validate problems and coverage flags — and because every hard
+   gate reads "the candidate must not be *worse* than the baseline", an artificially bad **baseline**
+   is a free pass for the candidate. This one is **not overridable**; the code it describes is gone.
+
+   Then all four must hold:
+   - **zero code delta between the two pins** — `git diff <P_base>..<P_cand> -- . ':(exclude).coyodex'`
+     empty. Note this is a delta test, NOT `P_base == P_cand`: once `.coyodex/` is tracked, committing
+     a map moves HEAD past the commit that map describes, so consecutive maps normally carry
+     *different* pins with identical code between them. Requiring equality would refuse the ordinary
+     archive → rebuild → compare loop, and a guard that cries wolf on the happy path just teaches
+     everyone to override it;
    - the tree is **clean**, ignoring coyodex's own dirs:
      `git status --porcelain -- . ':(exclude).coyodex' ':(exclude).coyodex-eval'`.
      **Housekeeping exception:** if the ONLY dirty path is `.gitignore`, inspect
      `git diff -- .gitignore`; when every added/removed line does nothing but add coyodex paths
      (`.coyodex-eval/`, `.coyodex/` entries — step 5 below), treat the tree as clean. Any other
      `.gitignore` change still counts as dirty;
-   - **zero code delta between `P` and `HEAD`** — once `.coyodex/` is tracked, committing a map moves
-     HEAD past the commit that map describes, so "HEAD == P" literally never holds again (the normal
-     state, not an error). The real invariant is:
+   - **zero code delta between `P_cand` and `HEAD`**:
      ```
-     git diff <P>..HEAD -- . ':(exclude).coyodex' ':(exclude).gitignore'
+     git diff <P_cand>..HEAD -- . ':(exclude).coyodex'
      ```
-     empty.
+     empty. `.gitignore` is deliberately **not** excluded here. The analysed file set comes from
+     `git ls-files --exclude-standard`, so a committed `.gitignore` change silently rescopes the tree
+     the maps are measured against — verified: adding one directory to a `.gitignore` moved the walk
+     from 24 files to 13 and E from 3 to 2, with every other clause green. If the only difference is
+     coyodex housekeeping, apply the same content test as the clause above rather than excluding the
+     file;
+   - **the analysis scope is unchanged** — `git diff <P_base>..HEAD -- .coyodex/.ignore` empty.
+     `.coyodex/.ignore` declares which committed code the map is not meant to describe;
+     `iter_source_files` honours it, so it sets the coverage denominator AND the code-derived
+     component expectation E. On this repo, removing it took E from 14 to 37 (+164%) and flipped the
+     current map's granularity band from DRIFT to PASS with no change to map or code. The other
+     clauses all exclude `.coyodex/` wholesale, so this file needs its own check.
 
-   **Why all three.** Both maps are scored against the **working tree**: `validate --check-sources`
+   **Why any of this.** Both maps are scored against the **working tree**: `validate --check-sources`
    resolves anchors there, coverage reads it, and the grounding skeptics read it. If the checkout is
    not the code both maps describe, the older map's anchors miss, coverage flags spike, and skeptics
    refute claims that were true when the map was written. The numbers then move because the CODE
    moved — the one thing a method eval must never confuse with a method change.
 
-   Any of the three failing → **REFUSE** and stop:
+   Any clause failing → **REFUSE** and stop:
    > eval compares two maps of the SAME code, so a quality change means the *method* changed, not the
-   > code. `<what failed — the two maps are pinned at different commits / the tree is dirty / HEAD
-   > carries code changes on top of the pin>`. Get to a clean tree with zero code delta vs the maps'
-   > commit, then re-run `/coyodex-eval`.
+   > code. `<what failed — code differs between the two maps' pins / the tree is dirty / HEAD carries
+   > code changes on top of the candidate's pin / .coyodex/.ignore changed>`. Get to a clean tree
+   > with zero code delta, then re-run `/coyodex-eval`.
 
-   **Override.** If the user insists on running anyway ("run it anyway", "I know the code differs"),
-   run it — and stamp **every** output. The report leads with:
-   > INFORMATIONAL — the two maps describe different code (`<P_baseline>` vs `<P_candidate>`, N files
-   > differ). Counts, coverage and grounding mix code change with method change; this is not a method
-   > verdict.
+   **Override** (never available for a `-dirty` pin). If the user insists on running anyway ("run it
+   anyway", "I know the code differs"), run it — under three conditions, all of them required:
+   - **the report leads with the stamp**:
+     > INFORMATIONAL — the two maps describe different code (`<P_base>` vs `<P_cand>`, N files
+     > differ). Counts, coverage and grounding mix code change with method change; this is not a
+     > method verdict.
+   - **nothing is written to the Step-3 cache.** Score and judge into the run directory instead
+     (`.coyodex-eval/runs/<ts>/informational/`). The cache is keyed by map hash alone, so an entry
+     written from a rejected tree is indistinguishable from a good one and would be reused, unnoticed,
+     by the next honest run — which would then report a clean PASS built on numbers that were never
+     valid. The cache must only ever hold scores computed under a guard that PASSED;
+   - **the run directory records it**: write `.coyodex-eval/runs/<ts>/INFORMATIONAL` containing both
+     pins and the reason. `delta.md` says `Verdict: PASS` in the same words either way, so without
+     this file an overridden run is indistinguishable from an honest one to anyone reading it later
+     — including you, next month.
 
-   An overridden run is never reported as a clean PASS or REGRESSED.
+   An overridden run is never reported as a clean PASS or REGRESSED, and is never blessed into a
+   cache or quoted as a method result.
 5. Make sure `.coyodex-eval/` is git-ignored in this project (add it to `.gitignore` if absent).
 
 ## Step 2 — Freeze both maps, then check them
 No build happens here, but the maps still get frozen: everything downstream must be scoring the exact
 bytes that were picked in Step 1.
 
-1. Hash each map and keep the digest for the rest of the run:
+1. Hash each map and keep both digests for the rest of the run:
    ```
    COYODEX_HOME/.venv/bin/coyodex-eval hash <map>
+   COYODEX_HOME/.venv/bin/coyodex-eval hash .coyodex/project-map.json \
+     > .coyodex-eval/runs/<YYYY-MM-DD_HHMM>/map-hash        # the candidate's, kept on disk
    ```
-   Store the candidate's under `.coyodex-eval/runs/<YYYY-MM-DD_HHMM>/map-hash`. From here both maps
-   are **read-only**; the Step-5 `coyodex-eval run` re-verifies the candidate via
-   `--expect-map-hash`, and a mismatch voids the run.
+   From here both maps are **read-only**. The Step-5 `coyodex-eval run` re-verifies the candidate via
+   `--expect-map-hash` and a mismatch voids the run — but that is the LAST step, and `claims` /
+   `judge` have no hash guard of their own. So **re-check both hashes yourself immediately before
+   judging** (Step 4) and abort if either moved: judging an edited map wastes the entire skeptic
+   fan-out, which is the expensive part of the run.
 2. Run the checks on **each** map. An archived map sits three levels below the repo root, so
    `validate` needs `--repo .` to resolve its repo-root-relative anchors — without it every anchor
    "fails" as noise (~300 spurious warnings on a real map) and a genuinely broken one is invisible.
@@ -141,6 +183,11 @@ Cache layout, one directory per map:
 ```
 
 For each of the two maps, in this order:
+0. **Verify the cache entry belongs to this map.** Recompute the map's hash and check it against the
+   `map-hash` file in the cache directory; on a mismatch, treat the entry as absent and rebuild it.
+   No tool reads that file — the directory NAME is the only link between an entry and its map, and a
+   name is not a checksum. Without this, a cache directory whose contents came from a different map
+   is undetectable, and it is the baseline's only freeze check (rule 1).
 1. If the cache directory exists, **guard the cached judge** — reusable only if produced under the
    CURRENT judge protocol:
    ```
@@ -226,20 +273,29 @@ For a map M:
 ## Step 5 — Compare + store + report
 1. Compare the candidate against the baseline's cached scores and archive the run — under the freeze
    guard:
+   Derive both cache paths with command substitution rather than transcribing them — they are named
+   by 12 hex characters, and a hand-copied one is a transposition away from pointing nowhere:
    ```
+   BASE=$(COYODEX_HOME/.venv/bin/coyodex-eval hash <baseline map> | cut -c1-12)
+   CAND=$(COYODEX_HOME/.venv/bin/coyodex-eval hash .coyodex/project-map.json | cut -c1-12)
    COYODEX_HOME/.venv/bin/coyodex-eval run \
      --project "<repo-name> — current vs dev-rebuilds/<NNNN>" --project-key <repo-name> \
      --map .coyodex/project-map.json --repo . \
      --expect-map-hash "$(cat .coyodex-eval/runs/<ts>/map-hash)" \
      --thresholds COYODEX_HOME/eval/thresholds.json \
-     --baseline-dir .coyodex-eval/cache/<baseline sha12> \
-     --judge .coyodex-eval/cache/<candidate sha12>/judge.json \
+     --baseline-dir ".coyodex-eval/cache/$BASE" \
+     --judge ".coyodex-eval/cache/$CAND/judge.json" \
      --out .coyodex-eval/runs/<ts>
    ```
    `--project` is the human label in the report (it names both sides); `--project-key` is what the
    thresholds file is looked up by, so per-project gates keep working. A hash-mismatch refusal means
    the candidate map was modified during the run — the run is void; restart from Step 1.
    Copy the candidate's raw verdicts into the run dir as `judge-verdicts.json`.
+
+   **A verdict of `BASELINE` is a VOID run, never a result.** It means no baseline profile was
+   loaded, so nothing was compared — and its exit code is 0, the same as PASS. `run` now refuses a
+   `--baseline-dir` that is missing or empty, but if `BASELINE` ever reaches you, report it as a
+   broken run and fix the path; never pass it on as "nothing got worse".
 2. Report to the user. Lead with **what was compared** — both map paths, both commits, and the
    INFORMATIONAL banner if the Step-1 guard was overridden. Then **judge/quality deltas first**
    (grounding pass-rate with its denominator and failure count, rubric scores), then the verdict

@@ -18,10 +18,20 @@ curation (recorded exceptions, adjudications, Phase-4 corrections) that a rebuil
 Doing it by hand is how the archives already in the wild got their shape — one live repo has ten of
 them — and hand-moving is exactly where a stray `rm` or a clobbered directory costs a whole build.
 
-WHAT MOVES. Everything in `.coyodex/` except `.gitignore` (coyodex writes it, and the next assemble
-expects it) and `dev-rebuilds/` itself. That is deliberately a denylist, not a list of known
-filenames: a future artifact should be archived by default rather than silently left behind to
-confuse the next build.
+WHAT MOVES. Everything in `.coyodex/` except `dev-rebuilds/` itself and the two files that are
+DECLARATIONS ABOUT THE REPO rather than build output — `.gitignore` (coyodex writes it, and the next
+assemble expects it) and `.ignore` (which code the map is not meant to describe). That is
+deliberately a denylist, not a list of known filenames: a future artifact should be archived by
+default rather than silently left behind to confuse the next build.
+
+WHY `.ignore` STAYS. It is scope, not output. `iter_source_files` honours it, so it decides which
+files feed the coverage check AND the code-derived component expectation E. Archiving it away
+silently rescopes the tree for the next build and for every later scoring of ANY map: measured on
+this repo, moving `.ignore` aside took E from 14 to 37 (+164%), which flipped the current map's
+granularity band from DRIFT (36 vs 14) to PASS (36 vs 37) with no change to the map or the code.
+The eval compares an archived map against a current one, so a rescope between the two is exactly
+the confound its same-code guard exists to prevent — and the guard cannot see it, because it
+excludes `.coyodex/` wholesale. Keeping the file in place removes the trap instead of documenting it.
 
     coyodex-eval archive <repo-root> [--dry-run]
 
@@ -46,9 +56,11 @@ ARCHIVE_DIR = "dev-rebuilds"
 #: wrong (a baseline picker sorted on name length and chose the wrong archive in 28 of 40 trials).
 #: Padding removes the trap instead of documenting it.
 ARCHIVE_WIDTH = 4
-# Kept in place: `.gitignore` is coyodex's own (it ignores build-fragments/ and the archives), and
-# archiving the archive container would nest it one inside the next on every run.
-KEEP = {".gitignore", ARCHIVE_DIR}
+# Kept in place: `.gitignore` is coyodex's own (it ignores build-fragments/ and the archives),
+# `.ignore` is the repo's analysis-scope declaration and moving it rescopes E and coverage for every
+# later build and score (see WHY `.ignore` STAYS above), and archiving the archive container would
+# nest it one inside the next on every run.
+KEEP = {".gitignore", ".ignore", ARCHIVE_DIR}
 
 
 def next_archive_dir(coyodex: Path) -> Path:

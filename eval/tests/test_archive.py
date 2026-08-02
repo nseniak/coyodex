@@ -35,6 +35,7 @@ def make_repo(tmp: str, *, archives: tuple[str, ...] = ()) -> Path:
     for name in ("project-map.json", "project-map.md", "preindex.json", "provenance.json"):
         (cy / name).write_text("x")
     (cy / ".gitignore").write_text("build-fragments/\n")
+    (cy / ".ignore").write_text("eval/fixtures/trapdoor/\n")
     for a in archives:
         (cy / archive_map.ARCHIVE_DIR / a).mkdir(parents=True)
     return root
@@ -115,6 +116,23 @@ def test_the_gitignore_stays_put():
         root = make_repo(tmp)
         archive_map.archive(root)
         assert (root / ".coyodex" / ".gitignore").read_text() == "build-fragments/\n"
+
+
+def test_the_scope_declaration_stays_put():
+    """`.ignore` is scope, not output — archiving it silently rescopes the analysed tree.
+
+    It decides which files `iter_source_files` walks, so it sets the coverage denominator AND the
+    code-derived component expectation E. On the coyodex repo, moving it aside took E from 14 to 37
+    (+164%) and flipped the current map's granularity band from DRIFT to PASS — same map, same code.
+    Since `archive` is the first command of the eval loop (archive -> rebuild -> compare), a rescope
+    there lands squarely between the two maps the eval compares, and the same-code guard cannot see
+    it: the guard excludes `.coyodex/` wholesale."""
+    with tempfile.TemporaryDirectory() as tmp:
+        root = make_repo(tmp)
+        dest, entries = archive_map.archive(root)
+        assert (root / ".coyodex" / ".ignore").read_text() == "eval/fixtures/trapdoor/\n"
+        assert not any(p.name == ".ignore" for p in entries)
+        assert dest is not None and not (dest / ".ignore").exists()
 
 
 def test_archives_are_never_nested_inside_each_other():

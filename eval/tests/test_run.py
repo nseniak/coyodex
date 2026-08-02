@@ -190,6 +190,36 @@ def test_cli_run_requires_project_and_map() -> None:
     assert r.returncode == 2 and "required" in (r.stdout + r.stderr)
 
 
+def test_cli_run_refuses_a_baseline_dir_that_is_not_there() -> None:
+    """A mistyped --baseline-dir must not silently become "no comparison at all".
+
+    It used to: a missing dir was skipped, the verdict fell back to BASELINE, and the exit code was
+    0 — indistinguishable from "nothing got worse". The eval names its cache dirs by a 12-character
+    map hash, so the mistype is one transposed character away, and the caller asked for a comparison
+    in the very same command. Fail closed instead."""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        mp = root / "map.json"
+        mp.write_text(make_map(), encoding="utf-8")
+        r = subprocess.run([*RUN, "--project", "p", "--map", str(mp),
+                            "--baseline-dir", str(root / "nosuch")], capture_output=True, text=True)
+        assert r.returncode == 2, r.stdout + r.stderr
+        assert "BASELINE" not in r.stdout
+
+
+def test_cli_run_refuses_a_baseline_dir_with_no_profile() -> None:
+    """Same failure by another route: the directory exists but holds nothing to compare against."""
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d)
+        mp = root / "map.json"
+        mp.write_text(make_map(), encoding="utf-8")
+        (empty := root / "empty").mkdir()
+        r = subprocess.run([*RUN, "--project", "p", "--map", str(mp),
+                            "--baseline-dir", str(empty)], capture_output=True, text=True)
+        assert r.returncode == 2, r.stdout + r.stderr
+        assert "BASELINE" not in r.stdout
+
+
 # --- freeze / hash (I2) ---------------------------------------------------------
 def test_cli_hash_prints_the_sha256_of_the_file() -> None:
     with tempfile.TemporaryDirectory() as d:
