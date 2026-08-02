@@ -277,13 +277,6 @@ body.vresizing #stage { pointer-events: none; }
                  color: #4338ca; cursor: pointer; }
 .uc-seg button:hover { background: #eef2ff; }
 .uc-seg button.on { background: #6366f1; color: #fff; }
-.uc-caphead { cursor: pointer; user-select: none; }
-.uc-caphead:hover { background: #fcfdff; }
-.uc-twist { display: inline-block; width: 13px; color: #9ca3af; font-size: 11px;
-            transition: transform .15s ease; }
-.uc-group.uc-shut .uc-twist { transform: rotate(-90deg); }
-.uc-group.uc-shut .uc-capbody { display: none; }
-.uc-group.uc-shut .uc-caphead { border-bottom-color: transparent; }
 /* The capability badge — on a group heading it names the label, on a row it names the capability. */
 .uc-caplabel { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
                padding: 1px 7px; border-radius: 9px; background: #f3f4f6; color: #6b7280; }

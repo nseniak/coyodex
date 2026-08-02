@@ -4710,15 +4710,14 @@ function renderUseCases() {
     if (byCapability) {
       const title = g.cap ? g.cap.name : 'Not assigned to a capability';
       const lab = g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '';
-      // A `platform` capability starts collapsed. Without that, the background use cases the
-      // completeness check now demands would bury the product screen — the very complaint that
-      // started this work, one tab over.
-      const shut = (g.label || '').toLowerCase() === 'platform';
-      return `<section class="uc-group${shut ? ' uc-shut' : ''}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
-        + `<h3 class="uc-actor uc-caphead" tabindex="0" role="button" aria-expanded="${shut ? 'false' : 'true'}">`
-        + `<span class="uc-twist">&#9662;</span>${esc(title)}${lab}`
+      // A plain section, exactly like the actor grouping's: no twisty, nothing to fold. `platform`
+      // capabilities used to start collapsed so the background use cases would not bury the product
+      // ones — but a section that hides itself is a second thing to learn on a screen whose whole job
+      // is to list what the product does, and the `platform` label already says which is which.
+      return `<section class="uc-group" data-cap="${esc(g.cap ? g.cap.id : '')}">`
+        + `<h3 class="uc-actor">${esc(title)}${lab}`
         + `<span class="uc-actor-wants">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span></h3>`
-        + `<div class="uc-capbody"><ul class="uc-list">${rows}</ul></div></section>`;
+        + `<ul class="uc-list">${rows}</ul></section>`;
     }
     return '<section class="uc-group">'
       + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}</h3>${wants}`
@@ -4731,15 +4730,6 @@ function renderUseCases() {
   diagram.innerHTML = `<div class="usecases-wrap">${sw}${sections || '<p class="empty">No use cases recorded.</p>'}</div>`;
   diagram.querySelectorAll('.uc-seg button').forEach((b) => {
     b.addEventListener('click', () => { UC_GROUP_BY = b.getAttribute('data-gb'); renderUseCases(); });
-  });
-  diagram.querySelectorAll('.uc-caphead').forEach((h) => {
-    const toggle = () => {
-      const sec = h.closest('.uc-group');
-      sec.classList.toggle('uc-shut');
-      h.setAttribute('aria-expanded', String(!sec.classList.contains('uc-shut')));
-    };
-    h.addEventListener('click', toggle);
-    h.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); toggle(); } });
   });
   // A row opens the use case's flow — the SAME detail a Happy Path step drills into (one home).
   const openUc = (li) => go({ kind: 'usecase', uc: li.getAttribute('data-uc') });
