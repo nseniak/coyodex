@@ -31,7 +31,11 @@ The eval scores maps. It cannot see how they were made, and two preconditions ar
   `dev-rebuilds/` is git-ignored, and no build path reads it — but nothing stops an agent that goes
   looking. When a build must be **provably** blind (a phase-boundary validation), build it with
   `COYODEX_HOME/eval/blind-build.md` and pass its map to Step 1 as an explicit path.
-- **Both maps must describe the same code.** That one the eval does enforce — Step 1.
+- **Both maps must describe the same code.** Step 1 is that check — but note it is **yours to run**,
+  not the tooling's. It is a handful of git commands that YOU execute and YOU judge; no tool records
+  that they ran or what they returned, and nothing downstream re-checks them. A run where Step 1 was
+  skipped or misread looks exactly like a guarded one. (The `map-hash` and `protocol` guards are
+  mechanised; this one is not.)
 
 ## Rules that keep a run honest
 1. **Both maps are READ-ONLY.** Never edit a map to improve a number; a map edited mid-run voids the
@@ -45,6 +49,11 @@ The eval scores maps. It cannot see how they were made, and two preconditions ar
    either differs is not a method comparison.
 
 ## Paths — keep them straight
+**Export `COYODEX_HOME` before anything else** — every command block below writes it as a bare
+prefix, which is a relative path if you paste it verbatim:
+```
+export COYODEX_HOME=<the path the skill gave you>
+```
 - **`COYODEX_HOME`** (from the skill) — the coyodex clone: method docs, config, and the CLIs
   (`COYODEX_HOME/.venv/bin/coyodex`, `COYODEX_HOME/.venv/bin/coyodex-eval`). Config:
   `COYODEX_HOME/eval/thresholds.json` and `COYODEX_HOME/eval/rubric.md`.
@@ -67,9 +76,16 @@ REGRESSED.
    against: show the user the loop at the top of this doc and stop.
    **Either side may be overridden with an explicit map path** — that is how a map built by
    `blind-build.md`, or any two archives, get compared.
-3. **Distinctness.** `coyodex-eval hash` both. Identical hashes → the same map twice; say so and stop.
-4. **Same-code guard.** Read each map's pin from its `commit` / `committed` header field — call them
-   `P_base` and `P_cand`.
+3. **Distinctness.** `COYODEX_HOME/.venv/bin/coyodex-eval hash` both. Identical hashes → the same map
+   twice; say so and stop.
+4. **Same-code guard.** Read each map's pin from its top-level **`commit`** field — call them `P_base`
+   and `P_cand`:
+   ```
+   python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"])' <map>
+   ```
+   `commit` is the short sha (`b9050ae`). Do **not** use `committed` — that is the commit's DATE
+   (`2026-07-29`), a sibling field, and feeding it to `git rev-parse` produces exit 128 and a refusal
+   with a fabricated reason. If a map has no `commit` field, refuse (see below).
 
    **First, refuse a `-dirty` pin outright.** A build over uncommitted code records its pin as
    `<short-sha>-dirty` (`method.md`, the scope step), and that suffix is the ONLY record that the map
@@ -118,7 +134,21 @@ REGRESSED.
      git diff <P_base> -- .coyodex/.ignore              # note: no `..HEAD`
      git diff <P_cand> -- .coyodex/.ignore
      ```
-     both empty. A `<P>..HEAD` form would compare two *commits* and miss the case that matters most:
+     both empty. **If the diff shows the file as a `new file`, the maps PREDATE the scope
+     declaration** — it did not exist when they were built. That is a real mismatch, not a tree
+     problem: both maps were built over a WIDER tree than today's scoring walks, so their component
+     counts include code that E and coverage now exclude. But no edit to the working tree can clear
+     it — deleting `.ignore` to make the diff empty is the very thing this clause exists to prevent.
+     Say so plainly and give the only real fix:
+     > Both maps predate `.coyodex/.ignore` (added in `<commit>`), so they describe a wider tree than
+     > the eval now scores. Nothing in the working tree can reconcile that. Rebuild both sides under
+     > the current scope — `coyodex-eval archive .`, `/coyodex`, and eval the next pair — or eval two
+     > maps that were both built after `<commit>`.
+
+     Do **not** reach for the override here: it switches off clauses 1–3 as well, and this is not the
+     kind of mismatch an INFORMATIONAL banner makes safe to read.
+
+     A `<P>..HEAD` form would compare two *commits* and miss the case that matters most:
      the scope file is read from the **working tree** (`load_ignore`), and clause 2 excludes
      `.coyodex/` wholesale, so an uncommitted edit — or an outright deletion — of this file is
      invisible to every other clause. Verified: with an uncommitted `.coyodex/.ignore` removed, all
@@ -167,17 +197,24 @@ REGRESSED.
 
    An overridden run is never reported as a clean PASS or REGRESSED, and is never blessed into a
    cache or quoted as a method result.
-5. Make sure `.coyodex-eval/` is git-ignored in this project (add it to `.gitignore` if absent).
+5. Housekeeping, once the guard has passed: make sure `.coyodex-eval/` is git-ignored in this project
+   (add it to `.gitignore` if absent). This sits after the refusal, so on a refused run it never
+   happens — which is correct, since a refused run writes nothing that needs ignoring.
 
 ## Step 2 — Freeze both maps, then check them
 No build happens here, but the maps still get frozen: everything downstream must be scoring the exact
 bytes that were picked in Step 1.
 
-1. Hash each map and keep both digests for the rest of the run:
+1. Pick the run directory and CREATE it — nothing else does, and this is the first write of the run:
    ```
-   COYODEX_HOME/.venv/bin/coyodex-eval hash <map>
+   TS=<YYYY-MM-DD_HHMM>
+   mkdir -p ".coyodex-eval/runs/$TS"
+   ```
+   Then hash each map and keep both digests for the rest of the run:
+   ```
+   COYODEX_HOME/.venv/bin/coyodex-eval hash <baseline map>
    COYODEX_HOME/.venv/bin/coyodex-eval hash .coyodex/project-map.json \
-     > .coyodex-eval/runs/<YYYY-MM-DD_HHMM>/map-hash        # the candidate's, kept on disk
+     > ".coyodex-eval/runs/$TS/map-hash"                    # the candidate's, kept on disk
    ```
    From here both maps are **read-only**. The Step-5 `coyodex-eval run` re-verifies the candidate via
    `--expect-map-hash` and a mismatch voids the run — but that is the LAST step, and `claims` /
