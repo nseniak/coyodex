@@ -682,11 +682,16 @@ the step-count band (over AND under) and the fused-goal name smell, which are tw
 question about one element; a `Cn` id silences its promote-to-subsystem altitude nudge; the literal
 **`granularity`** silences the component-count-vs-E advisory (record it with the why when the
 altitude decision is conscious); the literal **`entity-flows`** silences the no-entity-in-any-flow
-canary; the literal **`runs-in`** silences the whole **`runs_in` placement family** — the
-deployment-units-enumerated-but-nothing-links advisory (code that truly runs as one unit), the
-deployment-quality canaries (unit naming, formula-filled `runs_in`, unlinked units, ambiguous
-thread hosts, variant tagging), *self-started entry points left 'Unplaced'*, and *a messaging
-channel no participant's `runs_in` can place*; the literal **`isolated`** silences the
+canary; the `runs_in` placement family has FIVE
+scoped literals, one per finding group — **`runs-in/quality`** (unit naming, formula-filled
+`runs_in`, unlinked units, ambiguous thread hosts, variant tagging), **`runs-in/unlinked`** (units
+enumerated but nothing links code to them — code that truly runs as one unit),
+**`runs-in/unplaced`** (most components unplaced across the enumerated units),
+**`runs-in/entry-hosts`** (self-started entry points left 'Unplaced') and
+**`runs-in/messaging`** (a channel no participant's `runs_in` can place). A BARE **`runs-in`**
+silences nothing and says so: it used to switch off all five at once while the justification behind
+it was about one, and on a live map a record about two test-profile containers thereby hid six
+deployment units that had stopped hosting any component; the literal **`isolated`** silences the
 components-wired-to-nothing canary (see below); the literal **`channel-ends`** silences the
 one-sided-channel advisory (a channel whose far end genuinely lives outside the mapped repo); the
 literal **`channel-payload`** silences the no-channel-names-a-payload canary (channels that really
@@ -703,14 +708,15 @@ both. And every literal is scoped to its own advisory: recording `isolated` (com
 (entity cards), and `messaging` (no nameable channels at all) does not quiet `channel-payload`
 (nameable channels carrying no domain type).
 
-**Two escapes are deliberately family-wide, and both report what they swallowed.** `runs-in` covers
-every `runs_in` finding in the map and a `UCn`/`SFn` id covers both granularity signals for its
-element — one decision, recorded once. The risk is that the recorded *why* is usually about a single
-finding while the literal silences the rest, so in both cases `validate` prints a line naming the
-**count** and the **groups** it suppressed: `4 deployment advisory/advisories suppressed by the
-recorded 'runs-in' exception, across 2 finding group(s) — 3 × deployment quality …; 1 × self-started
-entry points with no host unit`, and `1 granularity advisory/advisories suppressed by recorded
-flow/sub-flow id(s): SF20 (the fused-goal name smell)`. The line fires on the FIRST suppression, not
+**One escape is still deliberately family-wide, and it reports what it swallowed.** A `UCn`/`SFn`
+id covers both granularity signals for its element — one decision, recorded once — so `validate`
+prints a line naming the **count** and the **groups** it suppressed: `1 granularity
+advisory/advisories suppressed by recorded flow/sub-flow id(s): SF20 (the fused-goal name smell)`.
+The `runs_in` family used to be the second one, and is no longer: its five scoped literals each
+silence exactly their own group and are reported the same way (`1 deployment advisory/advisories
+suppressed by recorded scoped exception(s) … (`runs-in/quality`)`). Scoping it was the fix for
+exactly the risk this paragraph describes — the recorded *why* is usually about a single finding,
+and a family-wide literal silences the rest. The line fires on the FIRST suppression, not
 only on the second — a silence you cannot see is indistinguishable from having no findings. Neither
 line can itself be silenced. Read it: if the why you wrote covered only one of the listed groups,
 re-read the rest by validating a copy with the record removed.
@@ -1194,12 +1200,35 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   not in the pinned worklist (the snapshot is wrong), and a worklist claim with no verdict at all (the
   pass did not challenge everything). Pin the worklist — re-deriving it after the refutations land
   makes `claims_challenged` exceed `claims_total`, which `validate` blocks on.
-  **`grounding write` is the LAST write before assemble — after the final reconcile edit, not
-  before it.** Reconciling a refutation REWRITES the claim, which orphans its verdict, so a record
+  **`grounding write` runs after the final reconcile edit, and is followed by ONE assemble that
+  carries the record into the map.** Write it with `--map`, pointed at the assembled map, so the
+  record states how the shipped claim surface differs from the pinned worklist. Both assembles are
+  the SAME command, `--reconcile` included — dropping that flag silently discards every subsystem,
+  `runs_in` and `drop_edges` assignment and changes the claim count (444 → 447 on a live map), and
+  `assemble` only prints a note about it:
+
+  ```
+  # 1. reconcile the refutations INTO THE FRAGMENTS, then:
+  .venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex \
+      --reconcile .coyodex/reconcile.json
+  # 2. the record, measured against the map it describes:
+  .venv/bin/coyodex grounding write --worklist .coyodex/verify/worklist.json \
+      --map .coyodex/project-map.json \
+      $(for f in .coyodex/verify/verdicts-*.json; do printf ' --verdicts %s' "$f"; done) \
+      --out .coyodex/build-fragments/grounding.json
+  # 3. the SAME assemble again, to carry the record in:
+  .venv/bin/coyodex assemble .coyodex/build-fragments/*.json --out .coyodex \
+      --reconcile .coyodex/reconcile.json
+  ```
+
+  Step 3 is safe because `assemble` is idempotent on claims — verified over a real build's
+  fragments, three runs, 444 claims every time — so it cannot invalidate what step 2 measured.
+
+  **`claims_total` stays PINNED, and the pin is not a bug to fix.** Reconciling a refutation REWRITES the claim, which orphans its verdict, so a record
   written first describes a worklist that no longer exists. A live build wrote it, then reconciled
   nine refutations, and shipped `418 of 418 challenged` on a map whose worklist held 415 and of
   which only 403 could still be matched — then quoted the 418 in its commit message as fact. No gate
-  saw it: `validate` blocks only `claims_challenged > claims_total`, and a stale pin is
+  saw it at the time: `validate` blocks only `claims_challenged > claims_total`, and a stale pin is
   self-consistent. `finalize` now raises an advisory when the pin and the live worklist disagree,
   and L3 assertions 13 and 14 watch the ordering and the number. A hand-written record
   shipped on a live build asserting anchors had been "corrected" 29 seconds before the tool that
