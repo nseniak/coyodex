@@ -4687,7 +4687,10 @@ function renderUseCases() {
     const kinds = new Set((g.roles || []).map((r) => (r.kind || '').trim().toLowerCase()));
     const kind = kinds.size === 1 ? [...kinds][0] : '';
     const w = (g.roles || []).length === 1 ? g.roles[0].wants : '';
-    const wants = w ? `<span class="uc-actor-wants">${mdInline(w)}</span>` : '';
+    // Its OWN line under the heading, always — inline beside the name it sat on the same line for a
+    // short want and wrapped onto the next for a long one, so the section headers never lined up. The
+    // label carries the weight, since without it the sentence reads as a description of the actor.
+    const wants = w ? `<p class="uc-wants"><span class="uc-wants-lbl">Wants:</span> ${mdInline(w)}</p>` : '';
     const rows = g.ucs.map((n) => {
       const to = (n.fields && n.fields['Trigger → Outcome']) || '';
       // In diff mode, flag a use case whose flow touches changed code (derived from the element diff).
@@ -4718,7 +4721,7 @@ function renderUseCases() {
         + `<div class="uc-capbody"><ul class="uc-list">${rows}</ul></div></section>`;
     }
     return '<section class="uc-group">'
-      + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}${wants}</h3>`
+      + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}</h3>${wants}`
       + `<ul class="uc-list">${rows}</ul></section>`;
   }).join('');
   const sw = HAS_CAPABILITIES ? '<div class="uc-groupby"><span class="uc-groupby-lbl">Group by</span>'
