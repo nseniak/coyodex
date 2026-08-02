@@ -9,6 +9,7 @@ Stdlib-only — no pytest required. Run either way (needs an editable install: `
 """
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -18,7 +19,7 @@ from coyodex import grammar
 from coyodex.model import Dep, EntityRelation, ProjectModel, UseCase, load_model
 from coyodex.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
 from coyodex.viewer import build_graph, gen_viewer
-from coyodex.views import _relation_item, model_to_graph
+from coyodex.views import _relation_item, and_list, model_to_graph
 
 VIEWER_DIR = Path(gen_viewer.__file__).resolve().parent  # the served shell + viewer.js/css live here
 
@@ -3384,9 +3385,63 @@ def test_parser_hp_captures_first_uc_of_multi_tag() -> None:
 
 
 def test_hp_actor_is_use_case_actor() -> None:
-    # A step IS one use case, so its driving actor is that use case's Actor cell (no separate signal).
+    # A step IS one use case, so its driving actors are that use case's own — no separate signal.
     g = parse_map(make_gp_role_actor_map())
-    assert gen_viewer._hp_actor(g, g["happy_path"][0]) == "Org admin"
+    assert gen_viewer._hp_actors(g, g["happy_path"][0]) == ["Org admin"]
+
+
+def make_gp_two_actor_map() -> str:
+    """A Happy Path whose first step realizes a use case with TWO INTERCHANGEABLE actors (either party
+    can start it — the method's one legitimate multi-actor case), and whose second step is driven by
+    the second of them alone. The shape that used to produce a lifeline for a person who does not
+    exist, named "Org admin, Moderator"."""
+    m = json.loads(make_gp_role_actor_map())
+    m["roles"].append({"id": "R2", "name": "Moderator", "kind": "human",
+                       "wants": "moderate", "drives": "UC22, UC23"})
+    m["use_cases"][0]["actors"] = ["R1", "R2"]
+    m["use_cases"].append({"id": "UC23", "name": "Ban a user", "actors": ["R2"],
+                           "trigger_outcome": "a -> b"})
+    m["happy_path"].append({"id": "HP2", "title": "Moderator bans a user", "uc": "UC23", "why": None})
+    return json.dumps(m)
+
+
+def test_and_list_reads_as_plural() -> None:
+    # A comma join reads as ONE long name; the conjunction is what makes two actors look like two.
+    assert and_list([]) == ""
+    assert and_list(["A"]) == "A"
+    assert and_list(["A", "B"]) == "A and B"
+    assert and_list(["A", "B", "C"]) == "A, B, and C"
+
+
+def test_use_case_node_carries_actor_list_and_readable_field() -> None:
+    # BOTH forms reach the frontend: the list (so a view can tell two actors from one), and the
+    # readable rendering of that same list (so every view spells the conjunction identically).
+    uc = cast("dict[str, object]", parse_map(make_gp_two_actor_map())["nodes"]["UC22"])
+    assert uc["actors"] == ["Org admin", "Moderator"]
+    assert cast("dict[str, str]", uc["fields"])["Actor"] == "Org admin and Moderator"
+
+
+def test_interchangeable_actors_get_one_arrow_and_a_junction_mark() -> None:
+    g = parse_map(make_gp_two_actor_map())
+    mm = gen_viewer.gen_hp_mermaid(g)
+    # Both actors are real lifelines, and the joined name is never one of them.
+    assert "actor HPA0 as Org admin" in mm and "actor HPA1 as Moderator" in mm
+    assert "Org admin, Moderator" not in mm and "Org admin and Moderator" not in mm
+    # ONE message per step — a second arrow for the alternative actor would read as a second thing
+    # that happened — and the shared step's arrow leaves the LEFTMOST of its actors.
+    assert mm.count("->>HPSYS") == 2
+    assert "HPA0->>HPSYS: 1. Admin creates the org" in mm
+    # ...so the other actor's lifeline is between that arrow's ends, and gets the junction mark.
+    assert gen_viewer.hp_step_marks(g) == [["HPA1"], []]
+
+
+def test_both_interchangeable_actors_drive_the_shared_step() -> None:
+    # The alternative initiator drives that step too: selecting it must light the step, and its card
+    # must list it. It also resolves to a real Role, so its kind/wants come through.
+    by_aid = {a["aid"]: a for a in gen_viewer.hp_actors(parse_map(make_gp_two_actor_map()))}
+    assert by_aid["HPA0"]["stepIdx"] == [0]
+    assert by_aid["HPA1"]["stepIdx"] == [0, 1]
+    assert by_aid["HPA1"]["kind"] == "human" and by_aid["HPA1"]["wants"] == "moderate"
 
 
 def test_flow_mermaid_sequence_from_use_case() -> None:

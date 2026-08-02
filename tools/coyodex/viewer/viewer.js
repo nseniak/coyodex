@@ -31,6 +31,8 @@ let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box seq
 let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
 let HP_ACTORS;          // Happy-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
+let HP_STEP_MARKS;      // per Happy-Path step, the participant ids its ONE arrow crosses — a use case's
+                        // other interchangeable actors ([] for the normal one-actor step)
 let FLOW_ACTORS;        // uc-id -> [{aid,name,kind,wants,stepIdx}] flow-level actor lifelines (mirrors HP_ACTORS, scoped to one flow's own steps)
 let ELEMENT_TINT;       // per-kind {fill,stroke} for views Mermaid renders kind-agnostically (cluster frames, flow participant boxes)
 let MERMAID_LIBS;       // Context "Libraries" drill: System + the folded in-process deps
@@ -75,7 +77,7 @@ function applyBundle(b) {
   DEPLOYMENT_EDGES = b.deploymentEdges || {}; DEPLOYMENT_INFRA_EDGES = b.deploymentInfraEdges || {};
   DEPLOYMENT_CALL_EDGES = b.deploymentCallEdges || {};
   MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
-  HP_ACTORS = b.hpActors; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
+  HP_ACTORS = b.hpActors; HP_STEP_MARKS = b.hpStepMarks || []; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
   MERMAID_BY_BUCKETFOLD = b.mermaidByBucketFold || {}; FOLDED_BUCKETS = b.foldedBuckets || [];
   HAS_GROUPING = b.hasGrouping; HAS_DOMAIN = b.hasDomain; HAS_SUBDOMAINS = b.hasSubdomains;
@@ -208,11 +210,13 @@ for (const e of GRAPH.edges || []) (COMP_LOOKUP[e.src + '>' + e.dst] ||= []).pus
 // detailed actions live in that use case's T6 flow (FLOWS_MM / FLOWS_NARR), opened when the step drills.
 const HP_BY_ID = {};
 for (const s of GRAPH.happy_path || []) HP_BY_ID[s.id] = s;
-// Happy Path actor lookups: by participant id (HPA0) and by the step it drives (HP1 -> actor record).
+// Happy Path actor lookups: by participant id (HPA0) and by the step it drives (HP1 -> actor records).
+// A step maps to a LIST: its use case may name several interchangeable actors, and each of them really
+// does drive it — keeping only one lit while a step is selected would dim a driver of that very step.
 const HP_ACTOR_BY_AID = {};
 for (const a of HP_ACTORS) HP_ACTOR_BY_AID[a.aid] = a;
-const HP_ACTOR_OF_STEP = {};
-for (const a of HP_ACTORS) for (const st of a.steps) HP_ACTOR_OF_STEP[st.id] = a;
+const HP_ACTORS_OF_STEP = {};
+for (const a of HP_ACTORS) for (const st of a.steps) (HP_ACTORS_OF_STEP[st.id] || (HP_ACTORS_OF_STEP[st.id] = [])).push(a);
 // The Use Cases catalog: every use-case node in model order (importance), plus the reverse index
 // uc -> [Happy Path step ids] that realize it. A use case may occupy several Happy Path positions, so
 // this maps to a LIST — the `HPn` pill lists them all and lights every one when clicked. A use case
@@ -496,6 +500,18 @@ function styleSeqActor(root, aid, kind) {
     if (kind === 'service') hexagonifyActor(g);
     for (const shape of g.querySelectorAll('circle, polygon')) shape.style.setProperty('fill', tint.fill, 'important');
   }
+}
+// The Happy Path's System lifeline, painted like the System box every other view draws it — the same
+// dark indigo, with its label repainted so it stays readable on that fill. Mermaid renders it as a plain
+// default participant, so without this the one box that IS the system reads as the greyest thing on
+// screen. In THIS diagram the boxed participant is the system and every other lifeline is a stick figure
+// or a hexagon, so `text.actor-box` reaches its label with no name to match on (Mermaid puts none there).
+const HP_SYS_ID = 'HPSYS';  // the participant id gen_hp_mermaid gives the System lifeline
+function styleSeqSystem(root) {
+  const tint = ELEMENT_TINT.system;
+  if (!tint) return;
+  for (const rect of root.querySelectorAll('rect.actor[name="' + HP_SYS_ID + '"]')) applyTint(rect, 'system');
+  for (const t of root.querySelectorAll('text.actor-box')) t.style.setProperty('fill', tint.color, 'important');
 }
 // Swap one stick figure for the hexagon outline, in place: the hexagon is centred on the figure's own
 // footprint and the label is left untouched, so the lifeline, the label and every message keep the exact
@@ -1827,28 +1843,31 @@ function showFlowStep(uc, i) {
   highlightTreePath(local ? refTreePath(wn.file, wn.line) : null);
   if (local) syncCodeView(wn.file, wn.line, []);
 }
-// One actor's card: its kind, what its role wants (the explanation), and the Happy Path steps it drives.
-function showHPActor(a) {
+// One actor's card, in ANY view that draws an actor. `drives` is the only part that differs by view (the
+// Happy Path lists step titles, a flow lists its own steps), so everything else lives here once — and
+// `Wants` is a TITLED row, exactly as the Dependencies view's actor panel renders it. It was an untitled
+// paragraph here, which reads as a description of the actor rather than as what they are after; the same
+// fact should not change its name between two views.
+function actorPanelHtml(a, drives) {
   const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
-  const drives = (a.steps || []).map((st) =>
-    '<dd>' + esc(st.title || st.id) + '</dd>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
+  const wants = a.wants ? '<dt>Wants</dt><dd>' + mdInline(a.wants) + '</dd>' : '';
+  const driveRows = drives ? '<dt>Drives</dt>' + drives : '';
+  return '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
     + '<span class="badge kind">actor</span>' + kindBadge + '</div>'
-    + (a.wants ? '<p class="explain">' + mdInline(a.wants) + '</p>' : '')
-    + (drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '');
+    + (wants || driveRows ? '<dl>' + wants + driveRows + '</dl>' : '');
 }
-// A flow-level actor's card — the same idea as showHPActor, scoped to one flow: its kind, what its
-// role wants, and which of THIS flow's own steps it drives. Reads those steps straight out of
-// FLOWS_NARR by index rather than duplicating their text in FLOW_ACTORS.
+// The Happy Path's actor card: the steps it drives are that walk's own positions.
+function showHPActor(a) {
+  panel.innerHTML = actorPanelHtml(a, (a.steps || []).map((st) =>
+    '<dd>' + esc(st.title || st.id) + '</dd>').join(''));
+}
+// A flow-level actor's card — the same card, scoped to one flow: which of THIS flow's own steps it
+// drives. Reads those steps straight out of FLOWS_NARR by index rather than duplicating their text in
+// FLOW_ACTORS.
 function showFlowActor(uc, a) {
-  const kindBadge = a.kind ? '<span class="badge kind">' + esc(a.kind) + '</span>' : '';
   const flowSteps = FLOWS_NARR[uc] || [];
-  const drives = a.stepIdx.map((i) => flowSteps[i]).filter(Boolean)
-    .map((st) => '<dd>' + esc(st.src) + ' <em>' + esc(st.verb) + '</em> ' + esc(st.dst) + '</dd>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(a.name) + '</h2>'
-    + '<span class="badge kind">actor</span>' + kindBadge + '</div>'
-    + (a.wants ? '<p class="explain">' + mdInline(a.wants) + '</p>' : '')
-    + (drives ? '<dl><dt>Drives</dt>' + drives + '</dl>' : '');
+  panel.innerHTML = actorPanelHtml(a, a.stepIdx.map((i) => flowSteps[i]).filter(Boolean)
+    .map((st) => '<dd>' + esc(st.src) + ' <em>' + esc(st.verb) + '</em> ' + esc(st.dst) + '</dd>').join(''));
 }
 
 // --- hover tooltip --------------------------------------------------------------
@@ -2031,8 +2050,10 @@ const VIEW_Q = {
 // on one view, meets one shape, and scans for the heading naming the view they are already on. A flat
 // "Boxes" list made them read every row to find the one that applies. Sections are keyed by VIEW ID and
 // titled from the tab's own label (VIEW_LABEL), so a heading can never drift from the tab it names.
-// A shape drawn on two views is listed under both — each section has to be complete on its own, or the
-// reader who looks under their view and finds nothing concludes the legend has no answer.
+// Sections run in TAB ORDER, so scanning the legend and scanning the view switcher are the same scan.
+// Each shape is listed ONCE, under the first view that draws it: the vocabulary is shared across views
+// by design (a person is the same figure everywhere), and repeating a row under every view that uses it
+// turned the legend into a list with the same swatch three times over.
 //
 // [view ids, [[tint kind, shape, label], …]]. Colours come from ELEMENT_TINT — the SAME styles the
 // generators paint the boxes with — and the shape mirrors the generators' SHAPE map, so a swatch cannot
@@ -2041,17 +2062,11 @@ const VIEW_Q = {
 const LEGEND_SECTIONS = [
   // The two sequence views. Both draw a Role as a lifeline, and the kind is the whole point of the
   // pair: a person acts, a service actor (a scheduled job, a poller, an inbound caller) starts on its
-  // own. Same hexagon, same indigo as the Dependencies view — one vocabulary across the two altitudes.
+  // own. The Happy Path also draws the System, in the same dark box the Dependencies view gives it.
   [['hp', 'usecases'], [
-    ['human', 'man', 'a person'],
-    ['svc', 'hex', 'a service actor'],
-  ]],
-  [['context'], [
     ['system', 'rect', 'the system'],
     ['human', 'man', 'a person'],
     ['svc', 'hex', 'a service actor'],
-    ['dep', 'cyl', 'dependency'],
-    ['bucketfold', 'rect', 'a collapsed group'],
   ]],
   [['container'], [
     ['subsystem', 'rect', 'subsystem'],
@@ -2060,6 +2075,12 @@ const LEGEND_SECTIONS = [
   [['domain'], [
     ['subdomain', 'rect', 'subdomain'],
     ['entity', 'rect', 'entity'],
+  ]],
+  // The system + both actor shapes are drawn here too — listed above, under the first view that draws
+  // them, so this section holds only what is new when you arrive at it.
+  [['context'], [
+    ['dep', 'cyl', 'dependency'],
+    ['bucketfold', 'rect', 'a collapsed group'],
   ]],
   // The infrastructure rows keep the wording of the lanes they label ("Used as a message bus"), which
   // states what the band measures — a dep's DERIVED role — rather than claiming it as an identity.
@@ -3767,22 +3788,29 @@ function hpFocus(scene, keep) {  // dim every focusable HP element not in the ke
   for (const el of scene.dimEls) el.style.opacity = keep.has(el) ? '' : DIM;
 }
 // Select an actor: its figure + lifeline + every step it drives glow; the rest dims.
+// One step's drawn parts: its label, its arrow, and any junction dots marking the alternative actors
+// that arrow passes. The dots belong to the step everywhere the step is treated as a unit (hover, glow,
+// dim), so they are collected here once rather than at each of the four call sites.
+function hpMsgEls(m) { return [m.text, m.line, ...(m.dots || [])].filter(Boolean); }
 function hpActorDesc(scene, a) {
   const stepEls = [];
-  for (const i of a.stepIdx) { const m = scene.hpMsg[i]; if (m) { if (m.text) stepEls.push(m.text); if (m.line) stepEls.push(m.line); } }
+  for (const i of a.stepIdx) { const m = scene.hpMsg[i]; if (m) stepEls.push(...hpMsgEls(m)); }
   const lit = [...scene.hpActor[a.aid].els, ...stepEls];
   return { key: 'hpactor:' + a.aid, glow: () => hpHighlight(scene, lit), focus: { els: new Set(lit) }, show: () => showHPActor(a) };
 }
 function selectHPActor(scene, a) { selReplace(scene, hpActorDesc(scene, a)); }
-// Select a step: the step (text + line) glows and its driving actor stays lit; the rest dims.
-function hpStepDesc(scene, i, hpId, aid) {
+// Select a step: the step (label + arrow + its junction dots) glows and EVERY actor that can drive it
+// stays lit — for a use case with interchangeable actors that is more than one; dimming the others
+// would hide drivers of the very step being read. The rest dims.
+function hpStepDesc(scene, i, hpId, aids) {
   const m = scene.hpMsg[i] || {};
-  const glow = [m.text, m.line].filter(Boolean);
-  const rec = aid ? scene.hpActor[aid] : null;
+  const glow = hpMsgEls(m);
+  const keep = new Set(glow);
+  for (const aid of (aids || [])) for (const el of ((scene.hpActor[aid] || {}).els || [])) keep.add(el);
   return { key: 'hpstep:' + hpId, glow: () => hpHighlight(scene, glow),
-           focus: { els: new Set([...glow, ...(rec ? rec.els : [])]) }, show: () => showHPArrow(hpId) };
+           focus: { els: keep }, show: () => showHPArrow(hpId) };
 }
-function selectHPStep(scene, i, hpId, aid) { selReplace(scene, hpStepDesc(scene, i, hpId, aid)); }
+function selectHPStep(scene, i, hpId, aids) { selReplace(scene, hpStepDesc(scene, i, hpId, aids)); }
 // Select a whole use case on the Happy Path (reached from a Use-cases `HPn` pill): EVERY step that
 // realizes it glows and its driving actor stays lit; the rest dims. A use case can occupy several
 // positions, so more than one step may light — that is exactly the "appears twice" signal. The panel
@@ -3792,10 +3820,11 @@ function hpUseCaseDesc(scene, uc) {
   (GRAPH.happy_path || []).forEach((step, i) => {
     if (step.uc !== uc) return;
     const m = scene.hpMsg[i]; if (!m) return;
-    if (m.text) glow.push(m.text);
-    if (m.line) glow.push(m.line);
-    const rec = HP_ACTOR_OF_STEP[step.id] ? scene.hpActor[HP_ACTOR_OF_STEP[step.id].aid] : null;
-    if (rec) keep.push(...rec.els);
+    glow.push(...hpMsgEls(m));
+    for (const a of (HP_ACTORS_OF_STEP[step.id] || [])) {
+      const rec = scene.hpActor[a.aid];
+      if (rec) keep.push(...rec.els);
+    }
   });
   return { key: 'hpuc:' + uc, glow: () => hpHighlight(scene, glow),
            focus: { els: new Set([...glow, ...keep]) }, show: () => showUseCaseSummary(uc) };
@@ -3805,6 +3834,37 @@ function selectHPUseCase(scene, uc) { selReplace(scene, hpUseCaseDesc(scene, uc)
 // Bind the Happy Path: steps + actors both select; a step ⌘-clicks to its Level-2 components view.
 // The step id is no longer in the label, so message[i] pairs with GRAPH.happy_path[i] by order; an actor's
 // figure/lifeline are found by participant id (data-id="GPAn") and its driven steps come from HP_ACTORS.
+// A step whose use case names SEVERAL interchangeable actors still gets one arrow (a sequence diagram
+// has no "or" — a second arrow would read as a second thing that happened). The arrow leaves the
+// leftmost of them, and each of the others is marked with a junction dot where the arrow crosses its
+// lifeline: "any of these can drive this step", said on the arrow itself, with no invented step.
+//
+// The dot is a plain circle in the diagram's own coordinates, so it zooms with the arrow it sits on
+// (unlike the action icons, which are counter-scaled to stay a fixed screen size). The crossing is
+// guaranteed by the generator's leftmost rule, but it is re-checked here anyway: a dot that missed its
+// arrow would read as a mark on some other step entirely, so it is dropped rather than drawn adrift.
+const HP_JUNCTION_R = 4.5;
+function hpJunctionDots(root, line, aids) {
+  const out = [];
+  if (!line || !aids || !aids.length) return out;
+  let lb; try { lb = line.getBBox(); } catch (_) { return out; }
+  const stroke = getComputedStyle(line).stroke;  // the arrow's own colour — the dot is part of it
+  for (const aid of aids) {
+    const life = root.querySelector('line.actor-line[data-id="' + aid + '"]');
+    if (!life) continue;
+    const x = parseFloat(life.getAttribute('x1'));
+    if (!isFinite(x) || x < lb.x || x > lb.x + lb.width) continue;
+    const dot = document.createElementNS(SVGNS, 'circle');
+    dot.setAttribute('cx', x); dot.setAttribute('cy', lb.y + lb.height / 2);
+    dot.setAttribute('r', HP_JUNCTION_R);
+    dot.setAttribute('fill', stroke || '#333');
+    dot.setAttribute('stroke', 'none');
+    dot.setAttribute('pointer-events', 'none');  // the arrow beneath keeps the whole hit area
+    line.parentNode.appendChild(dot);
+    out.push(dot);
+  }
+  return out;
+}
 function bindHP() {
   const scene = mainScene, root = scene.root;
   // message text[i] <-> GRAPH.happy_path[i]; its arrow is the i-th .messageLine in document order. Pair
@@ -3815,16 +3875,17 @@ function bindHP() {
   const lines = [...root.querySelectorAll('.messageLine0, .messageLine1')];
   leftAlignMessageLabels(texts, lines);
   scene.focusUnion = focusUnionEls;  // this is a sequence diagram — union selections dim by DOM-part set
-  scene.hpMsg = {};  // step index -> { text, line }
+  scene.hpMsg = {};  // step index -> { text, line, dots }
   for (let i = 0; i < (GRAPH.happy_path || []).length; i++) {
     const text = texts[i] || null;
     const line = lines[i] || null;
-    if (text) scene.dimEls.push(text);
-    if (line) scene.dimEls.push(line);
-    scene.hpMsg[i] = { text, line };
+    const dots = hpJunctionDots(root, line, HP_STEP_MARKS[i]);
+    scene.hpMsg[i] = { text, line, dots };
+    for (const el of hpMsgEls(scene.hpMsg[i])) scene.dimEls.push(el);
   }
   // resolve each actor's DOM (figure top + bottom mirror + lifeline) by participant id, register for dimming.
   scene.hpActor = {};  // aid -> { els:[…] }
+  styleSeqSystem(root);  // the System lifeline, in the same dark box the other views draw it as
   const bottoms = [...root.querySelectorAll('g.actor-man.actor-bottom')];
   for (const a of HP_ACTORS) {
     const figT = root.querySelector('.actor-top[data-id="' + a.aid + '"]');
@@ -3835,8 +3896,10 @@ function bindHP() {
     for (const el of els) scene.dimEls.push(el);
     styleSeqActor(root, a.aid, a.kind);  // person vs service actor, in the Dependencies view's vocabulary
   }
-  const aidOfStep = {};  // step index -> driving actor id (keeps the actor lit when a step is selected)
-  for (const a of HP_ACTORS) for (const i of a.stepIdx) aidOfStep[i] = a.aid;
+  // step index -> EVERY actor that can drive it (a use case may name interchangeable initiators), so a
+  // selected step keeps all of them lit rather than just whichever one the arrow starts from.
+  const aidsOfStep = {};
+  for (const a of HP_ACTORS) for (const i of a.stepIdx) (aidsOfStep[i] || (aidsOfStep[i] = [])).push(a.aid);
   // Per-use-case selector: arriving from a Use-cases `HPn` pill (state `sel: 'hpuc:<uc>'`) lights every
   // step of that use case. Registered for each use case that occupies ≥1 position; back/forward too.
   for (const uc of Object.keys(HP_STEPS_BY_UC)) scene.selectors['hpuc:' + uc] = () => selAdd(scene, hpUseCaseDesc(scene, uc));
@@ -3845,27 +3908,29 @@ function bindHP() {
   (GRAPH.happy_path || []).forEach((step, i) => {
     const { text, line } = scene.hpMsg[i];
     if (!text) return;
+    // The junction dots are part of the arrow, so they take the hover/rest treatment with it.
+    const dots = scene.hpMsg[i].dots || [];
     const hpId = step.id, selKey = 'hpstep:' + hpId;
-    scene.selectors[selKey] = () => selAdd(scene, hpStepDesc(scene, i, hpId, aidOfStep[i]));  // back/forward restore
+    scene.selectors[selKey] = () => selAdd(scene, hpStepDesc(scene, i, hpId, aidsOfStep[i]));  // back/forward restore
     // Drilling a step opens its use case's flow — the SAME view (and breadcrumb: "Use Cases › …") a
     // click from the Use Cases tab lands on, so a use case's flow has ONE home regardless of entry.
     addLabelActionIcon(text, selKey, { kind: 'drill', run: () => go({ kind: 'usecase', uc: step.uc }) });
     const icon = ACTION_ICONS[selKey];
     // A dimmed step (hpFocus set its opacity to DIM because focus is on some other step/actor) isn't a
     // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
-    const on = () => { if (!selHas(scene, selKey)) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
+    const on = () => { if (!selHas(scene, selKey)) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; for (const d of dots) d.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
     // restore to the resting glow (an actor-selected step keeps its HILITE), not blank — and for the
     // same reason, the pill sticks too: `scene.hpLit` is exactly what hpRestFilter already checks to
     // decide that, so hiding the icon only when this step ISN'T in that lit set keeps it up for as
     // long as its driving actor is selected, not just for as long as the step itself is.
-    const off = () => { if (!selHas(scene, selKey)) { text.style.filter = hpRestFilter(scene, text); if (line) line.style.filter = hpRestFilter(scene, line); if (!scene.hpLit.has(text)) hideIcon(icon); } };
+    const off = () => { if (!selHas(scene, selKey)) { text.style.filter = hpRestFilter(scene, text); if (line) line.style.filter = hpRestFilter(scene, line); for (const d of dots) d.style.filter = hpRestFilter(scene, d); if (!scene.hpLit.has(text)) hideIcon(icon); } };
     const click = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
       off();
       if (isDrillClick(ev)) { go({ kind: 'usecase', uc: step.uc }); return; }  // ⌥-click drills into the use case's flow
       if (ev.shiftKey) { frameArrow(line || text); return; }  // shift-click is a pure camera move — frame, never select
-      pickSel(scene, hpStepDesc(scene, i, hpId, aidOfStep[i]), ev);
+      pickSel(scene, hpStepDesc(scene, i, hpId, aidsOfStep[i]), ev);
     };
     for (const el of [text, line]) {
       if (!el) continue;
@@ -4203,17 +4268,31 @@ function renderGlossary() {
 // recurs) that jumps to that step. Off-spine use cases have NO pill — that absence is the on/off-spine
 // signal in the catalog. A non-diagram HTML view rendered straight into #diagram, like the Glossary.
 function renderUseCases() {
-  // Group by the single primary actor, keeping model (importance) order within a group and
-  // first-appearance order of the actors. A use case whose Actor names no known role (or is blank)
-  // falls into an "Other" bucket rather than an invented header — the single-actor invariant made safe.
-  const groups = [];               // [{actor, role, ucs:[node]}]
+  // Group by ACTOR, keeping model (importance) order within a group and first-appearance order of the
+  // actors. A use case may name several INTERCHANGEABLE actors (either can start it) — that pair is a
+  // group of its own, headed by both names, not a use case filed under one of them and hidden from the
+  // other. It used to land in the "Other" bucket: the group key was the joined display string, which
+  // matched no single role, so the catalog quietly lost it. "Other" now means what it says — an actor
+  // this map never declared as a role, or none at all.
+  const groups = [];               // [{actor, roles:[role], ucs:[node]}]
   const byActor = {};
   const OTHER = '\x00other';
   for (const n of UC_NODES) {
-    const actor = ((n.fields && n.fields.Actor) || '').trim();
-    const role = ROLE_BY_NAME[actor.toLowerCase()];
-    const key = (role && actor) ? actor.toLowerCase() : OTHER;
-    if (!byActor[key]) { byActor[key] = { actor: role ? actor : 'Other', role: role || null, ucs: [] }; groups.push(byActor[key]); }
+    // `actors` is the structured list; the `Actor` field is the readable rendering of that same list
+    // (and the only form a graph built before `actors` existed carries).
+    const names = (n.actors && n.actors.length ? n.actors : [((n.fields && n.fields.Actor) || '')])
+      .map((s) => String(s).trim()).filter(Boolean);
+    const roles = names.map((nm) => ROLE_BY_NAME[nm.toLowerCase()]);
+    const known = names.length && roles.every(Boolean);
+    const key = known ? names.map((s) => s.toLowerCase()).join('\x00') : OTHER;
+    if (!byActor[key]) {
+      // The header text is the `Actor` FIELD, which is already the readable rendering of this same list
+      // ("Team member and Organization admin"), so the conjunction is spelled in one place — the view
+      // builder — instead of once per view.
+      const title = ((n.fields && n.fields.Actor) || '').trim() || names.join(', ');
+      byActor[key] = { actor: known ? title : 'Other', roles: known ? roles : [], ucs: [] };
+      groups.push(byActor[key]);
+    }
     byActor[key].ucs.push(n);
   }
   const kindBadge = (kind) => {
@@ -4230,7 +4309,14 @@ function renderUseCases() {
       + ' title="On the Happy Path — click to jump there">Happy Path</button>';
   };
   const sections = groups.map((g) => {
-    const wants = g.role && g.role.wants ? `<span class="uc-actor-wants">${mdInline(g.role.wants)}</span>` : '';
+    // One actor: its kind and what it wants, as before. SEVERAL interchangeable actors: the kind only
+    // when they agree on it (they normally do — a human "or" a service is the method's tell that one of
+    // them isn't really an actor), and no "wants", because each of them wants something of their own and
+    // one header cannot speak for both. Clicking either name's own group still shows theirs.
+    const kinds = new Set(g.roles.map((r) => (r.kind || '').trim().toLowerCase()));
+    const kind = kinds.size === 1 ? [...kinds][0] : '';
+    const w = g.roles.length === 1 ? g.roles[0].wants : '';
+    const wants = w ? `<span class="uc-actor-wants">${mdInline(w)}</span>` : '';
     const rows = g.ucs.map((n) => {
       const to = (n.fields && n.fields['Trigger → Outcome']) || '';
       // In diff mode, flag a use case whose flow touches changed code (derived from the element diff).
@@ -4241,7 +4327,7 @@ function renderUseCases() {
         + '</li>';
     }).join('');
     return '<section class="uc-group">'
-      + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(g.role && g.role.kind)}${wants}</h3>`
+      + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}${wants}</h3>`
       + `<ul class="uc-list">${rows}</ul></section>`;
   }).join('');
   diagram.innerHTML = `<div class="usecases-wrap">${sections || '<p class="empty">No use cases recorded.</p>'}</div>`;

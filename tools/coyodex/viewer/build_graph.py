@@ -46,6 +46,11 @@ class Node:
     runs_in: list[str] = field(default_factory=list)  # components only: the deployment unit name(s)
                                   # whose process runs this component — the Deployment view's `runs`
                                   # edges (process → this component's subsystem) derive from it
+    actors: list[str] = field(default_factory=list)  # use cases only: the driving role NAMES, primary
+                                  # first — the structured half of the human `Actor` field. A use case
+                                  # may list several INTERCHANGEABLE initiators (either can start it),
+                                  # and only this list lets a view tell "two actors" from one actor
+                                  # whose name happens to contain a comma.
     roles: list[str] = field(default_factory=list)  # deps only: the role SET derived from the dep's
                                   # incoming C→D edge verbs (grammar.dep_roles) — 'datastore' /
                                   # 'messaging' / 'service' / 'security'. A dual-role dep (Redis as bus +

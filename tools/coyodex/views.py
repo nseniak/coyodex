@@ -52,6 +52,20 @@ _GENERATED_NOTICE = (
     "     file with `coyodex render project-map.json project-map.md`. -->")
 
 
+def and_list(items: list[str]) -> str:
+    """`X` · `X and Y` · `X, Y, and Z` — a name list a reader parses as PLURAL. A bare comma join reads
+    as one long name: a use case with two interchangeable initiators rendered as "Team member,
+    Organization admin", which every view then treated as a single unknown actor. The conjunction is
+    what makes the plurality visible, so it is used everywhere an actor list is displayed (the markdown
+    Use cases table and the viewer's `Actor` field alike) — one spelling, no drift between views."""
+    xs = [i for i in items if i]
+    if len(xs) < 2:
+        return xs[0] if xs else ""
+    if len(xs) == 2:
+        return f"{xs[0]} and {xs[1]}"
+    return ", ".join(xs[:-1]) + ", and " + xs[-1]
+
+
 def _esc(cell: str) -> str:
     """A model text value as a table cell: literal pipes re-escaped (the schema rule), newlines
     flattened so one row stays one line."""
@@ -272,7 +286,7 @@ def model_to_markdown(m: ProjectModel) -> str:
         rn = {r.id: r.name for r in m.roles}  # render actors as role NAMES, resolved from their ids
         section("Use cases",
                 _table(["ID", "Use case", "Actor", "Trigger → Outcome"],
-                       [[f"**{u.id}**", u.name, ", ".join(rn.get(a, a) for a in u.actors),
+                       [[f"**{u.id}**", u.name, and_list([rn.get(a, a) for a in u.actors]),
                          u.trigger_outcome] for u in m.use_cases]))
     if m.happy_path:
         body = ["The happy-path ordering of use cases. Each step IS a use case (its `*(UCn)*` tag",
@@ -703,10 +717,16 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
     subdomain_names = {sd.id: sd.name for sd in m.subdomains}
     role_names = {r.id: r.name for r in m.roles}  # role ids → display names (the frontend sees names)
     for u in m.use_cases:
-        actor_names = ", ".join(role_names.get(a, a) for a in u.actors)
-        nodes[u.id] = _node(u, "usecase", u.name, _first_href(u.trigger_outcome),
-                            {"Use case": u.name, "Actor": actor_names,
-                             "Trigger → Outcome": u.trigger_outcome}, None)
+        # BOTH forms: the readable one for display, and the LIST for every view that needs to know who
+        # the actors actually are. The display string used to be the only form, so a two-actor use case
+        # reached the frontend as one unsplittable name — it matched no role, and the Happy Path drew a
+        # lifeline for a person who does not exist while the Use-cases catalog filed it under "Other".
+        actor_names = [role_names.get(a, a) for a in u.actors]
+        node = _node(u, "usecase", u.name, _first_href(u.trigger_outcome),
+                     {"Use case": u.name, "Actor": and_list(actor_names),
+                      "Trigger → Outcome": u.trigger_outcome}, None)
+        node.actors = actor_names
+        nodes[u.id] = node
     for s in m.subsystems:
         parent_name = subsystem_names.get(s.parent, s.parent) if s.parent else ""
         nodes[s.id] = _node(s, "subsystem", s.name, s.source,

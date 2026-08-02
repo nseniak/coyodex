@@ -563,7 +563,10 @@ ELEMENT_TINT = {
     "bucketfold": {"fill": "#ecfdf5", "stroke": "#065f46", "strokeWidth": "2.5px", "strokeDasharray": "6 3"},
     # The remaining drawn vocabularies, so the viewer's LEGEND can build its swatches from the very
     # styles the diagrams paint with (one source of truth — a legend that can drift is worse than none).
-    "system": {"fill": "#1e1b4b", "stroke": "#312e81"},
+    # `color` too: the System is the one box dark enough that its LABEL has to be repainted with it —
+    # the Happy Path's System lifeline is a default Mermaid participant, and a dark fill under the
+    # default near-black label is unreadable. (The flowchart views get the colour from their classDef.)
+    "system": {"fill": "#1e1b4b", "stroke": "#312e81", "color": "#fff"},
     "human": {"fill": "#fff7ed", "stroke": "#c2410c"},
     "svc": {"fill": "#eef2ff", "stroke": "#4338ca"},
     "infraBus": _fill_stroke(INFRA_BUS_STYLE),
@@ -2394,16 +2397,47 @@ def _safe_msg(s: str) -> str:
     return re.sub(r"\s+", " ", s).strip()
 
 
-def _hp_actor(graph: GraphDict, step: dict[str, Any]) -> str:
-    """The actor that drives a GP step = the `Actor` of the use case it realizes (a step IS exactly one
-    use case, so no separate actor signal is needed), falling back to a generic 'Actor'."""
+def _hp_actors(graph: GraphDict, step: dict[str, Any]) -> list[str]:
+    """The actor NAMES that can drive a GP step = the actors of the use case it realizes (a step IS
+    exactly one use case, so no separate actor signal is needed), falling back to a generic 'Actor'.
+
+    Usually one name. A use case may list several INTERCHANGEABLE initiators — either party can start
+    the same action — and those are the reason this returns a list: reading the human `Actor` field
+    instead gave one joined string ("Team member, Organization admin"), which the diagram then drew as
+    a third lifeline for a person who does not exist. The `actors` list is the same fact, unjoined.
+    The field is still the fallback for a graph built before it existed."""
     uc = step.get("uc")
     node = graph["nodes"].get(uc) if isinstance(uc, str) else None
     if node:
+        names = [_safe_msg(str(a)) for a in cast("list[str]", node.get("actors") or []) if str(a).strip()]
+        if names:
+            return names
         for k, v in cast("dict[str, str]", node.get("fields") or {}).items():
             if k.strip().lower() == "actor" and str(v).strip():
-                return _safe_msg(str(v))
-    return "Actor"
+                return [_safe_msg(str(v))]
+    return ["Actor"]
+
+
+def _hp_actor_order(graph: GraphDict) -> dict[str, str]:
+    """{actor name: participant id} in the order the lifelines are declared — EVERY actor of every
+    step, primary first, in first-appearance order. The co-actors of a shared use case are declared
+    here too (not only the one an arrow starts from), which is what gives them a lifeline to be marked
+    on. Shared by gen_hp_mermaid and hp_actors so the ids can never disagree."""
+    order: dict[str, str] = {}
+    for st in cast("list[dict[str, Any]]", graph["happy_path"]):
+        for name in _hp_actors(graph, st):
+            order.setdefault(name, "HPA" + str(len(order)))
+    return order
+
+
+def _hp_step_source(order: dict[str, str], names: list[str]) -> str:
+    """Which of a step's interchangeable actors the arrow STARTS from: the LEFTMOST one on the diagram.
+    Not an arbitrary pick — the System is the last participant declared, so it is always the rightmost
+    lifeline, and an arrow leaving the leftmost actor therefore crosses every other actor of that same
+    step on its way there. That is what lets the viewer mark each of them with a junction dot: the
+    crossing is guaranteed by construction rather than by luck of the ordering."""
+    ids = list(order.values())
+    return min((order[n] for n in names if n in order), key=ids.index, default="")
 
 
 def gen_hp_mermaid(graph: GraphDict) -> str:
@@ -2412,37 +2446,58 @@ def gen_hp_mermaid(graph: GraphDict) -> str:
     (`1. …`, `2. …`) — the same numbering the T6 flows use — so a step's `HPn` id (surfaced on a
     Use-cases pill and in the side panel) points at a visible number; the bare `HPn` id itself is kept
     out of the label. The viewer pairs message[i] with step[i] by order. Distinct actors (derived per
-    step from its UC) become the lifelines."""
+    step from its UC) become the lifelines.
+
+    ONE message per step, even when its use case has several interchangeable actors: a sequence diagram
+    has no "or", so a second arrow would read as a second thing that happened, in sequence. The arrow
+    leaves the leftmost of them and the viewer marks the others where it crosses their lifeline (see
+    hp_step_marks) — the alternative is shown without inventing a step nobody takes."""
     steps = cast("list[dict[str, Any]]", graph["happy_path"])
     title = _safe_msg(graph["title"] or "System")
-    actor_ids: dict[str, str] = {}  # actor name -> stable participant id, in first-appearance order
-    for st in steps:
-        actor_ids.setdefault(_hp_actor(graph, st), "HPA" + str(len(actor_ids)))
+    actor_ids = _hp_actor_order(graph)
     lines = ["sequenceDiagram"]
     for name, aid in actor_ids.items():
         lines.append(f"  actor {aid} as {name}")
     lines.append(f"  participant HPSYS as {title}")
     for i, st in enumerate(steps):
-        aid = actor_ids[_hp_actor(graph, st)]
+        aid = _hp_step_source(actor_ids, _hp_actors(graph, st))
         title_txt = _safe_msg(str(st["title"])) if st["title"] else ""
         label = title_txt or str(st["id"])  # title only; id lives in the side panel, not the label
         lines.append(f"  {aid}->>HPSYS: {i + 1}. {label}")
     return "\n".join(lines)
 
 
+def hp_step_marks(graph: GraphDict) -> list[list[str]]:
+    """Per step, the participant ids of its OTHER interchangeable actors — the ones its single arrow
+    passes on the way to the System. `[]` for a normal one-actor step, so the common case costs nothing.
+
+    The viewer draws a junction dot where the arrow crosses each of these lifelines. That is the whole
+    point of starting the arrow at the leftmost actor: every id listed here is guaranteed to sit between
+    the arrow's two ends, so a dot always lands ON the arrow and never floats beside it."""
+    order = _hp_actor_order(graph)
+    out: list[list[str]] = []
+    for st in cast("list[dict[str, Any]]", graph["happy_path"]):
+        names = _hp_actors(graph, st)
+        src = _hp_step_source(order, names)
+        out.append([order[n] for n in names if n in order and order[n] != src])
+    return out
+
+
 def hp_actors(graph: GraphDict) -> list[dict[str, Any]]:
     """Per-actor data for the Happy Path lifelines, in the SAME participant order/ids as
     gen_hp_mermaid (so `HPAn` lines up with the rendered lifeline). Each actor links back to its
     Roles-table entry by name to surface what it wants + its kind, plus the GP steps it drives —
-    `stepIdx` are the message positions the viewer highlights when the actor is selected."""
+    `stepIdx` are the message positions the viewer highlights when the actor is selected.
+
+    An actor drives a step when it is ONE OF that step's interchangeable actors, not only when the
+    arrow happens to start from it: the alternative initiator genuinely drives that step too, so
+    selecting it lights the step and its card lists it."""
     steps = cast("list[dict[str, Any]]", graph["happy_path"])
     roles_by_name = {_safe_msg(r["name"]).strip().lower(): r for r in graph["roles"]}
-    order: dict[str, str] = {}  # actor name -> participant id, first-appearance order (matches gen_hp_mermaid)
-    for st in steps:
-        order.setdefault(_hp_actor(graph, st), "HPA" + str(len(order)))
+    order = _hp_actor_order(graph)  # actor name -> participant id (matches gen_hp_mermaid exactly)
     out: list[dict[str, Any]] = []
     for name, aid in order.items():
-        idxs = [i for i, st in enumerate(steps) if _hp_actor(graph, st) == name]
+        idxs = [i for i, st in enumerate(steps) if name in _hp_actors(graph, st)]
         role = roles_by_name.get(name.strip().lower())
         out.append({
             "aid": aid,
@@ -2762,6 +2817,7 @@ class ViewBundle(TypedDict):
     flowsMm: dict[str, str]
     flowsNarr: dict[str, list[dict[str, Any]]]
     hpActors: list[dict[str, Any]]
+    hpStepMarks: list[list[str]]
     flowActors: dict[str, list[dict[str, Any]]]
     elementTint: dict[str, dict[str, str]]
     mermaidLibs: str
@@ -2857,6 +2913,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         flowsMm=flow_mermaids(graph),
         flowsNarr=flow_narratives(graph),
         hpActors=hp_actors(graph) if hp else [],
+        hpStepMarks=hp_step_marks(graph) if hp else [],
         flowActors=flow_actors_map(graph),
         elementTint=ELEMENT_TINT,
         mermaidLibs=gen_libs_mermaid(graph),
