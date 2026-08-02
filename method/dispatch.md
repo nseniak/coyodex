@@ -12,31 +12,47 @@ Read/run them with that absolute prefix. Only `.coyodex/...` paths are in the an
 ## Step 0 — brief the user BEFORE doing anything else
 
 The first thing the user sees must be what coyodex is about to read, and what the map will claim
-about the code. Run this immediately — before choosing a mode, before reading the repo:
+about the code. Run this immediately — before choosing a mode, before reading the repo (an ABSOLUTE
+path: your cwd is the analyzed repo, which has no `.venv/`):
 
 ```
-.venv/bin/coyodex scope --repo <repo>
+<COYODEX_HOME>/.venv/bin/coyodex scope --repo <repo>
 ```
 
-**Show its output verbatim.** Do not summarise, re-word or "the highlights are" it. It names the
-file set the entire map is measured against, and a paraphrase is exactly where "everything under
-`fixtures/` is out of scope" becomes silence — after which the map reads complete because the
-evidence of what it skipped never reached the person reading it.
+**Show its output verbatim, as your first message.** Do not summarise, re-word or "the highlights
+are" it. It states the rule that decides the file set (git, minus `.gitignore`, minus
+`.coyodex/.ignore`), how many files that came to, what each ignore pattern removed — naming any
+pattern that removed nothing — and what the commit pin will mean. Paraphrase it and the narrowing
+turns into silence, after which the map reads complete because the evidence of what it skipped never
+reached the person reading it. It reports COUNTS and PATTERNS, not a file listing; if the user asks
+which files, answer then, from the repo.
 
-Then act on what it says about the pin:
+**Order.** Run the briefing now, then go on to Steps 1–2 and decide the mode. The pin branch below
+depends on the mode, so come back to it once you know — it is written here because it belongs to
+the briefing, not because it happens before the mode is known.
 
-- **Uncommitted code, and the mode is Build (or a rebuild)** → ask before starting the work. This is
-  the same A/B choice `method.md`'s pin gate asks, moved from the END of the build to the front,
-  where changing your mind is free (a build once lost ~2 hours blocked on it after the fact):
-  - **A (recommended)** — commit or stash the code first; re-run `coyodex scope` and continue.
+Then, with the mode decided, act on what the briefing said about the pin:
+
+- **Uncommitted code, and the mode is Build (or a rebuild)** → ask before starting the work, and
+  say which mode you are in so the question has a reason. This is the same A/B choice `method.md`'s
+  pin gate asks, moved from the END of the build to the front, where changing your mind is free (a
+  build once lost ~2 hours blocked on it after the fact):
+  - **A (recommended)** — **the user** commits or stashes the code, then you re-run `coyodex scope`
+    (show it again — it is the same briefing about a now-different tree) and continue. Never commit
+    or stash the user's code yourself: it is their working tree and their commit message, and this
+    step is a question, not a mandate.
   - **B** — continue as is. The pin is recorded `<sha>-dirty`, meaning "this map describes code that
     is not in any commit".
 
   Carry the answer forward: the pin gate in `method.md` **must not ask again**.
 - **Uncommitted code, and the mode is Analyze** → say so and continue, do NOT ask. Analysis is
   designed to run on a dirty tree; that is the normal case, not a problem.
-- **No uncommitted code**, or **no git repo at all** → nothing to ask. The briefing already said what
-  that means.
+- **No uncommitted code** → nothing to ask.
+- **No git repo at all** → nothing to ask, and nothing to add: the briefing already says that
+  `.gitignore` cannot apply and that there is no commit to pin the map to.
+
+**Announce the mode** you land on in Steps 1–2, whichever it is — a build that starts with no word
+about what it decided is the thing Step 0 exists to prevent.
 
 ## Step 1 — did the user name a mode?
 
