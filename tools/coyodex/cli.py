@@ -47,11 +47,12 @@ Commands:
              assignment pass), resolving ids against the build's own --fragments
              (or --map, once one exists) and reporting every rule that matched
              nothing. Feed the result to `assemble --reconcile`.
-  finalize   The pre-commit read: validate + audit + both anchor-drift passes,
-             written to .coyodex/finalize-report.{json,md} with whole lists. Adds no
-             check of its own and compares nothing against a previous map. A
-             convenience wrapper, not an enforcement point — exit 1 for what
-             validate/audit already block on, or when a check did not run.
+  finalize   The pre-commit read: validate + audit + the shape-only anchor-drift
+             pass, and the verdict-based one too ONLY with --verdicts (without it
+             that leg does not run). Written to .coyodex/finalize-report.{json,md}
+             with whole lists. Adds no check of its own and compares nothing against
+             a previous map. A convenience wrapper, not an enforcement point — exit 1
+             for what validate/audit already block on, or when a check did not run.
   scope      The up-front briefing, before any work: which files will be analyzed
              (git decides — .gitignore is out), what `.coyodex/.ignore` removed, and
              which commit the map will be pinned to, warning when uncommitted code

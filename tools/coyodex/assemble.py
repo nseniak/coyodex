@@ -8,8 +8,8 @@ committed / built). This command validates every fragment against the schema (on
 fails ALONE, with its file and JSON path named — the whole point of assembling with a tool),
 merges them (arrays concatenate in argument order; a duplicate ID across fragments is an ERROR,
 never a silent overwrite), and writes the canonical `project-map.json` plus its generated markdown
-and HTML views. The LLM never hand-authors the stored format: validity is guaranteed here, by the
-serializer.
+view. No HTML file is written: the interactive diagram is built on demand by `coyodex serve`. The
+LLM never hand-authors the stored format: validity is guaranteed here, by the serializer.
 
 A fragment is the model document minus the strictness that only the WHOLE map needs: `format` is
 optional in a fragment, every top-level field is optional, and cross-fragment references are NOT
@@ -698,11 +698,11 @@ def main(argv: list[str] | None = None) -> int:
     if "-h" in argv or "--help" in argv or not argv:
         print("usage: coyodex assemble <fragment.json>... --out <dir> [--reconcile <file>]\n\n"
               "Merge build agents' structured-row fragments into the canonical project-map.json\n"
-              "(+ the generated markdown and HTML views) in <dir>. Each fragment is a PARTIAL\n"
-              "model (any subset of the top-level arrays; one header fragment may carry\n"
-              "title/goal/commit). A malformed fragment or a duplicate ID fails loudly with the\n"
-              "fragment named — nothing is silently fixed up; run `coyodex validate` on the\n"
-              "result to catch anything else wrong.\n\n"
+              "(+ the generated markdown view; the diagram is served, never written) in <dir>.\n"
+              "Each fragment is a PARTIAL model (any subset of the top-level arrays; one header\n"
+              "fragment may carry title/goal/commit). A malformed fragment or a duplicate ID\n"
+              "fails loudly with the fragment named — nothing is silently fixed up; run\n"
+              "`coyodex validate` on the result to catch anything else wrong.\n\n"
               "--reconcile <file>: a declarative reconcile input applied AFTER the merge (and after\n"
               "  entity-edge derivation), BEFORE the write — so a re-assemble always re-applies it.\n"
               "  `set` bulk-assigns subsystem/subdomain/runs_in/bucket; `drop_edges` removes refuted\n"
