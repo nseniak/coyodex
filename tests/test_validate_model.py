@@ -753,6 +753,43 @@ def test_edge_no_call_site_opt_out_allows_missing_where():
     assert not any("no `Where` anchor" in p for p in problems_of(m))
 
 
+# --- containers are not edge endpoints --------------------------------------------
+
+def make_promoted_model(endpoint: str, side: str = "dst") -> ProjectModel:
+    """A map mid-PROMOTION: a component became a subsystem and one edge still points at the
+    container. This is the exact state `method/change-impact.md`'s promotion recipe produces when a
+    re-point is missed, and the recipe promises validation catches it."""
+    m = make_valid_model()
+    m.subsystems = [Group(id="S1", name="Billing", purpose="charges")]
+    m.subdomains = [Group(id="SD1", name="Orders", purpose="ordering")]
+    m.components[0].subsystem = "S1"
+    setattr(m.edges[1], side, endpoint)
+    return m
+
+
+def test_an_edge_pointing_at_a_subsystem_is_a_blocking_problem():
+    m = make_promoted_model("S1")
+    assert any("cannot be an edge endpoint" in p and "S1" in p for p in problems_of(m))
+
+
+def test_an_edge_pointing_at_a_subdomain_is_a_blocking_problem():
+    m = make_promoted_model("SD1")
+    assert any("cannot be an edge endpoint" in p and "SD1" in p for p in problems_of(m))
+
+
+def test_a_container_as_the_SOURCE_of_an_edge_is_caught_too():
+    # Both ends, not just the one the promotion recipe happens to describe.
+    m = make_promoted_model("S1", side="src")
+    assert any("cannot be an edge endpoint" in p for p in problems_of(m))
+
+
+def test_ordinary_endpoints_are_not_mistaken_for_containers():
+    # The guard is the ID SHAPE, so nothing that merely starts with an S-ish letter is swept in — and
+    # C/D/E endpoints, which is every real edge, stay silent.
+    m = make_valid_model()
+    assert not any("cannot be an edge endpoint" in p for p in problems_of(m))
+
+
 # --- flow-step anchors (`where` is THE location — one step, one call site) ---------
 
 
@@ -1398,6 +1435,44 @@ def test_domain_card_completeness_and_relations():
     assert any("half-stated cardinality" in p for p in probs)
 
 
+# --- the cardinality vocabulary is closed ------------------------------------------
+
+def make_carded_model(src_card: str, dst_card: str = "1") -> ProjectModel:
+    m = make_valid_model()
+    m.entities = [make_entity(relations=[EntityRelation(verb="refersTo", target="E1",
+                                                        src_card=src_card, dst_card=dst_card)])]
+    return m
+
+
+def test_every_published_cardinality_token_is_accepted():
+    # The four `method/domain-cards.md` publishes. If enforcement and documentation ever disagree,
+    # this is the side that must not move silently.
+    for token in ("1", "*", "0..1", "1..*"):
+        assert not any("unknown" in p and "cardinality" in p
+                       for p in problems_of(make_carded_model(token))), token
+
+
+def test_an_invented_cardinality_token_is_a_blocking_problem():
+    # `many→ONE` parsed, validated clean and reached the class diagram, where a reader cannot tell an
+    # author's private notation from the map's.
+    probs = problems_of(make_carded_model("many", "ONE"))
+    assert any("unknown src cardinality 'many'" in p for p in probs)
+    assert any("unknown dst cardinality 'ONE'" in p for p in probs)
+
+
+def test_a_near_miss_cardinality_is_still_rejected():
+    # `0..n` and `0..*` look like the vocabulary and are not in it — the case a substring test misses.
+    for token in ("0..n", "0..*", "n"):
+        assert any("unknown src cardinality" in p for p in problems_of(make_carded_model(token))), token
+
+
+def test_stating_neither_side_stays_clean():
+    # The vocabulary applies to a STATED cardinality; omitting the pair entirely is legal.
+    m = make_valid_model()
+    m.entities = [make_entity(relations=[EntityRelation(verb="refersTo", target="E1")])]
+    assert not any("cardinality" in p for p in problems_of(m))
+
+
 def make_keyed_relation(keyed_by: list[str], verb: str = "attachedTo") -> EntityRelation:
     return EntityRelation(verb=verb, target="E2", src_card="*", dst_card="1", keyed_by=keyed_by)
 
@@ -1681,6 +1756,60 @@ def test_extensionless_edge_where_existence_is_verified():
         assert check_anchor_existence_model(ok, [root]) == []                 # exists → clean
         bad = ProjectModel(edges=[Edge(src="C1", verb="uses", dst="C2", where="Nope.file:1")])
         assert any("does not resolve" in p for p in check_anchor_existence_model(bad, [root]))
+
+
+# --- a cited LINE must exist, not just the file ------------------------------------
+
+def make_anchored_model(anchor: str) -> ProjectModel:
+    return ProjectModel(edges=[Edge(src="C1", verb="uses", dst="C2", where=anchor)])
+
+
+def make_three_line_repo(td: str) -> Path:
+    root = Path(td)
+    (root / "src").mkdir()
+    (root / "src" / "a.py").write_text("one\ntwo\nthree\n", encoding="utf-8")
+    return root
+
+
+def test_a_line_past_the_end_of_the_file_is_a_blocking_problem():
+    # `method.md` promised "`--check-sources` verifies that line exists, so a fabricated anchor is a
+    # hard block" while only the FILE was tested — so an agent that could not find the true line was
+    # told a gate would catch a guess. `src/a.py:999999` passed all-green.
+    with tempfile.TemporaryDirectory() as td:
+        root = make_three_line_repo(td)
+        out = check_anchor_existence_model(make_anchored_model("src/a.py:999999"), [root])
+        assert any("cites a line the file does not have" in p and "3 line(s)" in p for p in out), out
+
+
+def test_a_line_inside_the_file_stays_clean():
+    with tempfile.TemporaryDirectory() as td:
+        root = make_three_line_repo(td)
+        for anchor in ("src/a.py:1", "src/a.py:3", "src/a.py:2-3"):
+            assert check_anchor_existence_model(make_anchored_model(anchor), [root]) == [], anchor
+
+
+def test_a_range_whose_END_overflows_is_caught():
+    # The start being real is not enough — `2-99` claims 99 lines of witness that do not exist.
+    with tempfile.TemporaryDirectory() as td:
+        root = make_three_line_repo(td)
+        out = check_anchor_existence_model(make_anchored_model("src/a.py:2-99"), [root])
+        assert any("cites a line the file does not have" in p for p in out), out
+
+
+def test_a_whole_file_anchor_cites_no_line_and_stays_clean():
+    with tempfile.TemporaryDirectory() as td:
+        root = make_three_line_repo(td)
+        m = ProjectModel(components=[Component(id="C1", name="A", purpose="p", source="src/")])
+        assert check_anchor_existence_model(m, [root]) == []
+
+
+def test_a_missing_file_reports_only_the_file_not_the_line():
+    # One finding per anchor: a nonexistent file must not ALSO produce a line complaint about a file
+    # nobody could read.
+    with tempfile.TemporaryDirectory() as td:
+        root = make_three_line_repo(td)
+        out = check_anchor_existence_model(make_anchored_model("src/gone.py:99"), [root])
+        assert len(out) == 1 and "does not resolve" in out[0], out
 
 
 def test_colon_range_anchor_is_not_flagged():

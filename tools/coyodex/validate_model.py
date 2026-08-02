@@ -136,6 +136,17 @@ def _is_subsystem_id(i: str) -> bool:
     return i.startswith("S") and not i.startswith("SD") and not i.startswith("SF")
 
 
+#: A CONTAINER id — a subsystem or a subdomain. Containers group other elements; they are not
+#: themselves an end of a relationship, which is why they may never appear as an edge endpoint.
+#: Written against the exact id shape (not a prefix test) so a `SD`-prefixed word in free text can
+#: never reach it, and so `SF` (sub-flow) stays out.
+_CONTAINER_ID = re.compile(r"^(?:S|SD)\d+$")
+
+
+def _is_container_id(i: str) -> bool:
+    return bool(_CONTAINER_ID.fullmatch((i or "").strip()))
+
+
 # ── semantic checks ──────────────────────────────────────────────────────────────────────────────
 
 def _check_ids(m: ProjectModel) -> list[str]:
@@ -2416,6 +2427,18 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
         elif has_where and e.no_call_site:
             warnings.append(f"{e.src} → {e.dst}: `no_call_site` is set but a `Where` is present — "
                             "drop one so the intent is unambiguous")
+        # A CONTAINER is not an endpoint. `_check_references` resolves an `S`/`SD` id happily (it is a
+        # defined element), so nothing else here notices — and both the promotion recipe
+        # (`method/change-impact.md`) and `method.md` tell the lead that a leftover edge to a retired
+        # component's replacement subsystem "fails validation". It did not. Promotion is exactly when
+        # this happens: a component becomes a subsystem, and an edge nobody re-pointed now claims a
+        # whole container calls something, which the viewer cannot draw at any single altitude.
+        for side, eid in (("src", e.src), ("dst", e.dst)):
+            if _is_container_id(eid):
+                problems.append(
+                    f"Edge {e.src} → {e.dst}: {side} '{eid}' is a subsystem/subdomain, which cannot be "
+                    "an edge endpoint (edges run C↔C, C↔D, C→E) — re-point it at a specific child "
+                    "component")
     # Duplicate backbone edges: `assemble` collapses same-call-site duplicates (identical anchor), so
     # any (src,verb,dst) left here more than once points at DIFFERENT call sites (or is a no-call-site
     # pair) — a real conflict (which call site is the true one? a duplicate once masked a wrong
@@ -2481,6 +2504,16 @@ def check_domain_relations(entities: list[Entity]) -> tuple[list[str], list[str]
             if (r.src_card is None) != (r.dst_card is None):
                 problems.append(f"Domain card {e.id}: relation '{r.verb} … {r.target}' has a "
                                 f"half-stated cardinality — state both sides (`sc→dc`) or neither")
+            # The vocabulary is CLOSED (`grammar.CARDINALITIES`). Published as a validation rule since
+            # the first domain-cards doc and enforced by nothing, so `many→ONE` and `0..n` rode into
+            # the class diagram unchallenged. Blocking, like the half-stated-pair rule right above it:
+            # a cardinality is either the map's notation or it is noise, and a reader cannot tell.
+            for side, card in (("src", r.src_card), ("dst", r.dst_card)):
+                if card is not None and card.strip() not in grammar.CARDINALITIES:
+                    problems.append(
+                        f"Domain card {e.id}: relation '{r.verb} … {r.target}' has an unknown {side} "
+                        f"cardinality '{card}' — use one of "
+                        f"{', '.join(sorted(grammar.CARDINALITIES))}")
             if (r.verb, r.target) in seen_pairs:
                 problems.append(f"Domain card {e.id} declares the relation "
                                 f"'{r.verb} … {r.target}' twice")
@@ -2772,17 +2805,49 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
 
 
 def check_anchor_existence_model(m: ProjectModel, roots: list[Path]) -> list[str]:
+    """BLOCKING under `--check-sources`: every anchor must resolve to a real file (or directory), and
+    a cited LINE must exist in it.
+
+    The line half was missing for a long time while `method.md` told the build that "`--check-sources`
+    verifies that line exists, so a fabricated anchor is a hard block". It did not: only the file was
+    tested, so `some/real/file.py:999999` passed all-green. That gap points the wrong way — an agent
+    that cannot find the true line is told a gate will catch a guess, so guessing looks safe.
+
+    A line PAST THE END OF THE FILE is the only line error decidable here, and it is decisive: the
+    citation cannot be true of this file at this commit. Whether a line that DOES exist is the right
+    one is a reading question, left to the advisory operative-line pass and the Phase-4 skeptics.
+    """
     out: list[str] = []
+    line_count: dict[str, int | None] = {}
     for label, href in _anchor_pairs(m):
         rel = strip_anchor(href)
         is_dir = rel.endswith("/")
         rel = rel.rstrip("/")
         if not rel:
             continue
-        ok = any((r / rel).is_dir() if is_dir else (r / rel).is_file() for r in roots)
-        if not ok:
+        hit = next((r / rel for r in roots if ((r / rel).is_dir() if is_dir else (r / rel).is_file())),
+                   None)
+        if hit is None:
             out.append(f"{label}: '{href}' does not resolve to a "
                        f"{'directory' if is_dir else 'file'} in the repo")
+            continue
+        loc = parse_anchor(href)
+        if is_dir or loc is None or loc.lo is None:
+            continue                                   # a whole-file / directory anchor cites no line
+        key = str(hit)
+        if key not in line_count:
+            try:
+                line_count[key] = len(hit.read_text(encoding="utf-8", errors="ignore").splitlines())
+            except OSError:
+                line_count[key] = None                 # unreadable (binary, permissions): not a claim
+                                                       # about the map, so it is not this gate's finding
+        n = line_count[key]
+        if n is None:
+            continue
+        hi = loc.hi or loc.lo
+        if loc.lo < 1 or hi > n:
+            out.append(f"{label}: '{href}' cites a line the file does not have — "
+                       f"{rel} is {n} line(s) long")
     return out
 
 

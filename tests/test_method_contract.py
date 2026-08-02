@@ -509,6 +509,10 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
         "one edge, one primary call site; merge them",
     "{}: '{}' does not resolve to a":
         "a nonexistent path is never a judgement call",
+    "{}: '{}' cites a line the file does not have":
+        "the file is shorter than the citation, so the citation cannot be true of it at this commit "
+        "— arithmetic, not judgement. Its sibling above ('does not resolve') is unrecordable for the "
+        "same reason: both are BLOCKING problems from the existence gate, not advisories to live with",
     "{}: '{}' points at {} — anchor the operative statement":
         "the anchor moves to the acting line; nothing to record",
     "{} states: {} of {} state name(s) do not appear in the cited source":

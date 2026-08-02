@@ -406,6 +406,12 @@ REL_KIND = {
 # non-canonical structural verb -> the canonical verb to use instead (drives the validator hint).
 REL_ALIAS = {v: CANONICAL_VERB[k] for v, k in REL_KIND.items() if v != CANONICAL_VERB[k].lower()}
 
+# The CLOSED cardinality vocabulary — one side of a relation's `sc→dc` pair. `method/domain-cards.md`
+# has always published exactly these four and called them a validation rule; nothing enforced it, so
+# `many→ONE` or `0..n` passed and reached the class diagram, where a reader cannot tell an author's
+# private notation from the map's. Closed on purpose: an open set makes two maps incomparable.
+CARDINALITIES: frozenset[str] = frozenset({"1", "*", "0..1", "1..*"})
+
 # ── Backbone edge verb → ROLE ──────────────────────────────────────────────────────────────────────
 # The verb families that decide what a backbone edge MEANS — the ONE place backbone-verb meaning is
 # decided (like REL_KIND / CANONICAL_VERB above for entity relations). `assemble._infer_ce_verb` reads
