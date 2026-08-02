@@ -2,17 +2,17 @@
 name: coyodex-eval
 description: >
   FOR THE COYODEX DEVELOPER, not for users of coyodex: run the method-quality regression
-  eval on a project that already has a coyodex map.
-  Rebuilds a fresh map with the current method, judges it (grounding + rubric), and compares it to
-  the project's committed .coyodex/ map as the baseline — telling you whether the method/tooling got
-  better or worse. Results go in a git-ignored .coyodex-eval/. Use whenever the user wants to
+  eval on a project whose coyodex map has already been built.
+  Scores and judges (grounding + rubric) two maps of the same code and compares them — telling you
+  whether the method/tooling got better or worse. It builds nothing itself. Results go in a
+  git-ignored .coyodex-eval/. Use whenever the user wants to
   "eval the map", "check the method quality", "regression-test the coyodex map", or runs
   /coyodex-eval. Triggers on "coyodex-eval", "eval this map", "method-quality eval".
 ---
 
 # coyodex-eval
 
-A method-quality regression check on a codebase map: rebuild blind, judge, compare.
+A method-quality regression check on a codebase map: judge two maps of the same code, compare.
 
 **The repo is the source of truth — this skill is only a pointer into it, and is deliberately
 thin.** Anything written HERE is a copy baked into `~/.claude/skills/` at `make install-eval` time, and

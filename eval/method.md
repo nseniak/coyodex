@@ -2,177 +2,170 @@
 
 **For the coyodex DEVELOPER, not for users of coyodex.** It answers "did my change to the
 method or the tooling make the maps worse?", which is a question only someone changing
-coyodex asks. A user's map evolves incrementally alongside their code; a from-scratch rebuild
-is a first-run event for them, so the repeated rebuilding this depends on is a developer habit.
+coyodex asks. A user's map evolves incrementally alongside their code; the repeated rebuilding
+this depends on is a developer habit.
 
-Run this **inside a project that already has a coyodex map** (`.coyodex/project-map.json`). It rebuilds a
-FRESH map with the current coyodex method, judges it, and compares it to that baseline — answering one
-question: **did the method/tooling get better or worse?** All results go in `.coyodex-eval/`
-(git-ignored, regenerable). Nothing here overwrites the curated `.coyodex/` map.
+It compares **two maps of the same code** — the project's current `.coyodex/project-map.json`
+against one of its archived predecessors in `.coyodex/dev-rebuilds/NNNN/` — and reports whether the
+method got better or worse. All results go in `.coyodex-eval/` (git-ignored, regenerable). Nothing
+here writes `.coyodex/`.
 
-**Why the pin guard matters.** The comparison only means "the *method* changed" if the *code* is held
-fixed. So the fresh map must be built from the SAME source the baseline was. The baseline map records
-its commit; this method REFUSES unless you are checked out at that commit.
+**It never builds a map.** `/coyodex` is the builder; this scores what is already on disk. The loop:
 
-**Why the eval must not be able to cheat.** The eval is the validation instrument for every change to
-the method — so its own integrity holes are the worst bugs it can have. Three rules close them:
+```
+COYODEX_HOME/.venv/bin/coyodex-eval archive .   # move the current map to .coyodex/dev-rebuilds/NNNN/
+/coyodex                                        # rebuild from scratch with the current method
+/coyodex-eval                                   # compare the new map against that archive
+```
 
-1. **The builder is BLIND** (Step 2): the fresh build runs in an isolated environment that cannot see
-   the baseline map, any prior eval output, or the gate thresholds. A builder that can peek at the
-   baseline can (even unintentionally) steer toward its numbers.
-2. **The fresh map is FROZEN before anything reads it** (Step 2): its hash is written at build time and
-   every later scoring step verifies it. An edit after the build — however well-meant — invalidates
-   the run.
-3. **A validity failure is a FINDING, never a fixup** (Steps 2 and 5): if the frozen map fails
-   `validate` or `audit`, that IS the eval result ("the method produced an invalid map"). Report it;
-   never repair the map to make the run look better.
+Why the build is not part of the eval: `/coyodex` **is** the thing being measured, so a second build
+path here would be a copy that drifts from it; and driving a build from inside the eval required a
+blind isolated-worktree orchestration whose background fan-out silently stalled unattended runs.
+The archive already holds every previous map, so there is nothing left for the eval to build.
+
+## What this takes on trust
+The eval scores maps. It cannot see how they were made, and two preconditions are yours to hold:
+
+- **The rebuild must not read `.coyodex/dev-rebuilds/`.** The archived map is the answer key. A
+  rebuild in a fresh session is blind in practice — `archive` moves the map out of the working tree,
+  `dev-rebuilds/` is git-ignored, and no build path reads it — but nothing stops an agent that goes
+  looking. When a build must be **provably** blind (a phase-boundary validation), build it with
+  `COYODEX_HOME/eval/blind-build.md` and pass its map to Step 1 as an explicit path.
+- **Both maps must describe the same code.** That one the eval does enforce — Step 1.
+
+## Rules that keep a run honest
+1. **Both maps are READ-ONLY.** They are hashed before anything scores them and the hash is verified
+   at the comparison. Never edit a map to improve a number; a map edited mid-run voids the run.
+2. **A validity failure is a FINDING, never a fixup.** If a map fails `validate` or `audit`, that IS
+   a result — "the method produced an invalid map". Report it; never repair the map, and never
+   rebuild to get a cleaner one.
+3. **Same code both sides** (Step 1) and **same judge model both sides** (Step 4). A comparison where
+   either differs is not a method comparison.
 
 ## Paths — keep them straight
-- **`COYODEX_HOME`** (from the skill) — the coyodex clone: method docs, config, and the CLI
-  (`COYODEX_HOME/.venv/bin/coyodex`). Config: `COYODEX_HOME/eval/thresholds.json` and
-  `COYODEX_HOME/eval/rubric.md`.
-- **Your cwd** — the project being evaluated. Baseline map: `.coyodex/project-map.json`. Eval data:
-  `.coyodex-eval/`.
+- **`COYODEX_HOME`** (from the skill) — the coyodex clone: method docs, config, and the CLIs
+  (`COYODEX_HOME/.venv/bin/coyodex`, `COYODEX_HOME/.venv/bin/coyodex-eval`). Config:
+  `COYODEX_HOME/eval/thresholds.json` and `COYODEX_HOME/eval/rubric.md`.
+- **Your cwd** — the project being evaluated. Current map: `.coyodex/project-map.json`. Archived
+  maps: `.coyodex/dev-rebuilds/NNNN/project-map.json`. Eval data: `.coyodex-eval/`.
 
-## Step 1 — Guard: baseline + pin (refuse if not aligned)
-1. Require `.coyodex/project-map.json` — markdown maps are not supported. If missing → tell the
-   user to run `/coyodex` first to build a baseline, then stop.
-2. Read the pin from the model's `commit` / `committed` fields — the bare short sha.
-3. `git rev-parse --short HEAD`. Also check the tree is clean, ignoring coyodex's own dirs:
-   `git status --porcelain -- . ':(exclude).coyodex' ':(exclude).coyodex-eval'`.
-   **Housekeeping exception:** if the ONLY dirty path is `.gitignore`, inspect `git diff -- .gitignore`;
-   when every added/removed line does nothing but add coyodex paths (`.coyodex-eval/`, `.coyodex/`
-   entries — the tool's own step-5 housekeeping below), treat the tree as clean. Any other `.gitignore`
-   change still counts as dirty.
-4. Alignment. `HEAD` equal to the pin is aligned — and so is `HEAD` sitting AHEAD of the pin by
-   **map-only commits**: once `.coyodex/` is tracked, committing the map moves HEAD past the commit
-   the map describes, so "HEAD == pin" literally never holds again (the normal state, not an error).
-   The real invariant is ZERO CODE DELTA between the pin and HEAD:
+## Step 1 — Pick the two maps, then guard
+**Candidate** = the current map, **baseline** = the archived one. That direction matters: the gates
+are relative to the baseline, so "the new map lost something the old one had" is what trips
+REGRESSED.
+
+1. **Candidate.** `.coyodex/project-map.json`. Missing → tell the user to run `/coyodex` first, then
+   stop. Markdown maps are not supported.
+2. **Baseline.** By default the newest archive — the highest-numbered directory:
    ```
-   git diff <pin>..HEAD -- . ':(exclude).coyodex' ':(exclude).gitignore'
+   ls -d .coyodex/dev-rebuilds/*/ | sort | tail -1
    ```
-   Empty output → aligned. Non-empty output (any code changed since the pin), **or** a dirty tree →
-   **REFUSE** and stop:
-   > eval needs the source at the baseline's commit so a quality change means the *method* changed, not
-   > the code. The baseline map is pinned at `<pin>` and this checkout carries CODE changes on top of
-   > it. Check out a state with zero code delta vs the pin, in a clean tree, then re-run
-   > `/coyodex-eval`.
+   The numbers are zero-padded and monotonic, so a lexical sort is a recency sort. The user may name
+   another (`0002`, "the first one"). No `dev-rebuilds/` at all → there is nothing to compare
+   against: show the user the loop at the top of this doc and stop.
+   **Either side may be overridden with an explicit map path** — that is how a map built by
+   `blind-build.md`, or any two archives, get compared.
+3. **Distinctness.** `coyodex-eval hash` both. Identical hashes → the same map twice; say so and stop.
+4. **Same-code guard.** Read the bare short sha from each map's `commit` / `committed` header field.
+   All three must hold:
+   - the two maps record the **same commit** `P`;
+   - the tree is **clean**, ignoring coyodex's own dirs:
+     `git status --porcelain -- . ':(exclude).coyodex' ':(exclude).coyodex-eval'`.
+     **Housekeeping exception:** if the ONLY dirty path is `.gitignore`, inspect
+     `git diff -- .gitignore`; when every added/removed line does nothing but add coyodex paths
+     (`.coyodex-eval/`, `.coyodex/` entries — step 5 below), treat the tree as clean. Any other
+     `.gitignore` change still counts as dirty;
+   - **zero code delta between `P` and `HEAD`** — once `.coyodex/` is tracked, committing a map moves
+     HEAD past the commit that map describes, so "HEAD == P" literally never holds again (the normal
+     state, not an error). The real invariant is:
+     ```
+     git diff <P>..HEAD -- . ':(exclude).coyodex' ':(exclude).gitignore'
+     ```
+     empty.
+
+   **Why all three.** Both maps are scored against the **working tree**: `validate --check-sources`
+   resolves anchors there, coverage reads it, and the grounding skeptics read it. If the checkout is
+   not the code both maps describe, the older map's anchors miss, coverage flags spike, and skeptics
+   refute claims that were true when the map was written. The numbers then move because the CODE
+   moved — the one thing a method eval must never confuse with a method change.
+
+   Any of the three failing → **REFUSE** and stop:
+   > eval compares two maps of the SAME code, so a quality change means the *method* changed, not the
+   > code. `<what failed — the two maps are pinned at different commits / the tree is dirty / HEAD
+   > carries code changes on top of the pin>`. Get to a clean tree with zero code delta vs the maps'
+   > commit, then re-run `/coyodex-eval`.
+
+   **Override.** If the user insists on running anyway ("run it anyway", "I know the code differs"),
+   run it — and stamp **every** output. The report leads with:
+   > INFORMATIONAL — the two maps describe different code (`<P_baseline>` vs `<P_candidate>`, N files
+   > differ). Counts, coverage and grounding mix code change with method change; this is not a method
+   > verdict.
+
+   An overridden run is never reported as a clean PASS or REGRESSED.
 5. Make sure `.coyodex-eval/` is git-ignored in this project (add it to `.gitignore` if absent).
 
-## Step 2 — Build the FRESH map BLIND, then freeze it
-The build happens FIRST — before the baseline is scored or even read — so no baseline numbers exist
-anywhere in context while the fresh map is being written.
+## Step 2 — Freeze both maps, then check them
+No build happens here, but the maps still get frozen: everything downstream must be scoring the exact
+bytes that were picked in Step 1.
 
-### The blinded-builder recipe (reusable — every phase-boundary validation uses exactly this)
-This is the canonical **isolated environment** the master plan's validation loop refers to
-(`internal/docs/plan/00-MASTER-PLAN.md`, "per-phase validation recipe", step 1). Reuse it verbatim
-whenever a fresh map must be built without the builder seeing prior maps or eval state.
+1. Hash each map and keep the digest for the rest of the run:
+   ```
+   COYODEX_HOME/.venv/bin/coyodex-eval hash <map>
+   ```
+   Store the candidate's under `.coyodex-eval/runs/<YYYY-MM-DD_HHMM>/map-hash`. From here both maps
+   are **read-only**; the Step-5 `coyodex-eval run` re-verifies the candidate via
+   `--expect-map-hash`, and a mismatch voids the run.
+2. Run the checks on **each** map. An archived map sits three levels below the repo root, so
+   `validate` needs `--repo .` to resolve its repo-root-relative anchors — without it every anchor
+   "fails" as noise (~300 spurious warnings on a real map) and a genuinely broken one is invisible.
+   Pass `--repo .` on both sides so the two are measured identically:
+   ```
+   COYODEX_HOME/.venv/bin/coyodex validate --check-sources --repo . <map>
+   COYODEX_HOME/.venv/bin/coyodex audit <map>
+   COYODEX_HOME/.venv/bin/coyodex render <map> <run-dir>/<name>.md
+   ```
+   A `validate` problem or an `audit` contradiction is a **reported finding** that flows into the
+   final report — see rule 2. (The interactive diagram is served live from the model by
+   `coyodex serve`; there is no `.html` file to render. The run archives `project-map.view.json` —
+   the served viewer's data snapshot.)
 
-1. **Create an isolated checkout at the pin** (a scratch dir outside the project, e.g. under `$TMPDIR`):
-   ```
-   git -C <project> worktree add <scratch>/coyodex-eval-build <pin>
-   ```
-   (A `git clone <project> <scratch>/... && git checkout <pin>` works the same when worktrees are
-   inconvenient.)
-2. **Blind it** — remove everything the builder must not see:
-   ```
-   rm -rf <scratch>/coyodex-eval-build/.coyodex <scratch>/coyodex-eval-build/.coyodex-eval
-   ```
-   Note the map lives at HEAD, not at the pin: when the pin PREDATES the map commit (the normal
-   state — the map is committed on top of the code it describes), the worktree at the pin contains
-   no `.coyodex/` at all and blinding holds by construction; the `rm -rf` stays as defense-in-depth
-   for the older layout where the map commit IS the pin. `.coyodex-eval/` is git-ignored and
-   normally absent from a fresh worktree; remove it defensively anyway. **Dogfooding case:** if the evaluated project is the coyodex clone itself, the
-   worktree also contains committed copies of the eval bundle (its own `eval/thresholds.json`,
-   `eval/rubric.md`) — remove those too (`rm -rf <scratch>/coyodex-eval-build/eval`); the never-read
-   rule below is path-independent, but the blinding should be filesystem-deep, not instruction-deep.
-3. **Run the build in a FRESH-context sub-agent** (never in the orchestrating context, which has read
-   eval state) whose working directory is the isolated checkout, instructed to:
-   - follow the FULL coyodex build method — read `COYODEX_HOME/method/dispatch.md` then
-     `COYODEX_HOME/method.md` (+ `method/model.md`, `method/domain-cards.md`) — agents return
-     structured rows, `coyodex assemble` writes the model to its normal path
-     `.coyodex/project-map.json` (+ generated views) **inside the isolated checkout**;
-   - run the usual invariant there (`validate --check-sources`, `audit`, `render` via
-     `COYODEX_HOME/.venv/bin/coyodex`); export `COYODEX_NO_SERVE_REGISTER=1` first so this throwaway
-     build in a temporary checkout is NOT registered with `coyodex serve`;
-   - **never read**: any path under the original project checkout; any coyodex eval bundle under ANY
-     root — in particular any file named `thresholds.json` or `rubric.md` belonging to one (the
-     `COYODEX_HOME/eval/` originals AND any committed copy inside the worktree); any `.coyodex/` or
-     `.coyodex-eval/` directory anywhere. The builder sees ONLY the code at the pin plus the
-     build-method docs;
-   - **run every fan-out synchronously** (wait for each batch of harvest / trace / skeptic
-     sub-agents within its own turn): a builder that spawns BACKGROUND children stops at each
-     barrier, which silently stalls an unattended run — the first boundary validation needed three
-     manual resumes for exactly this. If background fan-out is unavoidable, the orchestrator must
-     watch the build agent for stops and nudge it to continue (a stalled builder looks identical to
-     a long-running one from outside).
-4. **Copy the result out and clean up:**
-   ```
-   mkdir -p .coyodex-eval/runs/<YYYY-MM-DD_HHMM>
-   cp <scratch>/coyodex-eval-build/.coyodex/project-map.json .coyodex-eval/runs/<ts>/project-map.json
-   git -C <project> worktree remove --force <scratch>/coyodex-eval-build
-   ```
+## Step 3 — Score and judge each map, cached by map hash
+The deterministic profile is cheap; the judge scores are expensive. Both are cached per map, keyed by
+the map's own hash, so the **same** mechanism serves both sides — and the map you score as the
+candidate today is already scored when it becomes the baseline of the next round.
 
-### Freeze the artifact
-1. Hash the fresh map the moment it lands in the run dir:
-   ```
-   COYODEX_HOME/.venv/bin/coyodex-eval hash .coyodex-eval/runs/<ts>/project-map.json \
-     > .coyodex-eval/runs/<ts>/map-hash
-   ```
-2. From this point the fresh map is **read-only**. The tool enforces the freeze at the Step-5
-   `coyodex-eval run` via `--expect-map-hash "$(cat .coyodex-eval/runs/<ts>/map-hash)"` — on a
-   mismatch it refuses and the run is void; rebuild (Step 2 from the top), never re-hash an edited
-   file. Before judging (Step 4), re-check the hash yourself
-   (`coyodex-eval hash <map> ` vs the stored `map-hash`) and abort the run if it moved — `claims` and
-   `judge` have no built-in guard, and judging an edited map wastes the whole fan-out.
-3. Run the checks on the frozen map. The run-dir map sits THREE levels below the repo root, so
-   `validate` needs `--repo .` to resolve its repo-root-relative anchors — without it the anchors
-   resolve against the run dir, every one "fails" as noise (~300 spurious warnings on a real map),
-   and a genuinely broken anchor is invisible:
-   ```
-   COYODEX_HOME/.venv/bin/coyodex validate --check-sources --repo . .coyodex-eval/runs/<ts>/project-map.json
-   COYODEX_HOME/.venv/bin/coyodex audit .coyodex-eval/runs/<ts>/project-map.json
-   COYODEX_HOME/.venv/bin/coyodex render .coyodex-eval/runs/<ts>/project-map.json .coyodex-eval/runs/<ts>/project-map.md
-   ```
-   (The interactive diagram is served live from the model by `coyodex serve`; there is no `.html`
-   file to render. The run archives `project-map.view.json` — the served viewer's data snapshot.)
-   A `validate` problem or `audit` contradiction here is a **reported finding** — "the method produced
-   an invalid map" — that flows into the profile and the final report. Do NOT fix the map, do not
-   re-run the builder to get a cleaner one, do not soften the finding. (The build sub-agent fixing its
-   OWN map before it hands it over is part of the method being measured; the orchestrator touching the
-   map after freeze is tampering.)
+Cache layout, one directory per map:
+```
+.coyodex-eval/cache/<first 12 chars of the map hash>/
+    map-hash · profile.json · judge.json · judge-verdicts.json
+```
 
-## Step 3 — Baseline cache (score + judge the CURRENT `.coyodex/` map, once per version)
-The baseline is `.coyodex/project-map.json`; its deterministic profile is cheap but its judge scores are
-expensive, so cache both, keyed by the map's hash. Done AFTER the blind build so its numbers can't
-leak into the build.
-1. `COYODEX_HOME/.venv/bin/coyodex-eval hash .coyodex/project-map.json`; compare to
-   `.coyodex-eval/baseline/map-hash`.
-2. **Protocol guard (even when the hash matches):** the cached judge scores are reusable only if
-   they were produced under the CURRENT judge protocol. Run
+For each of the two maps, in this order:
+1. If the cache directory exists, **guard the cached judge** — reusable only if produced under the
+   CURRENT judge protocol:
    ```
    COYODEX_HOME/.venv/bin/coyodex-eval protocol \
      --thresholds COYODEX_HOME/eval/thresholds.json --rubric COYODEX_HOME/eval/rubric.md \
-     --against .coyodex-eval/baseline/judge.json
+     --against .coyodex-eval/cache/<sha12>/judge.json
    ```
-   Exit 1 (protocol changed, or the cached report records no fingerprint) → delete
-   `.coyodex-eval/baseline/judge.json`; the baseline must be re-judged below. A protocol change
-   must invalidate the cache, never silently reuse stale scores.
-3. If the map hash is missing/different (first run, or the baseline map changed), or the judge
-   cache was invalidated:
-   - `COYODEX_HOME/.venv/bin/coyodex-eval score .coyodex/project-map.json --repo . --json` → save as
-     `.coyodex-eval/baseline/profile.json` (skip when only the judge cache was invalidated).
-   - Judge `.coyodex/project-map.json` with the **Step 4** procedure → `.coyodex-eval/baseline/judge.json`.
-   - Write the hash to `.coyodex-eval/baseline/map-hash`.
-4. Otherwise reuse the cached `.coyodex-eval/baseline/{profile,judge}.json`.
+   Exit 1 (the protocol changed, or the cached report records no fingerprint) → delete that
+   `judge.json`; the map must be re-judged. A protocol change must invalidate the cache, never
+   silently reuse stale scores.
+2. Missing `profile.json` → `COYODEX_HOME/.venv/bin/coyodex-eval score <map> --repo . --json` and
+   save it there.
+3. Missing `judge.json` → judge the map with **Step 4** and save it there.
+4. Write the digest to `map-hash`.
 
-## Step 4 — Judge a map (used for both the baseline in Step 3 and the fresh map)
+A cache hit on both maps means the run costs nothing but the comparison — the normal state when you
+re-run an eval without rebuilding.
+
+## Step 4 — Judge a map (used for both maps in Step 3)
 This is the real, LLM-backed judge; it runs in sub-agents (the tool never calls a model).
 
 **The pinned judge model.** All grounding skeptics and rubric judges run on the model named in
 `COYODEX_HOME/eval/thresholds.json` → `judge.grounding_model`. A comparison is only meaningful when
-both sides were judged by the SAME model; if that pin ever changes, delete
-`.coyodex-eval/baseline/judge.json` so the baseline is re-judged on the new model.
+both maps were judged by the SAME model; if that pin ever changes, the Step-3 protocol guard
+invalidates the cached scores and both maps are re-judged on the new model.
 
 For a map M:
 1. **The claims sample.** `COYODEX_HOME/.venv/bin/coyodex-eval claims M --json --top 40` → the top-K
@@ -226,34 +219,44 @@ For a map M:
    fingerprint together with n_skeptics, the cap, the rubric hash, and the grounding-prompt regime
    version — the Step-3 cache guard compares it (so a prompt-rule change, like the unverifiable
    channel, automatically invalidates pre-change cached scores).
-   Keep the raw JSON as provenance (`judge-verdicts.json` in the run dir). The report states the
-   denominator explicitly: pass-rate over the top-K sample minus failures, with the full worklist size
-   alongside.
+   Keep the raw JSON as provenance — `judge-verdicts.json` beside the map's cached scores, and copied
+   into the run dir for the candidate. The report states the denominator explicitly: pass-rate over
+   the top-K sample minus failures, with the full worklist size alongside.
 
 ## Step 5 — Compare + store + report
-1. Compare the fresh run against the cached baseline and archive it — under the freeze guard:
+1. Compare the candidate against the baseline's cached scores and archive the run — under the freeze
+   guard:
    ```
    COYODEX_HOME/.venv/bin/coyodex-eval run \
-     --project <repo-name> --map .coyodex-eval/runs/<ts>/project-map.json --repo . \
+     --project "<repo-name> — current vs dev-rebuilds/<NNNN>" --project-key <repo-name> \
+     --map .coyodex/project-map.json --repo . \
      --expect-map-hash "$(cat .coyodex-eval/runs/<ts>/map-hash)" \
      --thresholds COYODEX_HOME/eval/thresholds.json \
-     --baseline-dir .coyodex-eval/baseline --judge <fresh judge.json> \
+     --baseline-dir .coyodex-eval/cache/<baseline sha12> \
+     --judge .coyodex-eval/cache/<candidate sha12>/judge.json \
      --out .coyodex-eval/runs/<ts>
    ```
-   A hash-mismatch refusal means the frozen map was modified — the run is void; restart from Step 2.
-   Copy the fresh raw verdicts into the run dir as `judge-verdicts.json`.
-2. Report to the user, **judge/quality deltas first** (grounding pass-rate with its denominator and
-   failure count, rubric scores), then the verdict (PASS / DRIFT / REGRESSED) with the gates/bands
-   that moved — for the component count, lead with the **granularity line** (both maps' distance to
-   the code-derived expectation E; only the candidate gates); mention the use-case-granularity
-   fields (max_flow_len / flows_over_band_pct / subflows) when they moved notably — then the raw
-   structural counts last,
-   and the path to the run's `delta.md` and `project-map.view.json`. On REGRESSED, name the gate that
-   tripped. Any post-freeze validate/audit
-   finding from Step 2 is part of this report — a finding about the method, not something to have
-   fixed.
+   `--project` is the human label in the report (it names both sides); `--project-key` is what the
+   thresholds file is looked up by, so per-project gates keep working. A hash-mismatch refusal means
+   the candidate map was modified during the run — the run is void; restart from Step 1.
+   Copy the candidate's raw verdicts into the run dir as `judge-verdicts.json`.
+2. Report to the user. Lead with **what was compared** — both map paths, both commits, and the
+   INFORMATIONAL banner if the Step-1 guard was overridden. Then **judge/quality deltas first**
+   (grounding pass-rate with its denominator and failure count, rubric scores), then the verdict
+   (PASS / DRIFT / REGRESSED) with the gates/bands that moved — for the component count, lead with
+   the **granularity line** (both maps' distance to the code-derived expectation E; only the
+   candidate gates); mention the use-case-granularity fields (max_flow_len / flows_over_band_pct /
+   subflows) when they moved notably — then the raw structural counts last, and the path to the run's
+   `delta.md` and `project-map.view.json`. On REGRESSED, name the gate that tripped. Any
+   validate/audit finding from Step 2 is part of this report — a finding about the method, not
+   something to have fixed.
 
-## Accepting a better map
-The eval never touches `.coyodex/`. If a fresh map is genuinely better and you want it to become the
-baseline, accept it into `.coyodex/` through the normal coyodex flow (`/coyodex accept` / replace the
-map + re-pin); the next `/coyodex-eval` will re-score the new baseline (Step 3 hash mismatch).
+## After the run
+The eval never writes `.coyodex/`, so there is nothing to accept: the map it judged as the candidate
+IS the project's current map already.
+
+- **Better** — keep going. Nothing to do.
+- **Worse** — the previous map is intact in `.coyodex/dev-rebuilds/<NNNN>/`; restore it by hand if
+  you want it back, and fix the method before the next rebuild.
+- **Next round** — `coyodex-eval archive .`, `/coyodex`, `/coyodex-eval` again. The map you just
+  judged becomes the next baseline, with its scores already in the cache.

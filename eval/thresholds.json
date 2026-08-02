@@ -28,7 +28,7 @@
     }
   },
   "judge": {
-    "note": "Read by the orchestration (eval/method.md Step 4), not by the CLI. `grounding_model` is the PINNED sub-agent model for grounding skeptics and rubric judges \u2014 a comparison is only meaningful when both sides were judged by the same model; changing it invalidates cached baseline judge scores (delete .coyodex-eval/baseline/judge.json to re-judge). `n_skeptics` and `grounding_cap` mirror the tool defaults in coyodex_eval/judge.py (DEFAULT_N_SKEPTICS / DEFAULT_GROUNDING_CAP) \u2014 change them together.",
+    "note": "Read by the orchestration (eval/method.md Step 4), not by the CLI. `grounding_model` is the PINNED sub-agent model for grounding skeptics and rubric judges \u2014 a comparison is only meaningful when both sides were judged by the same model; changing it invalidates every cached judge score (the Step-3 `coyodex-eval protocol` guard catches it and both maps are re-judged). `n_skeptics` and `grounding_cap` mirror the tool defaults in coyodex_eval/judge.py (DEFAULT_N_SKEPTICS / DEFAULT_GROUNDING_CAP) \u2014 change them together.",
     "grounding_model": "sonnet",
     "n_skeptics": 3,
     "grounding_cap": 40

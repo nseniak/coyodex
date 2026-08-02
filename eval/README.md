@@ -3,9 +3,18 @@
 **For the coyodex DEVELOPER, not for users of coyodex.** It exists to answer "did my change to the method or the tooling make the maps worse?", which is a question only someone changing coyodex asks. A user's map evolves incrementally alongside their code; a from-scratch rebuild is a first-run event for them, so the repeated rebuilding this command depends on is a developer habit.
 
 This package answers one question: **did a change to the coyodex method or tooling make the maps it
-produces better or worse?** You keep the project's committed `.coyodex/project-map.md` as the
-**baseline**; the eval rebuilds a **fresh** map with the current method and compares the two. If quality
-dropped, it tells you.
+produces better or worse?** It compares **two maps of the same code**: the project's current
+`.coyodex/project-map.json` against an archived predecessor in `.coyodex/dev-rebuilds/NNNN/`. If
+quality dropped, it tells you.
+
+**It builds nothing.** `/coyodex` is the builder — and the thing being measured, so a second build
+path here would be a copy that drifts from it. The loop is:
+
+```sh
+coyodex-eval archive .    # move the current map to .coyodex/dev-rebuilds/NNNN/
+/coyodex                  # rebuild from scratch with the current method
+/coyodex-eval             # compare the new map against that archive
+```
 
 Maps are LLM-written, so two builds of the same repo never match byte-for-byte (IDs, wording, ordering
 drift). So the harness never diffs map *text* — it compares measurable **quality signals**.
@@ -13,12 +22,17 @@ drift). So the harness never diffs map *text* — it compares measurable **quali
 ## The two ways in
 
 - **`/coyodex-eval` (the skill)** — the normal way. Run it inside a project and it drives the whole
-  thing: guard → build a fresh map BLIND (isolated worktree, no baseline/thresholds visible) + freeze
-  its hash → judge it → compare to the baseline → store the run. It's the agent-driven orchestration
-  (it builds a map and spawns judge sub-agents, which the tool itself can't do). Install it with
-  `make install-eval`; the recipe it follows is `eval/method.md`.
+  thing: pick the two maps → guard (same code both sides) → freeze their hashes → score + judge each,
+  cached by map hash → compare → store the run. It's the agent-driven orchestration (it spawns the
+  judge sub-agents, which the tool itself can't do). Install it with `make install-eval`; the recipe
+  it follows is `eval/method.md`.
 - **The `coyodex-eval` CLI commands below** — the deterministic building blocks the skill calls. You can
   also run them by hand.
+
+`eval/blind-build.md` is the separate recipe for producing a map whose builder **provably** never saw
+the previous one (an isolated worktree at the pin). The everyday loop above is blind in practice —
+`archive` moves the map out of the working tree; nothing reads `dev-rebuilds/` — but a phase-boundary
+validation wants blindness by construction. Its output is handed to the eval as an explicit map path.
 
 ## The signals it compares
 
@@ -37,31 +51,39 @@ in the orchestration layer (sub-agents) and is handed in as a `judge.json` (see 
   method doc (`method.md`), the config (`thresholds.json`, `rubric.md`), and the code — a standalone
   `coyodex_eval` package under `tools/coyodex_eval/` exposing the `coyodex-eval` command. It depends on
   coyodex's core (schema/validate/audit) but the core has no reference back to it.
-- **Data** (`.coyodex-eval/` inside each evaluated project, **git-ignored**): the fresh maps, run
-  archives, judge results, and a cached scoring of the baseline. The baseline map itself is the
-  project's own committed `.coyodex/project-map.md`.
+- **Data** (`.coyodex-eval/` inside each evaluated project, **git-ignored**): run archives, and a
+  scoring cache keyed by map hash. The maps themselves are the project's own — the current
+  `.coyodex/project-map.json` and its archives under `.coyodex/dev-rebuilds/`.
 
 ```
 eval/                         # the bundle (in the coyodex repo)
-  README.md  SKILL.md  method.md  thresholds.json  rubric.md
+  README.md  SKILL.md  method.md  blind-build.md  thresholds.json  rubric.md
   tools/coyodex_eval/         profile.py · compare.py · judge.py · run.py · cli.py
   tests/                      test_profile.py · test_compare.py · test_judge.py · test_run.py
 ```
 
 ```
 <project>/
-  .coyodex/project-map.md         # the baseline (curated, committed, pinned to a commit)
-  .coyodex-eval/                  # git-ignored, regenerable
-    baseline/  map-hash · profile.json · judge.json   # memoized scoring of .coyodex/, per version
-    runs/<timestamp>/  project-map.md · map-hash · project-map.view.json · profile.json
-                       judge.json · judge-verdicts.json · delta.md
+  .coyodex/project-map.json           # the candidate — the current map
+  .coyodex/dev-rebuilds/NNNN/         # the baselines — previous maps, moved here by `archive`
+  .coyodex-eval/                      # git-ignored, regenerable
+    cache/<map sha12>/  map-hash · profile.json · judge.json · judge-verdicts.json
+    runs/<timestamp>/   project-map.json · project-map.md · map-hash · project-map.view.json
+                        profile.json · judge.json · judge-verdicts.json · delta.md
 ```
 
-## The pin guard (why the eval is trustworthy)
+The cache is keyed by the map's own hash, so both sides of a comparison use one mechanism — and the
+map scored as the candidate today is already scored when it becomes tomorrow's baseline.
 
-The comparison only means "the *method* changed" if the *code* is held fixed. The baseline map records
-the commit it was built at; `/coyodex-eval` **refuses** unless your working tree is at that commit. So
-before running it: `git checkout <pin>` (the pin is in the map header), then `/coyodex-eval`.
+## The same-code guard (why the eval is trustworthy)
+
+The comparison only means "the *method* changed" if the *code* is held fixed. Both maps are scored
+against the **working tree** — `validate --check-sources` resolves anchors there, coverage reads it,
+and the grounding skeptics read it. So `/coyodex-eval` **refuses** unless all three hold: the two maps
+record the same commit, the tree is clean, and there is zero code delta between that commit and HEAD.
+
+You can override it ("run it anyway"), and then every output is stamped **INFORMATIONAL** and names
+both commits — an overridden run is never reported as a clean PASS or REGRESSED.
 
 ## The commands
 
@@ -74,7 +96,8 @@ Run them with the CLI from the repo venv (`.venv/bin/coyodex-eval …`, or `pyth
 | `coyodex-eval hash <file>` | print a map artifact's sha256 freeze hash — written to `runs/<ts>/map-hash` at build time, enforced by `run --expect-map-hash`. |
 | `coyodex-eval claims <map.md> [--top <K>] [--json]` | print the audit's risk-ranked L2 worklist — the claims the judge grounds. `--top K` keeps the grounding sample; `--json` is the judge orchestration's input. |
 | `coyodex-eval judge --map <map.md> --verdicts <raw.json> --out <judge.json> [--repo <src>] [--rubric <file>]` | aggregate raw judge verdicts (from the sub-agents) into a `judge.json`, via the tested math. |
-| `coyodex-eval bless <run-dir> <baseline-dir>` | copy a run's artifacts into a baseline dir (used to seed a cache; the real baseline is `.coyodex/`). |
+| `coyodex-eval bless <run-dir> <baseline-dir>` | copy a run's artifacts into a baseline dir (used to seed a cache entry by hand; the normal baseline is an archive under `.coyodex/dev-rebuilds/`). |
+| `coyodex-eval archive <repo-root> [--dry-run]` | move the current map to `.coyodex/dev-rebuilds/NNNN/` so the next `/coyodex` builds from scratch — and so the eval has a baseline to compare against. Moves, never deletes. |
 | `coyodex-eval compare <baseline.json> <candidate.json> [--thresholds] [--baseline-judge] [--candidate-judge]` | low-level: compare two profiles directly. `eval run` uses this under the hood. |
 
 **Verdict / exit code** (from `coyodex-eval run` / `coyodex-eval compare`): `0` = **PASS** (or **BASELINE**, first run,
@@ -86,14 +109,15 @@ perfect"); tune them in `eval/thresholds.json`.
 
 ```sh
 cd <project>
-git checkout <pin>        # the commit in .coyodex/project-map.md's header — /coyodex-eval refuses otherwise
-/coyodex-eval             # builds a fresh map, judges it, compares to .coyodex/, writes .coyodex-eval/runs/<ts>/
+.venv/bin/coyodex-eval archive .   # the current map -> .coyodex/dev-rebuilds/NNNN/
+/coyodex                           # rebuild from scratch with the current method
+/coyodex-eval                      # compare, writes .coyodex-eval/runs/<ts>/
 ```
 
-It prints the verdict and points you at the run's `delta.md` and `project-map.view.json`. **PASS** → nothing
-got worse. **DRIFT** → a count/score moved a lot, look at it. **REGRESSED** → a real regression. If a
-fresh map is genuinely better, accept it into `.coyodex/` the normal coyodex way (`/coyodex accept`);
-the next eval re-scores the new baseline.
+It prints the verdict and points you at the run's `delta.md` and `project-map.view.json`. **PASS** →
+nothing got worse. **DRIFT** → a count/score moved a lot, look at it. **REGRESSED** → a real
+regression. There is nothing to accept: the map it judged is already the project's current map. If the
+new map is worse, the previous one is intact in `.coyodex/dev-rebuilds/NNNN/`.
 
 ## The judge (the semantic signal)
 
