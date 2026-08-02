@@ -186,6 +186,36 @@ def load_map_or_fragment(path: Path) -> tuple[ProjectModel, frozenset[str] | Non
     return load_fragment(text, path.name), frozenset(data)
 
 
+def expand_directories(paths: list[Path], notes: list[str]) -> list[Path]:
+    """Replace a bare DIRECTORY argument with its sorted `*.json` children.
+
+    A directory is what an operator types first, and both commands used to die on the raw
+    `[Errno 21] Is a directory` the reader raises. `--help` shows a glob but never says a bare
+    directory is refused, so the failure reads as "this command is broken" rather than "add
+    `/*.json`" — a live build lost a turn to it on `reconcile`, and `assemble` (printed far more
+    often in method.md) had the same edge.
+
+    A path ENDING IN `.json` is never expanded, even when it is a directory: `inner.json/` swept up
+    by the caller's own glob must keep raising, or the glob form and the bare-directory form would
+    silently disagree about the file set while both exit 0.
+
+    `sorted()` is CODEPOINT order and the shell's glob is locale collation, so the two differ on any
+    name leading with an uppercase letter or `_`. Argument order is load-bearing — dedup survivors
+    are first-occurrence-in-argument-order — so the expansion is REPORTED rather than claimed to
+    match the shell."""
+    out: list[Path] = []
+    for p in paths:
+        if p.is_dir() and p.suffix != ".json":
+            children = sorted(p.glob("*.json"))
+            out.extend(children)
+            notes.append(f"note: {p} expanded to {len(children)} fragment(s), in codepoint order — "
+                         f"the shell's glob may order them differently under a non-C locale, and "
+                         f"argument order decides which duplicate id survives")
+        else:
+            out.append(p)
+    return out
+
+
 def load_fragment_paths(paths: list[Path]) -> tuple[list[tuple[str, ProjectModel]],
                                                     list[str], list[str]]:
     """Read fragment FILES into `merge_fragments` parts. Returns `(parts, notes, errors)`.
@@ -202,7 +232,7 @@ def load_fragment_paths(paths: list[Path]) -> tuple[list[tuple[str, ProjectModel
     parts: list[tuple[str, ProjectModel]] = []
     notes: list[str] = []
     errors: list[str] = []
-    for p in paths:
+    for p in expand_directories(paths, notes):
         if p.name.endswith(".draft.json"):
             # The harvest contract tells agents to write `<path>.draft.json` while a fragment is
             # half-written, promising "the draft suffix keeps it out of the assemble glob". It did

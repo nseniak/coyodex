@@ -196,11 +196,19 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
     unit_names = [u.unit for u in m.deployment if u.unit]
     claimed = {name for c in m.components for name in (c.runs_in or [])}
     claimed |= {name for ep in m.entry_points for name in (ep.runs_in or [])}
-    # Which components each unit hosts, as a set — two units hosting the same set are one placement
-    # decision wearing two names, and only the distinct sets are evidence the view says anything.
+    # What each unit hosts, as a set — two units hosting the same set are one placement decision
+    # wearing two names, and only the distinct sets are evidence the view says anything.
+    #
+    # Components AND entry points, because `deployment_units_linked` above counts both and the two
+    # numbers are read side by side. Counting only components made a map that places its frontend
+    # via entry-point `runs_in` score `linked > 0` with `distinct_sets == 0` — which passed the gate
+    # vacuously AND suppressed the note that explains the gap. Entry points are keyed by index;
+    # they carry no id, and only set IDENTITY matters here.
     hosted: dict[str, frozenset[str]] = {}
     for u in unit_names:
-        members = frozenset(c.id for c in m.components if u in (c.runs_in or []))
+        members = frozenset(
+            [c.id for c in m.components if u in (c.runs_in or [])]
+            + [f"ep:{i}" for i, ep in enumerate(m.entry_points) if u in (ep.runs_in or [])])
         if members:
             hosted[u] = members
 

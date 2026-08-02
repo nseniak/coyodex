@@ -46,7 +46,7 @@ import sys
 from pathlib import Path
 
 from coyodex.anchors import strip_anchor
-from coyodex.assemble import load_fragment_paths, merge_fragments
+from coyodex.assemble import expand_directories, load_fragment_paths, merge_fragments
 from coyodex.model import Component, Dep, Entity, ProjectModel, load_model_path
 from coyodex.pathmatch import matches
 
@@ -192,12 +192,10 @@ def _args_after(argv: list[str], flag: str) -> list[str]:
 
 
 def count_fragment_files(frag_paths: list[str]) -> int:
-    """How many fragment FILES the arguments name, expanding a bare directory the way
-    `load_elements` does — so the reported count matches what was actually read."""
-    n = 0
-    for p in (Path(x) for x in frag_paths):
-        n += len(list(p.glob("*.json"))) if p.is_dir() and p.suffix != ".json" else 1
-    return n
+    """How many fragment FILES the arguments name, expanding a bare directory the way the shared
+    loader does — so the reported count matches what was actually read. Counting argv entries made
+    `--fragments <dir>` over 31 real fragments report "reading 1 fragment(s)"."""
+    return len(expand_directories([Path(p) for p in frag_paths], []))
 
 
 def load_elements(map_path: str | None, frag_paths: list[str],
@@ -220,42 +218,16 @@ def load_elements(map_path: str | None, frag_paths: list[str],
                         "rather than falling back to the map, which during a build is the previous "
                         "build's and whose ids mean something else.")
     if frag_paths:
-        # A bare DIRECTORY is what an operator types first, and it used to die with a raw
-        # "[Errno 21] Is a directory" from the fragment reader. The `--help` shows a glob but never
-        # says a directory is refused, so the failure reads as "this command is broken" rather than
-        # "add /*.json".
-        #
-        # Only a path that does NOT end in `.json` is expanded. A directory named `inner.json/`
-        # swept up by the caller's own glob must keep raising: `assemble` guards that case on
-        # purpose, and silently dropping it would make the two input forms disagree about the file
-        # set while both exit 0.
-        #
-        # `sorted()` is CODEPOINT order and the shell's glob is locale collation, so the two differ
-        # on any name leading with an uppercase letter or `_` (`Beta.json` sorts before `alpha.json`
-        # here, after it in zsh under en_US.UTF-8). Argument order is load-bearing — dedup survivors
-        # are first-occurrence-in-argument-order — so the expansion is REPORTED, letting a reader
-        # see the order that was actually used rather than trust a claim about matching the shell.
-        expanded: list[Path] = []
-        for p in (Path(x) for x in frag_paths):
-            expanded.extend(sorted(p.glob("*.json"))
-                            if p.is_dir() and p.suffix != ".json" else [p])
-        if not expanded:
-            raise RuleError(f"--fragments matched no readable fragment ({len(frag_paths)} path(s) "
-                            "given; a directory argument was expanded to its *.json children and "
-                            "held none)")
-        expansions = [(Path(x), n) for x in frag_paths
-                      if (p := Path(x)).is_dir() and p.suffix != ".json"
-                      and (n := len(sorted(p.glob('*.json'))))]
-        parts, notes, errors = load_fragment_paths(expanded)
-        for d, n in expansions:
-            notes.insert(0, f"--fragments {d} expanded to {n} file(s), in codepoint order — the "
-                            f"shell's glob may order them differently under a non-C locale, and "
-                            f"argument order decides which duplicate id survives")
+        # A bare DIRECTORY argument is expanded by `load_fragment_paths` — the loader BOTH commands
+        # share, so `assemble` and `reconcile` cannot drift on what an argument means. It was
+        # briefly duplicated here, which is exactly the shape that lets two readers of the same
+        # fragments disagree about the file set.
+        parts, notes, errors = load_fragment_paths([Path(p) for p in frag_paths])
         if errors:
             raise RuleError("cannot read the fragments:\n  " + "\n  ".join(errors))
         if not parts:
             raise RuleError(f"--fragments matched no readable fragment ({len(frag_paths)} path(s) "
-                            "given)")
+                            "given; a directory argument is expanded to its *.json children)")
         model, problems = merge_fragments(parts)
         if problems:
             raise RuleError("the fragments do not merge:\n  " + "\n  ".join(problems))

@@ -981,3 +981,16 @@ def test_distinct_hosted_sets_counts_genuinely_different_placements():
     p = build_profile(json.dumps(doc))
     assert p.deployment_units_linked == 4
     assert p.deployment_distinct_hosted_sets == 2, "the monolith set, and nginx's own"
+
+
+def test_distinct_hosted_sets_counts_entry_point_placement_too():
+    """`deployment_units_linked` counts a unit named by a component OR an entry point's `runs_in`,
+    and the two numbers are read side by side. Counting only components made a map that places its
+    frontend via entry points score `linked > 0` with `distinct_sets == 0` — which passed the gate
+    vacuously and suppressed the note explaining the gap."""
+    doc = json.loads(make_replicated_shapes_map())
+    doc["entry_points"] = [{"kind": "ui-route", "trigger": "/", "source": "c.tsx:9",
+                            "component": "C3", "runs_in": ["nginx"]}]
+    p = build_profile(json.dumps(doc))
+    assert p.deployment_units_linked == 4, "nginx is linked through the entry point"
+    assert p.deployment_distinct_hosted_sets == 2, "the monolith set, and nginx's entry point"

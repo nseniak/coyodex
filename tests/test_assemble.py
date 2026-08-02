@@ -14,7 +14,8 @@ import tempfile
 from pathlib import Path
 
 from coyodex import assemble
-from coyodex.assemble import _infer_ce_verb, ensure_fragments_ignored, load_fragment, merge_fragments
+from coyodex.assemble import (_infer_ce_verb, ensure_fragments_ignored, load_fragment,
+                              load_fragment_paths, merge_fragments)
 from coyodex.model import ModelError, load_model, to_canonical_json
 
 ASSEMBLE = [sys.executable, "-m", "coyodex.assemble"]
@@ -769,3 +770,36 @@ def test_the_keep_edges_count_reaches_the_assemble_digest():
     assert "keep_edges 51" in line, line
     # and zero-suppressed like every other op
     assert "keep_edges" not in _assemble_digest(ProjectModel(title="T", goal="g"), {}, {})
+
+
+def test_assemble_accepts_a_bare_fragment_directory():
+    """A directory is what an operator types first, and `assemble` — printed far more often in
+    method.md than `reconcile` — died on the reader's raw `[Errno 21] Is a directory`. The expansion
+    lives in the shared loader, so both commands agree on what an argument means."""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp) / "frags"
+        d.mkdir()
+        (d / "a.json").write_text(json.dumps({
+            "components": [{"id": "C1", "name": "A", "purpose": "p", "source": "a.py:1"}]}),
+            encoding="utf-8")
+        (d / "b.json").write_text(json.dumps({
+            "components": [{"id": "C2", "name": "B", "purpose": "p", "source": "b.py:1"}]}),
+            encoding="utf-8")
+        by_dir, notes, errors = load_fragment_paths([d])
+        by_glob, _n, _e = load_fragment_paths(sorted(d.glob("*.json")))
+        assert not errors, errors
+        assert [name for name, _ in by_dir] == [name for name, _ in by_glob] == ["a.json", "b.json"]
+        assert any("expanded to 2 fragment(s)" in n for n in notes), notes
+
+
+def test_a_directory_named_json_still_raises_from_assemble():
+    """`inner.json/` swept up by the caller's own glob must keep erroring: silently dropping it
+    would make the glob form and the bare-directory form disagree about the file set while both
+    exit 0."""
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp) / "frags"
+        d.mkdir()
+        (d / "a.json").write_text(json.dumps({"components": []}), encoding="utf-8")
+        (d / "inner.json").mkdir()
+        _parts, _notes, errors = load_fragment_paths(sorted(d.glob("*.json")))
+        assert any("Is a directory" in e for e in errors), errors
