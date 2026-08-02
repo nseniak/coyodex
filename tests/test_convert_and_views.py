@@ -461,3 +461,45 @@ if __name__ == "__main__":
                 failures += 1
                 print(f"FAIL {name}: {e}")
     raise SystemExit(1 if failures else 0)
+
+
+# ── the grounding section, which shipped with no test at all ─────────────────────────────────────
+
+def make_map_with_grounding(**g: object):
+    from coyodex.model import Grounding, ProjectModel
+    m = ProjectModel(title="T", goal="g")
+    m.grounding = Grounding(**g)  # type: ignore[arg-type]
+    return m
+
+
+def test_the_grounding_record_is_rendered():
+    """It travelled with the map as JSON and appeared in NO view, so the one number a reader needs
+    in order to judge every other number was invisible in the markdown."""
+    from coyodex.views import model_to_markdown
+    md = model_to_markdown(make_map_with_grounding(
+        claims_total=446, claims_challenged=446, claims_confirmed=428,
+        claims_refuted=7, claims_unverifiable=11, live_claims_digest="abc"))
+    assert "## Grounding" in md
+    assert "446 of 446 claim(s) challenged" in md and "428 confirmed" in md
+
+
+def test_a_map_without_grounding_renders_the_section_not_at_all():
+    """Byte-identity for every map that has no record — the property other optional sections keep."""
+    from coyodex.model import ProjectModel
+    from coyodex.views import model_to_markdown
+    assert "## Grounding" not in model_to_markdown(ProjectModel(title="T", goal="g"))
+
+
+def test_partial_coverage_is_called_out_in_the_view():
+    from coyodex.views import model_to_markdown
+    md = model_to_markdown(make_map_with_grounding(
+        claims_total=100, claims_challenged=40, claims_confirmed=40, live_claims_digest="abc"))
+    assert "Coverage is PARTIAL" in md and "60 claim(s) were never challenged" in md
+
+
+def test_a_record_with_no_digest_says_it_cannot_be_confirmed():
+    """The record can be right and unverifiable at once; a reader must be able to tell."""
+    from coyodex.views import model_to_markdown
+    md = model_to_markdown(make_map_with_grounding(
+        claims_total=10, claims_challenged=10, claims_confirmed=10))
+    assert "No `live_claims_digest`" in md

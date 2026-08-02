@@ -752,7 +752,9 @@ def main(argv: list[str] | None = None) -> int:
             f"assemble re-derives into the edge you just dropped)."
             if isinstance(unhealed, int) and unhealed else "")
         print(f"note: reconcile applied — set {{{set_summary}}}; "
-              f"drop_edges: {rec_stats.get('reconcile_edges_dropped', 0)} edge(s).{unhealed_tail}")
+              f"drop_edges: {rec_stats.get('reconcile_edges_dropped', 0)} edge(s); "
+              f"keep_edges: {rec_stats.get('duplicate_edges_resolved', 0)} duplicate(s) "
+              f"resolved.{unhealed_tail}")
     elif out_dir is not None and (out_dir / "reconcile.json").exists():
         # S8: a reconcile file is present but was NOT passed — an assemble without it silently reverts
         # every synthesis/trace assignment. Nudge, don't guess (the lead may have meant to omit it).
@@ -804,6 +806,10 @@ def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict
     sc = rec_stats.get("reconcile_set", {})
     if isinstance(sc, dict) and any(sc.values()):
         ops.append("reconcile set " + "/".join(f"{k}:{v}" for k, v in sc.items() if v))
+    if rec_stats.get("duplicate_edges_resolved"):
+        # `keep_edges` removed 51 edges on a real map and the digest said nothing — the same silent
+        # delta this directive was added to stop. It belongs beside drop_edges, not nowhere.
+        ops.append(f"reconcile keep_edges {rec_stats['duplicate_edges_resolved']}")
     if rec_stats.get("reconcile_edges_dropped"):
         ops.append(f"reconcile drop_edges {rec_stats['reconcile_edges_dropped']}")
     # Unhealed riding steps belong HERE, in the digest, not on the reconcile note further up: the

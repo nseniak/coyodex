@@ -30,6 +30,9 @@ from coyodex.audit_model import _claim_text, l2_worklist_model
 from coyodex.model import ProjectModel
 from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
 
+#: The listing's display text for an edge carrying no anchor. Never a value to RECORD.
+_NO_CALL_SITE = "(no call site)"
+
 _EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2` — excludes security claims
 
 #: The claim themes `apply-drift` has a writer for: an edge's `where` and a security row's `source`.
@@ -556,21 +559,42 @@ def dedup_edge(argv: list[str]) -> int:
             print(f"ERROR: {rec_path} is not valid JSON ({e})", file=sys.stderr)
             return 2
         existing = doc.get("keep_edges") or []
-        have = {(k.get("src"), k.get("verb"), k.get("dst")) for k in existing
-                if isinstance(k, dict)}
-        added = 0
+        by_triple = {(k.get("src"), k.get("verb"), k.get("dst")): k for k in existing
+                     if isinstance(k, dict)}
+        added = updated = 0
         for tok in keeps:
             parts = tok.split(":")
             s_, v_, d_, anchor = parts[0], parts[1], parts[2], ":".join(parts[3:])
-            if (s_, v_, d_) in have:
+            if anchor == _NO_CALL_SITE:
+                # The listing's DISPLAY placeholder for an edge with no anchor. `apply_reconcile`
+                # matches against the stored `where`, which is "" for such an edge, so recording the
+                # placeholder produces a directive that can never match — a permanent no-op warning
+                # "none of ... is anchored at '(no call site)'" on every assemble, phrased as drift
+                # rather than as the tool bug it is. `--accept-suggested` walks into it whenever the
+                # placeholder sorts first.
+                print(f"  SKIPPED {s_} {v_} {d_}: its suggested winner has no call site, and a "
+                      f"keep_edges directive matches on the anchor. Give it an anchor in the "
+                      f"fragment, or pass an explicit --keep naming another occurrence.",
+                      file=sys.stderr)
                 continue
-            existing.append({"src": s_, "verb": v_, "dst": d_, "where": anchor})
-            added += 1
+            prior = by_triple.get((s_, v_, d_))
+            if prior is None:
+                new = {"src": s_, "verb": v_, "dst": d_, "where": anchor}
+                existing.append(new)
+                by_triple[(s_, v_, d_)] = new
+                added += 1
+            elif prior.get("where") != anchor:
+                # Changing your mind was silently discarded while the tool printed `kept ... at
+                # <new anchor>` — a durable record asserting what the artifact does not support,
+                # which is the pattern this whole series is about.
+                print(f"  UPDATED {s_} {v_} {d_}: {prior.get('where')} -> {anchor}")
+                prior["where"] = anchor
+                updated += 1
         doc["keep_edges"] = existing
         rec_path.parent.mkdir(parents=True, exist_ok=True)
         rec_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"dedup-edge: recorded {added} keep_edges directive(s) in {rec_path} "
-              f"({len(existing)} total). Re-run assemble WITH --reconcile {rec_path}; the map is "
+        print(f"dedup-edge: recorded {added} new and updated {updated} keep_edges directive(s) in "
+              f"{rec_path} ({len(existing)} total). Re-run assemble WITH --reconcile {rec_path}; the map is "
               f"not edited here, so the decision survives every rebuild.")
         return 0
     m.edges = [e for i, e in enumerate(m.edges) if i not in drop_idx]

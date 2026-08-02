@@ -191,6 +191,12 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
         rows = votes.get(claim)
         if not rows:
             buckets["unvoted"].append({"claim": claim})
+            if live is not None and claim not in live:
+                # BEFORE the continue: an unvoted claim can be superseded too, and skipping it made
+                # the report list FEWER than `write --map` counted — silently, in the very tool the
+                # record points a reader at to see WHICH.
+                buckets["superseded"].append({"claim": claim, "verdict": "unvoted", "votes": 0,
+                                              "for": 0, "against": 0, "notes": []})
             continue
         bucket = _verdict_bucket(rows)
         grounded = sum(1 for r in rows if r.get("grounded") is True)
@@ -218,13 +224,25 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
         if not sup:
             out.append("  (none — the pinned worklist and the shipped map hold the same claims)")
         for row in sup:
+            split = (f" [{row['for']} for / {row['against']} against]"
+                     if row.get("votes") else "")
             mark = "" if row["verdict"] == "refuted" else f"   <- was {str(row['verdict']).upper()}"
-            out.append(f"  * {row['claim']}{mark}")
-        overridden = [r for r in sup if r["verdict"] != "refuted"]
+            out.append(f"  * {row['claim']}{mark}{split}")
+        # Only a CONFIRMED verdict was settled. A tie is by definition unsettled — this report's
+        # own next section calls it "the skeptics split; adjudicate against the code" — and an
+        # unverifiable verdict says the code could not answer. Calling all three "settled"
+        # over-claimed on two of them.
+        overridden = [r for r in sup if r["verdict"] == "confirmed"]
+        unsettled = [r for r in sup if r["verdict"] in ("tied", "unverifiable", "unvoted")]
         if overridden:
-            out.append(f"  {len(overridden)} of these were NOT refuted — the build rewrote a claim "
-                       f"the skeptics had settled. That is a decision, not a fix; say so in "
+            n = len(overridden)
+            out.append(f"  {n} of these {'was' if n == 1 else 'were'} CONFIRMED — the build rewrote "
+                       f"a claim the skeptics had settled. That is a decision, not a fix; say so in "
                        f"`grounding.note`.")
+        if unsettled:
+            n = len(unsettled)
+            out.append(f"  {n} {'was' if n == 1 else 'were'} never settled (tied / unverifiable / "
+                       f"unvoted) — removing the claim ended the question rather than answering it.")
     for name, label in (("refuted", "REFUTED — reconcile each into the map"),
                         ("tied", "TIED — the skeptics split; adjudicate against the code"),
                         ("unverifiable", "UNVERIFIABLE — a skeptic said the code cannot answer"),

@@ -173,6 +173,15 @@ def _recomputed_delta(g: dict, live: set[str], verdicts: list[Path]) -> str | No
     pinned = {str(r.get("claim")) for r in rows if isinstance(r, dict) and r.get("claim")}
     if not pinned:
         return None
+    # The recomputation is only valid against the COMPLETE verdict set. `grounding write` guarantees
+    # `votes == pinned` for the files IT was given; nothing guarantees `finalize` was handed the same
+    # ones, and a one-character glob slip is enough. With 15 of 16 files this accused an honest
+    # record of saying 4 where "the verdicts say 14" — and the remedy it printed then refused to run,
+    # because `grounding write` rejects a worklist with unvoted claims. A false accusation plus a
+    # dead-end fix is worse than the gap this closes, so it stands down unless the counts line up.
+    total = g.get("claims_total")
+    if not isinstance(total, int) or len(pinned) != total:
+        return None
     want_superseded, want_added = len(pinned - live), len(live - pinned)
     got_superseded = g.get("claims_superseded", 0)
     got_added = g.get("claims_added_since", 0)

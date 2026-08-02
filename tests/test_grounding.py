@@ -235,4 +235,43 @@ def test_report_lists_which_claims_were_superseded():
     assert "SUPERSEDED (3)" in out, out
     # the one that was CONFIRMED and cut anyway is the interesting case, and is called out
     assert "confirmed-then-cut" in out and "was CONFIRMED" in out, out
-    assert "were NOT refuted" in out, out
+    assert "CONFIRMED — the build rewrote a claim the skeptics had settled" in out, out
+
+
+def make_report(pinned: list[str], rows: list[dict], live: list[str] | None) -> str:
+    from coyodex.grounding import format_report
+    return format_report(pinned, rows, live_claims=live)
+
+
+def test_an_unvoted_claim_can_be_superseded_too():
+    """The unvoted branch returned before the superseded check, so the report listed FEWER
+    superseded claims than `write --map` counted — silently, in the tool the record points a reader
+    at to see which."""
+    pinned = ["kept", "never-challenged-and-cut"]
+    rows = [{"claim": "kept", "grounded": True, "evidence": "f.py:1"}]
+    text = make_report(pinned, rows, live=["kept"])
+    assert "SUPERSEDED (1)" in text and "never-challenged-and-cut" in text
+
+
+def test_only_a_confirmed_verdict_counts_as_settled():
+    """A tie is by definition unsettled — the report's own next section says "the skeptics split;
+    adjudicate against the code" — and an unverifiable verdict says the code could not answer.
+    Calling all three "settled" over-claimed on two of them."""
+    pinned = ["tied-and-cut", "unverifiable-and-cut", "confirmed-and-cut"]
+    rows = [{"claim": "tied-and-cut", "grounded": True, "evidence": "a.py:1"},
+            {"claim": "tied-and-cut", "grounded": False},
+            {"claim": "unverifiable-and-cut", "grounded": "unverifiable"},
+            {"claim": "confirmed-and-cut", "grounded": True, "evidence": "b.py:2"}]
+    text = make_report(pinned, rows, live=[])
+    assert "1 of these was CONFIRMED" in text, text
+    assert "2 were never settled" in text, text
+
+
+def test_the_superseded_list_shows_the_vote_split():
+    """2-1 and 3-0 read identically without it — and a live report described a 2-1 override as
+    "three skeptics agreed"."""
+    pinned = ["c"]
+    rows = [{"claim": "c", "grounded": True, "evidence": "a.py:1"},
+            {"claim": "c", "grounded": True, "evidence": "a.py:1"},
+            {"claim": "c", "grounded": False}]
+    assert "[2 for / 1 against]" in make_report(pinned, rows, live=[])

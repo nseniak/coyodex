@@ -1147,12 +1147,19 @@ def assert_22_behavioral_draft_precedes_preindex(turns: Sequence[Turn]) -> Asser
                         r"""\\?["'](use_cases|happy_path|roles|glossary)\\?["']""", blob):
                     first_behavioral = turn.index
             if call.name == "Bash" and _invokes(call.command, "preindex"):
-                if first_preindex is None:
-                    first_preindex = turn.index
+                if first_preindex is not None:
+                    continue
+                # The FIRST run only. Taking the last one over-credits the exact build this exists
+                # to catch: preindex@1 "NOT MET", draft@50, preindex@80 "met" scored a clean 1/1,
+                # and re-running preindex after the fragments land is routine. A scorecard may
+                # under-credit, never over-credit.
+                first_preindex = turn.index
                 out = results.get(call.id, "")
-                if "GR1 met" in out:
+                # Anchored to preindex's own line shape, so `echo 'GR1 met'` in the same block is
+                # not a verdict.
+                if re.search(r"^\s*GR1 met:", out, re.M):
                     tool_verdict = True
-                elif "GR1 NOT MET" in out:
+                elif re.search(r"^\s*GR1 NOT MET:", out, re.M):
                     tool_verdict = False
     if first_preindex is None:
         return Assertion(22, "behavioral draft precedes preindex", 0, 0)

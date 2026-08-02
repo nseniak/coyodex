@@ -367,6 +367,16 @@ SOURCE: [models.py](src/domain/models.py:78)
 
 ---
 
+## Grounding — how much of this map was challenged
+
+**42 of 42 claim(s) challenged** by fresh-context skeptics — 42 confirmed, 0 refuted, 0 unverifiable.
+
+> No `live_claims_digest`: nothing can confirm this record describes the map as it now stands.
+
+Every backbone edge in this map was authored directly against the fixture's own source, which is 1.5 kLOC of hand-written code the author of the map also wrote. That makes the grounding complete but NOT independent — there was no fresh-context skeptic pass, and this map has not been through Phase 4. Treat the number as a statement about coverage, not about adversarial confidence.
+
+---
+
 ## Coverage exceptions
 
 - src/generated/: machine-emitted wire types regenerated from a schema; ~900 LOC folded into one component on purpose (trap G3). Reading it line by line buys nothing a reader needs.

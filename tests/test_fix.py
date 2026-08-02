@@ -443,3 +443,40 @@ def test_the_in_place_dedup_now_says_the_edit_is_not_durable(capsys):
         p = make_dup_edge_map(tmp)
         assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested"]) == 0
         assert "next assemble REBUILDS" in capsys.readouterr().out
+
+
+def test_to_reconcile_refuses_to_record_an_anchorless_winner():
+    """`(no call site)` is the listing's DISPLAY text; `apply_reconcile` matches the stored `where`,
+    which is empty for such an edge. Recording the placeholder makes a directive that can never
+    match — a permanent no-op warning "none of … is anchored at '(no call site)'" on every
+    assemble, phrased as drift rather than as the tool bug it is."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "m.json"
+        p.write_text(json.dumps({
+            "format": FORMAT, "title": "T", "goal": "g",
+            "components": [{"id": "C1", "name": "A", "source": "src/a.py:1"},
+                           {"id": "C2", "name": "B", "source": "src/b.py:1"}],
+            "edges": [{"src": "C1", "verb": "calls", "dst": "C2", "no_call_site": True},
+                      {"src": "C1", "verb": "calls", "dst": "C2", "where": "src/a.py:10"}],
+        }), encoding="utf-8")
+        rec = Path(tmp) / "reconcile.json"
+        assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested",
+                         "--to-reconcile", str(rec)]) == 0
+        recorded = json.loads(rec.read_text()).get("keep_edges", [])
+        assert all(k["where"] != "(no call site)" for k in recorded), recorded
+
+
+def test_to_reconcile_updates_a_triple_instead_of_silently_keeping_the_old_anchor(capsys):
+    """Re-running with a different anchor printed `kept … at <new>` and then wrote nothing — a
+    durable record asserting what the artifact did not support."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        rec = Path(tmp) / "reconcile.json"
+        assert fix.main(["dedup-edge", "--map", str(p), "--to-reconcile", str(rec),
+                         "--keep", "C1:calls:C2:src/a.py:10"]) == 0
+        assert fix.main(["dedup-edge", "--map", str(p), "--to-reconcile", str(rec),
+                         "--keep", "C1:calls:C2:tests/a.py:99"]) == 0
+        out = capsys.readouterr().out
+        keeps = json.loads(rec.read_text())["keep_edges"]
+        assert len(keeps) == 1 and keeps[0]["where"] == "tests/a.py:99", keeps
+        assert "UPDATED" in out
