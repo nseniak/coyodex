@@ -23,6 +23,8 @@ Commands:
            — `--diff a.json b.json` compares two scorecards. A scorecard, never a gate.
   transcript  READ a build transcript in slices — an index by default, `--full` for one range.
            The retrospective's eye on what the agent actually did.
+  cost     What a build SPENT — wall time, tokens, and both PER ROW of map produced (`--map`).
+           Reads the sub-agent transcripts too, which are most of the spend. Never a gate.
   archive  Move a repo's coyodex map into .coyodex/dev-rebuilds/NNNN/ so the next run BUILDS
            from scratch (dispatch reads the WORKING TREE to choose the mode). Moves, never
            deletes — the old map is the baseline the new one is compared against.
@@ -75,6 +77,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "transcript":
         from coyodex_eval import transcript
         return transcript.main(rest)
+    if cmd == "cost":
+        from coyodex_eval import cost
+        return cost.main(rest)
     print(f"coyodex-eval: unknown command '{cmd}'\n", file=sys.stderr)
     print(USAGE, file=sys.stderr)
     return 2

@@ -35,6 +35,9 @@ does not emit ten tool-calling responses of which nine contain no reasoning.
   * `line` / `message_id` / `is_sidechain` — so evidence can point a reader at the exact record.
     `isSidechain: true` marks a sub-agent's own turns; the lead's fan-out behaviour is what L3
     measures, so callers filter those out by default (`read_turns(..., include_sidechains=False)`).
+  * `usage` / `model` — what the response was billed for, and by which model. The grouping is
+    what makes these safe to add: the same `usage` block is repeated on every record of one
+    message, so a per-record sum inflates output tokens ~8x. `coyodex-eval cost` reads them.
 
 Streaming: the corpus files are 2–3 MB each and a scorecard run reads eight of them. `iter_turns`
 never holds more than one message group in memory.
@@ -65,6 +68,12 @@ class ToolCall:
     name: str
     input: Mapping[str, object] = field(default_factory=dict)
     id: str = ""
+    #: When this block EXECUTED — not when its message was answered. The harness stamps each
+    #: content block separately, and a Turn carries the first one's time, so ten calls in one
+    #: response all share the Turn's timestamp while executing minutes apart. Anything timing a
+    #: call against its result must read this, or it measures the generation in between: the first
+    #: cut of the cost report put tool execution at 34% of agent time when the true figure is 4%.
+    timestamp: str = ""
 
     @property
     def command(self) -> str:
@@ -93,6 +102,63 @@ class ToolResult:
 
 
 @dataclass(frozen=True)
+class Usage:
+    """The token counts one API response was billed for.
+
+    Carried per TURN, never per record, and that is the whole point: the harness writes each
+    content block of one response as its own record and repeats the identical `usage` on every one
+    of them, so summing over records multiplies a response's tokens by its block count. On the
+    build transcripts this reader was written for that inflates output tokens by roughly 8x.
+
+    `context` is what the request actually re-read: cached tokens plus any written fresh. Growth
+    in this number turn over turn IS the cost of a long agent — every turn pays for the whole
+    conversation so far."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_input_tokens: int = 0
+    cache_creation_input_tokens: int = 0
+
+    @property
+    def context(self) -> int:
+        """Total prompt the model read this turn — cached + written + fresh."""
+        return (self.input_tokens + self.cache_read_input_tokens
+                + self.cache_creation_input_tokens)
+
+    def __bool__(self) -> bool:
+        return bool(self.input_tokens or self.output_tokens
+                    or self.cache_read_input_tokens or self.cache_creation_input_tokens)
+
+
+def _usage_of(message: Mapping[str, object]) -> Usage:
+    raw = message.get("usage")
+    if not isinstance(raw, dict):
+        return Usage()
+
+    def n(key: str) -> int:
+        value = raw.get(key)
+        return value if isinstance(value, int) else 0
+
+    return Usage(input_tokens=n("input_tokens"), output_tokens=n("output_tokens"),
+                 cache_read_input_tokens=n("cache_read_input_tokens"),
+                 cache_creation_input_tokens=n("cache_creation_input_tokens"))
+
+
+def _merge_usage(a: Usage, b: Usage) -> Usage:
+    """Field-wise max across the records of one message.
+
+    Max rather than sum: the records repeat one response's counts, so summing double-counts. Max
+    rather than first-wins: a streamed response can be written before its final `output_tokens`
+    is known, and the later record carries the complete figure."""
+    return Usage(input_tokens=max(a.input_tokens, b.input_tokens),
+                 output_tokens=max(a.output_tokens, b.output_tokens),
+                 cache_read_input_tokens=max(a.cache_read_input_tokens,
+                                             b.cache_read_input_tokens),
+                 cache_creation_input_tokens=max(a.cache_creation_input_tokens,
+                                                 b.cache_creation_input_tokens))
+
+
+@dataclass(frozen=True)
 class Turn:
     """One API message — an assistant response, or the user/tool-result message answering it.
 
@@ -108,6 +174,11 @@ class Turn:
     line: int = -1
     is_sidechain: bool = False
     timestamp: str = ""
+    #: Tokens billed for this turn, and the model that billed them. Empty on user turns — only an
+    #: assistant response has a usage block. `coyodex-eval cost` sums these; nothing else may sum
+    #: usage off raw records (see `Usage`).
+    usage: Usage = Usage()
+    model: str = ""
     #: (visible characters, signature bytes) summed over this turn's `thinking` blocks. A block can
     #: carry a multi-KB signature and an EMPTY body — the reasoning is redacted at write time. The
     #: reader used to drop those blocks entirely, so a retrospective could not tell "the agent did
@@ -168,6 +239,10 @@ class _Group:
     usage_conflicts: int = 0
     thinking_chars: int = 0
     thinking_signature_bytes: int = 0
+    #: `usage` above is the SIGNATURE (a json string, used to detect a grouping violation);
+    #: `tokens` is the parsed count the cost report sums.
+    tokens: Usage = Usage()
+    model: str = ""
 
 
 def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterator[Turn]:
@@ -201,7 +276,8 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                     tool_results=tuple(g.results), message_id=g.key, line=g.line,
                     is_sidechain=g.is_sidechain, timestamp=g.timestamp,
                     thinking_chars=g.thinking_chars,
-                    thinking_signature_bytes=g.thinking_signature_bytes)
+                    thinking_signature_bytes=g.thinking_signature_bytes,
+                    usage=g.tokens, model=g.model)
         index += 1
         return turn
 
@@ -235,6 +311,8 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
             content = message.get("content")
             blocks: Sequence[object] = content if isinstance(content, list) else []
 
+            record_ts = record.get("timestamp")
+            record_ts = record_ts if isinstance(record_ts, str) else ""
             calls: list[ToolCall] = []
             results: list[ToolResult] = []
             think_chars = think_sig = 0
@@ -248,7 +326,8 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                     uid = block.get("id")
                     calls.append(ToolCall(name=name if isinstance(name, str) else "",
                                           input=args if isinstance(args, dict) else {},
-                                          id=uid if isinstance(uid, str) else ""))
+                                          id=uid if isinstance(uid, str) else "",
+                                          timestamp=record_ts))
                 elif btype in ("thinking", "redacted_thinking"):
                     body = block.get("thinking")
                     sig = block.get("signature") or block.get("data")
@@ -274,6 +353,8 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                 continue
 
             key = mid if isinstance(mid, str) and mid else f"@{lineno}"
+            model = message.get("model")
+            model = model if isinstance(model, str) else ""
             if group is not None and group.key == key:
                 sig = _usage_signature(message)
                 if sig and group.usage and sig != group.usage:
@@ -282,13 +363,17 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                 group.results.extend(results)
                 group.thinking_chars += think_chars
                 group.thinking_signature_bytes += think_sig
+                # MERGED, never summed — every record of this message repeats the same counts.
+                group.tokens = _merge_usage(group.tokens, _usage_of(message))
+                group.model = group.model or model
                 continue
 
             yield from flush()
             group = _Group(key=key, role=ASSISTANT, line=lineno, is_sidechain=sidechain,
                            timestamp=timestamp, usage=_usage_signature(message),
                            calls=calls, results=results, thinking_chars=think_chars,
-                           thinking_signature_bytes=think_sig)
+                           thinking_signature_bytes=think_sig,
+                           tokens=_usage_of(message), model=model)
 
     yield from flush()
 
@@ -341,7 +426,7 @@ def bash_commands(turns: Sequence[Turn]) -> tuple[tuple[int, str], ...]:
 #: `files`, `loc`, `map` and `runs`.
 _COYODEX_SUBCOMMANDS = frozenset({
     "anchor-drift", "archive", "assemble", "audit", "balance", "bless", "claims", "compare",
-    "dump", "finalize", "fix", "grounding", "hash", "judge", "lint-fragment", "preindex",
+    "cost", "dump", "finalize", "fix", "grounding", "hash", "judge", "lint-fragment", "preindex",
     "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
     "run", "score", "scope", "serve", "transcript", "validate",
 })

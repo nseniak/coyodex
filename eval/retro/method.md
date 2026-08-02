@@ -164,6 +164,25 @@ Pass each transcript the map IT produced — the archived one for the previous r
 compares a scorecard that could read the map against one that could not, and three assertions move
 for that reason alone.
 
+### What it cost
+
+```
+coyodex-eval cost <transcript> --map .coyodex/project-map.json
+coyodex-eval cost <prev-transcript> --map <archive>/project-map.json
+```
+
+Wall time, tokens, and both PER ROW of map produced, plus the straggler waste in each fan-out.
+
+**Compare per row, never per build.** Absolute minutes and dollars track how big the map got: over
+four consecutive mcpolis builds the map grew 1,195 → 1,564 rows while the method changed under it,
+so the build that was *cheapest per unit of work* read as the slowest and most expensive one. Cost
+per row and seconds per row are the comparable numbers; a rise in either is the signal.
+
+`--map` also prints the grounding counts beside the spend, and they are read together — a change
+that halves the bill and doubles the refutation rate is not an improvement. If the session did
+anything before or after the build (an archive step, questions once the map landed), bound it with
+`--from-turn` / `--to-turn`, or time and tokens describe different stretches.
+
 The assertions and what each audits are in
 `COYODEX_HOME/eval/fixtures/trapdoor/L3-DESIGN.md` — **all of them, so check the doc against
 `coyodex-eval process` output rather than against any count written here.** This file said "the ten
