@@ -971,6 +971,11 @@ synthesis → parallel trace.**
   `deployment[]` units exist but no component sets `runs_in`, and flags a formula-filled `runs_in`.
   Keep fragment argument order stable and author the reconcile ids against the assembled ids (dedup
   survivors are first-occurrence-in-argument-order, so reordering fragments can shift surviving ids).
+  - **A dedup decision belongs here too.** `coyodex fix dedup-edge --to-reconcile
+    .coyodex/reconcile.json` writes its choices as `keep_edges` instead of editing the assembled
+    map. Editing the map does not survive: a shipped map carried 365 edges while re-assembling its
+    own committed fragments produced 416, because the next assemble restored 49 duplicates the fix
+    had removed. A map that cannot be rebuilt from its fragments has quietly stopped being generated.
   - **Generate the file — `coyodex reconcile`.** Count IDS, not rules: a file of 25 rules can carry
     187 hand-typed ids, and "25 rules" reads as small. There is no hand-authoring threshold any
     more, because the one that used to be here ("fine below ~30 assignments") is the sentence ten

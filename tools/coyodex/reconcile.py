@@ -73,12 +73,29 @@ class DropEdgeDirective:
 
 
 @dataclass
+class KeepEdgeDirective:
+    """Which anchor survives when one (src, verb, dst) is declared at several call sites.
+
+    `fix dedup-edge` resolves these, and wrote its answer into the ASSEMBLED map — which the next
+    assemble rebuilds from fragments, discarding it. That is not hypothetical: a shipped map carried
+    365 edges while re-assembling its own committed fragments produced 416, so the map could not be
+    reproduced from its sources and the difference was 49 silently-restored duplicates. Recording
+    the decision here is what makes it survive, exactly as `drop_edges` does for a refuted edge."""
+
+    src: str
+    verb: str
+    dst: str
+    where: str
+
+
+@dataclass
 class Reconcile:
     sets: list[SetDirective] = field(default_factory=list)
     drop_edges: list[DropEdgeDirective] = field(default_factory=list)
+    keep_edges: list[KeepEdgeDirective] = field(default_factory=list)
 
     def is_empty(self) -> bool:
-        return not self.sets and not self.drop_edges
+        return not self.sets and not self.drop_edges and not self.keep_edges
 
 
 # ── shared riding-step helpers (also used by `fix drop-edge`) ──────────────────────────────────────
@@ -134,10 +151,10 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         raise ReconcileError(f"{label}: not valid JSON: {e}") from e
     if not isinstance(data, dict):
         raise ReconcileError(f"{label}: top level: expected an object")
-    unknown = set(data) - {"set", "drop_edges"}
+    unknown = set(data) - {"set", "drop_edges", "keep_edges"}
     if unknown:
         raise ReconcileError(f"{label}: unknown top-level key(s): {', '.join(sorted(unknown))} "
-                             f"(only 'set' and 'drop_edges' are allowed)")
+                             f"(only 'set', 'drop_edges' and 'keep_edges' are allowed)")
     sets: list[SetDirective] = []
     raw_sets = data.get("set", [])
     if not isinstance(raw_sets, list):
@@ -187,7 +204,23 @@ def load_reconcile(text: str, label: str) -> Reconcile:
                                  f"exclusive")
         drops.append(DropEdgeDirective(src=d["src"], verb=d["verb"], dst=d["dst"],
                                        drop_steps=drop_steps, repoint=repoint))
-    return Reconcile(sets=sets, drop_edges=drops)
+    keeps: list[KeepEdgeDirective] = []
+    raw_keeps = data.get("keep_edges", [])
+    if not isinstance(raw_keeps, list):
+        raise ReconcileError(f"{label}: 'keep_edges': expected a list")
+    for i, d in enumerate(raw_keeps):
+        if not isinstance(d, dict):
+            raise ReconcileError(f"{label}: keep_edges[{i}]: expected an object")
+        unk = set(d) - {"src", "verb", "dst", "where"}
+        if unk:
+            raise ReconcileError(f"{label}: keep_edges[{i}]: unknown key(s): {', '.join(sorted(unk))}")
+        for req in ("src", "verb", "dst", "where"):
+            if not isinstance(d.get(req), str) or not d[req].strip():
+                raise ReconcileError(
+                    f"{label}: keep_edges[{i}]: '{req}' is required (a non-empty string)")
+        keeps.append(KeepEdgeDirective(src=d["src"], verb=d["verb"], dst=d["dst"],
+                                       where=d["where"]))
+    return Reconcile(sets=sets, drop_edges=drops, keep_edges=keeps)
 
 
 # ── validate (scoped to the touched fields) ────────────────────────────────────────────────────────
@@ -242,6 +275,28 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
     `_derive_entity_edges` (B1) so a dropped C→E edge is not re-derived from its step in the same run."""
     notes: list[str] = []
     elements = all_elements(m)
+    # BEFORE the drops, deliberately: a keep narrows a triple to one row, and a later `drop_edges`
+    # for the same triple should then see the single survivor rather than a set it no longer
+    # describes. A 0-match keep WARNS and never fails, like `drop_edges` — the anchor may have been
+    # corrected since, and a reconcile file must not rot when a fragment is fixed.
+    kept_total = 0
+    for ke in rec.keep_edges:
+        idxs = [i for i, e in enumerate(m.edges)
+                if e.src == ke.src and e.verb == ke.verb and e.dst == ke.dst]
+        if len(idxs) < 2:
+            notes.append(f"keep_edges: {ke.src} {ke.verb} {ke.dst} is declared "
+                         f"{len(idxs)} time(s) — nothing to de-duplicate")
+            continue
+        survivors = [i for i in idxs if (m.edges[i].where or "") == ke.where]
+        if not survivors:
+            notes.append(f"keep_edges: none of {ke.src} {ke.verb} {ke.dst}'s {len(idxs)} "
+                         f"occurrences is anchored at '{ke.where}' — kept them all")
+            continue
+        drop = {i for i in idxs if i != survivors[0]}
+        m.edges = [e for i, e in enumerate(m.edges) if i not in drop]
+        kept_total += len(drop)
+    if kept_total:
+        stats["duplicate_edges_resolved"] = kept_total
     set_counts: dict[str, int] = {f: 0 for f in _SET_FIELD_OWNER}
     for sd in rec.sets:
         for eid in sd.ids:

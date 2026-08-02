@@ -405,3 +405,41 @@ def test_subverb_help_falls_back_to_the_whole_usage_when_no_block_matches():
     assert subverb_help.verb_block(usage, "nosuchverb") is None
     assert subverb_help.handle(usage, "nosuchverb", ["--help"]) == 0
     assert subverb_help.handle(usage, "alpha", []) is None, "no help asked for → carry on parsing"
+
+
+def test_dedup_edge_can_record_its_decision_where_assemble_will_reread_it():
+    """Writing the choice into the assembled map is what made a shipped map irreproducible from its
+    own sources: 365 edges committed, 416 when its committed fragments were re-assembled, the
+    difference being 49 duplicates the next assemble silently restored."""
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        before = p.read_text()
+        rec = Path(tmp) / "reconcile.json"
+        assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested",
+                         "--to-reconcile", str(rec)]) == 0
+        assert p.read_text() == before, "--to-reconcile must NOT edit the map"
+        doc = json.loads(rec.read_text())
+        assert len(doc["keep_edges"]) == 1
+        k = doc["keep_edges"][0]
+        assert (k["src"], k["verb"], k["dst"]) == ("C1", "calls", "C2") and k["where"]
+
+
+def test_to_reconcile_merges_into_an_existing_file_without_duplicating():
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        rec = Path(tmp) / "reconcile.json"
+        rec.write_text(json.dumps({"set": [{"ids": ["C1"], "subsystem": "S1"}]}), encoding="utf-8")
+        assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested",
+                         "--to-reconcile", str(rec)]) == 0
+        assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested",
+                         "--to-reconcile", str(rec)]) == 0
+        doc = json.loads(rec.read_text())
+        assert doc["set"], "an existing directive must survive"
+        assert len(doc["keep_edges"]) == 1, "the same triple must not be recorded twice"
+
+
+def test_the_in_place_dedup_now_says_the_edit_is_not_durable(capsys):
+    with tempfile.TemporaryDirectory() as tmp:
+        p = make_dup_edge_map(tmp)
+        assert fix.main(["dedup-edge", "--map", str(p), "--accept-suggested"]) == 0
+        assert "next assemble REBUILDS" in capsys.readouterr().out

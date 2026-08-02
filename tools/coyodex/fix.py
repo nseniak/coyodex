@@ -439,6 +439,7 @@ def dedup_edge(argv: list[str]) -> int:
     map_path = None
     repo: Path | None = None
     keeps: list[str] = []
+    to_reconcile: str | None = None
     as_json = False
     accept_suggested = False
     i = 0
@@ -448,13 +449,15 @@ def dedup_edge(argv: list[str]) -> int:
             as_json = True
         elif a == "--accept-suggested":
             accept_suggested = True
-        elif a in ("--map", "--repo", "--keep"):
+        elif a in ("--map", "--repo", "--keep", "--to-reconcile"):
             i += 1
             val = _need(argv, i, a)
             if a == "--map":
                 map_path = val
             elif a == "--repo":
                 repo = Path(val)
+            elif a == "--to-reconcile":
+                to_reconcile = val
             else:
                 keeps.append(val)
         else:
@@ -541,10 +544,40 @@ def dedup_edge(argv: list[str]) -> int:
             return 1
         drop_idx |= {i for i in idxs if i != keep[0]}
         print(f"  kept {s} {v} {d} at {anchor}")
+    if to_reconcile:
+        # DURABLE. Writing the decision into the assembled map is what made a shipped map
+        # irreproducible from its own fragments: 365 edges committed, 416 on re-assemble, the
+        # difference being 49 duplicates the next assemble silently restored. `keep_edges` is read
+        # by `assemble --reconcile`, so the choice survives every rebuild.
+        rec_path = Path(to_reconcile)
+        try:
+            doc = json.loads(rec_path.read_text(encoding="utf-8")) if rec_path.exists() else {}
+        except ValueError as e:
+            print(f"ERROR: {rec_path} is not valid JSON ({e})", file=sys.stderr)
+            return 2
+        existing = doc.get("keep_edges") or []
+        have = {(k.get("src"), k.get("verb"), k.get("dst")) for k in existing
+                if isinstance(k, dict)}
+        added = 0
+        for tok in keeps:
+            parts = tok.split(":")
+            s_, v_, d_, anchor = parts[0], parts[1], parts[2], ":".join(parts[3:])
+            if (s_, v_, d_) in have:
+                continue
+            existing.append({"src": s_, "verb": v_, "dst": d_, "where": anchor})
+            added += 1
+        doc["keep_edges"] = existing
+        rec_path.parent.mkdir(parents=True, exist_ok=True)
+        rec_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        print(f"dedup-edge: recorded {added} keep_edges directive(s) in {rec_path} "
+              f"({len(existing)} total). Re-run assemble WITH --reconcile {rec_path}; the map is "
+              f"not edited here, so the decision survives every rebuild.")
+        return 0
     m.edges = [e for i, e in enumerate(m.edges) if i not in drop_idx]
     _write(Path(map_path), m, present)
-    print(f"dedup-edge: dropped {len(drop_idx)} duplicate occurrence(s). "
-          f"Re-run: validate --check-sources → audit → render.")
+    print(f"dedup-edge: dropped {len(drop_idx)} duplicate occurrence(s) from the assembled map — "
+          f"the next assemble REBUILDS from fragments and restores them. Use --to-reconcile "
+          f"<file> to make this durable. Re-run: validate --check-sources → audit → render.")
     return 0
 
 
@@ -563,7 +596,7 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       multi-site edge is skipped, not blind-rewritten.
 
   dedup-edge --map <map> [--repo <root>] [--json] [--accept-suggested]
-             [--keep <src:verb:dst:path:line> ...]
+             [--keep <src:verb:dst:path:line> ...] [--to-reconcile <reconcile.json>]
       With no --keep, LIST every (src, verb, dst) edge declared more than once at DIFFERING call
       sites — the conflict `validate` warns about — and suggest which anchor is the true one.
       With --keep, drop every other occurrence of that triple.
@@ -571,6 +604,10 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       printed --keep lines through a shell was trying to do (and got wrong twice: zsh does not
       word-split an unquoted expansion, and the surrounding prose also contains "--keep ").
       --json emits the same listing as data; parse that, never the lines above.
+      --to-reconcile writes the choices as `keep_edges` into the reconcile file INSTEAD of editing
+      the map, so `assemble --reconcile` re-applies them on every rebuild. Without it the edit is
+      lost at the next assemble — a shipped map carried 365 edges while its own fragments
+      re-assembled to 416.
       Pass --repo, or the "exists in the repo" rank term is constant and suggestions fall back to
       shortest-path.
 

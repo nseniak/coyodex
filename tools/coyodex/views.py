@@ -447,6 +447,27 @@ def model_to_markdown(m: ProjectModel) -> str:
                            [[_targets_label(t, elems), t.tested, _evidence_str(t.tests), t.gap, t.confidence]
                             for t in m.tests])
         section("Test completeness — gaps against the map", body)
+    if m.grounding is not None:
+        # The record travelled with the map as JSON and appeared in NO view — so the one number a
+        # reader most needs in order to judge every other number was invisible to anyone reading
+        # the markdown. It is the map's statement about its own confidence; it belongs on the page.
+        g = m.grounding
+        body = [f"**{g.claims_challenged} of {g.claims_total} claim(s) challenged** by "
+                f"fresh-context skeptics — {g.claims_confirmed} confirmed, {g.claims_refuted} "
+                f"refuted, {g.claims_unverifiable} unverifiable.", ""]
+        if g.claims_total and g.claims_challenged < g.claims_total:
+            body += [f"> Coverage is PARTIAL: {g.claims_total - g.claims_challenged} claim(s) were "
+                     f"never challenged. Those are good leads, not facts.", ""]
+        if g.claims_superseded or g.claims_added_since:
+            body += [f"Against the shipped map: **{g.claims_superseded} superseded** (pinned claims "
+                     f"the reconcile rewrote or removed) and **{g.claims_added_since} added** since "
+                     f"the worklist was pinned. `coyodex grounding report --map` lists which.", ""]
+        if not g.live_claims_digest:
+            body += ["> No `live_claims_digest`: nothing can confirm this record describes the map "
+                     "as it now stands.", ""]
+        if g.note:
+            body += [f"{g.note}", ""]
+        section("Grounding — how much of this map was challenged", body[:-1] if body else body)
     for ex in m.extras:
         section(ex.heading, [ex.body] if ex.body else [])
     out += ["---", "",

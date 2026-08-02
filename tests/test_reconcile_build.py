@@ -369,3 +369,34 @@ def test_an_empty_fragments_glob_refuses_instead_of_reading_the_stale_map():
         rules = write_rules([{"source_glob": "app/**", "subsystem": "S1"}], tmp)
         assert main(["--rules", str(rules), "--fragments"]) == 2
         assert main(["--rules", str(rules), "--fragments", "--out", str(Path(tmp) / "r.json")]) == 2
+
+
+def test_keep_edges_resolves_a_duplicated_triple_on_every_assemble():
+    """`fix dedup-edge` edited the assembled map, which the next assemble rebuilt from fragments —
+    so a shipped map carried 365 edges while its own committed fragments produced 416."""
+    from coyodex.model import Edge, ProjectModel
+    from coyodex.reconcile import KeepEdgeDirective, Reconcile, apply_reconcile
+    m = ProjectModel(title="T", goal="g")
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", where="src/a.py:10"),
+               Edge(src="C1", verb="calls", dst="C2", where="src/b.py:20"),
+               Edge(src="C3", verb="calls", dst="C4", where="src/c.py:1")]
+    rec = Reconcile(keep_edges=[KeepEdgeDirective("C1", "calls", "C2", "src/a.py:10")])
+    stats: dict[str, object] = {}
+    apply_reconcile(m, rec, stats)
+    assert len(m.edges) == 2
+    assert [e.where for e in m.edges if e.src == "C1"] == ["src/a.py:10"]
+    assert stats["duplicate_edges_resolved"] == 1
+
+
+def test_a_keep_edges_anchor_that_no_longer_exists_warns_and_keeps_everything():
+    """A reconcile file must not rot when a fragment's anchor is later corrected — the same
+    0-match-warns rule `drop_edges` already follows."""
+    from coyodex.model import Edge, ProjectModel
+    from coyodex.reconcile import KeepEdgeDirective, Reconcile, apply_reconcile
+    m = ProjectModel(title="T", goal="g")
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", where="src/a.py:10"),
+               Edge(src="C1", verb="calls", dst="C2", where="src/b.py:20")]
+    notes = apply_reconcile(m, Reconcile(
+        keep_edges=[KeepEdgeDirective("C1", "calls", "C2", "src/gone.py:1")]), {})
+    assert len(m.edges) == 2
+    assert any("none of" in n and "kept them all" in n for n in notes)
