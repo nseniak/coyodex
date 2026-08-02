@@ -384,14 +384,25 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
                      f"{candidate_judge.protocol.__dict__}) — re-judge the baseline under the "
                      "current protocol (delete the baseline map's "
                      ".coyodex-eval/cache/<map sha12>/judge.json)")
-    if baseline_judge is not None and candidate_judge is None:
-        # NOT a skippable comparison: the baseline was judged, the candidate wasn't — leaving the
-        # semantic gates out entirely would let an unjudged (or judge-crashed) run PASS. Breach → DRIFT.
+    if (baseline_judge is None) != (candidate_judge is None):
+        # EITHER side missing a judge report skips the semantic gates entirely, and a skipped gate
+        # must never read as a passed one. This used to breach in one direction only — the old design
+        # always had a judged baseline (the project's committed map, cached) and a freshly built
+        # candidate, so "candidate unjudged" was the only reachable half. Now the baseline is an
+        # ARCHIVED map whose cache dir is filled profile-first, judge-second, so an interrupted or
+        # failed judging leaves a profile-only baseline; that half used to be a bare note. Measured:
+        # a candidate judge reporting 0/40 grounded with 40 judge FAILURES compared clean, because
+        # `grounding_failure_rate_max` — the cap whose whole job is "broken judging must not PASS" —
+        # only runs when both sides have a report. Breach → DRIFT, in both directions.
         jbands.append(JudgeBand("judge_report_missing", 1.0, 0.0, 1.0, 0.0, False))
-        notes.append("candidate has NO judge report while the baseline does — the semantic gates were "
-                     "skipped; judge the fresh map (method.md Step 4) and re-run with --judge")
-    elif baseline_judge is None and candidate_judge is not None:
-        notes.append("judge bands skipped — a judge report was given for only one side (no baseline judge)")
+        if candidate_judge is None:
+            notes.append("candidate has NO judge report while the baseline does — the semantic gates "
+                         "were skipped; judge the candidate map (method.md Step 4) and re-run with "
+                         "--judge")
+        else:
+            notes.append("baseline has NO judge report while the candidate does — the semantic gates "
+                         "were skipped; judge the baseline map (method.md Step 4) into its "
+                         ".coyodex-eval/cache/<map sha12>/judge.json and re-run")
 
     if any(not g.passed for g in gates):
         verdict = REGRESSED

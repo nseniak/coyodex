@@ -28,10 +28,23 @@ worst bugs it can have.
    ```
    (A `git clone <project> <scratch>/... && git checkout <pin>` works the same when worktrees are
    inconvenient.)
-2. **Blind it** — remove everything the builder must not see:
+2. **Blind it** — remove everything the builder must not see, **keeping `.coyodex/.ignore`**:
    ```
-   rm -rf <scratch>/coyodex-blind-build/.coyodex <scratch>/coyodex-blind-build/.coyodex-eval
+   cd <scratch>/coyodex-blind-build
+   find .coyodex -mindepth 1 -maxdepth 1 ! -name .ignore -exec rm -rf {} +
+   rm -rf .coyodex-eval
    ```
+   **Why `.ignore` survives the blinding.** It is not a previous answer — it is the repo's
+   analysis-SCOPE declaration, tracked in git, saying which committed code the map is not meant to
+   describe. `iter_source_files` honours it, so deleting it silently widens the tree the blind build
+   maps and the scores are computed over: on this repo it takes the component expectation E from 14
+   to 37 and pulls in `eval/fixtures/trapdoor/`, a fixture built deliberately to TRIP coyodex's
+   advisories (broken anchors, overclaimed edges, an oversized flat folder). The resulting map
+   carries inflated validate problems, contradictions and coverage flags by construction — and since
+   every hard gate reads "the candidate must not be *worse* than the baseline", a blind map used as
+   the BASELINE is then a free pass for whatever it is compared against. Nothing downstream can
+   detect this: the worktree is deleted before the eval ever runs. Same reasoning as
+   `archive.py`'s `KEEP` set — scope is not output.
    Note the map usually lives at HEAD, not at the pin: when the pin PREDATES the map commit (the
    normal state — the map is committed on top of the code it describes), the worktree at the pin
    contains no `.coyodex/` at all and blinding holds by construction; the `rm -rf` stays as
@@ -71,8 +84,10 @@ worst bugs it can have.
 ## Handing the map to the eval
 The map is now an ordinary file. Give its path to `/coyodex-eval` as the explicit candidate
 (`eval/method.md` Step 1.2), with the baseline being the project's committed map or a
-`dev-rebuilds/NNNN/` archive. The eval's same-code guard still applies: the blind build's pin and the
-baseline map's commit must match, and the working tree must carry no code delta against them.
+`dev-rebuilds/NNNN/` archive. The eval's same-code guard still applies in full: zero code delta
+between the two maps' pins (not pin equality), a clean tree, no code delta against HEAD, and an
+unchanged `.coyodex/.ignore`. Note the guard verifies each pin with `git rev-parse` — so run the eval
+in a checkout where the blind build's pin actually resolves, or the clause is comparing nothing.
 
 The map is **read-only** from the moment it lands: `eval/method.md` freezes and hashes it, and a
 validate/audit failure on it is a reported finding about the method, never something to repair. The

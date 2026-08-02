@@ -174,13 +174,31 @@ def test_missing_candidate_judge_is_a_drift_not_a_skip() -> None:
     assert any("NO judge report" in n for n in r.notes), r.notes
 
 
-def test_missing_baseline_judge_is_noted_and_skipped() -> None:
-    """The reverse one-sided case is harmless: there is nothing to compare the candidate's judge
-    against, so it is a note, not a penalty."""
+def test_missing_baseline_judge_is_also_a_drift() -> None:
+    """The reverse case is NOT harmless, though it was only a note until review-2 finding 3.
+
+    That note encoded an assumption of the old design: the baseline was always the project's
+    committed map with cached judge scores, and the candidate was the freshly built one, so
+    "candidate unjudged" was the only half that could really happen. The eval now compares an
+    ARCHIVED map against the current one, and Step 3 fills a cache dir profile-first, judge-second —
+    so an interrupted judging leaves a profile-only BASELINE, and that half became reachable.
+
+    Either way the effect is the same and it is not a skip: with one side unjudged, every semantic
+    gate drops out, including `grounding_failure_rate_max`, whose entire job is "broken judging must
+    not PASS". Measured on the real map: a candidate reporting 0/40 grounded with 40 judge FAILURES
+    compared clean under the old note."""
     r = compare(make_profile(), make_profile(), None, None, make_judge())
+    assert r.verdict == DRIFT, r
+    assert any(j.metric == "judge_report_missing" and not j.within for j in r.judge_bands), r.judge_bands
+    assert any("baseline has NO judge report" in n for n in r.notes), r.notes
+
+
+def test_two_unjudged_sides_stay_a_clean_deterministic_comparison() -> None:
+    """Neither side judged is a legitimate deterministic-only run, not a half-missing one — the
+    breach above must not fire and turn every profile-only comparison into a DRIFT."""
+    r = compare(make_profile(), make_profile(), None, None, None)
     assert r.verdict == PASS, r
-    assert not r.judge_bands
-    assert any("only one side" in n for n in r.notes), r.notes
+    assert not any(j.metric == "judge_report_missing" for j in r.judge_bands), r.judge_bands
 
 
 def test_grounding_failure_flood_is_a_drift() -> None:

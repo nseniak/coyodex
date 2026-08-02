@@ -80,6 +80,14 @@ REGRESSED.
    gate reads "the candidate must not be *worse* than the baseline", an artificially bad **baseline**
    is a free pass for the candidate. This one is **not overridable**; the code it describes is gone.
 
+   **A clause is satisfied only by an EMPTY output from a command that SUCCEEDED.** Every `git diff`
+   below writes nothing to stdout when it fails — an unknown pin exits 128 with empty output, which
+   reads as a green clause to anyone testing emptiness alone. So first
+   `git rev-parse --verify <P>^{commit}` each pin (and refuse when a map carries no `commit` field at
+   all), then require **exit 0 AND no output** from each clause. Unverifiable pins are reachable in
+   normal use: a map handed in by explicit path from another checkout, a rebased or amended history,
+   a shallow clone, or a 7-character sha that has grown ambiguous.
+
    Then all four must hold:
    - **zero code delta between the two pins** — `git diff <P_base>..<P_cand> -- . ':(exclude).coyodex'`
      empty. Note this is a delta test, NOT `P_base == P_cand`: once `.coyodex/` is tracked, committing
@@ -103,12 +111,31 @@ REGRESSED.
      from 24 files to 13 and E from 3 to 2, with every other clause green. If the only difference is
      coyodex housekeeping, apply the same content test as the clause above rather than excluding the
      file;
-   - **the analysis scope is unchanged** — `git diff <P_base>..HEAD -- .coyodex/.ignore` empty.
+   - **the analysis scope is unchanged** — compare the **WORKING TREE** against each pin, not the
+     committed history:
+     ```
+     git ls-files --error-unmatch .coyodex/.ignore      # must be TRACKED, or this clause is a no-op
+     git diff <P_base> -- .coyodex/.ignore              # note: no `..HEAD`
+     git diff <P_cand> -- .coyodex/.ignore
+     ```
+     both empty. A `<P>..HEAD` form would compare two *commits* and miss the case that matters most:
+     the scope file is read from the **working tree** (`load_ignore`), and clause 2 excludes
+     `.coyodex/` wholesale, so an uncommitted edit — or an outright deletion — of this file is
+     invisible to every other clause. Verified: with an uncommitted `.coyodex/.ignore` removed, all
+     four clauses go green and E moves from 14 to 37. The `--error-unmatch` check matters too: if the
+     file is untracked, every diff against it is trivially empty and the clause silently protects
+     nothing.
      `.coyodex/.ignore` declares which committed code the map is not meant to describe;
      `iter_source_files` honours it, so it sets the coverage denominator AND the code-derived
      component expectation E. On this repo, removing it took E from 14 to 37 (+164%) and flipped the
      current map's granularity band from DRIFT to PASS with no change to map or code. The other
      clauses all exclude `.coyodex/` wholesale, so this file needs its own check.
+
+   **The one rescope no clause can see.** The analysed file set comes from
+   `git ls-files --exclude-standard`, which also honours `.git/info/exclude` and the user's global
+   excludes file. Neither lives in the tree, so no diff can compare them across two maps. If a run's
+   coverage or granularity numbers move for no reason you can find, check those two before believing
+   the result.
 
    **Why any of this.** Both maps are scored against the **working tree**: `validate --check-sources`
    resolves anchors there, coverage reads it, and the grounding skeptics read it. If the checkout is
@@ -184,10 +211,13 @@ Cache layout, one directory per map:
 
 For each of the two maps, in this order:
 0. **Verify the cache entry belongs to this map.** Recompute the map's hash and check it against the
-   `map-hash` file in the cache directory; on a mismatch, treat the entry as absent and rebuild it.
-   No tool reads that file — the directory NAME is the only link between an entry and its map, and a
-   name is not a checksum. Without this, a cache directory whose contents came from a different map
-   is undetectable, and it is the baseline's only freeze check (rule 1).
+   `map-hash` file in the cache directory. **Missing OR mismatched → treat the whole entry as absent
+   and rebuild it.** Missing is not "nothing to check": `map-hash` is written in step 4 below, so an
+   interrupted run leaves scores with no hash beside them, and `bless` never writes one at all —
+   trusting an entry because its hash file is absent would wave through exactly the entries whose
+   provenance is least certain. No tool reads that file; the directory NAME is the only other link
+   between an entry and its map, and a name is not a checksum. This is also the baseline's only
+   freeze check (rule 1).
 1. If the cache directory exists, **guard the cached judge** — reusable only if produced under the
    CURRENT judge protocol:
    ```
@@ -198,10 +228,14 @@ For each of the two maps, in this order:
    Exit 1 (the protocol changed, or the cached report records no fingerprint) → delete that
    `judge.json`; the map must be re-judged. A protocol change must invalidate the cache, never
    silently reuse stale scores.
-2. Missing `profile.json` → `COYODEX_HOME/.venv/bin/coyodex-eval score <map> --repo . --json` and
+2. **Write the digest to `map-hash` FIRST**, before any score lands beside it — it is what step 0
+   uses to decide the entry is trustworthy, so it must never be the file that an interruption leaves
+   out.
+3. Missing `profile.json` → `COYODEX_HOME/.venv/bin/coyodex-eval score <map> --repo . --json` and
    save it there.
-3. Missing `judge.json` → judge the map with **Step 4** and save it there.
-4. Write the digest to `map-hash`.
+4. Missing `judge.json` → judge the map with **Step 4** and save it there. Note the two are written
+   in this order, so an interrupted run can leave a profile with no judge — Step 5 treats a
+   half-filled entry as a real problem, not a skip.
 
 A cache hit on both maps means the run costs nothing but the comparison — the normal state when you
 re-run an eval without rebuilding.
@@ -292,10 +326,22 @@ For a map M:
    the candidate map was modified during the run — the run is void; restart from Step 1.
    Copy the candidate's raw verdicts into the run dir as `judge-verdicts.json`.
 
+   **On an overridden (INFORMATIONAL) run**, Step 1 forbade writing to the cache, so point both flags
+   at the run's own scratch scores instead — the command is otherwise identical:
+   ```
+     --baseline-dir ".coyodex-eval/runs/<ts>/informational/$BASE" \
+     --judge ".coyodex-eval/runs/<ts>/informational/$CAND/judge.json" \
+   ```
+   Without this form the hardcoded cache paths above have nothing to point at, `run` refuses (it
+   fails closed on a missing `--baseline-dir`), and the shortest way out looks like writing the cache
+   entry Step 1 just forbade. Do not take it: that is the poisoning route, and it outlives the run.
+
    **A verdict of `BASELINE` is a VOID run, never a result.** It means no baseline profile was
-   loaded, so nothing was compared — and its exit code is 0, the same as PASS. `run` now refuses a
+   loaded, so nothing was compared — and its exit code is 0, the same as PASS. `run` refuses a
    `--baseline-dir` that is missing or empty, but if `BASELINE` ever reaches you, report it as a
-   broken run and fix the path; never pass it on as "nothing got worse".
+   broken run and fix the path; never pass it on as "nothing got worse". Likewise, a note saying the
+   **judge bands were skipped** means one side had no judge report: the semantic gates did not run,
+   so the verdict is a deterministic-only result and must be reported as such, never as a clean pass.
 2. Report to the user. Lead with **what was compared** — both map paths, both commits, and the
    INFORMATIONAL banner if the Step-1 guard was overridden. Then **judge/quality deltas first**
    (grounding pass-rate with its denominator and failure count, rubric scores), then the verdict

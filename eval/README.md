@@ -79,11 +79,17 @@ map scored as the candidate today is already scored when it becomes tomorrow's b
 
 The comparison only means "the *method* changed" if the *code* is held fixed. Both maps are scored
 against the **working tree** — `validate --check-sources` resolves anchors there, coverage reads it,
-and the grounding skeptics read it. So `/coyodex-eval` **refuses** unless all three hold: the two maps
-record the same commit, the tree is clean, and there is zero code delta between that commit and HEAD.
+and the grounding skeptics read it. So `/coyodex-eval` **refuses** unless every clause holds: neither
+map carries a `-dirty` pin, there is zero code delta between the two maps' pins (a delta test, not an
+equality test — committing a map moves HEAD past the commit it describes, so consecutive maps
+normally carry different pins over identical code), the tree is clean, there is zero code delta
+between the candidate's pin and HEAD, and `.coyodex/.ignore` — the analysis-scope declaration — is
+unchanged against both pins in the working tree.
 
-You can override it ("run it anyway"), and then every output is stamped **INFORMATIONAL** and names
-both commits — an overridden run is never reported as a clean PASS or REGRESSED.
+You can override it ("run it anyway") except for a `-dirty` pin, which is never overridable. An
+overridden run is stamped **INFORMATIONAL**, names both commits, writes **nothing to the score
+cache**, and is never reported as a clean PASS or REGRESSED. `eval/method.md` Step 1 is the exact
+contract.
 
 ## The commands
 
