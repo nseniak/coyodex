@@ -153,29 +153,9 @@ Two things to know:
 
 coyodex takes every file in your project, except two sets: what your `.gitignore` excludes, and what
 `.coyodex/.ignore` excludes. git decides the first one, so all the usual rules hold, including a
-`.gitignore` inside a subfolder.
-
-`.coyodex/.ignore` is for the other case: code that *is* committed, but that you don't want on the
-map — a vendored copy, checked-in build output, a fixture tree. One path per line, from the repo
-root, `*`/`**` wildcards, `!` to put something back:
-
-```
-fixtures/broken_repo/
-generated/**
-!generated/hand_written.py
-```
-
-Every run starts by telling you exactly what this came to: how many files will be analyzed, and what
-each ignore pattern removed.
-
-Two things to know:
-
-- **It's not the same as mapping something coarsely.** If a folder is a real part of your product and
-  you just want it drawn as one box, that's a different setting the map records for you — don't put it
-  here. This file is for code the map isn't meant to describe at all.
-- **coyodex tells you it's on.** Every time it measures your code it reports how many files this file
-  removed, pattern by pattern, and it flags a pattern that removed nothing — because excluding too
-  much would quietly make the map look more complete than it is.
+`.gitignore` inside a subfolder. `.coyodex/.ignore` uses the same syntax, and is for the other case:
+code that *is* committed, but that you don't want on the map — a vendored copy, checked-in build
+output, a fixture tree.
 
 ## Status
 
