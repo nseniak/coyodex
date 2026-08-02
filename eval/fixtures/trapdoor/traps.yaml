@@ -184,9 +184,9 @@ traps:
     plants: 'A map state in which three separate deployment advisories fire at once (inferred variant tags, an unlinked unit, an ambiguous thread host).'
     where: 'golden/project-map.json'
     layer: L2
-    expect: 'Recording the literal `runs-in` under Balance exceptions collapses the whole family to ONE line that still states the suppressed COUNT — suppression stays visible.'
+    expect: 'A BARE `runs-in` under Balance exceptions silences NOTHING and says so, naming the five scoped keys. Each scoped key (`runs-in/quality`, `runs-in/unlinked`, `runs-in/unplaced`, `runs-in/entry-hosts`, `runs-in/messaging`) silences exactly its own group and is reported when it does.'
     covered: true
-    note: 'A live map recorded `runs-in` for one reason and thereby hid two unrelated findings, including a real variant-tagging gap.'
+    note: 'The bare literal used to collapse the whole family to one counted line. That was still a family escape — the method says a record silences exactly one (check, id) pair, never a family — and on a live map a record about two test-profile containers thereby hid six deployment units that had stopped hosting any component. Scoping was the fix; this spec was updated with it, having previously stated the pre-fix behaviour while the test already pinned the new one.'
 
   # ---- altitude ----------------------------------------------------------------------
   - id: G1

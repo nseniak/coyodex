@@ -1081,37 +1081,6 @@ def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
     return Assertion(18, "commit shape numbers match the map", good, total, tuple(hits), note)
 
 
-#: An inverting grep anywhere in a shell block that also runs a gate. Deliberately NOT a pipeline
-#: pattern: the real shape on a live build was `coyodex validate … > /tmp/v5.txt 2>&1; echo …;
-#: grep -v 'declared .* times with differing' /tmp/v5.txt`, so a `gate | grep -v` regex saw nothing.
-#: The full output being on disk does not help when the VIEW the agent reads is the inverted one.
-#: Broad on purpose — a scorecard may under-credit, never over-credit.
-_INVERTING_GREP = re.compile(r"\bgrep\s+(?:-\w+\s+)*-\w*v\w*\b")
-
-
-def assert_19_no_gate_output_inverted_grep(turns: Sequence[Turn]) -> Assertion:
-    """No gate's output is piped through `grep -v`.
-
-    Assertion 15 catches a re-check narrowed by a pattern; it does not catch a family deleted from
-    the view. A live build ran `validate … | grep -v 'declared .* times with differing'`, hiding 38
-    duplicate-edge warnings that then stayed invisible across two assembles and a whole grounding
-    pass — the same 38 `fix dedup-edge` listed when it was finally run.
-
-    `observed` counts gate runs NOT inverted, so higher is better like every other line."""
-    clean = 0
-    hits: list[Evidence] = []
-    for turn in turns:
-        for call in turn.calls_named("Bash"):
-            if not re.search(r"\b(validate|audit|balance|finalize|anchor-drift)\b", call.command):
-                continue
-            if _INVERTING_GREP.search(call.command):
-                hits.append(Evidence(turn.index, {"command": call.command[:160]}))
-            else:
-                clean += 1
-    return Assertion(19, "no gate output filtered with `grep -v`", clean, clean + len(hits),
-                     evidence=tuple(hits))
-
-
 #: `assemble`'s one-line summary of what the auto-clean passes changed. Its presence is what makes
 #: assertion 21 scoreable at all.
 _ASSEMBLE_DIGEST = re.compile(r"model:.*\|\s*ops:|wrote .*project-map\.json")
@@ -1155,28 +1124,49 @@ def assert_22_behavioral_draft_precedes_preindex(turns: Sequence[Turn]) -> Asser
     14-agent structural harvest; its behavioral fragment was written 79 turns later. The structural
     slices exist to serve the behavioral layer, so the order is not decoration.
 
+    The AUTHORITATIVE signal is `preindex`'s own `GR1 met` / `GR1 NOT MET` line, which the tool
+    computes from the fragments on disk. It is preferred wherever the run captured it, because the
+    transcript-only fallback has blind spots this assertion was shipped with: a fragment written by
+    a SUB-AGENT is invisible (sidechain turns are filtered out of the default read, and `Agent` is
+    not a writing tool from this scan's point of view), and a heredoc using single-quoted JSON keys
+    did not match a double-quote-only pattern. Both produced "(never in this run)" for a build that
+    had drafted the layer.
+
     `of == 0` when the run never ran `preindex` — no opportunity."""
     first_preindex: int | None = None
     first_behavioral: int | None = None
+    tool_verdict: bool | None = None
+    results = results_by_tool_use_id(turns)
     for turn in turns:
         for call in turn.tool_calls:
-            if first_behavioral is None and call.name in ("Write", "Edit", "Bash"):
-                blob = call.text()
-                # `\\?"` because a tool call's text is JSON-serialised, so the fragment's own keys
-                # arrive escaped (`\\"use_cases\\"`) rather than bare.
-                if "build-fragments" in blob and re.search(
-                        r'\\?"(use_cases|happy_path|roles|glossary)\\?"', blob):
+            blob = call.text()
+            if first_behavioral is None and call.name in ("Write", "Edit", "Bash", "Agent"):
+                # `\\?["\']` — the call's text is JSON-serialised, so a fragment's own keys arrive
+                # escaped, and a heredoc may quote them either way.
+                if FRAGMENT_DIR in blob and re.search(
+                        r"""\\?["'](use_cases|happy_path|roles|glossary)\\?["']""", blob):
                     first_behavioral = turn.index
-            if (first_preindex is None and call.name == "Bash"
-                    and _invokes(call.command, "preindex")):
-                first_preindex = turn.index
+            if call.name == "Bash" and _invokes(call.command, "preindex"):
+                if first_preindex is None:
+                    first_preindex = turn.index
+                out = results.get(call.id, "")
+                if "GR1 met" in out:
+                    tool_verdict = True
+                elif "GR1 NOT MET" in out:
+                    tool_verdict = False
     if first_preindex is None:
         return Assertion(22, "behavioral draft precedes preindex", 0, 0)
-    ok = first_behavioral is not None and first_behavioral < first_preindex
-    ev = [] if ok else [Evidence(first_preindex, {
-        "preindex_at": str(first_preindex),
-        "behavioral_draft_at": str(first_behavioral) if first_behavioral else "(never in this run)"})]
-    return Assertion(22, "behavioral draft precedes preindex", 1 if ok else 0, 1, evidence=tuple(ev))
+    if tool_verdict is not None:
+        ok = tool_verdict
+        detail = {"source": "preindex's own GR1 line"}
+    else:
+        ok = first_behavioral is not None and first_behavioral < first_preindex
+        detail = {"preindex_at": str(first_preindex),
+                  "behavioral_draft_at": (str(first_behavioral) if first_behavioral
+                                          else "(not seen in this transcript)"),
+                  "source": "transcript scan — `preindex` printed no GR1 line to read"}
+    ev = () if ok else (Evidence(first_preindex, detail),)
+    return Assertion(22, "behavioral draft precedes preindex", 1 if ok else 0, 1, ev)
 
 
 ASSERTIONS = (
@@ -1197,7 +1187,6 @@ ASSERTIONS = (
     assert_16_longest_slice_dispatched_first,
     assert_17_a_drift_exception_cites_a_file_that_was_read,
     assert_18_commit_shape_matches_the_map,
-    assert_19_no_gate_output_inverted_grep,
     assert_21_final_assemble_digest_is_clean,
     assert_22_behavioral_draft_precedes_preindex,
 )

@@ -1,6 +1,6 @@
 # L3 — process assertions over a build transcript
 
-**Status: assertions 1–10, 12–19, 21 and 22 are IMPLEMENTED; 11 and 20 are not.** The reader is
+**Status: assertions 1–10, 12–18, 21 and 22 are IMPLEMENTED; 11, 19 and 20 are not.** The reader is
 [eval/tools/coyodex_eval/transcript.py](../../tools/coyodex_eval/transcript.py), the assertions and
 the scorecard/diff CLI are
 [eval/tools/coyodex_eval/process_scorecard.py](../../tools/coyodex_eval/process_scorecard.py)
@@ -170,10 +170,38 @@ Each is a repeatable process defect a real build showed and no existing number w
 | # | assertion | the fix it audits |
 |---|---|---|
 | 18 | a commit's shape numbers match the map it describes | a commit claimed "416 backbone edges … 33 flows/sub-flows" for a map holding 365 and 36. Both had been true earlier in the build; `fix dedup-edge` then dropped 49 duplicate occurrences. Scored against the `Shape:` line `finalize --emit-gate-block` now generates |
-| 19 | no gate's output is filtered with an inverting `grep` | assertion 15 catches a re-check narrowed by a pattern; it does not catch a family DELETED from the view. A build hid 38 duplicate-edge warnings with `grep -v`, and they stayed invisible across two assembles and a whole grounding pass. Note the real shape is not a pipeline — the gate was redirected to a file and the inverting grep read the file |
+| 19 | *(WITHDRAWN — do not re-add without reading below)* no gate's output is filtered with an inverting `grep` | the defect is real: a build hid 38 duplicate-edge warnings behind `grep -v` and they stayed invisible across two assembles and a whole grounding pass. The MEASUREMENT was not. See the note under this table |
 | 20 | *(reserved, NOT implemented)* the lead re-verified every refutation before applying it | three of one batch's eight adverse skeptic findings were false, including a 2-1 majority on the highest-risk claim in the map, and the lead caught all three on its own initiative. But a refutation is reconciled by an ordinary map write and justified by an ordinary file read, so there is no reliable transcript signature. Reserved rather than filled with a guess |
 | 21 | `assemble`'s digest is clean at the FINAL assemble | a build was told `UNHEALED riding steps 4` at four successive assembles and addressed it at none. Only the last assemble counts: a mid-build unhealed count is expected and drains as the trace lands. This measures whether the digest was READ, not whether the shipped map is broken |
 | 22 | the behavioral draft precedes `preindex` | `preindex` prints GR1 on every run. A build read it, harvested 14 structural slices, and wrote its behavioral fragment 79 turns later. The structural slices exist to serve the behavioral layer, so the order is not decoration |
 
 11 and 20 are both absent from the runner, for different reasons: 11 needs the fixture's golden map,
 20 needs a signature the transcript does not carry.
+
+### Why 19 was withdrawn
+
+It shipped, was measured against the corpus, and removed in the same session. The defect it aimed at
+is real and stays on the record above; the detector could not be made precise.
+
+The problem is that the real shape is not a pipeline. The motivating build ran
+`coyodex validate … > /tmp/v5.txt 2>&1; …; grep -v '<pattern>' /tmp/v5.txt`, so a `gate | grep -v`
+pattern matched nothing. Widening it to "an inverting grep anywhere in a shell block that also
+mentions a gate" did catch the two real cases — and produced 5 false flags out of 7 on the corpus:
+`git status --porcelain | grep -v '^ M …'`, a source grep filtered with `grep -v "^.*#"`, and
+repo-wide sweeps excluding `./.venv`, all in commands that happened to mention `validate` or `audit`
+somewhere. **71 % noise in a scorecard line is worse than an absent line**, because the next
+retrospective reads it as signal — which is the exact failure this whole assertion family exists to
+prevent.
+
+Making it precise needs something shell text does not carry: which output a later `grep -v` was
+reading. A file path can be tracked from the redirect to the grep, but a build that pipes, or that
+greps a path it built by variable, defeats it — and a detector that works on the tidy half of the
+corpus is how the first version got here.
+
+Assertion 15 already catches the narrower, well-signalled case (a re-check with a pattern narrower
+than the run that surfaced it). **If you re-add 19, first measure it on the whole corpus and count
+the false positives — the number that got it withdrawn is 5 of 7, and any replacement has to beat
+that before it is worth a line.**
+
+The number 19 stays retired, like 11 and 20. Re-using it would make two different measurements share
+an id across archived scorecards.

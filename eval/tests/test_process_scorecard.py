@@ -520,7 +520,7 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # 20 is also absent: "the lead re-verified every applied refutation" has no reliable transcript
     # signature (a refutation is reconciled by an ordinary map write, and the read that justifies it
     # is an ordinary file read), so the number is reserved rather than filled with a guess.
-    assert ids == [*range(1, 11), *range(12, 20), 21, 22], ids
+    assert ids == [*range(1, 11), *range(12, 19), 21, 22], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
     assert len(ids) == len(set(ids))
 
@@ -819,25 +819,6 @@ def test_a18_says_so_when_a_commit_had_no_generated_line_to_check_against():
     turns = [make_turn(1, make_bash("git commit -m 'map: 416 backbone edges'"))]
     a = P.assert_18_commit_shape_matches_the_map(turns)
     assert a.of == 0 and "no generated" in (a.note or ""), a
-
-
-def test_a19_sees_an_inverting_grep_that_is_not_a_pipeline():
-    """The real shape redirects the gate to a file and inverts the grep on the FILE, so a
-    `gate | grep -v` pattern saw nothing. The full output being on disk does not help when the view
-    the agent reads is the inverted one."""
-    turns = [make_turn(1, make_bash(
-        "coyodex validate map.json --check-sources > /tmp/v5.txt 2>&1; echo \"exit=$?\"; "
-        "grep -v 'declared .* times with differing' /tmp/v5.txt | head -40"))]
-    a = P.assert_19_no_gate_output_inverted_grep(turns)
-    assert a.observed == 0 and a.of == 1, a
-
-
-def test_a19_leaves_an_ordinary_gate_run_alone():
-    turns = [make_turn(1, make_bash("coyodex validate map.json --check-sources --check-coverage"))]
-    a = P.assert_19_no_gate_output_inverted_grep(turns)
-    assert a.observed == 1 and a.of == 1
-
-
 def test_a21_reads_only_the_final_assemble():
     """An unhealed count mid-build is expected and drains as the trace lands; only the last one
     means anything. A live build was told UNHEALED 4 at four successive assembles and shipped."""
@@ -867,7 +848,7 @@ def test_a22_catches_a_structural_harvest_before_any_behavioral_draft():
 
 def test_the_new_assertions_are_all_registered():
     ids = [a.id for a in P.score_turns(()).assertions]
-    for new in (18, 19, 21, 22):
+    for new in (18, 21, 22):
         assert new in ids, (new, ids)
 
 
@@ -1038,3 +1019,32 @@ def test_13_does_not_let_a_chained_assemble_hide_a_map_rewrite():
                  "coyodex assemble .coyodex/build-fragments/*.json --out .coyodex")))
     a = P.score_turns(turns).by_id()[13]
     assert (a.observed, a.of) == (0, 1), a
+
+
+def test_a22_prefers_preindex_own_gr1_verdict_over_a_transcript_guess():
+    """`preindex` computes GR1 from the fragments on disk. The transcript scan cannot see a
+    fragment written by a sub-agent, so a build that HAD drafted the layer read as "never"."""
+    turns = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p"),
+                       results=(("p", "  GR1 met: behavioral draft present (L1-usecases.json).\n"),)),)
+    a = P.assert_22_behavioral_draft_precedes_preindex(turns)
+    assert (a.observed, a.of) == (1, 1), a
+    turns_not = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json", uid="p"),
+                           results=(("p", "  GR1 NOT MET: no fragment carries use_cases.\n"),)),)
+    assert P.assert_22_behavioral_draft_precedes_preindex(turns_not).observed == 0
+
+
+def test_a22_reads_single_quoted_keys_in_a_heredoc():
+    """A heredoc quoting its JSON keys with `'` did not match a double-quote-only pattern."""
+    turns = (make_turn(1, make_bash(
+                 "python3 - <<'PY'\nimport json\n"
+                 "json.dump({'use_cases': [{'id': 'UC1'}]}, "
+                 "open('.coyodex/build-fragments/beh.json','w'))\nPY")),
+             make_turn(2, make_bash("coyodex preindex --out .coyodex/preindex.json")))
+    assert P.assert_22_behavioral_draft_precedes_preindex(turns).observed == 1
+
+
+def test_a22_says_which_signal_it_used():
+    """A reader must be able to tell an authoritative verdict from an inferred one."""
+    turns = (make_turn(1, make_bash("coyodex preindex --out .coyodex/preindex.json")),)
+    a = P.assert_22_behavioral_draft_precedes_preindex(turns)
+    assert a.evidence and "transcript scan" in str(a.evidence[0].detail["source"])
