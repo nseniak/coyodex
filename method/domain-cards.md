@@ -293,11 +293,10 @@ The validator (when domain cards are implemented — see "Implementation status"
 - each card heading defines a **unique** `E` id (existing duplicate-definition machinery).
 - every `RELATIONS` target resolves to a **defined** `E` (existing reference check — `E` is already
   in the ID token grammar).
-- each relation pair `(a, b)` is declared on **one** side only → warn on both-sided duplicates.
+- each relation pair `(a, b)` is declared on **one** side only → the validator BLOCKS on a both-sided duplicate.
 - each `FIELDS` item has a non-empty `type`; each cardinality token is in `{1, *, 0..1, 1..*}`.
 - `MEANING` and `SOURCE` present (the `SOURCE` anchor drives the confidence label).
 - the relation verb is the canonical one for its kind (aliases rejected — see the verb table).
-- no raw `|` inside a card line.
 - the structured `store`: `store.dep` is a D-id resolving to a real (non-folded) dep; `store.mode`
   is in the closed vocabulary (`collection`/`embedded`/`transient`/`cache`/`in-code`/`enum`). The
   persistence-coverage rule (advisory, adoption-gated) and the "Persistence exceptions" escape are
@@ -359,7 +358,7 @@ cardinality).
    `Edge.how`.
 4. **`tools/coyodex/viewer/gen_viewer.py`** — `gen_domain_mermaid` emits the `classDiagram`; `_relation_label`
    formats the resolved `fk_field` / `fk_side` into the arrow label (plain forward, `↩` reverse); a
-   **Domain** view button (hidden when the map has no entities).
+   **Entities** view button (internal view kind stays `domain`; hidden when the map has no entities).
 5. **`tools/coyodex/viewer/viewer.js`** — a classDiagram click-bridge (`bindDomain` / `eachClassEdge`):
    class group id `…-classId-E1-N` resolves via the id regex, relation path id `…-id_E1_E2_N`
    encodes its endpoints; the panel renders entity `attrs`, relation cardinality, and an **Implemented

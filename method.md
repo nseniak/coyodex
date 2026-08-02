@@ -357,8 +357,8 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     names it: `k. C1 → C2 ⟨runs SF1 — <name>⟩` (src/dst are the run's entry/exit endpoints; the
     phrase may be omitted — it defaults to the sub-flow's name; the reference carries NO `where` of
     its own). One level only — a sub-flow's step may not reference another sub-flow (`validate`
-    blocks). A sub-flow referenced by fewer than 2 flows is pointless indirection (`validate`
-    warns). The payoff is CONSISTENCY: without it, each flow retells the shared machinery at
+    blocks). A sub-flow with fewer than 2 reference STEPS across the map is pointless indirection
+    (`validate` warns — it counts reference steps, so two references inside one flow do not warn). The payoff is CONSISTENCY: without it, each flow retells the shared machinery at
     whatever depth its author picked — the viewer expands the reference inline (a tinted block
     named after the sub-flow) and the diff-impact engine reaches every referencing use case from a
     changed sub-flow line.
@@ -599,7 +599,7 @@ T7 Component internals · T8 Config/env vars · T9 Data schema.
   is an ungrounded claim. The one exception: a relationship with **no single call site**
   (event-driven, shared-state, or config/DI-wired coupling, where `From` never directly calls `To`) —
   set **`no_call_site: true`** on the edge to make the absence a conscious choice, not a silent gap.
-- Convenience = inline "Uses" column on T6 (the most-used slice of the edge list).
+- Convenience = the T6 flow steps, which retell the most-used slice of the edge list in reading order.
 
 ---
 
@@ -833,8 +833,10 @@ The JSON shape, so you don't have to guess its keys:
   "weight":   { "path", "loc", "file_count", "churn", "lang", "langs",
                 "children": [ …same node shape, sorted by loc desc… ] },   # the nested directory tree
   "symbols":  { "by_name": { "<name>": [ { "file", "line", "kind" } … ] }, "ambiguous": [ … ] },
-  "imports":  { "pairs": [ … ] },        # only when --pairs {component:[paths]} was given
-  "granularity": { "expected_components", "band": [lo, hi],
+  "imports":  { "mode", "semantics", "pairs": [ … ] },  # ALWAYS present; `pairs` is filled only
+                                         # when --pairs {component:[paths]} was given (else empty,
+                                         # with a `note` saying so)
+  "granularity": { "expected_components", "band": [lo, hi], "bound_by", "median_file_loc",
                    "per_dir": { "<dir>": E … }, "file_cap", "loc_cap" },   # the leaf anchor (rule above)
   "coverage": { "files_counted", "git_available", "tree_sitter_available",
                 "languages_seen_without_extractor", "note", … } }          # what it could/couldn't parse
@@ -983,8 +985,10 @@ synthesis → parallel trace.**
       the relations pass or re-ping the slice, and if you carry it, record the count and the why. When the entity count is high, the single T5
       owner still owns the slice but MAY fan the relations pass out **by subdomain** (each sub-agent
       relates the entities within one subdomain + names cross-subdomain targets), then merges. The
-      invariant is coverage, not headcount: every entity gets its relations authored. `validate`'s
-      isolated-entity count is the check.
+      invariant is coverage, not headcount: every entity gets its relations authored.
+      `validate --check-coverage`'s isolated-entity count is the check (it is threshold-gated —
+      silent below 5 entities, below 3 isolated, or at/under 20% isolated — and the plain
+      `validate` never prints it).
 - Phase 2 Synthesize (barrier, one agent): T1 clusters/dedups all harvest outputs, and (large
   maps) assigns Subsystems — a global graph cut, so it stays at the non-delegated barrier. **Synthesis
   is the final-ID authority.** **Only the dedup/renumber step is the hard barrier — overlap the
@@ -1258,7 +1262,15 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   wrong claims — and reported that only in chat, where it evaporates. Record it in the model's
   **`grounding`** object: `claims_total` (the worklist size), `claims_challenged` (how many got a
   verdict), then the SPLIT of those verdicts — `claims_confirmed` / `claims_refuted` /
-  `claims_unverifiable` — plus a `note` saying which claims were prioritized. Record the split even
+  `claims_unverifiable` — plus a `note` saying which claims were prioritized.
+  **How a partial pass is actually recorded.** `grounding write` REFUSES a worklist claim with no
+  verdict ("Ground them, or challenge a smaller worklist deliberately"), so you cannot hand it the
+  full worklist plus a subset of verdicts and get a `319 of 1608` record out — the command exits and
+  writes nothing. The deliberate path is the second half of its own message: cut the pinned worklist
+  file down to the claims you actually challenged, and write the record from THAT. `claims_total`
+  is then the reduced size, so the full surface exists nowhere in the counts — put it in the `note`
+  ("319 challenged, cut from a 1,608-claim worklist; ranked top-down"), or the record silently reads
+  as a complete pass over a small map. Record the split even
   when it is boring: without it "challenged" is the only number, and a reader cannot tell how many
   claims actually HELD UP. A live map wrote `total 399, grounded 399, refuted 3`, which reads as
   "399 held up AND 3 were refuted out of 399"; `validate` now BLOCKS on counts that do not add up
@@ -1340,8 +1352,9 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   written first describes a worklist that no longer exists. A live build wrote it, then reconciled
   nine refutations, and shipped `418 of 418 challenged` on a map whose worklist held 415 and of
   which only 403 could still be matched — then quoted the 418 in its commit message as fact. No gate
-  saw it at the time: `validate` blocks only `claims_challenged > claims_total`, and a stale pin is
-  self-consistent. `finalize` now raises an advisory when the pin and the live worklist disagree,
+  saw it at the time: `validate`'s arithmetic (challenged/superseded within total, the
+  confirmed+refuted+unverifiable split, no negatives) is all self-consistent against a stale pin.
+ `finalize` now raises an advisory when the pin and the live worklist disagree,
   and L3 assertions 13 and 14 watch the ordering and the number. A hand-written record
   shipped on a live build asserting anchors had been "corrected" 29 seconds before the tool that
   corrects them first ran. `--verdicts` is REPEATABLE: pass the per-batch files, do not hand-merge.
@@ -1530,7 +1543,8 @@ stray key here is the one thing that still fails `assemble`. Then run:
 
 It validates every fragment against the schema (a malformed fragment fails ALONE, with its file and
 JSON path named — re-request that one agent's rows), refuses duplicate IDs across fragments, and
-writes the canonical `project-map.json` plus the generated md/HTML views. In serial (non-parallel)
+writes the canonical `project-map.json` plus the generated markdown view (no HTML file — the
+interactive diagram is served on demand, never written). In serial (non-parallel)
 mode the same rule holds at smaller scale: author your rows as one or a few fragments and let
 `assemble` serialize — the stored JSON is always tool-written, so its validity is guaranteed by the
 serializer, not by you. (The old markdown template,
@@ -1580,9 +1594,11 @@ or blocking — (fix the map, or justify and note why)** before rendering. So th
 write is **validate --check-sources → audit → render** (`--check-sources` is not optional — it is the
 deterministic backstop that a nonexistent-file anchor / wrong repo-root prefix can never slip through).
 
-**Run `coyodex finalize` as the pre-commit read.** It runs that sequence plus both anchor-drift
-passes in one command, and writes every finding to `.coyodex/finalize-report.{json,md}` with whole
-lists:
+**Run `coyodex finalize` as the pre-commit read.** It runs that sequence plus the SHAPE-ONLY
+anchor-drift pass in one command, and writes every finding to `.coyodex/finalize-report.{json,md}`
+with whole lists. The verdict-based drift pass runs only when you hand it `--verdicts`; without
+that flag the leg simply does not run and nothing in the report says so, so a run without it is
+not the full pre-commit read:
 
 ```
 .venv/bin/coyodex finalize .coyodex/project-map.json --repo <repo> [--verdicts <file>]...

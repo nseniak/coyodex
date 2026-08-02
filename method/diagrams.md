@@ -47,7 +47,7 @@ show/hide toggle. The element-keyed deltas are the data.
   `project-map.json`) from the server and renders the C4 altitudes —
   Context → Subsystems (click a box/arrow to drill in place, derived inter-subsystem edges; drill a
   subsystem for its components → code) — plus the **Entities** view (the T5 domain model; when grouped
-  into subdomains, a bounded-contexts overview that ⌘-drills into one subdomain's `classDiagram`; a
+  into subdomains, a bounded-contexts overview that ⌥-drills (or double-click) into one subdomain's `classDiagram`; a
   subsystem card also draws the subdomains its components own/read — the derived `S→SD` bridge) and the
   **Happy Path** as its own behavioural overlay (a black-box sequence diagram of the use cases; clicking
   a step drills into its use case's T6 flow — a sequence diagram + readable narrative — whose element

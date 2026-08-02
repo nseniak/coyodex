@@ -20,12 +20,14 @@ path: your cwd is the analyzed repo, which has no `.venv/`):
 ```
 
 **Show its output verbatim, as your first message.** Do not summarise, re-word or "the highlights
-are" it. It states the rule that decides the file set (git, minus `.gitignore`, minus
+are" it. It states the rule that decides the file set (git, minus `.gitignore`, minus coyodex's
+built-in exclusions — `node_modules/`, `dist/`, build output, lock files — minus
 `.coyodex/.ignore`), how many files that came to, what each ignore pattern removed — naming any
 pattern that removed nothing — and what the commit pin will mean. Paraphrase it and the narrowing
 turns into silence, after which the map reads complete because the evidence of what it skipped never
-reached the person reading it. It reports COUNTS and PATTERNS, not a file listing; if the user asks
-which files, answer then, from the repo.
+reached the person reading it. The only paths it lists are the uncommitted ones; the in-scope and
+excluded sets are reported as COUNTS and PATTERNS, so if the user asks which files, answer then,
+from the repo.
 
 **Order.** Run the briefing now, then go on to Steps 1–2 and decide the mode. The pin branch below
 depends on the mode, so come back to it once you know — it is written here because it belongs to

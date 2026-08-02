@@ -29,7 +29,7 @@ Every element has a stable, unique ID by prefix:
 | `SD` | Domain subdomain — a group of entities and/or nested subdomains (optional) |
 | `SF` | Sub-flow — a named, reusable step sequence shared by ≥2 flows |
 | `R` | Role — a primary actor |
-| `EP` | Entry point. **Minted by `assemble` from content, never authored** — fragments leave it empty, assembly dedups T4 rows by source anchor and numbers the survivors. Change-impact keeps its own content key (`ep:{source}`), which is stable across rebuilds where a minted number is not. |
+| `EP` | Entry point. **Minted by `assemble` from content, never authored** — fragments leave it empty, assembly dedups T4 rows by source anchor PLUS trigger — two rows sharing one anchor both survive — and numbers the survivors. Change-impact keeps its own content key (`ep:{source}`), which is stable across rebuilds where a minted number is not. |
 
 An ID is a **prefix + digits only** — `C1`, `S12`, `SD3` — never a letter-suffixed variant like
 `S12a`. To split a subsystem into sub-subsystems, give each a **new numeric `S` ID** and nest it
@@ -121,6 +121,8 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
 
   "tests_note":  "<the 'Tests run for this table?' honesty line>",
   "tests":       [ { "targets": ["Cn", …], "label", "tested", "tests": [ { "file": "<path:line|path/>", "why" }, … ], "gap", "confidence" } ],
+  "grounding":   { "claims_total", "claims_challenged", "claims_confirmed", "claims_refuted",
+                   "claims_unverifiable", "claims_superseded", "note" },   # `validate` blocks on the arithmetic
   "extras":      [ { "heading", "body": "<verbatim markdown>" } ] }
 ```
 
@@ -134,8 +136,11 @@ can't match.
 Semantics, stated on the fields:
 
 - **ID references** (a `subsystem`/`parent` pointer, an edge endpoint, a flow-step endpoint, an HP
-  step's `uc`, a relation `target`, an entry point's owning `component`, an ID mentioned in any
-  text) must resolve to a defined element — `coyodex validate` checks it.
+  step's `uc`, a relation `target`, an entry point's owning `component`, plus any id written in
+  prose as an explicit `[[Cn]]` marker) must resolve to a defined element — `coyodex validate`
+  checks it. A BARE id-shaped token in free prose is deliberately NOT a reference and is NOT
+  checked (`S256`, an `infra/S3/` path, a `D3` product name), so after retiring an id, scrub the
+  prose yourself — nothing will catch a leftover mention.
 - **`entry_points[].activation`** is a closed vocabulary (`self` / `external`; empty → inferred
   from `kind`) — `validate` blocks any other value, EXACT match: consumers (the viewer, the
   entry-surface coverage advisory, the eval profile) share one rule that falls back to the kind
@@ -407,8 +412,10 @@ path named), merges by ID (a duplicate ID across fragments is an error, never a 
 and serializes the canonical `project-map.json`. Nothing is silently fixed up: a malformed field
 fails loudly, naming the fragment and the field — `coyodex validate` on the assembled result is
 what catches anything `assemble`'s own checks don't. Validity of the stored file is guaranteed by
-the serializer, not by the LLM. It also writes a `build-fragments/` entry into `<out>/.gitignore`,
-so the fragments scratch dir (`.coyodex/build-fragments/`) never dirties the tree. Agents WRITE
+the serializer, not by the LLM. It also normalizes `<out>/.gitignore` so every per-run artifact is
+ignored — `build-fragments/`, `finalize-report.json`, `finalize-report.md`, `dev-rebuilds/` — and
+removes any `preindex.json` line (the pre-index ships WITH the map), so the scratch dirs never
+dirty the tree and the committed artifacts are never ignored by accident. Agents WRITE
 their fragments to files in that dir and return only the path (a large fragment returned inline
 gets truncated by sub-agent result caps — see method.md's harvest prompt). Then the usual invariant
 runs unchanged: `validate → audit → render`.

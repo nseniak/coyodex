@@ -9,9 +9,9 @@ meaning), scoped to the diff.
 
 | Step | Action | Writes | Committed? |
 |---|---|---|---|
-| **1 Build** | map the repo | `.coyodex/project-map.json` (+ generated md/html views + `preindex.json`) | yes — pinned to the code commit it describes |
+| **1 Build** | map the repo | `.coyodex/project-map.json` (+ the generated `project-map.md` view + `preindex.json`; the diagram is served, never written) | yes — pinned to the code commit it describes |
 | **2 Analyze** | diff the code against the baseline | `.coyodex/analysis-changes/<date>.md` (the report) | **no** — written to disk, uncommitted |
-| **3 Accept** | fold the report into the baseline | patches `project-map.json`, regenerates the views + pre-index | yes — all committed |
+| **3 Accept** | fold the report into the baseline | patches `project-map.json`, regenerates the markdown view + pre-index | yes — all committed |
 
 The change-impact report is a **file from the moment it's generated** (step 2) — just
 uncommitted. This mirrors git's own model: the report is a *working-tree change*, accept is
@@ -145,7 +145,9 @@ clean baseline.
 
 ## Deliberately out of scope (for now)
 
-No precomputed index / call-graph artifact — re-walk the diff against the baseline each time.
+No precomputed index is used FOR THIS ANALYSIS — re-walk the diff against the baseline each time.
+(The committed `preindex.json` and the call-graph ripple engine exist, but they serve the viewer's
+symbol search and its diff overlay, not the CLI's change impact.)
 Revisit only if scale/frequency makes re-reading the bottleneck. When that day comes, the
 structured source already exists (`project-map.json`), so a viewer/tool reads it directly rather
 than introducing a second maintained model.
