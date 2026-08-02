@@ -27,6 +27,7 @@ from coyodex import audit_model, grammar
 from coyodex.model import (
     Component,
     Dep,
+    Edge,
     Entity,
     EntityField,
     EntryPoint,
@@ -34,8 +35,10 @@ from coyodex.model import (
     FlowStep,
     GlossaryRow,
     Group,
+    HappyStep,
     MessagingRow,
     ProjectModel,
+    Role,
     StateMachine,
     StateTransition,
     Store,
@@ -45,7 +48,13 @@ from coyodex.model import (
     load_model,
     to_canonical_json,
 )
-from coyodex.viewer.gen_viewer import flow_actors, flow_narrative, gen_flow_mermaid
+from coyodex.viewer.gen_viewer import (
+    flow_actors,
+    flow_narrative,
+    gen_flow_map_mermaid,
+    gen_flow_mermaid,
+    hp_actors,
+)
 from coyodex.views import _store_str, model_to_graph, model_to_markdown
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mcpolis-project-map.json"
@@ -399,6 +408,148 @@ def test_flow_narrative_expands_subflow_in_place():
     assert len(msgs) == len(narr)                       # message[i] <-> narrative[i], notes excluded
     assert "rect rgb" in mm and "Note over" in mm and "Persist the thing" in mm
     assert mm.count("  end") == 1                       # one run -> one closed rect
+
+
+def make_flow_map_model() -> ProjectModel:
+    """One flow touching every box kind the map draws — an actor, two components grouped in a
+    subsystem, an entity and an external dep — plus a pair used by two steps."""
+    m = ProjectModel(title="Tiny", goal="A tiny demo.")
+    m.use_cases = [UseCase(id="UC1", name="View")]
+    m.subsystems = [Group(id="S1", name="Reading room", purpose="serves readers")]
+    m.components = [Component(id="C1", name="Viewer", purpose="shows", subsystem="S1"),
+                    Component(id="C2", name="Store", purpose="keeps", subsystem="S1")]
+    m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="db", used_for="rows")]
+    m.entities = [Entity(id="E1", name="Order", meaning="a customer order", source="src/o.py:1")]
+    m.flows = [Flow(uc="UC1", title="View",
+                    steps=[FlowStep(n=1, src="Andy", dst="C1", phrase="opens the page"),
+                           FlowStep(n=2, src="C1", dst="C2", phrase="asks for the order",
+                                    where="src/a.py:3"),
+                           FlowStep(n=3, src="C2", dst="E1", phrase="reads the Order",
+                                    where="src/b.py:5"),
+                           FlowStep(n=4, src="C2", dst="D1", phrase="queries the table",
+                                    where="src/b.py:9"),
+                           FlowStep(n=5, src="C1", dst="C2", phrase="asks again",
+                                    where="src/a.py:11")])]
+    return m
+
+
+def test_flow_map_draws_one_box_per_element_with_its_group():
+    """The leaf-only map: a box per touched element, kind-shaped and kind-coloured, each naming the
+    top-level group it belongs to — and no subsystem FRAME (the containers are what it drops)."""
+    g = model_to_graph(make_flow_map_model())
+    mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
+    assert mm.startswith("flowchart LR")
+    assert "subgraph" not in mm                                   # leaf-only: no container frames
+    assert 'C1["Viewer<br/>Reading room"]' in mm                   # component + its subsystem subtitle
+    assert 'E1("Order")' in mm and 'D1[("Postgres")]' in mm        # entity and dep keep their shapes
+    assert 'FA0([" <br/>Andy"])' in mm                             # the actor, as the Context stick figure
+    assert mm.count("classDef") == 4                               # component / dep / entity / human
+
+
+def test_flow_map_arrows_come_from_the_steps_and_carry_their_numbers():
+    """One arrow per ordered pair, labelled with the step positions riding it — the SAME 1-based
+    numbers the sequence diagram puts on its messages, so a number carries between the renderings."""
+    g = model_to_graph(make_flow_map_model())
+    mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
+    arrows = [ln.strip() for ln in mm.splitlines() if "-->" in ln]
+    assert arrows == ['FA0 -->|"1"| C1', 'C1 -->|"2, 5"| C2', 'C2 -->|"3"| E1', 'C2 -->|"4"| D1']
+    seq = gen_flow_mermaid(g, cast("dict", g["flows"][0]))
+    assert "C1->>C2: 2. asks for the order" in seq and "C1->>C2: 5. asks again" in seq
+
+
+def test_flow_map_ignores_the_backbone_edge_list():
+    """The map re-renders THIS FLOW'S steps, never the backbone edges — so a relationship the
+    scenario does not exercise cannot appear on it."""
+    m = make_flow_map_model()
+    m.edges = [Edge(src="C1", verb="calls", dst="D1", why="unrelated to this flow",
+                    where="src/a.py:99")]
+    g = model_to_graph(m)
+    mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
+    arrows = [ln.strip() for ln in mm.splitlines() if "-->" in ln]
+    assert 'C1 -->|"2, 5"| C2' in arrows                            # the pair the steps do exercise
+    assert not [a for a in arrows if a.startswith("C1 -->") and a.endswith("D1")]  # the edge is not drawn
+
+
+def test_flow_map_draws_a_service_actor_as_a_service():
+    """human vs service is the method's own distinction — an autonomous initiator must not be drawn as
+    a person on one rendering and a service on the other. The map uses the same hexagon the Context
+    view and the sequence lifelines use."""
+    m = make_flow_map_model()
+    m.roles = [Role(id="R1", name="Andy", kind="service", wants="to sync")]
+    g = model_to_graph(m)
+    mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
+    assert 'FA0{{"Andy"}}' in mm and "class FA0 svc" in mm    # hexagon, not the stick-figure box
+    assert "classDef svc" in mm and "classDef human" not in mm
+
+
+def test_flow_map_and_flow_actors_agree_on_every_alias():
+    """The frontend crosses between an actor's `FAn` box and its roster entry, so a drawing that
+    numbers its actors differently from `flow_actors` would resolve one participant as another. The
+    hard case is a DANGLING element id (validate blocks it; serve still renders drafts): it must count
+    as an element on BOTH sides, never consume an alias on one of them."""
+    m = make_flow_map_model()
+    m.flows[0].steps.insert(0, FlowStep(n=6, src="C99", dst="C1", phrase="a dangling id",
+                                        where="src/x.py:1"))
+    g = model_to_graph(m)
+    mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
+    seq = gen_flow_mermaid(g, cast("dict", g["flows"][0]))
+    roster = flow_actors(g, cast("dict", g["flows"][0]))
+    assert [a["name"] for a in roster] == ["Andy"] and roster[0]["aid"] == "FA0"
+    assert 'FA0([" <br/>Andy"])' in mm and "actor FA0 as Andy" in seq   # the same alias on both drawings
+    assert 'C99["C99"]' in mm                                          # the dangling id stays an element
+    assert "FA1" not in mm and "FA1" not in seq
+
+
+def test_actor_facts_survive_a_name_the_sanitisers_rewrite():
+    """A role name is AUTHORED text; the diagrams draw a sanitised form of it. Every lookup joining a
+    drawn actor back to its Roles entry must resolve whichever form its caller holds — a flow step's
+    endpoint is authored, a Happy Path actor arrives sanitised. Keying only one of the two lost the
+    role's `kind`, and an empty kind draws a `service` actor as a PERSON: it broke the flow view when
+    the index was display-keyed, and the Happy Path when it was authored-keyed. Both are asserted here
+    so neither direction can regress alone."""
+    m = make_flow_map_model()
+    m.roles = [Role(id="R1", name="Ops#1 <sync>", kind="service", wants="to sync")]
+    m.use_cases = [UseCase(id="UC1", name="View", actors=["Ops#1 <sync>"])]
+    m.flows[0].steps[0] = FlowStep(n=1, src="Ops#1 <sync>", dst="C1", phrase="opens the page")
+    m.happy_path = [HappyStep(id="HP1", title="The bot syncs", uc="UC1")]
+    g = model_to_graph(m)
+    roster = flow_actors(g, cast("dict", g["flows"][0]))
+    assert roster[0]["kind"] == "service" and roster[0]["wants"] == "to sync"   # authored token
+    assert hp_actors(g)[0]["kind"] == "service"                                 # sanitised token
+    mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
+    assert "class FA0 svc" in mm                      # the kind reached the drawing
+    # The frontend joins a drawn box back to this roster BY ALIAS, so the alias must agree — the raw
+    # name never has to survive the round trip through the sanitised label.
+    assert roster[0]["aid"] == "FA0" and "FA1" not in mm
+    assert roster[0]["name"] == "Ops#1 <sync>"        # the roster stays in the authored text space
+
+
+def test_two_roles_that_differ_only_in_stripped_characters_stay_distinct():
+    """Roles are looked up by name in two text spaces, so two names that COLLAPSE onto each other
+    (`Night Shift` / `Night  Shift` — the sanitiser folds the double space) must not resolve to one
+    another, and the answer must not depend on which was written first in the Roles table."""
+    def facts(order: list[Role]) -> tuple[str, str]:
+        m = make_flow_map_model()
+        m.roles = order
+        m.use_cases = [UseCase(id="UC1", name="View", actors=["Night Shift"])]
+        m.flows[0].steps[0] = FlowStep(n=1, src="Night Shift", dst="C1", phrase="opens the page")
+        g = model_to_graph(m)
+        return (flow_actors(g, cast("dict", g["flows"][0]))[0]["kind"],
+                flow_actors(g, cast("dict", g["flows"][0]))[0]["wants"])
+
+    plain = Role(id="R1", name="Night Shift", kind="human", wants="to watch")
+    doubled = Role(id="R2", name="Night  Shift", kind="service", wants="to poll")
+    assert facts([plain, doubled]) == ("human", "to watch")   # the authored name wins…
+    assert facts([doubled, plain]) == ("human", "to watch")   # …in either table order
+
+
+def test_flow_map_expands_subflows_like_the_sequence_does():
+    """A sub-flow reference is one step in the model and several in both renderings — same expansion,
+    so the two never disagree about what the flow touches."""
+    g = model_to_graph(make_subflow_model())
+    mm = gen_flow_map_mermaid(g, cast("dict", g["flows"][0]))
+    arrows = [ln.strip() for ln in mm.splitlines() if "-->" in ln]
+    assert arrows == ['FA0 -->|"1"| C1', 'C1 -->|"2, 4"| C2', 'C2 -->|"3"| C1']  # SF1's two steps, inline
 
 
 def test_flow_actors_index_the_expanded_list():

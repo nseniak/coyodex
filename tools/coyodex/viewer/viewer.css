@@ -145,6 +145,15 @@ body.vresizing #stage { pointer-events: none; }
 #cappicker:not([hidden]) ~ #envpicker:not([hidden]) { bottom: 62px; }
 .cappick-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
                color: #6b7280; }
+/* The use-case flow's control card: the Sequence/Map switch + the step player. The same floating card as
+   the two pickers above (it is never on screen at the same time as either: those are structural views,
+   this one is a flow). The segmented control itself reuses `.uc-seg`, the Use Cases tab's group-by
+   switch. */
+#flowpicker { position: absolute; left: 12px; bottom: 12px; z-index: 6; background: #fff;
+              border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 10px;
+              box-shadow: 0 2px 10px rgba(0,0,0,.07); display: flex; align-items: center; gap: 7px; }
+#flowpicker[hidden] { display: none; }
+#flowmode { display: flex; align-items: center; gap: 7px; }
 #cappicker select { font: inherit; font-size: 12px; padding: 3px 7px; border: 1px solid #d1d5db;
                     border-radius: 6px; background: #fff; color: #111827; max-width: 230px; }
 .env-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
@@ -661,10 +670,11 @@ body.altmod .opensrc, body.altmod .opensrc * {
 #legend .row { display: flex; align-items: center; gap: 7px; margin: 3px 0; }
 #legend svg { display: block; flex: 0 0 auto; }
 
-/* Step player for use-case flow views — floats bottom-centre over the diagram. `hidden` toggles from JS. */
-#flowplayer { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 6;
-              display: inline-flex; align-items: center; gap: 6px; background: #fff; border: 1px solid #e5e7eb;
-              border-radius: 999px; padding: 4px 6px; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+/* Step player for use-case flow views. It lives INSIDE #flowpicker (one card for "how is this flow
+   drawn" + "where am I in it"), so it is laid out inline here and carries only the divider that separates
+   it from the mode switch — the card owns the position, background and shadow. `hidden` toggles from JS. */
+#flowplayer { display: inline-flex; align-items: center; gap: 6px;
+              padding-left: 9px; margin-left: 2px; border-left: 1px solid #e5e7eb; }
 #flowplayer[hidden] { display: none; }
 #flowplayer button { font-size: 12px; line-height: 1; padding: 5px 11px; border: 0; border-radius: 999px;
                      background: #6366f1; color: #fff; cursor: pointer; }

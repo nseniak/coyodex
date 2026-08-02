@@ -12,7 +12,7 @@ separate persisted model is needed.
 | **Container** | runtime pieces (services, datastores, sandboxes) | Deployment + components |
 | **Component** | T1 components + their verbed arrows | T1 + the edge list |
 | **Code** | entry points → `file:line`; the **domain model as a `classDiagram`** (entities with attributes + typed, cardinal relations) — led by a **Subdomains overview** when the model is grouped into subdomains | T4 anchors · T5 [domain cards](domain-cards.md) · Subdomains |
-| **Behavioral overlay** | the Happy Path as a black-box sequence of use cases; drill a step into its use case's T6 flow (a sequence diagram of actor + components/deps/entities) | HP steps + T6 flows |
+| **Behavioral overlay** | the Happy Path as a black-box sequence of use cases; drill a step into its use case's T6 flow, drawn either as a **sequence** (actor + components/deps/entities as lifelines, the steps in order) or as a **map** (the same steps as a leaf-only box graph — what this use case touches) | HP steps + T6 flows |
 
 Drill down = zoom one level in; step back = zoom out — the same "name a row to drill"
 navigation as the markdown, made visual. The Container and Code altitudes **nest to any depth**: a
@@ -51,7 +51,14 @@ show/hide toggle. The element-keyed deltas are the data.
   subsystem card also draws the subdomains its components own/read — the derived `S→SD` bridge) and the
   **Happy Path** as its own behavioural overlay (a black-box sequence diagram of the use cases; clicking
   a step drills into its use case's T6 flow — a sequence diagram + readable narrative — whose element
-  links locate each element in its home view). Navigated as a back/forward history (header arrows,
+  links locate each element in its home view). A flow offers **two renderings of its one step list**,
+  switched in place: the **sequence** (in what order) and a **map** (what it touches — one box per
+  element, kind-coloured as everywhere else, entities and dependencies included, with no container
+  frames, since scoped to one use case a subsystem frame holds one or two members and reads as noise;
+  each box names its area instead). The map's arrows are the flow's own steps, deduplicated per pair
+  and labelled with the step numbers riding them, never the backbone edge list — so it cannot draw a
+  relationship this scenario does not exercise. The step player walks either rendering, and switching
+  keeps the reader's place. Navigated as a back/forward history (header arrows,
   ⌘/⌥+←/→, breadcrumb) with pan/zoom and click→panel. A change-impact report adds a baseline⇄diff
   overlay on the Subsystems views (subsystem boxes badged with their subtree's change, components badged
   in their cards, a change summary in the panel). There is no flat whole-repo Components tab — it was too

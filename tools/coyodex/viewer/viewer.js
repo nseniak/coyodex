@@ -34,6 +34,7 @@ let DEPLOY_ENV = null;     // the selected environment (null = All); persists ac
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box sequence
 let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
+let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
 let HP_ACTORS;          // Happy-Path lifelines: [{aid,name,kind,wants,steps,stepIdx}]
 let HP_STEP_MARKS;      // per Happy-Path step, the participant ids its ONE arrow crosses — a use case's
@@ -82,6 +83,7 @@ function applyBundle(b) {
   DEPLOYMENT_EDGES = b.deploymentEdges || {}; DEPLOYMENT_INFRA_EDGES = b.deploymentInfraEdges || {};
   DEPLOYMENT_CALL_EDGES = b.deploymentCallEdges || {};
   MERMAID_HP = b.mermaidHp; FLOWS_MM = b.flowsMm; FLOWS_NARR = b.flowsNarr;
+  FLOWS_MAP = b.flowsMap || {};
   HP_ACTORS = b.hpActors; HP_STEP_MARKS = b.hpStepMarks || []; FLOW_ACTORS = b.flowActors; ELEMENT_TINT = b.elementTint;
   MERMAID_LIBS = b.mermaidLibs; FOLDED_LIBS = b.foldedLibs; CONTEXT_EDGES = b.contextEdges;
   MERMAID_BY_BUCKETFOLD = b.mermaidByBucketFold || {}; FOLDED_BUCKETS = b.foldedBuckets || [];
@@ -242,6 +244,11 @@ const UC_NODES = Object.values(GRAPH.nodes || {}).filter((n) => n.kind === 'usec
 const HP_STEPS_BY_UC = {};
 for (const s of GRAPH.happy_path || []) if (s.uc) (HP_STEPS_BY_UC[s.uc] ||= []).push(s.id);
 // Role lookup by name (lower-cased) -> {name, kind, wants} for the Use Cases actor-section headers.
+// Keyed in the AUTHORED name space, because its tokens are `usecase.actors[]`, which the server builds
+// from the roles table's own names. Keep it that way: a role name has a second, SANITISED form (what
+// the diagrams draw), and every bug in this area has been an index in one space read with a token from
+// the other — the server-side twin of this table carries both spellings for exactly that reason
+// (gen_viewer._roles_by_name).
 const ROLE_BY_NAME = {};
 for (const r of GRAPH.roles || []) ROLE_BY_NAME[(r.name || '').trim().toLowerCase()] = r;
 // Reverse traceability ("Used in UC"): element id -> Set of use-case ids whose T6 flow steps through
@@ -1767,7 +1774,7 @@ function bindFlow(uc) {
   // Hand the step player everything it needs to walk this flow: the ordered steps, each step's arrow+label
   // DOM (msgEls) and its endpoint columns (partsById). render() shows the strip and lands on step 1 once
   // svg-pan-zoom exists (centering needs it). No flow -> null, so the strip stays hidden.
-  flowPlay = steps.length ? { uc, steps, msgEls, partsById, cur: -1 } : null;  // -1 = unstarted (see flowInit)
+  flowPlay = steps.length ? { uc, kind: 'sequence', steps, msgEls, partsById, cur: -1 } : null;  // -1 = unstarted (see flowInit)
 }
 // --- use-case flow step player --------------------------------------------------
 // Walk a flow's actions one at a time. Each step is selected exactly as a click on its arrow would —
@@ -1814,15 +1821,28 @@ function flowReveal(els, i) {
   if (!mainPz || !els || !els.length) return;
   const d = diagram.getBoundingClientRect();
   const st = flowPlay.steps[i];
-  // preferred target: arrow + label (full extent) + both endpoint lifelines (x only, not the wide box).
+  // Preferred target: the arrow + its label (full extent) plus both endpoints. What an "endpoint" is
+  // depends on the rendering: a sequence lifeline is a tall column, so only its x matters (including its
+  // full height would always overflow); a map endpoint is a box, which is exactly what should be in view.
+  const map = flowPlay.kind === 'map';
   const items = els.map((el) => ({ el, xOnly: false }));
-  for (const end of [st.srcId, st.dstId])
+  // On the map an actor endpoint is a drawn box like any other, so it is addressed by its `FAn` alias;
+  // in the sequence view actor parts live outside partsById (see bindFlow), so only element ids apply.
+  const ends = map
+    ? [flowMapBoxId(flowPlay.uc, st.srcId, st.src), flowMapBoxId(flowPlay.uc, st.dstId, st.dst)]
+    : [st.srcId, st.dstId];
+  for (const end of ends)
     for (const el of (flowPlay.partsById[end] || []))
-      if (el.tagName === 'line') items.push({ el, xOnly: true });
+      if (map) items.push({ el, xOnly: false });
+      else if (el.tagName === 'line') items.push({ el, xOnly: true });
   let box = flowRect(items);
   if (!box) return;
   if (box.r - box.l > d.width || box.b - box.t > d.height) {   // too big to show in full -> just the label
-    const label = els.find((e) => e.classList && e.classList.contains('messageText'));
+    // The label carries the step number, so it is the one part worth keeping when the whole target
+    // cannot fit. Mermaid names it differently per diagram type: `messageText` in a sequence diagram,
+    // `edgeLabel` in a flowchart.
+    const label = els.find((e) => e.classList
+      && (e.classList.contains('messageText') || e.classList.contains('edgeLabel')));
     box = label ? flowRect([{ el: label, xOnly: false }]) : null;
     if (!box || box.r - box.l > d.width || box.b - box.t > d.height) return;  // even the label can't fit
   }
@@ -1856,7 +1876,14 @@ function flowGoto(i) {
   i = Math.max(0, Math.min(n - 1, i));
   flowPlay.cur = i;  // the player walks one step at a time -> REPLACE the selection with this step
   const sel = mainScene.selectors['flowstep:' + flowPlay.uc + ':' + i];
-  if (sel) { selClear(mainScene); sel(); }  // selClear + selAdd = a single-step selection (not additive)
+  // selClear + selAdd = a single-step selection (not additive). A step with NO selector — a rendering
+  // that could not draw this step's arrow — resets the scene INSTEAD: landing on step n while the
+  // previous step's arrow is lit, the diagram is dimmed to its neighbourhood and its card is open
+  // would read as "this is step n" about the wrong step. `selClear` alone would only drop the glow and
+  // leave both of the others standing, so it takes the full reset (glow + focus + panel) to make the
+  // absence honest.
+  if (sel) { selClear(mainScene); sel(); }
+  else resetScene(mainScene);
   flowReveal(flowPlay.msgEls[i] || [], i);
   flowCounter();
 }
@@ -1872,10 +1899,15 @@ function flowStepBy(d) {
 // selected step starts there; a fresh open is UNSTARTED — nothing selected, the overview panel stays, and
 // the counter sits ready at step 1 (the first Next selects it).
 function flowInit() {
+  const resume = flowResumeAt;
+  flowResumeAt = -1;   // consumed either way: a pending resume must never outlive the render it was set for
   if (!flowPlay || !flowPlay.steps.length) { flowplayer.hidden = true; return; }
   flowplayer.hidden = false;
   const m = (mainScene.selectedKey || '').match(/^flowstep:.*:(\d+)$/);
   flowPlay.cur = m ? +m[1] : -1;
+  // A rendering switch (Sequence <-> Map) re-enters the same flow at the step the reader was on — the
+  // two drawings share one step list, so the walk continues instead of restarting.
+  if (resume >= 0 && resume < flowPlay.steps.length) { flowGoto(resume); return; }
   flowCounter();
 }
 // A flow step's side panel — EVERY step shows ITSELF (its phrase, endpoints, note, and its own call
@@ -3588,8 +3620,12 @@ function ucSteps(uc) {
   return out;
 }
 
-function applyCapOverlay(scene) {
+function applyCapOverlay(scene, s) {
   if (!scene) return;
+  // A use-case flow map is ALREADY scoped — to one use case, which is narrower than any capability.
+  // Dimming it against a scope chosen on a structural screen could only grey out boxes this very
+  // scenario touches, so the overlay stays off here (the picker is hidden here for the same reason).
+  if (s && s.kind === 'usecase') return;
   const hit = capOverlayElements();
   const off = new Set();
   for (const id in scene.nodeEls) {
@@ -3610,6 +3646,8 @@ function applyCapOverlay(scene) {
 // same reason: it changes what the diagram says, so it belongs beside it rather than in a pane that
 // vanishes the moment something is selected. Shown on the structural views, where "which parts of the
 // machine serve this?" is a question you can actually ask.
+// Shown here, hidden by render()'s up-front loop — see the note on syncFlowPicker for why a floating
+// control needs both.
 function syncCapPicker(s) {
   const el = document.getElementById('cappicker');
   if (!el) return;
@@ -3631,6 +3669,204 @@ function syncCapPicker(s) {
     CAP_OVERLAY = v ? { kind: v.split(':')[0], id: v.split(':').slice(1).join(':') } : null;
     applyCapOverlay(mainScene);   // re-dim in place: no re-render, no layout jump
   });
+}
+
+// ── a use case's two renderings: Sequence and Map ─────────────────────────────────────────────────
+// One traced flow, drawn two ways. The SEQUENCE answers "in what order"; the MAP answers "what does
+// this use case touch", in the structural views' own visual language — one kind-coloured box per
+// element, entities and dependencies included, no subsystem frames (scoped to one use case a frame
+// holds one or two members and reads as noise; each box names its area instead).
+//
+// Both are generated from the SAME expanded steps (gen_viewer.gen_flow_mermaid / gen_flow_map_mermaid),
+// so they cannot disagree — and the map's arrows carry the sequence's own step numbers, so a number
+// read on one rendering finds the same step on the other.
+//
+// The choice is sticky across navigation (like DEPLOY_ENV): a reader who prefers one rendering keeps
+// it while drilling from use case to use case.
+let FLOW_VIEW = 'sequence';   // 'sequence' | 'map'
+let flowResumeAt = -1;        // the step to land on after a rendering switch (-1 = none pending)
+const EMPTY_FLOW_MAP = 'flowchart LR\n  NOFLOW["No T6 flow recorded"]';
+
+function flowMermaidFor(uc) {
+  return FLOW_VIEW === 'map' ? (FLOWS_MAP[uc] || EMPTY_FLOW_MAP) : (FLOWS_MM[uc] || EMPTY_FLOW_MM);
+}
+
+// The card. Floats bottom-left over the diagram like the environment and capability pickers, and for
+// the same reason: it changes what the diagram says, so it belongs beside it rather than in a pane that
+// vanishes the moment something is selected.
+//
+// TWO PLACES, for any control that floats over the diagram: this function SHOWS it, and render()'s
+// up-front loop HIDES it before the table tabs' early returns (those never reach the end of render, so
+// a control shown on a diagram would keep floating over the table you switched to). Add a control here
+// and you must add it there. `#envpicker` needs neither, because it is synced from renderChrome, which
+// every exit path calls — the tidier arrangement, kept in mind if a fourth control ever appears.
+// Only the MODE half is rebuilt here — the step player is
+// static markup inside the same card, shown and driven by flowInit/flowCounter, so re-rendering the
+// switch can never tear out the player's buttons.
+function syncFlowPicker(s) {
+  const card = document.getElementById('flowpicker'), el = document.getElementById('flowmode');
+  if (!card || !el) return;
+  const on = !!(s && s.kind === 'usecase');
+  card.hidden = !on;
+  if (!on) { el.innerHTML = ''; return; }
+  const btn = (v, label) =>
+    `<button type="button" data-fv="${v}"${FLOW_VIEW === v ? ' class="on"' : ''}>${label}</button>`;
+  el.innerHTML = '<label class="cappick-lbl">Flow as</label>'
+    + `<span class="uc-seg">${btn('sequence', 'Sequence')}${btn('map', 'Map')}</span>`;
+  el.querySelectorAll('.uc-seg button').forEach((b) => b.addEventListener('click', () => {
+    const v = b.getAttribute('data-fv');
+    if (v === FLOW_VIEW) return;
+    FLOW_VIEW = v;
+    // Keep the reader's place: the two renderings walk the SAME steps, so switching mid-walk lands on
+    // the same step in the other drawing rather than resetting to the start. flowInit consumes this.
+    // `render()` nulls flowPlay synchronously but repaints asynchronously, so a second click while the
+    // repaint is in flight must not overwrite a pending position with "unstarted".
+    if (flowPlay) flowResumeAt = flowPlay.cur;
+    // Same view identity, a completely different layout (lifelines vs a box graph), so the camera
+    // remembered for this view would frame the new drawing wrongly — drop it and let the new
+    // rendering fit fresh. (`resetTab` drops it the same way for the same reason.)
+    const cur = history[hi];
+    if (cur) { delete vpByView[stateKey(cur)]; delete cur.vp; }
+    render();          // same state, the other rendering of the same flow
+  }));
+}
+
+// A map box's Mermaid id IS its element id — except an actor, which carries an `FAn` alias (a Role has
+// no node, so there is no id to use). These two helpers cross that boundary in both directions:
+// `flowMapToken` turns a drawn box id into the token a narrative step carries as its endpoint, and
+// `flowMapBoxId` goes the other way — the direction the step player needs.
+//
+// Both go through FLOW_ACTORS, which is the ONE table in the RAW name space the narrative steps use.
+// Two rejected alternatives, each of which was tried:
+//   * trusting the roster's numbering while the generators numbered by a different rule — the two
+//     disagreed on a draft map carrying a dangling element id. Fixed at the source instead: the
+//     generators and `flow_actors` now share `is_role_endpoint`, so one alias means one participant,
+//     and a test pins that agreement (test_flow_map_and_flow_actors_agree_on_every_alias).
+//   * reading the names off the DRAWN boxes, which sounds authoritative but is not: a box label is
+//     `_safe_label(name)`, so a role named `Ops|Team` is drawn `Ops/Team` and would never match the
+//     step's raw token — its box goes inert and its steps lose their arrows.
+// The lesson both times: cross the alias boundary in ONE text space, and it must be the authored one.
+function flowMapToken(uc, mid) {
+  if (!/^FA\d+$/.test(mid)) return mid;
+  const a = (FLOW_ACTORS[uc] || []).find((x) => x.aid === mid);
+  return a ? a.name : mid;
+}
+function flowMapBoxId(uc, id, name) {
+  if (id) return id;
+  const a = (FLOW_ACTORS[uc] || []).find((x) => x.name === name);
+  return a ? a.aid : name;
+}
+// The steps riding one arrow of the map. An arrow is a PAIR, and a pair can carry several steps (that
+// is why the arrow is labelled with their numbers) — so its panel lists them all, each with its own
+// action and call site, rather than picking one to stand for the rest.
+function flowMapSteps(uc, a, b) {
+  const ta = flowMapToken(uc, a), tb = flowMapToken(uc, b);
+  const out = [];
+  (FLOWS_NARR[uc] || []).forEach((st, i) => {
+    if ((st.srcId || st.src) === ta && (st.dstId || st.dst) === tb) out.push({ st, i });
+  });
+  return out;
+}
+function showFlowPair(uc, a, b) {
+  const steps = flowMapSteps(uc, a, b);
+  if (!steps.length) { panel.innerHTML = EMPTY_PANEL; return; }
+  const first = steps[0].st;
+  const end = (label, id) => id ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
+  const rows = steps.map(({ st, i }) =>
+    '<dd><a href="#" class="flowstepref" data-i="' + i + '"><strong>' + (i + 1) + '.</strong> '
+    + mdInline(st.verb || 'uses') + '</a>'
+    + (st.note ? '<span class="muted"> — ' + mdInline(st.note) + '</span>' : '') + '</dd>').join('');
+  panel.innerHTML = '<div class="pane-title"><h2>' + esc(first.src) + ' &rarr; ' + esc(first.dst) + '</h2>'
+    + '<span class="badge edge">' + steps.length + ' step' + (steps.length > 1 ? 's' : '') + '</span></div>'
+    + '<p class="endpoints">' + end(first.src, first.srcId) + ' &rarr; ' + end(first.dst, first.dstId) + '</p>'
+    + '<dl><dt>Steps on this arrow</dt>' + rows + '</dl>';
+  bindFlowRefs();
+  // Each listed step opens its own full card — the same card the sequence view's arrow opens, and the
+  // same one the step player lands on — so a step's detail lives in exactly one place.
+  panel.querySelectorAll('a.flowstepref').forEach((el) => el.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    flowGoto(+el.getAttribute('data-i'));   // walking from the list keeps the player's counter in step
+  }));
+  // An arrow bundles several steps, each grounded at a DIFFERENT call site, so this pane grounds
+  // nothing: clear the code-viewer/tree highlight rather than leave the previous step's file standing
+  // under a panel that no longer describes it (the same clear showEdge and showFlowStep do).
+  cvElement = null;
+  setTreeSelection(null);
+  highlightTreePath(null);
+}
+function bindFlowMap(uc) {
+  const scene = mainScene;
+  const steps = FLOWS_NARR[uc] || [];
+
+  // Every element box selects exactly as it does in any other diagram (glow, neighbourhood dim, its own
+  // card, code-viewer sync). An ACTOR box has no GRAPH node, so bindNodes skips it — register it in the
+  // scene by hand so it is a first-class box too: same glow, same neighbourhood dim (nodeFocus reads
+  // scene.nodeEls/edgeEls, both of which now know the alias), only its card differs (a Role's card, not
+  // an element's).
+  bindNodes(scene, (id, el, ev) => selectNodeFromCanvas(el, id, ev));
+  scene.root.querySelectorAll('g.node').forEach((el) => {
+    const aid = idOf(el);
+    if (!aid || !/^FA\d+$/.test(aid)) return;
+    // Matched by alias, which the generators and `flow_actors` allocate under one shared rule (see
+    // flowMapToken). A box with no matching roster entry is left inert rather than handed some other
+    // actor's card — silence beats a confident wrong name.
+    const a = (FLOW_ACTORS[uc] || []).find((x) => x.aid === aid);
+    if (!a) return;
+    scene.nodeEls[aid] = el;
+    if (el.classList.contains('human')) stickFigureNode(el);
+    el.style.cursor = 'pointer';
+    // Built lazily (like every other node descriptor): `nodeFocus` reads scene.edgeEls, which bindEdges
+    // below fills in after this runs.
+    const desc = () => ({ key: 'node:' + aid, glow: () => glowNode(el),
+                          focus: nodeFocus(scene, aid), show: () => showFlowActor(uc, a) });
+    scene.selectors['node:' + aid] = () => selAdd(scene, desc());
+    bindHoverGlow(scene, el, aid);
+    el.addEventListener('click', (ev) => {
+      if (isDrag(ev)) return;
+      ev.stopPropagation();
+      pickSelBox(scene, desc(), el, ev);   // shift=frame, ⌘=toggle, plain=replace — as any box
+    });
+  });
+
+  // Arrows: index them by pair, so both consumers below read one source — the arrow's own selection
+  // (which lists every step riding it) and the step player (which needs the DOM of the arrow carrying
+  // step i).
+  const arrows = {};                       // 'src>dst' -> {path, label}
+  bindEdges(scene, (m) => {
+    const key = m[1] + '>' + m[2];
+    if (!flowMapSteps(uc, m[1], m[2]).length) return null;
+    return { e: { src: m[1], dst: m[2] },
+             selKey: 'flowpair:' + uc + ':' + key,
+             showFn: () => showFlowPair(uc, m[1], m[2]) };
+  });
+  eachEdge(scene.root, (p, label, m) => {
+    const key = m[1] + '>' + m[2];
+    if (!arrows[key]) arrows[key] = { path: p, label };
+  });
+
+  // One selector per STEP, keyed exactly as the sequence view keys its own (`flowstep:<uc>:<i>`), so the
+  // step player, the history restore and the pair panel's step links all drive the map through the same
+  // door they drive the sequence through. Selecting step i glows the arrow that carries it and dims to
+  // its two boxes — the map's equivalent of lighting one message and its two lifelines.
+  const msgEls = [];
+  steps.forEach((st, i) => {
+    const a = flowMapBoxId(uc, st.srcId, st.src), b = flowMapBoxId(uc, st.dstId, st.dst);
+    const arrow = arrows[a + '>' + b];
+    msgEls[i] = arrow ? [arrow.path, arrow.label].filter(Boolean) : [];
+    if (!arrow) return;                    // a step whose pair was not drawn: no glow, but it still counts
+    const desc = { key: 'flowstep:' + uc + ':' + i,
+                   glow: () => glowEdge(arrow.path, arrow.label),
+                   focus: { nodes: new Set([a, b]), edge: (e) => e.src === a && e.dst === b },
+                   show: () => showFlowStep(uc, i) };
+    scene.selectors[desc.key] = () => selAdd(scene, desc);
+  });
+
+  // Hand the player the same shape the sequence view hands it: the ordered steps, each step's arrow DOM,
+  // and the endpoint boxes to keep in view. `kind` tells flowReveal which geometry it is looking at —
+  // lifeline columns (x only) there, whole boxes here.
+  const partsById = {};
+  for (const id in scene.nodeEls) partsById[id] = [scene.nodeEls[id]];
+  flowPlay = steps.length ? { uc, kind: 'map', steps, msgEls, partsById, cur: -1 } : null;
 }
 
 function subtreeTouched(id, hit) {
@@ -4181,7 +4417,7 @@ function mermaidFor(s) {
   if (s.kind === 'deploymentGroup') return DEPLOYMENT_GROUP_CARDS[s.gid];
   if (s.kind === 'deploymentUnit') return DEPLOYMENT_CARDS[s.unit];
   if (s.kind === 'hp') return MERMAID_HP;
-  if (s.kind === 'usecase') return FLOWS_MM[s.uc] || EMPTY_FLOW_MM;
+  if (s.kind === 'usecase') return flowMermaidFor(s.uc);  // Sequence or Map — the flow picker's choice
   if (s.kind === 'libs') return MERMAID_LIBS;
   if (s.kind === 'bucketfold') return MERMAID_BY_BUCKETFOLD[s.bkid];
   // component: the baked report ships a diff-styled diagram (MERMAID_DIFF); a live diff has none, so it
@@ -4242,7 +4478,7 @@ function bindFor(s) {
   else if (s.kind === 'domedge') { bindDomain(); bindFrameDrill(mainScene); }  // both subdomains framed; ⌘-click a frame -> its card
   else if (s.kind === 'bridge') { bindDomain(); bindFrameDrill(mainScene); }  // subsystem×subdomain; components+entities+C→E edges, frames drill
   else if (s.kind === 'hp') bindHP();
-  else if (s.kind === 'usecase') bindFlow(s.uc);
+  else if (s.kind === 'usecase') (FLOW_VIEW === 'map' ? bindFlowMap : bindFlow)(s.uc);
   else if (s.kind === 'deployment') bindDeployment();
   else if (s.kind === 'deploymentUnit') bindDeployment(s.unit);  // same binder; the focal process (s.unit) drills nowhere further
   else if (s.kind === 'libs') bindLibs();
@@ -5096,6 +5332,15 @@ async function render(sArg, transient) {
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   const s = sArg || history[hi];
+  // Hide every floating over-the-diagram control HERE, before the HTML-tab early returns below. Their
+  // sync* functions run at the END of render, which the table views (Glossary / Use Cases / System /
+  // Data / Tests) and the degraded "could not render" branch never reach — so a control shown on a
+  // diagram would otherwise still be floating over the table you switched to. Each sync* re-shows its
+  // own control when the view warrants it.
+  for (const id of ['flowpicker', 'cappicker']) {
+    const c = document.getElementById(id);
+    if (c) c.hidden = true;
+  }
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
@@ -5156,8 +5401,9 @@ async function render(sArg, transient) {
   // The capability overlay re-applies on EVERY render, so it survives a drill, a dive, back/forward
   // and a tab restore — unlike the environment filter, which is re-applied from its own screen only
   // because it is scoped to that screen. A scope the reader chose should not evaporate on navigation.
-  applyCapOverlay(mainScene);
+  applyCapOverlay(mainScene, s);
   syncCapPicker(s);
+  syncFlowPicker(s);
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
   // pendingMatchTextId: a node reached this way ALWAYS gets the zoom-to-match-sidebar-text-size move

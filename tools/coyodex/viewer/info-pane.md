@@ -119,6 +119,34 @@ appear expanded inside each referencing flow's diagram, wrapped in a tinted bloc
 sub-flow's name in a note. Each expanded step selects like any other step; its pane carries the
 "Part of sub-flow" row above.
 
+### Flow map arrow (the **Map** rendering)
+
+The flow card (bottom-left of a use-case view) holds both flow controls: the **Flow as
+Sequence / Map** switch and the **step player**. The Map draws the same steps as one box per touched
+element — component, dependency, entity, the driving actor — in the structural views' own shapes and
+colours, with no subsystem frames (each box names its area on a second line instead). Boxes select
+exactly like the boxes of any other diagram, the actor box included.
+
+The **step player walks either rendering** — same steps, same panels, same code-viewer sync; on the
+Map it glows the arrow carrying the current step and dims to its two boxes. Switching rendering
+mid-walk keeps your place.
+
+Two things the Map deliberately does not carry: an arrow's pane grounds no single code location (its
+steps have different call sites — open a step for its own), and a **sub-flow run is not framed** the
+way the sequence tints it, since its steps can be spread across several arrows; each step's pane
+still names the sub-flow it belongs to.
+
+An arrow is a PAIR, and a pair can carry several steps (its label lists their numbers — the same
+numbers the sequence diagram puts on its messages), so its pane lists them all rather than picking
+one to stand for the rest. Each listed step opens the **Flow step** pane above, so a step's own
+detail — its note, its call site, the arrow it rides — still lives in exactly one place.
+
+| Property | Display | Action |
+|---|---|---|
+| source → destination | heading + a pill counting the steps | |
+| source → destination | text (each endpoint links to that element) | |
+| Steps on this arrow | list — `n.` + the step's own action | opens that step's own pane |
+
 ---
 
 ## Actor

@@ -96,8 +96,10 @@
                  Each view's caption lives in the info pane's top-level state (see VIEW_Q). -->
             <button data-view="hp">Happy Path</button>  <!-- the landing view; internal kind stays `hp` -->
             <button data-view="usecases">Use Cases</button>  <!-- actor-grouped catalog (hidden when no use cases) -->
-            <button data-view="container">Subsystems</button>
+            <!-- Entities before Subsystems: the behavioural tabs are followed by WHAT the system is about
+                 (its domain model) and only then by the machine that implements it. -->
             <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
+            <button data-view="container">Subsystems</button>
             <button data-view="context">Dependencies</button>  <!-- internal kind stays `context`; deps-focused, label only -->
             <button data-view="data">Data</button>  <!-- store-centric: physical stores → collections + who writes/reads + async channels (hidden when no stores) -->
             <button data-view="deployment">Deployment</button>  <!-- processes/threads ↔ subsystems (hidden when no deployment[] units) -->
@@ -129,13 +131,20 @@
            capability dims everything its use-case flows do not touch — always dim, never filter, so
            "this capability does not touch that subsystem" stays visible instead of being deleted. -->
       <div id="cappicker" hidden></div>
-      <!-- Step player: shown only on a use-case flow view (a Happy Path step drill-down). Walks the flow's
-           actions one at a time — glowing and centering the current arrow — without touching the info pane.
-           Absolutely positioned like #legend, so it floats over the diagram as it pans/zooms underneath. -->
-      <div id="flowplayer" hidden>
-        <button id="flowprev" title="Previous step (Left arrow)">&#9664;</button>
-        <span id="flowcount">Step 1 / 1</span>
-        <button id="flownext" title="Next step (Right arrow)">&#9654;</button>
+      <!-- The use-case flow's controls, in ONE card: how to draw the flow (Sequence / Map) and where you
+           are in it (the step player). They belong together — both act on the one flow the view shows, and
+           the player walks the SAME steps whichever rendering is on screen. Same place and reason as the
+           two pickers above: they change what the diagram says, so they sit beside it rather than in a
+           pane that vanishes the moment something is selected. Shown only on a use-case flow view.
+           `#flowmode` is rebuilt by syncFlowPicker; `#flowplayer` is static markup the player shows/hides,
+           so a re-render of the mode switch can never destroy the player's buttons. -->
+      <div id="flowpicker" hidden>
+        <div id="flowmode"></div>
+        <div id="flowplayer" hidden>
+          <button id="flowprev" title="Previous step (Left arrow)">&#9664;</button>
+          <span id="flowcount">Step 1 / 1</span>
+          <button id="flownext" title="Next step (Right arrow)">&#9654;</button>
+        </div>
       </div>
     </div>
     <!-- Horizontal drag handle: sets the info pane's HEIGHT (the diagram takes the rest). -->

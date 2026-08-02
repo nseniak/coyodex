@@ -3496,6 +3496,16 @@ def test_bundle_carries_gp_data() -> None:
     assert "sequenceDiagram" in hay and "Submit order" in hay
 
 
+def test_bundle_carries_both_flow_renderings() -> None:
+    # Every flow ships twice — as the sequence the view opens on and as the leaf-only map the "Flow as"
+    # switch shows — over the SAME use-case keys, so the switch can never land on a missing drawing.
+    b = bundle_of(make_gp_map())
+    assert set(b["flowsMap"]) == set(b["flowsMm"])
+    assert b["flowsMap"]["UC1"].startswith("flowchart LR")
+    # The step numbers are shared: step 1 labels the actor's arrow in both renderings.
+    assert 'FA0 -->|"1"| C1' in b["flowsMap"]["UC1"] and "FA0->>C1: 1. " in b["flowsMm"]["UC1"]
+
+
 def make_dep_kinds_map(kind_d1: str = "datastore", with_kind: bool = True) -> str:
     """A map whose T2 exercises dep Kinds: D1 is explicit (param), the rest inferred from Type. D3
     (library) + D4 (framework) are the in-process deps that fold into the Context 'Libraries' box; the
@@ -3891,15 +3901,20 @@ def test_folded_bucket_roster_synthetic_node_and_edge() -> None:
     assert "SYS>BKF0" in gen_viewer.gen_context_edges(g)     # the SYS→box arrow is a registered context edge
 
 
-def test_bundle_meta_carries_built_schema_and_tests() -> None:
-    # The header meta line states the build date + schema tag, and the graph ships each tests[] row
-    # with its targets resolved server-side (the Tests tab renders names + locate-links, no parsing).
-    m = ProjectModel(title="Tiny", built="2026-01-02 03:04", format="coyodex-map")
+def test_bundle_meta_carries_built_and_pin_and_tests() -> None:
+    # The header meta line states the build stamp and the commit pin, and the graph ships each tests[]
+    # row with its targets resolved server-side (the Tests tab renders names + locate-links, no parsing).
+    m = ProjectModel(title="Tiny", built="2026-01-02 03:04", format="coyodex-map",
+                     commit="abc1234", committed="2026-01-01")
     m.use_cases = [UseCase(id="UC1", name="Login")]
     m.tests = [GapRow(targets=["UC1"], tested="yes")]
     b = gen_viewer.build_view_bundle(model_to_graph(m), None, VIEWER_DIR)
     assert "built 2026-01-02 03:04" in b["meta"]
-    assert "coyodex-map" in b["meta"]
+    # The pin reads `commit <sha> <when>` — no "from" between them. `when` is the commit's real
+    # date+time when git can resolve the sha, else the stored date (this fake sha resolves nowhere).
+    assert "<code>abc1234</code> 2026-01-01" in b["meta"]
+    # The `format` literal is the same on every map, so it is not in the header.
+    assert "coyodex-map" not in b["meta"]
     assert b["graph"]["tests"][0]["targets"][0] == {"id": "UC1", "name": "Login", "node": "UC1"}
 
 

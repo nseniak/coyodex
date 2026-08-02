@@ -309,7 +309,10 @@ prose level, the model has no field for it, and builders rightly skipped it — 
     steps. One machinery, two roles — mechanism in one flow, precondition in another — is correct,
     not an inconsistency. Renders as a Mermaid `sequenceDiagram` — the actor plus the
   touched components/deps/entities as lifelines, the steps as ordered messages — **and** as a numbered
-  narrative below it. Drilling a Happy Path step opens its use case's flow here.
+  narrative below it. Drilling a Happy Path step opens its use case's flow here. The viewer also draws
+  the same steps as a **leaf-only map** (a box per touched element, no container frames) for the
+  "what does this use case touch?" reading — a second *rendering* of the one step list, never a second
+  authored thing ([diagrams](method/diagrams.md)).
   - **Every element↔element step carries its own `where` — THE location.** A step is exactly ONE
     interaction, so it anchors its own call site: the `path:line` in the step's `from` code where this
     step's action fires (the same "anchor the operative statement" rule as an edge `Where`). Unlike an

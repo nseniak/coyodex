@@ -61,6 +61,22 @@ def _git(args: list[str], cwd: Path) -> str | None:
     return out.stdout.strip() if out.returncode == 0 and out.stdout.strip() else None
 
 
+def commit_stamp(anchor: Path, commit: str | None, committed: str | None) -> str:
+    """The pinned commit's date AND time, for the header — `2026-07-29 14:32`.
+
+    The model stores only the commit DATE (`committed`, `%cs`), which cannot tell two commits of the
+    same day apart; the time is read from git here, where the repo is at hand. A `-dirty` pin names a
+    real commit plus uncommitted code, so the suffix is stripped before asking git and the map still
+    reports the commit it was pinned to. Falls back to the stored date whenever git cannot answer
+    (no repo, unknown sha, git missing), so a map read outside its repo still shows what it knows."""
+    sha = (commit or "").removesuffix("-dirty").strip()
+    if sha and sha.lower() != "unknown":
+        stamp = _git(["show", "-s", "--format=%cd", "--date=format:%Y-%m-%d %H:%M", sha], anchor)
+        if stamp:
+            return stamp
+    return committed or ""
+
+
 def repo_root_default(anchor: Path) -> str:
     """Absolute path of the mapped repo, seeded into the viewer as the default source root for
     'open in editor' links. The viewer overrides this with a per-machine value in localStorage, so a
@@ -491,6 +507,12 @@ SUBSYSTEM_STYLE = f"fill:#c7d2fe,stroke:#3730a3,color:#1e1b4b,{_CONTAINER_BORDER
 ENTITY_STYLE    = "fill:#fdf4ff,stroke:#86198f,color:#581c87"  # fuchsia-50  — entity (E), light member
 SUBDOMAIN_STYLE = f"fill:#f5d0fe,stroke:#86198f,color:#581c87,{_CONTAINER_BORDER}"  # fuchsia-200 — subdomain (SD), deep container
 DEP_STYLE       = "fill:#ecfdf5,stroke:#065f46,color:#064e3b"  # emerald     — external dependency (D)
+# An actor box, wherever one is drawn as a flowchart node (the Context view's stick figures and
+# hexagons, a use-case map's driving actor) — one constant per kind so the views can never drift apart.
+# The human/service distinction is the METHOD's, not decoration: a `service` actor is an autonomous
+# initiator, and drawing one as a person reads as "somebody did this" when nobody did.
+ACTOR_HUMAN_STYLE = "fill:#fff7ed,stroke:#c2410c,color:#7c2d12"  # orange-50   — human actor (R)
+ACTOR_SVC_STYLE   = "fill:#eef2ff,stroke:#4338ca,color:#312e81"  # indigo-50   — service actor (R)
 # A dependency/library GROUP container (the Libraries bundle box + folded bucket count boxes): the SAME
 # emerald as the deps/libraries it holds, distinguished as a drillable group only by the shared dashed
 # container border (the convention subsystems/subdomains already use), never by a foreign hue.
@@ -1269,8 +1291,8 @@ def _context_head(graph: GraphDict) -> list[str]:
 
 CONTEXT_CLASSDEFS = [
     "  classDef system fill:#1e1b4b,stroke:#312e81,color:#fff;",
-    "  classDef human fill:#fff7ed,stroke:#c2410c,color:#7c2d12;",
-    "  classDef svc fill:#eef2ff,stroke:#4338ca,color:#312e81;",
+    f"  classDef human {ACTOR_HUMAN_STYLE};",
+    f"  classDef svc {ACTOR_SVC_STYLE};",
     f"  classDef dep {DEP_STYLE};",
     # Group CONTAINERS (the Libraries bundle box + folded bucket count boxes) share one look: the same
     # emerald hue as the individual deps/libraries they hold, but a paler fill and a DASHED border — the
@@ -2533,7 +2555,7 @@ def hp_actors(graph: GraphDict) -> list[dict[str, Any]]:
     arrow happens to start from it: the alternative initiator genuinely drives that step too, so
     selecting it lights the step and its card lists it."""
     steps = cast("list[dict[str, Any]]", graph["happy_path"])
-    roles_by_name = {_safe_msg(r["name"]).strip().lower(): r for r in graph["roles"]}
+    roles_by_name = _roles_by_name(graph)
     order = _hp_actor_order(graph)  # actor name -> participant id (matches gen_hp_mermaid exactly)
     out: list[dict[str, Any]] = []
     for name, aid in order.items():
@@ -2566,6 +2588,47 @@ def _edge_index(graph: GraphDict) -> dict[tuple[str, str], tuple[str, str]]:
         if key not in idx:
             idx[key] = (str(e.get("verb") or ""), str(e.get("why") or ""))
     return idx
+
+
+def _roles_by_name(graph: GraphDict) -> dict[str, dict[str, Any]]:
+    """Roles indexed for name lookup — under BOTH the AUTHORED name and its DISPLAY form
+    (`_safe_msg`), because callers legitimately hold either: a flow step's endpoint is the authored
+    token, while a Happy Path actor has already been through `_safe_msg` by the time it gets here.
+
+    Indexing one space and looking up in the other is a silent miss, and a missed role returns no
+    `kind` — which draws a `service` actor as a PERSON in whichever view got it wrong. That has now
+    happened in both directions (display-keyed lost the flow view; authored-keyed lost the Happy
+    Path), so neither space is 'the' right one and the index carries both. The authored spelling wins
+    a collision: it is what the map actually says.
+
+    Keys are stripped + lowercased, as every caller's token is.
+
+    Written as TWO PASSES, not one loop writing both keys per role: the authored spelling must beat a
+    DIFFERENT role's display form, and a single loop only makes it beat the same role's — leaving the
+    winner to list order. Two roles named `Night Shift` and `Night  Shift` (a doubled space, which
+    `_safe_msg` collapses — a typo, not an exotic name) then resolved to whichever was written last,
+    so one of them silently wore the other's kind and `wants`."""
+    roles = cast("list[dict[str, Any]]", graph["roles"])
+    out: dict[str, dict[str, Any]] = {}
+    for r in roles:                                # pass 1: display forms
+        out[_safe_msg(str(r["name"])).strip().lower()] = r
+    for r in roles:                                # pass 2: authored names, which win outright
+        out[str(r["name"]).strip().lower()] = r
+    return out
+
+
+def is_role_endpoint(is_id: bool) -> bool:
+    """Is this flow-step endpoint a PERSON (a Role) rather than an element? The one rule, shared by
+    every consumer — the sequence diagram, the flow map and `flow_actors` — because they must agree on
+    which endpoints get an `FAn` alias or the alias numbering drifts between them.
+
+    The rule is the authored shape: a token authored as an ID is an element, full stop. A dangling id
+    (one no element defines — `coyodex validate` blocks it, but `serve` still renders drafts) stays an
+    element, drawn as a box labelled with the raw id: a visible gap. It must NOT fall through to the
+    role branch, where a missing element would mis-read as a person AND would consume an `FAn` alias
+    that the other renderings hand to a real actor — which is how one drawing's `FA0` came to mean a
+    different participant than another's."""
+    return not is_id
 
 
 def _flow_step_label(idx: dict[tuple[str, str], tuple[str, str]], st: dict[str, Any]) -> str:
@@ -2632,9 +2695,9 @@ def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
         nonlocal n_actor
         if token in pid:
             return
-        if is_id:                                  # an element endpoint: a real node -> its name; an
+        if not is_role_endpoint(is_id):            # an element endpoint: a real node -> its name; an
             # unknown id (the validator blocks the build on it) -> the raw id, still a participant, so a
-            # missing element never mis-reads as a person.
+            # missing element never mis-reads as a person (see is_role_endpoint).
             label = _safe_msg(str(graph["nodes"][token]["name"])) if token in graph["nodes"] else token
             pid[token] = token
             decls.append(f"  participant {token} as {label}")
@@ -2665,6 +2728,119 @@ def gen_flow_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
         lines.append(f"  {pid[str(st['src'])]}->>{pid[str(st['dst'])]}: {i + 1}. {_safe_msg(_flow_step_label(idx, st))}")
     if open_sf is not None:
         lines.append("  end")
+    return "\n".join(lines)
+
+
+# ── the flow MAP (the second rendering of one use case) ────────────────────────────────────────────
+# The sequence diagram answers "in what order"; the map answers "what does this use case touch", in the
+# structural views' own visual language — one kind-coloured box per element, entities and dependencies
+# included. Same scenario, same element set, same step numbers: two renderings of one source, so they
+# can never disagree.
+FLOW_MAP_SHAPE = {"component": ('["', '"]'), "dep": ('[("', '")]'), "entity": ('("', '")'),
+                  "subsystem": ('["', '"]'), "subdomain": ('("', '")')}
+FLOW_MAP_STYLE = {"component": COMPONENT_STYLE, "dep": DEP_STYLE, "entity": ENTITY_STYLE,
+                  "subsystem": SUBSYSTEM_STYLE, "subdomain": SUBDOMAIN_STYLE,
+                  "human": ACTOR_HUMAN_STYLE, "svc": ACTOR_SVC_STYLE}
+
+
+def _flow_map_subtitle(graph: GraphDict, nid: str) -> str:
+    """The element's top-level group name as a second label line — the orientation the dropped
+    container frames used to carry ("which part of the system is this box from?"). Empty for an
+    ungrouped element; `<br/>` sits outside `_safe_label`, like every other intentional break."""
+    gid = _top_group(graph, nid)
+    name = str(graph["nodes"].get(gid, {}).get("name") or "") if gid else ""
+    return f"<br/>{_safe_label(name)}" if name else ""
+
+
+def _flow_map_arrow_label(ns: list[int]) -> str:
+    """The step numbers riding one pair — the same 1-based positions the sequence diagram numbers its
+    messages with, so a reader can carry a number from one rendering to the other.
+
+    EVERY number is listed, never a truncated head: the whole promise of the label is that the two
+    renderings can be read against each other, and `1, 2, 3, 4 +3` breaks it for steps 5-7 — they would
+    appear nowhere on the map. The flow step band (3-15) bounds the worst case at a short list."""
+    return ", ".join(str(n) for n in ns)
+
+
+def gen_flow_map_mermaid(graph: GraphDict, flow: dict[str, Any]) -> str:
+    """One use case's flow as a LEAF-ONLY map: a box per touched element (component / dependency /
+    entity / the driving actor) and one arrow per ordered pair, labelled with the step numbers that
+    ride it. Sub-flow runs are expanded exactly as the sequence view expands them.
+
+    Two deliberate choices:
+
+    * **No subsystem / subdomain frames.** Scoped to one use case, a container frames one or two
+      members and reads as noise; `_flow_map_subtitle` keeps the orientation on the box itself.
+    * **Arrows come from THIS FLOW'S STEPS, never the backbone edge list.** A step is what the
+      scenario does; a backbone edge is the aggregate of every scenario. Drawing edges here would
+      show relationships this use case never exercises — so the map is a re-rendering of the same
+      data the sequence diagram draws, and can never contradict it.
+
+    A box's mermaid id IS its node id (an actor gets the sequence view's `FAn` alias), so the
+    viewer's generic node binding resolves a click to the element's panel with no special casing."""
+    steps = expanded_steps(graph, flow)
+    roles_by_name = _roles_by_name(graph)
+    pid: dict[str, str] = {}
+    decls: list[str] = []
+    kinds: set[str] = set()
+    n_actor = 0
+
+    def ensure(token: str, is_id: bool) -> None:
+        nonlocal n_actor
+        if is_role_endpoint(is_id):                    # a Role name (actor step) — no node behind it
+            if token in pid:
+                return
+            aid = "FA" + str(n_actor)
+            n_actor += 1
+            pid[token] = aid
+            # human vs service is the METHOD's distinction, drawn the same way as everywhere else: the
+            # stick figure for a person, the hexagon for an autonomous service. Same glyph vocabulary as
+            # the Context view and the sequence lifelines, so one flow cannot say "a person did this"
+            # where the other says "a scheduled job did".
+            role = roles_by_name.get(token.strip().lower())
+            if role is not None and str(role.get("kind") or "").strip().lower() == "service":
+                kinds.add("svc")
+                decls.append(f'  {aid}{{{{"{_safe_label(token)}"}}}}:::cy-{aid}')   # hexagon = service
+                decls.append(f"  class {aid} svc")
+                return
+            kinds.add("human")
+            # The blank first line makes room for the stick figure the viewer redraws this outline as
+            # (`stickFigureNode`) — the same actor glyph the Context view draws.
+            decls.append(f'  {aid}([" <br/>{_safe_label(token)}"]):::cy-{aid}')
+            decls.append(f"  class {aid} human")
+            return
+        if token in pid:
+            return
+        node = cast("dict[str, Any] | None", graph["nodes"].get(token))
+        # An unknown id (validate blocks the build on one, serve still renders drafts) falls back to a
+        # component-shaped box labelled with the raw id — visible as a gap, never silently dropped. A
+        # legal-but-unusual endpoint kind (a step may name a subsystem or subdomain) keeps its OWN
+        # shape and colour: this map speaks the structural views' vocabulary, so drawing a container as
+        # a component would be the map saying something the model does not.
+        kind = str((node or {}).get("kind") or "component")
+        if kind not in FLOW_MAP_SHAPE:
+            kind = "component"
+        label = _safe_label(str((node or {}).get("name") or token)) + _flow_map_subtitle(graph, token)
+        open_b, close_b = FLOW_MAP_SHAPE[kind]
+        pid[token] = token
+        kinds.add(kind)
+        decls.append(f"  {token}{open_b}{label}{close_b}:::cy-{token}")
+        decls.append(f"  class {token} {kind}")
+
+    for st in steps:
+        ensure(str(st["src"]), bool(st.get("src_is_id")))
+        ensure(str(st["dst"]), bool(st.get("dst_is_id")))
+    # One arrow per ORDERED pair, in first-appearance order; a return-direction step is its own arrow,
+    # so a call and its response stay two arrows rather than collapsing into one ambiguous line.
+    pairs: dict[tuple[str, str], list[int]] = {}
+    for i, st in enumerate(steps):
+        pairs.setdefault((pid[str(st["src"])], pid[str(st["dst"])]), []).append(i + 1)
+    lines = ["flowchart LR", *decls]
+    for (a, b), ns in pairs.items():
+        lines.append(f"  {a} -->|{_edge_label(_flow_map_arrow_label(ns))}| {b}")
+    for kind in ("component", "dep", "entity", "subsystem", "subdomain", "human", "svc"):
+        if kind in kinds:
+            lines.append(f"  classDef {kind} {FLOW_MAP_STYLE[kind]};")
     return "\n".join(lines)
 
 
@@ -2709,6 +2885,11 @@ def flow_mermaids(graph: GraphDict) -> dict[str, str]:
     return {str(f["uc"]): gen_flow_mermaid(graph, f) for f in graph["flows"]}
 
 
+def flow_maps(graph: GraphDict) -> dict[str, str]:
+    """{uc_id: flowchart} for every T6 flow — the map rendering the use-case view toggles to."""
+    return {str(f["uc"]): gen_flow_map_mermaid(graph, f) for f in graph["flows"]}
+
+
 def flow_narratives(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
     """{uc_id: [narrative step, …]} for every T6 flow — the readable companion to flow_mermaids."""
     return {str(f["uc"]): flow_narrative(graph, f) for f in graph["flows"]}
@@ -2721,24 +2902,23 @@ def flow_actors(graph: GraphDict, flow: dict[str, Any]) -> list[dict[str, Any]]:
     wants) and lists which of THIS flow's own steps it drives — `stepIdx` indexes the SAME filtered,
     ordered step list flow_narrative returns (== the viewer's FLOWS_NARR[uc]), so the two stay in
     lockstep. A role can drive more than one step (e.g. it also receives the final reply).
-    `is_role` mirrors flow_narrative's srcId/dstId predicate exactly (an id absent from the current
-    graph reads as a role, not a dangling element) so the two functions never disagree on a step."""
+    Role-ness comes from the SHARED `is_role_endpoint` rule, so the aliases handed out here are exactly
+    the ones the two diagram generators draw. (This used to be a local predicate that also treated a
+    DANGLING id as a role; the diagrams never did, so on a draft map carrying one, every alias after it
+    named a different participant here than on the diagram — see is_role_endpoint.)"""
     steps = expanded_steps(graph, flow)  # the SAME index space as flow_narrative / gen_flow_mermaid
 
-    def is_role(tok: str, is_id: bool) -> bool:
-        return not (is_id and tok in graph["nodes"])
-
-    roles_by_name = {_safe_msg(r["name"]).strip().lower(): r for r in graph["roles"]}
+    roles_by_name = _roles_by_name(graph)
     order: dict[str, str] = {}  # role display name -> alias (FAn), first-appearance order
     for st in steps:
         for tok, is_id in ((str(st["src"]), bool(st.get("src_is_id"))), (str(st["dst"]), bool(st.get("dst_is_id")))):
-            if is_role(tok, is_id):
+            if is_role_endpoint(is_id):
                 order.setdefault(tok, "FA" + str(len(order)))
     out: list[dict[str, Any]] = []
     for name, aid in order.items():
         idxs = [i for i, st in enumerate(steps)
-                if (is_role(str(st["src"]), bool(st.get("src_is_id"))) and str(st["src"]) == name)
-                or (is_role(str(st["dst"]), bool(st.get("dst_is_id"))) and str(st["dst"]) == name)]
+                if (is_role_endpoint(bool(st.get("src_is_id"))) and str(st["src"]) == name)
+                or (is_role_endpoint(bool(st.get("dst_is_id"))) and str(st["dst"]) == name)]
         role = roles_by_name.get(name.strip().lower())
         out.append({
             "aid": aid,
@@ -2855,6 +3035,7 @@ class ViewBundle(TypedDict):
     hasDeployment: bool
     mermaidHp: str
     flowsMm: dict[str, str]
+    flowsMap: dict[str, str]      # the same flows as leaf-only maps — the use-case view's second rendering
     flowsNarr: dict[str, list[dict[str, Any]]]
     hpActors: list[dict[str, Any]]
     hpStepMarks: list[list[str]]
@@ -2903,14 +3084,16 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         meta = f"diff: <code>{diff['base']}</code> → <code>{diff['new']}</code> · {len(diff['changes'])} changes"
     else:
         commit = graph['commit'] or 'unknown'
-        committed = graph.get('committed')
-        meta = f"baseline @ commit <code>{commit}</code>" + (f" from {committed}" if committed else "")
+        # The pin reads `commit <sha> <date> <time>` — no "from", which read as if the SHA came from
+        # the date. The time is resolved from git (commit_stamp); the stored date is the fallback.
+        stamp = commit_stamp(anchor, graph.get('commit'), graph.get('committed'))
+        meta = f"baseline @ commit <code>{commit}</code>" + (f" {html_escape(stamp)}" if stamp else "")
         built = graph.get('built')
-        fmt = graph.get('format')
         if built:
             meta += f" · built {html_escape(built)}"
-        if fmt:
-            meta += f" · schema <code>{html_escape(fmt)}</code>"
+        # The map's `format` ("coyodex-map") is deliberately NOT shown: it is the same literal on every
+        # map ever written, so it told a reader nothing about the map in front of them. It stays in the
+        # model, where the loader checks it.
     meta = repo_tag + meta
     grouping = has_grouping(graph)
     domain = has_domain(graph)
@@ -2951,6 +3134,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so
         # they come from graph["flows"] directly (empty when the map has no T6 section).
         flowsMm=flow_mermaids(graph),
+        flowsMap=flow_maps(graph),
         flowsNarr=flow_narratives(graph),
         hpActors=hp_actors(graph) if hp else [],
         hpStepMarks=hp_step_marks(graph) if hp else [],
