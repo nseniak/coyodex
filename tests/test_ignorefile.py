@@ -116,10 +116,11 @@ def test_a_trailing_comment_is_reported_not_stored_and_not_stripped():
 
 
 def make_documented_ignore_examples() -> list[tuple[str, str]]:
-    """(source, text) for every `.ignore` example a reader can copy: the two docs' fenced blocks and
-    the module's own docstring. Read from the REAL files — a retyped copy guards nothing, which is
-    how the first version of this test passed while `README.md` and `ignorefile.py` still taught the
-    broken syntax the parser had just started rejecting."""
+    """(source, text) for every `.ignore` example a reader can copy: any fenced block in the two docs
+    plus the module's own docstring. Read from the REAL files — a retyped copy guards nothing, which
+    is how the first version of this test passed while `README.md` and `ignorefile.py` still taught
+    the broken syntax the parser had just started rejecting. A doc with no example simply contributes
+    none; see the floor its caller asserts."""
     repo = Path(__file__).resolve().parent.parent
     out: list[tuple[str, str]] = []
     for rel in ("method.md", "README.md"):
@@ -150,7 +151,13 @@ def test_every_documented_ignore_example_parses_clean():
     patterns were copied verbatim from `method.md`, and after that example was fixed `README.md` and
     this module's own docstring still taught the same thing."""
     examples = make_documented_ignore_examples()
-    assert len(examples) >= 3, f"expected the two docs plus the docstring, found: {examples}"
+    # A count, because the failure this guards is an example that stops being FOUND — a renamed
+    # heading or a re-fenced block silently empties the list and the test passes on nothing. The
+    # floor is the sources that must always carry one: `method.md` (what a build copies) and this
+    # module's docstring. `README.md` is scanned too and audited when it has a block, but it is not
+    # required to teach the syntax — the README says what is analyzed, not how to write patterns.
+    sources = {s.split(" block ")[0] for s, _ in examples}
+    assert {"method.md", "ignorefile.py docstring"} <= sources, f"found only: {sorted(sources)}"
     for source, text in examples:
         spec = parse_ignore(text)
         assert spec.bad_lines == (), f"{source} teaches syntax the parser rejects: {spec.bad_lines}"
