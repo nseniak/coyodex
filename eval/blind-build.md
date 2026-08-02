@@ -51,9 +51,19 @@ worst bugs it can have.
    defense-in-depth for the older layout where the map commit IS the pin. `.coyodex-eval/` is
    git-ignored and normally absent from a fresh worktree; remove it defensively anyway.
    **Dogfooding case:** if the built project is the coyodex clone itself, the worktree also contains
-   committed copies of the eval bundle (its own `eval/thresholds.json`, `eval/rubric.md`) — remove
-   those too (`rm -rf <scratch>/coyodex-blind-build/eval`); the never-read rule below is
-   path-independent, but the blinding should be filesystem-deep, not instruction-deep.
+   committed copies of the eval's TARGETS — `eval/thresholds.json` and `eval/rubric.md`. Remove
+   exactly those two files:
+   ```
+   rm -f <scratch>/coyodex-blind-build/eval/thresholds.json \
+         <scratch>/coyodex-blind-build/eval/rubric.md
+   ```
+   The never-read rule below is path-independent, but the blinding should be filesystem-deep, not
+   instruction-deep. **Do not `rm -rf` the whole `eval/` tree** — that was the earlier instruction and
+   it is the same mistake as deleting `.ignore`, one level up: `.coyodex/.ignore` excludes only
+   `eval/fixtures/trapdoor/`, so the baseline map describes `eval/tools/` and `eval/tests/` as
+   ordinary source. Removing the bundle wholesale makes the blind build map a tree the baseline never
+   described, and the resulting count, coverage and E differences have nothing to do with the method.
+   Blind the answers, not the codebase.
 3. **Run the build in a FRESH-context sub-agent** (never in an orchestrating context that has read
    eval state) whose working directory is the isolated checkout, instructed to:
    - follow the FULL coyodex build method — read `COYODEX_HOME/method/dispatch.md` then
