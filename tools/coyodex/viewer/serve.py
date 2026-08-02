@@ -42,7 +42,7 @@ from coyodex.impact_ripple import RippleOptions, build_impact_result
 from coyodex.model import ModelError, load_model
 from coyodex.viewer.diffmap import DiffRow, parse_unified_diff
 from coyodex.viewer.filetree import FileTreeNode, build_tree, node_path_index, resolved_path_index
-from coyodex.viewer.gen_viewer import ViewBundle, build_view_bundle
+from coyodex.viewer.gen_viewer import ViewBundle, build_view_bundle, repo_state
 from coyodex.viewer.recents import RecentsStore
 from coyodex.views import model_to_graph
 
@@ -495,6 +495,9 @@ def _recents_payload(store: RecentsStore, projects: dict[str, Project]) -> list[
             "ok": proj is not None,
             "commit": proj.commit if proj else "",
             "rendered": proj is not None,   # a valid map is openable; the viewer is served, not baked
+            # Can this map's CODE be read? A `.coyodex/` copied outside its repo opens fine and then
+            # 404s on every file — say so on the card instead of letting the reader find out by clicking.
+            "code": repo_state(proj.map_json.parent, proj.commit) if proj else "no-repo",
         })
     return items
 
@@ -903,6 +906,8 @@ async function loadRecents(){
     let meta='<span class="cpath" title="'+esc(it.path)+'">'+esc(shorten(it.path))+'</span>';
     if(it.commit)meta+='<span class="csha">'+esc(it.commit.slice(0,10))+'</span>';
     if(!it.ok)meta+='<span class="warn">No valid map yet</span>';
+    else if(it.code==='no-repo')meta+='<span class="warn" title="This folder is not inside a git repository, so the viewer cannot read its files">no code beside this map</span>';
+    else if(it.code==='no-commit')meta+='<span class="warn" title="The repo beside this map does not have the commit the map is pinned to">pinned commit missing</span>';
     else if(!it.rendered)meta+='<span class="warn">not rendered</span><button class="copy" data-path="'+esc(it.path)+'">Copy render cmd</button>';
     c.innerHTML='<span class="grip" title="Drag to reorder">⠿</span><span class="title'+(it.ok&&it.rendered?'':' dead')+'">'+esc(it.title)+'</span>'+goal
       +'<div class="cmeta">'+meta+'</div><button class="x" title="Remove from list">✕</button>';

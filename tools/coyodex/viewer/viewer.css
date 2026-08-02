@@ -130,32 +130,17 @@ body.vresizing #stage { pointer-events: none; }
    rather than a silent absence — but faded and inert. `!important` because the focus/dim pass writes
    opacity inline, and an environment exclusion must outrank a transient selection highlight. */
 .envout { opacity: .16 !important; pointer-events: none !important; }
-/* The capability overlay's dim — the THIRD channel, below `.envout` in precedence and above the
-   transient selection focus. Lighter than `.envout` on purpose: an environment exclusion is a hard
-   "does not run here", while this is a scope the reader chose and can change in one click, so the
-   dimmed boxes stay readable enough to answer "what ISN'T in this capability?". */
-.capout { opacity: .28; }
-.capout:hover { opacity: .55; }
-#cappicker { position: absolute; left: 12px; bottom: 12px; z-index: 5; background: #fff;
-             border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 10px;
-             box-shadow: 0 2px 10px rgba(0,0,0,.07); display: flex; align-items: center; gap: 7px; }
-#cappicker[hidden] { display: none; }
-/* Both pickers can be visible on the same screen; the capability one sits above the environment one
-   so neither covers the other and their order never changes. */
-#cappicker:not([hidden]) ~ #envpicker:not([hidden]) { bottom: 62px; }
 .cappick-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
                color: #6b7280; }
-/* The use-case flow's control card: the Sequence/Map switch + the step player. The same floating card as
-   the two pickers above (it is never on screen at the same time as either: those are structural views,
-   this one is a flow). The segmented control itself reuses `.uc-seg`, the Use Cases tab's group-by
-   switch. */
+/* The use-case flow's control card: the Sequence/Map switch + the step player. Floats like the
+   environment picker above (never on screen at the same time as it: that one is the Deployment
+   overview, this one a flow). The segmented control reuses `.uc-seg`, the Use Cases group-by switch.
+   `.cappick-lbl` is its label style, kept from the removed capability picker. */
 #flowpicker { position: absolute; left: 12px; bottom: 12px; z-index: 6; background: #fff;
               border: 1px solid #e5e7eb; border-radius: 8px; padding: 7px 10px;
               box-shadow: 0 2px 10px rgba(0,0,0,.07); display: flex; align-items: center; gap: 7px; }
 #flowpicker[hidden] { display: none; }
 #flowmode { display: flex; align-items: center; gap: 7px; }
-#cappicker select { font: inherit; font-size: 12px; padding: 3px 7px; border: 1px solid #d1d5db;
-                    border-radius: 6px; background: #fff; color: #111827; max-width: 230px; }
 .env-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .env-picker-label { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280;
                     margin-right: 3px; }
@@ -322,12 +307,10 @@ body.vresizing #stage { pointer-events: none; }
 .sys-tile.sys-warn .sys-bar i { background: #f59e0b; }
 .sys-tile.sys-ok .sys-bar i { background: #10b981; }
 .sys-s { font-size: 11px; color: #6b7280; margin-top: 5px; line-height: 1.35; }
-/* "Serves" chips in the info pane — which parts of the product this box serves. Each chip sets the
-   overlay to that capability, so the pane is a jumping-off point, not a dead end. */
-.serves-chip { font: inherit; font-size: 11px; padding: 1px 8px; margin: 0 4px 3px 0; cursor: pointer;
+ /* "Serves" labels in the info pane — which parts of the product this box serves. Plain labels, not
+   controls: they used to set a capability overlay on the diagram, which was removed. */
+.serves-chip { display: inline-block; font-size: 11px; padding: 1px 8px; margin: 0 4px 3px 0;
                border: 1px solid #c7d2fe; border-radius: 9px; background: #eef2ff; color: #3730a3; }
-.serves-chip:hover { background: #e0e7ff; }
-.serves-chip:focus-visible { outline: 2px solid #818cf8; outline-offset: 1px; }
 .serves-none { color: #9ca3af; }
 .serves-note { display: block; font-size: 11px; color: #6b7280; margin-top: 3px; }
 /* svg-pan-zoom sets pan/zoom via inline `style.transform` on its own `.svg-pan-zoom_viewport` group —

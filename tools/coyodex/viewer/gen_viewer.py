@@ -61,6 +61,31 @@ def _git(args: list[str], cwd: Path) -> str | None:
     return out.stdout.strip() if out.returncode == 0 and out.stdout.strip() else None
 
 
+def repo_state(anchor: Path, commit: str | None) -> str:
+    """Can the viewer actually read this map's CODE? — `ok` / `no-repo` / `no-commit`.
+
+    Every source read (the file browser, the code viewer) goes through git at the map's pinned
+    commit, so two setups show a map whose every file click fails:
+
+    * **`no-repo`** — the map's folder is not inside a git work tree at all. A `.coyodex/` copied
+      somewhere for inspection is the common case: the map opens, every diagram works, and every file
+      404s. The old per-file message ("Not tracked in this commit") blamed the commit for what is
+      really a missing repo, and it only appeared after a click.
+    * **`no-commit`** — a git repo is there, but it does not have the pinned commit (a different
+      clone, a shallow one, a branch fetched without it).
+
+    Cheap: two `git` calls, and callers cache it with the rest of the map's derived data. Both probes
+    PRINT on success (`rev-parse` echoes the path / the sha) — `_git` reports empty output as failure,
+    so a silent-on-success probe like `cat-file -e` would read as "missing" every time."""
+    top = _git(["rev-parse", "--show-toplevel"], anchor)
+    if not top:
+        return "no-repo"
+    sha = (commit or "").removesuffix("-dirty").strip()
+    if sha and sha.lower() != "unknown" and not _git(["rev-parse", "--verify", f"{sha}^{{commit}}"], anchor):
+        return "no-commit"
+    return "ok"
+
+
 def commit_stamp(anchor: Path, commit: str | None, committed: str | None) -> str:
     """The pinned commit's date AND time, for the header — `2026-07-29 14:32`.
 
@@ -3004,6 +3029,7 @@ class ViewBundle(TypedDict):
     (see viewer.js `applyBundle` — keep the two in step).
     """
     repoRoot: str
+    repoState: str                 # 'ok' | 'no-repo' | 'no-commit' — can the viewer read this map's code?
     ghRepo: str | None
     ghCommit: str | None
     graph: dict[str, Any]          # the MERGED graph (base+diff, with Context nodes added)
@@ -3107,7 +3133,8 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         annotate_unit_dep_facts(mg, graph)
         annotate_run_by(mg, graph)
     return ViewBundle(
-        repoRoot=repo_root, ghRepo=gh_repo, ghCommit=gh_commit,
+        repoRoot=repo_root, repoState=repo_state(anchor, graph.get('commit')),
+        ghRepo=gh_repo, ghCommit=gh_commit,
         graph=mg,
         mermaidBase=base_mm, mermaidDiff=diff_mm, mermaidContext=context_mm,
         mermaidContainer=gen_container_mermaid(graph) if grouping else "",

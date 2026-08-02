@@ -126,11 +126,6 @@
            in the pane it vanished the moment you selected a box, stranding you in a filtered view with
            no way back. Hidden on every view but the Deployment overview. -->
       <div id="envpicker" hidden></div>
-      <!-- Capability overlay picker. Mirrors #envpicker (bottom-left, over the diagram) because it
-           answers the same shape of question: which parts of what is drawn are in scope. Selecting a
-           capability dims everything its use-case flows do not touch — always dim, never filter, so
-           "this capability does not touch that subsystem" stays visible instead of being deleted. -->
-      <div id="cappicker" hidden></div>
       <!-- The use-case flow's controls, in ONE card: how to draw the flow (Sequence / Map) and where you
            are in it (the step player). They belong together — both act on the one flow the view shows, and
            the player walks the SAME steps whichever rendering is on screen. Same place and reason as the

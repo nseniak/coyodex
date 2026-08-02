@@ -32,6 +32,7 @@ let DEPLOY_ENVS;           // declared deployment environments (variant names), 
 let DEPLOY_ENV = null;     // the selected environment (null = All); persists across the session
 let HAS_DEPLOYMENT;        // gates the Deployment tab (any deployment[] unit present)
 let MERMAID_HP;            // Happy Path (Level 1): use cases as a black-box sequence
+let REPO_STATE = 'ok';    // 'ok' | 'no-repo' | 'no-commit' — whether the server can read this map's code
 let FLOWS_MM;             // T6 use-case flows: uc-id -> sequenceDiagram (the inside view)
 let FLOWS_MAP;            // the SAME flows as leaf-only maps: uc-id -> flowchart (the Map rendering)
 let FLOWS_NARR;          // uc-id -> [{n,src,srcId,dst,dstId,verb,why,note}] readable steps
@@ -89,6 +90,9 @@ function applyBundle(b) {
   HAS_GROUPING = b.hasGrouping; HAS_DOMAIN = b.hasDomain; HAS_SUBDOMAINS = b.hasSubdomains;
   HAS_HP = b.hasHp; HAS_DIFF = b.hasDiff; META = b.meta; DIFF_STATE = b.diffState;
   REPO_ROOT_DEFAULT = b.repoRoot; GH_REPO_DEFAULT = b.ghRepo; GH_COMMIT = b.ghCommit;
+  REPO_STATE = b.repoState || 'ok';   // the notice is painted at boot (below), not here:
+                                      // applyBundle runs under top-level await, before the
+                                      // code-pane elements are bound.
   HAS_GLOSSARY = Array.isArray(GRAPH.glossary) && GRAPH.glossary.length > 0;
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
   // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
@@ -1098,9 +1102,7 @@ function servesHtml(id) {
   }
   const total = Object.values(GRAPH.nodes || {}).filter((x) => x.kind === 'capability').length;
   const chips = [...caps].sort((a, b) => Number(a.slice(3)) - Number(b.slice(3))).map((c) =>
-    `<button type="button" class="serves-chip" data-cap="${esc(c)}"`
-    + ' title="Show everything this capability touches">'
-    + esc(GRAPH.nodes[c] ? GRAPH.nodes[c].name : c) + '</button>').join(' ');
+    `<span class="serves-chip">${esc(GRAPH.nodes[c] ? GRAPH.nodes[c].name : c)}</span>`).join(' ');
   // Shared machinery is worth naming, not just counting — but only as an observation about REACH.
   // Nothing here classifies the box as "platform": measured on the reference map the maximum spread
   // was 4 capabilities of 7, so no threshold separates machinery from product, and that
@@ -1287,14 +1289,6 @@ function bindNodeDetailHandlers(root) {
     const st = { kind: 'data', store: a.getAttribute('data-store') };
     if (a.getAttribute('data-entity')) st.entity = a.getAttribute('data-entity');
     go(st);
-  }));
-  // A "Serves" chip sets the overlay to that capability — the whole point of the reverse view is to
-  // go straight from "this box serves ordering" to "show me everything ordering touches".
-  root.querySelectorAll('.serves-chip[data-cap]').forEach((b) => b.addEventListener('click', () => {
-    CAP_OVERLAY = { kind: 'capability', id: b.getAttribute('data-cap') };
-    applyCapOverlay(mainScene);
-    const sel = document.querySelector('#capsel');
-    if (sel) sel.value = 'capability:' + b.getAttribute('data-cap');
   }));
   bindTriggeredBy(root);
   bindImpactSection(root);
@@ -3563,113 +3557,12 @@ function applyEnvDim(scene) {
     if (e.label) e.label.classList.toggle('envout', off);
   }
 }
-// ── the capability overlay ────────────────────────────────────────────────────────────────────────
-// Select a capability (or one use case, or the Happy Path) and everything the selection does not
-// touch fades. ALWAYS DIM, NEVER FILTER, at every altitude — one behaviour to learn.
-//
-// Dimming rather than filtering is the same call the environment filter already made above: "not
-// part of this" is information, and a filtered view deletes it. The objection that dimming a large
-// screen is unreadable does not apply here — the viewer deliberately has no flat whole-repo
-// component map, so every screen is one drill level (the busiest card in the reference map draws 19
-// boxes). A screen too crowded to dim is a balance finding to fix in the model, not a second
-// interaction mode to design around.
-//
-// This is the THIRD dim channel (selection focus writes inline opacity + `.dim`; the environment
-// filter writes `.envout`). Precedence, highest first:
-//   1. environment exclusion — a hard "this does not run here"
-//   2. capability overlay    — a scope the reader chose
-//   3. selection focus       — a transient highlight
-// So the overlay never un-dims something the environment excluded, and a selection never un-dims
-// something outside the chosen capability.
-let CAP_OVERLAY = null;   // {kind:'capability'|'usecase'|'hp', id} — module-level, like DEPLOY_ENV
-
-function capOverlayElements() {
-  // The selection's element set, as a UNION — a capability is exactly the union of its use cases,
-  // and the Happy Path the union of its spine, so one code path serves all three scopes.
-  if (!CAP_OVERLAY) return null;
-  const hit = new Set();
-  const add = (capId) => {
-    for (const eid in CAPABILITY_TOUCH) {
-      if ((CAPABILITY_TOUCH[eid] || []).includes(capId)) hit.add(eid);
-    }
-  };
-  if (CAP_OVERLAY.kind === 'capability') { add(CAP_OVERLAY.id); return hit; }
-  const ucs = CAP_OVERLAY.kind === 'hp'
-    ? (GRAPH.happy_path || []).map((g) => g.uc).filter(Boolean)
-    : [CAP_OVERLAY.id];
-  for (const uc of ucs) {
-    for (const st of ucSteps(uc)) {
-      for (const end of [st.src, st.dst]) if (end && GRAPH.nodes[end]) hit.add(end);
-    }
-  }
-  return hit;
-}
-
-function ucSteps(uc) {
-  // A use case's own flow steps, sub-flows expanded — the same expansion the server-side helper
-  // does, because a step hidden behind an `SFn` still touches what it touches.
-  const f = (GRAPH.flows || []).find((x) => x.uc === uc);
-  if (!f) return [];
-  const sf = {};
-  for (const s of (GRAPH.subflows || [])) sf[s.id] = s;
-  const out = [];
-  for (const st of (f.steps || [])) {
-    if (st.subflow && sf[st.subflow]) out.push(...(sf[st.subflow].steps || []));
-    else out.push(st);
-  }
-  return out;
-}
-
-function applyCapOverlay(scene, s) {
-  if (!scene) return;
-  // A use-case flow map is ALREADY scoped — to one use case, which is narrower than any capability.
-  // Dimming it against a scope chosen on a structural screen could only grey out boxes this very
-  // scenario touches, so the overlay stays off here (the picker is hidden here for the same reason).
-  if (s && s.kind === 'usecase') return;
-  const hit = capOverlayElements();
-  const off = new Set();
-  for (const id in scene.nodeEls) {
-    // A CONTAINER is lit when any descendant is — the subtree roll-up that makes the overlay work on
-    // the Subsystems overview, which draws only subsystem boxes and no components at all.
-    const on = !hit || hit.has(id) || subtreeTouched(id, hit);
-    scene.nodeEls[id].classList.toggle('capout', !on);
-    if (!on) off.add(id);
-  }
-  for (const e of scene.edgeEls) {
-    const dim = !!hit && (off.has(e.e.src) || off.has(e.e.dst));
-    e.path.classList.toggle('capout', dim);
-    if (e.label) e.label.classList.toggle('capout', dim);
-  }
-}
-
-// The overlay's picker. Floats bottom-LEFT over the diagram like the environment filter, and for the
-// same reason: it changes what the diagram says, so it belongs beside it rather than in a pane that
-// vanishes the moment something is selected. Shown on the structural views, where "which parts of the
-// machine serve this?" is a question you can actually ask.
-// Shown here, hidden by render()'s up-front loop — see the note on syncFlowPicker for why a floating
-// control needs both.
-function syncCapPicker(s) {
-  const el = document.getElementById('cappicker');
-  if (!el) return;
-  const structural = s && ['container', 'base', 'context', 'domain'].includes(s.kind);
-  const on = HAS_CAPABILITIES && structural;
-  el.hidden = !on;
-  if (!on) { el.innerHTML = ''; return; }
-  const caps = Object.values(GRAPH.nodes || {}).filter((n) => n.kind === 'capability');
-  const opt = (v, label, sel) => `<option value="${esc(v)}"${sel ? ' selected' : ''}>${esc(label)}</option>`;
-  const cur = CAP_OVERLAY ? CAP_OVERLAY.kind + ':' + CAP_OVERLAY.id : '';
-  el.innerHTML = '<label class="cappick-lbl">Serving</label>'
-    + '<select id="capsel">'
-    + opt('', 'Everything', !cur)
-    + (HAS_HP ? opt('hp:*', 'The Happy Path', cur === 'hp:*') : '')
-    + caps.map((c) => opt('capability:' + c.id, c.name, cur === 'capability:' + c.id)).join('')
-    + '</select>';
-  el.querySelector('#capsel').addEventListener('change', (ev) => {
-    const v = ev.target.value;
-    CAP_OVERLAY = v ? { kind: v.split(':')[0], id: v.split(':').slice(1).join(':') } : null;
-    applyCapOverlay(mainScene);   // re-dim in place: no re-render, no layout jump
-  });
-}
+// The capability OVERLAY (a "Serving" picker that dimmed everything a chosen capability did not
+// touch) was removed: choosing from a control that showed only names meant picking blind, and the
+// result — a third dimming channel over the same diagram — read as noise rather than as an answer.
+// What survives is the reverse direction, which asks the question of the box in front of you: the
+// "Serves" row (servesHtml) names the capabilities a box serves, and `capability_touch` still
+// carries the data. `subtreeTouched` stays because that row rolls a container up the same way.
 
 // ── a use case's two renderings: Sequence and Map ─────────────────────────────────────────────────
 // One traced flow, drawn two ways. The SEQUENCE answers "in what order"; the MAP answers "what does
@@ -3834,10 +3727,15 @@ function bindFlowMap(uc) {
   const arrows = {};                       // 'src>dst' -> {path, label}
   bindEdges(scene, (m) => {
     const key = m[1] + '>' + m[2];
-    if (!flowMapSteps(uc, m[1], m[2]).length) return null;
+    const on = flowMapSteps(uc, m[1], m[2]);
+    if (!on.length) return null;
     return { e: { src: m[1], dst: m[2] },
              selKey: 'flowpair:' + uc + ':' + key,
-             showFn: () => showFlowPair(uc, m[1], m[2]) };
+             // Selecting an arrow moves the player's counter to the FIRST step riding it — the same
+             // "clicking a step's arrow moves the counter to it" the sequence view does (flowSyncCur
+             // there too). An arrow can carry several steps, so the walk resumes from the earliest;
+             // the counter is a position marker, so it moves without disturbing what is selected.
+             showFn: () => { flowSyncCur(on[0].i); showFlowPair(uc, m[1], m[2]); } };
   });
   eachEdge(scene.root, (p, label, m) => {
     const key = m[1] + '>' + m[2];
@@ -5305,15 +5203,12 @@ async function render(sArg, transient) {
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   const s = sArg || history[hi];
-  // Hide every floating over-the-diagram control HERE, before the HTML-tab early returns below. Their
-  // sync* functions run at the END of render, which the table views (Glossary / Use Cases / System /
+  // Hide the floating over-the-diagram control HERE, before the HTML-tab early returns below.
+  // syncFlowPicker runs at the END of render, which the table views (Glossary / Use Cases / System /
   // Data / Tests) and the degraded "could not render" branch never reach — so a control shown on a
-  // diagram would otherwise still be floating over the table you switched to. Each sync* re-shows its
-  // own control when the view warrants it.
-  for (const id of ['flowpicker', 'cappicker']) {
-    const c = document.getElementById(id);
-    if (c) c.hidden = true;
-  }
+  // diagram would otherwise still be floating over the table you switched to.
+  const fp = document.getElementById('flowpicker');
+  if (fp) fp.hidden = true;
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
@@ -5374,8 +5269,6 @@ async function render(sArg, transient) {
   // The capability overlay re-applies on EVERY render, so it survives a drill, a dive, back/forward
   // and a tab restore — unlike the environment filter, which is re-applied from its own screen only
   // because it is scoped to that screen. A scope the reader chose should not evaporate on navigation.
-  applyCapOverlay(mainScene, s);
-  syncCapPicker(s);
   syncFlowPicker(s);
   // A file-browser click navigated here to reveal a node: select it now the view has rendered. The
   // box is drawn (we picked the view so it would be) — fall back to its panel + tree row if not.
@@ -6032,6 +5925,25 @@ async function loadServerTree() {
 // highlight.js (lazy-loaded from a CDN, SRI-pinned like the other libs), show a line-number gutter, and
 // scroll to / highlight the current line. Deliberately simple — richer navigation is a planned follow-up.
 const cvscroll = document.getElementById('cvscroll');  // the scrolling source area (the table lives here)
+
+// A map whose CODE the server cannot read: the folder is not in a git work tree (a `.coyodex/` copied
+// somewhere on its own), or the repo it is in does not have the pinned commit. Say it ONCE, up front,
+// where the source would go — the per-file 404 ("Not tracked in this commit") arrives only after a
+// click and blames the commit for what is usually a missing repo.
+function noCodeMessage() {
+  return REPO_STATE === 'no-commit'
+    ? 'This map is pinned to commit ' + esc((GH_COMMIT || '').slice(0, 10)) + ', which is not in the repo'
+      + ' beside it — the code cannot be read at the version the map describes.'
+    : 'No code beside this map: its folder is not inside a git repository, so there are no files to'
+      + ' read. Open the map that sits in the repo itself to browse its source.';
+}
+function showNoCodeNotice() {
+  cvscroll.innerHTML = '<p class="cvempty">' + noCodeMessage() + '</p>';
+}
+// Painted HERE, at module scope, as soon as the code pane exists: the bundle has already been
+// applied (it arrives under the top-level await above), and nothing else writes this pane until a
+// file is opened, so the notice is what a reader sees instead of "select a node" that leads nowhere.
+if (REPO_STATE !== 'ok') showNoCodeNotice();
 const cvminimap = document.getElementById('cvminimap');  // the overview ruler beside it
 const cvpath = document.getElementById('cvpath');
 const cvopen = document.getElementById('cvopen');  // ↗ opens the shown file in the external editor / on GitHub
@@ -6586,7 +6498,11 @@ async function loadCode(path, line) {
     r = await fetch(url, { cache: 'no-store' });
     if (token !== cvReq) return;
     if (!r.ok) {
-      cvscroll.innerHTML = '<p class="cverr">' + (r.status === 404 ? 'Not tracked in this commit.' : 'Could not load this file.') + '</p>';
+      // A 404 with a healthy repo means this ONE file is not in the commit; with a broken one it means
+      // the map has no readable code at all, which is a different sentence (see noCodeMessage).
+      cvscroll.innerHTML = r.status !== 404 ? '<p class="cverr">Could not load this file.</p>'
+        : (REPO_STATE !== 'ok' ? '<p class="cvempty">' + noCodeMessage() + '</p>'
+                               : '<p class="cverr">Not tracked in this commit.</p>');
       cvPath = null; cvPinned = null; clearPendingScroll(path); return;  // nothing shown -> drop any pin + pending scroll
     }
   } catch (_) {
@@ -7716,3 +7632,4 @@ if (impactbtn) {
 // Happy Path — the behavioural spine, lead-with-behaviour — falling back to Subsystems, then the
 // Dependencies (context) view, when a map has no Happy Path.
 go({ kind: (HAS_DIFF && HAS_GROUPING) ? 'container' : (HAS_HP ? 'hp' : (HAS_GROUPING ? 'container' : 'context')) });
+
