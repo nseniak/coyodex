@@ -304,12 +304,14 @@ body.vresizing #stage { pointer-events: none; }
 .sys-tile.sys-warn .sys-bar i { background: #f59e0b; }
 .sys-tile.sys-ok .sys-bar i { background: #10b981; }
 .sys-s { font-size: 11px; color: #6b7280; margin-top: 5px; line-height: 1.35; }
- /* "Serves" labels in the info pane — which parts of the product this box serves. Plain labels, not
-   controls: they used to set a capability overlay on the diagram, which was removed. */
-.serves-chip { display: inline-block; font-size: 11px; padding: 1px 8px; margin: 0 4px 3px 0;
-               border: 1px solid #c7d2fe; border-radius: 9px; background: #eef2ff; color: #3730a3; }
-.serves-none { color: #9ca3af; }
-.serves-note { display: block; font-size: 11px; color: #6b7280; margin-top: 3px; }
+/* Backward flow trace in a box pane: capability headings make the concrete use-case links scannable
+   without repeating the same information in a separate summary row. */
+#panel .used-by-cap { margin-top: 4px; }
+#panel .used-cap-group + .used-cap-group { margin-top: 9px; }
+#panel .used-cap-name { color: #4b5563; font-size: 11px; font-weight: 700; letter-spacing: 0; }
+#panel .used-uc-list { list-style: none; margin: 2px 0 0; padding: 0; }
+#panel .used-uc-list li { margin: 2px 0; line-height: 1.35; }
+#panel .used-none { color: #9ca3af; }
 /* svg-pan-zoom sets pan/zoom via inline `style.transform` on its own `.svg-pan-zoom_viewport` group —
    this transition is toggled on JUST for centerOnSelection's programmatic move (viewer.js), never left
    on during a drag-pan (every mousemove frame would otherwise visibly lag behind the cursor). */
@@ -540,9 +542,8 @@ body.altmod .opensrc, body.altmod .opensrc * {
    action that box has in that view. Hidden until the box is hovered (a busy diagram would
    otherwise show a badge on every single box at once); double-click-anywhere-on-the-box (see
    isDrillClick) is the fully-visible fallback for anyone who never hovers it. A plain click on the
-   icon fires the action directly. Also stays visible while the box is the current selection
-   (`.is-selected`, set by glowNode) — so picking a box doesn't hide the very icon you might want next,
-   just because the cursor moved to read its details in the side panel.
+   icon fires the action directly. Also stays visible when a direct diagram click selected the box;
+   automatic selections keep it hover-only (driven by glowNode's `_selected` state).
    Paint (fill/stroke/stroke-width/stroke-dasharray) is deliberately NOT set here — it's set via inline
    style + !important in viewer.js (see ICON_PAINT/paintImportant), because Mermaid emits its OWN
    per-diagram CSS scoped by an id, e.g. `#coyodexGraph7 .subsystem > * { fill: …; stroke-dasharray: 6,3;
@@ -557,7 +558,7 @@ body.altmod .opensrc, body.altmod .opensrc * {
 /* Every action pill lives in a front overlay (see iconOverlay in viewer.js), never inside a Mermaid
    node, edge or label group where a later box could cover it. For box/cluster pills, the old descendant
    reveal rule (`g.node:hover .action-icon`) therefore can't reach them. JS
-   toggles `.revealed` off the owner box's hover + selection state instead (see refreshPillReveal),
+   toggles `.revealed` off the owner box's hover + direct-selection state instead (see refreshPillReveal),
    including the "never on a dimmed box, even under the cursor" case the old `.dim:hover` rule covered. */
 .action-icon.revealed { opacity: 1; pointer-events: auto; }
 /* Diff badges are purely informational (no click/hover) and now live in the same front overlay as the

@@ -53,7 +53,7 @@ def test_flow_arrows_locate_all_backbone_relationships_in_structural_views() -> 
     js = (VIEWER_DIR / "viewer.js").read_text()
     locate = js[js.index("function relationshipLocateTarget"):js.index("function decorateActionIcons")]
     sequence = js[js.index("function bindFlow(uc)"):js.index("// --- use-case flow step player")]
-    flow_map = js[js.index("function bindFlowMap(uc)"):js.index("function subtreeTouched")]
+    flow_map = js[js.index("function bindFlowMap(uc)"):js.index("function syncEnvPicker")]
     edge_action = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
 
     assert "selCover: bundleAtoms(pairEdges)" in locate
@@ -70,6 +70,50 @@ def test_flow_arrows_locate_all_backbone_relationships_in_structural_views() -> 
     assert "const action = { kind: 'drill'" not in edge_action
     assert "action || (onDrill ? { kind: 'drill'" in js
     assert "'edge:' + e.src + '>' + e.dst + ':' + m[3]" in js
+
+
+def test_only_direct_diagram_clicks_pin_selection_action_icons() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    selection = js[js.index("function selApply"):js.index("// The full click-gesture handler")]
+    sequence = js[js.index("function bindFlow(uc)"):js.index("// --- use-case flow step player")]
+    edge_action = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
+    glow_edge = js[js.index("function glowEdge"):js.index("// Synthetic (aggregated")]
+    hp_glow = js[js.index("function hpGlow"):js.index("// Glow a set of elements")]
+    flow_map = js[js.index("function bindFlowMap(uc)"):js.index("function syncEnvPicker")]
+
+    assert "d.glow(!!d.revealAction)" in selection
+    assert "function selAdd(scene, desc, revealAction = false)" in selection
+    assert "revealAction: !!revealAction" in selection
+    assert "selToggle(scene, desc, true)" in selection
+    assert "selReplace(scene, desc, true)" in selection
+    assert "function selRevealsAction" in selection
+    assert "selRevealsAction(scene, selKey)" in sequence
+    assert "glowEdge(p, label, revealAction = true)" in glow_edge
+    assert "p._actionIcon._selected = !!revealAction" in glow_edge
+    assert "hpGlow(el, revealAction = true)" in hp_glow
+    assert "el._actionIcon._selected = !!revealAction" in hp_glow
+    assert "glow: (reveal) => glowEdge" in flow_map
+    assert "flowPlay.showLocate" not in js
+    assert "showLocate:" not in js
+    assert "const pinOnSelect" not in edge_action
+
+
+def test_node_use_cases_are_grouped_by_capability_without_a_serves_row() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    trace = js[js.index("function tracedUseCasesFor"):js.index("// The \"Triggered by\"")]
+    detail = js[js.index("function nodeDetailHtml"):js.index("function bindNodeDetailHandlers")]
+
+    assert "isAncestorOf(id, eid)" in trace
+    assert "UC_NODES.filter((uc) => set.has(uc.id))" in trace
+    assert "CAP_OF_UC[uc.id]" in trace
+    assert 'class="used-cap-group"' in trace
+    assert 'class="used-uc-list"' in trace
+    assert "No traced use case reaches it." in trace
+    assert "servesHtml" not in js
+    assert "${usedInHtml(id)}" in detail
+    assert ".used-cap-name" in css
+    assert ".serves-chip" not in css
 
 
 def test_flow_map_dims_other_numbers_on_a_selected_multi_step_arrow() -> None:
@@ -93,7 +137,7 @@ def test_flow_map_arrows_reuse_complete_sequence_step_info() -> None:
     js = (VIEWER_DIR / "viewer.js").read_text()
     step = js[js.index("function flowStepInfoHtml"):js.index("// One actor's card")]
     pair = js[js.index("function showFlowPair"):js.index("function bindFlowMap")]
-    binding = js[js.index("function bindFlowMap"):js.index("function subtreeTouched")]
+    binding = js[js.index("function bindFlowMap"):js.index("function syncEnvPicker")]
 
     assert "flowStepInfoHtml(uc, i, false)" in step
     assert "bindFlowStepInfo(panel, uc, i)" in step

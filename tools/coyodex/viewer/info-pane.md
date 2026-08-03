@@ -30,7 +30,8 @@ The **Action** column is empty on purpose — it's where we note what to do with
 
 Every box element renders the same way: a **title** (its name), a **type pill** (two pills for a
 dependency), one **description line** as prose, then **label → value rows**, and a derived
-**"In use cases"** row.
+**"In use cases"** row grouped by capability. Subsystems and subdomains roll up the use cases that
+reach any descendant; leaf elements list the use cases that reach them directly.
 What changes per type is which fields fill those slots. Empty fields, fields that just repeat
 the name, and fields the diagram already shows (like which box a box nests in) are dropped.
 
@@ -39,7 +40,7 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 |---|---|---|
 | Purpose | prose | |
 | Runs in | list of process links (the deployment units running it) | opens that process's card |
-| In use cases | list of use-case links | |
+| In use cases | use-case links grouped by capability; includes descendant traces | |
 | *(kind)* | badge: "subsystem" | |
 
 ### Component
@@ -49,7 +50,7 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 | Entry point | text | |
 | *(extra authored fields)* | text | |
 | Runs in | list of process links (replaces the authored text field, which said the same thing) | opens that process's card |
-| In use cases | list of use-case links | |
+| In use cases | use-case links grouped by capability | |
 | Triggered by | list of its T4 entry points (kind · trigger · source) | source link opens the code viewer |
 | *(kind)* | badge: "component" | |
 
@@ -62,14 +63,14 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 | Runs on / Exposed as / Config source | text — present when a `deployment[]` INFRASTRUCTURE unit (one hosting no code) names this dependency; it has no process box, so its facts ride here | |
 | Environments | its deployment variants, each with the manifest anchor grounding it | source link opens the code viewer |
 | *(extra authored fields)* | text | |
-| In use cases | list | |
+| In use cases | use-case links grouped by capability | |
 | *(type)* | two pills: `dependency` + its sub-type (datastore / service / messaging / …) | |
 
 ### Subdomain
 | Property | Display | Action |
 |---|---|---|
 | Purpose | prose | |
-| In use cases | list | |
+| In use cases | use-case links grouped by capability; includes descendant traces | |
 | *(kind)* | badge: "subdomain" | |
 
 ### Entity
@@ -77,7 +78,7 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 |---|---|---|
 | Meaning | prose | |
 | Stored | text | |
-| In use cases | list | |
+| In use cases | use-case links grouped by capability | |
 | *(kind)* | badge: "entity" | |
 | *(the entity's own fields)* | **not** in the info pane — shown as columns inside the diagram box instead | |
 
@@ -128,6 +129,11 @@ reveals a **LocateFixed** corner action labelled with its destination tab (for e
 Subsystems** or **Locate in Entities**); it opens that element's canonical structural diagram with
 the same element selected and centred. Actor boxes have no structural diagram, so they carry no
 locate action.
+
+Action icons follow the selection's origin consistently across diagrams. A direct click on a diagram
+element selects it and keeps its Drill or Locate icon visible. A selection applied by the UI — stepping,
+locating or drilling to a target, following a tree/pane link, switching renderings, or restoring history —
+keeps the same highlight and detail pane but leaves its action icon hover-only.
 
 The **step player walks either rendering** — same steps, same panels, same code-viewer sync; on the
 Map it glows the arrow carrying the current step and dims to its two boxes. Switching rendering

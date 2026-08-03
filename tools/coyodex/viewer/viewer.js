@@ -19,7 +19,6 @@ let BRIDGE_EDGES;               // flat list of every component->entity edge (st
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
 let MERMAID_DEPLOYMENT;    // Deployment overview (the "All" view): processes + infra + derived `runs` edges
 let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of the subsystems it runs
-let CAPABILITY_TOUCH = {};    // element id -> the capability ids whose flows reach it
 let COMPLETENESS = {};        // the four-state counts shown on the System tab
 let HAS_CAPABILITIES = false;
 let CAP_OF_UC = {};           // use-case id -> its capability NODE (names on screen, never ids)
@@ -97,7 +96,6 @@ function applyBundle(b) {
   HAS_USECASES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'usecase');
   // ── the capability overlay's data (plan/60-capabilities). Computed server-side by the ONE Python
   // helper; a second implementation here is the drift this repo keeps paying for elsewhere.
-  CAPABILITY_TOUCH = GRAPH.capability_touch || {};
   COMPLETENESS = GRAPH.completeness || {};
   HAS_CAPABILITIES = Object.values(GRAPH.nodes || {}).some((n) => n.kind === 'capability');
   CAP_OF_UC = {};
@@ -317,10 +315,12 @@ function makeScene(root, defaultPanel) {
   // dimEls: a flat list of extra focusable elements (the Happy Path's actor figures, lifelines and
   // message text/lines) that the standard node/edge focus model doesn't cover — dimmed/restored together.
   // selection: the ordered list of selected-element DESCRIPTORS (click order = card/stack order; the LAST
-  //   is the "primary" that drives the tree + code viewer). selKeys mirrors their keys for O(1) membership
+  //   is the "primary" that drives the tree + code viewer). Each selected descriptor also carries
+  //   `revealAction`: true only when that item was selected by a direct diagram click. selKeys mirrors
+  //   their keys for O(1) membership
   //   (hover-glow / already-selected tests). selectedKey = the primary's key (or null) — a compat handle
   //   for the few spots that want "the/most-recent" selection. A descriptor is { key, glow, focus, show }:
-  //     glow()  -> apply this element's highlight, return a cleanup fn (glowNode / glowEdge / hpHighlight)
+  //     glow(revealAction) -> apply this element's highlight, optionally pin its action icon, return cleanup
   //     focus   -> flowchart: { nodes:Set<id>, edge:(e)=>bool }; sequence: { els:Set<DOMEl> }; null = don't dim
   //     show()  -> fill `panel` with this element's detail (an existing show* fn; also syncs tree/code when primary)
   // focusUnion(scene, selection) dims to the UNION of every selected element's neighbourhood — the default
@@ -341,7 +341,7 @@ function selHas(scene, key) { return scene.selKeys.has(key); }
 // highlights (a step lit by both a participant and its own selection) stay consistent.
 function selApply(scene) {
   if (scene._selClear) { scene._selClear(); scene._selClear = null; }
-  const undos = scene.selection.map((d) => d.glow());
+  const undos = scene.selection.map((d) => d.glow(!!d.revealAction));
   scene._selClear = () => undos.forEach((f) => f && f());
   if (scene.selection.length) scene.focusUnion(scene, scene.selection); else clearFocus(scene);
   renderSelPanel(scene);
@@ -351,10 +351,15 @@ function selApply(scene) {
   // highlight + default the code slot to browse, the same cleanup empty-canvas click / Escape do.
   if (!scene.selection.length) { highlightTreePath(null); setBrowsing(true); }
 }
-function selAdd(scene, desc) {
+function selAdd(scene, desc, revealAction = false) {
   if (scene.selKeys.has(desc.key)) { scene.selectedKey = desc.key; return; }  // already in the set (dedupe restore)
-  scene.selection.push(desc); scene.selKeys.add(desc.key); scene.selectedKey = desc.key;
+  scene.selection.push({ ...desc, revealAction: !!revealAction });
+  scene.selKeys.add(desc.key); scene.selectedKey = desc.key;
   selApply(scene);
+}
+function selRevealsAction(scene, key) {
+  const d = scene.selection.find((x) => x.key === key);
+  return !!(d && d.revealAction);
 }
 function selRemove(scene, key) {
   const i = scene.selection.findIndex((d) => d.key === key);
@@ -363,18 +368,24 @@ function selRemove(scene, key) {
   scene.selectedKey = scene.selection.length ? scene.selection[scene.selection.length - 1].key : null;
   selApply(scene);
 }
-function selToggle(scene, desc) { if (scene.selKeys.has(desc.key)) selRemove(scene, desc.key); else selAdd(scene, desc); }
+function selToggle(scene, desc, revealAction = false) {
+  if (scene.selKeys.has(desc.key)) selRemove(scene, desc.key);
+  else selAdd(scene, desc, revealAction);
+}
 function selClear(scene) {  // drop every selected element (tear down glows) WITHOUT touching the panel/focus
   if (scene._selClear) { scene._selClear(); scene._selClear = null; }
   scene.selection = []; scene.selKeys = new Set(); scene.selectedKey = null;
   flowSuspend();
   flowMapRefreshStepLabels();
 }
-function selReplace(scene, desc) { selClear(scene); selAdd(scene, desc); }
+function selReplace(scene, desc, revealAction = false) { selClear(scene); selAdd(scene, desc, revealAction); }
 // The click-time router: a multi-select modifier (⌘ / ⌃) toggles the element in/out of the running
 // selection; a plain click replaces the selection with just this element. Every plain-select entry point
 // goes through here so the two gestures behave uniformly across every view.
-function pickSel(scene, desc, e) { if (isMultiSelectClick(e)) selToggle(scene, desc); else selReplace(scene, desc); }
+function pickSel(scene, desc, e) {
+  if (isMultiSelectClick(e)) selToggle(scene, desc, true);
+  else selReplace(scene, desc, true);
+}
 // The full click-gesture handler for a BOX (node / fold): shift-click is a pure camera move (frame the box
 // via matchTextSize — never selects), ⌘-click toggles it in/out of the multi-selection, a plain click
 // replaces. Every box entry point routes here so all three gestures behave identically for regular boxes
@@ -829,10 +840,10 @@ function paintImportant(el, props) {
 }
 // Action icons live in the front overlay (iconOverlay), NOT inside their node/edge/label group,
 // so the CSS descendant reveal rule (`g.node:hover .action-icon`) can no longer reach them — their
-// show/hide is driven here in JS instead. It mirrors exactly what that CSS did: visible while the owner
-// box is hovered OR selected, but NEVER on a DIMMED box even under the cursor (a box you're not focused
-// on shouldn't invite drilling just because the pointer passed over it). A label/edge pill (opts.host)
-// keeps its own showIcon/hideIcon path and is not wired through this owner-based reveal behavior.
+// show/hide is driven here in JS instead. A box pill is visible while its owner is hovered, or while a
+// DIRECT diagram click selected it; automatic selections keep the pill hover-only. A dimmed box never
+// reveals under the cursor (a box you're not focused on shouldn't invite drilling just because the
+// pointer passed over it). A label/edge pill (opts.host) keeps its own showIcon/hideIcon path.
 function refreshPillReveal(icon) {
   const owner = icon._owner;
   const dimmed = owner && owner.classList.contains('dim');
@@ -1151,8 +1162,9 @@ function isDrillClick(e) {
 function isMultiSelectClick(e) { return !!e && (e.metaKey || e.ctrlKey) && e.detail < 2; }
 
 // --- side panel -----------------------------------------------------------------
-// The "Used in UC" backward view for an element: the use cases whose T6 flow steps through it, as
-// links into each use case's flow. Derived from USES_BY_NODE; '' when no flow touches this element.
+// The backward trace for an element: the use cases whose T6 flow steps through it, grouped under their
+// capabilities and linked into each flow. A subsystem/subdomain rolls up every descendant's traces,
+// so its pane answers for the whole box rather than for an id no flow step normally names directly.
 // "Runs in" — the deployment units whose process runs this subsystem / component. ONE row for the
 // code→process relation, under the map's own vocabulary (`runs_in`): a component's authored text
 // version is dropped server-side when this replaces it, so the unit is never printed twice under two
@@ -1177,63 +1189,42 @@ function runByHtml(id) {
     '<a href="#" class="procref" data-unit="' + esc(u) + '">' + esc(u) + '</a>').join(', ');
   return '<dt>Runs in</dt><dd>' + links + '</dd>';
 }
-function usedInHtml(id) {
-  const set = USES_BY_NODE[id];
-  if (!set || !set.size) return '';
-  const links = [...set].sort().map((uc) =>
-    '<a href="#" class="ucref" data-uc="' + esc(uc) + '">'
-    + esc(GRAPH.nodes[uc] ? GRAPH.nodes[uc].name : uc) + '</a>').join(', ');
-  // "In use cases", not "Used in": the values ARE use cases, and the bare "Used in" left the reader to
-  // guess what kind of thing the list held (processes? subsystems? files?). The label names the list.
-  return '<dt>In use cases</dt><dd>' + links + '</dd>';
-}
-// "Serves" — given this box, which parts of the product does it serve? Derived from
-// `CAPABILITY_TOUCH`, the inverse of the per-capability element sets. (Its forward twin, a
-// "where this capability lives" panel on the Use Cases tab, was removed as not worth its space: a
-// capability spanning four subsystems is normal, so the ranked bars rarely changed a reader's mind.
-// The question is worth answering on the box you are looking at, not as a standing summary.)
-//
-// Shown at BOTH altitudes. A component looks itself up directly; a subsystem rolls up its whole
-// subtree, because a container holds no code of its own — its answer is the union of its
-// descendants', exactly as the overlay's own subtree roll-up works.
-//
-// The reading is at the extremes: served by ONE capability means this box belongs to one part of the
-// product (change it and you know what you touch); served by nearly all means shared machinery. The
-// third case is the one worth spelling out — served by NONE is ambiguous between "genuinely
-// cross-cutting, no scenario walks through it" and "no trace ever reached it", so the row says so
-// rather than guessing, and points at the trace debt that would settle it.
-function servesHtml(id) {
+function tracedUseCasesFor(id) {
   const n = GRAPH.nodes[id];
-  if (!n || !HAS_CAPABILITIES) return '';
-  if (!['component', 'subsystem', 'entity', 'subdomain', 'dep'].includes(n.kind)) return '';
-  const caps = new Set(CAPABILITY_TOUCH[id] || []);
-  if (n.kind === 'subsystem' || n.kind === 'subdomain') {
-    for (const eid in CAPABILITY_TOUCH) {
-      let cur = GRAPH.nodes[eid];
-      for (let guard = 0; cur && guard < 12; guard++) {
-        if (cur.parent === id) { (CAPABILITY_TOUCH[eid] || []).forEach((c) => caps.add(c)); break; }
-        cur = GRAPH.nodes[cur.parent];
-      }
+  const out = new Set(USES_BY_NODE[id] || []);
+  if (n && (n.kind === 'subsystem' || n.kind === 'subdomain')) {
+    for (const eid in USES_BY_NODE) {
+      if (isAncestorOf(id, eid)) for (const uc of USES_BY_NODE[eid]) out.add(uc);
     }
   }
-  if (!caps.size) {
-    // Only say this where a capability COULD have reached — an untouched box on a map with traces is
-    // a real signal; on an untraced map it would just be noise about the whole map.
-    const debt = (COMPLETENESS || {}).use_cases_untraced || 0;
-    return '<dt>Serves</dt><dd><span class="serves-none">no capability reaches it</span>'
-      + (debt ? ` — cross-cutting, or never traced (${debt} use case${debt > 1 ? 's' : ''} untraced)`
-              : ' — cross-cutting: no traced scenario walks through it') + '</dd>';
+  return out;
+}
+function usedInHtml(id) {
+  const n = GRAPH.nodes[id];
+  if (!n || !['component', 'subsystem', 'entity', 'subdomain', 'dep'].includes(n.kind)) return '';
+  const set = tracedUseCasesFor(id);
+  if (!set.size) {
+    return HAS_USECASES
+      ? '<dt>In use cases</dt><dd><span class="used-none">No traced use case reaches it.</span></dd>'
+      : '';
   }
-  const total = Object.values(GRAPH.nodes || {}).filter((x) => x.kind === 'capability').length;
-  const chips = [...caps].sort((a, b) => Number(a.slice(3)) - Number(b.slice(3))).map((c) =>
-    `<span class="serves-chip">${esc(GRAPH.nodes[c] ? GRAPH.nodes[c].name : c)}</span>`).join(' ');
-  // Shared machinery is worth naming, not just counting — but only as an observation about REACH.
-  // Nothing here classifies the box as "platform": measured on the reference map the maximum spread
-  // was 4 capabilities of 7, so no threshold separates machinery from product, and that
-  // classification was dropped from the design rather than tuned.
-  const note = (total >= 4 && caps.size >= total - 1)
-    ? '<span class="serves-note">reached by nearly every capability — shared machinery</span>' : '';
-  return `<dt>Serves</dt><dd>${chips}${note}</dd>`;
+  const link = (uc) => '<a href="#" class="ucref" data-uc="' + esc(uc.id) + '">'
+    + esc(uc.name || uc.id) + '</a>';
+  const ordered = UC_NODES.filter((uc) => set.has(uc.id));
+  if (!HAS_CAPABILITIES) {
+    return '<dt>In use cases</dt><dd>' + ordered.map(link).join(', ') + '</dd>';
+  }
+  const groups = Object.values(GRAPH.nodes || {})
+    .filter((x) => x.kind === 'capability')
+    .map((cap) => ({ cap, ucs: ordered.filter((uc) => CAP_OF_UC[uc.id] === cap) }))
+    .filter((g) => g.ucs.length);
+  const loose = ordered.filter((uc) => !CAP_OF_UC[uc.id]);
+  if (loose.length) groups.push({ cap: null, ucs: loose });
+  const html = groups.map((g) => '<div class="used-cap-group">'
+    + '<div class="used-cap-name">' + esc(g.cap ? g.cap.name : 'Other use cases') + '</div>'
+    + '<ul class="used-uc-list">' + g.ucs.map((uc) => '<li>' + link(uc) + '</li>').join('')
+    + '</ul></div>').join('');
+  return '<dt>In use cases</dt><dd class="used-by-cap">' + html + '</dd>';
 }
 // The "Triggered by" forward view for a component: its T4 entry points — how the outside world reaches
 // it (an HTTP route, a CLI command, a cron, an event). Like the arrow/crossing rows, each entry point is
@@ -1391,7 +1382,7 @@ function nodeDetailHtml(id) {
   // code viewer, which carry the path and the sole "open externally" control.
   return `<div class="pane-title"><h2>${esc(n.name)}</h2>${kindPills(n)}${chg}</div>`
     + explain
-    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${servesHtml(id)}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
+    + `<dl>${rows}${variantsPaneHtml(id)}${runByHtml(id)}${persistedInHtml(id)}${accessRowsHtml(id)}${persistedDataLinkHtml(id)}${usedInHtml(id)}${triggeredByHtml(id)}</dl>`
     + impactSectionHtml(id);
 }
 // Wire the interactive bits inside the just-written detail panel: the use-case-flow refs and the
@@ -1562,7 +1553,8 @@ function showBucketFold(bkid) {
 // Select a folded-bucket count box: roster panel + dim to its neighbourhood (SYS + the arrow), exactly
 // like selecting the Libraries fold. Reuses the node selKey so the hover guard matches.
 function bucketFoldDesc(scene, el, bkid) {
-  return { key: 'node:' + bkid, glow: () => glowNode(el), focus: nodeFocus(scene, bkid), show: () => showBucketFold(bkid) };
+  return { key: 'node:' + bkid, glow: (reveal) => glowNode(el, reveal),
+           focus: nodeFocus(scene, bkid), show: () => showBucketFold(bkid) };
 }
 function selectBucketFold(scene, el, bkid) { selReplace(scene, bucketFoldDesc(scene, el, bkid)); }
 // Tag every folded-bucket box with the drill cursor (⌘-drills into its members), like subsystem boxes.
@@ -1802,7 +1794,8 @@ function bindFlow(uc) {
     const glowEls = [...parts, ...stepEls];
     const keep = new Set(glowEls);
     for (const i of myMsg) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
-    const desc = { key: selKey, glow: () => hpHighlight(scene, glowEls), focus: { els: keep }, show: () => showNode(id) };
+    const desc = { key: selKey, glow: () => hpHighlight(scene, glowEls, false),
+                   focus: { els: keep }, show: () => showNode(id) };
     scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward can restore this participant selection
     const on = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = HOVER; };
     const off = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
@@ -1846,7 +1839,8 @@ function bindFlow(uc) {
     const glowEls = [...parts, ...stepEls];
     const keep = new Set(glowEls);
     for (const i of a.stepIdx) for (const nb of [steps[i].srcId, steps[i].dstId]) for (const el of (partsById[nb] || [])) keep.add(el);
-    const desc = { key: selKey, glow: () => hpHighlight(scene, glowEls), focus: { els: keep }, show: () => showFlowActor(uc, a) };
+    const desc = { key: selKey, glow: () => hpHighlight(scene, glowEls, false),
+                   focus: { els: keep }, show: () => showFlowActor(uc, a) };
     scene.selectors[selKey] = () => selAdd(scene, desc);
     const on = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = HOVER; };
     const off = () => { if (!selHas(scene, selKey)) for (const el of parts) el.style.filter = hpRestFilter(scene, el); };
@@ -1874,7 +1868,9 @@ function bindFlow(uc) {
     const keep = new Set(els);
     for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
     for (const el of (actorPartsByStep[i] || [])) keep.add(el);  // Role endpoints have no node id
-    const desc = { key: selKey, glow: () => hpHighlight(scene, els), focus: { els: keep },
+    const desc = { key: selKey,
+                   glow: (reveal) => hpHighlight(scene, els, reveal),
+                   focus: { els: keep },
                    show: () => { flowSyncCur(i); showFlowStep(uc, i); } };
     scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward + the step player can restore this flow-step selection
     const onClick = (ev) => {
@@ -1888,14 +1884,24 @@ function bindFlow(uc) {
     const off = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = hpRestFilter(scene, el); };
     const locate = relationshipLocateAction(st.srcId, st.dstId);
     if (line) attachEdgeHandlers(line, text, onClick, on, off, null, null,
-      () => selHas(scene, selKey), locate);
+      () => selRevealsAction(scene, selKey), locate);
     else {
       text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important');
       if (locate) {
         addLabelActionIcon(text, 'flowloc:' + uc + ':' + i, locate);
         const icon = text._actionIcon;
-        text.addEventListener('mouseenter', () => showIcon(icon));
-        text.addEventListener('mouseleave', () => { if (!selHas(scene, selKey)) hideIcon(icon); });
+        const showLocate = () => showIcon(icon);
+        const hideLocate = () => {
+          if (!selRevealsAction(scene, selKey)) hideIcon(icon);
+        };
+        text.addEventListener('mouseenter', showLocate);
+        text.addEventListener('mouseleave', hideLocate);
+        icon.addEventListener('mouseenter', showLocate);
+        icon.addEventListener('mouseleave', hideLocate);
+        if (icon._bridge) {
+          icon._bridge.addEventListener('mouseenter', showLocate);
+          icon._bridge.addEventListener('mouseleave', hideLocate);
+        }
       }
       text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off);
     }
@@ -1904,7 +1910,9 @@ function bindFlow(uc) {
   // Hand the step player everything it needs to walk this flow: the ordered steps, each step's arrow+label
   // DOM (msgEls) and its endpoint columns (partsById). A fresh visit is inactive with no remembered step;
   // its first Next lands on step 1. No flow -> null, so the strip stays hidden.
-  flowPlay = steps.length ? { uc, kind: 'sequence', steps, msgEls, partsById, cur: -1, active: false } : null;
+  flowPlay = steps.length
+    ? { uc, kind: 'sequence', steps, msgEls, partsById, cur: -1, active: false }
+    : null;
 }
 // --- use-case flow step player --------------------------------------------------
 // Walk a flow's actions one at a time. Each step is selected exactly as a click on its arrow would —
@@ -2674,17 +2682,17 @@ function topSubdomainOf(id) {
 // of an ancestor's filter, the filter has to simply not be applied above it in the first place.
 function shapeOf(el) { return el.querySelector('rect, polygon, path, circle') || el; }
 // Selection highlight for a node/frame — HILITE filter (on the shape, not the group — see shapeOf) +
-// an `is-selected` class on the group, so a selected box's corner action icon (if it has one) stays
-// visible after the cursor leaves it, instead of only ever showing on hover. The node analog of
-// glowEdge (edges have no action icon, so no class needed there).
-function glowNode(el) {
+// an `is-selected` class on the group. `revealAction` distinguishes a direct diagram click (pin the
+// corner action after the cursor leaves) from an automatic selection (highlight only; action stays
+// hover-driven). The node analog of glowEdge.
+function glowNode(el, revealAction = true) {
   shapeOf(el).style.filter = HILITE;
   el.classList.add('is-selected');
   // Keep the box's corner pill visible after the cursor leaves it while it's the selection. The pill now
   // lives in the front overlay (not this group), so this is a JS flag rather than the old `.is-selected`
   // descendant CSS rule; `_actionIcon` is set by addActionIcon for every box/cluster pill.
   const icon = el._actionIcon;
-  if (icon) { icon._selected = true; refreshPillReveal(icon); }
+  if (icon) { icon._selected = !!revealAction; refreshPillReveal(icon); }
   return () => {
     shapeOf(el).style.filter = ''; el.classList.remove('is-selected');
     if (icon) { icon._selected = false; refreshPillReveal(icon); }
@@ -2709,7 +2717,8 @@ function nodeFocus(scene, id) {
 // A normal node's selection descriptor: glow the box, dim to its neighbourhood, show its detail (+ mirror
 // into the file browser / code viewer when it's the primary card).
 function nodeDesc(scene, el, id) {
-  return { key: 'node:' + id, glow: () => glowNode(el), focus: nodeFocus(scene, id), show: () => showNodeDetailSynced(id) };
+  return { key: 'node:' + id, glow: (reveal) => glowNode(el, reveal),
+           focus: nodeFocus(scene, id), show: () => showNodeDetailSynced(id) };
 }
 // Select a normal node within a scene: REPLACE the selection with just this node (glow + dim + panel).
 // Used by every non-modifier select path (tree click, search hit, history restore's single-key case).
@@ -2826,7 +2835,8 @@ function frameArrow(el) {
 // is a registered context edge, so focusNode resolves the connection. Reuses the node selKey so
 // bindNodes' hover guard matches and the selection glow isn't overwritten by a passing hover.
 function libsFoldDesc(scene, el) {
-  return { key: 'node:' + LIBS_ID, glow: () => glowNode(el), focus: nodeFocus(scene, LIBS_ID), show: () => showLibsFold() };
+  return { key: 'node:' + LIBS_ID, glow: (reveal) => glowNode(el, reveal),
+           focus: nodeFocus(scene, LIBS_ID), show: () => showLibsFold() };
 }
 function selectLibsFold(scene, el) { selReplace(scene, libsFoldDesc(scene, el)); }
 // Tag the Libraries box with the drill cursor (it ⌘-drills into the full list), like subsystem boxes.
@@ -2981,9 +2991,8 @@ function edgeLabelHasContent(label) {
 // matter for the pill's identity and visibility. `hit` is the wide invisible clone that actually
 // catches the pointer (see attachEdgeHandlers) — hovering/leaving THAT, not the thin original stroke,
 // is what should show/hide the pill, so listeners go on it, not on `p`. `isSelected` (from
-// bindSelectEdge, matching hpGlow's `scene.selectedKey !== selKey` guard) is what lets the pill stay
-// up after a selection even once the cursor leaves — without it, hide() would blank a pill glowEdge
-// just pinned the moment the mouse moved off the arrow.
+// bindSelectEdge, matching hpGlow's selection guard) is what lets the pill stay up after a direct
+// selection even once the cursor leaves. Flow-step callers narrow it when a stepper owns the selection.
 function bindEdgeActionIcon(p, hit, label, action, isSelected) {
   const id = p.id || ('edgepill' + (EDGE_ICON_SEQ++));
   const isDim = () => p.style.opacity === DIM || (label && label.style.opacity === DIM);
@@ -3012,7 +3021,6 @@ function bindEdgeActionIcon(p, hit, label, action, isSelected) {
   hit.addEventListener('mouseenter', showAt);
   hit.addEventListener('mouseleave', hide);
   if (label) { label.addEventListener('mouseenter', showAt); label.addEventListener('mouseleave', hide); }
-  // Lets glowEdge (selection) show/hide this pill the same way hpGlow does for a Happy Path step.
   p._actionIcon = icon;
 }
 // Give an edge's visible path a wide transparent hit-path + make its label clickable.
@@ -3065,7 +3073,7 @@ function eachEdge(root, fn) {
 }
 
 // Stroke an edge's path + glow its label (selection highlight); returns a cleanup fn.
-function glowEdge(p, label) {
+function glowEdge(p, label, revealAction = true) {
   // Preserve any BASE inline stroke/width the arrow already carries (a synthetic arrow sets its own thick
   // dashed base — see markSyntheticEdge) so deselecting restores it, not Mermaid's default. dasharray is
   // never touched here, so a dashed synthetic arrow stays dashed through the whole select cycle.
@@ -3074,15 +3082,15 @@ function glowEdge(p, label) {
   p.style.setProperty('stroke', '#2563eb', 'important');
   p.style.setProperty('stroke-width', '3px', 'important');
   if (label) label.style.filter = HILITE;
-  // A drillable edge's pill (see bindEdgeActionIcon) sticks while selected, same as hpGlow does for a
-  // Happy Path step — otherwise selecting the edge (without ever hovering it) would leave no way to
-  // see its drill option short of hovering again.
-  if (p._actionIcon) showIcon(p._actionIcon);
+  if (p._actionIcon) {
+    p._actionIcon._selected = !!revealAction;
+    if (revealAction) showIcon(p._actionIcon); else hideIcon(p._actionIcon);
+  }
   return () => {
     if (s0) p.style.setProperty('stroke', s0, sp0); else p.style.removeProperty('stroke');
     if (w0) p.style.setProperty('stroke-width', w0, wp0); else p.style.removeProperty('stroke-width');
     if (label) label.style.filter = '';
-    if (p._actionIcon) hideIcon(p._actionIcon);
+    if (p._actionIcon) { p._actionIcon._selected = false; hideIcon(p._actionIcon); }
   };
 }
 // Synthetic (aggregated, count-labelled) arrows — the ones that bundle several sub-arrows and drill to a
@@ -3107,7 +3115,8 @@ function edgeFocus(scene, e) {
   return { nodes: new Set([e.src, e.dst]), edge: (x) => x.src === e.src && x.dst === e.dst };
 }
 function edgeDesc(scene, p, label, e, selKey, showFn) {
-  return { key: selKey, glow: () => glowEdge(p, label), focus: edgeFocus(scene, e), show: showFn };
+  return { key: selKey, glow: (reveal) => glowEdge(p, label, reveal),
+           focus: edgeFocus(scene, e), show: showFn };
 }
 // `opts.onDrill` (optional) makes an ⌥-click drill instead of select, and marks the arrow with the drill
 // cursor; `opts.actionFn` is its preview. `opts.action` adds an explicit icon action without changing
@@ -3128,7 +3137,7 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   };
   scene.edgeEls.push({ e, path: p, label, key: selKey });  // `key` lets coverKeys select this arrow for a synthetic-arrow drill
   attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn,
-    () => selHas(scene, selKey), opts.action);
+    () => selRevealsAction(scene, selKey), opts.action);
 }
 
 // An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
@@ -3754,9 +3763,6 @@ function applyEnvDim(scene) {
 // The capability OVERLAY (a "Serving" picker that dimmed everything a chosen capability did not
 // touch) was removed: choosing from a control that showed only names meant picking blind, and the
 // result — a third dimming channel over the same diagram — read as noise rather than as an answer.
-// What survives is the reverse direction, which asks the question of the box in front of you: the
-// "Serves" row (servesHtml) names the capabilities a box serves, and `capability_touch` still
-// carries the data. `subtreeTouched` stays because that row rolls a container up the same way.
 
 // ── a use case's two renderings: Map and Sequence ─────────────────────────────────────────────────
 // One traced flow, drawn two ways. The SEQUENCE answers "in what order"; the MAP answers "what does
@@ -3935,7 +3941,7 @@ function bindFlowMap(uc) {
     el.style.cursor = 'pointer';
     // Built lazily (like every other node descriptor): `nodeFocus` reads scene.edgeEls, which bindEdges
     // below fills in after this runs.
-    const desc = () => ({ key: 'node:' + aid, glow: () => glowNode(el),
+    const desc = () => ({ key: 'node:' + aid, glow: (reveal) => glowNode(el, reveal),
                           focus: nodeFocus(scene, aid), show: () => showFlowActor(uc, a) });
     scene.selectors['node:' + aid] = () => selAdd(scene, desc());
     bindHoverGlow(scene, el, aid);
@@ -3984,7 +3990,7 @@ function bindFlowMap(uc) {
     msgEls[i] = arrow ? [arrow.path, arrow.label].filter(Boolean) : [];
     if (!arrow) return;                    // a step whose pair was not drawn: no glow, but it still counts
     const desc = { key: 'flowstep:' + uc + ':' + i,
-                   glow: () => glowEdge(arrow.path, arrow.label),
+                   glow: (reveal) => glowEdge(arrow.path, arrow.label, reveal),
                    focus: { nodes: new Set([a, b]), edge: (e) => e.src === a && e.dst === b },
                    show: () => { flowSyncCur(i); showFlowStep(uc, i); } };
     scene.selectors[desc.key] = () => selAdd(scene, desc);
@@ -3998,19 +4004,6 @@ function bindFlowMap(uc) {
   flowPlay = steps.length
     ? { uc, kind: 'map', steps, msgEls, partsById, mapArrows: arrows, cur: -1, active: false }
     : null;
-}
-
-function subtreeTouched(id, hit) {
-  if (!hit) return true;
-  for (const eid of hit) {
-    let cur = GRAPH.nodes[eid];
-    let guard = 0;
-    while (cur && guard++ < 12) {
-      if (cur.parent === id) return true;
-      cur = GRAPH.nodes[cur.parent];
-    }
-  }
-  return false;
 }
 
 // Draw (or hide) the environment filter. It sits OVER THE DIAGRAM, not in the info pane: it changes
@@ -4324,18 +4317,24 @@ function bindDomain() {
 // stick figure over a lifeline. Both SELECT (panel + glow + focus-dim); a step also ⌘-clicks to drill.
 // Glow one HP element (figure, text, lifeline or arrow) with the soft HP_SEL drop-shadow — a touch
 // above the hover glow, never the heavy stroke-recolour the click used to apply. Returns a cleanup.
-function hpGlow(el) {
+function hpGlow(el, revealAction = true) {
   el.style.filter = HP_SEL;
-  if (el._actionIcon) showIcon(el._actionIcon);  // a selected step's pill stays put, not just its glow
-  return () => { el.style.filter = ''; if (el._actionIcon) hideIcon(el._actionIcon); };
+  if (el._actionIcon) {
+    el._actionIcon._selected = !!revealAction;
+    if (revealAction) showIcon(el._actionIcon); else hideIcon(el._actionIcon);
+  }
+  return () => {
+    el.style.filter = '';
+    if (el._actionIcon) { el._actionIcon._selected = false; hideIcon(el._actionIcon); }
+  };
 }
 // Glow a set of elements and remember them in scene.hpLit (a step driven by a selected actor is
 // glowed but isn't itself the selection, so its own hover handlers must restore THIS glow on leave —
 // not blank it). ADDITIVE, so several selected sequence elements can be lit at once (multi-select): each
 // call adds its els to the running lit set and its cleanup removes exactly those. selApply rebuilds the
 // whole set from scratch on every change, so a shared el (lit by two selections) can't be stranded.
-function hpHighlight(scene, els) {
-  const undo = els.map(hpGlow);
+function hpHighlight(scene, els, revealAction = true) {
+  const undo = els.map((el) => hpGlow(el, revealAction));
   for (const el of els) scene.hpLit.add(el);
   return () => { undo.forEach((f) => f()); for (const el of els) scene.hpLit.delete(el); };
 }
@@ -4357,7 +4356,8 @@ function hpActorDesc(scene, a) {
   const stepEls = [];
   for (const i of a.stepIdx) { const m = scene.hpMsg[i]; if (m) stepEls.push(...hpMsgEls(m)); }
   const lit = [...scene.hpActor[a.aid].els, ...stepEls];
-  return { key: 'hpactor:' + a.aid, glow: () => hpHighlight(scene, lit), focus: { els: new Set(lit) }, show: () => showHPActor(a) };
+  return { key: 'hpactor:' + a.aid, glow: () => hpHighlight(scene, lit, false),
+           focus: { els: new Set(lit) }, show: () => showHPActor(a) };
 }
 function selectHPActor(scene, a) { selReplace(scene, hpActorDesc(scene, a)); }
 // Select a step: the step (label + arrow + its junction dots) glows and EVERY actor that can drive it
@@ -4368,7 +4368,7 @@ function hpStepDesc(scene, i, hpId, aids) {
   const glow = hpMsgEls(m);
   const keep = new Set(glow);
   for (const aid of (aids || [])) for (const el of ((scene.hpActor[aid] || {}).els || [])) keep.add(el);
-  return { key: 'hpstep:' + hpId, glow: () => hpHighlight(scene, glow),
+  return { key: 'hpstep:' + hpId, glow: (reveal) => hpHighlight(scene, glow, reveal),
            focus: { els: keep }, show: () => showHPArrow(hpId) };
 }
 function selectHPStep(scene, i, hpId, aids) { selReplace(scene, hpStepDesc(scene, i, hpId, aids)); }
@@ -4387,7 +4387,7 @@ function hpUseCaseDesc(scene, uc) {
       if (rec) keep.push(...rec.els);
     }
   });
-  return { key: 'hpuc:' + uc, glow: () => hpHighlight(scene, glow),
+  return { key: 'hpuc:' + uc, glow: () => hpHighlight(scene, glow, false),
            focus: { els: new Set([...glow, ...keep]) }, show: () => showUseCaseSummary(uc) };
 }
 function selectHPUseCase(scene, uc) { selReplace(scene, hpUseCaseDesc(scene, uc)); }
@@ -4481,10 +4481,9 @@ function bindHP() {
     // candidate for a next action — the pill stays hidden even while hovered, matching a dimmed box.
     const on = () => { if (!selHas(scene, selKey)) { text.style.filter = HOVER; if (line) line.style.filter = HOVER; for (const d of dots) d.style.filter = HOVER; if (text.style.opacity !== DIM) showIcon(icon); } };
     // restore to the resting glow (an actor-selected step keeps its HILITE), not blank — and for the
-    // same reason, the pill sticks too: `scene.hpLit` is exactly what hpRestFilter already checks to
-    // decide that, so hiding the icon only when this step ISN'T in that lit set keeps it up for as
-    // long as its driving actor is selected, not just for as long as the step itself is.
-    const off = () => { if (!selHas(scene, selKey)) { text.style.filter = hpRestFilter(scene, text); if (line) line.style.filter = hpRestFilter(scene, line); for (const d of dots) d.style.filter = hpRestFilter(scene, d); if (!scene.hpLit.has(text)) hideIcon(icon); } };
+    // same reason, a directly selected step's pill stays visible. An automatically selected or merely
+    // indirectly lit step returns to hover-only when the pointer leaves.
+    const off = () => { if (!selHas(scene, selKey)) { text.style.filter = hpRestFilter(scene, text); if (line) line.style.filter = hpRestFilter(scene, line); for (const d of dots) d.style.filter = hpRestFilter(scene, d); if (!icon._selected) hideIcon(icon); } };
     const click = (ev) => {
       if (isDrag(ev)) return;
       ev.stopPropagation();
