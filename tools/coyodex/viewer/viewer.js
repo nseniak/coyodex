@@ -1907,39 +1907,33 @@ function flowInit() {
 // A flow step's side panel — EVERY step shows ITSELF (its phrase, endpoints, note, and its own call
 // site), never the backbone arrow's text: one element pair appears in several steps meaning different
 // things, so the shared arrow description can't be right for each — and the arrow's `where` is only an
-// example site, while the step's `where` is THE location. The backbone arrow(s) stay reachable via the
-// "rides" link(s); every parallel edge of the pair is listed, never silently the first.
+// example site, while the step's `where` is THE location. When the pair has backbone relations, the
+// whole src → dst line opens that pair exactly as clicking its drawn backbone arrow would.
 function showFlowStep(uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
-  const end = (label, id) => id ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
   const wn = st.where ? whereNode(st.where) : null;
   const local = !!(wn && localRef(wn.file));
   const srcRow = st.where
     ? '<dl><dt>Source</dt><dd>' + (local
         ? '<a href="#" class="stepwhere">' + esc(st.where) + '</a>' : esc(st.where)) + '</dd></dl>'
     : '';
-  const rides = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || []) : [];
-  const ridesRows = rides.length
-    ? '<dl><dt>Rides arrow</dt>' + rides.map((e, k) =>
-        '<dd><a href="#" class="ridesref" data-k="' + k + '">' + esc(st.src) + ' —' + esc(e.verb || 'uses')
-        + '&rarr; ' + esc(st.dst) + '</a></dd>').join('') + '</dl>'
-    : '';
+  const pairEdges = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || []) : [];
+  const pairText = esc(st.src) + ' &rarr; ' + esc(st.dst);
+  const pair = pairEdges.length ? '<a href="#" class="flowpairref">' + pairText + '</a>' : pairText;
   // The step's action is the title (a full sentence for actor steps — too long for a pill). The src → dst
-  // endpoints move to the body, keeping their links to each element.
+  // pair moves to the body as one relationship link when the backbone records that directed pair.
   panel.innerHTML = '<div class="pane-title"><h2>' + (st.verb ? mdInline(st.verb) : 'Step') + '</h2></div>'
-    + '<p class="endpoints">' + end(st.src, st.srcId) + ' &rarr; ' + end(st.dst, st.dstId) + '</p>'
+    + '<p class="endpoints">' + pair + '</p>'
     + (st.sf ? '<dl><dt>Part of sub-flow</dt><dd>&#10216;' + esc(st.sfName || st.sf)
        + '&#10217; <span class="muted">(' + esc(st.sf) + ' — a shared sequence this flow includes)</span></dd></dl>' : '')
     + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
     + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '')
-    + srcRow + ridesRows;
-  bindFlowRefs();
+    + srcRow;
+  const fp = panel.querySelector('a.flowpairref');
+  if (fp) fp.addEventListener('click', (ev) => { ev.preventDefault(); showPairEdges(pairEdges); });
   const sw = panel.querySelector('a.stepwhere');
   if (sw) sw.addEventListener('click', (ev) => { ev.preventDefault(); openInCodeViewer(wn.file, wn.line); });
-  panel.querySelectorAll('a.ridesref').forEach((a) => a.addEventListener('click', (ev) => {
-    ev.preventDefault(); showEdge(rides[+a.getAttribute('data-k')]);
-  }));
   // Mirror the step's own anchor into the tree + code viewer — and degrade gracefully when the step
   // has none (`no_call_site`, or a map from before step anchors): clear the stale tree highlight so a
   // previous selection's path can't read as this step's location, and leave the code viewer alone.
@@ -7625,4 +7619,3 @@ if (impactbtn) {
 // Happy Path — the behavioural spine, lead-with-behaviour — falling back to Subsystems, then the
 // Dependencies (context) view, when a map has no Happy Path.
 go({ kind: (HAS_DIFF && HAS_GROUPING) ? 'container' : (HAS_HP ? 'hp' : (HAS_GROUPING ? 'container' : 'context')) });
-

@@ -107,11 +107,10 @@ leaves the code viewer alone).
 | Property | Display | Action |
 |---|---|---|
 | The step's action | heading (the step's own authored text — a phrase on every step) | |
-| source → destination | text (each endpoint is a link to that element) | |
+| source → destination | one link to the directed pair's backbone relationship(s); plain text when the pair has none | opens the arrow directly when there is one relationship, or the pair pane containing all parallel relationships |
 | Why (legacy backstop only — empty for a normal step; the backbone edge's why for a phrase-less step) | prose | |
 | Note | text | |
 | Source (the step's own `where`) | text link — opens the code viewer at the call site | |
-| Rides arrow | list — one link per backbone edge of the pair (opens that arrow's pane) | |
 | Part of sub-flow | text (only on a step expanded from a named sub-flow: ⟨name⟩ + its SF id) | |
 
 A **sub-flow** (a shared step sequence referenced by several flows) renders **inline**: its steps

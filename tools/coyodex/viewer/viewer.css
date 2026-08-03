@@ -464,9 +464,9 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 #panel .locate { display: inline-block; margin-top: 16px; font-size: 13px; color: #2563eb; text-decoration: none; }
 #panel .locate:hover { text-decoration: underline; }
 /* "Used in UC" backward-view links on a node panel (element -> the use cases whose flow touches it) */
-#panel a.ucref, #panel a.alsoref, #panel a.flowref { color: #2563eb; text-decoration: none; }
-#panel a.ucref:hover, #panel a.alsoref:hover, #panel a.flowref:hover { text-decoration: underline; }
-/* a flow step's src → dst endpoints, shown under the action title */
+#panel a.ucref, #panel a.alsoref, #panel a.flowref, #panel a.flowpairref { color: #2563eb; text-decoration: none; }
+#panel a.ucref:hover, #panel a.alsoref:hover, #panel a.flowref:hover, #panel a.flowpairref:hover { text-decoration: underline; }
+/* a flow step's src → dst relationship, shown under the action title */
 #panel p.endpoints { margin: 2px 0 10px; color: #4b5563; }
 /* inline `code` in prose fields (mdInline), light panel background */
 #panel code { font-family: ui-monospace, monospace; font-size: 12px; background: #f3f4f6;

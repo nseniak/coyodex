@@ -34,6 +34,20 @@ def test_viewer_js_parses() -> None:
     _node_check(VIEWER_DIR / "viewer.js")
 
 
+def test_flow_step_links_the_pair_without_rendering_rides_rows() -> None:
+    """A step's A → B line is the one route to every backbone relation for that pair."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    start = js.index("function showFlowStep(uc, i)")
+    end = js.index("\n// One actor's card", start)
+    flow_step = js[start:end]
+
+    assert 'class="flowpairref"' in flow_step
+    assert "showPairEdges(pairEdges)" in flow_step
+    assert "Rides arrow" not in flow_step
+    assert "ridesref" not in flow_step
+    assert 'class="flowref"' not in flow_step
+
+
 def test_the_ui_does_not_name_internal_model_fields():
     """The viewer speaks the reader's language, not the model's.
 
