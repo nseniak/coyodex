@@ -468,6 +468,8 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 #panel a.ucref:hover, #panel a.alsoref:hover, #panel a.flowref:hover, #panel a.flowpairref:hover { text-decoration: underline; }
 /* a flow step's src → dst relationship, shown under the action title */
 #panel p.endpoints { margin: 2px 0 10px; color: #4b5563; }
+/* On a selected multi-step flow-map arrow, leave the current number full-strength and recede the rest. */
+#diagram .flow-other-step { opacity: .25; }
 /* inline `code` in prose fields (mdInline), light panel background */
 #panel code { font-family: ui-monospace, monospace; font-size: 12px; background: #f3f4f6;
               padding: 0 3px; border-radius: 3px; color: #1f2937; }
@@ -532,8 +534,9 @@ body.altmod .opensrc, body.altmod .opensrc * {
   cursor: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='28'%20height='22'%20viewBox='0%200%2028%2022'%3E%3Crect%20x='1'%20y='1'%20width='26'%20height='20'%20rx='5'%20fill='%234f46e5'%20stroke='%23fff'%20stroke-width='1.5'/%3E%3Cpath%20d='M9,15%20L17,7%20M17,10.5%20L17,7%20L13.5,7'%20fill='none'%20stroke='%23fff'%20stroke-width='2'%20stroke-linecap='round'%20stroke-linejoin='round'/%3E%3C/svg%3E") 4 4, pointer !important;
 }
 
-/* Corner action icon: a container's zoom-in glass drills in, a leaf-with-source's </> opens its file —
-   the one useful secondary action a box has. Hidden until the box is hovered (a busy diagram would
+/* Corner action icon: a container's zoom-in glass drills in, a leaf-with-source's arrow opens its file,
+   and a use-case Map box's fixed target locates it in its structural diagram — the one useful secondary
+   action that box has in that view. Hidden until the box is hovered (a busy diagram would
    otherwise show a badge on every single box at once); double-click-anywhere-on-the-box (see
    isDrillClick) is the fully-visible fallback for anyone who never hovers it. A plain click on the
    icon fires the action directly. Also stays visible while the box is the current selection

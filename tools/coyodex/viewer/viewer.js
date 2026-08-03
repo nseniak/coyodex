@@ -341,6 +341,7 @@ function selApply(scene) {
   scene._selClear = () => undos.forEach((f) => f && f());
   if (scene.selection.length) scene.focusUnion(scene, scene.selection); else clearFocus(scene);
   renderSelPanel(scene);
+  flowMapRefreshStepLabels();
   // Deselecting the last element (⌘-click it off) returns to the empty state: clear the file-browser
   // highlight + default the code slot to browse, the same cleanup empty-canvas click / Escape do.
   if (!scene.selection.length) { highlightTreePath(null); setBrowsing(true); }
@@ -361,6 +362,7 @@ function selToggle(scene, desc) { if (scene.selKeys.has(desc.key)) selRemove(sce
 function selClear(scene) {  // drop every selected element (tear down glows) WITHOUT touching the panel/focus
   if (scene._selClear) { scene._selClear(); scene._selClear = null; }
   scene.selection = []; scene.selKeys = new Set(); scene.selectedKey = null;
+  flowMapRefreshStepLabels();
 }
 function selReplace(scene, desc) { selClear(scene); selAdd(scene, desc); }
 // The click-time router: a multi-select modifier (⌘ / ⌃) toggles the element in/out of the running
@@ -713,7 +715,8 @@ function styleDeploymentLanes(root) {
 // --- corner action icon -----------------------------------------------------------
 // Every drawn box gets AT MOST ONE corner icon — whatever its one useful secondary action is: a
 // container (subsystem/subdomain) drills into the diagram, a leaf with a source ref (component/entity)
-// opens that file. Nothing shown otherwise (a dep, or a leaf with no file, has no secondary action).
+// opens that file. On a use-case Map, the one action instead locates the box in its canonical structural
+// diagram. Nothing shown otherwise (a dep, or a leaf with no file, has no secondary action).
 // Clicking the icon fires the action directly; isDrillClick's ⌘-click / double-click paths flash this
 // SAME icon (via ACTION_ICONS) so all three routes teach the one visual language. Hidden until the box
 // is hovered (see viewer.css) — keeps a busy diagram uncluttered; double-click-anywhere-on-the-box
@@ -753,9 +756,8 @@ function flashIcon(icon) {
 // A drawn vector glyph per action kind, not a text character — a unicode glyph reads as a blurry dot at
 // small sizes (font hinting varies by system); a path is crisp at any zoom. `drill` draws a magnifying
 // glass with a plus — the exact "zoom in" metaphor the app's own drill cursor already uses (viewer.css
-// `body.cmd .drill { cursor: zoom-in }`). `open` draws a diagonal arrow with a corner arrowhead — the
-// standard "open externally" shape — and viewer.css's `.opensrc` cursor is hand-drawn to match it, so
-// the icon and the ⌘-held cursor still agree on what the action means.
+// `body.cmd .drill { cursor: zoom-in }`). `locate` uses Lucide's fixed target, and `open` draws the
+// standard diagonal "open externally" arrow that viewer.css's `.opensrc` cursor matches.
 function buildGlyph(kind) {
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'glyph');
@@ -767,6 +769,17 @@ function buildGlyph(kind) {
     const plus = document.createElementNS(SVGNS, 'path');
     plus.setAttribute('d', 'M -4.2,-2 L 0.2,-2 M -2,-4.2 L -2,0.2');
     g.append(lens, handle, plus);
+  } else if (kind === 'locate') {
+    // Lucide LocateFixed, recentered around 0,0 for the existing circular action badge. The outer
+    // target identifies a location; the four short cardinal marks keep it distinct from drill's
+    // magnifying glass even at the map's fit zoom.
+    const outer = document.createElementNS(SVGNS, 'circle');
+    outer.setAttribute('cx', '0'); outer.setAttribute('cy', '0'); outer.setAttribute('r', '6');
+    const inner = document.createElementNS(SVGNS, 'circle');
+    inner.setAttribute('cx', '0'); inner.setAttribute('cy', '0'); inner.setAttribute('r', '2.25');
+    const marks = document.createElementNS(SVGNS, 'path');
+    marks.setAttribute('d', 'M -10,0 L -8,0 M 8,0 L 10,0 M 0,-10 L 0,-8 M 0,8 L 0,10');
+    g.append(outer, inner, marks);
   } else {
     // The standard "open externally" glyph: a diagonal shaft with a corner arrowhead at the tip (the
     // same shape as the common external-link icon). Scale + stroke-width are carried over unchanged
@@ -795,13 +808,14 @@ function buildGlyph(kind) {
 // whatever the container painted itself with. An inline `!important` style is the one thing that beats
 // an author stylesheet's `!important` regardless of selector specificity, which is exactly why
 // `applyTint` elsewhere in this file already uses the same trick for cluster-frame recolouring.
-// Both kinds share the same indigo — the icon SHAPE (magnifying glass vs. arrow) is what tells drill
-// and open apart now, not colour. glyphWidth stays thicker for `open`: a few open line segments (the
+// All kinds share the same indigo — the icon SHAPE is what tells drill, locate and open apart, not
+// colour. glyphWidth stays thicker for `open`: a few open line segments (the
 // arrow) read as visually thinner/smaller than the drill glyph's filled lens ring at the same
 // bounding-box size, even at matched colour.
 const ICON_PAINT = {
   drill: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.1px' },
   open: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '2.6px' },
+  locate: { stroke: '#6366f1', hoverFill: '#eef2ff', glyphStroke: '#4338ca', glyphWidth: '1.8px' },
 };
 const ACTION_ICON_R = 16.5;  // the halo's radius — shared with addLabelActionIcon so its offset can clear the badge without a magic number of its own
 function paintImportant(el, props) {
@@ -838,6 +852,33 @@ function ensureIconOverlay(container) {
   root.appendChild(g);
   return g;
 }
+const ACTION_ICON_TIP_DELAY_MS = 250;
+let actionIconTipTimer = null;
+let actionIconHover = null;
+function hideActionIconTip() {
+  if (actionIconTipTimer) clearTimeout(actionIconTipTimer);
+  actionIconTipTimer = null;
+  actionIconHover = null;
+  hideTip();
+}
+function scheduleActionIconTip(label, ev) {
+  hideActionIconTip();
+  actionIconHover = { label, x: ev.clientX, y: ev.clientY };
+  actionIconTipTimer = setTimeout(() => {
+    actionIconTipTimer = null;
+    if (!actionIconHover) return;
+    tip.textContent = actionIconHover.label;
+    tip.classList.remove('action');
+    tip.classList.add('on');
+    moveTip(actionIconHover.x, actionIconHover.y);
+  }, ACTION_ICON_TIP_DELAY_MS);
+}
+function moveActionIconTip(ev) {
+  if (!actionIconHover) return;
+  actionIconHover.x = ev.clientX;
+  actionIconHover.y = ev.clientY;
+  if (!actionIconTipTimer) moveTip(ev.clientX, ev.clientY);
+}
 // Inject `action`'s icon (circle + glyph) into `el`'s own top-left corner, in `el`'s local coordinate
 // space (getBBox), so it rides along with whatever transform Mermaid gave the node/cluster group.
 // `opts.anchor` + `opts.host` override where the icon is placed/attached — for a label that has no box
@@ -857,7 +898,10 @@ function addActionIcon(el, id, action, opts) {
   }
   const paint = ICON_PAINT[action.kind];
   const icon = document.createElementNS(SVGNS, 'g');
-  icon.setAttribute('class', 'action-icon ' + (action.kind === 'drill' ? 'is-drill' : 'is-open'));
+  icon.setAttribute('class', 'action-icon is-' + action.kind);
+  const actionLabel = action.title || (action.kind === 'drill' ? 'Drill in' : 'Open source');
+  icon.setAttribute('role', 'button');
+  icon.setAttribute('aria-label', actionLabel);
   // The anchor point in DIAGRAM units, kept around so rescaleActionIcons can recompute the transform
   // (translate + a counter-zoom scale) on every zoom change without re-measuring the box.
   icon._anchor = anchor;
@@ -879,13 +923,18 @@ function addActionIcon(el, id, action, opts) {
   glyph.querySelectorAll('circle, path').forEach((shape) => {
     paintImportant(shape, { fill: 'none', stroke: paint.glyphStroke, 'stroke-width': paint.glyphWidth, 'stroke-dasharray': 'none' });
   });
-  const title = document.createElementNS(SVGNS, 'title');
-  title.textContent = action.kind === 'drill' ? 'Drill in' : 'Open source';
-  icon.append(halo, circle, glyph, title);
+  icon.append(halo, circle, glyph);
   // The hover tint also goes through JS + !important (not a CSS :hover rule) for the same reason as the
   // base paint above — it's just fill, so it hits the exact same Mermaid collision.
-  icon.addEventListener('mouseenter', () => paintImportant(circle, { fill: paint.hoverFill }));
-  icon.addEventListener('mouseleave', () => paintImportant(circle, { fill: '#fff' }));
+  icon.addEventListener('mouseenter', (ev) => {
+    paintImportant(circle, { fill: paint.hoverFill });
+    scheduleActionIconTip(actionLabel, ev);
+  });
+  icon.addEventListener('mousemove', moveActionIconTip);
+  icon.addEventListener('mouseleave', () => {
+    paintImportant(circle, { fill: '#fff' });
+    hideActionIconTip();
+  });
   icon.addEventListener('click', (e) => {
     if (isDrag(e)) return;  // tail of a drag-pan, not a real click
     e.stopPropagation();
@@ -980,10 +1029,21 @@ function hideIcon(icon) { if (icon) { icon.style.removeProperty('opacity'); icon
 // inside) get their icon from bindFrameDrill instead, which already knows which frames are drillable —
 // that runs INSIDE bindFor, before this, so ACTION_ICONS is reset once in render() before bindFor, not
 // here (resetting here would wipe the cluster icons bindFrameDrill just registered).
-function decorateActionIcons(scene) {
+function locateActionFor(id) {
+  const t = selectTargetFor(id);
+  if (!t || !t.selectId) return null;  // excludes actor aliases and anything without a structural home
+  const target = { ...t.state, sel: 'node:' + t.selectId };
+  const tab = stateTitle({ kind: topView(t.state.kind) });
+  return { kind: 'locate', title: 'Locate in ' + tab, run: () => {
+    pendingCenter = t.selectId;
+    go(target);
+  } };
+}
+function decorateActionIcons(scene, s) {
+  const locating = s.kind === 'usecase' && FLOW_VIEW === 'map';
   for (const id in scene.nodeEls) {
     if (scene.noAction.has(id)) continue;  // the box you're already zoomed into — no self-drill icon
-    const action = primaryActionFor(id);
+    const action = locating ? locateActionFor(id) : primaryActionFor(id);
     if (action) addActionIcon(scene.nodeEls[id], id, action);
   }
 }
@@ -1860,7 +1920,12 @@ function flowCounter() {
   flownext.classList.toggle('flowend', i >= n - 1);   // last step
 }
 // Move the counter to step i without re-highlighting — used when a click on the arrow already selected it.
-function flowSyncCur(i) { if (flowPlay) { flowPlay.cur = i; flowCounter(); } }
+function flowSyncCur(i) {
+  if (!flowPlay) return;
+  flowPlay.cur = i;
+  flowCounter();
+  flowMapRefreshStepLabels();
+}
 // Go to step i: select its arrow exactly as a manual click would (same info pane, code viewer, glow and
 // focus — via the step's registered selector), then scroll it into view if needed. Delegating to the click
 // selector keeps stepping and clicking in sync by design.
@@ -3643,6 +3708,43 @@ function flowMapBoxId(uc, id, name) {
   const a = (FLOW_ACTORS[uc] || []).find((x) => x.name === name);
   return a ? a.aid : name;
 }
+// A map arrow's label is the list of flow-step numbers carried by that ordered pair. When the player
+// selects one step on a MULTI-step arrow, keep that number at full opacity and dim the others so the
+// shared arrow says which of its several moments is current without changing the number format.
+// Rebuilding the numeric paragraph is safe: these are generated integers, and the click handlers live
+// on the enclosing Mermaid edge-label group, not on this paragraph.
+function flowMapPaintStepLabel(label, stepIdx, current) {
+  const p = label && label.querySelector('foreignObject p');
+  if (!p) return;
+  const active = stepIdx.length > 1 && stepIdx.includes(current);
+  const parts = [];
+  stepIdx.forEach((i, k) => {
+    if (k) {
+      const separator = document.createElement('span');
+      separator.textContent = ', ';
+      if (active) separator.className = 'flow-other-step';
+      parts.push(separator);
+    }
+    const number = document.createElement('span');
+    number.textContent = String(i + 1);
+    if (active && i !== current) number.className = 'flow-other-step';
+    if (active && i === current) number.setAttribute('aria-current', 'step');
+    parts.push(number);
+  });
+  p.replaceChildren(...parts);
+}
+// Selection, not the counter alone, controls the emphasis. A node click leaves the player's position
+// intact, but the arrow is no longer selected and therefore must return every number to regular weight.
+function flowMapRefreshStepLabels() {
+  if (!flowPlay || flowPlay.kind !== 'map' || !flowPlay.mapArrows || !mainScene) return;
+  const i = flowPlay.cur;
+  const stepSelected = i >= 0 && selHas(mainScene, 'flowstep:' + flowPlay.uc + ':' + i);
+  for (const [key, arrow] of Object.entries(flowPlay.mapArrows)) {
+    const pairSelected = selHas(mainScene, 'flowpair:' + flowPlay.uc + ':' + key);
+    const current = (stepSelected || pairSelected) && arrow.stepIdx.includes(i) ? i : -1;
+    flowMapPaintStepLabel(arrow.label, arrow.stepIdx, current);
+  }
+}
 // The steps riding one arrow of the map. An arrow is a PAIR, and a pair can carry several steps (that
 // is why the arrow is labelled with their numbers) — so its panel lists them all, each with its own
 // action and call site, rather than picking one to stand for the rest.
@@ -3690,7 +3792,11 @@ function bindFlowMap(uc) {
   // scene by hand so it is a first-class box too: same glow, same neighbourhood dim (nodeFocus reads
   // scene.nodeEls/edgeEls, both of which now know the alias), only its card differs (a Role's card, not
   // an element's).
-  bindNodes(scene, (id, el, ev) => selectNodeFromCanvas(el, id, ev));
+  bindNodes(scene, (id, el, ev) => {
+    const locate = locateActionFor(id);
+    if (locate && isDrillClick(ev)) { locate.run(); return; }
+    selectNodeFromCanvas(el, id, ev);
+  });
   scene.root.querySelectorAll('g.node').forEach((el) => {
     const aid = idOf(el);
     if (!aid || !/^FA\d+$/.test(aid)) return;
@@ -3733,7 +3839,11 @@ function bindFlowMap(uc) {
   });
   eachEdge(scene.root, (p, label, m) => {
     const key = m[1] + '>' + m[2];
-    if (!arrows[key]) arrows[key] = { path: p, label };
+    if (!arrows[key]) arrows[key] = {
+      path: p,
+      label,
+      stepIdx: flowMapSteps(uc, m[1], m[2]).map((x) => x.i),
+    };
   });
 
   // One selector per STEP, keyed exactly as the sequence view keys its own (`flowstep:<uc>:<i>`), so the
@@ -3758,7 +3868,7 @@ function bindFlowMap(uc) {
   // lifeline columns (x only) there, whole boxes here.
   const partsById = {};
   for (const id in scene.nodeEls) partsById[id] = [scene.nodeEls[id]];
-  flowPlay = steps.length ? { uc, kind: 'map', steps, msgEls, partsById, cur: -1 } : null;
+  flowPlay = steps.length ? { uc, kind: 'map', steps, msgEls, partsById, mapArrows: arrows, cur: -1 } : null;
 }
 
 function subtreeTouched(id, hit) {
@@ -5186,7 +5296,7 @@ function renderTests() {
 // doesn't disturb history or the info pane.
 async function render(sArg, transient) {
   const seq = ++renderSeq;
-  hideTip();  // a re-render replaces the diagram — drop any tooltip from the old one
+  hideActionIconTip();  // a re-render replaces the diagram — drop any tooltip from the old one
   if (mainPz) { mainPz.destroy(); mainPz = null; }
   flowPlay = null; flowplayer.hidden = true;  // hide the step player until bindFlow re-arms it for a flow view
   const s = sArg || history[hi];
@@ -5231,7 +5341,7 @@ async function render(sArg, transient) {
   iconOverlay = ensureIconOverlay(diagram);  // front layer for corner icons + badges — must exist before bindFor/decorate add any
   for (const id in ACTION_ICONS) delete ACTION_ICONS[id];  // reset before bindFor's bindFrameDrill re-populates it
   bindFor(s);
-  decorateActionIcons(mainScene);  // corner icon = each drawn box's one useful secondary action
+  decorateActionIcons(mainScene, s);  // corner icon = each drawn box's one useful secondary action
   // Every drawn box gets a default re-select closure (plain-click select), so back/forward can restore
   // a node selection. Edges, flow steps and HP actors/steps register their own during bindFor; a box
   // with special select behaviour (the Libraries fold) pre-registers too, so it's skipped here.

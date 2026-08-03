@@ -124,7 +124,11 @@ The flow card (bottom-left of a use-case view) holds both flow controls: the **F
 Sequence / Map** switch and the **step player**. The Map draws the same steps as one box per touched
 element — component, dependency, entity, the driving actor — in the structural views' own shapes and
 colours, with no subsystem frames (each box names its area on a second line instead). Boxes select
-exactly like the boxes of any other diagram, the actor box included.
+exactly like the boxes of any other diagram, the actor box included. Hovering a model-element box
+reveals a **LocateFixed** corner action labelled with its destination tab (for example, **Locate in
+Subsystems** or **Locate in Entities**); it opens that element's canonical structural diagram with
+the same element selected and centred. Actor boxes have no structural diagram, so they carry no
+locate action.
 
 The **step player walks either rendering** — same steps, same panels, same code-viewer sync; on the
 Map it glows the arrow carrying the current step and dims to its two boxes. Switching rendering
@@ -139,6 +143,8 @@ An arrow is a PAIR, and a pair can carry several steps (its label lists their nu
 numbers the sequence diagram puts on its messages), so its pane lists them all rather than picking
 one to stand for the rest. Each listed step opens the **Flow step** pane above, so a step's own
 detail — its note, its call site, the arrow it rides — still lives in exactly one place.
+While the step player is on a selected multi-step arrow, its current step number stays at full
+opacity and the other numbers dim; selecting something else restores them without moving the player.
 
 | Property | Display | Action |
 |---|---|---|

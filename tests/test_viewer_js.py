@@ -48,6 +48,45 @@ def test_flow_step_links_the_pair_without_rendering_rides_rows() -> None:
     assert 'class="flowref"' not in flow_step
 
 
+def test_flow_map_dims_other_numbers_on_a_selected_multi_step_arrow() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    start = js.index("function flowMapPaintStepLabel(label, stepIdx, current)")
+    end = js.index("\n// The steps riding one arrow", start)
+    label_code = js[start:end]
+
+    assert "stepIdx.length > 1 && stepIdx.includes(current)" in label_code
+    assert "active && i !== current" in label_code
+    assert "flow-other-step" in label_code
+    assert "createElement('strong')" not in label_code
+    assert "pairSelected" in label_code and "stepSelected" in label_code
+    assert "flowMapRefreshStepLabels();" in js[js.index("function selApply"):js.index("function selAdd")]
+    assert "mapArrows: arrows" in js
+
+
+def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    start = js.index("function locateActionFor(id)")
+    end = js.index("\nfunction clearFocus", start)
+    locate_code = js[start:end]
+
+    assert "const t = selectTargetFor(id)" in locate_code
+    assert "!t || !t.selectId" in locate_code  # actor aliases have no structural home
+    assert "kind: 'locate'" in locate_code
+    assert "const tab = stateTitle({ kind: topView(t.state.kind) })" in locate_code
+    assert "title: 'Locate in ' + tab" in locate_code
+    assert "sel: 'node:' + t.selectId" in locate_code
+    assert "pendingCenter = t.selectId" in locate_code
+    assert "s.kind === 'usecase' && FLOW_VIEW === 'map'" in locate_code
+    assert "locating ? locateActionFor(id) : primaryActionFor(id)" in locate_code
+    assert "if (locate && isDrillClick(ev)) { locate.run(); return; }" in js
+    assert "action-icon is-' + action.kind" in js
+    assert "Lucide LocateFixed" in js
+    assert "ACTION_ICON_TIP_DELAY_MS = 250" in js
+    assert "scheduleActionIconTip(actionLabel, ev)" in js
+    assert "icon.setAttribute('aria-label', actionLabel)" in js
+    assert "createElementNS(SVGNS, 'title')" not in js[js.index("function addActionIcon"):js.index("function addLabelActionIcon")]
+
+
 def test_the_ui_does_not_name_internal_model_fields():
     """The viewer speaks the reader's language, not the model's.
 
