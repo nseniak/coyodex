@@ -126,7 +126,7 @@
            in the pane it vanished the moment you selected a box, stranding you in a filtered view with
            no way back. Hidden on every view but the Deployment overview. -->
       <div id="envpicker" hidden></div>
-      <!-- The use-case flow's controls, in ONE card: how to draw the flow (Sequence / Map) and where you
+      <!-- The use-case flow's controls, in ONE card: how to draw the flow (Map / Sequence) and where you
            are in it (the step player). They belong together — both act on the one flow the view shows, and
            the player walks the SAME steps whichever rendering is on screen. Same place and reason as the
            two pickers above: they change what the diagram says, so they sit beside it rather than in a
@@ -136,9 +136,9 @@
       <div id="flowpicker" hidden>
         <div id="flowmode"></div>
         <div id="flowplayer" hidden>
-          <button id="flowprev" title="Previous step (Left arrow)">&#9664;</button>
+          <button id="flowprev" aria-label="Previous step">&#9664;</button>
           <span id="flowcount">Step 1 / 1</span>
-          <button id="flownext" title="Next step (Right arrow)">&#9654;</button>
+          <button id="flownext" aria-label="Next step">&#9654;</button>
         </div>
       </div>
     </div>

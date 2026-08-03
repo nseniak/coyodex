@@ -132,7 +132,7 @@ body.vresizing #stage { pointer-events: none; }
 .envout { opacity: .16 !important; pointer-events: none !important; }
 .cappick-lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
                color: #6b7280; }
-/* The use-case flow's control card: the Sequence/Map switch + the step player. Floats like the
+/* The use-case flow's control card: the Map/Sequence switch + the step player. Floats like the
    environment picker above (never on screen at the same time as it: that one is the Deployment
    overview, this one a flow). The segmented control reuses `.uc-seg`, the Use Cases group-by switch.
    `.cappick-lbl` is its label style, kept from the removed capability picker. */
@@ -470,6 +470,9 @@ body.tree-browsing:not(.tree-pinned) #codeview { display: none; }
 #panel p.endpoints { margin: 2px 0 10px; color: #4b5563; }
 /* On a selected multi-step flow-map arrow, leave the current number full-strength and recede the rest. */
 #diagram .flow-other-step { opacity: .25; }
+/* A bundled map arrow repeats the ordinary sequence-step pane once per step. A firm divider keeps the
+   full records distinct without wrapping each one in another card. */
+#panel .flow-step-separator { border-top: 2px solid #d1d5db; margin: 18px 0; }
 /* inline `code` in prose fields (mdInline), light panel background */
 #panel code { font-family: ui-monospace, monospace; font-size: 12px; background: #f3f4f6;
               padding: 0 3px; border-radius: 3px; color: #1f2937; }
@@ -553,8 +556,9 @@ body.altmod .opensrc, body.altmod .opensrc * {
    Mermaid's own default colour/dash pattern the whole time — drill only looked "right" by coincidence
    (its intended indigo is a similarly-toned purple to Mermaid's default). */
 .action-icon { cursor: pointer; opacity: 0; pointer-events: none; transition: opacity .12s ease; }
-/* Box + cluster pills now live in a front overlay (see iconOverlay in viewer.js), NOT inside their own
-   node group, so the old descendant reveal rule (`g.node:hover .action-icon`) can't reach them. JS
+/* Every action pill lives in a front overlay (see iconOverlay in viewer.js), never inside a Mermaid
+   node, edge or label group where a later box could cover it. For box/cluster pills, the old descendant
+   reveal rule (`g.node:hover .action-icon`) therefore can't reach them. JS
    toggles `.revealed` off the owner box's hover + selection state instead (see refreshPillReveal),
    including the "never on a dimmed box, even under the cursor" case the old `.dim:hover` rule covered. */
 .action-icon.revealed { opacity: 1; pointer-events: auto; }

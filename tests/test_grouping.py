@@ -3497,7 +3497,7 @@ def test_bundle_carries_gp_data() -> None:
 
 
 def test_bundle_carries_both_flow_renderings() -> None:
-    # Every flow ships twice — as the sequence the view opens on and as the leaf-only map the "Flow as"
+    # Every flow ships twice — as the leaf-only map the view opens on and as the sequence the "Flow as"
     # switch shows — over the SAME use-case keys, so the switch can never land on a missing drawing.
     b = bundle_of(make_gp_map())
     assert set(b["flowsMap"]) == set(b["flowsMm"])

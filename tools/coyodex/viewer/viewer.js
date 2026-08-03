@@ -341,6 +341,7 @@ function selApply(scene) {
   scene._selClear = () => undos.forEach((f) => f && f());
   if (scene.selection.length) scene.focusUnion(scene, scene.selection); else clearFocus(scene);
   renderSelPanel(scene);
+  flowSuspendIfDeselected(scene);
   flowMapRefreshStepLabels();
   // Deselecting the last element (⌘-click it off) returns to the empty state: clear the file-browser
   // highlight + default the code slot to browse, the same cleanup empty-canvas click / Escape do.
@@ -362,6 +363,7 @@ function selToggle(scene, desc) { if (scene.selKeys.has(desc.key)) selRemove(sce
 function selClear(scene) {  // drop every selected element (tear down glows) WITHOUT touching the panel/focus
   if (scene._selClear) { scene._selClear(); scene._selClear = null; }
   scene.selection = []; scene.selKeys = new Set(); scene.selectedKey = null;
+  flowSuspend();
   flowMapRefreshStepLabels();
 }
 function selReplace(scene, desc) { selClear(scene); selAdd(scene, desc); }
@@ -821,12 +823,12 @@ const ACTION_ICON_R = 16.5;  // the halo's radius — shared with addLabelAction
 function paintImportant(el, props) {
   for (const k in props) el.style.setProperty(k, props[k], 'important');
 }
-// Box + cluster action icons live in the front overlay (iconOverlay), NOT inside their own node group,
+// Action icons live in the front overlay (iconOverlay), NOT inside their node/edge/label group,
 // so the CSS descendant reveal rule (`g.node:hover .action-icon`) can no longer reach them — their
 // show/hide is driven here in JS instead. It mirrors exactly what that CSS did: visible while the owner
 // box is hovered OR selected, but NEVER on a DIMMED box even under the cursor (a box you're not focused
 // on shouldn't invite drilling just because the pointer passed over it). A label/edge pill (opts.host)
-// keeps its own showIcon/hideIcon path and is not wired through this.
+// keeps its own showIcon/hideIcon path and is not wired through this owner-based reveal behavior.
 function refreshPillReveal(icon) {
   const owner = icon._owner;
   const dimmed = owner && owner.classList.contains('dim');
@@ -838,7 +840,7 @@ function setPillHover(icon, hovering) { icon._hover = hovering; refreshPillRevea
 // (applyFocus/clearFocus), so a pill on a box that just became (or stopped being) dimmed updates even
 // with no fresh hover event to trigger it.
 function refreshAllPills() { for (const id in ACTION_ICONS) { const ic = ACTION_ICONS[id]; if (ic && ic._owner) refreshPillReveal(ic); } }
-// The front overlay layer for corner icons + badges: a <g> appended LAST inside the diagram's top
+// The front overlay layer for action icons + badges: a <g> appended LAST inside the diagram's top
 // content group, so it paints on top of every cluster/edge/node. Added BEFORE svg-pan-zoom wraps the
 // content into its viewport, so it rides inside the same pan/zoom transform the boxes do — the icons'
 // own counter-zoom (rescaleActionIcons) then holds them at a fixed screen size, exactly as it did when
@@ -879,17 +881,15 @@ function moveActionIconTip(ev) {
   actionIconHover.y = ev.clientY;
   if (!actionIconTipTimer) moveTip(ev.clientX, ev.clientY);
 }
-// Inject `action`'s icon (circle + glyph) into `el`'s own top-left corner, in `el`'s local coordinate
-// space (getBBox), so it rides along with whatever transform Mermaid gave the node/cluster group.
-// `opts.anchor` + `opts.host` override where the icon is placed/attached — for a label that has no box
-// of its own to sit in the corner of (see addLabelActionIcon), the caller supplies both instead.
+// Inject `action`'s icon (circle + glyph) into the final foreground overlay. `opts.anchor` supplies an
+// overlay-space position for an edge/label icon; `opts.host` is its fallback parent if the overlay is
+// unavailable and also marks it as independently revealed. A box icon needs neither: its own top-left
+// corner is converted from the box's local coordinates into the overlay here.
 function addActionIcon(el, id, action, opts) {
-  const host = opts && opts.host;                 // a label/edge pill supplies its own host + anchor
-  // A box/cluster pill (no host) homes in the front overlay so a later sibling group can't paint over it
-  // (see iconOverlay); its top-left corner, read in the box's own space, is carried into the overlay's
-  // space so the on-screen position is unchanged. Falls back to the box's own group only if the overlay
-  // isn't up yet (never in practice — render() builds it before any pill is added).
-  const parent = host || iconOverlay || el;
+  const host = opts && opts.host;
+  // The overlay comes first even for edge pills. Keeping those inside a Mermaid label/edge group lets
+  // nodes and cluster frames drawn later cover them. The host remains only as a defensive fallback.
+  const parent = iconOverlay || host || el;
   let anchor = opts && opts.anchor;
   if (!anchor) {
     let bbox; try { bbox = el.getBBox(); } catch (_) { return; }
@@ -960,9 +960,9 @@ function addActionIcon(el, id, action, opts) {
 // A message label has no box to anchor a corner badge to — sit the pill just before the label's left
 // edge instead (so it reads first, like a bullet), vertically centered on it. Used for a Happy Path
 // message's text AND (see bindEdgeActionIcon) any drillable edge with a real label — same convention
-// either way: one fixed spot, not one that chases the cursor. Appended to the label's own parent (not
-// the label itself: an SVG <text> can't usefully host a child <g>), which shares its coordinate space
-// since Mermaid gives these labels no transform of their own.
+// either way: one fixed spot, not one that chases the cursor. The visible pill goes in iconOverlay so
+// every box and cluster stays behind it. Its invisible hover bridge remains in the label's parent,
+// before the label, so it cannot intercept clicks meant for the label itself.
 //
 // The gap to the label must be a CONSTANT SCREEN distance, not a constant diagram-unit one: the pill's
 // own SIZE is already held constant on screen regardless of zoom (rescaleActionIcons counter-scales
@@ -974,12 +974,13 @@ function addActionIcon(el, id, action, opts) {
 function addLabelActionIcon(label, id, action) {
   let bbox; try { bbox = label.getBBox(); } catch (_) { return; }
   const host = label.parentNode;
-  // bbox is in the LABEL's own local space — pointToHostSpace carries its left-middle point (and, a
-  // little further right, the bridge's far edge) into `host`'s space, whatever the relationship
-  // between the two turns out to be (see pointToHostSpace).
-  const ref = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, host);
-  const rightEdge = pointToHostSpace(label, bbox.x + 5, bbox.y + bbox.height / 2, host);
-  if (!ref || !rightEdge) return;
+  const parent = iconOverlay || host;
+  // The pill and bridge use different coordinate systems. Keep both references so zoom updates can
+  // position the foreground pill while resizing the bridge in the label parent's local coordinates.
+  const ref = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, parent);
+  const bridgeRef = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, host);
+  const bridgeRight = pointToHostSpace(label, bbox.x + 5, bbox.y + bbox.height / 2, host);
+  if (!ref || !bridgeRef || !bridgeRight) return;
   const gap = ACTION_ICON_R + 10;
   const anchor = { x: ref.x - gap, y: ref.y };  // inv=1 placeholder for this first paint, before mainPz exists
   // Bridge the gap with an invisible hit area — one continuous hoverable strip from label to pill, so
@@ -1004,19 +1005,23 @@ function addLabelActionIcon(label, id, action) {
   // edge shows it without the caller threading the icon through separately.
   label._actionIcon = icon;
   icon._bridge = bridge;
+  icon._bridgeHost = host;
+  icon._bridgeRef = bridgeRef;
+  icon._bridgeRight = bridgeRight.x;
   icon._labelRef = ref;
   icon._labelGap = gap;
-  icon._labelRight = rightEdge.x;  // bridge's far edge: a little past the label's own left edge
   placeLabelBridge(icon);
 }
 // (Re)size the bridge from the pill's CURRENT anchor (already zoom-corrected by the caller) out to
 // just past the label — kept in sync with rescaleActionIcons so it never lags the pill it bridges to.
 function placeLabelBridge(icon) {
   const b = icon._bridge; if (!b) return;
-  const x = icon._anchor.x;
+  const anchor = pointToHostSpace(icon.parentNode, icon._anchor.x, icon._anchor.y, icon._bridgeHost);
+  if (!anchor) return;
+  const x = Math.min(anchor.x, icon._bridgeRight);
   b.setAttribute('x', String(x));
-  b.setAttribute('y', String(icon._labelRef.y - 40));
-  b.setAttribute('width', String(Math.max(0, icon._labelRight - x)));
+  b.setAttribute('y', String(icon._bridgeRef.y - 40));
+  b.setAttribute('width', String(Math.abs(icon._bridgeRight - anchor.x)));
   b.setAttribute('height', '80');
 }
 // Message pills have no enclosing g.node/g.cluster to hang the CSS :hover/.is-selected reveal rule off
@@ -1810,7 +1815,8 @@ function bindFlow(uc) {
     const keep = new Set(els);
     for (const end of [st.srcId, st.dstId]) for (const el of (partsById[end] || [])) keep.add(el);
     for (const el of (actorPartsByStep[i] || [])) keep.add(el);  // Role endpoints have no node id
-    const desc = { key: selKey, glow: () => hpHighlight(scene, els), focus: { els: keep }, show: () => showFlowStep(uc, i) };
+    const desc = { key: selKey, glow: () => hpHighlight(scene, els), focus: { els: keep },
+                   show: () => { flowSyncCur(i); showFlowStep(uc, i); } };
     scene.selectors[selKey] = () => selAdd(scene, desc);  // so back/forward + the step player can restore this flow-step selection
     const onClick = (ev) => {
       if (isDrag(ev)) return;
@@ -1826,9 +1832,9 @@ function bindFlow(uc) {
   });
 
   // Hand the step player everything it needs to walk this flow: the ordered steps, each step's arrow+label
-  // DOM (msgEls) and its endpoint columns (partsById). render() shows the strip and lands on step 1 once
-  // svg-pan-zoom exists (centering needs it). No flow -> null, so the strip stays hidden.
-  flowPlay = steps.length ? { uc, kind: 'sequence', steps, msgEls, partsById, cur: -1 } : null;  // -1 = unstarted (see flowInit)
+  // DOM (msgEls) and its endpoint columns (partsById). A fresh visit is inactive with no remembered step;
+  // its first Next lands on step 1. No flow -> null, so the strip stays hidden.
+  flowPlay = steps.length ? { uc, kind: 'sequence', steps, msgEls, partsById, cur: -1, active: false } : null;
 }
 // --- use-case flow step player --------------------------------------------------
 // Walk a flow's actions one at a time. Each step is selected exactly as a click on its arrow would —
@@ -1906,25 +1912,57 @@ function flowReveal(els, i) {
   if (!dx && !dy) return;   // already fully visible -> stay put
   flowAnimatePanBy(dx, dy);
 }
-// cur === -1 is the "unstarted" state: no step selected yet, but the counter reads "Step 1 / N" so the
-// first Next lands on step 1 (not step 2). Stepping wraps around the ends, so once started neither button
-// disables; Prev stays disabled only while unstarted (where it does nothing).
+// `cur` remembers the last step reached during THIS visit; `active` says whether that step is selected
+// now. Inactive shows an honest dash, disables Previous and leaves Next available. With no remembered
+// step Next starts at 1; after a deselection it resumes the remembered step. Once active, stepping wraps.
 function flowCounter() {
   if (!flowPlay) return;
-  const n = flowPlay.steps.length, i = flowPlay.cur;
-  flowcount.textContent = 'Step ' + (i < 0 ? 1 : i + 1) + ' / ' + n;
-  flowprev.disabled = i < 0;   // truly inert only while unstarted; once started, Prev wraps past step 1
-  flownext.disabled = false;   // Next is always live: unstarted -> step 1, last -> wraps to step 1
+  const n = flowPlay.steps.length, i = flowPlay.cur, active = flowPlay.active;
+  flowcount.textContent = 'Step ' + (active ? i + 1 : '\u2013') + ' / ' + n;
+  flowprev.disabled = !active;
+  flownext.disabled = false;
   // Grey (but still clickable) at the ends: Prev on step 1, Next on the last step — the old end-of-list look.
-  flowprev.classList.toggle('flowend', i <= 0);       // step 1 (and unstarted, which is also :disabled)
-  flownext.classList.toggle('flowend', i >= n - 1);   // last step
+  flowprev.classList.toggle('flowend', !active || i <= 0);
+  flownext.classList.toggle('flowend', active && i >= n - 1);
+}
+// The step number is view state, just like selection and camera position. `active` distinguishes a
+// selected step from a suspended player that only remembers where Next should resume.
+function flowSnapshot() {
+  return flowPlay ? { cur: flowPlay.cur, active: flowPlay.active } : null;
+}
+function restoreFlowSnapshot(saved) {
+  if (!flowPlay || !saved) return false;
+  const i = Number(saved.cur);
+  if (!Number.isInteger(i) || i < -1 || i >= flowPlay.steps.length) return false;
+  flowPlay.cur = i;
+  flowPlay.active = !!saved.active && i >= 0;
+  flowCounter();
+  flowMapRefreshStepLabels();
+  return true;
 }
 // Move the counter to step i without re-highlighting — used when a click on the arrow already selected it.
 function flowSyncCur(i) {
   if (!flowPlay) return;
   flowPlay.cur = i;
+  flowPlay.active = true;
   flowCounter();
   flowMapRefreshStepLabels();
+}
+// Selection is what makes the remembered step active. Clearing the canvas, pressing Escape, selecting
+// another element or toggling the step off suspends the player but deliberately retains `cur`, so Next
+// can restore that exact step's selection, pane, source and framing.
+function flowSuspend() {
+  if (!flowPlay || !flowPlay.active) return;
+  flowPlay.active = false;
+  flowCounter();
+}
+function flowSuspendIfDeselected(scene) {
+  if (!flowPlay || !flowPlay.active || scene !== mainScene) return;
+  const stepKey = 'flowstep:' + flowPlay.uc + ':' + flowPlay.cur;
+  const pairPrefix = 'flowpair:' + flowPlay.uc + ':';
+  const selected = scene.selKeys.has(stepKey)
+    || [...scene.selKeys].some((key) => key.startsWith(pairPrefix));
+  if (!selected) flowSuspend();
 }
 // Go to step i: select its arrow exactly as a manual click would (same info pane, code viewer, glow and
 // focus — via the step's registered selector), then scroll it into view if needed. Delegating to the click
@@ -1933,7 +1971,8 @@ function flowGoto(i) {
   if (!flowPlay || !flowPlay.steps.length) return;
   const n = flowPlay.steps.length;
   i = Math.max(0, Math.min(n - 1, i));
-  flowPlay.cur = i;  // the player walks one step at a time -> REPLACE the selection with this step
+  flowPlay.cur = i;
+  flowPlay.active = true;  // the player walks one step at a time -> REPLACE the selection with this step
   const sel = mainScene.selectors['flowstep:' + flowPlay.uc + ':' + i];
   // selClear + selAdd = a single-step selection (not additive). A step with NO selector — a rendering
   // that could not draw this step's arrow — resets the scene INSTEAD: landing on step n while the
@@ -1946,37 +1985,39 @@ function flowGoto(i) {
   flowReveal(flowPlay.msgEls[i] || [], i);
   flowCounter();
 }
-// From the unstarted state, Next selects step 1 (and Prev does nothing); once started, step by ±1 and wrap
-// around the ends (Next past the last -> step 1, Prev before step 1 -> the last).
+// Inactive: Previous does nothing; Next resumes the remembered step, or starts at step 1 on a fresh visit.
+// Active: step by +/-1 and wrap around the ends.
 function flowStepBy(d) {
   if (!flowPlay) return;
   const n = flowPlay.steps.length;
-  if (flowPlay.cur < 0) { if (d > 0) flowGoto(0); return; }
+  if (!flowPlay.active) { if (d > 0) flowGoto(flowPlay.cur >= 0 ? flowPlay.cur : 0); return; }
   flowGoto((flowPlay.cur + d + n) % n);
 }
 // Called from render() once svg-pan-zoom exists. Shows the strip. A back/forward revisit that restored a
-// selected step starts there; a fresh open is UNSTARTED — nothing selected, the overview panel stays, and
-// the counter sits ready at step 1 (the first Next selects it).
-function flowInit() {
-  const resume = flowResumeAt;
-  flowResumeAt = -1;   // consumed either way: a pending resume must never outlive the render it was set for
+// selected step starts there; a fresh drill is inactive with no memory, so its first Next selects step 1.
+// A Map/Sequence switch is not a fresh drill: it preserves both the remembered index and active state.
+function flowInit(s) {
+  const switched = flowResume;
+  flowResume = null;   // consumed either way: a pending resume must never outlive the render it was set for
   if (!flowPlay || !flowPlay.steps.length) { flowplayer.hidden = true; return; }
   flowplayer.hidden = false;
   const m = (mainScene.selectedKey || '').match(/^flowstep:.*:(\d+)$/);
   flowPlay.cur = m ? +m[1] : -1;
-  // A rendering switch (Sequence <-> Map) re-enters the same flow at the step the reader was on — the
-  // two drawings share one step list, so the walk continues instead of restarting.
-  if (resume >= 0 && resume < flowPlay.steps.length) { flowGoto(resume); return; }
+  flowPlay.active = !!m;
+  // A rendering switch carries the live state directly. Otherwise use the history point's snapshot,
+  // which restores selected and suspended step numbers alike after Back/Forward navigation.
+  const saved = switched || (s && s.flow);
+  if (restoreFlowSnapshot(saved)) {
+    if (switched && flowPlay.active) { flowGoto(flowPlay.cur); return; }
+    return;
+  }
   flowCounter();
 }
-// A flow step's side panel — EVERY step shows ITSELF (its phrase, endpoints, note, and its own call
-// site), never the backbone arrow's text: one element pair appears in several steps meaning different
-// things, so the shared arrow description can't be right for each — and the arrow's `where` is only an
-// example site, while the step's `where` is THE location. When the pair has backbone relations, the
-// whole src → dst line opens that pair exactly as clicking its drawn backbone arrow would.
-function showFlowStep(uc, i) {
+// One flow step's complete information. The sequence message and a single-step map arrow render this
+// verbatim; a bundled map arrow reuses it once per carried step, adding only a Step N badge.
+function flowStepInfoHtml(uc, i, numbered) {
   const st = (FLOWS_NARR[uc] || [])[i];
-  if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
+  if (!st) return EMPTY_PANEL;
   const wn = st.where ? whereNode(st.where) : null;
   const local = !!(wn && localRef(wn.file));
   const srcRow = st.where
@@ -1988,20 +2029,43 @@ function showFlowStep(uc, i) {
   const pair = pairEdges.length ? '<a href="#" class="flowpairref">' + pairText + '</a>' : pairText;
   // The step's action is the title (a full sentence for actor steps — too long for a pill). The src → dst
   // pair moves to the body as one relationship link when the backbone records that directed pair.
-  panel.innerHTML = '<div class="pane-title"><h2>' + (st.verb ? mdInline(st.verb) : 'Step') + '</h2></div>'
+  const stepBadge = numbered ? '<span class="badge edge">Step ' + (i + 1) + '</span>' : '';
+  return '<div class="pane-title"><h2>' + (st.verb ? mdInline(st.verb) : 'Step') + '</h2>' + stepBadge + '</div>'
     + '<p class="endpoints">' + pair + '</p>'
     + (st.sf ? '<dl><dt>Part of sub-flow</dt><dd>&#10216;' + esc(st.sfName || st.sf)
        + '&#10217; <span class="muted">(' + esc(st.sf) + ' — a shared sequence this flow includes)</span></dd></dl>' : '')
     + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
     + (st.note ? '<dl><dt>Note</dt><dd>' + mdInline(st.note) + '</dd></dl>' : '')
     + srcRow;
-  const fp = panel.querySelector('a.flowpairref');
+}
+function bindFlowStepInfo(host, uc, i) {
+  const st = (FLOWS_NARR[uc] || [])[i];
+  if (!st) return;
+  const pairEdges = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || []) : [];
+  const fp = host.querySelector('a.flowpairref');
   if (fp) fp.addEventListener('click', (ev) => { ev.preventDefault(); showPairEdges(pairEdges); });
-  const sw = panel.querySelector('a.stepwhere');
-  if (sw) sw.addEventListener('click', (ev) => { ev.preventDefault(); openInCodeViewer(wn.file, wn.line); });
+  const sw = host.querySelector('a.stepwhere');
+  if (sw) sw.addEventListener('click', (ev) => {
+    ev.preventDefault();
+    const wn = whereNode(st.where);
+    openInCodeViewer(wn.file, wn.line);
+  });
+}
+// A flow step's side panel — EVERY step shows ITSELF (its phrase, endpoints, note, and its own call
+// site), never the backbone arrow's text: one element pair appears in several steps meaning different
+// things, so the shared arrow description can't be right for each — and the arrow's `where` is only an
+// example site, while the step's `where` is THE location. When the pair has backbone relations, the
+// whole src → dst line opens that pair exactly as clicking its drawn backbone arrow would.
+function showFlowStep(uc, i) {
+  const st = (FLOWS_NARR[uc] || [])[i];
+  if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
+  panel.innerHTML = flowStepInfoHtml(uc, i, false);
+  bindFlowStepInfo(panel, uc, i);
   // Mirror the step's own anchor into the tree + code viewer — and degrade gracefully when the step
   // has none (`no_call_site`, or a map from before step anchors): clear the stale tree highlight so a
   // previous selection's path can't read as this step's location, and leave the code viewer alone.
+  const wn = st.where ? whereNode(st.where) : null;
+  const local = !!(wn && localRef(wn.file));
   cvElement = null;  // a step has no single owning element -> no header pill
   setTreeSelection(null);
   highlightTreePath(local ? refTreePath(wn.file, wn.line) : null);
@@ -2870,14 +2934,16 @@ function bindEdgeActionIcon(p, hit, label, onDrill, isSelected) {
     if (icon._bridge) { icon._bridge.addEventListener('mouseenter', showAt); icon._bridge.addEventListener('mouseleave', hide); }
   } else {
     const host = p.parentNode;
-    const fallback = edgeMidpointAnchor(p) || { x: 0, y: 0 };
+    const parent = iconOverlay || host;
+    const localFallback = edgeMidpointAnchor(p) || { x: 0, y: 0 };
+    const fallback = pointToHostSpace(p, localFallback.x, localFallback.y, parent) || { x: 0, y: 0 };
     addActionIcon(p, id, action, { host, anchor: fallback });
     icon = ACTION_ICONS[id];
     const moveTo = (anchor) => {
       icon._anchor = anchor;
       icon.setAttribute('transform', `translate(${anchor.x},${anchor.y}) scale(${curIconInv()})`);
     };
-    showAt = (ev) => { if (isDim()) return; moveTo(clientToLocal(host, ev.clientX, ev.clientY) || fallback); showIcon(icon); };
+    showAt = (ev) => { if (isDim()) return; moveTo(clientToLocal(parent, ev.clientX, ev.clientY) || fallback); showIcon(icon); };
   }
   icon.addEventListener('mouseenter', showAt);
   icon.addEventListener('mouseleave', hide);
@@ -3079,9 +3145,9 @@ function resolveComponentEdge(m) {
 // A linear stack of view "states" (one per diagram-changing click); back/forward move the index.
 // Selecting a node/edge for details is NOT a separate history entry — but the current selection is
 // remembered PER VIEW: captured on the state we leave and restored when we step back/forward to it.
-//   state = { kind: 'context' | 'container' | 'component' | 'subsystem' | 'edge', sid?, a?, b?, vp?, sel? }
-// vp = { zoom, pan } and sel = the selectedKey, both captured when we leave a view, so stepping
-// back/forward restores the view exactly as it was (a fresh drill via go() has neither — it
+//   state = { kind: 'context' | 'container' | 'component' | 'subsystem' | 'edge', ..., vp?, sels?, flow? }
+// vp = { zoom, pan }, sels = selection keys, and flow = {cur, active}; all are captured when we leave
+// a view, so stepping back/forward restores it exactly as it was (a fresh drill via go() has none and
 // fits/centers with nothing selected).
 let history = [];
 let hi = -1;  // index of the current state
@@ -3153,6 +3219,7 @@ function captureViewState() {  // stash the leaving entry's pan/zoom + selection
   // just the primary. `sels` supersedes the old scalar `sel`; a freshly-built navigation state may still
   // carry a single requested `sel` (a focus-drill / flow-step link) — restoreSelection handles both.
   history[hi].sels = mainScene ? mainScene.selection.map((d) => d.key) : null;
+  history[hi].flow = flowSnapshot();
   history[hi].content = (pendingLeaveContent !== undefined) ? pendingLeaveContent : snapContent();
   pendingLeaveContent = undefined;
   // Remember where this tab was left (a shallow clone so later mutation of the history entry can't
@@ -3167,7 +3234,8 @@ function pushContentPoint(content) {
   captureViewState();
   const c = history[hi];
   history = history.slice(0, hi + 1);
-  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd, unit: c.unit, bkid: c.bkid, sels: c.sels, content });
+  history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd,
+                 unit: c.unit, bkid: c.bkid, sels: c.sels, flow: c.flow, content });
   hi = history.length - 1;
   renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
@@ -3286,6 +3354,7 @@ function driveTransition(from, instant) {
   // untouched and just restore the right pane (+ any selection change) and refresh the chrome.
   if (from && to && mainScene && stateKey(from) === stateKey(to)) {
     if (!restoreSelection(mainScene, to)) resetScene(mainScene);  // replay the whole saved selection, else clear
+    restoreFlowSnapshot(to.flow);
     applyContent(to.content);
     renderChrome(to);
     return;
@@ -3623,7 +3692,7 @@ function applyEnvDim(scene) {
 // "Serves" row (servesHtml) names the capabilities a box serves, and `capability_touch` still
 // carries the data. `subtreeTouched` stays because that row rolls a container up the same way.
 
-// ── a use case's two renderings: Sequence and Map ─────────────────────────────────────────────────
+// ── a use case's two renderings: Map and Sequence ─────────────────────────────────────────────────
 // One traced flow, drawn two ways. The SEQUENCE answers "in what order"; the MAP answers "what does
 // this use case touch", in the structural views' own visual language — one kind-coloured box per
 // element, entities and dependencies included, no subsystem frames (scoped to one use case a frame
@@ -3633,10 +3702,11 @@ function applyEnvDim(scene) {
 // so they cannot disagree — and the map's arrows carry the sequence's own step numbers, so a number
 // read on one rendering finds the same step on the other.
 //
-// The choice is sticky across navigation (like DEPLOY_ENV): a reader who prefers one rendering keeps
+// Map is the default because it preserves the structural vocabulary used by the rest of the viewer;
+// the choice is sticky across navigation (like DEPLOY_ENV), so a reader who switches to Sequence keeps
 // it while drilling from use case to use case.
-let FLOW_VIEW = 'sequence';   // 'sequence' | 'map'
-let flowResumeAt = -1;        // the step to land on after a rendering switch (-1 = none pending)
+let FLOW_VIEW = 'map';   // 'map' | 'sequence'
+let flowResume = null;        // {cur, active} carried only across a Map/Sequence rendering switch
 const EMPTY_FLOW_MAP = 'flowchart LR\n  NOFLOW["No T6 flow recorded"]';
 
 function flowMermaidFor(uc) {
@@ -3664,7 +3734,7 @@ function syncFlowPicker(s) {
   const btn = (v, label) =>
     `<button type="button" data-fv="${v}"${FLOW_VIEW === v ? ' class="on"' : ''}>${label}</button>`;
   el.innerHTML = '<label class="cappick-lbl">Flow as</label>'
-    + `<span class="uc-seg">${btn('sequence', 'Sequence')}${btn('map', 'Map')}</span>`;
+    + `<span class="uc-seg">${btn('map', 'Map')}${btn('sequence', 'Sequence')}</span>`;
   el.querySelectorAll('.uc-seg button').forEach((b) => b.addEventListener('click', () => {
     const v = b.getAttribute('data-fv');
     if (v === FLOW_VIEW) return;
@@ -3673,7 +3743,7 @@ function syncFlowPicker(s) {
     // the same step in the other drawing rather than resetting to the start. flowInit consumes this.
     // `render()` nulls flowPlay synchronously but repaints asynchronously, so a second click while the
     // repaint is in flight must not overwrite a pending position with "unstarted".
-    if (flowPlay) flowResumeAt = flowPlay.cur;
+    if (flowPlay) flowResume = { cur: flowPlay.cur, active: flowPlay.active };
     // Same view identity, a completely different layout (lifelines vs a box graph), so the camera
     // remembered for this view would frame the new drawing wrongly — drop it and let the new
     // rendering fit fresh. (`resetTab` drops it the same way for the same reason.)
@@ -3733,21 +3803,20 @@ function flowMapPaintStepLabel(label, stepIdx, current) {
   });
   p.replaceChildren(...parts);
 }
-// Selection, not the counter alone, controls the emphasis. A node click leaves the player's position
-// intact, but the arrow is no longer selected and therefore must return every number to regular weight.
+// Only an actively selected STEP controls the emphasis. Selecting a bundled pair outside the stepper
+// must leave every number neutral; its pane describes all of them and none is artificially current.
 function flowMapRefreshStepLabels() {
   if (!flowPlay || flowPlay.kind !== 'map' || !flowPlay.mapArrows || !mainScene) return;
   const i = flowPlay.cur;
-  const stepSelected = i >= 0 && selHas(mainScene, 'flowstep:' + flowPlay.uc + ':' + i);
-  for (const [key, arrow] of Object.entries(flowPlay.mapArrows)) {
-    const pairSelected = selHas(mainScene, 'flowpair:' + flowPlay.uc + ':' + key);
-    const current = (stepSelected || pairSelected) && arrow.stepIdx.includes(i) ? i : -1;
+  const stepSelected = flowPlay.active && i >= 0 && selHas(mainScene, 'flowstep:' + flowPlay.uc + ':' + i);
+  for (const arrow of Object.values(flowPlay.mapArrows)) {
+    const current = stepSelected && arrow.stepIdx.includes(i) ? i : -1;
     flowMapPaintStepLabel(arrow.label, arrow.stepIdx, current);
   }
 }
 // The steps riding one arrow of the map. An arrow is a PAIR, and a pair can carry several steps (that
-// is why the arrow is labelled with their numbers) — so its panel lists them all, each with its own
-// action and call site, rather than picking one to stand for the rest.
+// is why the arrow is labelled with their numbers). A single one uses the ordinary sequence-step pane;
+// a bundle stacks that same complete pane for every step with a divider between them.
 function flowMapSteps(uc, a, b) {
   const ta = flowMapToken(uc, a), tb = flowMapToken(uc, b);
   const out = [];
@@ -3759,23 +3828,13 @@ function flowMapSteps(uc, a, b) {
 function showFlowPair(uc, a, b) {
   const steps = flowMapSteps(uc, a, b);
   if (!steps.length) { panel.innerHTML = EMPTY_PANEL; return; }
-  const first = steps[0].st;
-  const end = (label, id) => id ? '<a href="#" class="flowref" data-id="' + esc(id) + '">' + esc(label) + '</a>' : esc(label);
-  const rows = steps.map(({ st, i }) =>
-    '<dd><a href="#" class="flowstepref" data-i="' + i + '"><strong>' + (i + 1) + '.</strong> '
-    + mdInline(st.verb || 'uses') + '</a>'
-    + (st.note ? '<span class="muted"> — ' + mdInline(st.note) + '</span>' : '') + '</dd>').join('');
-  panel.innerHTML = '<div class="pane-title"><h2>' + esc(first.src) + ' &rarr; ' + esc(first.dst) + '</h2>'
-    + '<span class="badge edge">' + steps.length + ' step' + (steps.length > 1 ? 's' : '') + '</span></div>'
-    + '<p class="endpoints">' + end(first.src, first.srcId) + ' &rarr; ' + end(first.dst, first.dstId) + '</p>'
-    + '<dl><dt>Steps on this arrow</dt>' + rows + '</dl>';
-  bindFlowRefs();
-  // Each listed step opens its own full card — the same card the sequence view's arrow opens, and the
-  // same one the step player lands on — so a step's detail lives in exactly one place.
-  panel.querySelectorAll('a.flowstepref').forEach((el) => el.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    flowGoto(+el.getAttribute('data-i'));   // walking from the list keeps the player's counter in step
-  }));
+  if (steps.length === 1) { showFlowStep(uc, steps[0].i); return; }
+  panel.innerHTML = steps.map(({ i }, k) => (k ? '<hr class="flow-step-separator">' : '')
+    + '<section class="flow-step-detail" data-step="' + i + '">'
+    + flowStepInfoHtml(uc, i, true) + '</section>').join('');
+  panel.querySelectorAll('.flow-step-detail').forEach((section) => {
+    bindFlowStepInfo(section, uc, +section.getAttribute('data-step'));
+  });
   // An arrow bundles several steps, each grounded at a DIFFERENT call site, so this pane grounds
   // nothing: clear the code-viewer/tree highlight rather than leave the previous step's file standing
   // under a panel that no longer describes it (the same clear showEdge and showFlowStep do).
@@ -3831,11 +3890,12 @@ function bindFlowMap(uc) {
     if (!on.length) return null;
     return { e: { src: m[1], dst: m[2] },
              selKey: 'flowpair:' + uc + ':' + key,
-             // Selecting an arrow moves the player's counter to the FIRST step riding it — the same
-             // "clicking a step's arrow moves the counter to it" the sequence view does (flowSyncCur
-             // there too). An arrow can carry several steps, so the walk resumes from the earliest;
-             // the counter is a position marker, so it moves without disturbing what is selected.
-             showFn: () => { flowSyncCur(on[0].i); showFlowPair(uc, m[1], m[2]); } };
+             // A one-step arrow is that step, exactly like a sequence message. A bundle is not one
+             // particular step: show every step and leave the inactive player's saved index untouched.
+             showFn: () => {
+               if (on.length === 1) { flowSyncCur(on[0].i); showFlowStep(uc, on[0].i); }
+               else showFlowPair(uc, m[1], m[2]);
+             } };
   });
   eachEdge(scene.root, (p, label, m) => {
     const key = m[1] + '>' + m[2];
@@ -3859,7 +3919,7 @@ function bindFlowMap(uc) {
     const desc = { key: 'flowstep:' + uc + ':' + i,
                    glow: () => glowEdge(arrow.path, arrow.label),
                    focus: { nodes: new Set([a, b]), edge: (e) => e.src === a && e.dst === b },
-                   show: () => showFlowStep(uc, i) };
+                   show: () => { flowSyncCur(i); showFlowStep(uc, i); } };
     scene.selectors[desc.key] = () => selAdd(scene, desc);
   });
 
@@ -3868,7 +3928,9 @@ function bindFlowMap(uc) {
   // lifeline columns (x only) there, whole boxes here.
   const partsById = {};
   for (const id in scene.nodeEls) partsById[id] = [scene.nodeEls[id]];
-  flowPlay = steps.length ? { uc, kind: 'map', steps, msgEls, partsById, mapArrows: arrows, cur: -1 } : null;
+  flowPlay = steps.length
+    ? { uc, kind: 'map', steps, msgEls, partsById, mapArrows: arrows, cur: -1, active: false }
+    : null;
 }
 
 function subtreeTouched(id, hit) {
@@ -5415,7 +5477,7 @@ async function render(sArg, transient) {
     updateZoomLevel();
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
     else if (pendingCenterId) applyZoomAndCenter(mainScene.nodeEls[pendingCenterId], 1);  // centre only, keep the fit zoom
-    flowInit();  // a flow view: show the step player (unstarted on a fresh open; nothing auto-selected)
+    flowInit(s);  // a flow view: restore this history point's selected/saved step, or start fresh
   }
   // Empty-space click behaviour, mirroring the on-element gestures: a plain click deselects; a shift-click
   // is a pure camera move — with no element under it, it fits+centers the WHOLE diagram (the background

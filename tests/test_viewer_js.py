@@ -37,7 +37,7 @@ def test_viewer_js_parses() -> None:
 def test_flow_step_links_the_pair_without_rendering_rides_rows() -> None:
     """A step's A → B line is the one route to every backbone relation for that pair."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    start = js.index("function showFlowStep(uc, i)")
+    start = js.index("function flowStepInfoHtml(uc, i, numbered)")
     end = js.index("\n// One actor's card", start)
     flow_step = js[start:end]
 
@@ -58,9 +58,29 @@ def test_flow_map_dims_other_numbers_on_a_selected_multi_step_arrow() -> None:
     assert "active && i !== current" in label_code
     assert "flow-other-step" in label_code
     assert "createElement('strong')" not in label_code
-    assert "pairSelected" in label_code and "stepSelected" in label_code
+    assert "flowPlay.active && i >= 0" in label_code
+    assert "pairSelected" not in label_code
+    assert "const current = stepSelected" in label_code
     assert "flowMapRefreshStepLabels();" in js[js.index("function selApply"):js.index("function selAdd")]
     assert "mapArrows: arrows" in js
+
+
+def test_flow_map_arrows_reuse_complete_sequence_step_info() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    step = js[js.index("function flowStepInfoHtml"):js.index("// One actor's card")]
+    pair = js[js.index("function showFlowPair"):js.index("function bindFlowMap")]
+    binding = js[js.index("function bindFlowMap"):js.index("function subtreeTouched")]
+
+    assert "flowStepInfoHtml(uc, i, false)" in step
+    assert "bindFlowStepInfo(panel, uc, i)" in step
+    assert "if (steps.length === 1) { showFlowStep(uc, steps[0].i); return; }" in pair
+    assert "flowStepInfoHtml(uc, i, true)" in pair
+    assert 'class="flow-step-separator"' in pair
+    assert "Steps on this arrow" not in pair
+    assert "flowstepref" not in pair
+    assert "if (on.length === 1)" in binding
+    assert "else showFlowPair" in binding
+    assert "flowSyncCur(on[0].i); showFlowPair" not in binding
 
 
 def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
@@ -85,6 +105,66 @@ def test_flow_map_boxes_locate_the_element_in_its_structural_diagram() -> None:
     assert "scheduleActionIconTip(actionLabel, ev)" in js
     assert "icon.setAttribute('aria-label', actionLabel)" in js
     assert "createElementNS(SVGNS, 'title')" not in js[js.index("function addActionIcon"):js.index("function addLabelActionIcon")]
+
+
+def test_all_action_icons_render_in_the_foreground_overlay() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    action = js[js.index("function addActionIcon"):js.index("function addLabelActionIcon")]
+    label = js[js.index("function addLabelActionIcon"):js.index("function showIcon")]
+    edge = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
+
+    assert "const parent = iconOverlay || host || el" in action
+    assert "const parent = host || iconOverlay || el" not in action
+    assert "const parent = iconOverlay || host" in label
+    assert "pointToHostSpace(icon.parentNode, icon._anchor.x" in label
+    assert "const parent = iconOverlay || host" in edge
+    assert "clientToLocal(parent, ev.clientX, ev.clientY)" in edge
+
+
+def test_use_case_flow_opens_as_map_and_lists_map_first() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    start = js.index("function syncFlowPicker(s)")
+    end = js.index("\n// `flowMapToken`", start)
+    picker = js[start:end]
+
+    assert "let FLOW_VIEW = 'map'" in js
+    assert "${btn('map', 'Map')}${btn('sequence', 'Sequence')}" in picker
+    assert picker.index("btn('map', 'Map')") < picker.index("btn('sequence', 'Sequence')")
+
+
+def test_flow_player_suspends_and_resumes_within_one_visit() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    start = js.index("function flowCounter()")
+    end = js.index("\n// A flow step's side panel", start)
+    player = js[start:end]
+
+    assert "active ? i + 1 : '\\u2013'" in player
+    assert "flowprev.disabled = !active" in player
+    assert "flownext.disabled = false" in player
+    assert "flownext.title" not in player
+    assert "flowPlay.active = false" in player
+    assert "flowGoto(flowPlay.cur >= 0 ? flowPlay.cur : 0)" in player
+    assert "flowResume = null" in player
+    assert "if (switched && flowPlay.active) { flowGoto(flowPlay.cur); return; }" in player
+    assert "flowResume = { cur: flowPlay.cur, active: flowPlay.active }" in js
+    assert "flowSuspend();" in js[js.index("function selClear"):js.index("function selReplace")]
+
+
+def test_flow_player_state_is_captured_and_restored_with_history() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    capture = js[js.index("function captureViewState"):js.index("function pushContentPoint")]
+    transition = js[js.index("function driveTransition"):js.index("async function runDrill")]
+    html = (VIEWER_DIR / "viewer.html").read_text()
+
+    assert "history[hi].flow = flowSnapshot()" in capture
+    assert "flow: c.flow" in js[js.index("function pushContentPoint"):js.index("function go(state")]
+    assert "restoreFlowSnapshot(to.flow)" in transition
+    assert "const saved = switched || (s && s.flow)" in js
+    assert "flowInit(s)" in js
+    assert 'id="flowprev" aria-label="Previous step"' in html
+    assert 'id="flownext" aria-label="Next step"' in html
+    assert 'title="Previous step' not in html
+    assert 'title="Next step' not in html
 
 
 def test_the_ui_does_not_name_internal_model_fields():
