@@ -34,18 +34,42 @@ def test_viewer_js_parses() -> None:
     _node_check(VIEWER_DIR / "viewer.js")
 
 
-def test_flow_step_links_the_pair_without_rendering_rides_rows() -> None:
-    """A step's A → B line is the one route to every backbone relation for that pair."""
+def test_flow_step_keeps_relationship_navigation_on_the_arrow() -> None:
+    """The pane stays step-specific; its arrow owns structural relationship navigation."""
     js = (VIEWER_DIR / "viewer.js").read_text()
     start = js.index("function flowStepInfoHtml(uc, i, numbered)")
     end = js.index("\n// One actor's card", start)
     flow_step = js[start:end]
 
-    assert 'class="flowpairref"' in flow_step
-    assert "showPairEdges(pairEdges)" in flow_step
+    assert 'class="flowpairref"' not in flow_step
+    assert 'class="endpoints"' not in flow_step
+    assert "showPairEdges(pairEdges)" not in flow_step
     assert "Rides arrow" not in flow_step
     assert "ridesref" not in flow_step
     assert 'class="flowref"' not in flow_step
+
+
+def test_flow_arrows_locate_all_backbone_relationships_in_structural_views() -> None:
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    locate = js[js.index("function relationshipLocateTarget"):js.index("function decorateActionIcons")]
+    sequence = js[js.index("function bindFlow(uc)"):js.index("// --- use-case flow step player")]
+    flow_map = js[js.index("function bindFlowMap(uc)"):js.index("function subtreeTouched")]
+    edge_action = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
+
+    assert "selCover: bundleAtoms(pairEdges)" in locate
+    assert "kind: 'subsystem'" in locate and "kind: 'edge'" in locate
+    assert "kind: 'domain'" in locate and "kind: 'domedge'" in locate
+    assert "kind: 'bridge'" in locate
+    assert "const direct = COMP_LOOKUP[srcId + '>' + dstId] || []" in locate
+    assert "direct.length" in locate
+    assert "relationshipLocateTarget(dstId, srcId)" in locate
+    assert "kind: 'locate'" in locate
+    assert "title: 'Locate in ' + tab" in locate
+    assert "relationshipLocateAction(st.srcId, st.dstId)" in sequence
+    assert "relationshipLocateAction(m[1], m[2])" in flow_map
+    assert "const action = { kind: 'drill'" not in edge_action
+    assert "action || (onDrill ? { kind: 'drill'" in js
+    assert "'edge:' + e.src + '>' + e.dst + ':' + m[3]" in js
 
 
 def test_flow_map_dims_other_numbers_on_a_selected_multi_step_arrow() -> None:
@@ -113,10 +137,17 @@ def test_all_action_icons_render_in_the_foreground_overlay() -> None:
     label = js[js.index("function addLabelActionIcon"):js.index("function showIcon")]
     edge = js[js.index("function bindEdgeActionIcon"):js.index("// Give an edge's visible path")]
 
+    assert "svg.appendChild(g)" in js[js.index("function ensureIconOverlay"):js.index("const ACTION_ICON_TIP_DELAY_MS")]
+    assert "svg.querySelector(':scope > g')" not in js[js.index("function ensureIconOverlay"):js.index("const ACTION_ICON_TIP_DELAY_MS")]
+    assert "iconOverlay.parentNode.appendChild(iconOverlay)" in js
     assert "const parent = iconOverlay || host || el" in action
     assert "const parent = host || iconOverlay || el" not in action
     assert "const parent = iconOverlay || host" in label
+    assert "const bridgeParent = iconBridgeOverlay || parent" in label
+    assert "bridgeParent.appendChild(bridge)" in label
+    assert "host.insertBefore(bridge, label)" not in label
     assert "pointToHostSpace(icon.parentNode, icon._anchor.x" in label
+    assert "b.setAttribute('height', String(10 * inv))" in label
     assert "const parent = iconOverlay || host" in edge
     assert "clientToLocal(parent, ev.clientX, ev.clientY)" in edge
 

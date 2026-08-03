@@ -107,7 +107,6 @@ leaves the code viewer alone).
 | Property | Display | Action |
 |---|---|---|
 | The step's action | heading (the step's own authored text — a phrase on every step) | |
-| source → destination | one link to the directed pair's backbone relationship(s); plain text when the pair has none | opens the arrow directly when there is one relationship, or the pair pane containing all parallel relationships |
 | Why (legacy backstop only — empty for a normal step; the backbone edge's why for a phrase-less step) | prose | |
 | Note | text | |
 | Source (the step's own `where`) | text link — opens the code viewer at the call site | |
@@ -151,8 +150,12 @@ during a walk, the current number stays at full opacity and the others dim.
 | Property | Display | Action |
 |---|---|---|
 | Step number + action | one complete section per carried step | |
-| source → destination | relationship text | opens the backbone arrows for that pair |
 | Explanation / note / source | same fields as the Sequence message pane | source opens code |
+
+When the pair has a structural relationship, the arrow itself exposes a **Locate** action. It opens
+the Subsystems or Entities diagram that draws the relationship and selects every displayed arrow for
+that directed pair, including parallel arrows. A response step with no same-direction relationship
+locates the reverse pair it is answering; the step pane does not repeat the endpoints.
 
 ---
 

@@ -298,6 +298,10 @@ let EDGE_ICON_SEQ = 0;  // fallback ACTION_ICONS key for a drillable edge path w
 // so everything in it paints on top of every box/edge — which is what keeps the drill pill from hiding
 // behind a component. Recreated per render; null between renders.
 let iconOverlay = null;
+// Label-to-icon hover bridges share the overlay coordinate system but live in their own first child,
+// beneath every visible action icon. This keeps the bridge reachable above Mermaid content without a
+// later bridge stealing pointer events from an earlier icon on tightly-spaced sequence rows.
+let iconBridgeOverlay = null;
 // The step player's live context on a use-case flow view: the flow's uc, its ordered narrative steps, the
 // per-step DOM (arrow line + label) and participant columns bindFlow already resolved, and the current
 // 0-based step. null on every non-flow view (so the strip stays hidden and the arrow keys stay inert).
@@ -840,18 +844,21 @@ function setPillHover(icon, hovering) { icon._hover = hovering; refreshPillRevea
 // (applyFocus/clearFocus), so a pill on a box that just became (or stopped being) dimmed updates even
 // with no fresh hover event to trigger it.
 function refreshAllPills() { for (const id in ACTION_ICONS) { const ic = ACTION_ICONS[id]; if (ic && ic._owner) refreshPillReveal(ic); } }
-// The front overlay layer for action icons + badges: a <g> appended LAST inside the diagram's top
-// content group, so it paints on top of every cluster/edge/node. Added BEFORE svg-pan-zoom wraps the
-// content into its viewport, so it rides inside the same pan/zoom transform the boxes do — the icons'
+// The front overlay layer for action icons + badges: a <g> appended LAST directly to the Mermaid SVG,
+// so it paints on top of every top-level group. This matters for sequence diagrams, which have several
+// sibling groups rather than one shared content root. Added BEFORE svg-pan-zoom wraps all SVG children
+// into its viewport, so it rides inside the same pan/zoom transform the boxes do — the icons'
 // own counter-zoom (rescaleActionIcons) then holds them at a fixed screen size, exactly as it did when
 // they lived in their box group. The old <g> is thrown away with the rest of the SVG on each re-render.
 function ensureIconOverlay(container) {
   const svg = container.querySelector('svg');
-  if (!svg) return null;
-  const root = svg.querySelector(':scope > g') || svg;   // Mermaid's outermost content group (holds clusters/edges/nodes) — a DIRECT child, never a <g> buried in <defs>
+  if (!svg) { iconBridgeOverlay = null; return null; }
   const g = document.createElementNS(SVGNS, 'g');
   g.setAttribute('class', 'coyodex-icon-overlay');
-  root.appendChild(g);
+  iconBridgeOverlay = document.createElementNS(SVGNS, 'g');
+  iconBridgeOverlay.setAttribute('class', 'coyodex-icon-bridge-overlay');
+  g.appendChild(iconBridgeOverlay);
+  svg.appendChild(g);
   return g;
 }
 const ACTION_ICON_TIP_DELAY_MS = 250;
@@ -961,8 +968,9 @@ function addActionIcon(el, id, action, opts) {
 // edge instead (so it reads first, like a bullet), vertically centered on it. Used for a Happy Path
 // message's text AND (see bindEdgeActionIcon) any drillable edge with a real label — same convention
 // either way: one fixed spot, not one that chases the cursor. The visible pill goes in iconOverlay so
-// every box and cluster stays behind it. Its invisible hover bridge remains in the label's parent,
-// before the label, so it cannot intercept clicks meant for the label itself.
+// every box and cluster stays behind it. Its invisible hover bridge uses the dedicated first overlay
+// child: above Mermaid content, below every icon, and ending at the label's left edge so label clicks
+// remain the label's own.
 //
 // The gap to the label must be a CONSTANT SCREEN distance, not a constant diagram-unit one: the pill's
 // own SIZE is already held constant on screen regardless of zoom (rescaleActionIcons counter-scales
@@ -975,39 +983,28 @@ function addLabelActionIcon(label, id, action) {
   let bbox; try { bbox = label.getBBox(); } catch (_) { return; }
   const host = label.parentNode;
   const parent = iconOverlay || host;
-  // The pill and bridge use different coordinate systems. Keep both references so zoom updates can
-  // position the foreground pill while resizing the bridge in the label parent's local coordinates.
+  const bridgeParent = iconBridgeOverlay || parent;
+  // The pill and bridge are in sibling overlay layers with the same effective coordinate system. Keep
+  // their references separately for the fallback path where no overlay exists.
   const ref = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, parent);
-  const bridgeRef = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, host);
-  const bridgeRight = pointToHostSpace(label, bbox.x + 5, bbox.y + bbox.height / 2, host);
-  if (!ref || !bridgeRef || !bridgeRight) return;
+  const bridgeRef = pointToHostSpace(label, bbox.x, bbox.y + bbox.height / 2, bridgeParent);
+  if (!ref || !bridgeRef) return;
   const gap = ACTION_ICON_R + 10;
   const anchor = { x: ref.x - gap, y: ref.y };  // inv=1 placeholder for this first paint, before mainPz exists
-  // Bridge the gap with an invisible hit area — one continuous hoverable strip from label to pill, so
-  // there's never a moment the cursor is over neither. It deliberately overlaps BOTH ends by a few
-  // units rather than trying to land exactly on their edges (see `rightEdge`/the pill's own anchor
-  // below), so DOM order is what decides who wins each overlap, not exact geometry:
-  //  - inserted BEFORE the label (not appended after) so the label — a real, pre-existing, clickable
-  //    Mermaid element — stays on top and keeps receiving its own clicks. Appending the bridge after
-  //    it was a real bug: the bridge has no click handler, so a click landing in that overlap (a few
-  //    units is often most of a short label like a bare connection count) silently went nowhere.
-  //  - the pill itself (added last, below) is appended AFTER the bridge, so it wins the OTHER overlap,
-  //    at its own end — starting the bridge exactly at the pill's centre guarantees that overlap
-  //    regardless of the pill's actual on-screen radius (see the comment above), without needing the
-  //    bridge to also be perfectly sized to it.
+  // Bridge the gap with one continuous hover strip. It starts at the pill's centre (the icon wins that
+  // overlap because its layer is above this one) and stops exactly at the label's left edge.
   const bridge = document.createElementNS(SVGNS, 'rect');
   bridge.style.setProperty('fill', 'transparent');
   bridge.style.setProperty('pointer-events', 'all');
-  host.insertBefore(bridge, label);
+  bridgeParent.appendChild(bridge);
   addActionIcon(label, id, action, { host, anchor });
   const icon = ACTION_ICONS[id];
   // Lets hpGlow / glowEdge find this pill from the label/path element alone, so selecting the step or
   // edge shows it without the caller threading the icon through separately.
   label._actionIcon = icon;
   icon._bridge = bridge;
-  icon._bridgeHost = host;
+  icon._bridgeHost = bridgeParent;
   icon._bridgeRef = bridgeRef;
-  icon._bridgeRight = bridgeRight.x;
   icon._labelRef = ref;
   icon._labelGap = gap;
   placeLabelBridge(icon);
@@ -1018,11 +1015,12 @@ function placeLabelBridge(icon) {
   const b = icon._bridge; if (!b) return;
   const anchor = pointToHostSpace(icon.parentNode, icon._anchor.x, icon._anchor.y, icon._bridgeHost);
   if (!anchor) return;
-  const x = Math.min(anchor.x, icon._bridgeRight);
+  const inv = curIconInv();
+  const x = Math.min(anchor.x, icon._bridgeRef.x);
   b.setAttribute('x', String(x));
-  b.setAttribute('y', String(icon._bridgeRef.y - 40));
-  b.setAttribute('width', String(Math.abs(icon._bridgeRight - anchor.x)));
-  b.setAttribute('height', '80');
+  b.setAttribute('y', String(icon._bridgeRef.y - 5 * inv));
+  b.setAttribute('width', String(Math.abs(icon._bridgeRef.x - anchor.x)));
+  b.setAttribute('height', String(10 * inv));
 }
 // Message pills have no enclosing g.node/g.cluster to hang the CSS :hover/.is-selected reveal rule off
 // (viewer.css), so their visibility is plain JS opacity/pointer-events toggling instead — called from
@@ -1043,6 +1041,67 @@ function locateActionFor(id) {
     pendingCenter = t.selectId;
     go(target);
   } };
+}
+// The structural diagram that actually draws a flow arrow's backbone relationship. The destination
+// carries `selCover`, resolved after render against the arrows the target diagram chose to draw: one
+// concrete arrow, several parallel arrows, or one collapsed arrow that represents them all.
+function relationshipLocateTarget(srcId, dstId) {
+  const src = GRAPH.nodes[srcId], dst = GRAPH.nodes[dstId];
+  const pairEdges = COMP_LOOKUP[srcId + '>' + dstId] || [];
+  if (!src || !dst || !pairEdges.length) return null;
+  const withEdges = (state) => ({ ...state, selCover: bundleAtoms(pairEdges) });
+  const parentOfKind = (node, kind) => {
+    const p = node.parent && GRAPH.nodes[node.parent];
+    return p && p.kind === kind ? p.id : null;
+  };
+
+  if (src.kind === 'component' && dst.kind === 'component') {
+    const a = parentOfKind(src, 'subsystem'), b = parentOfKind(dst, 'subsystem');
+    if (!a || !b) return withEdges({ kind: 'component' });
+    if (a === b) return withEdges({ kind: 'subsystem', sid: a });
+    if (MERMAID_EDGE_CARD[a + '>' + b]) return withEdges({ kind: 'edge', a, b });
+    if (isAncestorOf(a, b)) return withEdges({ kind: 'subsystem', sid: a });
+    if (isAncestorOf(b, a)) return withEdges({ kind: 'subsystem', sid: b });
+    return null;
+  }
+
+  if ((src.kind === 'component' && dst.kind === 'dep')
+      || (src.kind === 'dep' && dst.kind === 'component')) {
+    const component = src.kind === 'component' ? src : dst;
+    const sid = parentOfKind(component, 'subsystem');
+    return withEdges(sid ? { kind: 'subsystem', sid } : { kind: 'component' });
+  }
+
+  if (src.kind === 'entity' && dst.kind === 'entity') {
+    if (!HAS_SUBDOMAINS) return withEdges({ kind: 'domain' });
+    const a = topSubdomainOf(srcId), b = topSubdomainOf(dstId);
+    if (!a || !b) return null;
+    if (a === b) return withEdges({ kind: 'domsub', sd: a });
+    if (MERMAID_DOMAIN_EDGE_CARD[a + '>' + b]) return withEdges({ kind: 'domedge', a, b });
+    if (isAncestorOf(a, b)) return withEdges({ kind: 'domsub', sd: a });
+    if (isAncestorOf(b, a)) return withEdges({ kind: 'domsub', sd: b });
+    return null;
+  }
+
+  if (src.kind === 'component' && dst.kind === 'entity') {
+    const sid = parentOfKind(src, 'subsystem'), sd = topSubdomainOf(dstId);
+    if (sid && sd && MERMAID_BRIDGE_CARD[sid + '>' + sd]) {
+      return withEdges({ kind: 'bridge', sid, sd });
+    }
+  }
+  return null;
+}
+function relationshipLocateAction(srcId, dstId) {
+  if (!srcId || !dstId) return null;  // actor endpoints have no structural relationship to locate
+  // A sequence response commonly points opposite to the structural call it is answering. Prefer an
+  // exact directed relationship; only when none exists, locate the reverse pair's stored arrows.
+  const direct = COMP_LOOKUP[srcId + '>' + dstId] || [];
+  const target = direct.length
+    ? relationshipLocateTarget(srcId, dstId)
+    : relationshipLocateTarget(dstId, srcId);
+  if (!target) return null;
+  const tab = stateTitle({ kind: topView(target.kind) });
+  return { kind: 'locate', title: 'Locate in ' + tab, run: () => go(target) };
 }
 function decorateActionIcons(scene, s) {
   const locating = s.kind === 'usecase' && FLOW_VIEW === 'map';
@@ -1804,8 +1863,8 @@ function bindFlow(uc) {
     if (life) attachEdgeHandlers(life, null, click, on, off, null);
   }
 
-  // messages: select (the step's OWN panel — showFlowStep grounds it via the step's `where`; the
-  // backbone edge is behind the panel's "rides" link) / focus / tooltip (the why). A step's arrow +
+  // messages: select (the step's OWN panel — showFlowStep grounds it via the step's `where`) / locate
+  // the backbone relationship from the arrow's action / focus / tooltip (the why). A step's arrow +
   // label glow together; focus keeps them + both endpoints' columns.
   steps.forEach((st, i) => {
     const els = msgEls[i];
@@ -1827,8 +1886,19 @@ function bindFlow(uc) {
     };
     const on = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = HOVER; };
     const off = () => { if (!selHas(scene, selKey)) for (const el of els) el.style.filter = hpRestFilter(scene, el); };
-    if (line) attachEdgeHandlers(line, text, onClick, on, off, null);
-    else { text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important'); text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off); }
+    const locate = relationshipLocateAction(st.srcId, st.dstId);
+    if (line) attachEdgeHandlers(line, text, onClick, on, off, null, null,
+      () => selHas(scene, selKey), locate);
+    else {
+      text.style.cursor = 'pointer'; text.style.setProperty('pointer-events', 'all', 'important');
+      if (locate) {
+        addLabelActionIcon(text, 'flowloc:' + uc + ':' + i, locate);
+        const icon = text._actionIcon;
+        text.addEventListener('mouseenter', () => showIcon(icon));
+        text.addEventListener('mouseleave', () => { if (!selHas(scene, selKey)) hideIcon(icon); });
+      }
+      text.addEventListener('click', onClick); text.addEventListener('mouseenter', on); text.addEventListener('mouseleave', off);
+    }
   });
 
   // Hand the step player everything it needs to walk this flow: the ordered steps, each step's arrow+label
@@ -2024,14 +2094,10 @@ function flowStepInfoHtml(uc, i, numbered) {
     ? '<dl><dt>Source</dt><dd>' + (local
         ? '<a href="#" class="stepwhere">' + esc(st.where) + '</a>' : esc(st.where)) + '</dd></dl>'
     : '';
-  const pairEdges = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || []) : [];
-  const pairText = esc(st.src) + ' &rarr; ' + esc(st.dst);
-  const pair = pairEdges.length ? '<a href="#" class="flowpairref">' + pairText + '</a>' : pairText;
-  // The step's action is the title (a full sentence for actor steps — too long for a pill). The src → dst
-  // pair moves to the body as one relationship link when the backbone records that directed pair.
+  // The step's action is the title (a full sentence for actor steps — too long for a pill). Its arrow
+  // owns structural navigation, so the pane stays focused on the step's authored facts and call site.
   const stepBadge = numbered ? '<span class="badge edge">Step ' + (i + 1) + '</span>' : '';
   return '<div class="pane-title"><h2>' + (st.verb ? mdInline(st.verb) : 'Step') + '</h2>' + stepBadge + '</div>'
-    + '<p class="endpoints">' + pair + '</p>'
     + (st.sf ? '<dl><dt>Part of sub-flow</dt><dd>&#10216;' + esc(st.sfName || st.sf)
        + '&#10217; <span class="muted">(' + esc(st.sf) + ' — a shared sequence this flow includes)</span></dd></dl>' : '')
     + (st.why ? '<p class="explain">' + mdInline(st.why) + '</p>' : '')
@@ -2041,9 +2107,6 @@ function flowStepInfoHtml(uc, i, numbered) {
 function bindFlowStepInfo(host, uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) return;
-  const pairEdges = (st.srcId && st.dstId) ? (COMP_LOOKUP[st.srcId + '>' + st.dstId] || []) : [];
-  const fp = host.querySelector('a.flowpairref');
-  if (fp) fp.addEventListener('click', (ev) => { ev.preventDefault(); showPairEdges(pairEdges); });
   const sw = host.querySelector('a.stepwhere');
   if (sw) sw.addEventListener('click', (ev) => {
     ev.preventDefault();
@@ -2051,11 +2114,11 @@ function bindFlowStepInfo(host, uc, i) {
     openInCodeViewer(wn.file, wn.line);
   });
 }
-// A flow step's side panel — EVERY step shows ITSELF (its phrase, endpoints, note, and its own call
+// A flow step's side panel — EVERY step shows ITSELF (its phrase, note, and its own call
 // site), never the backbone arrow's text: one element pair appears in several steps meaning different
 // things, so the shared arrow description can't be right for each — and the arrow's `where` is only an
-// example site, while the step's `where` is THE location. When the pair has backbone relations, the
-// whole src → dst line opens that pair exactly as clicking its drawn backbone arrow would.
+// example site, while the step's `where` is THE location. Structural navigation belongs to the Locate
+// action on the drawn arrow, where it remains available without repeating the endpoints in this pane.
 function showFlowStep(uc, i) {
   const st = (FLOWS_NARR[uc] || [])[i];
   if (!st) { panel.innerHTML = EMPTY_PANEL; return; }
@@ -2921,9 +2984,8 @@ function edgeLabelHasContent(label) {
 // bindSelectEdge, matching hpGlow's `scene.selectedKey !== selKey` guard) is what lets the pill stay
 // up after a selection even once the cursor leaves — without it, hide() would blank a pill glowEdge
 // just pinned the moment the mouse moved off the arrow.
-function bindEdgeActionIcon(p, hit, label, onDrill, isSelected) {
+function bindEdgeActionIcon(p, hit, label, action, isSelected) {
   const id = p.id || ('edgepill' + (EDGE_ICON_SEQ++));
-  const action = { kind: 'drill', run: onDrill };
   const isDim = () => p.style.opacity === DIM || (label && label.style.opacity === DIM);
   const hide = () => { if (!isSelected || !isSelected()) hideIcon(icon); };
   let icon, showAt;
@@ -2955,10 +3017,9 @@ function bindEdgeActionIcon(p, hit, label, onDrill, isSelected) {
 }
 // Give an edge's visible path a wide transparent hit-path + make its label clickable.
 // `tipHtml` (optional) wires a hover meaning-preview on the same hit-area + label.
-// `onDrill` (falsy for a non-drillable edge) doubles as the drill callback for the corner pill AND the
-// flag for the ⌘-held cursor affordance — a drillable edge always gets both together. `isSelected`
-// (only meaningful alongside onDrill) is passed straight through to bindEdgeActionIcon.
-function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn, isSelected) {
+// `onDrill` (falsy for a non-drillable edge) controls the ⌘-held cursor and direct drill gesture.
+// `action` can instead put another explicit action on the arrow, such as Locate on a flow relationship.
+function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actionFn, isSelected, action) {
   const hit = p.cloneNode(false);
   hit.removeAttribute('id'); hit.removeAttribute('marker-end'); hit.removeAttribute('class');
   hit.style.setProperty('stroke', 'transparent', 'important');
@@ -2980,7 +3041,8 @@ function attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, onDrill, actio
     label.addEventListener('mouseleave', hoverOff);
   }
   if (actionFn) { attachTip(hit, actionFn); if (label) attachTip(label, actionFn); }
-  if (onDrill) bindEdgeActionIcon(p, hit, label, onDrill, isSelected);
+  const edgeAction = action || (onDrill ? { kind: 'drill', run: onDrill } : null);
+  if (edgeAction) bindEdgeActionIcon(p, hit, label, edgeAction, isSelected);
 }
 
 // Iterate a diagram's edges, pairing each path with its label by index. Mermaid emits one label
@@ -3048,7 +3110,8 @@ function edgeDesc(scene, p, label, e, selKey, showFn) {
   return { key: selKey, glow: () => glowEdge(p, label), focus: edgeFocus(scene, e), show: showFn };
 }
 // `opts.onDrill` (optional) makes an ⌥-click drill instead of select, and marks the arrow with the drill
-// cursor; `opts.actionFn` (optional) is what an ⌥-hover previews for that drill.
+// cursor; `opts.actionFn` is its preview. `opts.action` adds an explicit icon action without changing
+// the arrow's ordinary click behavior.
 function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
   opts = opts || {};
   const desc = edgeDesc(scene, p, label, e, selKey, showFn);
@@ -3064,7 +3127,8 @@ function bindSelectEdge(scene, p, label, e, selKey, showFn, opts) {
     pickSel(scene, desc, ev);  // ⌘-click toggles into the multi-selection, a plain click replaces
   };
   scene.edgeEls.push({ e, path: p, label, key: selKey });  // `key` lets coverKeys select this arrow for a synthetic-arrow drill
-  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn, () => selHas(scene, selKey));
+  attachEdgeHandlers(p, label, onClick, hoverOn, hoverOff, opts.onDrill, opts.actionFn,
+    () => selHas(scene, selKey), opts.action);
 }
 
 // An inter-subsystem arrow (Subsystems map + neighbourhood cross arrows): a plain click SELECTS it —
@@ -3120,11 +3184,11 @@ function bindBridgeEdge(scene, p, label, a, b, target) {
     { onDrill: () => { if (leaf) pendingCenter = leaf; go(tgt); }, actionFn: () => actionTipEdge(a, b, drawn) });
 }
 
-// `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn } or null to skip.
+// `resolve(match)` maps a path id (L_<src>_<dst>_<i>) to { e, selKey, showFn, opts? } or null to skip.
 function bindEdges(scene, resolve) {
   eachEdge(scene.root, (p, label, m) => {
     const r = resolve(m);
-    if (r) bindSelectEdge(scene, p, label, r.e, r.selKey, r.showFn);
+    if (r) bindSelectEdge(scene, p, label, r.e, r.selKey, r.showFn, r.opts);
   });
 }
 
@@ -3138,7 +3202,9 @@ function resolveComponentEdge(m) {
   const arr = COMP_LOOKUP[m[1] + '>' + m[2]];
   if (!arr) return null;
   const e = arr[Math.min(+m[3], arr.length - 1)];
-  return { e, selKey: 'edge:' + e.src + '>' + e.dst, showFn: () => showEdge(e) };
+  // Parallel component edges are separate rendered arrows. Keep their selectors distinct so a
+  // relationship Locate can select every one instead of whichever selector happened to register last.
+  return { e, selKey: 'edge:' + e.src + '>' + e.dst + ':' + m[3], showFn: () => showEdge(e) };
 }
 
 // --- navigation history ---------------------------------------------------------
@@ -3890,6 +3956,7 @@ function bindFlowMap(uc) {
     if (!on.length) return null;
     return { e: { src: m[1], dst: m[2] },
              selKey: 'flowpair:' + uc + ':' + key,
+             opts: { action: relationshipLocateAction(m[1], m[2]) },
              // A one-step arrow is that step, exactly like a sequence message. A bundle is not one
              // particular step: show every step and leave the inactive player's saved index untouched.
              showFn: () => {
@@ -4048,7 +4115,7 @@ function bindDomainSub(sd) {
       });
     }
   });
-  eachClassEdge(mainScene.root, (p, label, x, y) => {
+  eachClassEdge(mainScene.root, (p, label, x, y, i) => {
     const kx = GRAPH.nodes[x] && GRAPH.nodes[x].kind;
     const ky = GRAPH.nodes[y] && GRAPH.nodes[y].kind;
     if (kx === 'entity' && ky === 'entity') {  // an internal relation — select to its detail
@@ -4056,7 +4123,7 @@ function bindDomainSub(sd) {
       if (!arr) return;
       const e = arr[0];
       // parallel relations of one pair share the drawn arrow — the panel lists them ALL (showPairEdges)
-      bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showPairEdges(arr));
+      bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst + ':' + i, () => showPairEdges(arr));
     } else if (kx === 'subsystem' || ky === 'subsystem') {  // a bridge arrow: subsystem -> entity (owns/reads)
       const sub = kx === 'subsystem' ? x : y;
       bindBridgeEdge(mainScene, p, label, x, y, { kind: 'bridge', sid: sub, sd: sd });  // ⌘ -> the S×SD bridge card
@@ -4189,7 +4256,7 @@ function eachClassEdge(root, fn) {
     // and the bridge card's component→entity arrows (`id_C1_E1`); the flat Domain view + edge cards are
     // all E↔E, a no-op there.
     const m = (p.id || '').match(/[_-]((?:SD|S|C|D|E)\d+)_((?:SD|S|C|D|E)\d+)(?:[_-]|$)/);
-    if (m) fn(p, aligned ? labels[i] || null : null, m[1], m[2]);
+    if (m) fn(p, aligned ? labels[i] || null : null, m[1], m[2], i);
   });
 }
 // Mermaid's classDiagram markers default to markerUnits="strokeWidth", so the selection highlight's
@@ -4237,7 +4304,7 @@ function bindDomain() {
       el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); if (openSrcClick(id, ev)) return; selectNodeFromCanvas(el, id, ev); });
     }
   });
-  eachClassEdge(mainScene.root, (p, label, src, dst) => {
+  eachClassEdge(mainScene.root, (p, label, src, dst, i) => {
     const ks = GRAPH.nodes[src] && GRAPH.nodes[src].kind, kd = GRAPH.nodes[dst] && GRAPH.nodes[dst].kind;
     if (ks === 'subsystem' || kd === 'subsystem') {  // a bridge arrow subsystem -> entity (owns/reads)
       const sub = ks === 'subsystem' ? src : dst, ent = ks === 'subsystem' ? dst : src;
@@ -4248,7 +4315,7 @@ function bindDomain() {
     if (!arr) return;
     const e = arr[0];
     // parallel relations of one pair share the drawn arrow — the panel lists them ALL (showPairEdges)
-    bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst, () => showPairEdges(arr));
+    bindSelectEdge(mainScene, p, label, e, 'edge:' + e.src + '>' + e.dst + ':' + i, () => showPairEdges(arr));
   });
 }
 
@@ -5425,6 +5492,10 @@ async function render(sArg, transient) {
   // selection (pendingSelect below) instead runs through updateFolderPeek, which browses only for a folder.
   if (!transient && !pendingSelect && !willRestore) { applyDefaultPanel(s); setBrowsing(true); }
   if (mode === 'diff' && hasDiff()) applyDiffOverlay(s);  // diff badges that aren't drawn by the binders
+  // Some binders append decorative SVG marks (for example Happy Path junction dots) after the overlay
+  // was created. Raise the whole overlay once decoration is complete so controls and hover bridges are
+  // the final painted and hit-tested layer in every Mermaid diagram shape.
+  if (iconOverlay && iconOverlay.parentNode) iconOverlay.parentNode.appendChild(iconOverlay);
   // The capability overlay re-applies on EVERY render, so it survives a drill, a dive, back/forward
   // and a tab restore — unlike the environment filter, which is re-applied from its own screen only
   // because it is scoped to that screen. A scope the reader chose should not evaporate on navigation.
