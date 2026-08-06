@@ -36,8 +36,11 @@
   <button id="helpbtn" title="How to get around the map">?</button>
   <button id="setbtn" title="Source link settings (editor + repo root)">&#9881;</button>
   <!-- Impact explorer (design: impact-and-update-design.md): project ANY diff — any base/target,
-       including ranges that don't touch the map's commit — onto the map, with typed ripple. -->
-  <span id="impactctl">
+       including ranges that don't touch the map's commit — onto the map, with typed ripple.
+       HIDDEN FOR NOW: the feature works but is not good enough to advertise, so the whole control is
+       kept in the DOM (every JS handler below still resolves) and only taken off screen. Drop the
+       `hidden` attribute — and the `#impactctl[hidden]` rule in viewer.css — to bring it back. -->
+  <span id="impactctl" hidden>
     <button id="impactbtn" title="Project a diff onto the map: what does it impact?">Impact…</button>
     <div id="impactpop" hidden>
       <div class="diffpop-title">Impact of a diff</div>

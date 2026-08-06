@@ -810,6 +810,9 @@ table.cvcode td.cvtag { position: sticky; right: 0; width: 1%; white-space: nowr
 /* A small dropdown anchored under the "Diff…" button: pick a range and the changed map elements badge.
    Positioned relative to #impactctl so it floats under the button as the header stays fixed. */
 #impactctl { position: relative; display: inline-block; }
+/* The author `display` above would otherwise beat the UA's [hidden] rule, so the impact control has to
+   be switched off explicitly. See the HIDDEN FOR NOW note on #impactctl in viewer.html. */
+#impactctl[hidden] { display: none; }
 #impactpop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 40; width: 260px;
            background: #fff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 10px;
            box-shadow: 0 8px 28px rgba(0,0,0,.16); font-size: 12px; color: #111827; }

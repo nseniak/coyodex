@@ -99,49 +99,8 @@ You can also **just ask for changes** in plain language, and coyodex edits the m
 **A rebuild is a fresh start.** If you later rebuild the map from scratch (which you have to ask for
 explicitly), your manual tweaks aren't re-applied.
 
-### Analyzing changes
-
-**1. Edit your code.** Work as usual.
-
-**2. Analyze the change.**
-
-```
-/coyodex analyze
-```
-
-Writes a report to `.coyodex/analysis-changes/<date>.md`: what your change adds, touches, and ripples
-to. It's left uncommitted so you can review it first; the baseline isn't touched yet.
-
-**3. Accept the change.**
-
-```
-/coyodex accept
-```
-
-Updates the map to reflect your change, re-pins it to the new commit, and commits it with the report.
-
-Then keep coding and repeat steps 1–3.
-
-On any agent beyond the three above, each step also works by pasting *"Read `method.md` and follow it
+On any agent beyond the three above, these steps also work by pasting *"Read `method.md` and follow it
 to …"* to any agent that can read this repo.
-
-## The workflow
-
-```
-/coyodex ────────▶ .coyodex/project-map.json (committed, commit-pinned; + markdown view + preindex.json)
-                   interactive viewer served live by `coyodex serve` (not a file)
-   │
-   ▼
-edit code
-   │
-   ▼
-/coyodex analyze ──▶ .coyodex/analysis-changes/<date>.md (report: modified / added / deleted, uncommitted)
-   │
-   ▼
-/coyodex accept ──▶ patch the map, re-render the markdown view + pre-index, bump the commit pin, commit the map + pre-index + the report
-```
-
-The map is committed *with* the code, so the baseline commit and the code commit stay in step.
 
 ## Which files are analyzed
 
@@ -160,8 +119,7 @@ something to depend on.
 **What works today**
 
 - Build a baseline map of a repo and render it as an interactive, drillable C4 viewer.
-- Analyze a code diff against the map, overlay what changed and what it ripples to, and accept the
-  result back into the baseline.
+- Ask for map changes in plain language — move, split, rename, or drill deeper into any part.
 - Open a component's or entity's source straight from the viewer, in your editor (VS Code, Cursor,
   IntelliJ, …) or on GitHub.
 
