@@ -51,7 +51,7 @@ from coyodex.reconcile import (
     load_reconcile,
     validate_reconcile,
 )
-from coyodex.validate_model import unbacked_entity_steps
+from coyodex.validate_model import rule_identity, unbacked_entity_steps
 
 # Top-level NON-list fields, merged one-per-map with a conflict report. `grounding` belongs here:
 # it is written by the Phase-4 reconcile as its own fragment, and omitting it meant `assemble`
@@ -368,6 +368,7 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
     actor_stripped = _strip_actor_edges(out)          # actors are never backbone endpoints
     comp_merged = _merge_duplicate_components(out)     # same module harvested by two slices → one
     chan_merged = _merge_duplicate_messaging(out, problems)   # two agents, same example row
+    rules_merged = _merge_duplicate_rules(out)         # two block agents, same decision + same lines
     edges_before_dup = len(out.edges)
     _merge_duplicate_edges(out)  # LAST: dep-merge / actor-strip / component re-point can create exact dups
     eps_before_dup = len(out.entry_points)
@@ -377,6 +378,7 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
         stats["actor_edges_stripped"] = actor_stripped
         stats["components_merged"] = comp_merged
         stats["messaging_rows_collapsed"] = chan_merged
+        stats["duplicate_rules_collapsed"] = rules_merged
         stats["duplicate_edges_collapsed"] = edges_before_dup - len(out.edges)
         stats["duplicate_entry_points_collapsed"] = eps_before_dup - len(out.entry_points)
         stats["extras_sections_merged"] = extras_merged
@@ -417,6 +419,41 @@ def _merge_extras_headings(m: ProjectModel) -> int:
     merged = len(m.extras) - len(order)
     m.extras = [by_key[k] for k in order]
     return merged
+
+
+def _merge_duplicate_rules(m: ProjectModel) -> int:
+    """Collapse business rules that state the SAME decision at the SAME lines into one, keeping the
+    first, and RE-POINT every reference to the merged-away id (`remap_element_ids`). Returns the
+    count.
+
+    Two block agents stating one rule is correct input, not an error — exactly like two trace agents
+    writing one channel row. Their ids come from disjoint pre-allocated ranges, so the duplicate-ID
+    check sees nothing and the map ships the same decision twice. Merging here rather than blocking
+    at `validate` follows `_merge_duplicate_messaging`, which exists because blocking a legitimate
+    two-agent duplicate made a live build hand-merge.
+
+    Identity is `validate_model.rule_identity` — the normalized statement PLUS the exact site set,
+    one implementation shared with the check that catches a hand-edited map. Neither half alone is
+    safe: two rules can legitimately share a statement at different lines (a decision enforced by
+    two different guards is two rules), and two different decisions routinely share a line."""
+    survivor_of: dict[tuple[str, tuple[str, ...]], str] = {}
+    remap: dict[str, str] = {}
+    kept = []
+    for r in m.rules:
+        ident = rule_identity(r)
+        if not ident[0] or not ident[1]:
+            kept.append(r)                 # no statement, or no anchored site: not a safe identity
+            continue
+        if ident in survivor_of:
+            remap[r.id] = survivor_of[ident]
+            continue
+        survivor_of[ident] = r.id
+        kept.append(r)
+    if not remap:
+        return 0
+    m.rules = kept
+    remap_element_ids(m, remap)
+    return len(remap)
 
 
 def _merge_duplicate_messaging(m: ProjectModel, problems: list[str]) -> int:

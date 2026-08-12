@@ -1783,6 +1783,19 @@ itself, because reusing the previous map's spelling for stability is what earned
 `--map` defaults to `.coyodex/project-map.json`, and `record --help` calls that "the edit the next
 assemble discards". A record written into the map is a decision that silently un-records itself.
 and the nudge stops for that bucket only; a summary line still reports what the record silenced.
+**A decision-sounding step that is NOT a business rule has its own escape: `Sweep debt`.** Once a
+map carries business rules, `validate` lists every anchored flow step whose wording reads like a
+decision that no rule claims — the sweep worklist, and the only thing that says whether the sweep
+finished. There is deliberately no `swept` field to set: a boolean asserting "I searched the whole
+repo" is unfalsifiable, and hand-assigned data rendered as derived is what made the first
+prototype's screens confidently wrong. So the list shrinks two ways only — write the rule, or say
+why the step is not one. Record ``coyodex record --heading "Sweep debt" --line
+"<the step's anchor>: <why this is plumbing, not a decision>"`` under the **"Sweep debt"** extras
+heading; the key is the step's own `path:line`, never a `UCn` or a `BRn`, because the id-keyed
+reader matches no `BR` token and a line it cannot parse silences nothing, silently. The same
+heading, keyed by a `BRn`, is where you record a rule whose sites land in files no component claims
+— it renders with no component and cannot be verified, and carrying that knowingly is a decision
+you make once rather than re-read at every validate.
 **OPEN THE FILE before recording one.** The escape is for "the skeptics read a sibling file and the
 stored anchor is right" — a claim about what is at a `path:line`, which you cannot know without
 looking. A live build recorded both of its drift findings as false alarms with no `Read` and no

@@ -424,8 +424,11 @@ class RuleSite:
     purpose still holds"), a site ASSERTS that this line does the deciding, which is what the
     operative-line check (`call_site_anchors`) gates on. Folding `no_call_site` into `EvidenceItem`
     would leak a call-site concept onto components, deps and test rows, which cite rather than act."""
-    where: str                   # bare `path:line` — the OPERATIVE line (a definition header, an
-                                 # import or a comment is a shape error, not a site)
+    where: str | None = None     # bare `path:line` — the OPERATIVE line (a definition header, an
+                                 # import or a comment is a shape error, not a site). Typed
+                                 # `str | None` exactly like Edge.where / FlowStep.where, so the
+                                 # DECLARED-ABSENCE form is expressible: a required `str` whose
+                                 # published pattern rejects `""` makes `no_call_site` unwritable.
     why: str = ""                # what this line does FOR the rule ("rejects a non-owner caller")
     no_call_site: bool = False   # declared absence, mirroring Edge/FlowStep.no_call_site: this rule
                                  # is enforced by construction (a type, a schema constraint, a

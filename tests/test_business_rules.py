@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -22,6 +23,7 @@ from pathlib import Path
 from coyodex import grammar
 from coyodex.dump import _group_member_ids, legend_of, resolve_id
 from coyodex.anchors import strip_anchor
+from coyodex.assemble import _merge_duplicate_rules
 from coyodex.impact_git import ImpactCore, ImpactFile, load_map_extents
 from coyodex.impact_lib import DirectHit, anchor_index
 from coyodex.impact_ripple import RippleOptions, build_impact_result, type_of
@@ -42,6 +44,8 @@ from coyodex.model import (
     ProjectModel,
     Role,
     RuleSite,
+    ExtraSection,
+    SecurityRow,
     Store,
     SubFlow,
     UseCase,
@@ -51,6 +55,8 @@ from coyodex.model import (
     remap_element_ids,
     to_canonical_json,
 )
+from coyodex.lint_fragment import lint_fragment_problems
+from coyodex.record import KNOWN_HEADINGS
 from coyodex.reconcile import (
     _SET_FIELD_OWNER,
     SetDirective,
@@ -62,11 +68,18 @@ from coyodex.validate_model import (
     _referenced_ids,
     call_site_anchors,
     component_file_owners,
+    _anchor_pairs,
+    _check_anchor_format,
     anchored_flow_steps,
+    check_anchor_existence_model,
+    check_operative_lines_model,
+    check_rules_model,
     rule_components,
     rule_entities,
     rule_steps,
+    rules_swept,
     site_components,
+    sweep_debt,
     validate_model,
 )
 
@@ -709,6 +722,403 @@ def test_use_cases_sort_numerically_not_lexicographically() -> None:
         FlowStep(n=1, src="C1", dst="E1", phrase="same line", where="src/guard.py:22")]))
     order = [l.uc for l in rule_steps(m, m.rules[0], GUARD_EXTENTS) if l.strength == "exact"]
     assert order == ["UC2", "UC10"], order
+
+
+# ═══ Phase 3 — validation, escapes, the sweep canary ══════════════════════════════
+# Every check here is a STRICT NO-OP on a ruleless map: 10+ tests assert on the exact advisory set
+# of maps that carry no rules, and the trapdoor golden must stay problem-free.
+
+def make_rule_repo(td: str) -> Path:
+    """A tiny repo whose one file has a definition header, a comment and one operative line."""
+    root = Path(td)
+    (root / "src").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "guard.py").write_text(
+        "def cancel_order(user, order):\n"          # 1 — a definition header
+        "    # only the owner may cancel\n"          # 2 — a comment
+        "    if order.owner_id != user.id:\n"        # 3 — the operative line
+        "        raise Forbidden()\n",               # 4
+        encoding="utf-8")
+    return root
+
+
+def make_checkable_model() -> ProjectModel:
+    m = make_base_model()
+    m.components = [Component(id="C1", name="Guard", purpose="p", source="src/guard.py:1",
+                              files=["src/guard.py"])]
+    m.entities = [Entity(id="E1", name="Order", store=Store(notes="orders"), meaning="a thing",
+                         source="src/guard.py:1",
+                         fields=[EntityField(name="id", type="str", markers=["PK"])])]
+    m.flows = [Flow(uc="UC1", title="Cancel", steps=[
+        FlowStep(n=1, src="R1", dst="C1", phrase="asks to cancel"),
+        FlowStep(n=2, src="C1", dst="E1", phrase="rejects a non-owner", where="src/guard.py:3")])]
+    m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show", where="src/guard.py:3"),
+               Edge(src="C1", verb="uses", dst="D1", why="query", where="src/guard.py:4")]
+    m.blocks = [Group(id="BLK1", name="Order lifecycle", purpose="who may change an order")]
+    m.rules = [BusinessRule(id="BR1", statement="Only the order's owner may cancel it.",
+                            block="BLK1",
+                            sites=[RuleSite(where="src/guard.py:3", why="rejects a non-owner")])]
+    return m
+
+
+def rule_problems(m: ProjectModel) -> list[str]:
+    return check_rules_model(m)[0]
+
+
+def rule_warnings(m: ProjectModel) -> list[str]:
+    return check_rules_model(m)[1]
+
+
+# --- the no-op guarantee ----------------------------------------------------------
+
+def test_a_ruleless_map_gets_no_rule_problem_or_warning() -> None:
+    assert check_rules_model(make_base_model()) == ([], [])
+
+
+def test_the_committed_fixtures_stay_exactly_as_they_were() -> None:
+    """Both committed fixtures have ZERO component `files` and ZERO flow-step anchors, so any
+    always-on rule check would fire on them — and `test_trapdoor_tools.py` requires the golden to
+    stay problem-free."""
+    for rel in ("tests/fixtures/mcpolis-project-map.json",
+                "eval/fixtures/trapdoor/golden/project-map.json"):
+        m = load_model((REPO / rel).read_text(encoding="utf-8"))
+        assert check_rules_model(m) == ([], []), rel
+
+
+def test_the_canary_is_silent_until_a_map_carries_rules() -> None:
+    """`sweep_debt` answers 'did the sweep miss something?'. On a map nobody swept EVERY decision
+    is trivially unclaimed, so firing there would put a permanent advisory on every existing map —
+    the 'flag conflating nobody-looked with no-line-exists' the prototype shipped."""
+    m = make_checkable_model()
+    m.flows[0].steps[1].phrase = "rejects a non-owner unless the caller is an admin"
+    m.rules = []
+    assert sweep_debt(m) == []
+    m.rules = [BusinessRule(id="BR1", statement="Something else.", sites=[
+        RuleSite(where="src/guard.py:4", why="elsewhere")])]
+    assert sweep_debt(m), "with rules present the unclaimed decision must surface"
+
+
+# --- a site reaches all three anchor families -------------------------------------
+
+def test_a_misshapen_site_anchor_is_a_shape_problem() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="[guard](src/guard.py:3)", why="a markdown link")]
+    assert any("BR1 site[0] where" in p for p in problems_of(m))
+
+
+def test_a_dead_site_anchor_is_a_blocking_existence_problem() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = make_rule_repo(td)
+        m = make_checkable_model()
+        m.rules[0].sites = [RuleSite(where="src/guard.py:900", why="past the end")]
+        problems = check_anchor_existence_model(m, [root])
+        assert any("BR1 site[0]" in p and "does not have" in p for p in problems), problems
+
+
+def test_a_definition_header_site_draws_the_operative_line_advisory() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        root = make_rule_repo(td)
+        m = make_checkable_model()
+        m.rules[0].sites = [RuleSite(where="src/guard.py:1", why="the def header")]
+        warnings = check_operative_lines_model(m, [root])
+        assert any("BR1 site[0]" in w for w in warnings), warnings
+        m.rules[0].sites = [RuleSite(where="src/guard.py:2", why="a comment")]
+        assert any("comment" in w for w in check_operative_lines_model(m, [root]))
+        m.rules[0].sites = [RuleSite(where="src/guard.py:3", why="the operative line")]
+        assert not any("BR1" in w for w in check_operative_lines_model(m, [root]))
+
+
+def test_a_site_reaches_all_three_families_from_one_map() -> None:
+    """One throwaway map with a bad-shape site, a dead site and a def-header site: each family must
+    report its own, and none may swallow another's."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_rule_repo(td)
+        m = make_checkable_model()
+        m.rules = [
+            BusinessRule(id="BR1", statement="a", sites=[RuleSite(where="not an anchor at all")]),
+            BusinessRule(id="BR2", statement="b", sites=[RuleSite(where="src/guard.py:900")]),
+            BusinessRule(id="BR3", statement="c", sites=[RuleSite(where="src/guard.py:1")]),
+        ]
+        assert any("BR1 site[0] where" in p for p in _check_anchor_format(m))
+        assert any("BR2 site[0]" in p for p in check_anchor_existence_model(m, [root]))
+        assert any("BR3 site[0]" in w for w in check_operative_lines_model(m, [root]))
+        assert {label.split()[0] for label, _a in _anchor_pairs(m) if label.startswith("BR")} \
+            == {"BR1", "BR2", "BR3"}
+
+
+# --- one rule states one decision -------------------------------------------------
+
+def test_a_statementless_rule_is_blocking() -> None:
+    m = make_checkable_model()
+    m.rules[0].statement = "  "
+    assert any("BR1 states no decision" in p for p in rule_problems(m))
+
+
+def test_a_siteless_rule_is_blocking() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = []
+    assert any("lists no enforcement site" in p for p in rule_problems(m))
+
+
+def test_a_site_with_neither_where_nor_no_call_site_is_blocking() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="", why="nothing")]
+    assert any("has no `where`" in p for p in rule_problems(m))
+
+
+def test_a_site_with_both_where_and_no_call_site_is_blocking() -> None:
+    """Mirrors Edge/FlowStep, but BLOCKING rather than advisory: a site is the map's strongest
+    'this line acts' claim, and a contradictory one cannot be read either way."""
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="src/guard.py:3", no_call_site=True)]
+    assert any("sets `no_call_site` but carries a `where`" in p for p in rule_problems(m))
+
+
+def test_a_declared_absence_site_is_legal() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="", why="enforced by the type", no_call_site=True)]
+    assert rule_problems(m) == []
+
+
+def test_a_whole_file_site_is_blocking() -> None:
+    """A site claims ONE line enforces the rule. Without a `:line` the operative-line check —
+    which is the only deterministic thing standing between a site and a component home — is
+    skipped, so the claim is unfalsifiable by construction."""
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="src/guard.py", why="somewhere in here")]
+    assert any("names a whole file" in p for p in rule_problems(m))
+
+
+# --- the derivation inputs must exist ---------------------------------------------
+
+def test_rules_on_a_map_whose_components_declare_no_files_is_blocking() -> None:
+    """Rot silently zeroes the layer: both committed fixtures have zero component `files`, so a
+    rule on such a map renders bare — indistinguishable from a rule nobody enforces."""
+    m = make_checkable_model()
+    m.components[0].files = []
+    assert any("NO component declares `files`" in p for p in rule_problems(m))
+
+
+def test_a_rule_landing_in_an_unclaimed_file_is_advisory_and_recordable() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="src/other.py:3", why="elsewhere")]
+    assert any("BR1" in w and "no component claims" in w for w in rule_warnings(m))
+    m.extras = [ExtraSection(heading="Sweep debt", body="BR1: the guard lives in a vendored file")]
+    assert not any("no component claims" in w for w in rule_warnings(m))
+
+
+# --- the interim security-duplication guard ---------------------------------------
+
+def test_an_access_rule_repeating_a_security_source_is_blocking_and_escapable() -> None:
+    m = make_checkable_model()
+    m.rules[0].access = True
+    m.security = [SecurityRow(surface="Cancel order", who="owner", source="src/guard.py:3")]
+    assert any("claimed twice" in p for p in rule_problems(m))
+    m.extras = [ExtraSection(heading="Accepted duplications",
+                             body="src/guard.py:3: the row ships until the fold")]
+    assert not any("claimed twice" in p for p in rule_problems(m))
+
+
+def test_a_non_access_rule_sharing_a_security_anchor_is_fine() -> None:
+    """This repo's own precedent says an anchor is NOT a claim identity — one line can legitimately
+    guard two surfaces — so the guard is scoped to `access` rules and exact duplication."""
+    m = make_checkable_model()
+    m.security = [SecurityRow(surface="Cancel order", who="owner", source="src/guard.py:3")]
+    assert rule_problems(m) == []
+
+
+# --- the sweep canary and DERIVED sweep state -------------------------------------
+
+def make_swept_model() -> ProjectModel:
+    """Two decision-sounding steps in one component; the rule claims one of them."""
+    m = make_checkable_model()
+    m.flows[0].steps = [
+        FlowStep(n=1, src="R1", dst="C1", phrase="asks to cancel"),
+        FlowStep(n=2, src="C1", dst="E1", phrase="rejects a non-owner", where="src/guard.py:3"),
+        FlowStep(n=3, src="C1", dst="E1", phrase="only an admin may override",
+                 where="src/guard.py:4")]
+    return m
+
+
+def test_the_canary_lists_the_unclaimed_decision_and_shrinks_after_a_sweep() -> None:
+    m = make_swept_model()
+    assert [(container, st.n) for container, st in sweep_debt(m)] == [("UC1", 3)]
+    m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
+                                block="BLK1",
+                                sites=[RuleSite(where="src/guard.py:4", why="the admin gate")]))
+    assert sweep_debt(m) == []
+
+
+def test_the_canary_shrinks_when_a_step_is_recorded_as_not_a_decision() -> None:
+    m = make_swept_model()
+    m.extras = [ExtraSection(heading="Sweep debt",
+                             body="src/guard.py:4: an override flag, not a product decision")]
+    assert sweep_debt(m) == []
+
+
+def test_sweep_state_is_derived_from_the_canary_not_asserted() -> None:
+    m = make_swept_model()
+    assert rules_swept(m) == {"BR1": False}, "an unclaimed decision in BR1's component is debt"
+    m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
+                                block="BLK1",
+                                sites=[RuleSite(where="src/guard.py:4", why="the admin gate")]))
+    assert rules_swept(m) == {"BR1": True, "BR2": True}
+
+
+def test_a_rule_with_no_component_is_never_swept() -> None:
+    """There is no territory to have finished sweeping."""
+    m = make_swept_model()
+    m.rules[0].sites = [RuleSite(where="src/other.py:3", why="elsewhere")]
+    assert rules_swept(m)["BR1"] is False
+
+
+def test_debt_in_another_components_file_does_not_hold_a_rule_unswept() -> None:
+    m = make_swept_model()
+    m.components.append(Component(id="C2", name="Other", purpose="p", files=["src/other.py"]))
+    m.flows[0].steps[2].where = "src/other.py:1"
+    assert rules_swept(m)["BR1"] is True
+
+
+# --- rule identity is content, never the authored id ------------------------------
+
+def test_two_agents_stating_one_rule_are_caught_by_content_not_id() -> None:
+    """Ids cannot carry identity: rules are authored one agent per block from disjoint ranges, so
+    two agents stating one rule produce two ids and the duplicate-ID check stays silent."""
+    m = make_checkable_model()
+    m.rules.append(BusinessRule(id="BR2", statement="Only the ORDER'S owner  may cancel it!",
+                                block="BLK1",
+                                sites=[RuleSite(where="src/guard.py:3", why="same line")]))
+    assert any("BR1, BR2 state the same decision" in p for p in rule_problems(m))
+
+
+def test_the_same_statement_at_different_sites_is_two_rules() -> None:
+    m = make_checkable_model()
+    m.rules.append(BusinessRule(id="BR2", statement="Only the order's owner may cancel it.",
+                                block="BLK1",
+                                sites=[RuleSite(where="src/guard.py:4", why="another line")]))
+    assert not any("state the same decision" in p for p in rule_problems(m))
+
+
+# --- lint-fragment shifts the blocking rules left ---------------------------------
+
+def test_lint_fragment_catches_a_bad_site_in_the_authoring_agents_own_turn() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="src/guard.py", why="a whole file")]
+    assert any("names a whole file" in p for p in lint_fragment_problems(m, None))
+
+
+def test_lint_fragment_does_not_report_whole_map_sweep_debt_on_one_block() -> None:
+    """A fragment holds ONE block's rules, so every other block's decisions would read as debt."""
+    m = make_swept_model()
+    assert not any("sweep" in p.lower() for p in lint_fragment_problems(m, None))
+
+
+# --- reconciled after the phase-3 review -------------------------------------------
+
+def test_the_canary_counts_a_subflow_step_once_and_labels_it_by_its_container() -> None:
+    """`UC9 step 4` is the WRONG row when the step was authored in SF50 — UC9 has its own step 4 —
+    and a sub-flow ridden by three use cases was counted three times."""
+    m = make_swept_model()
+    m.subflows = [SubFlow(id="SF1", name="Override check", steps=[
+        FlowStep(n=3, src="C1", dst="E1", phrase="only an admin may override",
+                 where="src/guard.py:4")])]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="C1", phrase="runs it", subflow="SF1"),
+                        FlowStep(n=2, src="C1", dst="E1", phrase="rejects a non-owner",
+                                 where="src/guard.py:3")]
+    m.flows.append(Flow(uc="UC2", title="Refund", steps=[
+        FlowStep(n=1, src="C1", dst="C1", phrase="runs it", subflow="SF1")]))
+    m.use_cases.append(UseCase(id="UC2", name="Refund", actors=["R1"]))
+    assert [(c, st.n) for c, st in sweep_debt(m)] == [("SF1", 3)]
+
+
+def test_a_rule_enforced_inside_the_steps_function_claims_that_step() -> None:
+    """The authoring contract tells the sweep to anchor the TRUE operative line even when another
+    line would join the step. Exact-only claiming would then leave every such step as permanent
+    debt, and the UI would show a rule enforcing a step that `validate` calls unclaimed."""
+    m = make_swept_model()
+    m.flows[0].steps[2].where = "src/guard.py:25"        # the second decision, in another function
+    m.rules[0].sites = [RuleSite(where="src/guard.py:5", why="the real guard, 2 lines down")]
+    ext = {"src/guard.py": [(1, 10, "cancel_order", "function"),
+                            (20, 30, "override", "function")]}
+    assert [(c, st.n) for c, st in sweep_debt(m, ext)] == [("UC1", 3)]   # step 2 is now claimed
+    assert [(c, st.n) for c, st in sweep_debt(m)] == [("UC1", 2), ("UC1", 3)]  # exact-only: more debt
+
+
+def test_a_recorded_suppression_is_reported_never_silent() -> None:
+    """A silence you cannot see reads exactly like having no findings — and this escape flips
+    `rules_swept`, a DERIVED state."""
+    m = make_swept_model()
+    m.extras = [ExtraSection(heading="Sweep debt",
+                             body="src/guard.py:4: an override flag, not a product decision")]
+    warnings = rule_warnings(m)
+    assert any("suppressed by a recorded 'Sweep debt' line" in w and "counted as SWEPT" in w
+               for w in warnings), warnings
+
+
+def test_lint_fragment_does_not_fail_a_block_fragment_on_another_fragments_files() -> None:
+    """A rules-only fragment carries no components at all — failing it on "NO component declares
+    `files`" is a defect the block agent does not own and cannot fix."""
+    frag = ProjectModel(title="", goal="")
+    frag.blocks = [Group(id="BLK1", name="Order lifecycle", purpose="who may change an order")]
+    frag.rules = [BusinessRule(id="BR1", statement="Only the owner may cancel.",
+                               sites=[RuleSite(where="src/guard.py:3", why="rejects a non-owner")])]
+    assert lint_fragment_problems(frag, None) == []
+    # ... and the map-wide gate still fires at the lead's validate
+    m = make_checkable_model()
+    m.components[0].files = []
+    assert any("NO component declares `files`" in p for p in check_rules_model(m)[0])
+
+
+def test_a_declared_absence_site_survives_a_json_round_trip() -> None:
+    """`where: str` with a pattern that rejects "" made `no_call_site` unwritable — the published
+    schema said one thing and the model another."""
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where=None, why="enforced by the type", no_call_site=True)]
+    back = load_model(to_canonical_json(m))
+    assert back.rules[0].sites[0].where is None and back.rules[0].sites[0].no_call_site
+    assert check_rules_model(back)[0] == []
+
+
+def test_record_accepts_every_heading_the_tools_read() -> None:
+    """The bug class the 'Sweep debt' entry fixed, swept: 'Coverage exceptions' and 'Persistence
+    exceptions' were read by `validate` and rejected by `coyodex record` — exit 2 in a live build,
+    pinned by nothing."""
+    src = "\n".join((REPO / "tools" / "coyodex" / f).read_text(encoding="utf-8")
+                     for f in ("validate_model.py", "balance_lib.py", "audit_model.py",
+                               "anchor_drift.py"))
+    read = {h.lower() for h in re.findall(
+        r'(?:extras_bodies\(m,|_recorded_ids\(m,|_recorded_line_keys\(m,)\s*"([^"]+)"', src)}
+    read |= {h.lower() for h in re.findall(r'_EXCEPTIONS_HEADING\s*=\s*"([^"]+)"', src)}
+    known = {h.lower() for h in KNOWN_HEADINGS}
+    assert read <= known, f"read by a tool, refused by `coyodex record`: {sorted(read - known)}"
+
+
+def test_assemble_merges_two_block_agents_stating_one_rule() -> None:
+    """Following `_merge_duplicate_messaging`: two agents writing one thing is correct input, and
+    blocking it made a live build hand-merge. `validate`'s check stands for the hand-edited map."""
+    m = make_checkable_model()
+    m.rules.append(BusinessRule(id="BR7", statement="Only the ORDER'S owner  may cancel it!",
+                                sites=[RuleSite(where="src/guard.py:3", why="same line")]))
+    m.extras = [ExtraSection(heading="Notes", body="see [[BR7]] for the admin case")]
+    assert _merge_duplicate_rules(m) == 1
+    assert [r.id for r in m.rules] == ["BR1"]
+    assert m.extras[0].body == "see [[BR1]] for the admin case"
+
+
+def test_assemble_keeps_the_same_statement_at_different_sites() -> None:
+    m = make_checkable_model()
+    m.rules.append(BusinessRule(id="BR7", statement="Only the order's owner may cancel it.",
+                                sites=[RuleSite(where="src/guard.py:4", why="another guard")]))
+    assert _merge_duplicate_rules(m) == 0
+
+
+def test_assemble_never_merges_a_rule_with_no_anchored_site() -> None:
+    """Two declared-absence rules are not evidence of anything — no site set, no safe identity."""
+    m = make_checkable_model()
+    m.rules = [BusinessRule(id="BR1", statement="Enforced by the type.",
+                            sites=[RuleSite(no_call_site=True)]),
+               BusinessRule(id="BR2", statement="Enforced by the type.",
+                            sites=[RuleSite(no_call_site=True)])]
+    assert _merge_duplicate_rules(m) == 0
 
 
 if __name__ == "__main__":

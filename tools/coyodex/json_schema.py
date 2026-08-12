@@ -25,7 +25,7 @@ from typing import Union, get_args, get_origin, get_type_hints
 
 from coyodex import grammar
 from coyodex.model import FORMAT, ID_SHAPE, ProjectModel
-from coyodex.anchors import FILE_ANCHOR as _ANCHOR_LINE
+from coyodex.anchors import FILE_ANCHOR as _ANCHOR_LINE, FILE_LINE_ANCHOR
 
 _PRIMITIVE = {str: "string", int: "integer", bool: "boolean"}
 
@@ -247,9 +247,12 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("BusinessRule", "sites"): {"description": "every place the decision is ENFORCED. The rule's "
                                  "components, its use-case steps and whether it has been swept are "
                                  "DERIVED from these — there is no authored field for any of them."},
-    ("RuleSite", "where"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC
+    ("RuleSite", "where"): {"pattern": FILE_LINE_ANCHOR.pattern, "description": _ANCHOR_DESC
                              + " The OPERATIVE line — the one that acts. A definition header, an "
-                             "import, a comment or a blank line is a shape error, not a site."},
+                             "import, a comment or a blank line is a shape error, not a site, and "
+                             "the `:line` is REQUIRED: without it the operative-line check is "
+                             "skipped and the claim cannot be falsified. null (with "
+                             "`no_call_site`) = enforced by construction, no single line."},
     ("RuleSite", "why"): {"description": "what this line does FOR the rule ('rejects a non-owner "
                            "caller') — reconstructible from the line itself, with no clause added."},
     ("RuleSite", "no_call_site"): {"description": "explicit opt-out (mirrors Edge.no_call_site): "

@@ -46,6 +46,12 @@ KNOWN_HEADINGS = (
     "Happy Path coverage",
     "Entry-point coverage",
     "Bucket vocabulary",
+    "Sweep debt",
+    # 'Coverage exceptions' and 'Persistence exceptions' were read by `validate` and REFUSED here —
+    # `coyodex record` exited 2 on the two headings its own advisories tell an operator to write.
+    # `tests/test_business_rules.py` now pins this list against what the tools actually read.
+    "Coverage exceptions",
+    "Persistence exceptions",
 )
 
 

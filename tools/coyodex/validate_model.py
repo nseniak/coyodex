@@ -33,10 +33,12 @@ from coyodex.reporting import clip as _clip, reset_full_lists, set_full_lists, s
 from coyodex.anchors import (
     DIR_ANCHOR as _DIR_ANCHOR,
     FILE_ANCHOR as _ANCHOR_LINE,
+    FILE_LINE_ANCHOR,
     non_operative_reason,
     parse_anchor,
     strip_anchor,
 )
+from coyodex.impact_git import Extents, load_map_extents
 from coyodex.impact_lib import enclosing_extent
 from coyodex.pysrc import parse_python
 from coyodex.model import (
@@ -795,7 +797,7 @@ def _anchor_line(raw: str) -> tuple[str, int | None] | None:
 
 
 def rule_steps(m: ProjectModel, rule: BusinessRule,
-               extents: dict[str, list[tuple[int, int, str, str]]] | None = None,
+               extents: Extents | None = None,
                steps: list[tuple[str, str, FlowStep]] | None = None) -> list[RuleStepLink]:
     """The use-case steps a rule's sites reach, strongest link per (use case, container, step) first.
 
@@ -846,7 +848,7 @@ def rule_steps(m: ProjectModel, rule: BusinessRule,
 
 
 def rule_entities(m: ProjectModel, rule: BusinessRule,
-                  extents: dict[str, list[tuple[int, int, str, str]]] | None = None,
+                  extents: Extents | None = None,
                   steps: list[tuple[str, str, FlowStep]] | None = None) -> list[str]:
     """The entity ids a rule reaches — ONLY through a step that itself names one as an endpoint.
 
@@ -865,6 +867,279 @@ def rule_entities(m: ProjectModel, rule: BusinessRule,
             continue
         out.update(e for e in (st.src, st.dst) if e in defined)
     return sorted(out, key=element_sort_key)
+
+
+# ── sweep state: DERIVED, never authored ──────────────────────────────────────────────────────────
+# There is deliberately no `swept` field. An authored boolean asserting "I searched the whole repo"
+# is unfalsifiable, and every one of the prototype's worst errors was hand-assigned data rendered as
+# derived. Sweep state comes from a CANARY instead: the map already anchors the decisions it walked,
+# so an anchored flow step whose wording reads like a decision that no rule claims is either a rule
+# nobody wrote or a step that is not a decision. Both need a human; neither can be asserted away.
+
+#: Wording that reads like a DECISION rather than a mechanical action. A heuristic worklist, and a
+#: FLOOR in the same sense as the operative-line check: it catches the sweep that stopped early, it
+#: does not prove the sweep was complete. Tuned for precision over recall, because a false positive
+#: holds a swept rule unswept — sweep state is derived FROM this list. Noun forms are excluded on
+#: purpose: `validat(e|ing)` matches "the validation run", while `validator` is a component.
+#:
+#: MEASURED, on this repo's own map: 13 of its 89 distinct anchored steps match. Most are genuinely
+#: conditional once read with their `note` ("only with `--open`", "a blocked CDN falls back to plain
+#: text"), and a minority are not — `\bonly\b` also catches "only judges the difference" and
+#: "removes it only now". Those are the cost of keeping the single most decision-bearing word in
+#: English, and the 'Sweep debt' record is what an author writes for one. RECALL IS UNTESTED and
+#: known-incomplete: a decision phrased without a marker word ("returns 403 for a non-member",
+#: "scoped to the tenant") is missed, which is why this is a worklist rather than a gate.
+_DECISION_MARKERS: tuple[str, ...] = (
+    r"\bif\b", r"\bunless\b", r"\bonly\b", r"\botherwise\b", r"\belse\b",
+    r"\breject", r"\bden(?:y|ies|ied)\b", r"\brefus", r"\bforbid",
+    r"\ballow", r"\bpermit", r"\bgrants?\b",
+    r"\brequire", r"\bmust\b", r"\benforce",
+    r"\bvalidat(?:e|es|ed|ing)\b", r"\bverif(?:y|ies|ied|ying)\b", r"\bguard",
+    r"\blimits?\b", r"\bthrottl", r"\bquota", r"\bthreshold",
+    r"\bat most\b", r"\bat least\b", r"\bno more than\b",
+    r"\bdefaults? to\b", r"\bfalls? back\b", r"\bfallback\b", r"\bprefer",
+    r"\bskips?\b", r"\bexpir", r"\bstale\b",
+    r"\bpriorit", r"\bwins\b", r"\bprecede",
+    r"\bdecid", r"\bchoos", r"\bpicks?\b",
+    r"\bblocks on\b", r"\bfails? the\b",
+)
+_DECISION_RE = re.compile("|".join(_DECISION_MARKERS), re.IGNORECASE)
+
+# The 'Sweep debt' extras heading records "this decision-sounding step is not a business rule",
+# keyed by the step's own ANCHOR (`path:line: why`). Anchor-keyed rather than `UCn/step`, because
+# `_RECORD_LINE` only matches `(?:CAP|EP|UC|HP|R|C|E)\d+` line-leaders — a `BR7:` or `UC4/11:` line
+# would silence nothing, silently. Read with `_recorded_line_keys`, like 'Accepted duplications',
+# and written as a LITERAL at each use site (the contract test derives the machine-read list from
+# exactly those literals).
+
+
+def decision_sounding_steps(m: ProjectModel) -> list[tuple[str, str, FlowStep]]:
+    """Anchored flow steps whose phrase (or note) reads like a decision — the sweep worklist."""
+    return [(uc, container, st) for uc, container, st in anchored_flow_steps(m)
+            if _DECISION_RE.search(f"{st.phrase} {st.note}")]
+
+
+def rule_claimed_step_keys(m: ProjectModel, extents: Extents | None = None,
+                           steps: list[tuple[str, str, FlowStep]] | None = None) -> set[tuple[str, int]]:
+    """The `(container, n)` of every step SOME rule reaches, at EITHER strength.
+
+    The symbol strength counts, and it has to. The authoring contract tells the sweep to anchor the
+    true operative line "even when a different line would join a flow step" — so the systematic case
+    is a site a few lines from the step inside one function. Exact-only claiming would leave every
+    such step as permanent debt, the canary would never empty, and a rule the UI shows as enforcing
+    a step would simultaneously hold that rule unswept.
+
+    WITHOUT `extents` this degrades to exact-only, which reports MORE debt — the safe direction for
+    a worklist, and the honest one: "the same enclosing function" is not derivable from the map.
+    Keyed by `(container, n)`, not `(uc, container, n)`: the anchors decide the link, and they do
+    not vary by which use case rides a sub-flow."""
+    if steps is None:
+        steps = anchored_flow_steps(m)
+    return {(l.container, l.n)
+            for r in m.rules
+            for l in rule_steps(m, r, extents, steps)}
+
+
+def sweep_debt(m: ProjectModel, extents: Extents | None = None) -> list[tuple[str, FlowStep]]:
+    """Distinct `(container, step)` pairs that read like a decision, that no rule claims, and that no
+    'Sweep debt' line adjudicates — the whole-map worklist, and the input to per-rule sweep state.
+
+    Keyed by the AUTHORING container so a sub-flow step is reported once as `SF50 step 4` rather
+    than once per riding use case as `UC9 step 4` — which is both a double count and the wrong row
+    (UC9 has its own step 4), and breaks the labelling convention `_check_anchor_format` uses.
+
+    EMPTY on a map with no rules: the canary answers "did the sweep miss something?", and on a map
+    nobody swept every decision is trivially unclaimed. Firing there would put a permanent advisory
+    on every existing map, which is exactly the "flag conflating nobody-looked with no-line-exists"
+    the prototype shipped."""
+    return _sweep_debt_split(m, extents)[0]
+
+
+def _sweep_debt_split(m: ProjectModel,
+                      extents: Extents | None = None) -> tuple[list[tuple[str, FlowStep]], list[str]]:
+    """`(debt, silenced anchors)` — the worklist, and what a recorded line took out of it.
+
+    The two are returned together because a silence you cannot see reads exactly like having no
+    findings, and this escape does not merely quieten an advisory: it changes `rules_swept`, a
+    DERIVED state. The suppression report is what keeps that visible."""
+    if not m.rules:
+        return [], []
+    steps = anchored_flow_steps(m)
+    claimed = rule_claimed_step_keys(m, extents, steps)
+    recorded = _recorded_line_keys(m, "sweep debt")
+    out: dict[tuple[str, int], tuple[str, FlowStep]] = {}
+    silenced: set[str] = set()
+    for _uc, container, st in decision_sounding_steps(m):
+        if (container, st.n) in claimed:
+            continue
+        where = (st.where or "").strip()
+        if _records_key(recorded, where):
+            silenced.add(where)
+            continue
+        out[(container, st.n)] = (container, st)
+    return ([out[k] for k in sorted(out, key=lambda k: (element_sort_key(k[0]), k[1]))],
+            sorted(silenced))
+
+
+def rules_swept(m: ProjectModel, extents: Extents | None = None) -> dict[str, bool]:
+    """Per rule id, whether its components hold NO uncovered decision-sounding step.
+
+    This IS the sweep state — computed, not asserted; there is no field to set. Read it for exactly
+    what it says, though: a rule is swept when nothing decision-shaped is left UNCLAIMED in the code
+    it governs, so a rule whose components hold no decision-sounding step at all is swept trivially.
+    That is a floor, like the operative-line check — it catches the sweep that stopped early, not
+    the sweep that never looked. A rule that resolves to no component is NOT swept: there is no
+    territory to have finished sweeping."""
+    owners = component_file_owners(m)
+    debt_comps: set[str] = set()
+    for _container, st in sweep_debt(m, extents):
+        debt_comps.update(owners.get(strip_anchor((st.where or "").strip()), ()))
+    out: dict[str, bool] = {}
+    for r in m.rules:
+        comps = rule_components(m, r, owners)
+        out[r.id] = bool(comps) and not any(cid in debt_comps for cid in comps)
+    return out
+
+
+# ── the rule checks ───────────────────────────────────────────────────────────────────────────────
+
+def rule_row_problems(m: ProjectModel) -> list[str]:
+    """The ROW-LOCAL blocking rules — a statement, at least one site, a well-formed site, and no two
+    rules stating the same decision at the same lines.
+
+    Split out because `lint_fragment` runs these on ONE block's fragment. The whole-map rules stay
+    in `check_rules_model`: `Component.files` lives in a different fragment entirely, so asking a
+    block agent about it fails its lint on a defect it does not own and cannot fix."""
+    problems: list[str] = []
+    for r in m.rules:
+        if not (r.statement or "").strip():
+            problems.append(f"{r.id} states no decision — `statement` is the rule; a site list "
+                            "without one is a set of anchors nobody can read")
+        if not r.sites:
+            problems.append(f"{r.id} lists no enforcement site — a rule nothing enforces is a "
+                            "belief about the product, not a claim about this code. Anchor the "
+                            "operative line(s), or set `no_call_site` on a site that is enforced "
+                            "by construction (a type, a schema constraint, a config-wired guard)")
+        for i, site in enumerate(r.sites):
+            where = (site.where or "").strip()
+            if not where and not site.no_call_site:
+                problems.append(f"{r.id} site[{i}] has no `where` — anchor the OPERATIVE line "
+                                "(the one that acts), or set `no_call_site`")
+            elif where and site.no_call_site:
+                problems.append(f"{r.id} site[{i}] sets `no_call_site` but carries a `where` "
+                                f"('{where}') — a site is one or the other; drop whichever is wrong")
+            elif where and not FILE_LINE_ANCHOR.match(where):
+                problems.append(f"{r.id} site[{i}]: '{where}' names a whole file — a site claims "
+                                "that ONE line enforces the rule, so it must carry a `:line` "
+                                "(that claim is what the operative-line check reads)")
+
+    # Two block agents can state the same rule with different authored ids, so the duplicate-id
+    # check stays silent. Identity is the NORMALIZED statement plus the site set — the same
+    # content-identity discipline `assemble._merge_duplicate_messaging` applies to a channel.
+    # `assemble` MERGES these, so a normal build never reaches this line; it stands for the
+    # hand-edited map, where deleting one row is the whole fix.
+    by_identity: dict[tuple[str, tuple[str, ...]], list[str]] = {}
+    for r in m.rules:
+        by_identity.setdefault(rule_identity(r), []).append(r.id)
+    for ids in sorted((ids for ids in by_identity.values() if len(ids) > 1),
+                      key=lambda ids: element_sort_key(ids[0])):
+        problems.append(f"Business rules {', '.join(ids)} state the same decision at the same "
+                        "sites — two block agents wrote one rule twice; keep one")
+    return problems
+
+
+def check_rules_model(m: ProjectModel,
+                      extents: Extents | None = None) -> tuple[list[str], list[str]]:
+    """(problems, warnings) for the T7 decision layer — the row-local rules plus the whole-map ones.
+    A STRICT NO-OP on a ruleless map: 10+ tests assert on the exact advisory set of maps that carry
+    none, and the trapdoor golden must stay problem-free."""
+    if not m.rules and not m.blocks:
+        return [], []
+    problems: list[str] = rule_row_problems(m)
+    warnings: list[str] = []
+
+    # The derivation INPUTS. Without `files` on any component, every rule resolves to no component,
+    # renders bare, and is indistinguishable from a rule nobody enforces. Fail loudly rather than
+    # render nothing — the map is the thing that is broken, not the rules.
+    if m.rules and not any(c.files for c in m.components):
+        problems.append(
+            f"The map carries {len(m.rules)} business rule(s) but NO component declares `files` — "
+            "a rule's components, its use-case steps and its sweep state are all DERIVED by "
+            "resolving its sites through `Component.files`, so every rule would render bare and "
+            "look like a rule nobody enforces. Harvest the components' file lists, or drop the rules")
+
+    # An `access` rule whose site is byte-equal to a `security[].source` states the same enforcement
+    # twice while `security[]` still exists. INTERIM (phase 8 folds security into rules and retires
+    # this): scoped to EXACT duplication only, because this repo's own precedent
+    # (`duplicate_security_warnings`) says an anchor is not a claim identity — one line can
+    # legitimately guard two surfaces.
+    sec_by_anchor: dict[str, list[str]] = {}
+    for sec in m.security:
+        if (sec.source or "").strip():
+            sec_by_anchor.setdefault(sec.source.strip(), []).append(sec.surface)
+    accepted = _recorded_line_keys(m, "accepted duplications")
+    recorded_debt = _recorded_line_keys(m, "sweep debt")
+    for r in m.rules:
+        if not r.access:
+            continue
+        for site in r.sites:
+            where = (site.where or "").strip()
+            surfaces = sec_by_anchor.get(where, [])
+            if not surfaces or _records_key(accepted, where):
+                continue
+            problems.append(
+                f"{r.id} is an `access` rule anchored at '{where}', which is already the auth-check "
+                f"source of security surface '{surfaces[0]}' — the same enforcement is claimed "
+                f"twice. Keep the rule and drop the security row, or record '{where}: <why both>' "
+                "under an 'Accepted duplications' extras heading")
+
+    # A rule that resolves to no component renders with nothing to show. Advisory, not blocking:
+    # the map-wide `files` gate above catches the systemic case, and a single unresolved site is
+    # debt the viewer already stamps `unverified`.
+    owners = component_file_owners(m)
+    orphan = sorted((r.id for r in m.rules
+                     if any(not s.no_call_site for s in r.sites)
+                     and not rule_components(m, r, owners)
+                     and not _records_key(recorded_debt, r.id)),
+                    key=element_sort_key)
+    if orphan:
+        warnings.append(
+            f"Business rule(s) whose sites land in files no component claims, so they render with "
+            f"no component and cannot be verified: {_shown(orphan, 12)}. Add the file to the owning "
+            "component's `files`, re-anchor the site, or record '<BRn>: <why>' under a "
+            "'Sweep debt' extras heading")
+
+    debt, silenced = _sweep_debt_split(m, extents)
+    if debt:
+        listed = [f"{container} step {st.n} ({st.where}) — {_clip(st.phrase)}"
+                  for container, st in debt]
+        warnings.append(
+            f"{len(debt)} anchored flow step(s) read like a DECISION that no business rule claims — "
+            f"the sweep worklist: {_shown(listed, 10, sep='; ', unit='step(s)')}. "
+            "Write the rule, or record "
+            "'<the step's anchor>: <why it is not a decision>' under a 'Sweep debt' "
+            "extras heading")
+    if silenced:
+        # A silence you cannot see reads exactly like having no findings — and this escape does not
+        # only quieten an advisory, it flips `rules_swept`, a DERIVED state. Same disclosure the
+        # granularity and runs-in families already print.
+        warnings.append(
+            f"{len(silenced)} decision-sounding step(s) suppressed by a recorded "
+            "'Sweep debt' line, and counted as SWEPT because of it: "
+            f"{_shown(silenced, 10, unit='step(s)')}. Re-read one by validating a copy with that "
+            "line removed")
+
+    return problems, warnings
+
+
+def rule_identity(r: BusinessRule) -> tuple[str, tuple[str, ...]]:
+    """A rule's CONTENT identity: normalized statement + the sorted set of its site anchors.
+
+    Ids cannot carry it — rules are authored by one agent per block, from disjoint id ranges, so
+    two agents stating one rule produce two different ids and the duplicate-id check stays silent."""
+    statement = re.sub(r"[^a-z0-9]+", " ", (r.statement or "").lower()).strip()
+    sites = tuple(sorted({(s.where or "").strip() for s in r.sites if (s.where or "").strip()}))
+    return (statement, sites)
 
 
 def triggered_entry_point_ids(m: ProjectModel) -> set[str]:
@@ -3018,6 +3293,15 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
         bad_anchor(f"{e.id} source", e.source)
     for g in m.glossary:
         bad_anchor(f"glossary '{g.term}' source", g.source)
+    for r in m.rules:
+        for i, site in enumerate(r.sites):
+            # A site is the map's strongest "this line acts" claim, so its anchor must NAME a line —
+            # `bad_file` would accept a bare `src/guard.py`, which skips the operative-line check
+            # and makes the claim unfalsifiable.
+            if site.where and not FILE_LINE_ANCHOR.match(site.where):
+                problems.append(f"{r.id} site[{i}] where: '{site.where}' is not a valid "
+                                "`path:line` anchor — an enforcement site names ONE operative "
+                                "line, so the `:line` is required")
     for group in group_forests(m):
         bad_anchor(f"{group.id} source", group.source)
         bad_file(f"{group.id} tech_source", group.tech_source)
@@ -3167,6 +3451,12 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         # inferred case — surfaced as an advisory elsewhere, not here).
         if ep.cadence_source and not url.match(ep.cadence_source):
             out.append((f"entry_points[{ep.component} {ep.kind}] cadence", ep.cadence_source))
+    for br in m.rules:
+        # a rule SITE is an L2 claim that this exact line enforces the decision — a dead anchor is
+        # a rule nobody can check, so it rides the same existence path as a security source.
+        for i, site in enumerate(br.sites):
+            if site.where and not url.match(site.where):
+                out.append((f"{br.id} site[{i}]", site.where))
     for s in m.security:
         # the Auth-check anchor is an L2 grounding claim — verify the enforcement site exists.
         # The canonical `security[].source` is a bare `path:line` (like Entity.source), so take the
@@ -3239,9 +3529,9 @@ def call_site_anchors(m: ProjectModel) -> list[tuple[str, str]]:
     """(label, anchor) for every anchor that claims AN ACTION FIRES AT THAT LINE.
 
     Deliberately NOT every anchor: a component/entity/entry-point `source` is supposed to point at a
-    definition, so running the operative-line check over those would flag correct anchors. Only three
-    families make a "this line acts" claim — backbone edge `where`, flow/sub-flow step `where`, and a
-    security surface's enforcement `source`."""
+    definition, so running the operative-line check over those would flag correct anchors. Only four
+    families make a "this line acts" claim — backbone edge `where`, flow/sub-flow step `where`, a
+    security surface's enforcement `source`, and a business rule's enforcement SITE."""
     out: list[tuple[str, str]] = []
     for e in m.edges:
         # `extends`/`implements` are DECLARED by the definition header — `class Sub(Base):` IS the
@@ -3259,6 +3549,12 @@ def call_site_anchors(m: ProjectModel) -> list[tuple[str, str]]:
     for s in m.security:
         if s.source:
             out.append((f"security '{s.surface}' auth check", s.source))
+    for r in m.rules:
+        # a site claims THIS LINE enforces the decision — the strongest "this line acts" claim in
+        # the map, so it belongs here more than any other family.
+        for i, site in enumerate(r.sites):
+            if site.where:
+                out.append((f"{r.id} site[{i}] ({site.why or 'enforcement site'})", site.where))
     return out
 
 
@@ -3527,6 +3823,13 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     warnings.extend(edge_warnings)
     warnings.extend(roleless_cd_verb_warnings(m))
     warnings.extend(duplicate_security_warnings(m))
+    # The pre-index symbol table committed beside the map, when there is one: it is what tells "the
+    # rule is enforced inside the function this step names" from "no rule claims this step".
+    # Without it the canary is conservative (more debt), never wrong in the other direction.
+    rule_problems, rule_warnings = check_rules_model(
+        m, load_map_extents(model_path) if model_path is not None else None)
+    problems.extend(rule_problems)
+    warnings.extend(rule_warnings)
     card_problems, card_warnings = _check_domain_cards(m)
     problems.extend(card_problems)
     warnings.extend(card_warnings)

@@ -79,7 +79,7 @@ MACHINE_READ_HEADINGS: tuple[str, ...] = (
     "audit exceptions", "balance exceptions", "coverage exceptions",
     "accepted duplications", "entry-point coverage", "happy path coverage",
     "persistence exceptions", "unclaimed surfaces", "drift exceptions",
-    "bucket vocabulary",
+    "bucket vocabulary", "sweep debt",
 )
 
 

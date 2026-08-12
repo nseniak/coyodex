@@ -33,6 +33,7 @@ from coyodex.validate_model import (
     check_anchor_existence_model,
     check_domain_relations,
     check_entity_sources_model,
+    rule_row_problems,
     domain_card_shape_problems,
     duplicate_security_warnings,
     roleless_cd_verb_warnings,
@@ -153,6 +154,14 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
                                  and mo.group(1) in known_ids)]
     problems += flow_problems + flow_warnings
     problems += _check_reference_shapes(m)
+    # The T7 rule rules (a statement, at least one site, an anchored OPERATIVE line per site) — all
+    # row-local, so a per-block fragment CAN answer them. Here rather than only at the lead's
+    # `validate` for the same reason the flow rules are: a block agent writing eight rules should
+    # fail on its own bad anchor in its own turn, not eight rules later in someone else's report.
+    # The WHOLE-MAP rules stay out — the sweep canary (a fragment holds one block's rules, so every
+    # other block's decisions would read as debt) and the `Component.files` gate (they live in a
+    # different fragment, so a block agent would fail its lint on a defect it cannot fix).
+    problems += rule_row_problems(m)
     if repo_root is not None:
         roots = [repo_root.resolve()]
         problems += check_anchor_existence_model(m, roots)

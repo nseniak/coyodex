@@ -19,6 +19,11 @@ from dataclasses import dataclass
 # line or a dot it is indistinguishable from a directory that forgot its trailing slash.
 FILE_ANCHOR = re.compile(r"^\S+\.\w+(?::\d+(?:-\d+)?)?$|^\S+:\d+(?:-\d+)?$")
 DIR_ANCHOR = re.compile(r"^\S+/$")
+# A file anchor that MUST name a line — the shape a "this line acts" claim has to have. `FILE_ANCHOR`
+# also accepts a bare dotted path, which is right for a `source` (where a thing LIVES) and wrong for
+# an enforcement site: without a line the operative-line check is skipped, so the claim becomes
+# unfalsifiable by construction. One definition, shared by `validate` and the published schema.
+FILE_LINE_ANCHOR = re.compile(r"^\S+:\d+(?:-\d+)?$")
 
 
 def is_file_anchor(s: str) -> bool:
