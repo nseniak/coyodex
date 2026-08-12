@@ -55,11 +55,11 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("HappyStep", "why"): {"description": "the prerequisite that fixes this step's position — "
                              "why it can't come earlier in the walk."},
     ("Group", "id"): {"pattern": ID_SHAPE.pattern, "description": "`S<n>` in subsystems[], "
-                       "`SD<n>` in subdomains[], `CAP<n>` in capabilities[] — same dataclass, "
-                       "three id forests."},
+                       "`SD<n>` in subdomains[], `CAP<n>` in capabilities[], `BLK<n>` in blocks[] "
+                       "— same dataclass, four id forests."},
     ("Group", "parent"): {"pattern": ID_SHAPE.pattern, "description": "the enclosing group's id, "
-                           "in the SAME forest (an S parents an S, an SD an SD, a CAP a CAP), or "
-                           "null for top-level."},
+                           "in the SAME forest (an S parents an S, an SD an SD, a CAP a CAP, a BLK "
+                           "a BLK), or null for top-level."},
     ("Group", "label"): {"enum": ["", *grammar.CAP_LABELS], "description": "CAPABILITY-ONLY: an "
                           "authored judgement about the use cases in this capability — core is the "
                           "product and the Happy Path walks every core capability. Nothing derives "
@@ -230,6 +230,31 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                 "string = INFERRED (no manifest witness): `validate` surfaces it as an "
                                 "advisory, never blocks; a CITED source that doesn't resolve IS a hard "
                                 "block under `--check-sources`."},
+    ("BusinessRule", "id"): {"pattern": r"^BR\d+$"},
+    ("BusinessRule", "statement"): {"description": "ONE product decision, in product language and "
+                                     "naming no component — the sharp test is 'could a product "
+                                     "person have decided otherwise?'. Two claims joined by 'and' "
+                                     "are two rules."},
+    ("BusinessRule", "block"): {"pattern": r"^BLK\d+$", "description": "the decision area this rule "
+                                 "belongs to, or null. Assigned at synthesis via `reconcile` (a "
+                                 "`BLK<n>` does not exist when the rule is authored), exactly as "
+                                 "`use_cases[].capability` is."},
+    ("BusinessRule", "access"): {"description": "this rule governs WHO MAY DO WHAT — the security "
+                                  "marker. The security surface table and the eval's auth coverage "
+                                  "read it."},
+    ("BusinessRule", "confidence"): {"enum": [*grammar.CONFIDENCE_VALUES, ""],
+                             "description": "verified = read in the code; inferred = deduced. '' = unstated."},
+    ("BusinessRule", "sites"): {"description": "every place the decision is ENFORCED. The rule's "
+                                 "components, its use-case steps and whether it has been swept are "
+                                 "DERIVED from these — there is no authored field for any of them."},
+    ("RuleSite", "where"): {"pattern": _ANCHOR_LINE.pattern, "description": _ANCHOR_DESC
+                             + " The OPERATIVE line — the one that acts. A definition header, an "
+                             "import, a comment or a blank line is a shape error, not a site."},
+    ("RuleSite", "why"): {"description": "what this line does FOR the rule ('rejects a non-owner "
+                           "caller') — reconstructible from the line itself, with no clause added."},
+    ("RuleSite", "no_call_site"): {"description": "explicit opt-out (mirrors Edge.no_call_site): "
+                                    "this rule is enforced by construction (a type, a schema "
+                                    "constraint, a config-wired guard) — `where` may be empty."},
     ("ProjectModel", "format"): {"const": FORMAT},
     ("ProjectModel", "commit"): {"description": "short commit sha the map was built at."},
     ("ProjectModel", "committed"): {"description": "YYYY-MM-DD."},

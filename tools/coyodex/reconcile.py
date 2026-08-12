@@ -34,7 +34,16 @@ import json
 from dataclasses import dataclass, field
 
 from coyodex.audit_model import apply_anchor_corrections
-from coyodex.model import Component, Dep, Entity, FlowStep, ProjectModel, UseCase, all_elements
+from coyodex.model import (
+    BusinessRule,
+    Component,
+    Dep,
+    Entity,
+    FlowStep,
+    ProjectModel,
+    UseCase,
+    all_elements,
+)
 from coyodex.validate_analysis import check_hierarchy
 
 
@@ -48,7 +57,9 @@ class ReconcileError(Exception):
 # others do: they are synthesis-time assignments over ~every element of their kind, and the ids they
 # reference (`CAPn`, and especially `EPn`, which assemble mints from content) do not exist when the
 # behavioral fragment is authored. Hand-writing them into fragments is the circle `reconcile` was
-# built to break.
+# built to break. `block` is the same shape one forest over: `BLK` ids are minted at synthesis while
+# rules are authored after the trace, so a fragment cannot know them — and a re-synthesis that
+# renumbers blocks would otherwise silently re-point every rule it touched.
 _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     "subsystem": (Component, "component"),
     "subdomain": (Entity, "entity"),
@@ -56,11 +67,15 @@ _SET_FIELD_OWNER: dict[str, tuple[type, str]] = {
     "entry_points": (UseCase, "use case"),
     "runs_in": (Component, "component"),
     "bucket": (Dep, "dependency"),
+    "block": (BusinessRule, "business rule"),
 }
 
 
 @dataclass
 class SetDirective:
+    #: EVERY key of `_SET_FIELD_OWNER` must appear here as an attribute — `assigned_fields()`
+    #: iterates that dict and calls `getattr`, so a dict entry with no attribute raises
+    #: `AttributeError` on every reconcile run, not just the ones that use the new field.
     ids: list[str]
     subsystem: str | None = None
     subdomain: str | None = None
@@ -68,6 +83,7 @@ class SetDirective:
     entry_points: list[str] | None = None
     runs_in: list[str] | None = None
     bucket: str | None = None
+    block: str | None = None
 
     def assigned_fields(self) -> list[str]:
         return [f for f in _SET_FIELD_OWNER if getattr(self, f) is not None]
@@ -198,7 +214,7 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         if not ids:
             raise ReconcileError(f"{label}: set[{i}].ids: must name at least one element")
         sd = SetDirective(ids=ids)
-        for fld in ("subsystem", "subdomain", "capability", "bucket"):
+        for fld in ("subsystem", "subdomain", "capability", "bucket", "block"):
             if fld in d:
                 if not isinstance(d[fld], str):
                     raise ReconcileError(f"{label}: set[{i}].{fld}: expected a string")
@@ -299,6 +315,7 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
     defined = set(elements) | {g.id for g in m.happy_path}
     units = {d.unit for d in m.deployment}
     cap_ids = {c.id for c in m.capabilities}
+    blk_ids = {b.id for b in m.blocks}
     ep_ids = {ep.id for ep in m.entry_points if ep.id}
     hier_parents: dict[str, str] = {}                # touched child → intended parent, for check_hierarchy
     for si, sd in enumerate(rec.sets):
@@ -325,6 +342,14 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                     if cap not in cap_ids:
                         problems.append(f"reconcile set[{si}] {eid}: capability '{cap}' is not a "
                                         f"defined capability (a `CAPn` in `capabilities[]`)")
+                elif fld == "block":
+                    # Same shape as `capability` one forest over: `check_hierarchy` picks the
+                    # expected parent from the CHILD's prefix, and a rule is not a block, so resolve
+                    # the target here — it must be a defined BLK id.
+                    blk = (sd.block or "").strip()
+                    if blk not in blk_ids:
+                        problems.append(f"reconcile set[{si}] {eid}: block '{blk}' is not a "
+                                        f"defined block (a `BLKn` in `blocks[]`)")
                 elif fld == "entry_points":
                     bad_eps = [e for e in (sd.entry_points or []) if e not in ep_ids]
                     if bad_eps:
@@ -413,6 +438,9 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             if sd.bucket is not None and isinstance(el, Dep):
                 el.bucket = sd.bucket
                 set_counts["bucket"] += 1
+            if sd.block is not None and isinstance(el, BusinessRule):
+                el.block = sd.block
+                set_counts["block"] += 1
     stats["reconcile_set"] = set_counts
     dropped_total = 0
     # Riding steps left unhealed by a report-only drop. Counted here so `assemble` can put the number

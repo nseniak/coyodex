@@ -36,7 +36,7 @@ from coyodex.model import (
 _PREFIX = re.compile(r"^[A-Z]+")
 _KIND = {"UC": "use_case", "HP": "happy_path_step", "S": "subsystem", "C": "component",
          "D": "dep", "SD": "subdomain", "E": "entity", "R": "role", "CAP": "capability",
-         "EP": "entry_point"}
+         "EP": "entry_point", "BLK": "block", "BR": "business_rule"}
 _MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
@@ -56,13 +56,16 @@ def _href(cell: str | None) -> str | None:
 def _group_member_ids(m: ProjectModel, gid: str) -> list[str]:
     """A group's DERIVED members (membership is single-source on the child): a subsystem holds its
     components + child subsystems; a subdomain holds its entities + child subdomains; a capability
-    holds its use cases + child capabilities."""
+    holds its use cases + child capabilities; a block holds its business rules + child blocks."""
     if gid.startswith("SD"):
         return ([e.id for e in m.entities if e.subdomain == gid]
                 + [sd.id for sd in m.subdomains if sd.parent == gid])
     if gid.startswith("CAP"):
         return ([u.id for u in m.use_cases if u.capability == gid]
                 + [c.id for c in m.capabilities if c.parent == gid])
+    if gid.startswith("BLK"):
+        return ([r.id for r in m.rules if r.block == gid]
+                + [b.id for b in m.blocks if b.parent == gid])
     return ([c.id for c in m.components if c.subsystem == gid]
             + [s.id for s in m.subsystems if s.parent == gid])
 
@@ -133,8 +136,16 @@ def legend_of(m: ProjectModel) -> list[dict[str, object]]:
     for r in m.roles:
         out.append({"id": r.id, "name": r.name, "kind": "role", "parent": "", "source": ""})
     for cap in m.capabilities:
-        out.append({"id": cap.id, "name": cap.name, "kind": "capability", "parent": "",
-                    "source": ""})
+        # `parent`/`source` like every other group row: a nested capability was invisible to every
+        # sub-agent handed this legend, because these two cells were hard-coded empty.
+        out.append({"id": cap.id, "name": cap.name, "kind": "capability",
+                    "parent": cap.parent or "", "source": _href(cap.source) or ""})
+    for blk in m.blocks:
+        out.append({"id": blk.id, "name": blk.name, "kind": "block", "parent": blk.parent or "",
+                    "source": _href(blk.source) or ""})
+    for br in m.rules:
+        out.append({"id": br.id, "name": br.statement, "kind": "business_rule",
+                    "parent": br.block or "", "source": ""})
     return out
 
 
@@ -161,7 +172,7 @@ def members_of(m: ProjectModel, gid: str) -> list[dict[str, object]]:
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 
 _USAGE = """usage: coyodex dump [<project-map.json>]
-                    [--id <ID> | --record <ID> | --edges <ID> | --members <Sn|SDn>
+                    [--id <ID> | --record <ID> | --edges <ID> | --members <Sn|SDn|CAPn|BLKn>
                      | --legend | --counts]
 
 Emit the parsed model as JSON — whole (no flag), or one FIXED slice:
@@ -169,7 +180,7 @@ Emit the parsed model as JSON — whole (no flag), or one FIXED slice:
                   (a group's children; a component's member entry points)
   --record <ID>   the element's full stored record
   --edges <ID>    the backbone edges into/out of a node: {"in": [...], "out": [...]}
-  --members <ID>  a subsystem's / subdomain's member records
+  --members <ID>  a group's member records (subsystem / subdomain / capability / block)
   --legend        every element as id · name · kind · parent · source — the shared id universe a
                   fan-out needs (builds kept hand-writing this walk and handing it to sub-agents)
   --counts        how many rows each array holds — the whole inventory, not assemble's C/D/E subset
@@ -234,9 +245,9 @@ def main(argv: list[str] | None = None) -> int:
     elif flag == "--edges":
         out: object = edges_of(m, eid)
     elif flag == "--members":
-        if _kind_of(eid) not in ("subsystem", "subdomain"):
-            print(f"ERROR: --members takes a subsystem (Sn) or subdomain (SDn) id, got '{eid}'",
-                  file=sys.stderr)
+        if _kind_of(eid) not in ("subsystem", "subdomain", "capability", "block"):
+            print("ERROR: --members takes a group id — a subsystem (Sn), subdomain (SDn), "
+                  f"capability (CAPn) or block (BLKn), got '{eid}'", file=sys.stderr)
             return 2
         if eid not in all_elements(m):
             print(f"ERROR: {eid} is not defined in the map", file=sys.stderr)

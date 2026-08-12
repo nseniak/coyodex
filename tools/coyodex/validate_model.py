@@ -50,6 +50,7 @@ from coyodex.model import (
     UseCase,
     all_elements,
     expanded_flow_steps,
+    group_forests,
     load_model,
 )
 from coyodex.validate_analysis import (
@@ -103,8 +104,8 @@ def _strings(value: object, skip_keys: frozenset[str] = frozenset({"format"})) -
 
 
 def _parents(m: ProjectModel) -> dict[str, str]:
-    """child id -> parent id, across all THREE forests (C→S, S→S, SD→SD, E→SD, UC→CAP, CAP→CAP) —
-    single-source, on the child.
+    """child id -> parent id, across all FOUR forests (C→S, S→S, SD→SD, E→SD, UC→CAP, CAP→CAP,
+    BR→BLK, BLK→BLK) — single-source, on the child.
 
     The capability arms were missing when capabilities shipped, and everything downstream of this
     map went with them: an undefined `capability`, an undefined capability `parent` and a CYCLE in
@@ -130,6 +131,12 @@ def _parents(m: ProjectModel) -> dict[str, str]:
     for u in m.use_cases:
         if u.capability:
             out[u.id] = u.capability
+    for blk in m.blocks:
+        if blk.parent:
+            out[blk.id] = blk.parent
+    for br in m.rules:
+        if br.block:
+            out[br.id] = br.block
     return out
 
 
@@ -182,6 +189,8 @@ def _check_ids(m: ProjectModel) -> list[str]:
         + [(e.id, "subdomain", e.subdomain) for e in m.entities]
         + [(c.id, "parent", c.parent) for c in m.capabilities]
         + [(u.id, "capability", u.capability) for u in m.use_cases]
+        + [(b.id, "parent", b.parent) for b in m.blocks]
+        + [(r.id, "block", r.block) for r in m.rules]
         + [(u.id, "entry_points", ep) for u in m.use_cases for ep in u.entry_points]
         + [(g.id, "uc", g.uc) for g in m.happy_path]
         + [(e.id, "relation target", r.target) for e in m.entities for r in e.relations]
@@ -239,6 +248,12 @@ def _referenced_ids(m: ProjectModel) -> set[str]:
     for cap in m.capabilities:
         if cap.parent:
             refs.add(cap.parent)
+    for blk in m.blocks:
+        if blk.parent:
+            refs.add(blk.parent)
+    for br in m.rules:
+        if br.block:
+            refs.add(br.block)                       # BLKn — a dangling block is a broken forest
     for f in m.flows:
         if f.uc:
             refs.add(f.uc)
@@ -2088,18 +2103,22 @@ def _check_group_tech(m: ProjectModel) -> tuple[list[str], list[str]]:
                 "nothing; author the tech label, or drop the anchor"
                 for s in m.subsystems
                 if (s.tech_source or "").strip() and not (s.tech or "").strip()]
-    # A capability groups USE CASES, so it has no stack either — same argument as the subdomain.
+    # A capability groups USE CASES and a block groups DECISIONS, so neither has a stack — same
+    # argument as the subdomain. One `Group` dataclass now backs FOUR forests: every per-kind guard
+    # here must enumerate all four, or the field it refuses is simply legal in the forest it forgot.
     problems += [f"{c.id} carries `tech` ('{(c.tech or c.tech_source).strip()}') — tech is a "
-                 "subsystem field; a capability groups use cases, not code"
-                 for c in m.capabilities
+                 f"subsystem field; a {kind} groups {what}, not code"
+                 for arr, kind, what in ((m.capabilities, "capability", "use cases"),
+                                         (m.blocks, "block", "decisions"))
+                 for c in arr
                  if (c.tech or "").strip() or (c.tech_source or "").strip()]
     return problems, warnings
 
 
 def _check_group_label(m: ProjectModel) -> list[str]:
     """`label` (core | supporting | platform) is a CAPABILITY field, and the mirror of
-    `_check_group_tech`: one `Group` dataclass backs three forests, so nothing structural stops a
-    subsystem or a subdomain from carrying one.
+    `_check_group_tech`: one `Group` dataclass backs FOUR forests, so nothing structural stops a
+    subsystem, a subdomain or a block from carrying one.
 
     Blocking on the wrong forest is the point. The label is an authored judgement about USE CASES —
     it is what lets the Happy-Path rule ask "does every core capability reach the walk?" instead of
@@ -2112,7 +2131,8 @@ def _check_group_label(m: ProjectModel) -> list[str]:
     `tech`-on-a-subdomain rule already refuses."""
     problems = [f"{g.id} carries `label` ('{g.label.strip()}') — label is a capability field "
                 f"(an authored judgement about use cases); drop it from this {kind}"
-                for arr, kind in ((m.subsystems, "subsystem"), (m.subdomains, "subdomain"))
+                for arr, kind in ((m.subsystems, "subsystem"), (m.subdomains, "subdomain"),
+                                  (m.blocks, "block"))
                 for g in arr if (g.label or "").strip()]
     problems += [f"{c.id} has an unknown `label` '{c.label.strip()}' — one of "
                  f"{', '.join(grammar.CAP_LABELS)}"
@@ -2799,7 +2819,7 @@ def _check_anchor_format(m: ProjectModel) -> list[str]:
         bad_anchor(f"{e.id} source", e.source)
     for g in m.glossary:
         bad_anchor(f"glossary '{g.term}' source", g.source)
-    for group in (*m.subsystems, *m.subdomains):
+    for group in group_forests(m):
         bad_anchor(f"{group.id} source", group.source)
         bad_file(f"{group.id} tech_source", group.tech_source)
     # Operational-table source fields that the viewer turns into code links — same bare-anchor rule as
@@ -2910,7 +2930,7 @@ def _anchor_pairs(m: ProjectModel) -> list[tuple[str, str]]:
         href = _first_link_of(u, [u.name, u.trigger_outcome])  # actors are role ids now, not a link cell
         if href and not url.match(href):
             out.append((u.id, href))
-    for group in (*m.subsystems, *m.subdomains):
+    for group in group_forests(m):
         if group.source and not url.match(group.source):
             out.append((f"{group.id} source", group.source))
         if group.tech_source and not url.match(group.tech_source):

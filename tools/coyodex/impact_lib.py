@@ -23,7 +23,7 @@ import re
 from dataclasses import dataclass, field
 
 from coyodex.anchors import parse_anchor
-from coyodex.model import ProjectModel
+from coyodex.model import ProjectModel, group_forests
 
 # ── `-U0` unified-diff hunks ──────────────────────────────────────────────────────────────────────
 
@@ -201,7 +201,7 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
     entities, deps (where_configured + evidence), backbone edges (`where`), flow steps (`where` —
     a step's own precise call site, so a changed line hits the step directly and ripples to its use
     case), entry points, glossary, security rows, run_commands, non_entity_types, and groups
-    (subsystems/subdomains — the territory seeds). HP / use cases / roles carry no anchors
+    (EVERY forest — subsystems/subdomains/capabilities/blocks — the territory seeds). HP / use cases / roles carry no anchors
     (ripple-only, by design — they inherit precision from their steps)."""
     out: list[AnchorRef] = []
 
@@ -243,7 +243,7 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
         add(_ref(f"security:{s.surface}", "security", s.source, "source"))
     for r in model.run_commands:
         add(_ref(f"run:{r.action}", "run_command", r.source, "source"))
-    for grp in list(model.subsystems) + list(model.subdomains):
+    for grp in group_forests(model):
         add(_ref(grp.id, "group", grp.source, "source"))
     return out
 

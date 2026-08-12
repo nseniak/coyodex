@@ -1248,7 +1248,8 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   `coyodex audit --json` — the machine-readable `{findings, worklist, themes, theme_counts}` payload
   built for this batching step; never regex-parse the human report; the same rule covers the model
   itself — look an id up with **`coyodex dump`** (`--id` resolves kind/name/source/members, `--record`
-  the full stored record, `--edges` a node's in/out backbone edges, `--members` a subsystem's members)
+  the full stored record, `--edges` a node's in/out backbone edges, `--members` a group's
+  members — a subsystem, subdomain, capability or block)
   rather than hand-parsing `project-map.json`, which is how a build ends up with a throwaway script
   that reads a field the schema renamed. **`dump` also reads a build FRAGMENT**, so use it during
   Phases 1-3 too instead of scripting over `build-fragments/*.json`.) **Batch on the payload's own

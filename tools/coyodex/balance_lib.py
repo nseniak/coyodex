@@ -28,7 +28,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
-from coyodex.model import ProjectModel
+from coyodex.model import ProjectModel, group_forests
 
 # ── the bands (named constants so calibration is one edit) ───────────────────────────────────────
 
@@ -152,7 +152,7 @@ def _container_dir(m: ProjectModel, elem_id: str) -> str | None:
             src, files = c.source, c.files
             break
     else:
-        for grp in (*m.subsystems, *m.subdomains):
+        for grp in group_forests(m):
             if grp.id == elem_id:
                 src = grp.source
                 break
@@ -173,11 +173,10 @@ def _container_dir(m: ProjectModel, elem_id: str) -> str | None:
 
 def _name_token(m: ProjectModel, elem_id: str) -> str | None:
     """The element's final name token, lowercased ('Audit log repository' -> 'repository')."""
-    for arr in (m.components, m.subsystems, m.subdomains, m.entities):
-        for el in arr:
-            if el.id == elem_id:
-                tokens = re.findall(r"[A-Za-z0-9]+", el.name)
-                return tokens[-1].lower() if tokens else None
+    for el in [*m.components, *group_forests(m), *m.entities]:
+        if el.id == elem_id:
+            tokens = re.findall(r"[A-Za-z0-9]+", el.name)
+            return tokens[-1].lower() if tokens else None
     return None
 
 
@@ -268,7 +267,7 @@ def near_miss_runs_in_keys(m: ProjectModel) -> list[str]:
 
 
 def _name_of(m: ProjectModel, gid: str) -> str:
-    for grp in (*m.subsystems, *m.subdomains):
+    for grp in group_forests(m):
         if grp.id == gid:
             return grp.name
     return gid
@@ -473,10 +472,9 @@ def _segmentwise_lcp(paths: list[str]) -> list[str]:
 
 
 def _display_name(m: ProjectModel, elem_id: str) -> str:
-    for arr in (m.components, m.subsystems, m.subdomains, m.entities):
-        for el in arr:
-            if el.id == elem_id:
-                return el.name
+    for el in [*m.components, *group_forests(m), *m.entities]:
+        if el.id == elem_id:
+            return el.name
     return elem_id
 
 
@@ -635,8 +633,15 @@ def fanout_summary(m: ProjectModel) -> tuple[int | None, int | None, float | Non
 
 
 def next_free_group_id(m: ProjectModel, prefix: str = "S") -> str:
-    """The next unused numeric id for the given group prefix ('S', 'SD' or 'CAP')."""
-    arr = ({"SD": m.subdomains, "CAP": m.capabilities}).get(prefix, m.subsystems)
+    """The next unused numeric id for the given group prefix ('S', 'SD', 'CAP' or 'BLK').
+
+    An unknown prefix would search the WRONG array and mint a colliding id in silence, so the
+    mapping is exhaustive over the forests rather than a `.get(prefix, m.subsystems)` fallback."""
+    arrays = {"S": m.subsystems, "SD": m.subdomains, "CAP": m.capabilities, "BLK": m.blocks}
+    if prefix not in arrays:
+        raise ValueError(f"next_free_group_id: unknown group prefix '{prefix}' — "
+                         f"one of {', '.join(arrays)}")
+    arr = arrays[prefix]
     pat = re.compile(rf"^{prefix}(\d+)$")
     used = [int(match.group(1)) for g in arr if (match := pat.match(g.id))]
     return f"{prefix}{max(used, default=0) + 1}"

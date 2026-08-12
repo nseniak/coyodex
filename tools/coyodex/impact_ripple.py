@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 from coyodex.impact_git import ImpactCore
 from coyodex.impact_lib import DirectHit
-from coyodex.model import FlowStep, ProjectModel
+from coyodex.model import FlowStep, ProjectModel, group_forests
 
 # ── the lattice ───────────────────────────────────────────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ RANK_DIRECT = {"line": 1, "symbol": 2, "file": 3}
 R_STRUCTURAL, R_BEHAVIORAL, R_DATA, R_CALLGRAPH, R_TERRITORY = 4, 5, 6, 7, 8
 
 # `CAP` and `EP` lead for the same first-match reason as model.ID_SHAPE.
-_ID_RE = re.compile(r"^(CAP|EP|SD|SF|UC|HP|C|D|E|S)(\d+)$")
+_ID_RE = re.compile(r"^(CAP|EP|SD|SF|UC|HP|BLK|BR|C|D|E|S)(\d+)$")
 
 # NOTE `EP` maps to the same bucket as the synthetic `ep:` key below. They are two spellings of one
 # element family: `ep:{source}` is change-impact's own CONTENT key (stable across rebuilds, which an
@@ -39,7 +39,13 @@ _ID_RE = re.compile(r"^(CAP|EP|SD|SF|UC|HP|C|D|E|S)(\d+)$")
 # resolve to `entry_points` so a reference and an impact row name the same thing.
 _KIND_BY_PREFIX = {"C": "components", "D": "deps", "E": "entities", "S": "subsystems",
                    "SD": "subdomains", "SF": "subflows", "UC": "use_cases", "HP": "happy_path",
-                   "CAP": "capabilities", "EP": "entry_points"}
+                   "CAP": "capabilities", "EP": "entry_points", "BLK": "blocks", "BR": "rules"}
+#: The `Group` forests, by their `_KIND_BY_PREFIX` name. `_Maps.parent_of` carries every forest's
+#: parent chain (`model.group_forests`), so the arm that WALKS that chain must enumerate the same
+#: four — a hit on a nested capability or block otherwise reports no parent while the identical
+#: subsystem shape does.
+_GROUP_KINDS = ("subsystems", "subdomains", "capabilities", "blocks")
+
 _KIND_BY_SYNTH = {"edge": "edges", "ep": "entry_points", "step": "flow_steps",
                   "glossary": "glossary", "security": "security", "run": "run_commands",
                   "net": "non_entity_types"}
@@ -86,7 +92,7 @@ class _Maps:
         for c in model.components:
             if c.subsystem:
                 self.parent_of[c.id] = c.subsystem
-        for g in list(model.subsystems) + list(model.subdomains):
+        for g in group_forests(model):
             if g.parent:
                 self.parent_of[g.id] = g.parent
         for e in model.entities:
@@ -311,7 +317,7 @@ def build_impact_result(model: ProjectModel, core: ImpactCore,
                     register_ripple(other, R_DATA, 1, [{"from": eid, "relation": "related"}], files)
         elif kind == "deps":
             behavioral(eid, [])
-        elif kind in ("subsystems", "subdomains"):
+        elif kind in _GROUP_KINDS:
             structural_chain(eid, "parent-of")
 
     # 3. the payload

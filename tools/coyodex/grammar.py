@@ -10,11 +10,13 @@ import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-# IDs by prefix. Multi-letter prefixes (UC, HP, SD, SF) must precede the single-letter ones (so `SD1`
-# never reads as `S` + stray text).
+# IDs by prefix. Multi-letter prefixes (UC, HP, SD, SF, BLK, BR) must precede the single-letter ones
+# (so `SD1` never reads as `S` + stray text).
 # Multi-letter prefixes lead: `CAP3` would otherwise fall through every alternative (`C\d+` fails on
-# the "A"), and `EP1` likewise. Same first-match rule as model.ID_SHAPE.
-ID_TOKEN = re.compile(r"\b(?:CAP\d+|EP\d+|UC\d+|HP\d+|SD\d+|SF\d+|C\d+|D\d+|E\d+|S\d+)\b")
+# the "A"), and `EP1` likewise. Same first-match rule as model.ID_SHAPE. This must stay in LOCKSTEP
+# with ID_SHAPE: `remap_element_ids` rewrites `[[ID]]` prose refs through this token, so a prefix
+# known to the model and unknown here is silently dropped on every merge.
+ID_TOKEN = re.compile(r"\b(?:CAP\d+|EP\d+|UC\d+|HP\d+|SD\d+|SF\d+|BLK\d+|BR\d+|C\d+|D\d+|E\d+|S\d+)\b")
 
 # Grouping: membership is ONE parent pointer carried on the child.
 # Nesting depth is ADVISORY, not capped: the viewer renders arbitrary depth, and the cycle check (not a

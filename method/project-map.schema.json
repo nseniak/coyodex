@@ -180,6 +180,18 @@
     "grounding": {
       "$ref": "#/$defs/Grounding"
     },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Group"
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/BusinessRule"
+      }
+    },
     "extras": {
       "type": "array",
       "items": {
@@ -246,8 +258,8 @@
       "properties": {
         "id": {
           "type": "string",
-          "pattern": "^(UC|HP|SD|SF|CAP|EP|C|D|E|S|R)\\d+$",
-          "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[], `CAP<n>` in capabilities[] \u2014 same dataclass, three id forests."
+          "pattern": "^(UC|HP|SD|SF|CAP|EP|BLK|BR|C|D|E|S|R)\\d+$",
+          "description": "`S<n>` in subsystems[], `SD<n>` in subdomains[], `CAP<n>` in capabilities[], `BLK<n>` in blocks[] \u2014 same dataclass, four id forests."
         },
         "name": {
           "type": "string"
@@ -260,8 +272,8 @@
             "string",
             "null"
           ],
-          "pattern": "^(UC|HP|SD|SF|CAP|EP|C|D|E|S|R)\\d+$",
-          "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD an SD, a CAP a CAP), or null for top-level."
+          "pattern": "^(UC|HP|SD|SF|CAP|EP|BLK|BR|C|D|E|S|R)\\d+$",
+          "description": "the enclosing group's id, in the SAME forest (an S parents an S, an SD an SD, a CAP a CAP, a BLK a BLK), or null for top-level."
         },
         "label": {
           "type": "string",
@@ -1214,6 +1226,74 @@
         }
       },
       "required": [],
+      "additionalProperties": false
+    },
+    "BusinessRule": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^BR\\d+$"
+        },
+        "statement": {
+          "type": "string",
+          "description": "ONE product decision, in product language and naming no component \u2014 the sharp test is 'could a product person have decided otherwise?'. Two claims joined by 'and' are two rules."
+        },
+        "block": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^BLK\\d+$",
+          "description": "the decision area this rule belongs to, or null. Assigned at synthesis via `reconcile` (a `BLK<n>` does not exist when the rule is authored), exactly as `use_cases[].capability` is."
+        },
+        "sites": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RuleSite"
+          },
+          "description": "every place the decision is ENFORCED. The rule's components, its use-case steps and whether it has been swept are DERIVED from these \u2014 there is no authored field for any of them."
+        },
+        "access": {
+          "type": "boolean",
+          "description": "this rule governs WHO MAY DO WHAT \u2014 the security marker. The security surface table and the eval's auth coverage read it."
+        },
+        "confidence": {
+          "type": "string",
+          "enum": [
+            "verified",
+            "inferred",
+            ""
+          ],
+          "description": "verified = read in the code; inferred = deduced. '' = unstated."
+        }
+      },
+      "required": [
+        "id",
+        "statement"
+      ],
+      "additionalProperties": false
+    },
+    "RuleSite": {
+      "type": "object",
+      "properties": {
+        "where": {
+          "type": "string",
+          "pattern": "^\\S+\\.\\w+(?::\\d+(?:-\\d+)?)?$|^\\S+:\\d+(?:-\\d+)?$",
+          "description": "bare `path:line` anchor: a repo-relative file path, optionally followed by `:line` or `:line-line` \u2014 never a markdown link (its label would just be the basename, fully derivable from the path, so it is never authored). The OPERATIVE line \u2014 the one that acts. A definition header, an import, a comment or a blank line is a shape error, not a site."
+        },
+        "why": {
+          "type": "string",
+          "description": "what this line does FOR the rule ('rejects a non-owner caller') \u2014 reconstructible from the line itself, with no clause added."
+        },
+        "no_call_site": {
+          "type": "boolean",
+          "description": "explicit opt-out (mirrors Edge.no_call_site): this rule is enforced by construction (a type, a schema constraint, a config-wired guard) \u2014 `where` may be empty."
+        }
+      },
+      "required": [
+        "where"
+      ],
       "additionalProperties": false
     },
     "ExtraSection": {

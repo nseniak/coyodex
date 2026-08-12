@@ -27,7 +27,7 @@ from pathlib import Path
 
 from coyodex import balance_lib, grammar
 from coyodex.anchors import FILEREF as _FILEREF
-from coyodex.model import ProjectModel, expanded_flow_steps, load_model
+from coyodex.model import ProjectModel, expanded_flow_steps, group_forests, load_model
 from coyodex.reporting import reset_full_lists, set_full_lists, shown as _shown
 
 # ── the audit vocabulary (shared with the eval, which imports it from here) ──────────────────────
@@ -620,7 +620,7 @@ def _endpoint_detail(m: ProjectModel) -> dict[str, str]:
         out[e.id] = desc
     for u in m.use_cases:
         out[u.id] = f"{u.id} = {u.name}" if u.name else u.id
-    for g in (*m.subsystems, *m.subdomains):
+    for g in group_forests(m):
         desc = f"{g.id} = {g.name}" if g.name else g.id
         h = href(g.source)
         if h:

@@ -27,7 +27,7 @@ FORMAT = "coyodex-map"
 # load), while uniqueness/resolution stay semantic (validate_model).
 # ORDER MATTERS: the alternation is first-match, so a multi-letter prefix must precede any prefix it
 # starts with — `CAP` before `C`, `EP` before `E` — else `CAP3` matches `C` and then fails on `AP3`.
-ID_SHAPE = re.compile(r"^(UC|HP|SD|SF|CAP|EP|C|D|E|S|R)\d+$")
+ID_SHAPE = re.compile(r"^(UC|HP|SD|SF|CAP|EP|BLK|BR|C|D|E|S|R)\d+$")
 
 
 class ModelError(ValueError):
@@ -418,6 +418,47 @@ class TestRow:
 
 
 @dataclass
+class RuleSite:
+    """One place a business rule is actually ENFORCED — the line that acts, not the line that
+    declares. Deliberately NOT an `EvidenceItem`: evidence CITES a claim ("re-read this and the
+    purpose still holds"), a site ASSERTS that this line does the deciding, which is what the
+    operative-line check (`call_site_anchors`) gates on. Folding `no_call_site` into `EvidenceItem`
+    would leak a call-site concept onto components, deps and test rows, which cite rather than act."""
+    where: str                   # bare `path:line` — the OPERATIVE line (a definition header, an
+                                 # import or a comment is a shape error, not a site)
+    why: str = ""                # what this line does FOR the rule ("rejects a non-owner caller")
+    no_call_site: bool = False   # declared absence, mirroring Edge/FlowStep.no_call_site: this rule
+                                 # is enforced by construction (a type, a schema constraint, a
+                                 # config-wired guard) and has no single line — `where` may be empty.
+
+
+@dataclass
+class BusinessRule:
+    """ONE product decision the code makes, plus every place it is enforced — the map's decision
+    layer (T7). Entities say what the product stores, flows say what it does in what order,
+    lifecycles say what states it moves through; nothing said what it DECIDES, which is exactly the
+    part a reader calls "product-specific".
+
+    EVERYTHING ELSE IS DERIVED. The components a rule lives in, the use-case steps that enforce it,
+    the entities it touches and whether it has been swept are all computed from `sites` against the
+    rest of the map (`validate_model.rule_components` / `rule_steps`). There is deliberately no
+    `components`, no `steps` and no `swept` field: an authored boolean asserting "I searched the
+    whole repo" is unfalsifiable, and hand-assigned data rendered as derived was the prototype's
+    most damaging failure — it looked correct on every screen."""
+    id: str                      # BRn
+    statement: str               # ONE decision, in product language, naming no component
+    block: str | None = None     # BLKn — the decision area this rule belongs to. Assigned at
+                                 # synthesis via `reconcile` (symmetric with UseCase.capability):
+                                 # `BLK` ids are minted at synthesis while rules are authored after
+                                 # the trace, so a fragment cannot know them, and a re-synthesis that
+                                 # renumbers blocks must not silently re-point every rule.
+    sites: list[RuleSite] = field(default_factory=list)
+    access: bool = False         # this rule governs WHO MAY DO WHAT — the security marker. The
+                                 # security surface table and the eval's `auth_surfaces` read it.
+    confidence: str = ""
+
+
+@dataclass
 class ExtraSection:
     """An unrecognized authored section, preserved verbatim so a converted map loses no content."""
     heading: str
@@ -530,6 +571,12 @@ class ProjectModel:
     tests_note: str = ""
     tests: list[TestRow] = field(default_factory=list)
     grounding: Grounding | None = None   # Phase-4 coverage over the L2 claim surface (see Grounding)
+    blocks: list[Group] = field(default_factory=list)   # T7 — the DECISION forest, a 4th `Group`
+                                     # forest beside capabilities/subsystems/subdomains. A block
+                                     # groups rules the way a capability groups use cases; its
+                                     # `purpose` carries the "what this area decides" line. Group's
+                                     # `label` and `tech` stay capability-/subsystem-only (validate).
+    rules: list[BusinessRule] = field(default_factory=list)  # the decisions themselves
     extras: list[ExtraSection] = field(default_factory=list)
 
 
@@ -542,7 +589,7 @@ class ProjectModel:
 ID_ARRAYS: dict[str, str] = {
     "use_cases": "UC", "happy_path": "HP", "capabilities": "CAP", "subsystems": "S",
     "components": "C", "deps": "D", "subdomains": "SD", "entities": "E", "roles": "R",
-    "subflows": "SF",
+    "subflows": "SF", "blocks": "BLK", "rules": "BR",
 }
 
 
@@ -561,6 +608,18 @@ def expanded_flow_steps(m: ProjectModel, f: Flow) -> list[FlowStep]:
         else:
             out.extend(sf.steps)
     return out
+
+
+def group_forests(m: ProjectModel) -> list[Group]:
+    """Every `Group` in the model, across ALL FOUR forests (subsystems, subdomains, capabilities,
+    blocks), in canonical order.
+
+    One dataclass backs four id spaces, and every consumer that walks "the groups" was hand-writing
+    `(*m.subsystems, *m.subdomains)` — which is how capability `source` anchors went unchecked by
+    `validate` for a whole release, and how a per-kind field guard silently legalises the field in
+    whatever forest the tuple forgot. Adding a forest must be one edit here, not eight in five
+    files."""
+    return [*m.subsystems, *m.subdomains, *m.capabilities, *m.blocks]
 
 
 def all_elements(m: ProjectModel) -> dict[str, object]:
@@ -663,6 +722,12 @@ def remap_element_ids(m: ProjectModel, remap: dict[str, str]) -> None:
         role.drives = _remap_str_ids(role.drives, remap)
     for tr in m.tests:
         tr.targets = [r(t) for t in tr.targets]
+    for blk in m.blocks:
+        if blk.parent:
+            blk.parent = r(blk.parent)
+    for br in m.rules:
+        if br.block:
+            br.block = r(br.block)
 
     def _brackets(s: str) -> str:
         return _BRACKET_REF.sub(

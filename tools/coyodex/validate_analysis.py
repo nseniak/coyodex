@@ -35,13 +35,15 @@ def _is_subsystem_id(i: str) -> bool:  # an `S` id, never a subdomain (`SD1` als
 
 def _expected_parent_kind(child: str) -> str:
     """The KIND a child's parent must be: entities (`E`) and subdomains (`SD`) nest under a SUBDOMAIN;
-    use cases (`UC`) and capabilities (`CAP`) nest under a CAPABILITY; components (`C`) and
-    subsystems (`S`) nest under a SUBSYSTEM.
+    use cases (`UC`) and capabilities (`CAP`) nest under a CAPABILITY; business rules (`BR`) and
+    blocks (`BLK`) nest under a BLOCK; components (`C`) and subsystems (`S`) nest under a SUBSYSTEM.
     Prefix order matters: `CAP1` also starts with "C" and `EP1` with "E", so the multi-letter
     namespaces are tested first (an entry point never has a parent, but it must not be mistaken
     for an entity if one is ever passed in)."""
     if child.startswith(("CAP", "UC")):
         return "capability"
+    if child.startswith(("BLK", "BR")):
+        return "block"
     if child.startswith("EP"):
         return "subsystem"       # entry points do not nest; never treat `EP1` as an entity
     return "subdomain" if child.startswith(("E", "SD")) else "subsystem"
@@ -50,22 +52,32 @@ def _expected_parent_kind(child: str) -> str:
 def _is_parent_kind(par: str, kind: str) -> bool:  # par's id-prefix matches the expected parent kind
     if kind == "capability":
         return par.startswith("CAP")
+    if kind == "block":
+        return par.startswith("BLK")
     return par.startswith("SD") if kind == "subdomain" else _is_subsystem_id(par)
+
+
+#: The wrong-parent message, per expected kind. A hard-coded "subdomain else subsystem" ternary
+#: already mis-reported a use case parented to a subsystem as "is not a subsystem (S…)"; a fourth
+#: forest makes that failure mode certain rather than merely present.
+_PARENT_KIND_LABEL = {"subdomain": "subdomain (SD…)", "capability": "capability (CAP…)",
+                      "block": "block (BLK…)", "subsystem": "subsystem (S…)"}
 
 
 def check_hierarchy(parents: dict[str, str], defined: set[str]) -> tuple[list[str], list[str]]:
     """Returns ``(problems, warnings)``. Parent must be the right KIND for the child
-    (component/subsystem -> `S`; entity/subdomain -> `SD`) and defined, with no nesting cycles — all
+    (component/subsystem -> `S`; entity/subdomain -> `SD`; use case/capability -> `CAP`;
+    rule/block -> `BLK`) and defined, with no nesting cycles — all
     BLOCKING. Nesting deeper than `DEEP_NEST_WARN` is a non-blocking ADVISORY: arbitrary depth is allowed
     (the viewer renders it), and the cycle check — not a depth cap — is what makes the walk terminate.
-    The two forests (component->S and entity->SD) share one walk — their id spaces are disjoint, so a
-    chain never crosses between them. The kind check is EXACT, not a bare prefix test: `SD` starts with
-    `S`, so a component pointed at a subdomain must still be flagged."""
+    The forests share one walk — their id spaces are disjoint, so a chain never crosses between them.
+    The kind check is EXACT, not a bare prefix test: `SD` starts with `S`, so a component pointed at a
+    subdomain must still be flagged."""
     problems: list[str] = []
     for child, par in parents.items():
         want = _expected_parent_kind(child)
         if not _is_parent_kind(par, want):
-            label = "subdomain (SD…)" if want == "subdomain" else "subsystem (S…)"
+            label = _PARENT_KIND_LABEL[want]
             problems.append(f"{child} parent {par} is not a {label}")
         elif par not in defined:
             problems.append(f"{child} parent {par} is undefined")
