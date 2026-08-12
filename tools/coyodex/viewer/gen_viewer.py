@@ -3126,6 +3126,7 @@ class ViewBundle(TypedDict):
                                      # synchronous cross-process calls behind it
     deploymentEnvironments: list[str]
     hasDeployment: bool
+    hasBusinessRules: bool         # the map states at least one business rule (T7) — gates the tab
     mermaidHp: str
     flowsMm: dict[str, str]
     flowsMap: dict[str, str]      # the same flows as leaf-only maps — the use-case view's second rendering
@@ -3226,6 +3227,7 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         deploymentCallEdges=gen_deployment_call_edges(graph) if deployment else {},
         deploymentEnvironments=deployment_environments(graph) if deployment else [],
         hasDeployment=deployment,
+        hasBusinessRules=bool((graph.get("rules_view") or {}).get("rules")),
         mermaidHp=gen_hp_mermaid(graph) if hp else "",
         # Flows are independent of the Happy Path — the use-case view needs them even with no HP — so
         # they come from graph["flows"] directly (empty when the map has no T6 section).

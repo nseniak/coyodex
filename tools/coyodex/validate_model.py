@@ -25,6 +25,7 @@ import re
 import sys
 from collections.abc import Callable, Container, Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 from coyodex import balance_lib, grammar
@@ -790,8 +791,13 @@ def anchored_flow_steps(m: ProjectModel) -> list[tuple[str, str, FlowStep]]:
     return out
 
 
+@lru_cache(maxsize=8192)
 def _anchor_line(raw: str) -> tuple[str, int | None] | None:
-    """(path, start line) of an anchor, or None when it is not a parseable file anchor."""
+    """(path, start line) of an anchor, or None when it is not a parseable file anchor.
+
+    Memoized: `rule_steps` compares every SITE against every anchored STEP, so a map with 55 rules
+    over 165 sites re-parsed the same ~200 anchor strings 57,000 times — 90 ms of the viewer
+    transport, nearly all of it one regex. The key space is bounded by the map's distinct anchors."""
     loc = parse_anchor(raw)
     return None if loc is None else (loc.path, loc.lo)
 

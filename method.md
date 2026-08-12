@@ -1089,8 +1089,9 @@ synthesis → parallel trace.**
   have to exist before it starts. Cut them from what the product DECIDES, not from what the code is
   shaped like: an area a product person would argue about ("who may cancel an order", "how a plan
   limit is applied"), 8-12 of them on a map this size. A block is a `Group` like a capability, so it
-  carries `name` + `purpose` (the "what this area decides" line) and nothing else — `label` and
-  `tech` are blocked on it, as they are on a subdomain. Leave `rules[]` empty: it is written after
+  carries `name` + `purpose` (the "what this area decides" line), and `source` only if the area has
+  one honest home directory — a block groups DECISIONS, not code, so the viewer never treats that
+  anchor as a file's owner. `label` and `tech` are blocked on it, as they are on a subdomain. Leave `rules[]` empty: it is written after
   the trace, when the flows exist to sweep.
   **Also assign each component's `subsystem`, each entity's `subdomain`, each use case's
   `capability` and its trigger `entry_points`, each component's `runs_in`, and any dep `bucket`

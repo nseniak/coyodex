@@ -51,6 +51,7 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 | *(extra authored fields)* | text | |
 | Runs in | list of process links (replaces the authored text field, which said the same thing) | opens that process's card |
 | In use cases | use-case links grouped by capability | |
+| How it decides | the T7 business rules enforced in this component, grouped by block; explicit empty state | opens the Business logic tab focused on that rule |
 | Triggered by | list of its T4 entry points (kind · trigger · source) | source link opens the code viewer |
 | *(kind)* | badge: "component" | |
 
@@ -112,6 +113,11 @@ leaves the code viewer alone).
 | Note | text | |
 | Source (the step's own `where`) | text link — opens the code viewer at the call site | |
 | Part of sub-flow | text (only on a step expanded from a named sub-flow: ⟨name⟩ + its SF id) | |
+| Decides | the T7 business rules enforced at THIS step, each marked when the rule is enforced inside the same function rather than at this exact line | opens the Business logic tab focused on that rule |
+
+The **Decides** row is keyed by *(use case, authoring container, step number)* — a step's number is
+unique per container, never per use case, so a sub-flow's step 2 and the flow's own step 2 are two
+different rows. Membership is DERIVED from the rule's site anchors, never authored.
 
 A **sub-flow** (a shared step sequence referenced by several flows) renders **inline**: its steps
 appear expanded inside each referencing flow's diagram, wrapped in a tinted block with the
@@ -239,6 +245,35 @@ name + Purpose.
 
 The **group-pair overview** arrow (the bundled crossings between two groups) uses the same title +
 `connections` / `relations` pill, then lists each crossing with a count in the body.
+
+---
+
+## Business logic (the T7 tab)
+
+The decisions the product makes, as a rail of **decision areas** (blocks) and one pane of rules per
+area. Not a diagram: a decision is not a box, and drawing it as one would invent a structure the map
+does not have.
+
+| Property | Display | Action |
+|---|---|---|
+| The decision | heading (the rule's statement, in product language) | |
+| access / sweep debt / unverified / confidence | badges | |
+| Site | *line — component(s)*, one row per enforcement site | the line opens the code viewer; a component chip locates it in its structural diagram |
+| Enforced at | step chips: *use case* step *n* (with the sub-flow's id when the step was authored in one) | opens that use case's flow |
+| Touches | entity chips, only where a reached step names the entity | locates the entity's card |
+
+Three site states, and the difference between them is the whole point:
+
+- **verified** — the anchor resolves and at least one component claims the file. Every owner is
+  listed; a file several components claim shows all of them, because picking one would be a guess.
+- **declared absence** — the rule is enforced by construction (a type, a schema constraint, a
+  config-wired guard) and says so. Not a gap.
+- **unverified** — the anchor resolves to a file NO component claims, so nothing can check it. Drawn
+  dashed and stamped, never blank: a rule that renders bare must not look like a rule nobody wrote.
+
+A rule's components, its steps, its entities and its sweep state are all **derived** from the site
+anchors by the same Python implementation the checks and the markdown view use. Nothing on this tab
+is a second answer computed in the browser.
 
 ---
 

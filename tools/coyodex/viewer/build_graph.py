@@ -139,6 +139,14 @@ class GraphDict(TypedDict):
                                                 # touched by no flow) — the overlay dims those.
     completeness: dict[str, int]                # the four-state counts (traced / untraced / claimed /
                                                 # off-spine-in-core) shown on the System tab
+    # ── T7, the decision layer (views._build_rules_view) ──
+    # {blocks:[{id,name,purpose,parent}], rules:[{id,statement,block,access,confidence,
+    #  sites:[{where,why,declared,components:[{id,name}]}], steps:[{uc,ucName,container,n,strength,
+    #  phrase}], entities:[{id,name}], swept, unverified}], byComponent:{C-id:[BR…]},
+    #  byStep:{"uc:container:n":[BR…]}}. EVERY field under a rule except statement/block/access/
+    #  confidence/sites is DERIVED server-side by the one Python implementation — the frontend must
+    #  never re-derive an owner or a step link from `sites`.
+    rules_view: dict[str, object]
     non_entity_types: list[dict[str, str]]  # deliberately-unmodelled types: {name, source, why}
     deployment: list[dict[str, object]]     # {unit, runs_on, exposed_as, config_source, variants: [{env, source}…]}
     environments: list[str]                 # declared deployment-variant names (compose profiles / stages); [] = none

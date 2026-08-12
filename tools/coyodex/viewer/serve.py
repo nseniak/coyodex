@@ -391,7 +391,12 @@ def project_view(proj: Project) -> ViewBundle:
     The frontend fetches this at boot from /p/<slug>/api/view and renders it."""
     if proj.view is not None:
         return proj.view
-    graph = model_to_graph(load_model(proj.map_json.read_text(encoding="utf-8")))
+    # The pre-index symbol table, so a rule enforced inside the function a flow step names shows as
+    # "same function as this step" rather than not at all. The markdown view has no such table and
+    # degrades to exact-only — the viewer is where the finer answer is available, and using it here
+    # keeps the graph a pure function of (model, extents).
+    graph = model_to_graph(load_model(proj.map_json.read_text(encoding="utf-8")),
+                           load_map_extents(proj.map_json))
     report = proj.map_json.parent / CHANGE_REPORT
     proj.view = build_view_bundle(graph, report if report.is_file() else None, proj.map_json.parent)
     return proj.view

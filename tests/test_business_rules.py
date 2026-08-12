@@ -12,6 +12,8 @@ Run either way (needs an editable install: `make deps`):
 """
 from __future__ import annotations
 
+from typing import cast
+
 import dataclasses
 import json
 import os
@@ -67,7 +69,7 @@ from coyodex.reconcile import (
     load_reconcile,
     validate_reconcile,
 )
-from coyodex.views import model_to_markdown
+from coyodex.views import model_to_graph, model_to_markdown
 from coyodex.validate_model import (
     _referenced_ids,
     call_site_anchors,
@@ -1675,6 +1677,254 @@ def test_the_granularity_advisory_is_recordable() -> None:
     m.extras = [ExtraSection(heading="Balance exceptions",
                              body="BLK1: each guard really is its own decision here")]
     assert not any("nearly all single-site" in w for w in rule_warnings(m))
+
+
+# ═══ Phase 7 — the viewer ═════════════════════════════════════════════════════════
+# The frontend cannot call Python, so the ONLY guard against a second derivation in JS is that the
+# transport carries the answer and the JS never recomputes it. These tests hold both halves.
+
+VIEWER = REPO / "tools" / "coyodex" / "viewer"
+VIEWER_JS = (VIEWER / "viewer.js").read_text(encoding="utf-8")
+
+
+def rules_view_of(m: ProjectModel) -> dict:
+    """The T7 transport out of the graph. `GraphDict` types the value `object` (every payload in it
+    is freeform JSON), so the cast belongs here once rather than at each read."""
+    return cast(dict, model_to_graph(m)["rules_view"])
+
+
+def make_viewer_model() -> ProjectModel:
+    m = make_checkable_model()
+    m.components.append(Component(id="C2", name="Billing", purpose="p", files=["src/guard.py"]))
+    m.rules.append(BusinessRule(id="BR2", statement="A cancelled order cannot be cancelled again.",
+                                block="BLK1", access=True, sites=[
+                                    RuleSite(where="src/guard.py:4", why="short-circuits"),
+                                    RuleSite(why="the status enum forbids it", no_call_site=True)]))
+    m.rules.append(BusinessRule(id="BR3", statement="Only an admin may refund.",
+                                sites=[RuleSite(where="src/nobody.py:9", why="the admin gate")]))
+    return m
+
+
+def test_the_viewer_payload_equals_the_python_helper() -> None:
+    """The `capability_touch` precedent: the transport is the ONE derivation's output, not a
+    parallel one. If these ever disagree, the tab is showing something the checks do not."""
+    m = make_viewer_model()
+    rv = rules_view_of(m)
+    owners = component_file_owners(m)
+    for r, out in zip(m.rules, rv["rules"]):
+        assert out["id"] == r.id
+        assert [[c["id"] for c in s["components"]] for s in out["sites"]] == [
+            site_components(m, site, owners) if (site.where or "").strip() else []
+            for site in r.sites]
+        assert [(l["uc"], l["container"], l["n"], l["strength"]) for l in out["steps"]] == [
+            (l.uc, l.container, l.n, l.strength) for l in rule_steps(m, r)]
+        assert [e["id"] for e in out["entities"]] == rule_entities(m, r)
+        assert out["swept"] == rules_swept(m)[r.id]
+
+
+def test_a_shared_file_reaches_the_browser_with_every_owner() -> None:
+    m = make_viewer_model()
+    rv = rules_view_of(m)
+    site = rv["rules"][0]["sites"][0]
+    assert [c["id"] for c in site["components"]] == ["C1", "C2"]
+
+
+def test_an_unverified_rule_is_stamped_in_the_transport() -> None:
+    """A site nobody owns must arrive already marked — a rule that renders bare must not look like
+    a rule nobody wrote."""
+    rv = rules_view_of(make_viewer_model())
+    by_id = {r["id"]: r for r in rv["rules"]}
+    assert by_id["BR3"]["unverified"] is True
+    assert by_id["BR2"]["unverified"] is False       # its second site is a DECLARED absence
+    assert by_id["BR2"]["sites"][1]["declared"] is True
+
+
+def test_the_two_inversions_key_the_way_the_panes_look_up() -> None:
+    rv = rules_view_of(make_viewer_model())
+    assert rv["byComponent"]["C1"] == ["BR1", "BR2"]
+    assert rv["byComponent"]["C2"] == ["BR1", "BR2"]     # the shared file, both owners
+    assert rv["byStep"]["UC1:UC1:2"] == ["BR1"]          # (uc, authoring container, n)
+
+
+def test_blocks_and_rules_are_graph_nodes() -> None:
+    """`test_convert_and_views` requires every defined element to be a node; without this the
+    moment a fixture gains rules that test fails."""
+    g = model_to_graph(make_viewer_model())
+    assert g["nodes"]["BLK1"]["kind"] == "block" and g["nodes"]["BR1"]["kind"] == "rule"
+
+
+def test_the_bundle_gates_the_tab_on_the_map_having_rules() -> None:
+    from coyodex.viewer import gen_viewer
+    assert gen_viewer.build_view_bundle(model_to_graph(make_viewer_model()), None,
+                                        VIEWER)["hasBusinessRules"] is True
+    assert gen_viewer.build_view_bundle(model_to_graph(make_base_model()), None,
+                                        VIEWER)["hasBusinessRules"] is False
+
+
+# --- the JS holds no second derivation --------------------------------------------
+
+def _js_code(text: str) -> str:
+    """`text` with line comments stripped — the same discipline `test_viewer_js`'s field-name check
+    uses: prose ABOUT a field is not a use of it, and a rule that cannot tell them apart bans
+    explaining the design."""
+    out = []
+    for line in text.splitlines():
+        out.append("" if line.lstrip().startswith("//") else line.split("//", 1)[0])
+    return "\n".join(out)
+
+
+def _js_function(name: str) -> str:
+    start = VIEWER_JS.index("function " + name + "(")
+    return _js_code(VIEWER_JS[start:VIEWER_JS.index("\nfunction ", start + 10)])
+
+
+def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
+    """The one guard that matters. The three rule-rendering functions may READ `components` /
+    `steps` / `swept` off the payload; the moment one of them resolves an owner from a component's
+    `files`, or matches a step by comparing anchors, it is a second implementation in a language
+    the checks cannot see.
+
+    SCOPE: a substring ban over four tokens, which one level of indirection defeats (`srcCell`
+    parses an anchor to build a code LINK, which is not a derivation and is why it is not banned).
+    It catches the direct rewrite, not a determined one."""
+    for fn in ("renderRules", "decidesHtml", "stepRulesHtml"):
+        body = _js_function(fn)
+        # Reading a node to check its KIND is how every info-pane function guards; deriving an
+        # OWNER from `files`, or a step link by parsing anchors, is the second implementation.
+        for shape in (".files", "whereNode(", "parseStepEid(", "COMP_LOOKUP"):
+            assert shape not in body, (fn, shape)
+    # ...and it DOES read the server-computed answers.
+    assert "site.components" in _js_function("renderRules")
+    assert "r.swept" in _js_function("renderRules")
+    assert "l.strength" in _js_function("renderRules")
+
+
+def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
+    """A view that is registered in five of six places renders nothing, or renders and cannot be
+    navigated back to. Each of these is one of the six."""
+    html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
+    assert 'data-view="rules"' in html
+    assert "HAS_RULES = !!b.hasBusinessRules" in VIEWER_JS               # applyBundle
+    assert "'tests', 'rules'" in VIEWER_JS                              # TEXT_VIEWS
+    assert "kind === 'rules'" in VIEWER_JS                              # topView
+    assert "if (s.kind === 'rules') return 'Business logic'" in VIEWER_JS  # stateTitle
+    assert "if (s.kind === 'rules') return [{ kind: 'rules' }]" in VIEWER_JS  # VIEW_Q trail
+    assert "rules: 'What does this product DECIDE" in VIEWER_JS         # the view's question
+    assert "if (s.kind === 'rules') { renderRules(s);" in VIEWER_JS     # render
+    assert "b.dataset.view === 'rules' && !HAS_RULES" in VIEWER_JS      # the tab gate
+
+
+def test_same_tab_navigation_carries_the_pane_keys() -> None:
+    """`stateKey` and `pushContentPoint` are two hand-written lists of the same fields. A key in
+    one and not the other is a navigation that silently no-ops, or a pane that silently resets."""
+    key = VIEWER_JS[VIEWER_JS.index("function stateKey(s)"):VIEWER_JS.index("function snapContent")]
+    push = VIEWER_JS[VIEWER_JS.index("function pushContentPoint"):VIEWER_JS.index("function go(state")]
+    for field in ("store", "entity", "blk", "br"):
+        assert f"s.{field}" in key, field
+        assert f"{field}: c.{field}" in push, field
+
+
+def test_the_flow_step_pane_uses_a_new_class_and_keys_by_container() -> None:
+    start = VIEWER_JS.index("function flowStepInfoHtml(uc, i, numbered)")
+    pane = VIEWER_JS[start:VIEWER_JS.index("\n// One actor's card", start)]
+    assert "stepRulesHtml(uc, st)" in pane
+    assert "(st.sf || uc)" in pane            # the AUTHORING container, not the use case
+    assert 'class="brref"' in pane            # a new class name
+    # The same four the viewer-js negative contract names, matched in their RENDERED form.
+    for forbidden in ('class="flowpairref"', 'class="endpoints"', "ridesref", 'class="flowref"'):
+        assert forbidden not in _js_code(pane), forbidden
+
+
+def test_the_impact_summary_names_every_bucket_the_ripple_can_produce() -> None:
+    """`showImpactSummary` iterates a closed list, so a bucket it cannot name is a row that
+    vanishes while the direct/ripple counts still include it."""
+    from coyodex.impact_ripple import _KIND_BY_PREFIX, _KIND_BY_SYNTH
+    labels = VIEWER_JS[VIEWER_JS.index("const IMP_TYPE_LABEL = {"):]
+    labels = labels[:labels.index("};")]
+    missing = [k for k in set(_KIND_BY_PREFIX.values()) | set(_KIND_BY_SYNTH.values())
+               if f"{k}:" not in labels]
+    assert not missing, missing
+
+
+def test_the_tab_renders_no_internal_field_name() -> None:
+    """`no_call_site` is a model field; the reader sees "enforced by construction"."""
+    start = VIEWER_JS.index("function renderRules(s)")
+    body = VIEWER_JS[start:VIEWER_JS.index("\nfunction ", start + 10)]
+    code = _js_code(body)
+    for field in ("no_call_site", "rules_view", "byComponent"):
+        assert "'" + field not in code and '"' + field not in code, field
+
+
+# --- reconciled after the phase-7 review -------------------------------------------
+
+def test_the_transport_takes_the_symbol_table_and_the_markdown_view_does_not() -> None:
+    """The viewer's finer answer. `model_to_graph(m, extents)` is what makes "inside the same
+    function as this step" reachable; the markdown view has no table and stays exact-only, so the
+    two views are consistent about what each of them can know."""
+    m = make_swept_model()
+    m.flows[0].steps[1].src = "C2"                       # no structural coverage; the anchor decides
+    m.rules[0].sites = [RuleSite(where="src/guard.py:8", why="3 lines from the step")]
+    ext = {"src/guard.py": [(1, 10, "cancel_order", "function")]}
+    assert [s["strength"] for s in rules_view_of(m)["rules"][0]["steps"]] == []
+    with_ext = cast(dict, model_to_graph(m, ext)["rules_view"])
+    assert [(s["uc"], s["n"], s["strength"]) for s in with_ext["rules"][0]["steps"]] \
+        == [("UC1", 2, "symbol")]
+
+
+def test_the_step_chip_carries_the_containers_name_never_its_id() -> None:
+    """The viewer shows element NAMES. A sub-flow's `SFn` on screen is an internal id."""
+    m = make_checkable_model()
+    m.subflows = [SubFlow(id="SF1", name="Owner check", steps=[
+        FlowStep(n=2, src="C1", dst="E1", phrase="checks", where="src/guard.py:3")])]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="C1", phrase="runs it", subflow="SF1")]
+    step = rules_view_of(m)["rules"][0]["steps"][0]
+    assert step["container"] == "SF1" and step["containerName"] == "Owner check"
+    assert "esc(l.containerName || l.container)" in VIEWER_JS
+
+
+def test_a_block_is_never_a_files_primary_in_the_browser() -> None:
+    """A node carrying a `file` joins `filetree.node_path_index`, where a non-group kind sorts
+    FIRST. A block with a `source` then took over the file browser's selection for that file and
+    landed the reader on the Dependencies tab instead of the component that owns it. A capability —
+    the same never-drawn shape — passes None for exactly this reason."""
+    from coyodex.viewer.filetree import node_path_index
+    m = make_checkable_model()
+    m.blocks[0].source = "src/guard.py:1"
+    g = model_to_graph(m)
+    assert g["nodes"]["BLK1"].get("file") in (None, "")
+    # The primary is the COMPONENT that owns the file, as it was before blocks existed.
+    assert node_path_index(g).get("src/guard.py", [])[0] == "C1"
+    assert "BLK1" not in node_path_index(g).get("src/guard.py", [])
+
+
+def test_a_search_hit_on_a_block_or_a_rule_lands_on_the_business_logic_tab() -> None:
+    """Every graph node is indexed by the search, so a kind with no `selectTargetFor` case falls
+    through to the default and dead-ends on Dependencies, showing nothing."""
+    target = VIEWER_JS[VIEWER_JS.index("function selectTargetFor(id)"):
+                       VIEWER_JS.index("function selectFromTree(nodeId)")]
+    assert "case 'block':" in target and "kind: 'rules', blk: id" in target
+    assert "case 'rule':" in target and "blk: n.parent || 'none', br: id" in target
+
+
+def test_an_impact_row_for_a_rule_site_is_readable_and_clickable() -> None:
+    """The synthetic id is `rule:BR1:0`; `impName` returned everything after the first colon, so
+    the row read `BR1:0` — and clicking it matched no node and did nothing."""
+    assert "function parseRuleSiteEid(id)" in VIEWER_JS
+    goto = VIEWER_JS[VIEWER_JS.index("function gotoImpactEid(id)"):]
+    assert "const rid = parseRuleSiteEid(id);" in goto[:600]
+
+
+def test_the_pane_pill_and_the_search_badge_speak_the_readers_language() -> None:
+    assert "block: 'decision area', rule: 'business rule'" in VIEWER_JS
+    assert "KIND_LABEL = { dep: 'dependency', block: 'decision area', rule: 'business rule' }" \
+        in VIEWER_JS
+
+
+def test_the_rail_nests_child_blocks_under_their_parent() -> None:
+    """`blocks[].parent` is in the payload and `validate` supports it, so a flat rail draws a child
+    as its parent's sibling — and makes the field dead payload on a public contract."""
+    body = _js_function("renderRules")
+    assert "kids.set(b.parent || ''" in body and "walk(b.id, depth + 1, seen)" in body
 
 
 if __name__ == "__main__":

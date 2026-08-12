@@ -33,6 +33,7 @@ from coyodex.model import (
     all_elements,
 )
 from coyodex.validate_analysis import strip_anchor
+from coyodex.impact_git import Extents
 from coyodex.validate_model import (
     STEP_LINK_EXACT,
     anchored_flow_steps,
@@ -40,7 +41,10 @@ from coyodex.validate_model import (
     completeness_counts,
     component_file_owners,
     element_capabilities,
+    rule_components,
+    rule_entities,
     rule_steps,
+    rules_swept,
     site_components,
     unexplained_persistence_pairs,
 )
@@ -840,7 +844,70 @@ def _build_data_view(m: ProjectModel, nodes: dict[str, Node]) -> dict[str, objec
             "unassigned_channels": unassigned, "access": access}
 
 
-def model_to_graph(m: ProjectModel) -> GraphDict:
+def _build_rules_view(m: ProjectModel, extents: Extents | None) -> dict[str, object]:
+    """The T7 transport — every rule with its DERIVED components, steps, entities and sweep state.
+
+    Computed HERE because the typed model is in hand and `validate_model` owns the one
+    implementation: the frontend cannot call Python, and a second derivation in JS is exactly the
+    drift this repo keeps paying for. `tests/test_business_rules.py` asserts this payload equals the
+    Python helper, the way `capability_touch` is pinned.
+
+    `byComponent` and `byStep` are INVERSIONS of the same data, not second derivations — the
+    component pane and the flow-step pane look up by key instead of scanning every rule."""
+    owners = component_file_owners(m)
+    comp_names = {c.id: c.name for c in m.components}
+    ent_names = {e.id: e.name for e in m.entities}
+    uc_names = {u.id: u.name for u in m.use_cases}
+    # `containerName` rides along because the UI shows NAMES, never ids — and a step's authoring
+    # container is an `SFn` whenever it was written in a sub-flow.
+    sf_names = {sf.id: sf.name for sf in m.subflows}
+    anchored = anchored_flow_steps(m)
+    by_component: dict[str, list[str]] = {}
+    by_step: dict[str, list[str]] = {}
+    swept = rules_swept(m, extents)
+    out_rules: list[dict[str, object]] = []
+    for r in m.rules:
+        sites: list[dict[str, object]] = []
+        for site in r.sites:
+            where = (site.where or "").strip()
+            comps = site_components(m, site, owners) if where else []
+            sites.append({
+                "where": where,
+                "why": site.why,
+                "declared": bool(site.no_call_site),
+                # EVERY owner: `Component.files` is not disjoint, and picking one is the failure
+                # this layer exists to prevent. The UI renders them all.
+                "components": [{"id": c, "name": comp_names.get(c, c)} for c in comps],
+            })
+        steps = [{"uc": l.uc, "ucName": uc_names.get(l.uc, l.uc), "container": l.container,
+                  "containerName": sf_names.get(l.container, ""),
+                  "n": l.n, "strength": l.strength, "phrase": l.phrase}
+                 for l in rule_steps(m, r, extents, anchored)]
+        for c in rule_components(m, r, owners):
+            by_component.setdefault(c, []).append(r.id)
+        for l in steps:
+            by_step.setdefault(f"{l['uc']}:{l['container']}:{l['n']}", []).append(r.id)
+        out_rules.append({
+            "id": r.id, "statement": r.statement, "block": r.block or "",
+            "access": r.access, "confidence": r.confidence,
+            "sites": sites, "steps": steps,
+            "entities": [{"id": e, "name": ent_names.get(e, e)}
+                         for e in rule_entities(m, r, extents, anchored)],
+            "swept": bool(swept.get(r.id)),
+            # A rule with an anchored site nobody owns renders bare — a real state, stamped, never
+            # blank. `no_call_site` sites are a DECLARED absence and never count as unverified.
+            "unverified": any(not s["declared"] and not s["components"] for s in sites),
+        })
+    return {
+        "blocks": [{"id": b.id, "name": b.name, "purpose": b.purpose, "parent": b.parent or ""}
+                   for b in m.blocks],
+        "rules": out_rules,
+        "byComponent": by_component,
+        "byStep": by_step,
+    }
+
+
+def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict:
     """The model as the viewer's GraphDict, the shape `gen_viewer.build_view_bundle` consumes. A
     component's drill file prefers its canonical `source` and falls back to its `entry_point`,
     then a link found in its free-text fields."""
@@ -885,6 +952,24 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
                                "Parent": parent_name,
                                **({"Label": cap.label} if cap.label else {})},
                               cap.parent)
+    # Blocks and rules are never DRAWN as boxes — they group decisions, not code — but they must
+    # reach the browser as nodes all the same: `test_convert_and_views` requires every defined
+    # element to be one, and the Business logic tab shows NAMES, never ids.
+    block_names = {b.id: b.name for b in m.blocks}
+    for blk in m.blocks:
+        # `None` for the drill file, exactly like a capability. A node carrying a `file` joins
+        # `filetree.node_path_index`, where a non-group kind sorts FIRST and becomes that path's
+        # primary — so a block with a `source` took over the file browser's selection for that file
+        # and landed the reader on the Dependencies tab instead of the component that owns it.
+        nodes[blk.id] = _node(blk, "block", blk.name, None,
+                              {"Block": blk.name, "Purpose": blk.purpose,
+                               "Parent": block_names.get(blk.parent or "", blk.parent or "")},
+                              blk.parent)
+    for br in m.rules:
+        nodes[br.id] = _node(br, "rule", br.statement, None,
+                             {"Rule": br.statement,
+                              "Block": block_names.get(br.block or "", br.block or "")},
+                             br.block)
     # T4 entry points grouped by the component they name — surfaced as each component's "Triggered by"
     # list in the info pane (the standalone table also lives on the System tab). Each flat entry point
     # also carries `index` = its position within its component's list, so the viewer's search hits and
@@ -1061,6 +1146,8 @@ def model_to_graph(m: ProjectModel) -> GraphDict:
         # implementation in JS is exactly the drift this repo keeps paying for elsewhere.
         "capability_touch": {eid: sorted(caps)
                              for eid, caps in element_capabilities(m).items()},
+        # ── the T7 decision layer (see `_build_rules_view`) ──
+        "rules_view": _build_rules_view(m, extents),
         "completeness": completeness_counts(m),
         # ── reference collections (System / Tests tabs) — carried straight from the model ──
         "run_commands": [asdict(r) for r in m.run_commands],
