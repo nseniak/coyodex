@@ -18,6 +18,7 @@ from dataclasses import asdict
 
 from coyodex import grammar
 from coyodex.model import (
+    BusinessRule,
     Component,
     Dep,
     Entity,
@@ -25,6 +26,7 @@ from coyodex.model import (
     FlowStep,
     Group,
     ProjectModel,
+    RuleSite,
     StateMachine,
     Store,
     TestRow,
@@ -32,9 +34,14 @@ from coyodex.model import (
 )
 from coyodex.validate_analysis import strip_anchor
 from coyodex.validate_model import (
+    STEP_LINK_EXACT,
+    anchored_flow_steps,
     capability_elements,
     completeness_counts,
+    component_file_owners,
     element_capabilities,
+    rule_steps,
+    site_components,
     unexplained_persistence_pairs,
 )
 from coyodex.viewer.build_graph import (
@@ -458,6 +465,95 @@ def model_to_markdown(m: ProjectModel) -> str:
                 body.append("")
             section("T6b — Sub-flows (shared step sequences, referenced by the flows above)",
                     body[:-1] if body else body)
+    if m.rules or m.blocks:
+        # T7 — the decision layer. Grouped by block exactly as the use cases are grouped by
+        # capability above, trailing "not assigned" group included, so a rule `reconcile` has not
+        # placed yet is visible rather than silently dropped.
+        #
+        # NOTHING HERE IS AUTHORED except the statement, the sites and the block. The components on
+        # each site line and the use-case steps under it are DERIVED by
+        # `validate_model.site_components` / `rule_steps` — the one implementation, shared with the
+        # checks, the viewer transport and the eval. A second copy here is precisely the drift the
+        # layer exists to prevent.
+        #
+        # EXACT step links only. `rule_steps` gains its second strength ("inside the same function
+        # as this step") from the pre-index symbol table, and the markdown view is a pure function
+        # of the JSON — mixing an optional side file in would make `_check_view_fresh` depend on a
+        # file the map does not contain. The viewer, which has the table, shows both.
+        owners = component_file_owners(m)
+        comp_names = {c.id: c.name for c in m.components}
+        anchored = anchored_flow_steps(m)
+        uc_names = {u.id: u.name for u in m.use_cases}
+
+        def _site_line(site: RuleSite) -> str:
+            why = f" · {site.why}" if site.why else ""
+            where = (site.where or "").strip()
+            if site.no_call_site and not where:
+                return f"- *no call site* — enforced by construction{why}"
+            if not where:
+                return f"- *no anchor* — this site claims nothing{why}"
+            comps = site_components(m, site, owners)
+            # EVERY owner, never one: `Component.files` is not disjoint, and on this repo's own map
+            # 27% of call-site anchors sit in a file 2-5 components claim.
+            who = (", ".join(f"{comp_names.get(c, c)} ({c})" for c in comps)
+                   or "*unverified — no component claims this file*")
+            # Labelled with the LINE, not the basename `_anchor_link` uses elsewhere: a rule is
+            # routinely enforced at several lines of one file, and a list of identical `guard.py`
+            # labels hides exactly the thing the site list exists to show.
+            line = f"- [{where}]({where}) — {who}{why}"
+            # `validate` blocks a site that declares an absence AND cites a line, but `render` runs
+            # on unvalidated models — showing one half and dropping the other would turn a
+            # contradiction into a clean claim, which is the failure this layer exists to prevent.
+            return line + ("  *(also declares `no_call_site` — contradictory)*"
+                           if site.no_call_site else "")
+
+        def _step_ref(l) -> str:
+            """A step's FULL address. `n` is unique per authoring container, never per use case —
+            47 of this repo's 114 anchored steps come from a sub-flow, and 26 `(uc, n)` pairs name
+            more than one distinct step. Printing `(UC9) step 3` would point at the wrong row in
+            T6b, and two different steps would render as a byte-identical duplicate."""
+            uc = f"{uc_names.get(l.uc, l.uc)} ({l.uc})"
+            return f"{uc} step {l.n}" if l.container == l.uc else f"{uc} → {l.container} step {l.n}"
+
+        body: list[str] = [
+            "One decision per rule, with every place it is enforced. The component on each site "
+            "line and the",
+            "use-case steps under it are DERIVED from the site anchors — no field carries them.", ""]
+        def _rule_lines(r: BusinessRule) -> list[str]:
+            tags = "".join(f"  *({t})*" for t in (["access"] if r.access else [])
+                           + ([r.confidence] if r.confidence else []))
+            lines = [f"**{r.id} — {r.statement}**{tags}"]
+            lines += [_site_line(site) for site in r.sites]
+            # Exact links only, and the filter says so INDEPENDENTLY of `rule_steps` happening to
+            # produce none without a symbol table: the view must stay a pure function of the JSON
+            # even if a caller later hands this one.
+            steps = [l for l in rule_steps(m, r, None, anchored) if l.strength == STEP_LINK_EXACT]
+            if steps:
+                lines.append("- enforced at: " + " · ".join(_step_ref(l) for l in steps))
+            return lines + [""]
+
+        if m.blocks:
+            groups = [(b.id, b.name, b.purpose, [r for r in m.rules if (r.block or "") == b.id])
+                      for b in m.blocks]
+            placed = {b.id for b in m.blocks}
+            loose = [r for r in m.rules if (r.block or "") not in placed]
+            if loose:
+                groups.append(("", "Not assigned to a block", "", loose))
+            for bid, bname, purpose, members in groups:
+                body += [f"### {bname}" + (f" *({bid})*" if bid else ""), ""]
+                if purpose:
+                    body += [purpose, ""]
+                if not members:
+                    # Blocks are minted at synthesis, BEFORE the rules are authored, so an empty one
+                    # is a real state — and an invisible one reads as a block nobody minted.
+                    body += ["*No rules assigned to this block yet.*", ""]
+                for r in members:
+                    body += _rule_lines(r)
+        else:
+            for r in m.rules:
+                body += _rule_lines(r)
+        section("T7 — Business logic (the decisions this product makes)",
+                body[:-1] if body else body)
     if m.deployment or m.observability or m.security or m.config:
         body = []
         if m.deployment:

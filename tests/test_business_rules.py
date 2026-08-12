@@ -64,6 +64,7 @@ from coyodex.reconcile import (
     load_reconcile,
     validate_reconcile,
 )
+from coyodex.views import model_to_markdown
 from coyodex.validate_model import (
     _referenced_ids,
     call_site_anchors,
@@ -1119,6 +1120,172 @@ def test_assemble_never_merges_a_rule_with_no_anchored_site() -> None:
                BusinessRule(id="BR2", statement="Enforced by the type.",
                             sites=[RuleSite(no_call_site=True)])]
     assert _merge_duplicate_rules(m) == 0
+
+
+# ═══ Phase 4 — the markdown view ══════════════════════════════════════════════════
+
+def make_rendered_model() -> ProjectModel:
+    m = make_checkable_model()
+    m.components.append(Component(id="C2", name="Order store", purpose="p",
+                                  files=["src/guard.py"]))
+    m.rules.append(BusinessRule(id="BR2", statement="A cancelled order cannot be cancelled again.",
+                                block="BLK1", sites=[
+                                    RuleSite(where="src/guard.py:4", why="short-circuits a re-cancel"),
+                                    RuleSite(why="the status enum forbids it", no_call_site=True)]))
+    m.rules.append(BusinessRule(id="BR3", statement="Only an admin may refund.", access=True,
+                                sites=[RuleSite(where="src/nobody.py:9", why="the admin gate")]))
+    return m
+
+
+def t7_section(m: ProjectModel) -> str:
+    md = model_to_markdown(m)
+    start = md.index("## T7")
+    rest = md[start:]
+    end = rest.index("\n---")
+    return rest[:end]
+
+
+def test_a_ruleless_map_renders_no_business_logic_section() -> None:
+    """Guarded, so nothing churns on the three committed `.md` views."""
+    assert "T7" not in model_to_markdown(make_base_model())
+
+
+def test_all_three_committed_md_views_are_byte_identical() -> None:
+    """There is no CI — nothing catches a forgotten regeneration but this."""
+    for rel in (".coyodex/project-map", "tests/fixtures/mcpolis-project-map",
+                "eval/fixtures/trapdoor/golden/project-map"):
+        m = load_model((REPO / f"{rel}.json").read_text(encoding="utf-8"))
+        assert (REPO / f"{rel}.md").read_text(encoding="utf-8") == model_to_markdown(m), rel
+
+
+def test_the_preamble_and_generated_notice_are_untouched() -> None:
+    """Touching either churns all three committed `.md` files at once."""
+    md = model_to_markdown(make_rendered_model())
+    assert md.index("## T7") > md.index("Behavioral layer first")
+    assert "Generated with coyodex from `project-map.json`" in md
+
+
+def test_a_site_renders_every_owner_of_a_shared_file() -> None:
+    text = t7_section(make_rendered_model())
+    assert "src/guard.py:3](src/guard.py:3) — Guard (C1), Order store (C2)" in text
+
+
+def test_a_site_in_an_unclaimed_file_renders_as_unverified() -> None:
+    assert "*unverified — no component claims this file*" in t7_section(make_rendered_model())
+
+
+def test_a_declared_absence_site_says_so() -> None:
+    assert "*no call site* — enforced by construction" in t7_section(make_rendered_model())
+
+
+def test_a_site_link_is_labelled_by_its_line_not_its_basename() -> None:
+    """A rule is routinely enforced at several lines of one file; a list of identical `guard.py`
+    labels hides exactly what the site list exists to show."""
+    text = t7_section(make_rendered_model())
+    assert "[src/guard.py:3]" in text and "[src/guard.py:4]" in text
+
+
+def test_rules_group_by_block_with_a_trailing_not_assigned_group() -> None:
+    text = t7_section(make_rendered_model())
+    assert text.index("### Order lifecycle *(BLK1)*") < text.index("### Not assigned to a block")
+    assert text.index("**BR2") < text.index("### Not assigned to a block") < text.index("**BR3")
+
+
+def test_a_map_with_no_blocks_renders_the_rules_flat() -> None:
+    m = make_rendered_model()
+    m.blocks = []
+    m.rules[0].block = None
+    text = t7_section(m)
+    assert "###" not in text and "**BR1" in text
+
+
+def test_the_enforced_at_line_is_derived_not_authored() -> None:
+    text = t7_section(make_rendered_model())
+    assert "- enforced at: View order (UC1) step 2" in text
+    m = make_rendered_model()
+    m.rules[0].sites = [RuleSite(where="src/guard.py:4", why="a different line")]
+    assert "enforced at" not in t7_section(m).split("**BR2")[0]
+
+
+def test_the_view_is_a_pure_function_of_the_json() -> None:
+    """`_check_view_fresh` compares the committed `.md` to `model_to_markdown(m)`. Folding the
+    optional pre-index symbol table in would make the view depend on a file the map does not
+    contain, so the markdown shows EXACT step links only — the viewer, which has the table, adds
+    the same-function ones."""
+    m = make_rendered_model()
+    assert model_to_markdown(m) == model_to_markdown(load_model(to_canonical_json(m)))
+
+
+# --- reconciled after the phase-4 review -------------------------------------------
+
+def make_subflow_rule_model() -> ProjectModel:
+    """A rule enforced at a SUB-FLOW's step 2, while the use case has its own step 2 elsewhere."""
+    m = make_checkable_model()
+    m.subflows = [SubFlow(id="SF1", name="Owner check", steps=[
+        FlowStep(n=2, src="C1", dst="E1", phrase="checks the owner", where="src/guard.py:4")])]
+    m.flows[0].steps.append(FlowStep(n=3, src="C1", dst="C1", phrase="", subflow="SF1"))
+    m.rules[0].sites = [RuleSite(where="src/guard.py:4", why="the owner check")]
+    return m
+
+
+def test_the_enforced_at_line_carries_the_authoring_container() -> None:
+    """`n` is unique per container, never per use case: 47 of this repo's 114 anchored steps come
+    from a sub-flow and 26 `(uc, n)` pairs name more than one step, so `(UC1) step 2` points at the
+    wrong row in T6b — and two different steps render as a byte-identical duplicate."""
+    text = t7_section(make_subflow_rule_model())
+    assert "- enforced at: View order (UC1) → SF1 step 2" in text
+
+
+def test_two_distinct_steps_sharing_a_number_render_distinctly() -> None:
+    m = make_subflow_rule_model()
+    m.flows[0].steps[1].where = "src/guard.py:4"          # UC1's OWN step 2, same anchor
+    text = t7_section(m)
+    assert "View order (UC1) step 2 · View order (UC1) → SF1 step 2" in text
+
+
+def test_owners_of_a_shared_file_render_in_element_order() -> None:
+    """`C10` sorted before `C2` as a string — the mistake `element_sort_key` exists to prevent."""
+    m = make_checkable_model()
+    m.components = [Component(id=f"C{i}", name=f"Part {i}", purpose="p", files=["src/guard.py"])
+                    for i in (1, 2, 10)]
+    assert site_components(m, m.rules[0].sites[0]) == ["C1", "C2", "C10"]
+
+
+def test_a_contradictory_site_is_rendered_as_contradictory_not_as_a_clean_claim() -> None:
+    """`validate` blocks it, but `coyodex render` never runs validate — showing one half and
+    dropping the other turns a contradiction into a claim."""
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="src/guard.py:3", why="w", no_call_site=True)]
+    text = t7_section(m)
+    assert "[src/guard.py:3]" in text and "also declares `no_call_site` — contradictory" in text
+
+
+def test_an_anchorless_site_does_not_render_an_empty_link() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="", why="lost the anchor")]
+    text = t7_section(m)
+    assert "[]()" not in text and "*no anchor* — this site claims nothing" in text
+
+
+def test_a_minted_block_with_no_rules_is_visible() -> None:
+    """Blocks are minted at synthesis, BEFORE the rules are authored, so an empty one is a real
+    state — and an invisible one reads as a block nobody minted."""
+    m = make_checkable_model()
+    m.blocks.append(Group(id="BLK2", name="Refunds", purpose="who may get money back"))
+    text = t7_section(m)
+    assert "### Refunds *(BLK2)*" in text and "*No rules assigned to this block yet.*" in text
+
+
+def test_a_map_with_blocks_but_no_rules_still_renders_the_forest() -> None:
+    m = make_base_model()
+    m.blocks = [Group(id="BLK1", name="Order lifecycle", purpose="who may change an order")]
+    assert "### Order lifecycle *(BLK1)*" in t7_section(m)
+
+
+def test_an_authored_confidence_is_rendered_as_authored() -> None:
+    m = make_checkable_model()
+    m.rules[0].confidence = "inferred"
+    assert "**BR1 — Only the order's owner may cancel it.**  *(inferred)*" in t7_section(m)
 
 
 if __name__ == "__main__":

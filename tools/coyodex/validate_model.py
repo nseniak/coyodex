@@ -747,7 +747,7 @@ def component_file_owners(m: ProjectModel) -> dict[str, list[str]]:
             path = strip_anchor(raw)
             if path:
                 out.setdefault(path, []).append(c.id)
-    return {path: sorted(set(ids)) for path, ids in out.items()}
+    return {path: sorted(set(ids), key=element_sort_key) for path, ids in out.items()}
 
 
 def site_components(m: ProjectModel, site: RuleSite,
@@ -842,9 +842,11 @@ def rule_steps(m: ProjectModel, rule: BusinessRule,
                 continue                       # no symbol table / no enclosing symbol: exact only
             if enclosing_extent(ext.get(step_path, []), step_lo) == site_ext:
                 offer(RuleStepLink(uc, container, st.n, STEP_LINK_SYMBOL, raw, st.phrase))
+    # Exact before symbol; within a use case, its OWN steps before the ones it inherits from a
+    # sub-flow (`SF1` would otherwise sort ahead of `UC1` and read as the use case's first step).
     return sorted(best.values(),
                   key=lambda l: (l.strength != STEP_LINK_EXACT, element_sort_key(l.uc),
-                                 element_sort_key(l.container), l.n))
+                                 l.container != l.uc, element_sort_key(l.container), l.n))
 
 
 def rule_entities(m: ProjectModel, rule: BusinessRule,

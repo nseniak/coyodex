@@ -259,6 +259,47 @@ SOURCE: [file](path/sub:1)
 
 ---
 
+## T7 — Business logic (the decisions this product makes)
+
+<!-- ONE DECISION PER RULE, in product language, naming no component. The sharp test is "could a
+     product person have decided otherwise?" — "own connection first, else oldest shared" passes;
+     "if the list is empty, return early" does not. Two claims joined by "and" are two rules.
+
+     EVERYTHING UNDER A RULE IS DERIVED. The component on each site line, the use-case steps, the
+     entities and whether the rule has been swept are all computed from the site anchors — there is
+     no field to write for any of them, on purpose: an authored "I searched the whole repo" is
+     unfalsifiable. A site anchors the OPERATIVE line (the one that acts), never a definition
+     header, and never a line chosen because it happens to light up a use-case step.
+
+     In the JSON source a rule is { "id": "BRn", "statement", "block": "BLKn", "access": bool,
+     "sites": [ { "where": "path:line", "why", "no_call_site": bool } ] }; `block` is assigned at
+     synthesis via `reconcile`, never in a fragment. Blocks are `blocks[]`, a Group forest. -->
+
+One decision per rule, with every place it is enforced. The component on each site line and the
+use-case steps under it are DERIVED from the site anchors — no field carries them.
+
+### <Block name> *(BLK1)*
+
+<what this area of the product decides>
+
+**BR1 — <the decision, in product language>**  *(access)* *(verified)*
+- [path/to/file.py:88](path/to/file.py:88) — <Component name> (C4) · <what this line does for the rule>
+- [path/to/other.py:12](path/to/other.py:12) — <Component name> (C7), <Other name> (C9) · <enforced again>
+- enforced at: <Use case name> (UC2) step 4 · <Use case name> (UC5) → SF3 step 2
+
+**BR2 — <a decision the code enforces by construction>**
+- *no call site* — enforced by construction · <the type / schema constraint / config-wired guard>
+
+<!-- The site line's component list, the `enforced at:` line and the sweep state are all RENDERED
+     FROM the anchors, so the shapes above are outputs, not things to write:
+       · a file several components claim lists EVERY one of them, never the first;
+       · a site in a file no component claims renders `*unverified — no component claims this file*`;
+       · `(access)` marks a rule that governs who may do what; `(verified|inferred)` is `confidence`;
+       · `→ SFn step k` means the step was authored in a sub-flow — `n` is unique per container,
+         so the container is half a step's address. -->
+
+---
+
 ## Operational dimensions — the standard core four
 
 ### Deployment & topology
