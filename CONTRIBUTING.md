@@ -161,6 +161,15 @@ backward-compatibility guarantees yet**. Treat generated maps as disposable, and
 don't be surprised if a change touches the format. If a change *does* break the
 format, please call that out explicitly in the PR.
 
+**Latest format break — the business-logic layer (T7).** A map now states what the product
+DECIDES: `blocks[]` (a decision grouping) and `rules[]` (one decision plus every place it is
+enforced). **An auth surface is a business rule with `access: true`** — the Security & auth table
+is a derived view of those rules, and `security[]` is legacy. **There is no migration tool.** An
+existing map keeps loading and keeps rendering its `security[]` rows beside any rules, so nothing
+disappears; it gains the decision layer only by being **rebuilt** with the current method. Two maps
+in the fleet already fail to load on an earlier rename, so "just rebuild" is stated here rather
+than assumed.
+
 ## Licensing of contributions
 
 coyodex is licensed under the [Apache License 2.0](LICENSE). By contributing, you

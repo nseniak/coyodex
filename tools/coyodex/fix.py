@@ -16,7 +16,9 @@ canonical serializer (validity guaranteed by the serializer, never by hand):
   fix security-row  — rewrite a REFUTED security surface's text (and/or anchor), selected exactly.
                       0 or >1 matches is a refusal, not a "first match": the hand script this
                       replaces matched a substring, hit two rows, and clobbered a CONFIRMED claim.
-  fix dedup-security — drop security rows authored twice under the same surface (two fragments
+  fix dedup-security — LEGACY maps only (an `access` business rule is the storage for an auth
+                       surface now; `assemble` merges duplicate RULES by content). Drops security
+                       rows authored twice under the same surface (two fragments
                       harvesting one auth check). Rows merely SHARING an anchor are reported, never
                       dropped — that is legal, and treating it as duplication is how the clobber
                       above got mistaken for a de-duplication.

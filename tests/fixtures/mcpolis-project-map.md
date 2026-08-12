@@ -854,18 +854,20 @@ SOURCE: [events.py](backend/src/mcpolis/domain/model/events.py:9)
 
 ### Security & auth
 
-| Surface | Who can reach | Auth check | Risk note |
-|---|---|---|---|
-| `/mcp` gateway | Google bearer OR `svct_` service token | backend/src/mcpolis/entrypoints/app.py:353 | Composite verifier routes svct_→registry, else→OAuth |
-| `/mcp` org scoping | user/token scoped to one org | backend/src/mcpolis/entrypoints/middleware/org_context.py:267 | cross-org isolation via the slug→org contextvar |
-| service-token org pin | `svct_` holder, one pinned org | backend/src/mcpolis/entrypoints/middleware/service_token_pin.py:39 | slug mismatch 401s; fails closed if scope missing |
-| `/admin-mcp/{slug}` | OAuth user who is admin in that org | backend/src/mcpolis/entrypoints/app.py:521 | per-org gate; service tokens structurally rejected |
-| `/admin-mcp/system` | email in superadmin allowlist | backend/src/mcpolis/entrypoints/app.py:668 | cloud-only; allowlist is the sole gate |
-| dashboard `/api/*` | signed-in user (cookie); admin via require_admin | backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:284 | HMAC cookie, 7-day TTL, optional jti revocation |
-| org anti-enumeration | unknown slug → 401 (not 404) | backend/src/mcpolis/entrypoints/routes/org_routes.py:100 | one exception: `/{slug}/public` invite read |
-| upstream OAuth callback | public, HMAC-signed state | backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:107 | integrity rests on the signed state |
-| upstream URL fetch | gateway → upstream | backend/src/mcpolis/domain/services/url_safety.py:152 | SSRF deny-list (loopback/RFC1918/IMDS) |
-| rate limiting (unwired) | n/a | backend/src/mcpolis/entrypoints/app.py:1630 | middleware built but not installed today |
+Legacy `security[]` rows: this map predates the fold and has not been rebuilt.
+
+| Decision | Enforced at | Risk note |
+|---|---|---|
+| *(legacy row)* `/mcp` gateway — Google bearer OR `svct_` service token | [backend/src/mcpolis/entrypoints/app.py:353](backend/src/mcpolis/entrypoints/app.py:353) | Composite verifier routes svct_→registry, else→OAuth |
+| *(legacy row)* `/mcp` org scoping — user/token scoped to one org | [backend/src/mcpolis/entrypoints/middleware/org_context.py:267](backend/src/mcpolis/entrypoints/middleware/org_context.py:267) | cross-org isolation via the slug→org contextvar |
+| *(legacy row)* service-token org pin — `svct_` holder, one pinned org | [backend/src/mcpolis/entrypoints/middleware/service_token_pin.py:39](backend/src/mcpolis/entrypoints/middleware/service_token_pin.py:39) | slug mismatch 401s; fails closed if scope missing |
+| *(legacy row)* `/admin-mcp/{slug}` — OAuth user who is admin in that org | [backend/src/mcpolis/entrypoints/app.py:521](backend/src/mcpolis/entrypoints/app.py:521) | per-org gate; service tokens structurally rejected |
+| *(legacy row)* `/admin-mcp/system` — email in superadmin allowlist | [backend/src/mcpolis/entrypoints/app.py:668](backend/src/mcpolis/entrypoints/app.py:668) | cloud-only; allowlist is the sole gate |
+| *(legacy row)* dashboard `/api/*` — signed-in user (cookie); admin via require_admin | [backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:284](backend/src/mcpolis/entrypoints/routes/dashboard_auth.py:284) | HMAC cookie, 7-day TTL, optional jti revocation |
+| *(legacy row)* org anti-enumeration — unknown slug → 401 (not 404) | [backend/src/mcpolis/entrypoints/routes/org_routes.py:100](backend/src/mcpolis/entrypoints/routes/org_routes.py:100) | one exception: `/{slug}/public` invite read |
+| *(legacy row)* upstream OAuth callback — public, HMAC-signed state | [backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:107](backend/src/mcpolis/entrypoints/routes/upstream_oauth_callback.py:107) | integrity rests on the signed state |
+| *(legacy row)* upstream URL fetch — gateway → upstream | [backend/src/mcpolis/domain/services/url_safety.py:152](backend/src/mcpolis/domain/services/url_safety.py:152) | SSRF deny-list (loopback/RFC1918/IMDS) |
+| *(legacy row)* rate limiting (unwired) — n/a | [backend/src/mcpolis/entrypoints/app.py:1630](backend/src/mcpolis/entrypoints/app.py:1630) | middleware built but not installed today |
 
 ### Config & environments
 

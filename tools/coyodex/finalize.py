@@ -388,7 +388,9 @@ def _shape_line(map_path: Path) -> str:
     return (f"Shape: {len(m.components)} components in {len(m.subsystems)} subsystems, "
             f"{len(m.entities)} entities in {len(m.subdomains)} subdomains, {len(m.deps)} deps, "
             f"{len(m.use_cases)} use cases, {len(m.edges)} edges, {flows} flows/sub-flows, "
-            f"{len(m.entry_points)} entry points, {len(m.security)} security rows.")
+            f"{len(m.entry_points)} entry points, {len(m.rules)} business rules in "
+            f"{len(m.blocks)} blocks"
+            + (f", {len(m.security)} LEGACY security rows" if m.security else "") + ".")
 
 
 def _grounding_line(map_path: Path) -> str:

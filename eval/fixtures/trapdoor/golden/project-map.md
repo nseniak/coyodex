@@ -278,10 +278,12 @@ SOURCE: [models.py](src/domain/models.py:78)
 
 ### Security & auth
 
-| Surface | Who can reach | Auth check | Risk note |
-|---|---|---|---|
-| Ticket write routes (transition, comment, lock) | Any caller the router reaches, carrying a principal with scopes and a tenant. | src/auth/gate.py:62 | The check composes scope, tenant and lifecycle state and raises about thirty lines below its own header. Anchoring it at the header is trap A1: the header cannot act, so a header anchor claims enforcement at a line that never enforces. |
-| Ticket read routes | Any caller the router reaches; the only gate is the tenant comparison. | src/auth/gate.py:72 | Tenant-only. No scope is required to read, so any authenticated principal of a tenant sees every ticket in it. |
+Legacy `security[]` rows: this map predates the fold and has not been rebuilt.
+
+| Decision | Enforced at | Risk note |
+|---|---|---|
+| *(legacy row)* Ticket write routes (transition, comment, lock) — Any caller the router reaches, carrying a principal with scopes and a tenant. | [src/auth/gate.py:62](src/auth/gate.py:62) | The check composes scope, tenant and lifecycle state and raises about thirty lines below its own header. Anchoring it at the header is trap A1: the header cannot act, so a header anchor claims enforcement at a line that never enforces. |
+| *(legacy row)* Ticket read routes — Any caller the router reaches; the only gate is the tenant comparison. | [src/auth/gate.py:72](src/auth/gate.py:72) | Tenant-only. No scope is required to read, so any authenticated principal of a tenant sees every ticket in it. |
 
 ### Config & environments
 

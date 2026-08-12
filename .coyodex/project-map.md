@@ -987,6 +987,67 @@ SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:91)
 
 ---
 
+## T7 — Business logic (the decisions this product makes)
+
+One decision per rule, with every place it is enforced. The component on each site line and the
+use-case steps under it are DERIVED from the site anchors — no field carries them.
+
+### Who may reach the local server *(BLK1)*
+
+what the map server accepts, and from whom
+
+**BR1 — The map server answers only callers on the machine it runs on.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:734](tools/coyodex/viewer/serve.py:734) — Map server (C24) · binds the listener to the loopback address
+
+**BR2 — A request whose Host header does not name loopback is refused.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:517](tools/coyodex/viewer/serve.py:517) — Map server (C24) · refuses the request with 403 before routing it
+
+**BR3 — A page on another origin may not add, forget or reorder a project.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:540](tools/coyodex/viewer/serve.py:540) — Map server (C24) · requires a custom header a cross-origin page cannot set without a preflight
+
+**BR9 — A folder is served only when it already holds a `.coyodex/` directory.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:574](tools/coyodex/viewer/serve.py:574) — Map server (C24) · refuses a folder with no map directory
+
+**BR14 — A request body over 64 KB is not parsed at all.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:694](tools/coyodex/viewer/serve.py:694) — Map server (C24) · refuses an unstated, zero or oversized Content-Length
+
+### What the server will read off disk *(BLK2)*
+
+which files leave the machine, and at which commit
+
+**BR4 — A file is read at the map's pinned commit, never from a path that escapes the repository.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:636](tools/coyodex/viewer/serve.py:636) — Map server (C24) · rejects absolute paths, backslashes, NUL bytes and any `..` segment before reading
+
+**BR5 — The one route that reads real disk still resolves inside the repository.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:275](tools/coyodex/viewer/serve.py:275) — Map server (C24) · re-resolves the real path inside the work tree, refusing a symlink that escapes
+
+**BR6 — A commit value can never be parsed by git as a flag.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:643](tools/coyodex/viewer/serve.py:643) — Map server (C24) · accepts a bare hex SHA and nothing else
+
+**BR7 — A branch or revision expression can never be parsed by git as a flag.**  *(access)*  *(inferred)*
+- [tools/coyodex/impact_git.py:59](tools/coyodex/impact_git.py:59) — Change-impact engine (C40) · guards the ref on the path that actually reaches git's argv
+
+**BR8 — The folder picker walks the whole filesystem; nothing on that route narrows it.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:517](tools/coyodex/viewer/serve.py:517) — Map server (C24) · the origin guard is the only barrier this route has
+
+**BR10 — A frontend asset is served by exact name, never by a path.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/serve.py:702](tools/coyodex/viewer/serve.py:702) — Map server (C24) · matches the request against a fixed whitelist of names
+
+### What the viewer page will run or render *(BLK3)*
+
+which code executes in the reader's browser, and which text reaches the page
+
+**BR11 — An editor hand-off link may only use a scheme on the allowlist.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/viewer.js:5976](tools/coyodex/viewer/viewer.js:5976) — Diagram canvas & drill navigation (C23), Change-impact overlay (C32), Element info pane & selection (C37), File browser & code viewer (C38), Map search sidebar (C39) · refuses a template whose scheme is not allowlisted
+
+**BR12 — A third-party script runs only when its content hash matches.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/viewer.html:17](tools/coyodex/viewer/viewer.html:17) — Diagram canvas & drill navigation (C23), Change-impact overlay (C32), Map search sidebar (C39) · carries Subresource Integrity on every tag
+
+**BR13 — Text authored in the map is escaped before it reaches a diagram label.**  *(access)*  *(inferred)*
+- [tools/coyodex/viewer/gen_viewer.py:97](tools/coyodex/viewer/gen_viewer.py:97) — View bundle assembler (C22), Context & subsystem diagram generator (C26), Domain diagram generator (C27), Deployment & messaging diagram generator (C28), Behavioural flow generator (C29) · escapes label text before the renderer sees it
+
+---
+
 ## Operational dimensions — the standard core four
 
 ### Deployment & topology
@@ -1013,22 +1074,24 @@ SOURCE: [compare.py](eval/tools/coyodex_eval/compare.py:91)
 
 ### Security & auth
 
-| Surface | Who can reach | Auth check | Risk note |
-|---|---|---|---|
-| Local map server HTTP listener | Any process on the same machine that can reach the loopback interface — there is no authentication, no login, and no token of any kind. | tools/coyodex/viewer/serve.py:734 | The bind address is the only access control: 127.0.0.1 is hardcoded, so the server is unreachable from the network. On a shared or multi-user machine, however, ANY local process or local user can read every served map and every file in every served repo at the pinned commit. Accepted as the trust model of a single-user developer tool, but it is a real surface. |
-| DNS-rebinding guard on every request | A web page on an attacker-controlled domain that re-points its hostname at 127.0.0.1 to read the victim's source through the browser. | tools/coyodex/viewer/serve.py:512 | Enforced: a request whose Host header does not name loopback is refused with 403. An ABSENT Host (HTTP/1.0, curl) is allowed on purpose — a deliberate, documented hole, on the reasoning that a header-less request is not a browser-driven rebinding vector. |
-| State-changing POST endpoints (add / forget / reorder a project) | A cross-origin page in the user's browser trying to add or remove projects behind their back. | tools/coyodex/viewer/serve.py:535 | Enforced by requiring a custom request header a cross-origin page cannot set without a CORS preflight the server never answers. There is no token and no origin check, so the guard rests entirely on the browser's preflight behaviour; a non-browser local client can set the header freely. |
-| Source file read at the pinned commit (/p/<slug>/api/src) | Anyone who can reach the loopback server — the viewer page, or any local process. | tools/coyodex/viewer/serve.py:631 | Path traversal is blocked before anything is read: absolute paths, backslashes, NUL bytes and any `..` segment are rejected with 400, and the read then goes through git rather than the filesystem, so only objects that exist in the named commit can come back. A blob over the size cap is refused before it is buffered. |
-| Working-tree file read (/p/<slug>/api/src?at=WORKTREE) | The impact explorer, which must show the uncommitted side of a diff — the one route that touches real disk instead of git objects. | tools/coyodex/viewer/serve.py:275 | Enforced in layers: the resolved real path must stay inside the repo (so a tracked symlink cannot escape), any `.git` component is excluded, and only files git accounts for — tracked, or untracked but not ignored — are served, which keeps a gitignored secrets file from leaking through the viewer. This is the highest-risk read path in the product; the containment depends on all three checks staying together. |
-| Git argument injection through a commit value | Whoever writes the map JSON, or a caller passing `at=` on the src route — a value that reaches git's argv. | tools/coyodex/viewer/serve.py:643 | Enforced: only a bare hex SHA is accepted, so a value starting with `-` can never be parsed by git as a flag. Commands are run as an argument list with no shell, which removes shell injection separately. |
-| Git argument injection through a user-supplied ref | The impact explorer's base/target parameters, which accept branch names and revision expressions rather than bare SHAs. | tools/coyodex/impact_git.py:59 | Enforced, but NOT where the map first claimed: the guard in the server's own ref resolver never sees a request value (its only caller passes the map's own pin). The user-supplied base/target refs are gated in the impact engine, which rejects a leading dash and requires a revision-shaped character class before `git rev-parse --verify --end-of-options` peels it to a SHA. Verified live: `base=--output=/tmp/pwn` returns 400. |
-| Filesystem browser used to pick a project folder (/api/browse) | Anyone who can reach the loopback server; the landing page uses it to walk the disk. | tools/coyodex/viewer/serve.py:512 | NO CONTAINMENT ON THE ROUTE ITSELF — the weakest surface in the product, and the anchor here is the only barrier that actually applies. Any absolute path is expanded, resolved and listed: `/`, `/Users` and `~/.ssh` all return 200 with a real listing (verified live against a throwaway server). Only directory NAMES leak, never file contents, and symlinked directories are skipped. What protects it is not the route but the loopback bind (serve.py:734), this Host guard, and the absence of CORS headers — i.e. it is safe on a single-user machine and not on a shared one. |
-| Adding a project folder to the served set (/api/open) | The landing page, or any local caller that can set the CSRF header. | tools/coyodex/viewer/serve.py:574 | The only gate is that the folder must contain a `.coyodex/` directory. That is a low bar: creating such a directory anywhere makes that folder — and, through the src route, its git-tracked contents — servable. Mitigated by the loopback bind and the fact that reads stay inside a single repo at a pinned commit. |
-| Shared frontend asset route (/static/<name>) | The browser fetching the viewer's script and stylesheet. | tools/coyodex/viewer/serve.py:702 | Enforced by an exact-name whitelist rather than path joining, so no traversal is possible on this route at all — an unknown name is a flat 404. |
-| Editor hand-off URI built from a user-supplied template | The user, who may type a custom URI template into the viewer's Settings dialog. | tools/coyodex/viewer/viewer.js:5976 | Enforced in the browser: only schemes on the editor allowlist may land in an anchor href, which blocks `javascript:`, `data:`, `file:` and `http(s):` templates from running script or hijacking navigation. The dialog re-checks the same allowlist on save, so a rejected template is never stored. Note the URI is fired by the page, so the guard is client-side only — a tampered localStorage value is still filtered at the href, which is the right place. |
-| Third-party scripts executed inside the viewer page | The two CDNs the page loads its diagram and highlighting libraries from. | tools/coyodex/viewer/viewer.html:17 | Enforced with Subresource Integrity on every tag, including the lazily injected highlighter and its stylesheet, so a tampered or swapped file is rejected by the browser. Residual risk: the page still depends on reachable third-party hosts, and there is no Content-Security-Policy header, so SRI is the only barrier. |
-| Map-supplied text rendered into diagram labels | Whoever authors or edits the map JSON — including an agent writing a fragment. | tools/coyodex/viewer/gen_viewer.py:97 | The diagram renderer runs with HTML labels enabled, so label text is a script-injection path in principle. Enforced by a single sanitizer every diagram label passes through, which neutralises quotes, backticks, brackets, braces, pipes and angle brackets before the label reaches the browser. The risk concentrates in that one function: a caller that builds a label without it would bypass the guard. |
-| Request body size on the POST endpoints | Any local caller. | tools/coyodex/viewer/serve.py:689 | Enforced: a missing, zero, or over-64KB Content-Length yields no parsed body, so a large or malformed request cannot exhaust memory. Paired with a 4MB cap on served file contents and a row cap on diff responses. |
+Derived from the business rules marked `access` (T7) — the decision IS the surface.
+
+| Decision | Enforced at | Risk note |
+|---|---|---|
+| **BR1** — The map server answers only callers on the machine it runs on. | [tools/coyodex/viewer/serve.py:734](tools/coyodex/viewer/serve.py:734) | Any process on the same machine that can reach the loopback interface — there is no authentication, no login, and no token of any kind. The bind address is the only access control: 127.0.0.1 is hardcoded, so the server is unreachable from the network. On a shared or multi-user machine, however, ANY local process or local user can read every served map and every file in every served repo at the pinned commit. Accepted as the trust model of a single-user developer tool, but it is a real surface. |
+| **BR2** — A request whose Host header does not name loopback is refused. | [tools/coyodex/viewer/serve.py:517](tools/coyodex/viewer/serve.py:517) | A web page on an attacker-controlled domain that re-points its hostname at 127.0.0.1 to read the victim's source through the browser. Enforced: a request whose Host header does not name loopback is refused with 403. An ABSENT Host (HTTP/1.0, curl) is allowed on purpose — a deliberate, documented hole, on the reasoning that a header-less request is not a browser-driven rebinding vector. |
+| **BR3** — A page on another origin may not add, forget or reorder a project. | [tools/coyodex/viewer/serve.py:540](tools/coyodex/viewer/serve.py:540) | A cross-origin page in the user's browser trying to add or remove projects behind their back. Enforced by requiring a custom request header a cross-origin page cannot set without a CORS preflight the server never answers. There is no token and no origin check, so the guard rests entirely on the browser's preflight behaviour; a non-browser local client can set the header freely. |
+| **BR4** — A file is read at the map's pinned commit, never from a path that escapes the repository. | [tools/coyodex/viewer/serve.py:636](tools/coyodex/viewer/serve.py:636) | Anyone who can reach the loopback server — the viewer page, or any local process. Path traversal is blocked before anything is read: absolute paths, backslashes, NUL bytes and any `..` segment are rejected with 400, and the read then goes through git rather than the filesystem, so only objects that exist in the named commit can come back. A blob over the size cap is refused before it is buffered. |
+| **BR5** — The one route that reads real disk still resolves inside the repository. | [tools/coyodex/viewer/serve.py:275](tools/coyodex/viewer/serve.py:275) | The impact explorer, which must show the uncommitted side of a diff — the one route that touches real disk instead of git objects. Enforced in layers: the resolved real path must stay inside the repo (so a tracked symlink cannot escape), any `.git` component is excluded, and only files git accounts for — tracked, or untracked but not ignored — are served, which keeps a gitignored secrets file from leaking through the viewer. This is the highest-risk read path in the product; the containment depends on all three checks staying together. |
+| **BR6** — A commit value can never be parsed by git as a flag. | [tools/coyodex/viewer/serve.py:643](tools/coyodex/viewer/serve.py:643) | Whoever writes the map JSON, or a caller passing `at=` on the src route — a value that reaches git's argv. Enforced: only a bare hex SHA is accepted, so a value starting with `-` can never be parsed by git as a flag. Commands are run as an argument list with no shell, which removes shell injection separately. |
+| **BR7** — A branch or revision expression can never be parsed by git as a flag. | [tools/coyodex/impact_git.py:59](tools/coyodex/impact_git.py:59) | The impact explorer's base/target parameters, which accept branch names and revision expressions rather than bare SHAs. Enforced, but NOT where the map first claimed: the guard in the server's own ref resolver never sees a request value (its only caller passes the map's own pin). The user-supplied base/target refs are gated in the impact engine, which rejects a leading dash and requires a revision-shaped character class before `git rev-parse --verify --end-of-options` peels it to a SHA. Verified live: `base=--output=/tmp/pwn` returns 400. |
+| **BR8** — The folder picker walks the whole filesystem; nothing on that route narrows it. | [tools/coyodex/viewer/serve.py:517](tools/coyodex/viewer/serve.py:517) | Anyone who can reach the loopback server; the landing page uses it to walk the disk. NO CONTAINMENT ON THE ROUTE ITSELF — the weakest surface in the product, and the anchor here is the only barrier that actually applies. Any absolute path is expanded, resolved and listed: `/`, `/Users` and `~/.ssh` all return 200 with a real listing (verified live against a throwaway server). Only directory NAMES leak, never file contents, and symlinked directories are skipped. What protects it is not the route but the loopback bind (serve.py:734), this Host guard, and the absence of CORS headers — i.e. it is safe on a single-user machine and not on a shared one. |
+| **BR9** — A folder is served only when it already holds a `.coyodex/` directory. | [tools/coyodex/viewer/serve.py:574](tools/coyodex/viewer/serve.py:574) | The landing page, or any local caller that can set the CSRF header. The only gate is that the folder must contain a `.coyodex/` directory. That is a low bar: creating such a directory anywhere makes that folder — and, through the src route, its git-tracked contents — servable. Mitigated by the loopback bind and the fact that reads stay inside a single repo at a pinned commit. |
+| **BR10** — A frontend asset is served by exact name, never by a path. | [tools/coyodex/viewer/serve.py:702](tools/coyodex/viewer/serve.py:702) | The browser fetching the viewer's script and stylesheet. Enforced by an exact-name whitelist rather than path joining, so no traversal is possible on this route at all — an unknown name is a flat 404. |
+| **BR11** — An editor hand-off link may only use a scheme on the allowlist. | [tools/coyodex/viewer/viewer.js:5976](tools/coyodex/viewer/viewer.js:5976) | The user, who may type a custom URI template into the viewer's Settings dialog. Enforced in the browser: only schemes on the editor allowlist may land in an anchor href, which blocks `javascript:`, `data:`, `file:` and `http(s):` templates from running script or hijacking navigation. The dialog re-checks the same allowlist on save, so a rejected template is never stored. Note the URI is fired by the page, so the guard is client-side only — a tampered localStorage value is still filtered at the href, which is the right place. |
+| **BR12** — A third-party script runs only when its content hash matches. | [tools/coyodex/viewer/viewer.html:17](tools/coyodex/viewer/viewer.html:17) | The two CDNs the page loads its diagram and highlighting libraries from. Enforced with Subresource Integrity on every tag, including the lazily injected highlighter and its stylesheet, so a tampered or swapped file is rejected by the browser. Residual risk: the page still depends on reachable third-party hosts, and there is no Content-Security-Policy header, so SRI is the only barrier. |
+| **BR13** — Text authored in the map is escaped before it reaches a diagram label. | [tools/coyodex/viewer/gen_viewer.py:97](tools/coyodex/viewer/gen_viewer.py:97) | Whoever authors or edits the map JSON — including an agent writing a fragment. The diagram renderer runs with HTML labels enabled, so label text is a script-injection path in principle. Enforced by a single sanitizer every diagram label passes through, which neutralises quotes, backticks, brackets, braces, pipes and angle brackets before the label reaches the browser. The risk concentrates in that one function: a caller that builds a label without it would bypass the guard. |
+| **BR14** — A request body over 64 KB is not parsed at all. | [tools/coyodex/viewer/serve.py:694](tools/coyodex/viewer/serve.py:694) | Any local caller. Enforced: a missing, zero, or over-64KB Content-Length yields no parsed body, so a large or malformed request cannot exhaust memory. Paired with a 4MB cap on served file contents and a row cap on diff responses. |
 
 ### Config & environments
 
@@ -1266,6 +1329,10 @@ Full Phase-4 coverage: all 185 L2 claims from the audit worklist were challenged
 - granularity: 36 components against a code-derived expectation of ~11 (band 6–16). The expectation is bound by the LOC ceiling over a 294-LOC median file, which reads a toolkit of single-purpose stdlib modules as far fewer units than it has. Each component here is one module or one clearly separable unit inside an oversized file (the 2.5 kLOC validator is four; the 2.9 kLOC viewer generator is five; the 6.9 kLOC browser app is five), each with its own job, its own command or view, and its own tests. Folding them to reach the band would hide exactly the pipeline this map exists to explain — the altitude is deliberate.
 - store: the entities whose store mode is `transient`, `embedded`, `in-code` or `enum` deliberately carry no `dep`. This project has no database: the only physical store is the local filesystem, already linked on the eight entities that really land in a file. Tagging in-memory view, impact and eval structures with a filesystem dep would state a persistence that does not happen.
 - UC2: 16 steps against the 3–15 band. This is the product's whole spine — read the method, size the tree, fan out, self-check each fragment, merge, apply the synthesis assignments, run the gates, ground the claims, stamp provenance, commit. The gate run is already extracted as a sub-flow (SF10) and counts as one; the remaining steps each carry a distinct call site, so compressing further would drop a real anchor rather than reduce altitude.
+BLK1: the rules here are a 1:1 migration of the security rows; fusing them is the T7 authoring pass, which has not been run on this map
+BLK2: same — a 1:1 migration, not an authored sweep
+BLK3: same — a 1:1 migration, not an authored sweep
+
 
 ---
 

@@ -558,7 +558,8 @@ def model_to_markdown(m: ProjectModel) -> str:
                 body += _rule_lines(r)
         section("T7 — Business logic (the decisions this product makes)",
                 body[:-1] if body else body)
-    if m.deployment or m.observability or m.security or m.config:
+    access_rules = [r for r in m.rules if r.access]
+    if m.deployment or m.observability or m.security or m.config or access_rules:
         body = []
         if m.deployment:
             body += ["### Deployment & topology", ""] + _table(
@@ -568,10 +569,23 @@ def model_to_markdown(m: ProjectModel) -> str:
             body += ["### Observability", ""] + _table(
                 ["Signal", "Where emitted", "Where viewed", "Alerts"],
                 [[r.signal, r.where_emitted, r.where_viewed, r.alerts] for r in m.observability]) + [""]
-        if m.security:
-            body += ["### Security & auth", ""] + _table(
-                ["Surface", "Who can reach", "Auth check", "Risk note"],
-                [[r.surface, r.who, r.source, r.risk] for r in m.security]) + [""]
+        if m.security or access_rules:
+            # DERIVED from T7 where the map has rules: an `access` rule IS a security surface now,
+            # and re-typing it into a second table is the two-storages problem this fold ends. A
+            # legacy `security[]` row still renders beside them — an un-rebuilt map must not lose
+            # its table — with its own kind stated, so a reader can tell which storage each came
+            # from and there is no doubt about which one is authoritative.
+            rows = [[(f"**{r['id']}** — {r['surface']}" if r["kind"] == "rule"
+                      else f"*(legacy row)* {r['surface']}"
+                           + (f" — {r['who']}" if r["who"].strip() else "")),
+                      " · ".join(f"[{w}]({w})" for w in r["source"].split(" · ") if w)
+                      or "*enforced by construction*",
+                      r["risk"]] for r in auth_surface_rows(m)]
+            lead = ("Derived from the business rules marked `access` (T7) — the decision IS the "
+                    "surface." if access_rules else
+                    "Legacy `security[]` rows: this map predates the fold and has not been rebuilt.")
+            body += ["### Security & auth", "", lead, ""] + _table(
+                ["Decision", "Enforced at", "Risk note"], rows) + [""]
         if m.config:
             body += ["### Config & environments", ""] + _table(
                 ["Key", "Purpose", "Default", "Per-env / secret?"],
@@ -844,6 +858,24 @@ def _build_data_view(m: ProjectModel, nodes: dict[str, Node]) -> dict[str, objec
             "unassigned_channels": unassigned, "access": access}
 
 
+def auth_surface_rows(m: ProjectModel) -> list[dict[str, str]]:
+    """The security surface as display rows — `access` rules FIRST, then any legacy `security[]`.
+
+    ONE derivation, read by the markdown table and by the viewer transport. The fold made rules the
+    storage, and a view that reads only `security[]` shows an empty Security section on a folded map
+    while the markdown shows fourteen rows — which is the two-answers problem the fold exists to end,
+    running the other way. `kind` says which storage a row came from so a reader is never left
+    guessing which one is authoritative."""
+    rows = [{"kind": "rule", "id": r.id, "surface": r.statement, "who": "",
+             "source": " · ".join((s.where or "").strip() for s in r.sites
+                                  if (s.where or "").strip()),
+             "risk": r.risk}
+            for r in m.rules if r.access]
+    rows += [{"kind": "legacy", "id": "", "surface": r.surface, "who": r.who,
+              "source": r.source, "risk": r.risk} for r in m.security]
+    return rows
+
+
 def _build_rules_view(m: ProjectModel, extents: Extents | None) -> dict[str, object]:
     """The T7 transport — every rule with its DERIVED components, steps, entities and sweep state.
 
@@ -889,7 +921,7 @@ def _build_rules_view(m: ProjectModel, extents: Extents | None) -> dict[str, obj
             by_step.setdefault(f"{l['uc']}:{l['container']}:{l['n']}", []).append(r.id)
         out_rules.append({
             "id": r.id, "statement": r.statement, "block": r.block or "",
-            "access": r.access, "confidence": r.confidence,
+            "access": r.access, "risk": r.risk, "confidence": r.confidence,
             "sites": sites, "steps": steps,
             "entities": [{"id": e, "name": ent_names.get(e, e)}
                          for e in rule_entities(m, r, extents, anchored)],
@@ -1158,7 +1190,9 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
         "messaging": [asdict(r) for r in m.messaging],
 
         "observability": [asdict(r) for r in m.observability],
-        "security": [asdict(r) for r in m.security],
+        # DERIVED from both storages (see `auth_surface_rows`): a folded map keeps its Security
+        # section, and a legacy map keeps its rows, without the frontend knowing which is which.
+        "security": auth_surface_rows(m),
         "config": [asdict(r) for r in m.config],
         # Store-centric Data view (rail of physical stores → collections + writers/readers + async
         # channels + coverage gaps). Derived here where the typed model is in hand; rides in the graph

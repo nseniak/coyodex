@@ -1108,30 +1108,11 @@ def check_rules_model(m: ProjectModel,
             "resolving its sites through `Component.files`, so every rule would render bare and "
             "look like a rule nobody enforces. Harvest the components' file lists, or drop the rules")
 
-    # An `access` rule whose site is byte-equal to a `security[].source` states the same enforcement
-    # twice while `security[]` still exists. INTERIM (phase 8 folds security into rules and retires
-    # this): scoped to EXACT duplication only, because this repo's own precedent
-    # (`duplicate_security_warnings`) says an anchor is not a claim identity — one line can
-    # legitimately guard two surfaces.
-    sec_by_anchor: dict[str, list[str]] = {}
-    for sec in m.security:
-        if (sec.source or "").strip():
-            sec_by_anchor.setdefault(sec.source.strip(), []).append(sec.surface)
-    accepted = _recorded_line_keys(m, "accepted duplications")
+    # The interim `access`-rule / `security[].source` exact-duplication guard is RETIRED here.
+    # Rules are the storage now, so a map carrying both is an UN-REBUILT map rather than a mistake,
+    # and this repo's own precedent (`duplicate_security_warnings`) already says an anchor is not a
+    # claim identity — one line can legitimately guard two surfaces.
     recorded_debt = _recorded_line_keys(m, "sweep debt")
-    for r in m.rules:
-        if not r.access:
-            continue
-        for site in r.sites:
-            where = (site.where or "").strip()
-            surfaces = sec_by_anchor.get(where, [])
-            if not surfaces or _records_key(accepted, where):
-                continue
-            problems.append(
-                f"{r.id} is an `access` rule anchored at '{where}', which is already the auth-check "
-                f"source of security surface '{surfaces[0]}' — the same enforcement is claimed "
-                f"twice. Keep the rule and drop the security row, or record '{where}: <why both>' "
-                "under an 'Accepted duplications' extras heading")
 
     # A rule that resolves to no component renders with nothing to show. Advisory, not blocking:
     # the map-wide `files` gate above catches the systemic case, and a single unresolved site is

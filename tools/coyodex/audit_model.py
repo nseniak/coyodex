@@ -90,7 +90,12 @@ EDGE_CLAIM = re.compile(r"^([A-Z]+\d+) (\S+) ([A-Z]+\d+)$")   # `C5 persists E2`
 
 
 def security_claim(surface: str, source: str) -> str:
-    """A security row's L2 claim, EXACTLY as `l2_worklist_model` builds it."""
+    """A LEGACY security row's L2 claim, EXACTLY as `l2_worklist_model` builds it.
+
+    Rules with `access: true` are the storage for auth surfaces now, and their claims come from
+    `rule_site_claim`. This stays for maps built before the fold, which are not migrated — they are
+    rebuilt (see the release note). It is the same shape either way: a surface, and the line that
+    protects it."""
     return f"Auth surface '{surface}' is protected by: {_claim_text(source)}"
 
 

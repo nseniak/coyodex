@@ -458,6 +458,13 @@ class BusinessRule:
     sites: list[RuleSite] = field(default_factory=list)
     access: bool = False         # this rule governs WHO MAY DO WHAT — the security marker. The
                                  # security surface table and the eval's `auth_surfaces` read it.
+    risk: str = ""               # what is AT STAKE if this decision is wrong or absent. Authored,
+                                 # like `confidence` — it is a judgement, not a derivation, and it
+                                 # is the one thing a `security[]` row carried that a statement, a
+                                 # site and a `why` between them cannot say: "Tenant-only. No scope
+                                 # is required to read" is not what the line does, it is what the
+                                 # line's LIMIT costs. Meaningful mainly on an `access` rule, which
+                                 # is where the security surface table renders it.
     confidence: str = ""
 
 

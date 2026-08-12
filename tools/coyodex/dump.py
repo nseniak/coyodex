@@ -78,7 +78,10 @@ def resolve_id(m: ProjectModel, eid: str) -> dict[str, object] | None:
     if el is None:
         return None
     kind = _kind_of(eid)
-    name: str | None = getattr(el, "name", None) or getattr(el, "title", None)
+    # A business rule's display text is its `statement` — it has neither `name` nor `title`, so
+    # without this `dump --id BRn` answered `"name": null` for every rule in the map.
+    name: str | None = (getattr(el, "name", None) or getattr(el, "title", None)
+                        or getattr(el, "statement", None))
     source: str | None = None
     members: list[object] = []
     if isinstance(el, Component):

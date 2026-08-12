@@ -180,6 +180,19 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
     return problems
 
 
+def _legacy_security_warnings(m: ProjectModel) -> list[str]:
+    """Advisory: a fragment authoring `security[]`. An auth surface is an `access` business rule
+    now — the Security & auth table is a derived view of those. Nothing REJECTS a security row (a
+    map built before the fold still loads and still renders its rows), so this is where a NEW build
+    finds out, in the authoring agent's own turn rather than never."""
+    if not m.security:
+        return []
+    return [f"{len(m.security)} `security[]` row(s) authored — an auth surface is a business rule "
+            "with `access: true` now (T7), and the Security & auth table is a derived view of "
+            "those. Write the decision, its enforcement site(s) and its `risk`; a security row is "
+            "the legacy storage, kept only so a map built before the fold still renders."]
+
+
 def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     """Advisory (non-blocking) findings for one fragment — the domain-relation *warnings* (the
     field-less-association nudge, the by-name-FK hint) and the use-case *granularity* signals
@@ -192,6 +205,7 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     (a T4 harvest fragment has no flows; a trace fragment has no entry points) — per-fragment the
     signal is vacuous or a guaranteed false positive, so it runs in `validate` only."""
     _problems, warnings = check_domain_relations(m.entities)
+    warnings += _legacy_security_warnings(m)
     # The roleless-C→D-verb nudge rides THIS non-blocking channel (never `lint_fragment_problems`,
     # which would promote it to a blocking problem — trap T7), so an authoring agent SEES it and
     # decides, without a legitimately-generic `uses` failing the lint. The entry-point-kind nudges

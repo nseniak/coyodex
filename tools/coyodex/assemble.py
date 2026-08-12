@@ -437,6 +437,7 @@ def _merge_duplicate_rules(m: ProjectModel) -> int:
     safe: two rules can legitimately share a statement at different lines (a decision enforced by
     two different guards is two rules), and two different decisions routinely share a line."""
     survivor_of: dict[tuple[str, tuple[str, ...]], str] = {}
+    by_id = {r.id: r for r in m.rules}
     remap: dict[str, str] = {}
     kept = []
     for r in m.rules:
@@ -446,6 +447,12 @@ def _merge_duplicate_rules(m: ProjectModel) -> int:
             continue
         if ident in survivor_of:
             remap[r.id] = survivor_of[ident]
+            # The survivor keeps its own `risk` when it has one, and INHERITS the loser's when it
+            # does not: `risk` is authored prose with no other home, so dropping it on a merge would
+            # lose content the two agents between them did write.
+            keeper = by_id[survivor_of[ident]]
+            if not keeper.risk.strip() and r.risk.strip():
+                keeper.risk = r.risk
             continue
         survivor_of[ident] = r.id
         kept.append(r)

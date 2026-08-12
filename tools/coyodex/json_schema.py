@@ -242,6 +242,11 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("BusinessRule", "access"): {"description": "this rule governs WHO MAY DO WHAT — the security "
                                   "marker. The security surface table and the eval's auth coverage "
                                   "read it."},
+    ("BusinessRule", "risk"): {"description": "what is AT STAKE if this decision is wrong or "
+                                "absent — a judgement, not a derivation. Distinct from a site's "
+                                "`why` (what that LINE does): a risk note says what the decision's "
+                                "limit costs. Rendered in the security surface table for an "
+                                "`access` rule."},
     ("BusinessRule", "confidence"): {"enum": [*grammar.CONFIDENCE_VALUES, ""],
                              "description": "verified = read in the code; inferred = deduced. '' = unstated."},
     ("BusinessRule", "sites"): {"description": "every place the decision is ENFORCED. The rule's "

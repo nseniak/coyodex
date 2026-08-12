@@ -79,14 +79,30 @@ def make_ruled_model() -> ProjectModel:
 
 # --- the auth-surface inversion --------------------------------------------------
 
-def test_the_auth_surface_union_is_a_no_op_on_every_committed_map() -> None:
-    """`auth_surfaces_must_not_drop` is a hard gate with NO tolerance, and phase 8 empties
-    `security[]` into rules. Inverting it a phase early is only safe if it changes nothing today."""
+def test_the_auth_surface_set_reads_both_storages_on_every_committed_map() -> None:
+    """The union is what let the fold happen without the hard gate ever seeing a transition. On a
+    LEGACY map (the two fixtures, which are not migrated — they are rebuilt) it is the security
+    rows; on the folded map it is the `access` rules; on a half-migrated map it would be both."""
     for rel in (".coyodex/project-map", "tests/fixtures/mcpolis-project-map",
                 "eval/fixtures/trapdoor/golden/project-map"):
         m = load_model((REPO / f"{rel}.json").read_text(encoding="utf-8"))
-        p = build_profile_from_model(m)
-        assert p.auth_surfaces == [s.surface for s in m.security if s.surface.strip()], rel
+        expected: list[str] = []
+        for name in ([s.surface.strip() for s in m.security]
+                     + [r.statement.strip() for r in m.rules if r.access]):
+            if name and name not in expected:
+                expected.append(name)
+        assert build_profile_from_model(m).auth_surfaces == expected, rel
+
+
+def test_this_repos_own_map_carries_its_auth_surface_as_rules_now() -> None:
+    """The fold, on the one map that has the `Component.files` a rule needs. The two fixtures keep
+    their `security[]` rows: with zero component `files`, `check_rules_model` BLOCKS a rule on
+    them — they are exactly the "old maps are rebuilt" case."""
+    m = load_model((REPO / ".coyodex" / "project-map.json").read_text(encoding="utf-8"))
+    assert m.security == [] and len([r for r in m.rules if r.access]) == 14
+    # 14, matching the 14 rows it replaced — `auth_surfaces_must_not_drop` is a hard gate with no
+    # tolerance, and it cannot tell a deliberate fusion from a lost surface.
+    assert build_profile_from_model(m).security_surfaces == 14
 
 
 def test_an_access_rule_joins_the_auth_surface_set() -> None:

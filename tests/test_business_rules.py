@@ -69,7 +69,7 @@ from coyodex.reconcile import (
     load_reconcile,
     validate_reconcile,
 )
-from coyodex.views import model_to_graph, model_to_markdown
+from coyodex.views import auth_surface_rows, model_to_graph, model_to_markdown
 from coyodex.validate_model import (
     _referenced_ids,
     call_site_anchors,
@@ -293,6 +293,8 @@ def test_dump_resolves_a_block_and_a_rule() -> None:
     assert blk is not None and blk["kind"] == "block" and blk["members"] == ["BR1"]
     br = resolve_id(m, "BR1")
     assert br is not None and br["kind"] == "business_rule"
+    # a rule's display text is its STATEMENT — it has neither `name` nor `title`
+    assert br["name"] == "Only the order's owner may cancel it."
 
 
 def test_dump_legend_lists_blocks_and_rules() -> None:
@@ -318,7 +320,9 @@ def test_a_rule_carries_no_authored_component_step_or_sweep_field() -> None:
     are computed from `sites` against the rest of the map. An authored field for any of them would
     let the layer assert what nobody checked — which is exactly how the prototype lied."""
     names = {f.name for f in dataclasses.fields(BusinessRule)}
-    assert names == {"id", "statement", "block", "sites", "access", "confidence"}
+    # `risk` is AUTHORED, like `confidence` — a judgement about what the decision's limit costs,
+    # which nothing derives. The guarantee is about the DERIVED quantities below.
+    assert names == {"id", "statement", "block", "sites", "access", "risk", "confidence"}
     assert not names & {"components", "component", "steps", "use_cases", "swept", "entities"}
     assert {f.name for f in dataclasses.fields(RuleSite)} == {"where", "why", "no_call_site"}
 
@@ -938,14 +942,14 @@ def test_a_rule_landing_in_an_unclaimed_file_is_advisory_and_recordable() -> Non
 
 # --- the interim security-duplication guard ---------------------------------------
 
-def test_an_access_rule_repeating_a_security_source_is_blocking_and_escapable() -> None:
+def test_the_interim_duplication_guard_is_retired_at_the_fold() -> None:
+    """It existed only while `security[]` was the storage AND rules were arriving. Rules are the
+    storage now, so a map carrying both is an UN-REBUILT map, not a mistake — and this repo's own
+    `duplicate_security_warnings` already says an anchor is not a claim identity."""
     m = make_checkable_model()
     m.rules[0].access = True
     m.security = [SecurityRow(surface="Cancel order", who="owner", source="src/guard.py:3")]
-    assert any("claimed twice" in p for p in rule_problems(m))
-    m.extras = [ExtraSection(heading="Accepted duplications",
-                             body="src/guard.py:3: the row ships until the fold")]
-    assert not any("claimed twice" in p for p in rule_problems(m))
+    assert rule_problems(m) == []
 
 
 def test_a_non_access_rule_sharing_a_security_anchor_is_fine() -> None:
@@ -1925,6 +1929,156 @@ def test_the_rail_nests_child_blocks_under_their_parent() -> None:
     as its parent's sibling — and makes the field dead payload on a public contract."""
     body = _js_function("renderRules")
     assert "kids.set(b.parent || ''" in body and "walk(b.id, depth + 1, seen)" in body
+
+
+# ═══ Phase 8 — the security fold ══════════════════════════════════════════════════
+
+def test_an_access_rule_renders_in_the_security_table() -> None:
+    """The table is a DERIVED VIEW of the rules now — re-typing an auth surface into a second
+    storage is the problem this fold ends."""
+    m = make_checkable_model()
+    m.rules[0].access = True
+    m.rules[0].risk = "Anyone could cancel anyone's order."
+    md = model_to_markdown(m)
+    sec = md[md.index("### Security & auth"):]
+    sec = sec[:sec.index("\n---")]
+    assert "Derived from the business rules marked `access`" in sec
+    assert "BR1** — Only the order's owner may cancel it." in sec
+    assert "Anyone could cancel anyone's order." in sec
+    assert "[src/guard.py:3](src/guard.py:3)" in sec
+
+
+def test_a_non_access_rule_is_not_a_security_surface() -> None:
+    m = make_checkable_model()
+    assert "### Security & auth" not in model_to_markdown(m)
+
+
+def test_a_legacy_security_row_still_renders_beside_the_rules() -> None:
+    """An un-rebuilt map must not lose its table — and a reader must be able to tell which storage
+    each row came from."""
+    m = make_checkable_model()
+    m.rules[0].access = True
+    m.security = [SecurityRow(surface="Refund endpoint", who="admins", source="src/guard.py:4",
+                              risk="anyone could refund")]
+    md = model_to_markdown(m)
+    assert "*(legacy row)* Refund endpoint — admins" in md and "BR1** —" in md
+
+
+def test_a_declared_absence_access_rule_says_so_in_the_table() -> None:
+    m = make_checkable_model()
+    m.rules[0].access = True
+    m.rules[0].sites = [RuleSite(why="the type forbids it", no_call_site=True)]
+    assert "*enforced by construction*" in model_to_markdown(m)
+
+
+def test_risk_is_authored_and_published() -> None:
+    """The one thing a `security[]` row carried that a statement, a site and a `why` between them
+    cannot say: what the decision's LIMIT costs."""
+    from coyodex.json_schema import generate_schema
+    props = generate_schema()["$defs"]["BusinessRule"]["properties"]
+    assert "risk" in props and "AT STAKE" in props["risk"]["description"]
+
+
+def test_the_shape_line_counts_rules_and_names_a_legacy_row_as_legacy() -> None:
+    from coyodex.finalize import _shape_line
+    with tempfile.TemporaryDirectory() as td:
+        path = Path(td) / "project-map.json"
+        m = make_checkable_model()
+        path.write_text(to_canonical_json(m), encoding="utf-8")
+        assert "1 business rules in 1 blocks" in _shape_line(path)
+        assert "LEGACY" not in _shape_line(path)
+        m.security = [SecurityRow(surface="s", who="w", source="src/guard.py:3")]
+        path.write_text(to_canonical_json(m), encoding="utf-8")
+        assert "1 LEGACY security rows" in _shape_line(path)
+
+
+def test_this_repos_own_map_is_folded_and_the_fixtures_are_not() -> None:
+    """The fixtures have ZERO component `files`, so `check_rules_model` BLOCKS a rule on them —
+    they are exactly the "old maps are rebuilt" case the release note names."""
+    own = load_model((REPO / ".coyodex" / "project-map.json").read_text(encoding="utf-8"))
+    # 1:1, deliberately. Fusing is the T7 AUTHORING pass, not a migration — and fusing here fused
+    # two different decisions, misattributed a refutation onto a live site, and dropped the count
+    # the eval's hard auth gate reads. Every access rule carries the row's `who` and `risk` prose.
+    assert own.security == []
+    access = [r for r in own.rules if r.access]
+    assert len(access) == 14 and all(r.risk.strip() for r in access)
+    assert all(r.confidence == "inferred" for r in access), "a migration grounds nothing"
+    for rel in ("tests/fixtures/mcpolis-project-map", "eval/fixtures/trapdoor/golden/project-map"):
+        legacy = load_model((REPO / f"{rel}.json").read_text(encoding="utf-8"))
+        assert legacy.security and not legacy.rules, rel
+        assert not any(c.files for c in legacy.components), rel   # why it cannot be folded
+
+
+def test_the_release_note_states_the_break_and_the_absence_of_a_migration_tool() -> None:
+    text = (REPO / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "There is no migration tool" in text and "rebuilt" in text
+    assert "an auth surface is a business rule" in (REPO / "method.md").read_text(
+        encoding="utf-8").lower()
+
+
+# --- reconciled after the phase-8 review -------------------------------------------
+
+def test_the_viewer_transport_carries_the_auth_surface_from_both_storages() -> None:
+    """The fold emptied `security[]`, and the viewer's System tab reads that key — so a folded map
+    showed NO Security section at all while the markdown showed fourteen rows. That is the
+    two-answers problem the fold exists to end, running the other way."""
+    m = make_checkable_model()
+    m.rules[0].access = True
+    m.rules[0].risk = "Anyone could cancel anyone's order."
+    rows = cast(list, model_to_graph(m)["security"])
+    assert [r["kind"] for r in rows] == ["rule"]
+    assert rows[0]["surface"] == "Only the order's owner may cancel it."
+    assert rows[0]["risk"] == "Anyone could cancel anyone's order."
+    m.security = [SecurityRow(surface="Refund", who="admins", source="src/guard.py:4", risk="r")]
+    rows = cast(list, model_to_graph(m)["security"])
+    assert [r["kind"] for r in rows] == ["rule", "legacy"] and rows[1]["who"] == "admins"
+
+
+def test_the_markdown_table_and_the_transport_read_one_derivation() -> None:
+    m = make_checkable_model()
+    m.rules[0].access = True
+    m.rules[0].risk = "the cost"
+    assert [r["surface"] for r in auth_surface_rows(m)] \
+        == [r["surface"] for r in cast(list, model_to_graph(m)["security"])]
+    assert "the cost" in model_to_markdown(m)
+
+
+def test_the_rule_payload_carries_risk() -> None:
+    m = make_checkable_model()
+    m.rules[0].risk = "what the limit costs"
+    assert rules_view_of(m)["rules"][0]["risk"] == "what the limit costs"
+
+
+def test_a_fragment_authoring_security_rows_is_told_they_are_legacy() -> None:
+    """Nothing REJECTS a security row — a pre-fold map still loads. This is where a NEW build finds
+    out, in the authoring agent's own turn rather than never."""
+    from coyodex.lint_fragment import lint_fragment_warnings
+    m = make_checkable_model()
+    m.security = [SecurityRow(surface="s", who="w", source="src/guard.py:3", risk="r")]
+    assert any("legacy storage" in w for w in lint_fragment_warnings(m))
+    m.security = []
+    assert not any("legacy storage" in w for w in lint_fragment_warnings(m))
+
+
+def test_a_rule_merge_does_not_drop_the_losers_risk_note() -> None:
+    """`risk` is authored prose with no other home; a content merge that keeps only the survivor's
+    loses what the two agents between them did write."""
+    m = make_checkable_model()
+    m.rules[0].risk = ""
+    m.rules.append(BusinessRule(id="BR9", statement=m.rules[0].statement, risk="the real stake",
+                                sites=[RuleSite(where="src/guard.py:3", why="same line")]))
+    assert _merge_duplicate_rules(m) == 1
+    assert m.rules[0].risk == "the real stake"
+
+
+def test_the_security_lead_line_tells_the_truth_on_a_legacy_map() -> None:
+    """The "derived from the rules" preamble sat above a 100%-legacy table on both fixtures."""
+    m = make_checkable_model()
+    m.security = [SecurityRow(surface="s", who="w", source="src/guard.py:3", risk="r")]
+    md = model_to_markdown(m)
+    assert "predates the fold and has not been rebuilt" in md
+    m.rules[0].access = True
+    assert "Derived from the business rules marked `access`" in model_to_markdown(m)
 
 
 if __name__ == "__main__":
