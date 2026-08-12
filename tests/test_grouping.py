@@ -1986,6 +1986,45 @@ def test_gen_domain_mermaid_resolves_embedded_entity_type() -> None:
     assert "AuthMode mode" in mm and "E2 mode" not in mm
 
 
+def _box_member_lines(mm: str, eid: str) -> list[str]:
+    """The member lines a class box draws, in order — the list `entity_field_links` indexes into."""
+    out: list[str] = []
+    inside = False
+    for line in mm.splitlines():
+        if line.strip().startswith(f'class {eid}["'):
+            inside = line.rstrip().endswith("{")
+        elif inside:
+            if line.strip() == "}":
+                break
+            out.append(line.strip())
+    return out
+
+
+def test_entity_field_links_points_at_the_typing_entity() -> None:
+    # a field typed by an entity (`mode:E2`) is offered to the viewer as a link on the TYPE word.
+    links = gen_viewer.entity_field_links(parse_map(make_domain_map(_CARDS_EMBEDDED_ENTITY_TYPE)))
+    assert links == {"E1": [{"i": 0, "type": "AuthMode", "target": "E2"}]}   # `id:int` is not a link
+
+
+def test_entity_field_links_carries_the_collection_shape() -> None:
+    # the `[]` shape rides on the type, so the link covers exactly the drawn type text.
+    links = gen_viewer.entity_field_links(parse_map(make_domain_map(_CARDS_COLLECTION_MARKER)))
+    assert links["E1"] == [{"i": 0, "type": "StoredRefreshToken[]", "target": "E2"}]
+
+
+def test_entity_field_links_indexes_match_the_drawn_box() -> None:
+    # the viewer finds a link's member by INDEX in the box, so every index must land on a line that
+    # actually starts with that link's type — otherwise a link would sit on the wrong field.
+    graph = parse_map(make_domain_map(_CARDS_COLLECTION_MARKER))
+    mm = gen_viewer.gen_domain_mermaid(graph)
+    links = gen_viewer.entity_field_links(graph)
+    assert links
+    for eid, rows in links.items():
+        members = _box_member_lines(mm, eid)
+        for row in rows:
+            assert members[int(row["i"])].startswith(str(row["type"]) + " ")
+
+
 def test_gen_domain_mermaid_shows_collection_marker_in_box() -> None:
     # a `[]` (collection) marker is part of the type SHAPE, so it renders in the box member —
     # `StoredRefreshToken[] refresh_tokens`, not a single-valued-looking `StoredRefreshToken …`.

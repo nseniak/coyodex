@@ -17,6 +17,10 @@ let MERMAID_DOMAIN_EDGE_CARD;   // subdomain edge pair: 'A>B' -> two-subdomain c
 let MERMAID_BRIDGE_CARD;        // bridge pair 'S>SD' -> subsystem×subdomain classDiagram
 let BRIDGE_EDGES;               // flat list of every component->entity edge (structure<->domain bridge atoms)
 let DOMAIN_CONTAINER_EDGES;     // inter-subdomain arrow 'A>B' -> [crossing E->E relations]
+let ENTITY_FIELD_LINKS;         // entity id -> [{i, type, target}] : the class-box field lines whose
+                                // TYPE is another entity, so the viewer can link the type word
+let ENTITY_STORE_LINKS;         // entity id -> {i, text, dep} : the class-box store line, so the
+                                // viewer can link it into the Data tab
 let MERMAID_DEPLOYMENT;    // Deployment overview (the "All" view): processes + infra + derived `runs` edges
 let DEPLOYMENT_CARDS;      // per-process drill: unit-name -> flowchart card of the subsystems it runs
 let COMPLETENESS = {};        // the four-state counts shown on the System tab
@@ -76,6 +80,8 @@ function applyBundle(b) {
   MERMAID_DOMAIN = b.mermaidDomain; MERMAID_DOMAIN_CONTAINER = b.mermaidDomainContainer;
   MERMAID_DOMAIN_SUB = b.mermaidDomainSub; MERMAID_DOMAIN_EDGE_CARD = b.mermaidDomainEdgeCard;
   MERMAID_BRIDGE_CARD = b.mermaidBridgeCard; BRIDGE_EDGES = b.bridgeEdges; DOMAIN_CONTAINER_EDGES = b.domainContainerEdges;
+  ENTITY_FIELD_LINKS = b.entityFieldLinks || {};
+  ENTITY_STORE_LINKS = b.entityStoreLinks || {};
   MERMAID_DEPLOYMENT = b.mermaidDeployment; DEPLOYMENT_CARDS = b.deploymentCards; HAS_DEPLOYMENT = b.hasDeployment;
   DEPLOYMENT_GROUP_CARDS = b.deploymentGroupCards || {}; DEPLOYMENT_GROUP_MEMBERS = b.deploymentGroupMembers || {};
   DEPLOY_ENVS = b.deploymentEnvironments || [];
@@ -4108,6 +4114,7 @@ function bindDomainSub(sd) {
       });
     }
   });
+  bindEntityBoxLinks();  // every box is in nodeEls now — link its entity-typed fields + its store line
   eachClassEdge(mainScene.root, (p, label, x, y, i) => {
     const kx = GRAPH.nodes[x] && GRAPH.nodes[x].kind;
     const ky = GRAPH.nodes[y] && GRAPH.nodes[y].kind;
@@ -4276,6 +4283,61 @@ function fixDomainMarkers(root) {
     m.dataset.fixed = '1';
   });
 }
+// ── clickable links inside a class box ───────────────────────────────────────────────────────────
+// An entity box says two things that name somewhere else in the map, and both were drawn as inert
+// text — the reader had to hunt the target down by eye:
+//   * a field whose TYPE is another entity (`Role[] roles`) -> SELECT that entity;
+//   * the store line (`🛢 guilds(MongoDB)`) -> the Data tab, focused on that store's pane and this
+//     entity's row (exactly the jump the info pane's "See in Data view" link makes).
+// WHICH lines are linkable, and the exact text each link covers, comes from the generator
+// (ENTITY_FIELD_LINKS / ENTITY_STORE_LINKS, keyed by the line's index in its compartment) — the
+// generator is the one place that decides what a box line says, so a link can't drift from the drawn
+// text. Each entry is still re-checked against the text actually rendered before it is linked: a
+// mismatch means the two went out of step, and drawing no link beats a wrong one.
+
+// Turn the leading `text` of one drawn box line into a link running `run`. Returns false when the line
+// doesn't start with that text (the generator and the render are out of step) — the caller then leaves
+// it alone. `row` is a Mermaid class-box label group; its first text node carries the whole line.
+function linkifyBoxRow(row, text, title, run) {
+  const host = row && row.querySelector('.nodeLabel');
+  if (!host) return false;
+  const node = document.createTreeWalker(host, NodeFilter.SHOW_TEXT).nextNode();
+  if (!node || node.data.slice(0, text.length) !== text) return false;
+  node.splitText(text.length);                      // `node` now holds exactly `text`, the rest follows
+  const link = document.createElement('span');
+  link.className = 'boxlink';
+  link.textContent = node.data;
+  link.title = title;
+  link.addEventListener('click', (ev) => {
+    if (isDrag(ev)) return;
+    ev.stopPropagation();                           // the box's own click must not also select the box
+    run();
+  });
+  node.parentNode.replaceChild(link, node);
+  return true;
+}
+function bindEntityBoxLinks() {
+  for (const id in mainScene.nodeEls) {
+    const el = mainScene.nodeEls[id];
+    // A field's type is the member line's PREFIX, so only that word becomes the link — it is the type
+    // that names another element, not the property. A collapsed neighbour box draws no members at all.
+    const members = el.querySelectorAll('g.members-group > g.label');
+    for (const link of (ENTITY_FIELD_LINKS[id] || [])) {
+      const target = GRAPH.nodes[link.target];
+      if (target && members[link.i])
+        linkifyBoxRow(members[link.i], link.type, 'Select entity: ' + target.name,
+          () => selectFromTree(link.target));
+    }
+    // The store line is a WHOLE line in the box's second compartment, and all of it means "this lives
+    // there" — so the link covers the line, not a word of it. Gated on the Data tab existing, the same
+    // condition the info pane's "See in Data view" link is gated on (persistedInHtml).
+    const store = ENTITY_STORE_LINKS[id];
+    const extras = el.querySelectorAll('g.methods-group > g.label');
+    if (HAS_DATA && store && extras[store.i])
+      linkifyBoxRow(extras[store.i], store.text, 'See in Data view',
+        () => go({ kind: 'data', store: store.dep, entity: id }));
+  }
+}
 function bindDomain() {
   fixDomainMarkers(mainScene.root);
   mainScene.root.querySelectorAll('g.node, g.classGroup').forEach((el) => {
@@ -4297,6 +4359,7 @@ function bindDomain() {
       el.addEventListener('click', (ev) => { if (isDrag(ev)) return; ev.stopPropagation(); if (openSrcClick(id, ev)) return; selectNodeFromCanvas(el, id, ev); });
     }
   });
+  bindEntityBoxLinks();  // every box is in nodeEls now — link its entity-typed fields + its store line
   eachClassEdge(mainScene.root, (p, label, src, dst, i) => {
     const ks = GRAPH.nodes[src] && GRAPH.nodes[src].kind, kd = GRAPH.nodes[dst] && GRAPH.nodes[dst].kind;
     if (ks === 'subsystem' || kd === 'subsystem') {  // a bridge arrow subsystem -> entity (owns/reads)

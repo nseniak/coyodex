@@ -127,7 +127,10 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
 - **Entities** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal
   relations (composition/aggregation/inheritance/association). Click a class for its fields +
-  `file:line`; click a relation for its kind + cardinality. When the model groups entities into
+  `file:line`; click a relation for its kind + cardinality. Two things a box says are links: a field
+  whose **type is another entity** (`Role[] roles`) — click the type to select that entity, wherever
+  it is drawn — and the **store line** (`🛢 orders(MongoDB)`), which opens the Data tab on that
+  store's pane with this entity's row flashed (the same jump as the info pane's "See in Data view"). When the model groups entities into
   **subdomains**, the Entities view drills exactly like Subsystems (in place, back/forward history):
   - It leads with a **Subdomains overview** — one box per subdomain, with `SD→SD` arrows derived from
     the crossing entity relations (count-labelled).

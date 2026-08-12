@@ -390,6 +390,36 @@ def _lifecycle_line(node: dict[str, Any]) -> str | None:
     return f"⟳ lifecycle({n} states)" if n else None
 
 
+def _extra_rows(node: dict[str, Any], dep_names: dict[str, str]) -> list[str]:
+    """The lines an entity box draws in its SECOND compartment — where it lives, how long it is kept,
+    its lifecycle — in drawn order, absent ones dropped. Its own function because the store line is
+    also a LINK (entity_store_links needs the line's index in this compartment), and the drawn order
+    must be decided exactly once."""
+    return [x for x in (_store_line(node, dep_names), _retention_line(node), _lifecycle_line(node)) if x]
+
+
+def _member_rows(node: dict[str, Any], ent_names: dict[str, str]) -> list[tuple[str, str, str]]:
+    """One `(member line, type text, target entity id)` per attribute line an entity box draws, in
+    drawn order. The ONE place that decides both what a member line says and which entity (if any)
+    its type names — the viewer turns these same rows into per-field links, so a link can never point
+    somewhere other than the type the reader is looking at. `target` is '' for a plain type
+    (`string`, or a type that isn't an entity in this map)."""
+    rows: list[tuple[str, str, str]] = []
+    for a in cast("list[dict[str, str]]", node.get("attrs") or []):
+        # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
+        raw = str(a.get("type", ""))
+        atype = _safe_member(ent_names.get(raw, raw))
+        # `[]` is part of the type's SHAPE (it makes the field multi-valued), so it rides on the type
+        # — unlike PK/FK/opt/unique, which render as a toggleable ` · ` suffix (see _field_markers).
+        markers = str(a.get("markers", ""))
+        if "[]" in markers.split():
+            atype += "[]"
+        member = f'{atype} {_safe_member(str(a.get("name", "")))}'.strip()
+        if member:
+            rows.append((f"{member}{_field_markers(markers)}", atype, raw if raw in ent_names else ""))
+    return rows
+
+
 def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
                      with_members: bool, dep_names: dict[str, str] | None = None) -> list[str]:
     """The `classDiagram` lines for one entity box. `with_members=True` renders its attributes
@@ -406,22 +436,54 @@ def _class_box_lines(nid: str, node: dict[str, Any], ent_names: dict[str, str],
     if not with_members:
         return [f'  class {nid}["{label}"]']
     out = [f'  class {nid}["{label}"] {{']
-    for a in cast("list[dict[str, str]]", node.get("attrs") or []):
-        # an embedded-entity-id type (`mode:E10`) renders with the entity's NAME, not its id
-        atype = _safe_member(ent_names.get(str(a.get("type", "")), str(a.get("type", ""))))
-        # `[]` is part of the type's SHAPE (it makes the field multi-valued), so it rides on the type
-        # — unlike PK/FK/opt/unique, which render as a toggleable ` · ` suffix (see _field_markers).
-        markers = str(a.get("markers", ""))
-        if "[]" in markers.split():
-            atype += "[]"
-        member = f'{atype} {_safe_member(str(a.get("name", "")))}'.strip()
-        if member:
-            out.append(f"    {member}{_field_markers(markers)}")
+    for line, _atype, _target in _member_rows(node, ent_names):
+        out.append(f"    {line}")
     # Second compartment (below the divider): where it lives, how long it is kept, its lifecycle.
-    for extra in (_store_line(node, dep_names or {}), _retention_line(node), _lifecycle_line(node)):
-        if extra:
-            out.append(f"    {extra}")
+    for extra in _extra_rows(node, dep_names or {}):
+        out.append(f"    {extra}")
     out.append("  }")
+    return out
+
+
+def entity_field_links(graph: GraphDict) -> dict[str, list[dict[str, Any]]]:
+    """Per entity, every attribute line whose TYPE is another entity of this map — `{i, type, target}`,
+    where `i` is that line's index among the members its box draws and `type` is the exact type text
+    drawn there. The viewer turns each one into a click target on the type word, so a field like
+    `Role[] roles` selects the Role entity. Computed HERE, off the same rows the box is built from,
+    because what a member line says is a generator decision (entity-name lookup, the `[]` shape,
+    sanitising) the frontend must never re-derive — re-deriving it is how a link starts pointing at
+    something other than the word under the cursor."""
+    ent_names = {nid: str(n["name"]) for nid, n in graph["nodes"].items() if str(n["kind"]) == "entity"}
+    out: dict[str, list[dict[str, Any]]] = {}
+    for nid, n in graph["nodes"].items():
+        if str(n["kind"]) != "entity":
+            continue
+        rows = _member_rows(cast("dict[str, Any]", n), ent_names)
+        links = [{"i": i, "type": atype, "target": target}
+                 for i, (_line, atype, target) in enumerate(rows) if target]
+        if links:
+            out[nid] = links
+    return out
+
+
+def entity_store_links(graph: GraphDict) -> dict[str, dict[str, Any]]:
+    """Per entity that draws a store line (`🛢 guilds(MongoDB)`), what that line should link to —
+    `{i, text, dep}`, where `i` is the line's index in the box's SECOND compartment and `dep` is the
+    dependency the store lives in. The viewer turns the line into a link into the Data tab, focused on
+    that store's pane and this entity's row — the same jump the info pane's "See in Data view" makes.
+    Emitted here for the same reason the field links are (see entity_field_links): the drawn text is a
+    generator decision, and the frontend must not re-derive it."""
+    dep_names = _dep_name_map(graph)
+    out: dict[str, dict[str, Any]] = {}
+    for nid, n in graph["nodes"].items():
+        if str(n["kind"]) != "entity":
+            continue
+        node = cast("dict[str, Any]", n)
+        line = _store_line(node, dep_names)
+        dep = str((node.get("store") or {}).get("dep") or "")
+        if not line or not dep:
+            continue
+        out[nid] = {"i": _extra_rows(node, dep_names).index(line), "text": line, "dep": dep}
     return out
 
 
@@ -3044,6 +3106,11 @@ class ViewBundle(TypedDict):
     mermaidDomainContainer: str
     mermaidDomainSub: dict[str, str]
     mermaidDomainEdgeCard: dict[str, str]
+    entityFieldLinks: dict[str, list[dict[str, Any]]]  # entity id -> its entity-typed field
+                                   # links ({i, type, target}); drives the clickable type
+                                   # word on a class box (see entity_field_links)
+    entityStoreLinks: dict[str, dict[str, Any]]      # entity id -> its store line's link into the
+                                   # Data tab ({i, text, dep}); see entity_store_links
     mermaidBridgeCard: dict[str, str]
     bridgeEdges: list[dict[str, str]]
     domainContainerEdges: dict[str, list[dict[str, str]]]
@@ -3145,6 +3212,8 @@ def build_view_bundle(graph: GraphDict, report: Path | None, anchor: Path) -> Vi
         mermaidDomainContainer=gen_domain_container_mermaid(graph) if subdomains else "",
         mermaidDomainSub=domain_subdomain_mermaids(graph) if subdomains else {},
         mermaidDomainEdgeCard=domain_edge_card_mermaids(graph) if subdomains else {},
+        entityFieldLinks=entity_field_links(graph) if domain else {},
+        entityStoreLinks=entity_store_links(graph) if domain else {},
         mermaidBridgeCard=bridge_card_mermaids(graph) if (grouping and subdomains) else {},
         bridgeEdges=gen_bridge_edges(graph) if (grouping and subdomains) else [],
         domainContainerEdges=gen_domain_container_edges(graph) if subdomains else {},

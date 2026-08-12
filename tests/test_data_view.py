@@ -26,6 +26,7 @@ from coyodex.validate_model import unexplained_persistence_pairs
 from coyodex.views import model_to_graph
 from coyodex.viewer.gen_viewer import (
     ENTITY_STYLE,
+    entity_store_links,
     gen_channel_mermaids,
     gen_domain_mermaid,
 )
@@ -249,6 +250,26 @@ def test_domain_diagram_box_carries_store_retention_lifecycle_and_markers():
     # so it keeps the ordinary entity tint (no dimming, which would only restate the same fact).
     assert not any("🛢" in ln for ln in _box(src, '  class E4["Address"] {'))
     assert f"style E4 {ENTITY_STYLE}" in src
+
+
+def test_entity_store_links_point_the_store_line_at_its_data_pane():
+    graph = model_to_graph(make_data_model())
+    links = entity_store_links(graph)
+    # The line the box actually draws, its index in the SECOND compartment, and the dep whose Data-tab
+    # pane it opens — the viewer needs all three to link the line without re-deriving its text.
+    assert links["E1"] == {"i": 0, "text": "🛢 orders(MongoDB)", "dep": "D1"}
+    assert "E4" not in links                        # embedded entity: no store line, so nothing to link
+
+
+def test_entity_store_link_index_matches_the_drawn_box():
+    # The viewer finds the line by INDEX among the box's second-compartment lines, so the index must
+    # land on the store line itself — never on the retention or lifecycle line beside it.
+    graph = model_to_graph(make_data_model())
+    src = gen_domain_mermaid(graph)
+    box = _box(src, '  class E1["Order"] {')
+    extras = [ln for ln in box if not ln[0].isalpha()]   # the `name(args)` lines, all icon-led
+    link = entity_store_links(graph)["E1"]
+    assert extras[int(link["i"])] == link["text"]
 
 
 def test_detail_extras_are_always_emitted_so_the_toggle_never_relayouts():
