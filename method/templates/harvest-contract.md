@@ -54,8 +54,11 @@ lead; nothing above this line goes into an agent prompt.
 > **Anchor formats** (`assemble` does not fix these up — write them right, or `coyodex validate`
 > rejects them): `components[].source`, `entities[].source`, `components[].entry_point`,
 > `deps[].where_configured`, `edges[].where`, `entry_points[].source`, `evidence[].file`,
-> `run_commands[].source`, `security[].source`, `non_entity_types[].source`, **and the group `source`
-> fields** (`subsystems[].source` / `subdomains[].source`) are all **bare** repo-root-relative refs
+> `run_commands[].source`, `security[].source`, `non_entity_types[].source`,
+> **`rules[].sites[].where`** (the OPERATIVE line — its `:line` is REQUIRED, never a bare file),
+> **and the group `source`
+> fields** (`subsystems[].source` / `subdomains[].source` / `capabilities[].source` /
+> `blocks[].source`) are all **bare** repo-root-relative refs
 > (`path/to/file.py:120`; a directory anchor keeps its trailing slash, `path/dir/`; an extensionless
 > ops file carrying a line is fine — `Dockerfile:1`, `Makefile:6-9`) — a bare file or directory ref,
 > never a markdown link and never two refs joined by a separator (put a run command's doc pointer in

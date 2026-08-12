@@ -162,6 +162,17 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
     # other block's decisions would read as debt) and the `Component.files` gate (they live in a
     # different fragment, so a block agent would fail its lint on a defect it cannot fix).
     problems += rule_row_problems(m)
+    # `block` is a SYNTHESIS assignment, exactly like `capability`: a `BLK` id is minted before the
+    # rules exist, and a re-synthesis that renumbers blocks must not silently re-point every rule.
+    # The method says "never in the fragment"; without this the rule is prose, and a fragment
+    # carrying `block` lints clean and assembles with the value intact.
+    in_fragment = [r.id for r in m.rules if r.block]
+    if in_fragment:
+        problems.append(
+            f"business rule(s) carry `block` in a fragment: {', '.join(in_fragment)} — block "
+            "assignment goes through the synthesis `reconcile` (`coyodex reconcile`), never a "
+            "fragment: BLK ids are minted before the rules exist, and a re-synthesis that "
+            "renumbers them would leave these pointing at the wrong areas")
     if repo_root is not None:
         roots = [repo_root.resolve()]
         problems += check_anchor_existence_model(m, roots)

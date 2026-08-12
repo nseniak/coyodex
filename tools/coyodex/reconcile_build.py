@@ -47,7 +47,14 @@ from pathlib import Path
 
 from coyodex.anchors import strip_anchor
 from coyodex.assemble import expand_directories, load_fragment_paths, merge_fragments
-from coyodex.model import Component, Dep, Entity, ProjectModel, load_model_path
+from coyodex.model import (
+    BusinessRule,
+    Component,
+    Dep,
+    Entity,
+    ProjectModel,
+    load_model_path,
+)
 from coyodex.pathmatch import matches
 
 _DEFAULT_MAP = ".coyodex/project-map.json"
@@ -60,6 +67,7 @@ _FIELD_OWNER: dict[str, type] = {
     "runs_in": Component,
     "subdomain": Entity,
     "bucket": Dep,
+    "block": BusinessRule,
 }
 
 
@@ -68,12 +76,19 @@ class RuleError(Exception):
 
 
 def _elements(m: ProjectModel) -> list[object]:
-    return [*m.components, *m.entities, *m.deps]
+    return [*m.components, *m.entities, *m.deps, *m.rules]
 
 
 def _source_of(el: object) -> str:
-    """The element's repo-relative source path, anchor suffix stripped ('' when it has none)."""
+    """The element's repo-relative source path, anchor suffix stripped ('' when it has none).
+
+    A business RULE has no `source` — its location is its sites, and it may have several. The FIRST
+    anchored site stands in, so `source_glob` can sweep a directory's rules the way it sweeps its
+    components; a rule spanning several directories is placed by whichever one its first site names,
+    which is why `ids` is the reliable form for `block` (and what `coyodex reconcile` reports)."""
     raw = getattr(el, "source", "") or getattr(el, "where_configured", "") or ""
+    if not raw and isinstance(el, BusinessRule):
+        raw = next(((s.where or "") for s in el.sites if (s.where or "").strip()), "")
     return strip_anchor(raw).rstrip("/") if raw else ""
 
 
@@ -157,7 +172,8 @@ def coverage_report(m: ProjectModel, doc: dict) -> list[str]:
     touched = {eid for s in doc.get("set", []) for eid in s.get("ids", [])}
     out: list[str] = []
     for label, elements, fieldname in (("component", m.components, "subsystem"),
-                                       ("entity", m.entities, "subdomain")):
+                                       ("entity", m.entities, "subdomain"),
+                                       ("business rule", m.rules, "block")):
         missing = [el.id for el in elements
                    if el.id not in touched and not getattr(el, fieldname, None)]
         if missing:

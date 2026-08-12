@@ -503,6 +503,40 @@ prose level, the model has no field for it, and builders rightly skipped it — 
 - On-demand extras: state machines/lifecycles, event/message catalog, error/failure
   modes, change hotspots (git churn), permissions matrix (Role × use case).
 
+### Business logic — what the product DECIDES (T7)
+**This is the one genuine content gap the other tiers do not cover.** Entities say what the product
+stores, flows say what it does in what order, lifecycles say what states it moves through,
+components and edges say how it is built. None of them says what it **decides** — and the decision
+is exactly what a reader means by "the interesting, product-specific part". A reader who asks "what
+is special about this application?" gets no answer from a well-formed map without it.
+
+A **rule** is ONE decision, in product language, naming no component: *"only the order's owner may
+cancel it"*, *"own connection first, else oldest shared"*. A **block** groups rules the way a
+capability groups use cases — an area a product person would argue about. Rules are written after
+the trace, one agent per block (see *After the trace*), because sweeping a rule's enforcement sites
+needs the flows.
+
+Each rule carries `sites`: every place the decision is actually ENFORCED, anchored at the
+**operative line** — the one that acts, never a definition header and never a line chosen because
+it happens to join a flow step. A decision enforced by construction (a type, a schema constraint, a
+config-wired guard) says so with `no_call_site` and no anchor.
+
+**Everything else is derived.** Which components enforce a rule, which use-case steps it lands on,
+which entities it touches and whether the sweep that produced it finished are all COMPUTED from the
+site anchors — there is no field for any of them, and none may be added. That is not a convenience:
+the first prototype of this layer rendered hand-assigned data as if it were derived, in six distinct
+ways, and every one of them looked correct on screen. An authored "I searched the whole repo" is
+unfalsifiable, so sweep state comes from a canary instead — anchored flow steps that read like a
+decision no rule covers (`validate` lists them; the `Sweep debt` extras heading records the ones
+that are not decisions). **The canary is a floor, not a proof**: it reads the wording of anchored
+steps with a heuristic vocabulary, so an empty worklist means "nothing obvious was left", never
+"the sweep was exhaustive".
+
+**This section is shown in the viewer** (`coyodex serve` → Business logic tab) and in the markdown
+view as `## T7 — Business logic`, with each site rendered as *line — component*. A file several
+components claim shows EVERY one of them; a site in a file no component claims renders as
+**unverified**, which is a real state, not a rendering bug.
+
 ### Test completeness — measure against the MAP, not line %
 **This table is shown in the viewer**: the `coyodex serve` Tests tab renders the honesty note + the
 gap table (`Target · Tested? · Test(s) · Gap/risk · Confidence`) — so an empty table is a visible gap.
@@ -529,7 +563,12 @@ gaps are the deliverable.
   surviving mutation = strongest.
 
 ### Level 2 (on demand, reached by drilling)
-T7 Component internals · T8 Config/env vars · T9 Data schema.
+T8 Component internals · T9 Config/env vars · T10 Data schema.
+
+<!-- Renumbered from T7/T8/T9 when the business-logic section landed: T7 is a RENDERED map section
+     (the map document runs T0 → T6b → T7), while these three are on-demand drill tiers nothing in
+     the tooling produces. Two different things called T7 in one document is the confusion an agent
+     reading this pays for. -->
 
 ### Relationships (always included)
 - Backbone = a project-wide edge list: `From | Verb | To | Why | Where`. Uniform
@@ -1045,6 +1084,14 @@ synthesis → parallel trace.**
   advisory itself stays quiet until flows exist; during Phase 3 it fires on every not-yet-traced
   surface and **drains as traces land** — a mid-trace wall of these warnings is expected, not a
   defect. Only what survives the full trace is a finding.)
+  **Mint the BLOCKS here too** (`blocks[]`, the T7 decision grouping) — same moment and same reason
+  as `CAP`: the post-trace rule fan-out is one agent per block, so the blocks and their id ranges
+  have to exist before it starts. Cut them from what the product DECIDES, not from what the code is
+  shaped like: an area a product person would argue about ("who may cancel an order", "how a plan
+  limit is applied"), 8-12 of them on a map this size. A block is a `Group` like a capability, so it
+  carries `name` + `purpose` (the "what this area decides" line) and nothing else — `label` and
+  `tech` are blocked on it, as they are on a subdomain. Leave `rules[]` empty: it is written after
+  the trace, when the flows exist to sweep.
   **Also assign each component's `subsystem`, each entity's `subdomain`, each use case's
   `capability` and its trigger `entry_points`, each component's `runs_in`, and any dep `bucket`
   fixes here — as a `--reconcile` file, NOT a hand-script.** Synthesis owns the
@@ -1209,9 +1256,9 @@ synthesis → parallel trace.**
 
 ### After the trace — EVERY build (serial included)
 
-The three steps below are **not** parallel-mode-only. They run on every build; parallel mode only
-changes how many agents do the work (a serial build still FANS OUT for Phase 4 — fresh context is
-the point, not concurrency). See the scope warning at the top of parallel mode.
+The four steps below are **not** parallel-mode-only. They run on every build; parallel mode only
+changes how many agents do the work (a serial build still FANS OUT for the T7 rules and for Phase 4
+— fresh context is the point, not concurrency). See the scope warning at the top of parallel mode.
 
 - Phase 3.5 Re-balance reconcile (lead, not delegated — runs ONCE, after the trace). The grouping was
   cut at Phase 2 **before any edge existed**, so re-check it now against the real graph: run
@@ -1222,6 +1269,98 @@ the point, not concurrency). See the scope warning at the top of parallel mode.
   starting points, not facts. Exit criterion: `coyodex validate` emits no balance warning that is
   neither fixed nor justified. This step is not part of the per-write validate → audit → render
   invariant; maintenance re-surfaces imbalance for free through validate's always-on warnings.
+- **T7 Business logic (fan out, one agent per block — after the trace, it needs the flows to sweep
+  against).** The map has a home for DATA (entities), SEQUENCE (flows), STATES (lifecycles) and
+  STRUCTURE (components, edges) — and none for the DECISION the code makes, which is exactly the
+  part a reader calls "product-specific". Each agent gets ONE block (its `name` + `purpose`), the
+  map, and its own `BR` id range (BR1–19, BR20–39, … — one contiguous range per agent, exactly like
+  the trace fan-out's `SFn` ranges, because two agents minting `BR7` is a hard `assemble` failure).
+  **Show the rule SHAPE in the prompt** — a nested `sites[]` is more novel than anything the trace
+  agents write, and the sub-flow fan-out learned this the expensive way:
+
+  ```json
+  { "rules": [ { "id": "BR1",
+                 "statement": "<ONE decision, product language, naming no component>",
+                 "access": false,
+                 "confidence": "verified",
+                 "sites": [ { "where": "path/to/file.py:88",
+                              "why": "<what this line does FOR the rule>",
+                              "no_call_site": false } ] } ] }
+  ```
+
+  `access` is `true` when the rule governs WHO MAY DO WHAT; `confidence` is `verified` (read in the
+  code) or `inferred` (deduced). Those five keys are the WHOLE authored surface — the full field
+  semantics are in `method/model.md`. **`block` is NOT in the fragment** (see below).
+  The agent writes `«repo»/.coyodex/build-fragments/«agent-id».json` itself and returns that path
+  plus a one-line inventory, under the same rule as every other fragment (never inline it).
+  **`access` matters beyond display**: it is what makes a rule part of the auth surface the eval
+  gates on, and what the security table folds onto — a rule about who may do what and `access:
+  false` is a silently missing security row.
+
+  **One rule = one decision.** Several sites only when it is the SAME claim enforced in several
+  places. Two claims joined by "and" are two rules.
+
+  **The sharp test: could a product person have decided otherwise?** "Own connection first, else
+  oldest shared" passes. "If the list is empty, return early" does not — that is a mechanical
+  detail, and filling the layer with them is how the decision view stops being worth opening.
+
+  **Nothing unsupported.** A rule must be reconstructible from the lines its sites point at, with no
+  clause added. This was the prototype's most frequent error: a sentence that reads true, sitting
+  under a real anchor that shows only half of it. If the second half is real, anchor it too; if you
+  cannot find it, cut the clause.
+
+  **Sweeping a rule's sites.** Start from the code the BLOCK is about, not from the rule (a rule's
+  components are derived FROM its sites, so "the anchors in the rule's components" is a circle).
+  Take the components that own that area with `coyodex dump` (`--members` for a subsystem's members,
+  `--record` for one element's stored record — a component's `files`, a use case's flow steps —
+  `--edges` for a node's backbone edges), and read the anchors the map ALREADY holds in them: the
+  flow-step `where`s, the edge `where`s, the security sources. That is a median ~11 candidates per
+  rule on a real map. Read code only where none of them fit. Anchor the TRUE OPERATIVE LINE
+  even when a different line would join a flow step: **the step link is a readout, never a target.**
+  A site chosen because it lights up a use-case-step row is a false claim about where the decision
+  is made, and it is invisible on screen — the row looks better, which is the whole danger.
+  `validate` refuses a site that names a whole file, and flags one that points at a definition
+  header, an import, a comment or a blank line.
+
+  **A site with no single line is `no_call_site: true` and no `where`** — enforced by construction
+  (a type, a schema constraint, a config-wired guard). It is a declared absence, not a gap, and it
+  is the honest answer when there is no line to point at. Do not invent one.
+
+  **Fusion is preferred to splitting. Synthetic, not granular.** Report rules-per-block when you are
+  done. A block whose rules are nearly all single-site is the signature of a flow-step list wearing
+  rule clothing — fuse it. The shape to hold is roughly 10 blocks and ~55 rules on a map of this
+  size: near 5 rules per block. A drift toward one rule per anchor is a FAILURE even when every rule
+  is verified, because the reader is back to reading the flows.
+
+  **`block` is assigned via `reconcile`, never in the fragment** — `BLK` ids are minted at synthesis
+  and a re-synthesis that renumbers them must not silently re-point every rule (the same reason
+  `capability` and `entry_points` go through reconcile).
+
+  **Everything else about a rule is DERIVED and there is no field to write it in:** which components
+  enforce it, which use-case steps it lands on, which entities it touches, and whether it has been
+  swept. Do not describe them in prose either — the views compute them, and a prose copy is a second
+  answer that will disagree. If you find yourself wanting a field for one of them, stop: that is the
+  design being wrong, not the map.
+
+  Exit criterion: `coyodex lint-fragment` clean per fragment, then at the lead's `validate` the
+  **sweep worklist** — anchored flow steps that read like a decision no rule covers — is empty or
+  fully recorded under the `Sweep debt` extras heading (`coyodex record --map
+  .coyodex/build-fragments/extras.json --heading "Sweep debt" --line "<the step's anchor>: <why>"`
+  — name the FRAGMENT, or the next assemble discards the record).
+
+  **A step is covered two ways, and the second one is why you never anchor a decoy.** By ANCHOR: a
+  site lands on the step's line, or inside the same function. Or STRUCTURALLY: a rule is enforced in
+  a component the step NAMES. The second exists because a step's `where` is the CALLER's line
+  (`C1 → C2 : checks the owner` anchors where C1 calls C2) while the decision lives inside C2 — a
+  different file, where no anchor link can ever exist. Without it, "the worklist is empty" would be
+  unreachable by honest anchoring and the only route to a clean `validate` would be a decoy site on
+  the step's own line. Anchor the operative line; the worklist will clear.
+
+  **What the worklist proves, and what it does not.** It catches decision-shaped code nothing
+  claims. It does NOT prove the sweep was exhaustive: it reads the wording of ANCHORED steps only,
+  its vocabulary is a heuristic with known-incomplete recall, and one rule in a component clears
+  every decision-sounding step naming that component. Treat an empty worklist as "nothing obvious
+  was left", not as "done".
 - Test completeness (one agent, after the Phase 3 trace — it needs the finished inventory + flows).
   Walk the assembled map (use cases, T4 entry points, T5 entities, failure modes, critical-path
   branches) and for each ask "is there a test that exercises it?", emitting the risk-ranked gap table
@@ -1791,11 +1930,14 @@ repo" is unfalsifiable, and hand-assigned data rendered as derived is what made 
 prototype's screens confidently wrong. So the list shrinks two ways only — write the rule, or say
 why the step is not one. Record ``coyodex record --heading "Sweep debt" --line
 "<the step's anchor>: <why this is plumbing, not a decision>"`` under the **"Sweep debt"** extras
-heading; the key is the step's own `path:line`, never a `UCn` or a `BRn`, because the id-keyed
-reader matches no `BR` token and a line it cannot parse silences nothing, silently. The same
-heading, keyed by a `BRn`, is where you record a rule whose sites land in files no component claims
-— it renders with no component and cannot be verified, and carrying that knowingly is a decision
-you make once rather than re-read at every validate.
+heading — **name the FRAGMENT** (`--map .coyodex/build-fragments/extras.json`), not the assembled
+map, for the reason the bucket paragraph above gives. The key is whatever the advisory prints: the
+step's own `path:line` for a decision-sounding step, and a `BRn` for the other finding this heading
+answers — a rule whose sites land in files no component claims, which renders with no component and
+cannot be verified. Both work because this heading is read by the generic `key: why` reader, not
+the id-keyed one (which matches no `BR` token at all — a `BRn` line under a heading THAT reader
+serves would silence nothing, silently). Every suppression is REPORTED, and it moves a derived
+number: a recorded step counts as swept.
 **OPEN THE FILE before recording one.** The escape is for "the skeptics read a sibling file and the
 stored anchor is right" — a claim about what is at a `path:line`, which you cannot know without
 looking. A live build recorded both of its drift findings as false alarms with no `Read` and no

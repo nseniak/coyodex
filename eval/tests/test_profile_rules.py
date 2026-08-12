@@ -40,13 +40,19 @@ REPO = Path(__file__).resolve().parents[2]
 # --- builders -------------------------------------------------------------------
 
 def make_base_model() -> ProjectModel:
-    """A minimal map that validates clean, with NO rules — the un-adopted baseline."""
+    """A minimal map that validates clean, with NO rules — the un-adopted baseline.
+
+    TWO components on purpose: coverage counts a rule enforced in a component the step NAMES, so
+    with both decision-sounding steps naming C1 a rule in C1 would clear both and the swept count
+    would say nothing (see `validate_model.rule_claimed_step_keys`)."""
     m = ProjectModel(title="Demo", goal="A demo.")
     m.roles = [Role(id="R1", name="Andy", kind="human", wants="orders", drives="UC1")]
     m.use_cases = [UseCase(id="UC1", name="Cancel", actors=["R1"])]
     m.happy_path = [HappyStep(id="HP1", title="Cancel", uc="UC1")]
     m.components = [Component(id="C1", name="Guard", purpose="p", source="src/guard.py:1",
-                              files=["src/guard.py"])]
+                              files=["src/guard.py"]),
+                    Component(id="C2", name="Admin", purpose="p", source="src/admin.py:1",
+                              files=["src/admin.py"])]
     m.deps = [Dep(id="D1", name="Postgres", kind="datastore", type="SQL database")]
     m.entities = [Entity(id="E1", name="Order", store=Store(notes="orders"), meaning="a thing",
                          source="src/guard.py:1",
@@ -54,9 +60,10 @@ def make_base_model() -> ProjectModel:
     m.flows = [Flow(uc="UC1", title="Cancel", steps=[
         FlowStep(n=1, src="R1", dst="C1", phrase="asks to cancel"),
         FlowStep(n=2, src="C1", dst="E1", phrase="rejects a non-owner", where="src/guard.py:3"),
-        FlowStep(n=3, src="C1", dst="E1", phrase="only an admin may override",
-                 where="src/guard.py:4")])]
+        FlowStep(n=3, src="C2", dst="E1", phrase="only an admin may override",
+                 where="src/admin.py:4")])]
     m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show", where="src/guard.py:3"),
+               Edge(src="C2", verb="reads", dst="E1", why="override", where="src/admin.py:4"),
                Edge(src="C1", verb="uses", dst="D1", why="query", where="src/guard.py:4")]
     return m
 
@@ -115,11 +122,11 @@ def test_the_profile_carries_the_five_derived_rule_fields() -> None:
     m = make_ruled_model()
     p = build_profile_from_model(m)
     assert (p.rules, p.blocks, p.rule_sites) == (1, 1, 1)
-    # step 3 ("only an admin may override") is an unclaimed decision inside BR1's component
-    assert p.rules_swept == 0 and p.rules_unverified == 0
+    # BR1 lives in C1; the uncovered decision is in C2, so BR1 is swept and the map still has debt
+    assert p.rules_swept == 1 and p.rules_unverified == 0
     m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
                                 block="BLK1",
-                                sites=[RuleSite(where="src/guard.py:4", why="the admin gate")]))
+                                sites=[RuleSite(where="src/admin.py:4", why="the admin gate")]))
     p = build_profile_from_model(m)
     assert (p.rules, p.rule_sites, p.rules_swept) == (2, 2, 2)
 

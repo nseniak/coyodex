@@ -29,6 +29,8 @@ Every element has a stable, unique ID by prefix:
 | `SD` | Domain subdomain — a group of entities and/or nested subdomains (optional) |
 | `SF` | Sub-flow — a named, reusable step sequence shared by ≥2 flows |
 | `R` | Role — a primary actor |
+| `BR` | Business rule — ONE product decision the code makes, plus every place it is enforced (T7) |
+| `BLK` | Block — a group of business rules and/or nested blocks (the decision grouping) |
 | `EP` | Entry point. **Minted by `assemble` from content, never authored** — fragments leave it empty, assembly dedups T4 rows by source anchor PLUS trigger — two rows sharing one anchor both survive — and numbers the survivors. Change-impact keeps its own content key (`ep:{source}`), which is stable across rebuilds where a minted number is not. |
 
 An ID is a **prefix + digits only** — `C1`, `S12`, `SD3` — never a letter-suffixed variant like
@@ -118,6 +120,20 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "observability":  [ { "signal", "where_emitted", "where_viewed", "alerts" } ],
   "security":       [ { "surface", "who", "source": "<bare path:line anchor to the auth check>", "risk" } ],
   "config":         [ { "key", "purpose", "default", "per_env" } ],
+
+  "blocks":      [ { "id": "BLKn", "name", "purpose": "<what this area of the product decides>",
+                     "parent": "BLKn|null", "source", "confidence" } ],   // T7 — the decision grouping
+  "rules":       [ { "id": "BRn", "statement": "<ONE decision, in product language, naming no component>",
+                     "block": "BLKn|null",   // assigned by the LEAD after the rule fan-out, via
+                                             // `coyodex reconcile` — never in a fragment
+                     "access": false,                          // governs WHO MAY DO WHAT
+                     "sites": [ { "where": "<the OPERATIVE path:line|null>", "why",
+                                  "no_call_site": false } ],   // where the decision is ENFORCED
+                     "confidence" } ],
+  // A rule's COMPONENTS, its use-case STEPS, the ENTITIES it touches and whether it has been SWEPT
+  // are DERIVED from `sites` — there is no field for any of them, and none may be added: an
+  // authored "I searched the whole repo" is unfalsifiable, and hand-assigned data rendered as
+  // derived is the single failure this layer was designed to make impossible.
 
   "tests_note":  "<the 'Tests run for this table?' honesty line>",
   "tests":       [ { "targets": ["Cn", …], "label", "tested", "tests": [ { "file": "<path:line|path/>", "why" }, … ], "gap", "confidence" } ],
@@ -352,6 +368,9 @@ Semantics, stated on the fields:
   optional), **`states.source`** (the line declaring a state machine, on entities and components;
   may be `""` = inferred), **`messaging[].source`** (the line declaring a channel name),
   `evidence[].file`, **`run_commands[].source`**, **`security[].source`**,
+  **`rules[].sites[].where`** (the OPERATIVE line a business rule is enforced at — the only anchor
+  whose `:line` is REQUIRED, since without one the operative-line check is skipped and the claim
+  cannot be falsified; `null` with `no_call_site: true` = enforced by construction),
   **`deployment[].variants[].source`** (the manifest line grounding a variant tag; may be `""` =
   inferred), and
   **`non_entity_types[].source`** all use it — `glossary[].source` and the file OR directory fields
@@ -359,7 +378,7 @@ Semantics, stated on the fields:
   directory ref `path/`, and `glossary[].source` is additionally nullable (a pure product-level term
   with no single code home). Group `source` fields (`subsystems[].source` / `subdomains[].source`)
   use the same bare form — a file `path:line` or a directory ref `path/` — exactly like
-  `components[].source`. `coyodex validate` rejects any anchor written some other way. `tests[].tests[].file` is the same
+  `components[].source`, and so do `capabilities[].source` and `blocks[].source`. `coyodex validate` rejects any anchor written some other way. `tests[].tests[].file` is the same
   bare form (a `path:line` or a `path/` test dir) and IS turned into a code link. **The remaining
   operational-table location fields are deliberately NOT anchors** — `deployment[].config_source` and
   `observability[].where_emitted` / `where_viewed` describe topology in prose, so they are neither

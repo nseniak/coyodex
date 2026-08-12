@@ -907,6 +907,11 @@ _DECISION_MARKERS: tuple[str, ...] = (
 )
 _DECISION_RE = re.compile("|".join(_DECISION_MARKERS), re.IGNORECASE)
 
+#: A block small enough that "nearly all single-site" says nothing — two one-site rules are not a
+#: pattern. The share is deliberately high: fusion is a judgement, and this points, it never gates.
+_GRANULAR_BLOCK_MIN = 4
+_GRANULAR_BLOCK_SHARE = 0.8
+
 # The 'Sweep debt' extras heading records "this decision-sounding step is not a business rule",
 # keyed by the step's own ANCHOR (`path:line: why`). Anchor-keyed rather than `UCn/step`, because
 # `_RECORD_LINE` only matches `(?:CAP|EP|UC|HP|R|C|E)\d+` line-leaders — a `BR7:` or `UC4/11:` line
@@ -923,23 +928,40 @@ def decision_sounding_steps(m: ProjectModel) -> list[tuple[str, str, FlowStep]]:
 
 def rule_claimed_step_keys(m: ProjectModel, extents: Extents | None = None,
                            steps: list[tuple[str, str, FlowStep]] | None = None) -> set[tuple[str, int]]:
-    """The `(container, n)` of every step SOME rule reaches, at EITHER strength.
+    """The `(container, n)` of every step SOME rule covers — the canary's coverage test.
 
-    The symbol strength counts, and it has to. The authoring contract tells the sweep to anchor the
-    true operative line "even when a different line would join a flow step" — so the systematic case
-    is a site a few lines from the step inside one function. Exact-only claiming would leave every
-    such step as permanent debt, the canary would never empty, and a rule the UI shows as enforcing
-    a step would simultaneously hold that rule unswept.
+    TWO forms, and the second one is what keeps this honest.
 
-    WITHOUT `extents` this degrades to exact-only, which reports MORE debt — the safe direction for
-    a worklist, and the honest one: "the same enclosing function" is not derivable from the map.
+    ANCHOR coverage: a rule site links to the step, exact or same-enclosing-symbol. The symbol
+    strength has to count — the authoring contract tells the sweep to anchor the true operative line
+    "even when a different line would join a flow step", so a site a few lines from the step inside
+    one function is the systematic case. Without `extents` this degrades to exact-only, which
+    reports more debt (the safe direction); "the same enclosing function" is not derivable from the
+    map.
+
+    STRUCTURAL coverage: a rule is enforced in a component the step NAMES as an endpoint. This is
+    deliberately generous, and the alternative is worse than generosity. A flow step's `where` is
+    the CALLER's line (`C1 → C2 : checks the owner` anchors where C1 calls C2) while the rule's
+    operative line is inside C2 — a different file, so no anchor link can ever exist. Requiring one
+    would make "the worklist is empty" unreachable by honest anchoring, and the only way to a clean
+    `validate` would be to add a decoy site on the step's own line: the exact corruption the
+    contract forbids in capitals, rewarded by the gate. A canary that pays for dishonest anchors is
+    worse than a canary that clears a step early.
+
     Keyed by `(container, n)`, not `(uc, container, n)`: the anchors decide the link, and they do
     not vary by which use case rides a sub-flow."""
     if steps is None:
         steps = anchored_flow_steps(m)
-    return {(l.container, l.n)
-            for r in m.rules
-            for l in rule_steps(m, r, extents, steps)}
+    owners = component_file_owners(m)
+    enforcing: set[str] = set()
+    for r in m.rules:
+        enforcing.update(rule_components(m, r, owners))
+    covered = {(l.container, l.n)
+               for r in m.rules
+               for l in rule_steps(m, r, extents, steps)}
+    covered |= {(container, st.n) for _uc, container, st in steps
+                if enforcing.intersection((st.src, st.dst))}
+    return covered
 
 
 def sweep_debt(m: ProjectModel, extents: Extents | None = None) -> list[tuple[str, FlowStep]]:
@@ -984,14 +1006,24 @@ def _sweep_debt_split(m: ProjectModel,
 
 
 def rules_swept(m: ProjectModel, extents: Extents | None = None) -> dict[str, bool]:
-    """Per rule id, whether its components hold NO uncovered decision-sounding step.
+    """Per rule id, whether the code it governs holds NO uncovered decision-sounding step.
 
-    This IS the sweep state — computed, not asserted; there is no field to set. Read it for exactly
-    what it says, though: a rule is swept when nothing decision-shaped is left UNCLAIMED in the code
-    it governs, so a rule whose components hold no decision-sounding step at all is swept trivially.
-    That is a floor, like the operative-line check — it catches the sweep that stopped early, not
-    the sweep that never looked. A rule that resolves to no component is NOT swept: there is no
-    territory to have finished sweeping."""
+    This IS the sweep state — computed, not asserted; there is no field to set. READ IT FOR EXACTLY
+    WHAT IT SAYS, and no more. It is a FLOOR, in the same sense as the operative-line check: it
+    catches decision-shaped code nothing claims, never that a sweep was exhaustive. Three limits,
+    all real:
+
+      * a rule whose components hold no decision-sounding step at all is swept TRIVIALLY;
+      * `_DECISION_MARKERS` recall is untested and known-incomplete, so a decision phrased without a
+        marker word is invisible to it;
+      * coverage counts a rule enforced in a component the step NAMES, so one rule in a component
+        clears every decision-sounding step that names it.
+
+    The two halves are asymmetric on purpose. COVERAGE asks which components a step NAMES;
+    ATTRIBUTION asks which components own the file the step is ANCHORED IN. So an uncovered step
+    anchored inside a rule's own file holds that rule unswept — there is decision-shaped code in the
+    code it governs that nothing claims. A rule that resolves to no component is NOT swept: there is
+    no territory to have finished sweeping."""
     owners = component_file_owners(m)
     debt_comps: set[str] = set()
     for _container, st in sweep_debt(m, extents):
@@ -1110,6 +1142,32 @@ def check_rules_model(m: ProjectModel,
             f"no component and cannot be verified: {_shown(orphan, 12)}. Add the file to the owning "
             "component's `files`, re-anchor the site, or record '<BRn>: <why>' under a "
             "'Sweep debt' extras heading")
+
+    # GRANULARITY. "Synthetic, not granular" is the objective, and a block whose rules are nearly
+    # all single-site is the signature of a flow-step list wearing rule clothing — 55 one-site rules
+    # pass every other check here AND maximise the swept count the eval prints, so nothing else in
+    # the pipeline notices. Advisory: fusion is a judgement, and a genuinely one-site-per-decision
+    # area is legitimate; recording the block id under 'Balance exceptions' is how you say so.
+    granular = _recorded_line_keys(m, "balance exceptions")
+    by_block: dict[str, list[BusinessRule]] = {}
+    for r in m.rules:
+        by_block.setdefault(r.block or "", []).append(r)
+    thin = []
+    for bid, rules in sorted(by_block.items(), key=lambda kv: element_sort_key(kv[0])):
+        anchored = [r for r in rules if any(not s.no_call_site for s in r.sites)]
+        singles = [r for r in anchored if len(r.sites) == 1]
+        if (bid and len(anchored) >= _GRANULAR_BLOCK_MIN
+                and len(singles) >= len(anchored) * _GRANULAR_BLOCK_SHARE
+                and not _records_key(granular, bid)):
+            thin.append(f"{bid} ({len(singles)} of {len(anchored)})")
+    if thin:
+        warnings.append(
+            f"Block(s) whose rules are nearly all single-site: {_shown(thin, 8)} — the signature of "
+            "a flow-step list wearing rule clothing. The objective is SYNTHETIC, not granular: one "
+            "decision enforced in several places is ONE rule with several sites, and a drift toward "
+            "one rule per anchor is a failure even when every rule verifies. Fuse them, or record "
+            "'<BLKn>: <why this area really is one decision per site>' under a 'Balance exceptions' "
+            "extras heading")
 
     debt, silenced = _sweep_debt_split(m, extents)
     if debt:

@@ -272,8 +272,10 @@ SOURCE: [file](path/sub:1)
      header, and never a line chosen because it happens to light up a use-case step.
 
      In the JSON source a rule is { "id": "BRn", "statement", "block": "BLKn", "access": bool,
-     "sites": [ { "where": "path:line", "why", "no_call_site": bool } ] }; `block` is assigned at
-     synthesis via `reconcile`, never in a fragment. Blocks are `blocks[]`, a Group forest. -->
+     "sites": [ { "where": "path:line", "why", "no_call_site": bool } ] }; `block` is assigned by
+     the LEAD after the rule fan-out, via `coyodex reconcile` — never in a fragment (a `BLK` id is
+     minted at synthesis, before the rules exist, so a re-synthesis that renumbers blocks must not
+     silently re-point every rule). Blocks are `blocks[]`, a Group forest. -->
 
 One decision per rule, with every place it is enforced. The component on each site line and the
 use-case steps under it are DERIVED from the site anchors — no field carries them.
@@ -282,7 +284,7 @@ use-case steps under it are DERIVED from the site anchors — no field carries t
 
 <what this area of the product decides>
 
-**BR1 — <the decision, in product language>**  *(access)* *(verified)*
+**BR1 — <the decision, in product language>**  *(access)*  *(verified)*
 - [path/to/file.py:88](path/to/file.py:88) — <Component name> (C4) · <what this line does for the rule>
 - [path/to/other.py:12](path/to/other.py:12) — <Component name> (C7), <Other name> (C9) · <enforced again>
 - enforced at: <Use case name> (UC2) step 4 · <Use case name> (UC5) → SF3 step 2

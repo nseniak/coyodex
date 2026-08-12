@@ -59,6 +59,7 @@ from coyodex.model import (
 )
 from coyodex.lint_fragment import lint_fragment_problems
 from coyodex.record import KNOWN_HEADINGS
+from coyodex.reconcile_build import coverage_report, expand
 from coyodex.reconcile import (
     _SET_FIELD_OWNER,
     SetDirective,
@@ -792,12 +793,36 @@ def test_the_canary_is_silent_until_a_map_carries_rules() -> None:
     is trivially unclaimed, so firing there would put a permanent advisory on every existing map —
     the 'flag conflating nobody-looked with no-line-exists' the prototype shipped."""
     m = make_checkable_model()
+    m.components.append(Component(id="C2", name="Billing", purpose="p", files=["src/bill.py"]))
     m.flows[0].steps[1].phrase = "rejects a non-owner unless the caller is an admin"
     m.rules = []
     assert sweep_debt(m) == []
+    # a rule in a component the step does NOT name — neither anchor nor structural coverage
     m.rules = [BusinessRule(id="BR1", statement="Something else.", sites=[
-        RuleSite(where="src/guard.py:4", why="elsewhere")])]
+        RuleSite(where="src/bill.py:4", why="elsewhere")])]
     assert sweep_debt(m), "with rules present the unclaimed decision must surface"
+
+
+def test_a_rule_enforced_in_a_component_the_step_names_covers_that_step() -> None:
+    """THE PERVERSE-INCENTIVE FIX. A flow step's `where` is the CALLER's line (`C1 → C2 : checks
+    the owner` anchors where C1 calls C2) while the rule's operative line is inside C2 — a different
+    file, so no anchor link can ever exist. Requiring one made "the worklist is empty" unreachable
+    by honest anchoring, and the only route to a clean `validate` was to add a decoy site on the
+    step's own line: the exact corruption the contract forbids, rewarded by the gate."""
+    m = make_checkable_model()
+    m.components = [Component(id="C1", name="Controller", purpose="p", files=["src/ctl.py"]),
+                    Component(id="C2", name="Guard", purpose="p", files=["src/guard.py"])]
+    m.flows[0].steps = [
+        FlowStep(n=1, src="R1", dst="C1", phrase="asks to cancel"),
+        # the step anchors the CALLER's line; the decision lives in C2
+        FlowStep(n=2, src="C1", dst="C2", phrase="rejects a non-owner", where="src/ctl.py:40")]
+    m.edges = [Edge(src="C1", verb="calls", dst="C2", why="guard", where="src/ctl.py:40")]
+    m.rules[0].sites = [RuleSite(where="src/guard.py:12", why="the real guard")]
+    assert sweep_debt(m) == [], "an honestly-anchored rule must clear the step it decides"
+    # ...and a rule in a component the step names NOTHING of does not
+    m.components.append(Component(id="C3", name="Billing", purpose="p", files=["src/bill.py"]))
+    m.rules[0].sites = [RuleSite(where="src/bill.py:1", why="unrelated")]
+    assert [(c, st.n) for c, st in sweep_debt(m)] == [("UC1", 2)]
 
 
 # --- a site reaches all three anchor families -------------------------------------
@@ -932,13 +957,19 @@ def test_a_non_access_rule_sharing_a_security_anchor_is_fine() -> None:
 # --- the sweep canary and DERIVED sweep state -------------------------------------
 
 def make_swept_model() -> ProjectModel:
-    """Two decision-sounding steps in one component; the rule claims one of them."""
+    """Two decision-sounding steps in TWO components; the rule covers only the first.
+
+    Two components deliberately: with both steps naming C1, a rule enforced in C1 covers both
+    STRUCTURALLY (a rule in a component the step names is coverage — see
+    `rule_claimed_step_keys`), and the canary would have nothing to report."""
     m = make_checkable_model()
+    m.components.append(Component(id="C2", name="Admin", purpose="p", files=["src/admin.py"]))
     m.flows[0].steps = [
         FlowStep(n=1, src="R1", dst="C1", phrase="asks to cancel"),
         FlowStep(n=2, src="C1", dst="E1", phrase="rejects a non-owner", where="src/guard.py:3"),
-        FlowStep(n=3, src="C1", dst="E1", phrase="only an admin may override",
-                 where="src/guard.py:4")]
+        FlowStep(n=3, src="C2", dst="E1", phrase="only an admin may override",
+                 where="src/admin.py:4")]
+    m.edges.append(Edge(src="C2", verb="reads", dst="E1", why="override", where="src/admin.py:4"))
     return m
 
 
@@ -947,23 +978,42 @@ def test_the_canary_lists_the_unclaimed_decision_and_shrinks_after_a_sweep() -> 
     assert [(container, st.n) for container, st in sweep_debt(m)] == [("UC1", 3)]
     m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
                                 block="BLK1",
-                                sites=[RuleSite(where="src/guard.py:4", why="the admin gate")]))
+                                sites=[RuleSite(where="src/admin.py:4", why="the admin gate")]))
     assert sweep_debt(m) == []
 
 
 def test_the_canary_shrinks_when_a_step_is_recorded_as_not_a_decision() -> None:
     m = make_swept_model()
     m.extras = [ExtraSection(heading="Sweep debt",
-                             body="src/guard.py:4: an override flag, not a product decision")]
+                             body="src/admin.py:4: an override flag, not a product decision")]
     assert sweep_debt(m) == []
 
 
 def test_sweep_state_is_derived_from_the_canary_not_asserted() -> None:
+    """Sweep state is PER RULE and scoped to the rule's own components: BR1 lives in C1, and the
+    uncovered decision is in C2, so BR1 is swept while the map still carries debt."""
     m = make_swept_model()
-    assert rules_swept(m) == {"BR1": False}, "an unclaimed decision in BR1's component is debt"
+    assert rules_swept(m) == {"BR1": True}
+    assert [(c, st.n) for c, st in sweep_debt(m)] == [("UC1", 3)]
     m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
                                 block="BLK1",
-                                sites=[RuleSite(where="src/guard.py:4", why="the admin gate")]))
+                                sites=[RuleSite(where="src/admin.py:4", why="the admin gate")]))
+    assert rules_swept(m) == {"BR1": True, "BR2": True} and sweep_debt(m) == []
+
+
+def test_a_rule_is_unswept_while_decision_shaped_code_in_its_files_is_unclaimed() -> None:
+    """The two halves are asymmetric ON PURPOSE. COVERAGE asks which components the step NAMES
+    (a rule enforced in one of them decides it). ATTRIBUTION asks which components own the file the
+    step is ANCHORED IN. So an uncovered step whose anchor sits in a rule's file holds that rule
+    unswept: there is decision-shaped code in the code it governs that nothing claims."""
+    m = make_swept_model()
+    # C2 holds no rule, and its step is ANCHORED inside C1's file — decision-shaped code in the
+    # code BR1 governs, reached by a component nothing claims.
+    m.flows[0].steps[2].where = "src/guard.py:9"
+    assert rules_swept(m) == {"BR1": False}
+    m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
+                                block="BLK1",
+                                sites=[RuleSite(where="src/admin.py:4", why="the admin gate")]))
     assert rules_swept(m) == {"BR1": True, "BR2": True}
 
 
@@ -1022,8 +1072,8 @@ def test_the_canary_counts_a_subflow_step_once_and_labels_it_by_its_container() 
     and a sub-flow ridden by three use cases was counted three times."""
     m = make_swept_model()
     m.subflows = [SubFlow(id="SF1", name="Override check", steps=[
-        FlowStep(n=3, src="C1", dst="E1", phrase="only an admin may override",
-                 where="src/guard.py:4")])]
+        FlowStep(n=3, src="C2", dst="E1", phrase="only an admin may override",
+                 where="src/admin.py:4")])]
     m.flows[0].steps = [FlowStep(n=1, src="C1", dst="C1", phrase="runs it", subflow="SF1"),
                         FlowStep(n=2, src="C1", dst="E1", phrase="rejects a non-owner",
                                  where="src/guard.py:3")]
@@ -1038,8 +1088,13 @@ def test_a_rule_enforced_inside_the_steps_function_claims_that_step() -> None:
     line would join the step. Exact-only claiming would then leave every such step as permanent
     debt, and the UI would show a rule enforcing a step that `validate` calls unclaimed."""
     m = make_swept_model()
-    m.flows[0].steps[2].where = "src/guard.py:25"        # the second decision, in another function
-    m.rules[0].sites = [RuleSite(where="src/guard.py:5", why="the real guard, 2 lines down")]
+    # Both steps name C2, which holds no rule, so STRUCTURAL coverage cannot fire and the anchor
+    # strength is what decides. BR1 is enforced in C1, whose file both steps are anchored in.
+    m.flows[0].steps[1].src = "C2"
+    m.flows[0].steps[1].where = "src/guard.py:5"
+    m.flows[0].steps[2].src = "C2"
+    m.flows[0].steps[2].where = "src/guard.py:25"        # the second decision, another function
+    m.rules[0].sites = [RuleSite(where="src/guard.py:8", why="the real guard, 3 lines down")]
     ext = {"src/guard.py": [(1, 10, "cancel_order", "function"),
                             (20, 30, "override", "function")]}
     assert [(c, st.n) for c, st in sweep_debt(m, ext)] == [("UC1", 3)]   # step 2 is now claimed
@@ -1051,7 +1106,7 @@ def test_a_recorded_suppression_is_reported_never_silent() -> None:
     `rules_swept`, a DERIVED state."""
     m = make_swept_model()
     m.extras = [ExtraSection(heading="Sweep debt",
-                             body="src/guard.py:4: an override flag, not a product decision")]
+                             body="src/admin.py:4: an override flag, not a product decision")]
     warnings = rule_warnings(m)
     assert any("suppressed by a recorded 'Sweep debt' line" in w and "counted as SWEPT" in w
                for w in warnings), warnings
@@ -1473,6 +1528,153 @@ def test_two_sites_matching_one_claim_are_refused_not_blind_written() -> None:
     claim = rule_site_claim(m.rules[0].statement, "src/guard.py:3", "rejects a non-owner")
     counts, notes = apply_anchor_corrections(m, [(claim, "src/guard.py:7")])
     assert counts["rule_site"] == 0 and any("matches 2 rule sites" in n for n in notes)
+
+
+# ═══ Phase 6 — the authoring contract ═════════════════════════════════════════════
+# The method is the only place an authoring agent reads. A contract stated in code and not in the
+# method is a contract nobody follows; one stated in the method and not in code is prose.
+
+MODEL_DOC = (REPO / "method" / "model.md").read_text(encoding="utf-8")
+
+
+def t7_fanout_block() -> str:
+    """The T7 fan-out bullet ALONE — from its own heading to the next list item. The contract has
+    to be stated where the block agent reads it, not somewhere else in a 2000-line document."""
+    text = (REPO / "method.md").read_text(encoding="utf-8")
+    start = text.index("- **T7 Business logic (fan out")
+    return text[start:text.index("\n- Test completeness", start)]
+
+
+def test_the_fanout_states_the_five_load_bearing_authoring_rules() -> None:
+    """Each is a measured failure mode, not a style note: the sharp test keeps mechanical
+    conditionals out, "nothing unsupported" was the prototype's most frequent error, and "the step
+    link is a readout, never a target" is what stops an author anchoring the line that lights up
+    the UI instead of the line that acts."""
+    low = t7_fanout_block().lower()
+    for phrase in ("one rule = one decision",
+                   "could a product person have decided otherwise",
+                   "reconstructible from the lines its sites point at",
+                   "the step link is a readout, never a target",
+                   "fusion is preferred to splitting"):
+        assert phrase in low, phrase
+
+
+def test_the_fanout_says_the_derived_quantities_have_no_field() -> None:
+    """The central claim has to reach the author, or the first thing they do is ask for a field."""
+    assert ("everything else about a rule is derived and there is no field to write it in"
+            in t7_fanout_block().lower())
+    assert "no field for any of them" in MODEL_DOC.lower()
+
+
+def test_the_fanout_specifies_the_fragment_the_way_the_trace_fanout_does() -> None:
+    """The sub-flow fan-out learned this the expensive way — five live agents wrote `title` for
+    `name` because the prompt described the shape instead of showing it. A nested `sites[]` is
+    strictly more novel."""
+    block = t7_fanout_block()
+    assert "```json" in block and '"no_call_site"' in block      # the shape is SHOWN
+    assert "BR1–19" in block                                     # its own id range
+    assert "build-fragments" in block                            # where it writes
+    assert "`method/model.md`" in block                          # where the semantics live
+
+
+def test_the_fanout_names_access_as_an_authored_field() -> None:
+    """`access` is the marker the eval's auth gate and the security fold both read. An agent told
+    the field list is complete without it ships every rule `access: false`."""
+    block = t7_fanout_block()
+    assert '"access"' in block and "who may do what" in block.lower()
+
+
+def test_the_exit_criterion_does_not_reward_anchoring_the_steps_line() -> None:
+    """The criterion is "the worklist is empty", and a step's `where` is the CALLER's line while
+    the decision lives in the callee — so requiring an anchor link would make it reachable only by
+    a decoy site on the step's own line. The contract has to state the structural form."""
+    block = t7_fanout_block().lower()
+    assert re.sub(r"\s+", " ", block).count(
+        "a rule is enforced in a component the step names") == 1
+    assert "decoy" in block
+
+
+def test_the_method_does_not_oversell_the_canary() -> None:
+    low = t7_fanout_block().lower()
+    assert "does not prove the sweep was exhaustive" in low
+
+
+def test_the_method_routes_block_assignment_through_reconcile_after_the_fanout() -> None:
+    """"At synthesis" is impossible: a `BRn` does not exist then, and a reconcile naming one fails
+    the synthesis assemble with `unknown id`."""
+    assert "`block` is NOT in the fragment" in t7_fanout_block()
+    assert "assigned by the LEAD after the rule fan-out" in MODEL_DOC
+    assert "at synthesis via `reconcile`" not in MODEL_DOC
+
+
+def test_the_method_documents_both_new_prefixes_and_the_document_shape() -> None:
+    assert "| `BR` | Business rule" in MODEL_DOC and "| `BLK` | Block" in MODEL_DOC
+    assert '"blocks":' in MODEL_DOC and '"rules":' in MODEL_DOC
+
+
+def test_a_rule_site_is_in_the_exhaustive_anchor_format_lists() -> None:
+    """`method/model.md` and the harvest contract each carry an EXHAUSTIVE anchor list; an anchor
+    missing from them is one an agent has no reason to write correctly."""
+    contract = (REPO / "method" / "templates" / "harvest-contract.md").read_text(encoding="utf-8")
+    assert "`rules[].sites[].where`" in MODEL_DOC and "`rules[].sites[].where`" in contract
+
+
+def test_the_tier_number_t7_names_exactly_one_thing() -> None:
+    """The method used T7 for a Level-2 drill tier while the map document runs T0 → T6b. Two
+    different things called T7 in one document is confusion an agent pays for."""
+    text = (REPO / "method.md").read_text(encoding="utf-8")
+    assert "T7 Component internals" not in text
+    assert "T8 Component internals · T9 Config/env vars · T10 Data schema." in text
+
+
+def test_reconcile_can_actually_generate_the_block_assignment() -> None:
+    """The method insists on the GENERATOR ("there is no hand-authoring threshold any more"), so a
+    field it cannot emit is a documented dead end."""
+    m = make_checkable_model()
+    m.rules[0].block = None
+    doc, _report = expand(m, [{"ids": ["BR1"], "block": "BLK1"}])
+    assert doc == {"set": [{"ids": ["BR1"], "block": "BLK1"}]}
+    rec = load_reconcile(json.dumps(doc), "generated")
+    assert validate_reconcile(m, rec) == []
+
+
+def test_reconcile_coverage_reports_rules_with_no_block() -> None:
+    m = make_checkable_model()
+    m.rules[0].block = None
+    assert any("business rule(s) still have no block" in line
+               for line in coverage_report(m, {"set": []}))
+
+
+def test_lint_fragment_refuses_a_block_written_into_a_fragment() -> None:
+    """The method says "never in the fragment". Without this the rule is prose: a fragment carrying
+    `block` lints clean and assembles with the value intact."""
+    m = make_checkable_model()
+    assert any("carry `block` in a fragment" in p for p in lint_fragment_problems(m, None))
+    m.rules[0].block = None
+    assert not any("carry `block`" in p for p in lint_fragment_problems(m, None))
+
+
+def test_a_block_of_single_site_rules_draws_a_granularity_advisory() -> None:
+    """55 one-site rules pass every other check AND maximise the swept count the eval prints, so
+    nothing else in the pipeline notices the layer degenerating into a flow-step list."""
+    m = make_checkable_model()
+    m.rules = [BusinessRule(id=f"BR{i}", statement=f"Decision {i}.", block="BLK1",
+                            sites=[RuleSite(where=f"src/guard.py:{i}", why="w")])
+               for i in range(1, 7)]
+    assert any("nearly all single-site" in w for w in rule_warnings(m))
+    m.rules[0].sites.append(RuleSite(where="src/guard.py:9", why="a second place"))
+    m.rules[1].sites.append(RuleSite(where="src/guard.py:8", why="a second place"))
+    assert not any("nearly all single-site" in w for w in rule_warnings(m))
+
+
+def test_the_granularity_advisory_is_recordable() -> None:
+    m = make_checkable_model()
+    m.rules = [BusinessRule(id=f"BR{i}", statement=f"Decision {i}.", block="BLK1",
+                            sites=[RuleSite(where=f"src/guard.py:{i}", why="w")])
+               for i in range(1, 7)]
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="BLK1: each guard really is its own decision here")]
+    assert not any("nearly all single-site" in w for w in rule_warnings(m))
 
 
 if __name__ == "__main__":
