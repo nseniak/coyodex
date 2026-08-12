@@ -24,6 +24,7 @@ import json
 import re
 import sys
 from collections.abc import Callable, Container, Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from coyodex import balance_lib, grammar
@@ -34,11 +35,14 @@ from coyodex.anchors import (
     FILE_ANCHOR as _ANCHOR_LINE,
     non_operative_reason,
     parse_anchor,
+    strip_anchor,
 )
+from coyodex.impact_lib import enclosing_extent
 from coyodex.pysrc import parse_python
 from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
+    BusinessRule,
     Dep,
     Entity,
     EntryPoint,
@@ -47,9 +51,11 @@ from coyodex.model import (
     MessagingRow,
     ModelError,
     ProjectModel,
+    RuleSite,
     UseCase,
     all_elements,
     expanded_flow_steps,
+    expanded_steps_with_container,
     group_forests,
     load_model,
 )
@@ -666,6 +672,199 @@ def element_capabilities(m: ProjectModel) -> dict[str, set[str]]:
         for eid in ends:
             out.setdefault(eid, set()).add(cap)
     return out
+
+
+# ── the business-rule derivation primitive (T7) ───────────────────────────────────────────────────
+# ONE implementation. A rule's components, the use-case steps that enforce it and the entities it
+# touches are DERIVED from its sites against the rest of the map — nothing about them is authored,
+# so nothing about them can be asserted without being computable. Every consumer (the checks, the
+# markdown view, the viewer transport, the eval profile) reads THESE functions; a second copy in
+# `views.py` or in JS is the drift this repo already pays for, and here it would silently
+# re-introduce the hand-assigned data the layer exists to make impossible.
+#
+# TWO measured facts shape the API and must not be designed away:
+#
+#   1. `Component.files` IS NOT DISJOINT. On this repo's own map, 5 files are claimed by 2-5
+#      components each and hold 71 of its 260 call-site anchors (27%) — all decision-dense. So
+#      `site_components` returns a LIST and never picks: ambiguity is data the UI renders, not an
+#      error to resolve by taking `[0]`.
+#   2. THE STEP JOIN IS WEAK ON BYTE EQUALITY. Measured on the Mio map, only 15% of security-row
+#      anchors and 23% of edge anchors are byte-equal to a flow-step anchor, while 57% merely share
+#      a file. So the join has two STRENGTHS — byte-equal, and same enclosing symbol — and sharing a
+#      file alone is NOT a link. The weak strength needs a symbol table it cannot derive from the
+#      model, so it degrades to exact-only rather than silently widening to file equality.
+
+def element_sort_key(eid: str) -> tuple[str, int, str]:
+    """Sort key putting `UC2` before `UC10` — element ids are prefix + NUMBER, so plain lexicographic
+    order reads them as strings and interleaves the tens with the ones."""
+    hit = re.match(r"^([A-Za-z]+)(\d+)$", eid or "")
+    return (hit.group(1), int(hit.group(2)), "") if hit else ("", 0, eid or "")
+
+
+#: How a site reaches a flow step. `exact` = the two anchors are the same string. `symbol` = both
+#: lines sit inside the SAME innermost definition (the site enforces the rule inside the function
+#: the step names, at a different line). There is deliberately no `file` strength.
+STEP_LINK_EXACT = "exact"
+STEP_LINK_SYMBOL = "symbol"
+
+
+@dataclass(frozen=True)
+class RuleStepLink:
+    """One (use case, step) a rule's site reaches, and how strongly."""
+    uc: str                   # the use case whose flow surfaces the step (a sub-flow step reaches
+                              # EVERY flow that references it — content inside an SFn is not hidden)
+    container: str            # the id that AUTHORED the step: the flow's `uc`, or the `SFn`.
+                              # `n` is unique per CONTAINER, never per use case, so this is half the
+                              # step's identity — see `model.expanded_steps_with_container`.
+    n: int                    # the step's number within that container
+    strength: str             # STEP_LINK_EXACT | STEP_LINK_SYMBOL
+    site: str                 # the rule site anchor that reached it
+    phrase: str = ""          # the step's own action text — display only
+
+
+def component_file_owners(m: ProjectModel) -> dict[str, list[str]]:
+    """repo path -> EVERY component id whose `files` claims it, sorted.
+
+    `Component.files` carries no line ranges and is not required to be disjoint, so this is a
+    one-to-many index by construction. Deliberately built from `files` ALONE: a component's
+    `source` is where it LIVES (often a directory), and letting a directory prefix claim a site
+    would manufacture an owner for a file nobody listed — exactly the "component's home passed off
+    as evidence" failure. A map whose components declare no `files` therefore derives nothing, which
+    `validate` BLOCKS rather than rendering bare (`check_rules_model`).
+
+    A DIRECTORY entry is dropped rather than trimmed: `files: ["src/"]` normalized to `src` would
+    be matched by the shape-legal site anchor `src:12`, manufacturing the very owner the paragraph
+    above forbids. A line suffix IS stripped — `files: ["src/v.py:1"]` names one file, and keying it
+    verbatim would lose the owner of every site in it."""
+    out: dict[str, list[str]] = {}
+    for c in m.components:
+        for f in c.files:
+            raw = (f or "").strip()
+            if not raw or raw.endswith("/"):
+                continue                       # a directory claims no site (see above)
+            path = strip_anchor(raw)
+            if path:
+                out.setdefault(path, []).append(c.id)
+    return {path: sorted(set(ids)) for path, ids in out.items()}
+
+
+def site_components(m: ProjectModel, site: RuleSite,
+                    owners: dict[str, list[str]] | None = None) -> list[str]:
+    """EVERY component owning the file a site anchors, sorted. Empty = no component claims it.
+
+    Never picks, never falls back, never guesses: a 4-owner file returns all four and the UI shows
+    all four. Silently picking one would reproduce the exact failure this layer exists to prevent."""
+    if owners is None:
+        owners = component_file_owners(m)
+    path = strip_anchor((site.where or "").strip())
+    return list(owners.get(path, ()))
+
+
+def rule_components(m: ProjectModel, rule: BusinessRule,
+                    owners: dict[str, list[str]] | None = None) -> list[str]:
+    """Every component any of a rule's sites lands in, sorted and de-duplicated."""
+    if owners is None:
+        owners = component_file_owners(m)
+    seen: set[str] = set()
+    for site in rule.sites:
+        seen.update(site_components(m, site, owners))
+    return sorted(seen, key=element_sort_key)
+
+
+def anchored_flow_steps(m: ProjectModel) -> list[tuple[str, str, FlowStep]]:
+    """(use case id, authoring container id, step) for every ANCHORED step, sub-flows expanded.
+
+    A sub-flow step appears once per referencing flow, under that flow's use case but keeping its
+    OWN container id — the same rule `flow_endpoint_ids_by_uc` follows for reach, so a rule enforced
+    inside shared machinery still lands on every use case that rides it, without two steps that
+    merely share an `n` collapsing into one."""
+    out: list[tuple[str, str, FlowStep]] = []
+    for f in m.flows:
+        if not f.uc:
+            continue
+        for container, st in expanded_steps_with_container(m, f):
+            if (st.where or "").strip():
+                out.append((f.uc, container, st))
+    return out
+
+
+def _anchor_line(raw: str) -> tuple[str, int | None] | None:
+    """(path, start line) of an anchor, or None when it is not a parseable file anchor."""
+    loc = parse_anchor(raw)
+    return None if loc is None else (loc.path, loc.lo)
+
+
+def rule_steps(m: ProjectModel, rule: BusinessRule,
+               extents: dict[str, list[tuple[int, int, str, str]]] | None = None,
+               steps: list[tuple[str, str, FlowStep]] | None = None) -> list[RuleStepLink]:
+    """The use-case steps a rule's sites reach, strongest link per (use case, container, step) first.
+
+    `extents` is the pre-index symbol table (`impact_git.load_map_extents`). WITHOUT it only exact
+    links are produced — the honest degradation, since "the same enclosing function" is not
+    derivable from the map. Sharing a FILE is never a link: measured, 57% of anchors share a file
+    with some step, so a file-level join would light up nearly every row and mean nothing.
+
+    EXACT is same path + same START line, not raw string equality. A site spelled `a.py:22-24`
+    names the same operative line as a step at `a.py:22`; deciding link strength on how the author
+    punctuated the anchor would make the UI's strongest signal a formatting artifact."""
+    if steps is None:
+        steps = anchored_flow_steps(m)
+    ext = extents or {}
+    best: dict[tuple[str, str, int], RuleStepLink] = {}
+
+    def offer(link: RuleStepLink) -> None:
+        key = (link.uc, link.container, link.n)
+        cur = best.get(key)
+        if cur is None or (cur.strength == STEP_LINK_SYMBOL and link.strength == STEP_LINK_EXACT):
+            best[key] = link
+
+    for site in rule.sites:
+        raw = (site.where or "").strip()
+        if not raw:
+            continue
+        here = _anchor_line(raw)
+        if here is None:
+            continue
+        site_path, site_lo = here
+        site_ext = (enclosing_extent(ext.get(site_path, []), site_lo)
+                    if site_lo is not None else None)
+        for uc, container, st in steps:
+            there = _anchor_line((st.where or "").strip())
+            if there is None:
+                continue
+            step_path, step_lo = there
+            if (step_path, step_lo) == (site_path, site_lo):
+                offer(RuleStepLink(uc, container, st.n, STEP_LINK_EXACT, raw, st.phrase))
+                continue
+            if site_ext is None or step_lo is None or step_path != site_path:
+                continue                       # no symbol table / no enclosing symbol: exact only
+            if enclosing_extent(ext.get(step_path, []), step_lo) == site_ext:
+                offer(RuleStepLink(uc, container, st.n, STEP_LINK_SYMBOL, raw, st.phrase))
+    return sorted(best.values(),
+                  key=lambda l: (l.strength != STEP_LINK_EXACT, element_sort_key(l.uc),
+                                 element_sort_key(l.container), l.n))
+
+
+def rule_entities(m: ProjectModel, rule: BusinessRule,
+                  extents: dict[str, list[tuple[int, int, str, str]]] | None = None,
+                  steps: list[tuple[str, str, FlowStep]] | None = None) -> list[str]:
+    """The entity ids a rule reaches — ONLY through a step that itself names one as an endpoint.
+
+    Deliberately narrow. A rule does not get to claim an entity because its component happens to
+    touch one somewhere: the step it is enforced at has to name the entity, or the link is a guess.
+    The endpoint is matched against the DEFINED entity ids, not a prefix test — `ID_SHAPE` accepts
+    `EP1`, so `startswith("E")` alone would let an entry point through as an entity."""
+    if steps is None:
+        steps = anchored_flow_steps(m)
+    defined = {e.id for e in m.entities}
+    by_key = {(uc, container, st.n): st for uc, container, st in steps}
+    out: set[str] = set()
+    for link in rule_steps(m, rule, extents, steps):
+        st = by_key.get((link.uc, link.container, link.n))
+        if st is None:
+            continue
+        out.update(e for e in (st.src, st.dst) if e in defined)
+    return sorted(out, key=element_sort_key)
 
 
 def triggered_entry_point_ids(m: ProjectModel) -> set[str]:

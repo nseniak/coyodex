@@ -36,7 +36,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from coyodex.impact_git import WORKTREE as IMPACT_WORKTREE
-from coyodex.impact_git import compute_impact, load_extents
+from coyodex.impact_git import PREINDEX_JSON, compute_impact, load_map_extents
 from coyodex.impact_git import resolve_ref as impact_resolve_ref
 from coyodex.impact_ripple import RippleOptions, build_impact_result
 from coyodex.model import ModelError, load_model
@@ -48,7 +48,8 @@ from coyodex.views import model_to_graph
 
 MAP_JSON = "project-map.json"
 CHANGE_REPORT = "change-report.md"  # optional change-impact overlay, alongside the model in .coyodex/
-PREINDEX_JSON = "preindex.json"  # build-time structural pre-index (symbols/imports), alongside the map
+# `PREINDEX_JSON` is re-exported from impact_git — one home for the filename, since the extents
+# reader there resolves the same file.
 _DEFAULT_PORT = 8765
 
 # The generic frontend assets (shell + viewer.js/css) live next to this module and are served as-is,
@@ -360,14 +361,7 @@ def project_impact(proj: Project, query: dict[str, list[str]]) -> dict:
         callgraph_depth=depth,
     )
     model = load_model(proj.map_json.read_text(encoding="utf-8"))
-    extents = {}
-    pre_path = proj.map_json.parent / "preindex.json"
-    if pre_path.is_file():
-        try:
-            extents = load_extents(json.loads(pre_path.read_text(encoding="utf-8")))
-        except (OSError, ValueError):
-            extents = {}
-    core = compute_impact(proj.repo_root, model, extents, base, target)
+    core = compute_impact(proj.repo_root, model, load_map_extents(proj.map_json), base, target)
     return build_impact_result(model, core, opts, file_scope)
 
 

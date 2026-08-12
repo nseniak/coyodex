@@ -593,21 +593,35 @@ ID_ARRAYS: dict[str, str] = {
 }
 
 
+def expanded_steps_with_container(m: ProjectModel, f: Flow) -> list[tuple[str, FlowStep]]:
+    """Each expanded step paired with the id of the container that AUTHORED it — the flow's own
+    `uc`, or the `SFn` a reference step expanded to.
+
+    `(container, n)` is the ONLY unique step identity. `validate` enforces a unique `n` per flow
+    and per sub-flow SEPARATELY, so after expansion two different steps legitimately share an `n`
+    under one use case: this repo's own map has 114 anchored expanded steps, 107 distinct
+    `(uc, container, n)` keys — and only 86 distinct `(uc, n)` keys. The impact engine already
+    keys steps this way (`step:<uc|sf>:<n>`, impact_lib); anything that identifies an expanded step
+    by `(uc, n)` alone silently merges two rows into one, keeping one row's phrase and the OTHER
+    row's endpoints."""
+    sfs = {sf.id: sf for sf in m.subflows}
+    out: list[tuple[str, FlowStep]] = []
+    for st in f.steps:
+        sf = sfs.get(st.subflow or "")
+        if sf is None or not sf.steps:
+            out.append((f.uc, st))
+        else:
+            out.extend((sf.id, s) for s in sf.steps)
+    return out
+
+
 def expanded_flow_steps(m: ProjectModel, f: Flow) -> list[FlowStep]:
     """The flow's steps with each sub-flow REFERENCE step replaced inline by the referenced
     sub-flow's steps — the model-level analog of the viewer's graph-level expansion
     (gen_viewer.expanded_steps). Consumers that reason about "what this flow touches" (impact
     ripple, the model audit) walk THIS, so content inside a sub-flow is never invisible.
     An unresolved or empty reference degrades to the bare reference step."""
-    sfs = {sf.id: sf for sf in m.subflows}
-    out: list[FlowStep] = []
-    for st in f.steps:
-        sf = sfs.get(st.subflow or "")
-        if sf is None or not sf.steps:
-            out.append(st)
-        else:
-            out.extend(sf.steps)
-    return out
+    return [st for _container, st in expanded_steps_with_container(m, f)]
 
 
 def group_forests(m: ProjectModel) -> list[Group]:

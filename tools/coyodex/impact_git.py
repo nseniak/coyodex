@@ -14,6 +14,7 @@ filters before rename detection, which fabricates full-file deletes for renamed 
 """
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 from dataclasses import dataclass, field, replace
@@ -193,6 +194,9 @@ class ImpactCore:
         return [h for f in self.files for h in f.hits]
 
 
+#: The build-time structural pre-index (symbols/imports), committed alongside the map.
+PREINDEX_JSON = "preindex.json"
+
 Extents = dict[str, list[tuple[int, int, str, str]]]
 
 
@@ -202,6 +206,23 @@ def load_extents(preindex: dict) -> Extents:
     raw = (preindex.get("symbols") or {}).get("extents") or {}
     return {f: [(int(r[0]), int(r[1]), str(r[2]), str(r[3])) for r in rows]
             for f, rows in raw.items()}
+
+
+def load_map_extents(map_json: Path) -> Extents:
+    """The symbol-extent table of the pre-index COMMITTED BESIDE a map (`preindex.json`, same
+    directory), or `{}` when there is none / it cannot be read.
+
+    One reader, because there are now several consumers — change impact, and the business-rule
+    step join, which uses the same table to tell "this exact step" from "inside the same function
+    as this step". A missing table degrades every consumer the same way rather than each inventing
+    its own silence."""
+    path = map_json.parent / PREINDEX_JSON
+    if not path.is_file():
+        return {}
+    try:
+        return load_extents(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return {}
 
 
 def compute_impact(repo: Path, model: ProjectModel, extents: Extents,
