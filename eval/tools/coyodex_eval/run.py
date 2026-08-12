@@ -109,6 +109,8 @@ def delta_md(result: RunResult) -> str:
         f"structure : UC {p.use_cases} · S {p.subsystems} · SD {p.subdomains} · C {p.components} "
         f"· D {p.deps} · E {p.entities} · edges {p.edges} · HP {p.hp_steps} · flows {p.flows} "
         f"· auth {p.security_surfaces}",
+        *([f"business  : BR {p.rules} in {p.blocks} block(s) · {p.rule_sites} site(s) · "
+           f"{p.rules_swept} swept · {p.rules_unverified} unverified"] if p.rules else []),
         f"validate  : {'OK' if p.validate_ok else f'{p.validate_problems} problem(s)'}, "
         f"{p.validate_warnings} warning(s)",
         f"audit     : {p.contradictions} contradiction(s) · {p.audit_advisories} advisory · {p.l2_claims} L2 claim(s)",

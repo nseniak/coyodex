@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import re
 import subprocess
 import sys
@@ -24,8 +25,9 @@ from coyodex import grammar
 from coyodex.dump import _group_member_ids, legend_of, resolve_id
 from coyodex.anchors import strip_anchor
 from coyodex.assemble import _merge_duplicate_rules
-from coyodex.impact_git import ImpactCore, ImpactFile, load_map_extents
-from coyodex.impact_lib import DirectHit, anchor_index
+from coyodex.impact_git import ImpactCore, ImpactFile, compute_impact, load_map_extents
+from coyodex.audit_model import _THEMES, l2_worklist_model
+from coyodex.impact_lib import _CALL_SITE_KINDS, DirectHit, anchor_index
 from coyodex.impact_ripple import RippleOptions, build_impact_result, type_of
 from coyodex.balance_lib import next_free_group_id
 from coyodex.model import (
@@ -1286,6 +1288,191 @@ def test_an_authored_confidence_is_rendered_as_authored() -> None:
     m = make_checkable_model()
     m.rules[0].confidence = "inferred"
     assert "**BR1 — Only the order's owner may cancel it.**  *(inferred)*" in t7_section(m)
+
+
+# ═══ Phase 5 — impact, grounding and the eval ═════════════════════════════════════
+
+def test_every_site_is_its_own_anchor_ref_owned_by_the_rule() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites.append(RuleSite(where="src/guard.py:4", why="a second line"))
+    refs = [a for a in anchor_index(m) if a.kind == "rule_site"]
+    assert [(a.eid, a.owner, a.lo) for a in refs] == [("rule:BR1:0", "BR1", 3),
+                                                      ("rule:BR1:1", "BR1", 4)]
+
+
+def test_a_declared_absence_site_indexes_no_anchor() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(no_call_site=True, why="by construction")]
+    assert not [a for a in anchor_index(m) if a.kind == "rule_site"]
+
+
+def make_window_repo(td: str) -> Path:
+    """One 60-line function, so a change 40 lines from the anchor is INSIDE the enclosing extent and
+    well outside the ±3 call-site window."""
+    root = Path(td)
+    (root / "src").mkdir(parents=True, exist_ok=True)
+    (root / "src" / "wide.py").write_text(
+        "def wide():\n" + "".join(f"    x{i} = {i}\n" for i in range(1, 60)), encoding="utf-8")
+    return root
+
+
+def _resolution_rungs(m: ProjectModel, td: str, changed_line: int) -> dict[str, str]:
+    """The direct-hit resolution rung per element, for a one-line edit to `src/wide.py`."""
+    root = make_window_repo(td)
+    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t",
+           "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
+    for cmd in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "base"]):
+        subprocess.run(["git", *cmd], cwd=root, check=True, env=env, capture_output=True)
+    m.commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=root, check=True,
+                              capture_output=True, text=True).stdout.strip()
+    lines = (root / "src" / "wide.py").read_text(encoding="utf-8").splitlines(keepends=True)
+    lines[changed_line - 1] = "    CHANGED = 1\n"
+    (root / "src" / "wide.py").write_text("".join(lines), encoding="utf-8")
+    core = compute_impact(root, m, {"src/wide.py": [(1, 60, "wide", "function")]},
+                          "HEAD", "WORKTREE")
+    rank = {"line": 1, "symbol": 2, "file": 3}          # the STRONGEST rung per element: a
+    best: dict[str, str] = {}                           # component carries several anchors, and a
+    for h in core.hits:                                 # line-less `files` entry always says "file"
+        if h.eid not in best or rank[h.resolution] < rank[best[h.eid]]:
+            best[h.eid] = h.resolution
+    return best
+
+
+def test_a_site_and_a_security_source_take_the_tight_window_not_the_definition_span() -> None:
+    """A call-site anchor names ONE acting line inside a definition, so the enclosing span is the
+    wrong neighbourhood: a change 40 lines away would read as a symbol-rung hit on a line it never
+    touched. `security` sat outside the window while claiming to be an enforcement point; a rule
+    SITE is the same shape, and both are fixed together.
+
+    The COMPONENT `source` on the same line is the control — it points at a definition, so the
+    enclosing span IS its neighbourhood and it must still resolve at the symbol rung."""
+    assert set(_CALL_SITE_KINDS) == {"edge", "flow_step", "security", "rule_site"}
+    m = make_base_model()
+    m.components = [Component(id="C1", name="Wide", purpose="p", source="src/wide.py:5",
+                              files=["src/wide.py"])]
+    m.security = [SecurityRow(surface="S", who="w", source="src/wide.py:5")]
+    m.rules = [BusinessRule(id="BR1", statement="Only an owner may act.",
+                            sites=[RuleSite(where="src/wide.py:5", why="the guard")])]
+    m.flows, m.edges, m.entities = [], [], []
+    with tempfile.TemporaryDirectory() as td:
+        rungs = _resolution_rungs(m, td, 45)     # 40 lines away: inside `wide`, outside ±3
+    assert rungs["security:S"] == "file", rungs
+    assert rungs["rule:BR1:0"] == "file", rungs
+    assert rungs["C1"] == "symbol", rungs        # the control: a definition anchor keeps its span
+
+
+def test_a_changed_site_ripples_to_the_rule_its_components_and_its_use_cases() -> None:
+    m = make_checkable_model()
+    hit = DirectHit("rule:BR1:0", "rule_site", "src/guard.py", "modified", "line", "where",
+                    owner="BR1")
+    core = ImpactCore(pin="p" * 7, base="b" * 7, target="WORKTREE",
+                      files=[ImpactFile(path="src/guard.py", p_path="src/guard.py", status="M",
+                                        hits=[hit])])
+    reached = set(build_impact_result(m, core, RippleOptions())["impacts"])
+    assert {"BR1", "C1", "UC1"} <= reached, sorted(reached)
+
+
+def test_a_changed_rule_ripples_up_its_block_forest() -> None:
+    m = make_checkable_model()
+    m.blocks.append(Group(id="BLK2", name="Refunds", parent="BLK1"))
+    m.rules[0].block = "BLK2"
+    hit = DirectHit("BR1", "rules", "src/guard.py", "modified", "line", "where")
+    core = ImpactCore(pin="p" * 7, base="b" * 7, target="WORKTREE",
+                      files=[ImpactFile(path="src/guard.py", p_path="src/guard.py", status="M",
+                                        hits=[hit])])
+    reached = set(build_impact_result(m, core, RippleOptions())["impacts"])
+    assert {"BLK2", "BLK1"} <= reached, sorted(reached)
+
+
+# --- grounding: N sites must not collapse into one verdict ------------------------
+
+def test_each_site_is_its_own_l2_claim_because_the_anchor_is_in_the_claim_string() -> None:
+    """`l2_worklist_model` de-duplicates by claim string. Without the anchor, a rule enforced at
+    four lines collapses to ONE skeptic verdict — and that verdict then reads as covering all four."""
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(where="src/guard.py:3", why="the owner check"),
+                        RuleSite(where="src/guard.py:4", why="the owner check"),
+                        RuleSite(where="src/other.py:9", why="the owner check")]
+    claims = [w.claim for w in l2_worklist_model(m) if w.theme == "rule"]
+    assert len(claims) == 3 and len(set(claims)) == 3
+    assert all(s in c for s, c in zip(("src/guard.py:3", "src/guard.py:4", "src/other.py:9"), claims))
+
+
+def test_the_rule_theme_sits_second_and_the_order_is_pinned() -> None:
+    """The theme tier IS the batch order a grounding run works in — `_THEMES` is most-dangerous
+    first, and `test_themes_are_closed_and_match_the_worklist_order` pins declaration to emission."""
+    assert _THEMES[:2] == ("security", "rule")
+
+
+def test_a_claims_detail_names_the_components_of_ITS_SITE_not_the_rules_union() -> None:
+    """The rule's union would label a site in a file nobody claims with its SIBLING sites'
+    components — a component's home passed off as evidence — and would suppress the unverified
+    signal exactly when a rule is PARTLY grounded. It would also disagree with the T7 view."""
+    m = make_checkable_model()
+    m.components.append(Component(id="C2", name="Billing", purpose="p", files=["src/bill.py"]))
+    m.rules[0].sites = [RuleSite(where="src/guard.py:3", why="the owner check"),
+                        RuleSite(where="src/bill.py:9", why="the billing side"),
+                        RuleSite(where="src/nobody.py:1", why="an unclaimed file")]
+    details = [w.detail for w in l2_worklist_model(m) if w.theme == "rule"]
+    assert details == ["In: Guard (C1)", "In: Billing (C2)",
+                       "In: no component claims this file — the site is UNVERIFIED."]
+
+
+def test_the_grounding_detail_agrees_with_the_markdown_view() -> None:
+    m = make_checkable_model()
+    m.components.append(Component(id="C2", name="Billing", purpose="p", files=["src/guard.py"]))
+    item = next(w for w in l2_worklist_model(m) if w.theme == "rule")
+    assert item.detail == "In: Guard (C1), Billing (C2)"
+    assert "Guard (C1), Billing (C2)" in t7_section(m)
+
+
+def test_a_declared_absence_site_raises_no_claim() -> None:
+    m = make_checkable_model()
+    m.rules[0].sites = [RuleSite(no_call_site=True, why="by construction")]
+    assert not [w for w in l2_worklist_model(m) if w.theme == "rule"]
+
+
+def test_apply_drift_reaches_the_rule_site_writer_and_persists_it() -> None:
+    """END TO END, through `fix.main` — the only path an operator uses. Asserting the writer works
+    while calling it directly bypasses the dispatch, where the theme was WRITABLE but not
+    claim-shaped: every correction came back as an unparseable EDGE claim and was dropped, verbatim
+    the `cadence` failure that set is documented as having fixed. And the write gate hand-listed
+    three counters, so once a fourth writer existed the correction applied in memory, printed, and
+    was never persisted."""
+    from coyodex import fix
+    from coyodex.audit_model import rule_site_claim
+    with tempfile.TemporaryDirectory() as td:
+        make_rule_repo(td)
+        m = make_checkable_model()
+        map_path = Path(td) / "project-map.json"
+        map_path.write_text(to_canonical_json(m), encoding="utf-8")
+        verdicts = Path(td) / "verdicts.json"
+        claim = rule_site_claim(m.rules[0].statement, "src/guard.py:3", "rejects a non-owner")
+        verdicts.write_text(json.dumps({"grounding": [
+            {"claim": claim, "grounded": True, "evidence": "src/guard.py:30"}]}), encoding="utf-8")
+        assert fix.main(["apply-drift", "--map", str(map_path), "--verdicts", str(verdicts)]) == 0
+        assert load_model(map_path.read_text(encoding="utf-8")).rules[0].sites[0].where \
+            == "src/guard.py:30"
+
+
+def test_a_skeptic_corrected_site_anchor_is_writable() -> None:
+    from coyodex import fix
+    from coyodex.audit_model import apply_anchor_corrections, rule_site_claim
+    assert "rule" in fix._WRITABLE_THEMES
+    m = make_checkable_model()
+    claim = rule_site_claim(m.rules[0].statement, "src/guard.py:3", "rejects a non-owner")
+    counts, _notes = apply_anchor_corrections(m, [(claim, "src/guard.py:7")])
+    assert counts["rule_site"] == 1 and m.rules[0].sites[0].where == "src/guard.py:7"
+
+
+def test_two_sites_matching_one_claim_are_refused_not_blind_written() -> None:
+    m = make_checkable_model()
+    from coyodex.audit_model import apply_anchor_corrections, rule_site_claim
+    m.rules.append(BusinessRule(id="BR2", statement=m.rules[0].statement, sites=[
+        RuleSite(where="src/guard.py:3", why="rejects a non-owner")]))
+    claim = rule_site_claim(m.rules[0].statement, "src/guard.py:3", "rejects a non-owner")
+    counts, notes = apply_anchor_corrections(m, [(claim, "src/guard.py:7")])
+    assert counts["rule_site"] == 0 and any("matches 2 rule sites" in n for n in notes)
 
 
 if __name__ == "__main__":

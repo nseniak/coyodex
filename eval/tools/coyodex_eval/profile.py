@@ -117,6 +117,33 @@ class MapProfile:
     entities_in_flows_pct: float | None = None  # share of all entities; both fields None when the
     #                                            map has no entities or no flows (an untraced map
     #                                            is "not yet traced", not "traced and zero")
+    # ── business logic (T7 — the decision layer) ────────────────────────────────────────────────
+    # None on a map that has not adopted the layer, so an old profile stays loadable and an
+    # un-adopted map is distinguishable from one whose sweep found nothing. REPORT-ONLY by default,
+    # band-able per project via a thresholds entry — the same treatment `capabilities`, `subflows`
+    # and the completeness fields get, and for the same reason: a DEFAULT band on an
+    # adoption-dependent metric emits a "skipped, not numeric on both sides" note on every
+    # comparison of every map that has not adopted it. `l2_claims` stays unbanded on purpose and
+    # rule sites inflate it, so the collapse signal to band here is `rules` / `rule_sites`.
+    rules: int | None = None                   # how many decisions the map states
+    blocks: int | None = None                  # the decision grouping
+    rule_sites: int | None = None              # ANCHORED enforcement sites across all rules — the
+    #                                            number that says whether the rules are grounded or
+    #                                            merely listed. A `no_call_site` entry is deliberately
+    #                                            NOT counted: it is a declared absence, so counting
+    #                                            it would inflate exactly the metric it is absent from.
+    rules_swept: int | None = None             # rules whose components hold NO uncovered
+    #                                            decision-sounding step. DERIVED (validate_model.
+    #                                            rules_swept) — there is no authored flag, on
+    #                                            purpose: "I searched the whole repo" is
+    #                                            unfalsifiable, and a hand-set one would make this
+    #                                            metric measure the author's confidence.
+    rules_unverified: int | None = None        # rules with AT LEAST ONE anchored site in a file no
+    #                                            component claims, so part of the rule renders bare.
+    #                                            The debt number, and it matches what the T7 view
+    #                                            stamps: counting only rules where EVERY site fails
+    #                                            under-reports precisely the partly-grounded rule,
+    #                                            which is the interesting one.
     # ── deployment linkage ──────────────────────────────────────────────────────────────────────
     # A Deployment view is only a view if components point at units. A live rebuild kept all eight
     # units, dropped the two components that owned the nginx and vector files, and filled `runs_in`
@@ -193,7 +220,20 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         e = expected_components(root).expected
         granularity_expected = e if e > 0 else None  # a tree with no component-forming source anchors nothing
 
-    surfaces = [s.surface for s in m.security if s.surface.strip()]
+    # THE AUTH SURFACE, from both storages. `compare.auth_surfaces_must_not_drop` is a hard gate
+    # with no tolerance, and phase 8 empties `security[]` into rules with `access: true` — so the
+    # union is a no-op while both exist and a no-op again after the fold. Inverted HERE, one phase
+    # before the fold, precisely so the gate never sees the transition.
+    # De-duplicated as ONE set, not two passes: a list comprehension is evaluated against the
+    # pre-`+=` list, so it would dedup rules against security rows and never against other rules —
+    # and `security_surfaces = len(surfaces)` feeds `auth_surfaces_must_not_drop`, a hard gate with
+    # no tolerance, where one duplicate masks one genuinely dropped surface.
+    surfaces: list[str] = []
+    for name in ([s.surface.strip() for s in m.security]
+                 + [r.statement.strip() for r in m.rules if r.access]):
+        if name and name not in surfaces:
+            surfaces.append(name)
+    owners = validate_model.component_file_owners(m)   # built once; the derivation's shared index
     n_components = len({c.id for c in m.components})
     n_edges = len(m.edges)
     root_fanout, max_fanout, in_band_pct, depth = balance_lib.fanout_summary(m)
@@ -279,6 +319,17 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         entities_in_flows=e_in_flows,
         entities_in_flows_pct=(round(100 * e_in_flows / len(m.entities), 1)
                                if e_in_flows is not None else None),
+        rules=len({r.id for r in m.rules}) or None,
+        blocks=len({b.id for b in m.blocks}) or None,
+        rule_sites=(sum(1 for r in m.rules for s in r.sites if (s.where or "").strip())
+                    if m.rules else None),
+        rules_swept=(sum(1 for v in validate_model.rules_swept(m).values() if v)
+                     if m.rules else None),
+        rules_unverified=(sum(1 for r in m.rules
+                              if any((s.where or "").strip()
+                                     and not validate_model.site_components(m, s, owners)
+                                     for s in r.sites))
+                          if m.rules else None),
         auth_surfaces=surfaces,
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],
@@ -297,7 +348,10 @@ def _format(p: MapProfile) -> str:
         "",
         f"  structure   : UC {p.use_cases} · S {p.subsystems} · SD {p.subdomains} · C {p.components} "
         f"· D {p.deps} · E {p.entities} · edges {p.edges} · HP {p.hp_steps} · flows {p.flows} "
-        f"· auth-surfaces {p.security_surfaces}",
+        f"· auth-surfaces {p.security_surfaces}"
+        + (f"\n  business    : BR {p.rules} in {p.blocks} block(s) · {p.rule_sites} site(s) · "
+           f"{p.rules_swept} swept · {p.rules_unverified} unverified"
+           if p.rules else ""),
         f"  validate    : {verdict}, {p.validate_warnings} warning(s)",
         f"  audit       : {p.contradictions} contradiction(s) · {p.audit_advisories} advisory · "
         f"{p.audit_warnings} warning(s) · {p.l2_claims} L2 claim(s)",

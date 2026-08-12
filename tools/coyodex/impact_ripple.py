@@ -21,9 +21,10 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
-from coyodex.impact_git import ImpactCore
+from coyodex.impact_git import Extents, ImpactCore
 from coyodex.impact_lib import DirectHit
 from coyodex.model import FlowStep, ProjectModel, group_forests
+from coyodex.validate_model import rule_components, rule_steps
 
 # ── the lattice ───────────────────────────────────────────────────────────────────────────────────
 
@@ -46,7 +47,7 @@ _KIND_BY_PREFIX = {"C": "components", "D": "deps", "E": "entities", "S": "subsys
 #: subsystem shape does.
 _GROUP_KINDS = ("subsystems", "subdomains", "capabilities", "blocks")
 
-_KIND_BY_SYNTH = {"edge": "edges", "ep": "entry_points", "step": "flow_steps",
+_KIND_BY_SYNTH = {"edge": "edges", "ep": "entry_points", "step": "flow_steps", "rule": "rule_sites",
                   "glossary": "glossary", "security": "security", "run": "run_commands",
                   "net": "non_entity_types"}
 
@@ -98,6 +99,9 @@ class _Maps:
         for e in model.entities:
             if e.subdomain:
                 self.parent_of[e.id] = e.subdomain
+        for br in model.rules:                      # BR → its block, mirroring C → its subsystem
+            if br.block:
+                self.parent_of[br.id] = br.block
 
         ids: set[str] = ({c.id for c in model.components} | {d.id for d in model.deps}
                          | {e.id for e in model.entities})
@@ -173,10 +177,16 @@ class _Maps:
 
 def build_impact_result(model: ProjectModel, core: ImpactCore,
                         opts: RippleOptions | None = None,
-                        file_scope: str | None = None) -> dict:
+                        file_scope: str | None = None,
+                        extents: Extents | None = None) -> dict:
     """The full ImpactResult payload: consolidated direct hits + one application of the typed
     ripple rules, with provenance. `file_scope` restricts the direct set to one changed file's
-    cone (path OR its P-frame path)."""
+    cone (path OR its P-frame path).
+
+    `extents` is the pre-index symbol table `compute_impact` already receives. Only the RULE branch
+    reads it, to tell "enforced inside the function this step names" from "reaches no step": only
+    15-23% of anchors are byte-equal to a step anchor, so exact-only would drop most rule → use-case
+    ripples while the viewer, from the same table, shows them."""
     opts = opts or RippleOptions()
     maps = _Maps(model)
     impacts: dict[str, _Impact] = {}
@@ -260,6 +270,26 @@ def build_impact_result(model: ProjectModel, core: ImpactCore,
                                 [{"from": eid, "relation": "entry-point"}], files)
                 behavioral(owner, [{"from": eid, "relation": "entry-point"}])
             continue
+        if eid.startswith("rule:"):
+            # A hit rule SITE ripples to the rule itself, to the component(s) the site's file
+            # belongs to — EVERY owner, never one — and to the use cases whose steps the site
+            # reaches, through the SAME derivation the checks and the views use.
+            rid = eid.removeprefix("rule:").rsplit(":", 1)[0]
+            rule = next((r for r in model.rules if r.id == rid), None)
+            if rule is None:
+                continue
+            via = [{"from": eid, "relation": "rule-site"}]
+            register_ripple(rid, R_STRUCTURAL, 1, via, files)
+            for cid in rule_components(model, rule):
+                register_ripple(cid, R_STRUCTURAL, 1,
+                                via + [{"from": rid, "relation": "enforced-in"}], files)
+            for link in rule_steps(model, rule, extents):
+                register_ripple(link.uc, R_BEHAVIORAL, 1,
+                                via + [{"from": rid, "relation": "enforced-at"}], files)
+                for hp in maps.hp_of.get(link.uc, ()):
+                    register_ripple(hp, R_BEHAVIORAL, 1,
+                                    via + [{"from": link.uc, "relation": "happy-path"}], files)
+            continue
         if eid.startswith("step:"):
             # A hit flow step (its own `where` changed) ripples to its two element endpoints and —
             # the precise behavioral rung — to its use case(s) + their HP steps. A flow's step
@@ -317,6 +347,8 @@ def build_impact_result(model: ProjectModel, core: ImpactCore,
                     register_ripple(other, R_DATA, 1, [{"from": eid, "relation": "related"}], files)
         elif kind == "deps":
             behavioral(eid, [])
+        elif kind == "rules":
+            structural_chain(eid, "member-of")     # BR → its block, and on up the block forest
         elif kind in _GROUP_KINDS:
             structural_chain(eid, "parent-of")
 

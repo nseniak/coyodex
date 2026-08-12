@@ -21,9 +21,12 @@ from pathlib import Path
 
 from coyodex import audit_model
 from coyodex.model import (
+    BusinessRule,
     ExtraSection,
+    Group,
     HappyStep,
     Role,
+    RuleSite,
     Component,
     Dep,
     Edge,
@@ -82,6 +85,10 @@ def make_all_theme_model() -> ProjectModel:
     m.entry_points = [EntryPoint(kind="job", trigger="nightly sweep", component="C1",
                                  source="src/a.py:30", cadence="every 24h",
                                  cadence_source="src/a.py:31")]                     # cadence
+    m.blocks = [Group(id="BLK1", name="Access", purpose="who may act")]
+    m.rules = [BusinessRule(id="BR1", statement="Only an owner may cancel.", block="BLK1",
+                            sites=[RuleSite(where="src/a.py:13",
+                                            why="rejects a non-owner")])]           # rule
     return m
 
 def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:

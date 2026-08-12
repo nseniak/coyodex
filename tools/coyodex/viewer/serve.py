@@ -361,8 +361,11 @@ def project_impact(proj: Project, query: dict[str, list[str]]) -> dict:
         callgraph_depth=depth,
     )
     model = load_model(proj.map_json.read_text(encoding="utf-8"))
-    core = compute_impact(proj.repo_root, model, load_map_extents(proj.map_json), base, target)
-    return build_impact_result(model, core, opts, file_scope)
+    extents = load_map_extents(proj.map_json)
+    core = compute_impact(proj.repo_root, model, extents, base, target)
+    # The SAME table into both halves: the ripple's rule branch uses it exactly as the viewer does,
+    # so a rule shown as enforcing a step also ripples to that step's use case.
+    return build_impact_result(model, core, opts, file_scope, extents)
 
 
 def project_tree(proj: Project) -> FileTreeNode:

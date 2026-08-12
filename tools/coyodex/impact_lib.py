@@ -241,6 +241,11 @@ def anchor_index(model: ProjectModel) -> list[AnchorRef]:
                 add(_ref(f"step:{sf.id}:{st.n}", "flow_step", st.where, "where", owner=sf.id))
     for s in model.security:
         add(_ref(f"security:{s.surface}", "security", s.source, "source"))
+    for br in model.rules:
+        # `owner=` carries the rule id, following the `ep:` pattern, so a changed site ripples to the
+        # rule AND onward to what the rule reaches (impact_ripple).
+        for i, site in enumerate(br.sites):
+            add(_ref(f"rule:{br.id}:{i}", "rule_site", site.where, "where", owner=br.id))
     for r in model.run_commands:
         add(_ref(f"run:{r.action}", "run_command", r.source, "source"))
     for grp in group_forests(model):
@@ -270,6 +275,12 @@ def dir_anchors_for(anchors: list[AnchorRef], path: str) -> list[AnchorRef]:
 # the symbol rung for call-site anchors is a tight window around the anchor, never the whole
 # enclosing extent.
 EDGE_SYMBOL_WINDOW = 3
+
+#: Anchor kinds whose claim is "THIS LINE ACTS" — an example call site, a step's own call site, an
+#: auth check, a rule's enforcement site. They take the tight window above rather than the enclosing
+#: definition's span. `security` was outside it while claiming to be an enforcement point, and a
+#: rule SITE is the same shape; both are fixed here together.
+_CALL_SITE_KINDS = ("edge", "flow_step", "security", "rule_site")
 
 Extent = tuple[int, int, str, str]  # (start, end, name, kind) — preindex `symbols.extents` rows
 
@@ -331,7 +342,10 @@ def resolve_hits(refs: list[AnchorRef], frame: FileFrame, extents: list[Extent],
         if a.lo is not None:
             lo, hi = a.lo, a.hi if a.hi is not None else a.lo
             ext = None if frame.binary else enclosing_extent(extents, lo)
-            if a.kind in ("edge", "flow_step"):  # call-site-shaped anchors share the tight window
+            # A call-site-shaped anchor names ONE acting line inside a definition, not the
+            # definition, so the enclosing span is the wrong neighbourhood: a change anywhere in a
+            # 200-line function would read as a symbol-rung hit on a line it never touched.
+            if a.kind in _CALL_SITE_KINDS:
                 w_lo, w_hi = max(1, lo - EDGE_SYMBOL_WINDOW), hi + EDGE_SYMBOL_WINDOW
                 sym_span: tuple[int, int] | None = (w_lo, w_hi)
             else:

@@ -27,7 +27,13 @@ from pathlib import Path
 
 from coyodex import balance_lib, grammar
 from coyodex.anchors import FILEREF as _FILEREF
-from coyodex.model import ProjectModel, expanded_flow_steps, group_forests, load_model
+from coyodex.model import (
+    ProjectModel,
+    RuleSite,
+    expanded_flow_steps,
+    group_forests,
+    load_model,
+)
 from coyodex.reporting import reset_full_lists, set_full_lists, shown as _shown
 
 # ── the audit vocabulary (shared with the eval, which imports it from here) ──────────────────────
@@ -88,6 +94,17 @@ def security_claim(surface: str, source: str) -> str:
     return f"Auth surface '{surface}' is protected by: {_claim_text(source)}"
 
 
+def rule_site_claim(statement: str, where: str, why: str) -> str:
+    """A rule site's L2 claim, EXACTLY as `l2_worklist_model` builds it.
+
+    THE ANCHOR IS PART OF THE CLAIM STRING. `l2_worklist_model` de-duplicates by claim, so a rule
+    enforced at four lines would collapse to ONE skeptic verdict without it — and the collapsed
+    verdict would then read as covering all four. The `why` rides along because that is the specific
+    thing a skeptic re-reading the line has to find true."""
+    detail = f" — {_claim_text(why)}" if (why or "").strip() else ""
+    return f"Rule '{statement}' is enforced at {where}{detail}"
+
+
 def cadence_claim(kind: str, trigger: str, cadence: str) -> str:
     """An entry point's cadence claim, EXACTLY as `l2_worklist_model` builds it."""
     return f"Entry point [{kind}] {trigger} runs on cadence '{cadence}'"
@@ -97,9 +114,9 @@ def apply_anchor_corrections(m: ProjectModel,
                              corrections: list[tuple[str, str]]) -> tuple[dict[str, int], list[str]]:
     """Write each `(claim, corrected anchor)` onto the element its claim identifies.
 
-    Three kinds, matched by recomputing every candidate's claim: an edge's `where`, a security
-    row's `source`, an entry point's `cadence_source`. Returns per-kind counts and the notes to
-    print. A claim matching 0 or >1 elements is NEVER blind-written — it is reported and skipped,
+    Four kinds, matched by recomputing every candidate's claim: an edge's `where`, a security
+    row's `source`, an entry point's `cadence_source`, and a business rule SITE's `where`. Returns
+    per-kind counts and the notes to print. A claim matching 0 or >1 elements is NEVER blind-written — it is reported and skipped,
     the same multiplicity rule `fix security-row` enforces, and for the same reason: two rows can
     share a surface, two edges can share a triple, and picking "the first" is how a hand script
     overwrote a claim nobody meant to touch.
@@ -110,10 +127,13 @@ def apply_anchor_corrections(m: ProjectModel,
     re-matched the row the first had just moved, saw two candidates, skipped — and left two
     byte-identical security rows behind. Same inputs, two different maps. Two corrections that land
     on ONE element are refused for the same reason: whichever won would be an accident of order."""
-    counts = {"edge": 0, "security": 0, "cadence": 0}
+    counts = {"edge": 0, "security": 0, "cadence": 0, "rule_site": 0}
     notes: list[str] = []
     # Pass 1 — resolve every claim against the UNTOUCHED model.
-    resolved: list[tuple[str, str, str, int]] = []      # (claim, corrected, kind, index)
+    # (claim, corrected, kind, index, sub-index). `sub` is -1 for the flat arrays and the SITE
+    # index for a rule, whose target is two levels deep. Both are only ever used to address the
+    # same element again — and the pair is what the contested-target check is keyed on.
+    resolved: list[tuple[str, str, str, int, int]] = []
     for claim, corrected in corrections:
         if not corrected:
             notes.append(f"note: no corrected line for '{claim}' — left unchanged")
@@ -127,7 +147,7 @@ def apply_anchor_corrections(m: ProjectModel,
                 notes.append(f"WARNING: '{claim}' matches {len(hits)} edges — skipped (resolve "
                              f"by hand: an ambiguous multi-site edge must not be blind-rewritten).")
                 continue
-            resolved.append((claim, corrected, "edge", hits[0]))
+            resolved.append((claim, corrected, "edge", hits[0], -1))
             continue
         sec = [i for i, s in enumerate(m.security)
                if security_claim(s.surface, s.source) == claim]
@@ -136,7 +156,18 @@ def apply_anchor_corrections(m: ProjectModel,
                 notes.append(f"WARNING: '{claim}' matches {len(sec)} security surfaces — skipped "
                              f"(resolve by hand).")
                 continue
-            resolved.append((claim, corrected, "security", sec[0]))
+            resolved.append((claim, corrected, "security", sec[0], -1))
+            continue
+        sites = [(ri, si) for ri, br in enumerate(m.rules)
+                 for si, site in enumerate(br.sites)
+                 if (site.where or "").strip()
+                 and rule_site_claim(br.statement, (site.where or "").strip(), site.why) == claim]
+        if sites:
+            if len(sites) != 1:
+                notes.append(f"WARNING: '{claim}' matches {len(sites)} rule sites — skipped "
+                             f"(resolve by hand).")
+                continue
+            resolved.append((claim, corrected, "rule_site", sites[0][0], sites[0][1]))
             continue
         eps = [i for i, ep in enumerate(m.entry_points)
                if (ep.cadence or "").strip()
@@ -146,23 +177,24 @@ def apply_anchor_corrections(m: ProjectModel,
                 notes.append(f"WARNING: '{claim}' matches {len(eps)} entry points — skipped "
                              f"(resolve by hand).")
                 continue
-            resolved.append((claim, corrected, "cadence", eps[0]))
+            resolved.append((claim, corrected, "cadence", eps[0], -1))
             continue
-        notes.append(f"WARNING: '{claim}' matches no edge, security surface or cadenced entry "
-                     f"point in this map — skipped (the claim may have been rewritten since).")
+        notes.append(f"WARNING: '{claim}' matches no edge, security surface, rule site or "
+                     f"cadenced entry point in this map — skipped (the claim may have been "
+                     f"rewritten since).")
     # Two corrections resolving to ONE element cannot both be honoured; order must not decide.
     # Keyed on the CORRECTED value, not the claim: the same claim listed twice with two different
     # anchors is the same conflict wearing one name, and comparing claims missed it entirely.
-    seen: dict[tuple[str, int], str] = {}
-    contested: set[tuple[str, int]] = set()
-    for _claim, corrected, kind, idx in resolved:
-        prior = seen.get((kind, idx))
+    seen: dict[tuple[str, int, int], str] = {}
+    contested: set[tuple[str, int, int]] = set()
+    for _claim, corrected, kind, idx, sub in resolved:
+        prior = seen.get((kind, idx, sub))
         if prior is not None and prior != corrected:
-            contested.add((kind, idx))
-        seen.setdefault((kind, idx), corrected)
+            contested.add((kind, idx, sub))
+        seen.setdefault((kind, idx, sub), corrected)
     # Pass 2 — write.
-    for claim, corrected, kind, idx in resolved:
-        if (kind, idx) in contested:
+    for claim, corrected, kind, idx, sub in resolved:
+        if (kind, idx, sub) in contested:
             notes.append(f"WARNING: '{claim}' and another correction both resolve to the same "
                          f"{kind} — skipped BOTH (whichever won would be an accident of order; "
                          f"resolve by hand).")
@@ -179,6 +211,12 @@ def apply_anchor_corrections(m: ProjectModel,
                 notes.append(f"  {claim}: source {s.source!r} → {corrected!r}")
                 s.source = corrected
                 counts["security"] += 1
+        elif kind == "rule_site":
+            site = m.rules[idx].sites[sub]
+            if site.where != corrected:
+                notes.append(f"  {claim}: where {site.where!r} → {corrected!r}")
+                site.where = corrected
+                counts["rule_site"] += 1
         else:
             ep = m.entry_points[idx]
             if ep.cadence_source != corrected:
@@ -231,6 +269,9 @@ class WorkItem:
 #: largest, lowest-risk bucket — really was emitted 4th of 8.)
 _THEMES: tuple[str, ...] = (
     "security",       # auth surfaces + enforces/encrypts edges: a false claim is an access-control hole
+    "rule",           # a business rule's enforcement SITE — the product decision layer. Second only
+                      # to security: a rule states what the product decides, and an unchallenged one
+                      # reads as a fact about the business rather than a guess about a line.
     "dep-usage",      # C→D: does this component really reach that external system
     "ownership",      # C→E: persists/writes/reads — mis-wires the subsystem→subdomain bridge
     "persistence",    # store rows: what is persisted where
@@ -629,6 +670,29 @@ def _endpoint_detail(m: ProjectModel) -> dict[str, str]:
     return out
 
 
+def _rule_site_detail(m: ProjectModel, site: RuleSite,
+                      owners: dict[str, list[str]]) -> str | None:
+    """The self-describing context a rule-site claim carries: the components THIS SITE resolves to,
+    so a skeptic knows whose code the line is in.
+
+    Per SITE, never per rule. The rule's union would label a site in a file nobody claims with the
+    components of its sibling sites — a component's home passed off as evidence, and it would
+    suppress the "unverified" signal exactly when a rule is PARTLY grounded, which is when it
+    matters. It would also disagree with the markdown view about the same fact.
+
+    DERIVED — `site_components`, the one implementation, never a second walk of `Component.files`.
+    `owners` is the prebuilt index: rebuilding it per site made it 76% of `l2_worklist_model`."""
+    # LOCAL import, the documented circular-import exception: `validate_model` imports
+    # `l2_worklist_model` from this module, so the dependency can only run the other way at call
+    # time. Re-deriving the owners here instead is the one thing the design forbids.
+    from coyodex.validate_model import site_components
+    comps = site_components(m, site, owners)
+    if not comps:
+        return "In: no component claims this file — the site is UNVERIFIED."
+    names = {c.id: c.name for c in m.components}
+    return "In: " + ", ".join(f"{names.get(c, c)} ({c})" for c in comps)
+
+
 def _edge_detail(src: str, dst: str, described: dict[str, str]) -> str | None:
     parts: list[str] = []
     if src in described:
@@ -651,6 +715,22 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             claim=security_claim(s.surface, s.source),
             anchor=_anchor(s.source), theme="security",
             why_risky="security boundary — a false claim here is an access-control hole."))
+    rule_items: list[WorkItem] = []
+    if m.rules:
+        from coyodex.validate_model import component_file_owners   # same circular-import exception
+        owners = component_file_owners(m)
+        for br in m.rules:
+            for site in br.sites:
+                where = (site.where or "").strip()
+                if not where:
+                    continue    # a declared absence claims no line — nothing for a skeptic to read
+                rule_items.append(WorkItem(
+                    claim=rule_site_claim(br.statement, where, site.why),
+                    anchor=_anchor(where), theme="rule", drift_eligible=True,
+                    detail=_rule_site_detail(m, site, owners),
+                    why_risky=("a product DECISION and the line that enforces it — a false claim "
+                               "here reads as a fact about the business, and the map's decision "
+                               "layer is the part a reader trusts most.")))
     dep_items: list[WorkItem] = []
     entity_items: list[WorkItem] = []
     other_items: list[WorkItem] = []
@@ -682,6 +762,11 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                 claim=claim, anchor=anchor, detail=detail,
                 why_risky=(f"backbone edge — no deterministic gate confirms {e.src}'s code "
                            f"'{verb}' {e.dst}; ground the call site against the code.")))
+    # The rule tier goes HERE — after the edge loop, which also appends `security`-themed items to
+    # `items`. Emitting it where the rules are built (before that loop) interleaves
+    # security · rule · security and breaks the `_THEMES` declared-order == emission-order contract.
+    # Same reason `dep_items` is collected and extended rather than appended in place.
+    items.extend(rule_items)
     items.extend(dep_items)
     items.extend(entity_items)
     # `other_items` (theme "backbone") is appended LAST, at the end of this function — not here. It is

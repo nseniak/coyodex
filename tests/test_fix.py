@@ -699,7 +699,8 @@ def test_a_recorded_anchor_whose_claim_is_gone_notes_and_never_fails():
                           "corrected": "b.py:9"}]}), "rec")
     notes = apply_reconcile(m, rec, {})
     assert m.edges[0].where == "a.py:1"
-    assert any("matches no edge, security surface or cadenced entry point" in n for n in notes)
+    assert any("matches no edge, security surface, rule site or cadenced entry point" in n
+               for n in notes)
 
 
 def test_dedup_security_resolves_rows_that_share_surface_AND_anchor(capsys):

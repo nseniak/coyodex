@@ -54,7 +54,15 @@ _NO_CALL_SITE = "(no call site)"
 #: A theme added to `audit_model._THEMES` and not classified here silently becomes "not applicable",
 #: which would stop `apply-drift` writing a kind it should write. `tests/test_fix.py` pins the
 #: partition against `_THEMES` for exactly that.
-_WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone", "cadence"})
+_WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone", "cadence", "rule"})
+
+#: Writable themes whose claim is NOT edge-shaped, so `apply_anchor_corrections` can place it by
+#: recomputing the claim rather than by parsing `<Id> <verb> <Id>`. Everything writable and not in
+#: here is an edge-themed claim `_EDGE_CLAIM` failed to parse — a real, differently-worded problem.
+#: This list and `_WRITABLE_THEMES` must move together: `rule` was added to the second and not the
+#: first, and every rule-site correction was then reported as an unparseable EDGE claim and dropped
+#: — verbatim the `cadence` failure that set is documented as having fixed.
+_CLAIM_SHAPED_THEMES = frozenset({"security", "cadence", "rule"})
 
 
 def _load(map_path: Path) -> tuple[ProjectModel, frozenset[str] | None]:
@@ -187,7 +195,7 @@ def apply_drift(argv: list[str]) -> int:
         if theme not in _WRITABLE_THEMES:
             not_applicable.append((theme, claim))
             continue
-        if theme not in ("security", "cadence"):
+        if theme not in _CLAIM_SHAPED_THEMES:
             # An EDGE-themed claim that `_EDGE_CLAIM` could not parse. Letting it reach the security
             # writer reproduces the bug this dispatch exists to kill: `validate` accepts a multi-word
             # verb (`C1 writes to E1`), the regex's `(\S+)` cannot match it, and the operator was
@@ -208,20 +216,24 @@ def apply_drift(argv: list[str]) -> int:
     for n in notes:
         # An applied rewrite is indented and is the RESULT (stdout); a skip is a warning (stderr).
         print(n, file=sys.stdout if n.startswith("  ") else sys.stderr)
-    edges_applied, sec_applied, cadence_applied = counts["edge"], counts["security"], counts["cadence"]
+    edges_applied, sec_applied = counts["edge"], counts["security"]
+    cadence_applied, site_applied = counts["cadence"], counts["rule_site"]
     stuck = len(not_applicable) + len(unparseable)
     # The counts ride the LAST line, including the not-applicable one. A live build read this output
     # with `| tail -12`, so a total that is not on the final line is a total the reader never sees.
     tail = (f" {stuck} drift(s) NOT APPLICABLE to this command (named above) and still "
             f"unreconciled." if stuck else "")
-    if edges_applied or sec_applied or cadence_applied:
+    # `sum(counts.values())`, not a hand-listed disjunction — `reconcile.py` already does it that
+    # way, and the hand-listed one silently stopped writing the file the moment a fourth writer
+    # existed: the correction applied in memory, printed, and was never persisted.
+    if sum(counts.values()):
         _write(Path(map_path), m, _present)
-        print(f"apply-drift: rewrote {edges_applied} edge `where`, {sec_applied} security anchor(s) "
-              f"and {cadence_applied} cadence anchor(s).{tail} "
+        print(f"apply-drift: rewrote {edges_applied} edge `where`, {sec_applied} security anchor(s), "
+              f"{cadence_applied} cadence anchor(s) and {site_applied} rule site(s).{tail} "
               f"Re-run: validate --check-sources → audit → render.")
     else:
-        print(f"apply-drift: rewrote nothing — no drifted edge, security or cadence anchor to "
-              f"fix.{tail}")
+        print(f"apply-drift: rewrote nothing — no drifted edge, security, cadence or rule-site "
+              f"anchor to fix.{tail}")
     return 0
 
 
