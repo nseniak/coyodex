@@ -986,16 +986,17 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 /* A parent pill jumps within the Data tab (not out to the diagram) — mark it with a subtle underline. */
 .dv-chip.dv-jump { text-decoration: underline; text-decoration-style: dotted; text-underline-offset: 2px; }
 
-/* ── Business logic (T7): the decision layer. Reuses the Data tab's rail+panes chrome (.dv-wrap /
-   .dv-rail / .dv-pane / .dv-store), so only the rule-specific rows are styled here. ── */
-.br-purpose { margin: -4px 0 14px; color: #475569; font-size: 13px; }
-.br-rule { border-top: 1px solid #eef2f7; padding: 12px 0 10px; }
-.br-rule:first-of-type { border-top: 0; }
-.br-rule h3 { margin: 0 0 6px; font-size: 14px; font-weight: 650; line-height: 1.45; color: #0f172a; }
+/* A table cell holding SEVERAL code anchors (a rule's enforcement sites): one link per line, so a
+   rule enforced in six places reads as six places instead of one truncated string. */
+.src-list { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+
+/* ── Business logic (T7): the decision layer, in the Use Cases catalog's clothes. Level 1 (the
+   decision areas and their rules) reuses .usecases-wrap / .uc-group / .uc-row wholesale — a list of
+   areas holding rows reads exactly like a list of actors holding use cases — and level 2 (one rule's
+   page) reuses the same cards for its sections. Only the rule-specific parts are styled here. ── */
 .br-tag { display: inline-block; margin-left: 7px; padding: 1px 6px; border-radius: 4px;
           font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase;
           background: #f1f5f9; color: #475569; vertical-align: 2px; }
-.br-tag.br-access { background: #eef2ff; color: #4338ca; }
 .br-tag.br-debt   { background: #fef3c7; color: #92400e; }
 .br-tag.br-warn   { background: #fee2e2; color: #b91c1c; }
 .br-sites { list-style: none; margin: 0 0 6px; padding: 0; }
@@ -1011,13 +1012,22 @@ button.diffcommit .dc-tag { flex: 0 0 auto; font-size: 9.5px; text-transform: up
 .br-why { color: #64748b; font-size: 12px; }
 .br-unverified { color: #b91c1c; font-size: 12px; font-style: italic; }
 .br-nowhere { color: #475569; font-size: 12px; font-style: italic; }
-.br-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; margin-top: 4px; }
-.br-lbl { font-size: 10px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-          color: #94a3b8; }
+/* A rule page's chip rows (the flow steps it is enforced at, the entities it speaks about). */
+.br-chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 2px 0; }
 .br-step { font: inherit; font-size: 12px; cursor: pointer; padding: 1px 7px; border-radius: 4px;
            border: 1px solid #dbeafe; background: #eff6ff; color: #1e40af; }
 /* "inside the same function as this step" is a WEAKER claim than "this step" — drawn weaker. */
 .br-step.br-near { border-style: dashed; background: #f8fafc; color: #475569; }
 .br-step:hover { background: #dbeafe; }
-.br-dot { width: 6px; height: 6px; border-radius: 50%; background: #f59e0b; flex: 0 0 auto; }
+/* A rule page's decision — the full sentence, under the title heading. Reads as the lead line of the
+   page, not as a caption: it IS the rule, the title is only how a reader finds it again. */
+.br-statement { margin: -2px 0 10px; font-size: 14px; line-height: 1.5; color: #1f2937; }
+/* A rule row's third line — where the decision lives. Dimmer than the statement above it: it is the
+   derived answer, and the row's own decision has to stay the thing the eye lands on. */
+.br-where { display: block; margin-top: 3px; font-size: 11.5px; color: #94a3b8; line-height: 1.45; }
+.br-where .br-nowhere, .br-where .br-unverified { font-size: 11.5px; }
+/* The decision area a rule belongs to, on its page — a chip that walks back out to the list. */
+.br-blk { font: inherit; font-size: 12px; cursor: pointer; padding: 1px 9px; border-radius: 999px;
+          border: 1px solid #c7d2fe; background: #eef2ff; color: #3730a3; font-weight: 600; }
+.br-blk:hover { background: #e0e7ff; }
 #panel .br-steprules { line-height: 1.6; }

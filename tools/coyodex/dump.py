@@ -78,8 +78,8 @@ def resolve_id(m: ProjectModel, eid: str) -> dict[str, object] | None:
     if el is None:
         return None
     kind = _kind_of(eid)
-    # A business rule's display text is its `statement` — it has neither `name` nor `title`, so
-    # without this `dump --id BRn` answered `"name": null` for every rule in the map.
+    # A rule carries both: `name` is its title, `statement` the decision in full. The fallback is
+    # what a map built before `name` existed still answers with, instead of `"name": null`.
     name: str | None = (getattr(el, "name", None) or getattr(el, "title", None)
                         or getattr(el, "statement", None))
     source: str | None = None
@@ -147,7 +147,7 @@ def legend_of(m: ProjectModel) -> list[dict[str, object]]:
         out.append({"id": blk.id, "name": blk.name, "kind": "block", "parent": blk.parent or "",
                     "source": _href(blk.source) or ""})
     for br in m.rules:
-        out.append({"id": br.id, "name": br.statement, "kind": "business_rule",
+        out.append({"id": br.id, "name": br.name or br.statement, "kind": "business_rule",
                     "parent": br.block or "", "source": ""})
     return out
 

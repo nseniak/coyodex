@@ -1239,6 +1239,10 @@
           "type": "string",
           "description": "ONE product decision, in product language and naming no component \u2014 the sharp test is 'could a product person have decided otherwise?'. Two claims joined by 'and' are two rules."
         },
+        "name": {
+          "type": "string",
+          "description": "the SHORT title \u2014 a few words a reader scans, the way a use case has a name beside its trigger\u2192outcome sentence (\"Owner-only cancellation\"). Not a shortened statement: name the DECISION, then state it in full in `statement`."
+        },
         "block": {
           "type": [
             "string",
@@ -1274,7 +1278,8 @@
       },
       "required": [
         "id",
-        "statement"
+        "statement",
+        "name"
       ],
       "additionalProperties": false
     },

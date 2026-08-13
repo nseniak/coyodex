@@ -51,7 +51,7 @@ the name, and fields the diagram already shows (like which box a box nests in) a
 | *(extra authored fields)* | text | |
 | Runs in | list of process links (replaces the authored text field, which said the same thing) | opens that process's card |
 | In use cases | use-case links grouped by capability | |
-| How it decides | the T7 business rules enforced in this component, grouped by block; explicit empty state | opens the Business logic tab focused on that rule |
+| How it decides | the T7 business rules enforced in this component, grouped by block; explicit empty state | opens that rule's page on the Business logic tab |
 | Triggered by | list of its T4 entry points (kind · trigger · source) | source link opens the code viewer |
 | *(kind)* | badge: "component" | |
 
@@ -113,7 +113,7 @@ leaves the code viewer alone).
 | Note | text | |
 | Source (the step's own `where`) | text link — opens the code viewer at the call site | |
 | Part of sub-flow | text (only on a step expanded from a named sub-flow: ⟨name⟩ + its SF id) | |
-| Decides | the T7 business rules enforced at THIS step, each marked when the rule is enforced inside the same function rather than at this exact line | opens the Business logic tab focused on that rule |
+| Decides | the T7 business rules enforced at THIS step, each marked when the rule is enforced inside the same function rather than at this exact line | opens that rule's page on the Business logic tab |
 
 The **Decides** row is keyed by *(use case, authoring container, step number)* — a step's number is
 unique per container, never per use case, so a sub-flow's step 2 and the flow's own step 2 are two
@@ -250,17 +250,32 @@ The **group-pair overview** arrow (the bundled crossings between two groups) use
 
 ## Business logic (the T7 tab)
 
-The decisions the product makes, as a rail of **decision areas** (blocks) and one pane of rules per
-area. Not a diagram: a decision is not a box, and drawing it as one would invent a structure the map
-does not have.
+The decisions the product makes, in TWO levels — the same shape the Use Cases catalog has, because
+it answers the same kind of question. Not a diagram: a decision is not a box, and drawing it as one
+would invent a structure the map does not have.
+
+**Level 1 — the decision areas.** A list of **decision areas** (blocks, nested ones named under their
+parent), each holding its rules as one-line rows. A row carries only what it takes to choose: the
+decision, its badges, the components it is enforced in (three, then a count), and how many traced
+flow steps it governs. Clicking a row opens the rule.
+
+**Level 2 — one rule's page.** Reached by clicking a row, by the "How it decides" / "Decides" links
+in the info pane, or by a search hit on the rule. The breadcrumb reads *Business logic › <the rule>*
+and walks back to the rule's own area.
 
 | Property | Display | Action |
 |---|---|---|
-| The decision | heading (the rule's statement, in product language) | |
-| access / sweep debt / unverified / confidence | badges | |
-| Site | *line — component(s)*, one row per enforcement site | the line opens the code viewer; a component chip locates it in its structural diagram |
-| Enforced at | step chips: *use case* step *position* (with the sub-flow's NAME when the step was authored in one) | selects and frames that step in the use case's flow |
+| The rule | heading (its short `name`) with the full decision, in product language, beneath it | |
+| sweep debt / unverified | badges — both DERIVED | |
+| Decision area | chip, with the area's purpose under it | back to the list, on that area |
+| If it is wrong | the rule's risk, where the map states one | |
+| Where it is enforced | *line — component(s)*, one row per enforcement site | the line opens the code viewer; a component chip locates it in its structural diagram |
+| Enforced at these steps | step chips: *use case* step *position* (with the sub-flow's NAME when the step was authored in one) | selects and frames that step in the use case's flow |
 | Touches | entity chips, only where a reached step names the entity | locates the entity's card |
+
+Each of the three lower sections states its empty case ("No traced flow step reaches this rule")
+rather than disappearing: that emptiness is a fact about the map, and hiding it reads as a rule with
+nothing to say.
 
 The step number on a chip is the step's **position in the rendered flow** — the number the arrow
 badge and the step counter show — not the authored `n` the JSON carries. A sub-flow's steps are
@@ -281,6 +296,19 @@ Three site states, and the difference between them is the whole point:
 A rule's components, its steps, its entities and its sweep state are all **derived** from the site
 anchors by the same Python implementation the checks and the markdown view use. Nothing on this tab
 is a second answer computed in the browser.
+
+**The tab badges only what it derives.** Two authored flags are deliberately **not shown**:
+
+- `confidence` — the authoring agent's own word for its own work, which nothing derives and nothing
+  checks, and which comes out constant: every rule in a map carries the same value, because the
+  dispatch template's example JSON spells one out and each agent copies it down its whole block. A
+  badge on every row that separates no row from another is furniture, and stamping an unfalsifiable
+  self-report is what sweep state uses a canary to avoid.
+- `access` — a real distinction, but the System tab's **Security & auth** section IS the access
+  rules, each with its risk and its enforcement sites. A bare word here was a second, poorer
+  rendering of something that already has a home.
+
+Both fields still reach the model, the markdown view and the security surface.
 
 ---
 

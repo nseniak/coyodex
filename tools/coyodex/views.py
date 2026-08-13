@@ -533,7 +533,13 @@ def model_to_markdown(m: ProjectModel) -> str:
         def _rule_lines(r: BusinessRule) -> list[str]:
             tags = "".join(f"  *({t})*" for t in (["access"] if r.access else [])
                            + ([r.confidence] if r.confidence else []))
-            lines = [f"**{r.id} — {r.statement}**{tags}"]
+            # Title, then the decision, on ONE line. A second line would be a lazy continuation of
+            # this paragraph anyway (markdown joins them), and a blank line between them would put
+            # air between a rule and its own sentence. A map written before `name` existed renders
+            # exactly as it did — the statement alone, as the heading — so its committed `.md` does
+            # not churn on a field the map does not have.
+            head = f"{r.name.strip()}** — {r.statement}" if r.name.strip() else f"{r.statement}**"
+            lines = [f"**{r.id} — {head}{tags}"]
             lines += [_site_line(site) for site in r.sites]
             # Exact links only, and the filter says so INDEPENDENTLY of `rule_steps` happening to
             # produce none without a symbol table: the view must stay a pure function of the JSON
@@ -873,7 +879,10 @@ def auth_surface_rows(m: ProjectModel) -> list[dict[str, str]]:
     while the markdown shows fourteen rows — which is the two-answers problem the fold exists to end,
     running the other way. `kind` says which storage a row came from so a reader is never left
     guessing which one is authoritative."""
-    rows = [{"kind": "rule", "id": r.id, "surface": r.statement, "who": "",
+    # The rule's TITLE where it has one — the same words the Business logic tab names it by, so the
+    # two views of one decision are recognisably the same decision. A map with no `name` keeps the
+    # statement, which is what this column always was.
+    rows = [{"kind": "rule", "id": r.id, "surface": r.name or r.statement, "who": "",
              "source": " · ".join((s.where or "").strip() for s in r.sites
                                   if (s.where or "").strip()),
              "risk": r.risk}
@@ -927,7 +936,7 @@ def _build_rules_view(m: ProjectModel, extents: Extents | None) -> dict[str, obj
         for l in steps:
             by_step.setdefault(f"{l['uc']}:{l['container']}:{l['n']}", []).append(r.id)
         out_rules.append({
-            "id": r.id, "statement": r.statement, "block": r.block or "",
+            "id": r.id, "name": r.name, "statement": r.statement, "block": r.block or "",
             "access": r.access, "risk": r.risk, "confidence": r.confidence,
             "sites": sites, "steps": steps,
             "entities": [{"id": e, "name": ent_names.get(e, e)}
@@ -1005,8 +1014,8 @@ def model_to_graph(m: ProjectModel, extents: Extents | None = None) -> GraphDict
                                "Parent": block_names.get(blk.parent or "", blk.parent or "")},
                               blk.parent)
     for br in m.rules:
-        nodes[br.id] = _node(br, "rule", br.statement, None,
-                             {"Rule": br.statement,
+        nodes[br.id] = _node(br, "rule", br.name or br.statement, None,
+                             {"Rule": br.name or br.statement, "Decision": br.statement,
                               "Block": block_names.get(br.block or "", br.block or "")},
                              br.block)
     # T4 entry points grouped by the component they name — surfaced as each component's "Triggered by"

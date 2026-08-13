@@ -542,7 +542,7 @@ def test_every_owner_type_the_generator_knows_is_reachable_in_a_map():
     from coyodex.reconcile_build import _FIELD_OWNER, _elements
     m = make_map()
     m.use_cases = [UseCase(id="UC1", name="Do it")]
-    m.rules = [BusinessRule(id="BR1", statement="Only an owner may cancel.",
+    m.rules = [BusinessRule(id="BR1", name="Owner-only cancellation", statement="Only an owner may cancel.",
                             sites=[RuleSite(where="app/plugins/a.py:9", why="rejects a non-owner")])]
     reachable = {type(el) for el in _elements(m)}
     unreachable = sorted({t.__name__ for t in _FIELD_OWNER.values()} - {t.__name__ for t in reachable})

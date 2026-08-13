@@ -115,7 +115,8 @@ def make_base_model() -> ProjectModel:
 
 def make_rule(rid: str = "BR1", block: str | None = "BLK1",
               where: str = "src/v.py:12") -> BusinessRule:
-    return BusinessRule(id=rid, statement="Only the order's owner may cancel it.", block=block,
+    return BusinessRule(id=rid, name="Owner-only cancellation", block=block,
+                        statement="Only the order's owner may cancel it.",
                         sites=[RuleSite(where=where, why="rejects a non-owner caller")])
 
 
@@ -293,8 +294,9 @@ def test_dump_resolves_a_block_and_a_rule() -> None:
     assert blk is not None and blk["kind"] == "block" and blk["members"] == ["BR1"]
     br = resolve_id(m, "BR1")
     assert br is not None and br["kind"] == "business_rule"
-    # a rule's display text is its STATEMENT — it has neither `name` nor `title`
-    assert br["name"] == "Only the order's owner may cancel it."
+    # a rule's display text is its TITLE now — `dump` answers with the same words every other
+    # surface names it by, not the whole decision sentence
+    assert br["name"] == "Owner-only cancellation"
 
 
 def test_dump_legend_lists_blocks_and_rules() -> None:
@@ -320,9 +322,9 @@ def test_a_rule_carries_no_authored_component_step_or_sweep_field() -> None:
     are computed from `sites` against the rest of the map. An authored field for any of them would
     let the layer assert what nobody checked — which is exactly how the prototype lied."""
     names = {f.name for f in dataclasses.fields(BusinessRule)}
-    # `risk` is AUTHORED, like `confidence` — a judgement about what the decision's limit costs,
-    # which nothing derives. The guarantee is about the DERIVED quantities below.
-    assert names == {"id", "statement", "block", "sites", "access", "risk", "confidence"}
+    # `risk` is AUTHORED, like `confidence` and `name` — a judgement (or a title) nothing derives.
+    # The guarantee is about the DERIVED quantities below.
+    assert names == {"id", "name", "statement", "block", "sites", "access", "risk", "confidence"}
     assert not names & {"components", "component", "steps", "use_cases", "swept", "entities"}
     assert {f.name for f in dataclasses.fields(RuleSite)} == {"where", "why", "no_call_site"}
 
@@ -460,7 +462,7 @@ def make_shared_file_model() -> ProjectModel:
                               files=["src/shared.py"]) for i in range(1, 5)]
     m.components.append(Component(id="C5", name="Alone", purpose="p", files=["src/solo.py"]))
     m.blocks = [Group(id="BLK1", name="Access", purpose="who may act")]
-    m.rules = [BusinessRule(id="BR1", statement="Only an owner may cancel.", block="BLK1",
+    m.rules = [BusinessRule(id="BR1", name="Owner-only cancellation", statement="Only an owner may cancel.", block="BLK1",
                             sites=[RuleSite(where="src/shared.py:12", why="rejects a non-owner")])]
     return m
 
@@ -471,7 +473,7 @@ def make_extent_model() -> ProjectModel:
     m = make_base_model()
     m.components = [Component(id="C1", name="Guard", purpose="p", files=["src/guard.py"])]
     m.blocks = [Group(id="BLK1", name="Access", purpose="who may act")]
-    m.rules = [BusinessRule(id="BR1", statement="Only an owner may cancel.", block="BLK1",
+    m.rules = [BusinessRule(id="BR1", name="Owner-only cancellation", statement="Only an owner may cancel.", block="BLK1",
                             sites=[RuleSite(where="src/guard.py:22", why="rejects a non-owner")])]
     m.use_cases = [UseCase(id="UC1", name="Cancel", actors=["R1"]),
                    UseCase(id="UC2", name="Refund", actors=["R1"])]
@@ -764,7 +766,7 @@ def make_checkable_model() -> ProjectModel:
     m.edges = [Edge(src="C1", verb="reads", dst="E1", why="show", where="src/guard.py:3"),
                Edge(src="C1", verb="uses", dst="D1", why="query", where="src/guard.py:4")]
     m.blocks = [Group(id="BLK1", name="Order lifecycle", purpose="who may change an order")]
-    m.rules = [BusinessRule(id="BR1", statement="Only the order's owner may cancel it.",
+    m.rules = [BusinessRule(id="BR1", name="Owner-only cancellation", statement="Only the order's owner may cancel it.",
                             block="BLK1",
                             sites=[RuleSite(where="src/guard.py:3", why="rejects a non-owner")])]
     return m
@@ -804,8 +806,8 @@ def test_the_canary_is_silent_until_a_map_carries_rules() -> None:
     m.rules = []
     assert sweep_debt(m) == []
     # a rule in a component the step does NOT name — neither anchor nor structural coverage
-    m.rules = [BusinessRule(id="BR1", statement="Something else.", sites=[
-        RuleSite(where="src/bill.py:4", why="elsewhere")])]
+    m.rules = [BusinessRule(id="BR1", name="A different decision", statement="Something else.",
+                            sites=[RuleSite(where="src/bill.py:4", why="elsewhere")])]
     assert sweep_debt(m), "with rules present the unclaimed decision must surface"
 
 
@@ -868,9 +870,12 @@ def test_a_site_reaches_all_three_families_from_one_map() -> None:
         root = make_rule_repo(td)
         m = make_checkable_model()
         m.rules = [
-            BusinessRule(id="BR1", statement="a", sites=[RuleSite(where="not an anchor at all")]),
-            BusinessRule(id="BR2", statement="b", sites=[RuleSite(where="src/guard.py:900")]),
-            BusinessRule(id="BR3", statement="c", sites=[RuleSite(where="src/guard.py:1")]),
+            BusinessRule(id="BR1", name="Rule A", statement="a",
+                         sites=[RuleSite(where="not an anchor at all")]),
+            BusinessRule(id="BR2", name="Rule B", statement="b",
+                         sites=[RuleSite(where="src/guard.py:900")]),
+            BusinessRule(id="BR3", name="Rule C", statement="c",
+                         sites=[RuleSite(where="src/guard.py:1")]),
         ]
         assert any("BR1 site[0] where" in p for p in _check_anchor_format(m))
         assert any("BR2 site[0]" in p for p in check_anchor_existence_model(m, [root]))
@@ -982,7 +987,7 @@ def make_swept_model() -> ProjectModel:
 def test_the_canary_lists_the_unclaimed_decision_and_shrinks_after_a_sweep() -> None:
     m = make_swept_model()
     assert [(container, st.n) for container, st in sweep_debt(m)] == [("UC1", 3)]
-    m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
+    m.rules.append(BusinessRule(id="BR2", name="Admin cancel override", statement="Only an admin may override a cancel.",
                                 block="BLK1",
                                 sites=[RuleSite(where="src/admin.py:4", why="the admin gate")]))
     assert sweep_debt(m) == []
@@ -1001,7 +1006,7 @@ def test_sweep_state_is_derived_from_the_canary_not_asserted() -> None:
     m = make_swept_model()
     assert rules_swept(m) == {"BR1": True}
     assert [(c, st.n) for c, st in sweep_debt(m)] == [("UC1", 3)]
-    m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
+    m.rules.append(BusinessRule(id="BR2", name="Admin cancel override", statement="Only an admin may override a cancel.",
                                 block="BLK1",
                                 sites=[RuleSite(where="src/admin.py:4", why="the admin gate")]))
     assert rules_swept(m) == {"BR1": True, "BR2": True} and sweep_debt(m) == []
@@ -1017,7 +1022,7 @@ def test_a_rule_is_unswept_while_decision_shaped_code_in_its_files_is_unclaimed(
     # code BR1 governs, reached by a component nothing claims.
     m.flows[0].steps[2].where = "src/guard.py:9"
     assert rules_swept(m) == {"BR1": False}
-    m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
+    m.rules.append(BusinessRule(id="BR2", name="Admin cancel override", statement="Only an admin may override a cancel.",
                                 block="BLK1",
                                 sites=[RuleSite(where="src/admin.py:4", why="the admin gate")]))
     assert rules_swept(m) == {"BR1": True, "BR2": True}
@@ -1043,7 +1048,7 @@ def test_two_agents_stating_one_rule_are_caught_by_content_not_id() -> None:
     """Ids cannot carry identity: rules are authored one agent per block from disjoint ranges, so
     two agents stating one rule produce two ids and the duplicate-ID check stays silent."""
     m = make_checkable_model()
-    m.rules.append(BusinessRule(id="BR2", statement="Only the ORDER'S owner  may cancel it!",
+    m.rules.append(BusinessRule(id="BR2", name="Owner-only cancellation", statement="Only the ORDER'S owner  may cancel it!",
                                 block="BLK1",
                                 sites=[RuleSite(where="src/guard.py:3", why="same line")]))
     assert any("BR1, BR2 state the same decision" in p for p in rule_problems(m))
@@ -1051,7 +1056,7 @@ def test_two_agents_stating_one_rule_are_caught_by_content_not_id() -> None:
 
 def test_the_same_statement_at_different_sites_is_two_rules() -> None:
     m = make_checkable_model()
-    m.rules.append(BusinessRule(id="BR2", statement="Only the order's owner may cancel it.",
+    m.rules.append(BusinessRule(id="BR2", name="Owner-only cancellation", statement="Only the order's owner may cancel it.",
                                 block="BLK1",
                                 sites=[RuleSite(where="src/guard.py:4", why="another line")]))
     assert not any("state the same decision" in p for p in rule_problems(m))
@@ -1123,7 +1128,7 @@ def test_lint_fragment_does_not_fail_a_block_fragment_on_another_fragments_files
     `files`" is a defect the block agent does not own and cannot fix."""
     frag = ProjectModel(title="", goal="")
     frag.blocks = [Group(id="BLK1", name="Order lifecycle", purpose="who may change an order")]
-    frag.rules = [BusinessRule(id="BR1", statement="Only the owner may cancel.",
+    frag.rules = [BusinessRule(id="BR1", name="Owner-only cancellation", statement="Only the owner may cancel.",
                                sites=[RuleSite(where="src/guard.py:3", why="rejects a non-owner")])]
     assert lint_fragment_problems(frag, None) == []
     # ... and the map-wide gate still fires at the lead's validate
@@ -1160,7 +1165,7 @@ def test_assemble_merges_two_block_agents_stating_one_rule() -> None:
     """Following `_merge_duplicate_messaging`: two agents writing one thing is correct input, and
     blocking it made a live build hand-merge. `validate`'s check stands for the hand-edited map."""
     m = make_checkable_model()
-    m.rules.append(BusinessRule(id="BR7", statement="Only the ORDER'S owner  may cancel it!",
+    m.rules.append(BusinessRule(id="BR7", name="Owner-only cancellation", statement="Only the ORDER'S owner  may cancel it!",
                                 sites=[RuleSite(where="src/guard.py:3", why="same line")]))
     m.extras = [ExtraSection(heading="Notes", body="see [[BR7]] for the admin case")]
     assert _merge_duplicate_rules(m) == 1
@@ -1168,9 +1173,34 @@ def test_assemble_merges_two_block_agents_stating_one_rule() -> None:
     assert m.extras[0].body == "see [[BR1]] for the admin case"
 
 
+def test_a_merge_inherits_the_losers_title_when_the_survivor_has_none() -> None:
+    """`risk` was already inherited on a merge — authored prose with no other home, so dropping it
+    would lose content the two agents between them did write. `name` is the same shape and matters
+    MORE: it is mandatory, so a survivor left without one does not render a blank, it fails
+    `validate` on a title the map actually contained."""
+    m = make_checkable_model()
+    m.rules[0].name = ""
+    m.rules.append(BusinessRule(id="BR7", name="Owner-only cancellation",
+                                statement="Only the ORDER'S owner  may cancel it!",
+                                sites=[RuleSite(where="src/guard.py:3", why="same line")]))
+    assert _merge_duplicate_rules(m) == 1
+    assert [r.id for r in m.rules] == ["BR1"]
+    assert m.rules[0].name == "Owner-only cancellation"      # …and the map still validates
+    assert not [p for p in rule_problems(m) if "no `name`" in p]
+
+
+def test_a_merge_keeps_the_survivors_own_title() -> None:
+    m = make_checkable_model()
+    m.rules.append(BusinessRule(id="BR7", name="A different wording of the same rule",
+                                statement="Only the ORDER'S owner  may cancel it!",
+                                sites=[RuleSite(where="src/guard.py:3", why="same line")]))
+    assert _merge_duplicate_rules(m) == 1
+    assert m.rules[0].name == "Owner-only cancellation"
+
+
 def test_assemble_keeps_the_same_statement_at_different_sites() -> None:
     m = make_checkable_model()
-    m.rules.append(BusinessRule(id="BR7", statement="Only the order's owner may cancel it.",
+    m.rules.append(BusinessRule(id="BR7", name="Owner-only cancellation", statement="Only the order's owner may cancel it.",
                                 sites=[RuleSite(where="src/guard.py:4", why="another guard")]))
     assert _merge_duplicate_rules(m) == 0
 
@@ -1178,9 +1208,11 @@ def test_assemble_keeps_the_same_statement_at_different_sites() -> None:
 def test_assemble_never_merges_a_rule_with_no_anchored_site() -> None:
     """Two declared-absence rules are not evidence of anything — no site set, no safe identity."""
     m = make_checkable_model()
-    m.rules = [BusinessRule(id="BR1", statement="Enforced by the type.",
+    m.rules = [BusinessRule(id="BR1", name="Guaranteed by the type",
+                            statement="Enforced by the type.",
                             sites=[RuleSite(no_call_site=True)]),
-               BusinessRule(id="BR2", statement="Enforced by the type.",
+               BusinessRule(id="BR2", name="Guaranteed by the type",
+                            statement="Enforced by the type.",
                             sites=[RuleSite(no_call_site=True)])]
     assert _merge_duplicate_rules(m) == 0
 
@@ -1191,11 +1223,11 @@ def make_rendered_model() -> ProjectModel:
     m = make_checkable_model()
     m.components.append(Component(id="C2", name="Order store", purpose="p",
                                   files=["src/guard.py"]))
-    m.rules.append(BusinessRule(id="BR2", statement="A cancelled order cannot be cancelled again.",
+    m.rules.append(BusinessRule(id="BR2", name="No double cancellation", statement="A cancelled order cannot be cancelled again.",
                                 block="BLK1", sites=[
                                     RuleSite(where="src/guard.py:4", why="short-circuits a re-cancel"),
                                     RuleSite(why="the status enum forbids it", no_call_site=True)]))
-    m.rules.append(BusinessRule(id="BR3", statement="Only an admin may refund.", access=True,
+    m.rules.append(BusinessRule(id="BR3", name="Admin-only refunds", statement="Only an admin may refund.", access=True,
                                 sites=[RuleSite(where="src/nobody.py:9", why="the admin gate")]))
     return m
 
@@ -1348,7 +1380,17 @@ def test_a_map_with_blocks_but_no_rules_still_renders_the_forest() -> None:
 def test_an_authored_confidence_is_rendered_as_authored() -> None:
     m = make_checkable_model()
     m.rules[0].confidence = "inferred"
-    assert "**BR1 — Only the order's owner may cancel it.**  *(inferred)*" in t7_section(m)
+    assert ("**BR1 — Owner-only cancellation** — Only the order's owner may cancel it."
+            "  *(inferred)*") in t7_section(m)
+
+
+def test_a_rule_with_no_name_renders_as_it_did_before_the_field_existed() -> None:
+    """The committed `.md` of a map written before `name` must not churn on a field it does not
+    carry — and a bare `**BR1 — ** — …` heading is worse than the statement it replaced."""
+    m = make_checkable_model()
+    m.rules[0].name = ""
+    assert "**BR1 — Only the order's owner may cancel it.**" in t7_section(m)
+    assert "— ** —" not in t7_section(m)
 
 
 # ═══ Phase 5 — impact, grounding and the eval ═════════════════════════════════════
@@ -1412,7 +1454,7 @@ def test_a_site_and_a_security_source_take_the_tight_window_not_the_definition_s
     m.components = [Component(id="C1", name="Wide", purpose="p", source="src/wide.py:5",
                               files=["src/wide.py"])]
     m.security = [SecurityRow(surface="S", who="w", source="src/wide.py:5")]
-    m.rules = [BusinessRule(id="BR1", statement="Only an owner may act.",
+    m.rules = [BusinessRule(id="BR1", name="Owner-only actions", statement="Only an owner may act.",
                             sites=[RuleSite(where="src/wide.py:5", why="the guard")])]
     m.flows, m.edges, m.entities = [], [], []
     with tempfile.TemporaryDirectory() as td:
@@ -1529,7 +1571,7 @@ def test_a_skeptic_corrected_site_anchor_is_writable() -> None:
 def test_two_sites_matching_one_claim_are_refused_not_blind_written() -> None:
     m = make_checkable_model()
     from coyodex.audit_model import apply_anchor_corrections, rule_site_claim
-    m.rules.append(BusinessRule(id="BR2", statement=m.rules[0].statement, sites=[
+    m.rules.append(BusinessRule(id="BR2", name="Test rule", statement=m.rules[0].statement, sites=[
         RuleSite(where="src/guard.py:3", why="rejects a non-owner")]))
     claim = rule_site_claim(m.rules[0].statement, "src/guard.py:3", "rejects a non-owner")
     counts, notes = apply_anchor_corrections(m, [(claim, "src/guard.py:7")])
@@ -1678,7 +1720,7 @@ def test_a_block_of_single_site_rules_draws_a_granularity_advisory() -> None:
     """55 one-site rules pass every other check AND maximise the swept count the eval prints, so
     nothing else in the pipeline notices the layer degenerating into a flow-step list."""
     m = make_checkable_model()
-    m.rules = [BusinessRule(id=f"BR{i}", statement=f"Decision {i}.", block="BLK1",
+    m.rules = [BusinessRule(id=f"BR{i}", name=f"Rule {i}", statement=f"Decision {i}.", block="BLK1",
                             sites=[RuleSite(where=f"src/guard.py:{i}", why="w")])
                for i in range(1, 7)]
     assert any("nearly all single-site" in w for w in rule_warnings(m))
@@ -1689,7 +1731,7 @@ def test_a_block_of_single_site_rules_draws_a_granularity_advisory() -> None:
 
 def test_the_granularity_advisory_is_recordable() -> None:
     m = make_checkable_model()
-    m.rules = [BusinessRule(id=f"BR{i}", statement=f"Decision {i}.", block="BLK1",
+    m.rules = [BusinessRule(id=f"BR{i}", name=f"Rule {i}", statement=f"Decision {i}.", block="BLK1",
                             sites=[RuleSite(where=f"src/guard.py:{i}", why="w")])
                for i in range(1, 7)]
     m.extras = [ExtraSection(heading="Balance exceptions",
@@ -1714,11 +1756,11 @@ def rules_view_of(m: ProjectModel) -> dict:
 def make_viewer_model() -> ProjectModel:
     m = make_checkable_model()
     m.components.append(Component(id="C2", name="Billing", purpose="p", files=["src/guard.py"]))
-    m.rules.append(BusinessRule(id="BR2", statement="A cancelled order cannot be cancelled again.",
+    m.rules.append(BusinessRule(id="BR2", name="No double cancellation", statement="A cancelled order cannot be cancelled again.",
                                 block="BLK1", access=True, sites=[
                                     RuleSite(where="src/guard.py:4", why="short-circuits"),
                                     RuleSite(why="the status enum forbids it", no_call_site=True)]))
-    m.rules.append(BusinessRule(id="BR3", statement="Only an admin may refund.",
+    m.rules.append(BusinessRule(id="BR3", name="Admin-only refunds", statement="Only an admin may refund.",
                                 sites=[RuleSite(where="src/nobody.py:9", why="the admin gate")]))
     return m
 
@@ -1796,37 +1838,46 @@ def _js_function(name: str) -> str:
     return _js_code(VIEWER_JS[start:VIEWER_JS.index("\nfunction ", start + 10)])
 
 
+RULE_RENDERERS = ("renderRules", "renderRule", "ruleTagsHtml", "ruleSiteRow", "ruleStepChip",
+                  "ruleBlockGroups", "decidesHtml", "stepRulesHtml")
+
+
 def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
-    """The one guard that matters. The three rule-rendering functions may READ `components` /
-    `steps` / `swept` off the payload; the moment one of them resolves an owner from a component's
-    `files`, or matches a step by comparing anchors, it is a second implementation in a language
-    the checks cannot see.
+    """The one guard that matters. The rule-rendering functions may READ `components` / `steps` /
+    `swept` off the payload; the moment one of them resolves an owner from a component's `files`, or
+    matches a step by comparing anchors, it is a second implementation in a language the checks
+    cannot see.
 
     SCOPE: a substring ban over four tokens, which one level of indirection defeats (`srcCell`
     parses an anchor to build a code LINK, which is not a derivation and is why it is not banned).
     It catches the direct rewrite, not a determined one."""
-    for fn in ("renderRules", "decidesHtml", "stepRulesHtml"):
+    for fn in RULE_RENDERERS:
         body = _js_function(fn)
         # Reading a node to check its KIND is how every info-pane function guards; deriving an
         # OWNER from `files`, or a step link by parsing anchors, is the second implementation.
         for shape in (".files", "whereNode(", "parseStepEid(", "COMP_LOOKUP"):
             assert shape not in body, (fn, shape)
-    # ...and it DOES read the server-computed answers.
-    assert "site.components" in _js_function("renderRules")
-    assert "r.swept" in _js_function("renderRules")
-    assert "l.strength" in _js_function("renderRules")
+    # ...and they DO read the server-computed answers. The two levels split them: the LIST summarises
+    # a rule's owners and its state, the rule's own PAGE renders each site and each step link.
+    assert "site.components" in _js_function("renderRules")     # the list's "Enforced in …" line
+    assert "site.components" in _js_function("ruleSiteRow")     # the page's per-site owners
+    assert "r.swept" in _js_function("ruleTagsHtml")            # the sweep-debt chip, shown on both
+    assert "l.strength" in _js_function("ruleStepChip")
 
 
 def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
     """Business logic is read straight after what the product DOES, long before how it is built —
-    and its pane list must live in `dv-content`, the Data tab's scroll container. An invented
-    wrapper had no CSS at all, so the tab rendered at full height inside a clipped `dv-wrap` and
-    could not be scrolled."""
+    and both of its levels must live in `usecases-wrap`, the catalog's scroll container (`height:
+    100%; overflow: auto`). An invented wrapper has no CSS at all, so the tab renders at full height
+    inside a clipped parent and cannot be scrolled."""
     html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
     order = re.findall(r'data-view="(\w+)"', html)
     assert order[:3] == ["hp", "usecases", "rules"], order
-    body = _js_function("renderRules")
-    assert '<section class="dv-content">' in body and "dv-panes" not in body
+    for fn in ("renderRules", "renderRule"):
+        assert '<div class="usecases-wrap">' in _js_function(fn), fn
+    css = (VIEWER / "viewer.css").read_text(encoding="utf-8")
+    wrap = css[css.index(".usecases-wrap {"):]
+    assert "overflow: auto" in wrap[:wrap.index("}")]
 
 
 def test_a_step_chip_is_numbered_by_POSITION_the_way_the_diagram_is() -> None:
@@ -1835,7 +1886,7 @@ def test_a_step_chip_is_numbered_by_POSITION_the_way_the_diagram_is() -> None:
     this repo's map UC9's narrative runs 1..24 over authored ns `[1,2,3,1,2,3,4,…]`. Every other
     surface counts positions, so the chip must too. ONE lookup labels the chip AND acts on it, so
     the number a reader clicks and the step they land on cannot disagree."""
-    body = _js_function("renderRules")
+    body = _js_function("ruleStepChip")
     assert "flowStepIndex(l.uc, l.container, l.n)" in body
     assert "step ${i + 1}" in body
     assert "data-i=" in body and "data-n=" not in body     # the click reads the resolved index
@@ -1859,7 +1910,7 @@ def test_an_enforced_at_pill_selects_and_frames_the_step_in_the_flow() -> None:
     and its pane opens; restoring a flow SNAPSHOT only moved the counter. `frame` adds the
     shift-click camera move: a jump from a rule lands on a whole flow, and the one arrow it meant is
     a thin line somewhere in it."""
-    body = _js_function("renderRules")
+    body = _js_function("renderRule")
     assert "selectFlowStep(uc, i, true)" in body
     assert "flow: cur >= 0" not in body
     step = _js_function("selectFlowStep")
@@ -1889,6 +1940,196 @@ def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
     assert "rules: 'What does this product DECIDE" in VIEWER_JS         # the view's question
     assert "if (s.kind === 'rules') { renderRules(s);" in VIEWER_JS     # render
     assert "b.dataset.view === 'rules' && !HAS_RULES" in VIEWER_JS      # the tab gate
+
+
+def test_the_security_table_links_every_site_not_a_joined_string() -> None:
+    """`auth_surface_rows` joins a rule's sites into ONE ` · `-separated string (the markdown view
+    splits it back out to link each). The viewer handed that whole string to `srcCell`, which reads
+    ONE anchor — so the cell showed the LAST file's name and its button carried the joined string,
+    opening the code viewer on a path that does not exist. Every access rule on two real maps has
+    several sites (44 of 44, 47 of 47), so the link was broken on every row of both."""
+    sysfn = _js_function("renderSystem")
+    sec = sysfn[sysfn.index("'Security & auth'"):]
+    sec = sec[:sec.index("parts.push", 10)]
+    assert "srcListCell(r.source)" in sec
+    assert "{ src: r.source }" not in sec
+    split = _js_function("srcListCell")
+    assert "split(' · ')" in split and "parts.map(srcCell)" in split
+    # A rule enforced by construction has no anchor at all — a real state, never a blank cell.
+    assert "enforced by construction" in split
+
+
+def test_the_security_table_has_no_column_that_is_always_empty() -> None:
+    """`auth_surface_rows` writes `who: ""` for every RULE-derived row — only a legacy `security[]`
+    row ever carried one — so "Who can reach" was blank on every row of every rebuilt map. A legacy
+    row's `who` rides in the Surface cell instead, the way the markdown view has always written it."""
+    from coyodex.views import auth_surface_rows
+    m = make_checkable_model()
+    m.rules[0].access = True
+    assert [r["who"] for r in auth_surface_rows(m)] == [""]     # the reason the column went
+    sysfn = _js_function("renderSystem")
+    sec = sysfn[sysfn.index("'Security & auth'"):]
+    sec = sec[:sec.index("parts.push", 10)]
+    assert "Who can reach" not in sec
+    assert "r.surface + ' — ' + r.who" in sec                   # …but a legacy row keeps its who
+
+
+def test_a_rule_drills_into_its_own_page_the_way_a_use_case_does() -> None:
+    """The redesign's shape. The tab is a LIST of decision areas holding rules, and a rule is a
+    DRILL out of it — a second state kind, dead unless every registration point carries it (the same
+    six the tab itself needed). Level 1 must therefore render no anchors of its own: putting the
+    detail back on the list is exactly what the drill replaced."""
+    assert "if (kind === 'rule') return 'rules';" in VIEWER_JS                  # topView
+    assert "if (s.kind === 'rule') return ruleCrumbTitle(s.br);" in VIEWER_JS   # stateTitle
+    assert "if (s.kind === 'rule') { renderRule(s);" in VIEWER_JS               # render
+    assert "{ kind: 'rule', br: s.br }" in VIEWER_JS                            # ancestors (the trail)
+    lst = _js_function("renderRules")
+    assert "go({ kind: 'rule', br: li.getAttribute('data-br') })" in lst        # a row drills
+    for detail in ("ruleSiteRow", "ruleStepChip", "srcCell"):
+        assert detail not in lst, detail
+
+
+def test_a_rule_carries_a_short_title_beside_its_statement() -> None:
+    """A rule was a full sentence and nothing else — the one element in the map with no `name`. So
+    every list of rules was a wall of prose with nothing to skim, and the breadcrumb truncated a
+    sentence mid-word. `name` is the title, `statement` stays the decision in full."""
+    m = make_checkable_model()
+    m.rules[0].name = "Owner-only cancellation"
+    row = rules_view_of(m)["rules"][0]
+    assert row["name"] == "Owner-only cancellation"
+    assert row["statement"] == "Only the order's owner may cancel it."   # both, never one for the other
+    # The graph node — what the search, the impact rows and the breadcrumb read — is the TITLE.
+    node = cast(dict, model_to_graph(m)["nodes"])["BR1"]
+    assert node["name"] == "Owner-only cancellation"
+    assert node["fields"]["Decision"] == "Only the order's owner may cancel it."
+
+
+def test_a_rule_with_no_title_blocks_the_fragment_AND_validate() -> None:
+    """Mandatory means both gates. `rule_row_problems` is shared by `lint-fragment` (the authoring
+    agent's own turn) and `validate` (the whole map), so a rule with no title fails wherever it is
+    read — which is what makes an already-built map say so instead of quietly rendering worse."""
+    m = make_checkable_model()
+    m.rules[0].name = ""
+    assert [p for p in rule_problems(m) if "no `name`" in p]
+    assert [p for p in lint_fragment_problems(m, None) if "no `name`" in p]
+    m.rules[0].name = "Owner-only cancellation"
+    assert not [p for p in rule_problems(m) if "no `name`" in p]
+
+
+def test_the_title_is_schema_required_but_the_model_still_LOADS_without_it() -> None:
+    """The two questions a required field answers are different. The schema asks "must new authored
+    content carry this" — yes. The dataclass default asks "can an already-written map still be
+    read" — and it must be: with no default a pre-`name` map fails to LOAD, so `coyodex serve`
+    could not open it to show the reader what is wrong and `validate` could not report it either."""
+    from coyodex.json_schema import generate_schema
+    rule = generate_schema()["$defs"]["BusinessRule"]
+    assert "name" in rule["required"]
+    doc = json.loads(to_canonical_json(make_base_model()))
+    doc["rules"] = [{"id": "BR1", "statement": "Only an owner may cancel.",
+                     "sites": [{"where": "src/guard.py:3", "why": "w"}]}]
+    m = load_model(json.dumps(doc))
+    assert m.rules[0].name == ""          # it loaded
+
+
+def test_a_nameless_rule_is_not_rendered_as_its_own_statement_twice() -> None:
+    """The viewer falls back to the statement as the TITLE when a map has no `name`. Without this
+    the row would print that same sentence again on the line below it, as if the title and the
+    decision were two facts."""
+    assert "function ruleStatementLine(r)" in VIEWER_JS
+    line = _js_function("ruleStatementLine")
+    assert "(r.name || '').trim()" in line and "r.statement : ''" in line
+    for fn in ("renderRules", "renderRule"):
+        body = _js_function(fn)
+        assert "ruleStatementLine(r)" in body, fn
+
+
+def test_a_block_outside_the_forest_still_appears_with_its_rules() -> None:
+    """The walk starts at the ROOT, so it reaches only blocks whose ancestry reaches the root. A
+    block whose `parent` names an area the map never declared — or one inside a parent cycle — sits
+    in no such forest and used to drop off the tab taking every rule it held with it, silently: the
+    dangling-`rule.block` guard beside it did not fire, because the block id IS declared.
+
+    Measured in a node harness against the real function: `[BLK1, BLK2(parent=BLK99)]` rendered
+    `[BLK1]` and BR2 vanished; a BLK1<->BLK2 cycle rendered NOTHING at all."""
+    body = _js_function("ruleBlockGroups")
+    assert "for (const b of blocks) if (!seen.has(b.id))" in body     # the sweep for the unreached
+    assert "const seen = new Set();" in body                          # …which needs `seen` outside
+    # An undeclared parent is not a parent a reader can be shown — and its raw id must never render.
+    assert "parentName: names.get(b.parent || '') || ''" in body
+
+
+def test_a_nameless_rule_still_resolves_through_dump() -> None:
+    """`dump` is how an agent reads one element. Its fallback to the statement is the only thing a
+    map built before `name` existed has to show for a rule — and the test that used to cover it was
+    flipped to assert the title, leaving the fallback with no guard at all."""
+    m = make_ruled_model()
+    m.rules[0].name = ""
+    br = resolve_id(m, "BR1")
+    assert br is not None and br["name"] == "Only the order's owner may cancel it."
+    assert [r for r in legend_of(m) if r["id"] == "BR1"][0]["name"] \
+        == "Only the order's owner may cancel it."
+
+
+def test_the_tab_badges_only_what_it_can_derive() -> None:
+    """The tab badges DERIVED state and nothing else. Both survivors — sweep debt and unverified —
+    are computed from the site anchors by the one Python implementation. The two authored flags that
+    used to sit beside them are not shown:
+
+    `confidence` is the agent's own word for its own work — nothing derives it, nothing checks it
+    (`confidence_warnings` does not even cover rules), and the dispatch template's example JSON
+    spells one value out, so every agent copies it down its whole block. Measured on three real maps
+    it was constant per map: 96/96 and 69/69 `verified`, 14/14 `inferred`. A badge on every row that
+    separates no row from another is furniture.
+
+    `access` is a real distinction, but the System tab's Security & auth section IS the access rules,
+    with each one's risk and enforcement sites — a bare word here was a second, poorer rendering."""
+    tags = _js_function("ruleTagsHtml")
+    for derived in ("r.swept", "r.unverified"):
+        assert derived in tags, derived
+    for authored in ("confidence", "access"):
+        assert authored not in tags, authored
+        # …and no other part of the tab quietly puts it back.
+        for fn in ("renderRules", "renderRule"):
+            assert authored not in _js_function(fn), (fn, authored)
+    # Both fields are still carried — this is a display decision, not a payload change.
+    m = make_checkable_model()
+    m.rules[0].confidence = "verified"
+    m.rules[0].access = True
+    row = rules_view_of(m)["rules"][0]
+    assert row["confidence"] == "verified" and row["access"] is True
+
+
+def test_a_rules_crumb_walks_back_to_its_own_decision_area() -> None:
+    """A drill's trail is "Business logic › <the rule>", and the first crumb must reopen the list on
+    the area the rule lives in — not at the top, where the reader then hunts for where they were."""
+    trail = VIEWER_JS[VIEWER_JS.index("if (s.kind === 'rule') {"):]
+    # …through the SAME re-keying the list uses. Reading the raw `r.block` asked the list to scroll
+    # to `#blk-BLK9` for a rule whose `BLK9` the map never declared — no card, so the crumb dumped
+    # the reader at the top instead of on the group holding the rule they just left.
+    assert "{ kind: 'rules', blk: ruleGroupKeyFor(r && r.block) }" in trail[:400]
+    assert "ruleBlockGroups().some((g) => g.id === bid)" in _js_function("ruleGroupKeyFor")
+    # …and the area chip on the page itself makes the same move.
+    assert "go({ kind: 'rules', blk: b.getAttribute('data-blk') })" in _js_function("renderRule")
+
+
+def test_every_cross_link_into_a_rule_lands_on_the_rules_own_page() -> None:
+    """"How it decides", a flow step's "Decides" rows and a search hit are three doors into one
+    question: how is this decision enforced? Two of them used to open the tab focused on a BLOCK and
+    scroll — which, now that the answer lives one level down, would land the reader on a list."""
+    for fn in ("bindNodeDetailHandlers", "bindFlowStepInfo"):
+        assert "go({ kind: 'rule', br: a.getAttribute('data-br') })" in _js_function(fn), fn
+    # The block id those two doors read is dead payload now — a link carries only the rule.
+    for fn in ("decidesHtml", "stepRulesHtml"):
+        assert "data-blk" not in _js_function(fn), fn
+
+
+def test_a_rule_whose_area_the_map_never_declared_still_appears() -> None:
+    """The groups are keyed by a DECLARED block id, so a rule pointing at one that was never defined
+    (validate reports it; the viewer still has to draw it) falls into the trailing group instead of
+    being keyed under an id no section renders — which dropped it off the tab silently."""
+    body = _js_function("ruleBlockGroups")
+    assert "placed.has(r.block) ? r.block : 'none'" in body
+    assert "byBlock.has('none')" in body
 
 
 def test_same_tab_navigation_carries_the_pane_keys() -> None:
@@ -1925,11 +2166,10 @@ def test_the_impact_summary_names_every_bucket_the_ripple_can_produce() -> None:
 
 def test_the_tab_renders_no_internal_field_name() -> None:
     """`no_call_site` is a model field; the reader sees "enforced by construction"."""
-    start = VIEWER_JS.index("function renderRules(s)")
-    body = VIEWER_JS[start:VIEWER_JS.index("\nfunction ", start + 10)]
-    code = _js_code(body)
-    for field in ("no_call_site", "rules_view", "byComponent"):
-        assert "'" + field not in code and '"' + field not in code, field
+    for fn in RULE_RENDERERS:
+        code = _js_function(fn)
+        for field in ("no_call_site", "rules_view", "byComponent"):
+            assert "'" + field not in code and '"' + field not in code, (fn, field)
 
 
 # --- reconciled after the phase-7 review -------------------------------------------
@@ -1980,7 +2220,7 @@ def test_a_search_hit_on_a_block_or_a_rule_lands_on_the_business_logic_tab() -> 
     target = VIEWER_JS[VIEWER_JS.index("function selectTargetFor(id)"):
                        VIEWER_JS.index("function selectFromTree(nodeId)")]
     assert "case 'block':" in target and "kind: 'rules', blk: id" in target
-    assert "case 'rule':" in target and "blk: n.parent || 'none', br: id" in target
+    assert "case 'rule':" in target and "kind: 'rule', br: id" in target
 
 
 def test_an_impact_row_for_a_rule_site_is_readable_and_clickable() -> None:
@@ -1997,11 +2237,13 @@ def test_the_pane_pill_and_the_search_badge_speak_the_readers_language() -> None
         in VIEWER_JS
 
 
-def test_the_rail_nests_child_blocks_under_their_parent() -> None:
-    """`blocks[].parent` is in the payload and `validate` supports it, so a flat rail draws a child
-    as its parent's sibling — and makes the field dead payload on a public contract."""
-    body = _js_function("renderRules")
-    assert "kids.set(b.parent || ''" in body and "walk(b.id, depth + 1, seen)" in body
+def test_the_list_nests_child_blocks_under_their_parent() -> None:
+    """`blocks[].parent` is in the payload and `validate` supports it, so a flat list draws a child
+    as its parent's sibling — and makes the field dead payload on a public contract. The list has no
+    rail to indent, so a nested area also NAMES its parent."""
+    body = _js_function("ruleBlockGroups")
+    assert "kids.set(b.parent || ''" in body and "walk(b.id, depth + 1)" in body
+    assert "parentName" in body and "parentName" in _js_function("renderRules")
 
 
 # ═══ Phase 8 — the security fold ══════════════════════════════════════════════════
@@ -2016,7 +2258,7 @@ def test_an_access_rule_renders_in_the_security_table() -> None:
     sec = md[md.index("### Security & auth"):]
     sec = sec[:sec.index("\n---")]
     assert "Derived from the business rules marked `access`" in sec
-    assert "BR1** — Only the order's owner may cancel it." in sec
+    assert "BR1** — Owner-only cancellation" in sec      # the rule's TITLE, as on the other tab
     assert "Anyone could cancel anyone's order." in sec
     assert "[src/guard.py:3](src/guard.py:3)" in sec
 
@@ -2100,7 +2342,11 @@ def test_the_viewer_transport_carries_the_auth_surface_from_both_storages() -> N
     m.rules[0].risk = "Anyone could cancel anyone's order."
     rows = cast(list, model_to_graph(m)["security"])
     assert [r["kind"] for r in rows] == ["rule"]
-    assert rows[0]["surface"] == "Only the order's owner may cancel it."
+    assert rows[0]["surface"] == "Owner-only cancellation"  # its title, as the Business logic tab
+    m.rules[0].name = ""                                   # …and its statement on a pre-`name` map
+    assert cast(list, model_to_graph(m)["security"])[0]["surface"] \
+        == "Only the order's owner may cancel it."
+    m.rules[0].name = "Owner-only cancellation"
     assert rows[0]["risk"] == "Anyone could cancel anyone's order."
     m.security = [SecurityRow(surface="Refund", who="admins", source="src/guard.py:4", risk="r")]
     rows = cast(list, model_to_graph(m)["security"])
@@ -2138,7 +2384,7 @@ def test_a_rule_merge_does_not_drop_the_losers_risk_note() -> None:
     loses what the two agents between them did write."""
     m = make_checkable_model()
     m.rules[0].risk = ""
-    m.rules.append(BusinessRule(id="BR9", statement=m.rules[0].statement, risk="the real stake",
+    m.rules.append(BusinessRule(id="BR9", name="Test rule", statement=m.rules[0].statement, risk="the real stake",
                                 sites=[RuleSite(where="src/guard.py:3", why="same line")]))
     assert _merge_duplicate_rules(m) == 1
     assert m.rules[0].risk == "the real stake"

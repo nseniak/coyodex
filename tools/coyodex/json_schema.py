@@ -231,6 +231,10 @@ FIELD_META: dict[tuple[str, str], dict] = {
                                 "advisory, never blocks; a CITED source that doesn't resolve IS a hard "
                                 "block under `--check-sources`."},
     ("BusinessRule", "id"): {"pattern": r"^BR\d+$"},
+    ("BusinessRule", "name"): {"description": "the SHORT title — a few words a reader scans, the way "
+                                "a use case has a name beside its trigger\u2192outcome sentence "
+                                "(\"Owner-only cancellation\"). Not a shortened statement: name the "
+                                "DECISION, then state it in full in `statement`."},
     ("BusinessRule", "statement"): {"description": "ONE product decision, in product language and "
                                      "naming no component — the sharp test is 'could a product "
                                      "person have decided otherwise?'. Two claims joined by 'and' "
@@ -268,6 +272,16 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("ProjectModel", "committed"): {"description": "YYYY-MM-DD."},
     ("ProjectModel", "built"): {"description": "YYYY-MM-DD HH:MM."},
 }
+
+
+#: Fields the schema REQUIRES even though the dataclass gives them a default. The two normally
+#: coincide — a field with no default is required — but they answer different questions: the default
+#: says "can an already-written map still be loaded", the schema says "must new authored content
+#: carry this". `BusinessRule.name` needs both answers: a fragment without it is invalid, while a map
+#: written before the field existed must still open so the viewer can render it and `validate` can
+#: report it. Without this split, adding a required field to the model means old maps cannot be read
+#: at all — not even to be told what is missing.
+_ALSO_REQUIRED = {("BusinessRule", "name")}
 
 
 def _schema_for(hint: object, defs: dict[str, dict]) -> dict:
@@ -316,7 +330,8 @@ def _ensure_def(cls: type, defs: dict[str, dict]) -> None:
         if "description" in meta:
             prop["description"] = meta["description"]
         props[f.name] = prop
-        if f.default is MISSING and f.default_factory is MISSING:  # type: ignore[misc]
+        if ((f.default is MISSING and f.default_factory is MISSING)  # type: ignore[misc]
+                or (cls.__name__, f.name) in _ALSO_REQUIRED):
             required.append(f.name)
     defs[cls.__name__] = {
         "type": "object",

@@ -447,12 +447,16 @@ def _merge_duplicate_rules(m: ProjectModel) -> int:
             continue
         if ident in survivor_of:
             remap[r.id] = survivor_of[ident]
-            # The survivor keeps its own `risk` when it has one, and INHERITS the loser's when it
-            # does not: `risk` is authored prose with no other home, so dropping it on a merge would
-            # lose content the two agents between them did write.
+            # The survivor keeps its own `risk`/`name` when it has one, and INHERITS the loser's
+            # when it does not: both are authored prose with no other home, so dropping one on a
+            # merge would lose content the two agents between them did write. `name` matters more
+            # than `risk` did — it is MANDATORY, so a survivor that ends up without one does not
+            # merely render a blank, it fails `validate` on a field the map actually contained.
             keeper = by_id[survivor_of[ident]]
             if not keeper.risk.strip() and r.risk.strip():
                 keeper.risk = r.risk
+            if not keeper.name.strip() and r.name.strip():
+                keeper.name = r.name
             continue
         survivor_of[ident] = r.id
         kept.append(r)

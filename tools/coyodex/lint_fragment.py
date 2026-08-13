@@ -162,6 +162,9 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
     # other block's decisions would read as debt) and the `Component.files` gate (they live in a
     # different fragment, so a block agent would fail its lint on a defect it cannot fix).
     problems += rule_row_problems(m)
+    # …plus the one row-local rule `validate` does NOT share: an access rule with no `risk`. See
+    # `_access_rule_risk_problems` — the gate is on the fragment being written, not on a built map.
+    problems += _access_rule_risk_problems(m)
     # `block` is a SYNTHESIS assignment, exactly like `capability`: a `BLK` id is minted before the
     # rules exist, and a re-synthesis that renumbers blocks must not silently re-point every rule.
     # The method says "never in the fragment"; without this the rule is prose, and a fragment
@@ -193,15 +196,22 @@ def _legacy_security_warnings(m: ProjectModel) -> list[str]:
             "the legacy storage, kept only so a map built before the fold still renders."]
 
 
-def _access_rule_risk_warnings(m: ProjectModel) -> list[str]:
-    """Advisory: an `access: true` rule with no `risk`.
+def _access_rule_risk_problems(m: ProjectModel) -> list[str]:
+    """BLOCKING: an `access: true` rule with no `risk`.
 
     method.md requires an auth surface to state "what is at stake as its `risk`", and before the fold
     every security row carried one. After it, two consecutive real builds shipped maps where NOT ONE
     rule of 69 and 96 had a risk — the rendered Security & auth table's Risk column was blank on
-    every row — and nothing anywhere said so. Advisory rather than blocking, because a fragment
-    author can legitimately be mid-draft, and because failing the lint on a pre-fold map's rules
-    would block a rebuild that is otherwise improving the map."""
+    every row — and nothing anywhere said so.
+
+    It was an advisory first, on the reasoning that an author may be mid-draft. Two builds later the
+    advisory had changed nothing: a nudge that fires on every rule of a fragment reads as background
+    noise, and `risk` is precisely the field a statement, a site and a `why` between them CANNOT
+    replace — not what the line does, but what its limit costs.
+
+    Blocking HERE and not in `rule_row_problems`, which `validate` shares: a fragment is being
+    written now, by the agent that knows the answer, so it can fix it in its own turn — while an
+    already-built map must keep validating, rendering and rebuilding. The gate is on new work."""
     naked = [r.id for r in access_rules(m) if not (r.risk or "").strip()]
     if not naked:
         return []
@@ -239,9 +249,7 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     # answerable now, and the cross-fragment case (the common one) still surfaces at validate.
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
             + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m)
-            + duplicate_security_warnings(m) + confidence_warnings(m)
-            # Row-local: one rule's own `risk`, answerable by the block agent that wrote it.
-            + _access_rule_risk_warnings(m))
+            + duplicate_security_warnings(m) + confidence_warnings(m))
 
 
 # DELIBERATELY ABSENT: a per-fragment nudge about the entry-point per-kind COMPLETENESS statement.

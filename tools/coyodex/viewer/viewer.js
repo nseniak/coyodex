@@ -1264,8 +1264,7 @@ function decidesHtml(id) {
   const html = [...groups.entries()].map(([bid, rs]) => '<div class="used-cap-group">'
     + '<div class="used-cap-name">' + esc(blockName.get(bid) || 'Not assigned to a block') + '</div>'
     + '<div class="used-uc-list">' + rs.map((r) =>
-        '<a href="#" class="brref" data-blk="' + esc(r.block || '') + '" data-br="' + esc(r.id) + '">'
-        + esc(r.statement) + '</a>').join(', ')
+        '<a href="#" class="brref" data-br="' + esc(r.id) + '">' + esc(ruleTitle(r)) + '</a>').join(', ')
     + '</div></div>').join('');
   return '<dt>How it decides</dt><dd class="used-by-cap">' + html + '</dd>';
 }
@@ -1441,11 +1440,10 @@ function bindNodeDetailHandlers(root) {
   root.querySelectorAll('a.procref').forEach((a) => a.addEventListener('click', (ev) => {
     ev.preventDefault(); go({ kind: 'deploymentUnit', unit: a.getAttribute('data-unit') });
   }));
-  // "How it decides" / a flow step's rules: deep-link into the Business logic tab, focused on the
-  // rule's block pane and scrolled to the rule.
+  // "How it decides" / a flow step's rules: deep-link to the RULE'S OWN page under the Business
+  // logic tab — the one place that answers "how is this decision enforced?".
   root.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    go({ kind: 'rules', blk: a.getAttribute('data-blk') || 'none', br: a.getAttribute('data-br') });
+    ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
   }));
   // Data-view rows in the panel: element chips navigate; the "See in Data view" / "View persisted
   // data" links deep-link into the Data tab focused on a store pane (and, for an entity, its row).
@@ -2185,8 +2183,7 @@ function stepRulesHtml(uc, st) {
     // is the difference between a readout and a pretended proof.
     const near = link && link.strength !== 'exact'
       ? ' <span class="muted">(enforced inside the same function)</span>' : '';
-    return '<a href="#" class="brref" data-blk="' + esc(r.block || '') + '" data-br="' + esc(r.id)
-      + '">' + esc(r.statement) + '</a>' + near;
+    return '<a href="#" class="brref" data-br="' + esc(r.id) + '">' + esc(ruleTitle(r)) + '</a>' + near;
   });
   return '<dl><dt>Decides</dt><dd class="br-steprules">' + links.join('<br>') + '</dd></dl>';
 }
@@ -2199,10 +2196,9 @@ function bindFlowStepInfo(host, uc, i) {
     const wn = whereNode(st.where);
     openInCodeViewer(wn.file, wn.line);
   });
-  // The "Decides" rows deep-link into the Business logic tab, focused on the rule.
+  // The "Decides" rows deep-link to the rule's own page under the Business logic tab.
   host.querySelectorAll('a.brref').forEach((a) => a.addEventListener('click', (ev) => {
-    ev.preventDefault();
-    go({ kind: 'rules', blk: a.getAttribute('data-blk') || 'none', br: a.getAttribute('data-br') });
+    ev.preventDefault(); go({ kind: 'rule', br: a.getAttribute('data-br') });
   }));
 }
 // A flow step's side panel — EVERY step shows ITSELF (its phrase, note, and its own call
@@ -4767,6 +4763,7 @@ function topView(kind) {  // which top-level button a state lives under (contain
   if (kind === 'domsub' || kind === 'domedge') return 'domain';  // subdomain card + edge pair live under the Domain button
   if (kind === 'bridge') return 'container';  // a structure↔domain bridge card is anchored on its subsystem
   if (kind === 'usecases' || kind === 'usecase') return 'usecases';  // a use case's flow lives under the Use Cases catalog (incl. a Happy Path drill)
+  if (kind === 'rule') return 'rules';  // one rule's page lives under the Business logic list, as a flow does under Use Cases
   if (kind === 'deployment' || kind === 'deploymentUnit' || kind === 'deploymentGroup') return 'deployment';  // a process/container card lives under the Deployment tab
   if (kind === 'hp') return 'hp';
   if (kind === 'libs' || kind === 'bucketfold') return 'context';  // the Context folds drill out of Context
@@ -4778,6 +4775,7 @@ function stateTitle(s) {
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
   if (s.kind === 'rules') return 'Business logic';
+  if (s.kind === 'rule') return ruleCrumbTitle(s.br);
   if (s.kind === 'glossary') return 'Glossary';
   if (s.kind === 'system') return 'System';
   if (s.kind === 'data') return 'Data';
@@ -4834,6 +4832,12 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
   if (s.kind === 'rules') return [{ kind: 'rules' }];
+  // A rule's page under the list, whose crumb reopens it on the rule's OWN decision area — the same
+  // shape as a use case's flow under the Use Cases catalog.
+  if (s.kind === 'rule') {
+    const r = ruleById(s.br);
+    return [{ kind: 'rules', blk: ruleGroupKeyFor(r && r.block) }, { kind: 'rule', br: s.br }];
+  }
   if (s.kind === 'glossary') return [{ kind: 'glossary' }];
   if (s.kind === 'system') return [{ kind: 'system' }];
   if (s.kind === 'data') return [{ kind: 'data' }];
@@ -4961,6 +4965,15 @@ function srcCell(where) {
   }
   if (where) return `<span class="gloss-plain">${esc(cleanPath(file, line))}</span>`;
   return '<span class="gloss-none">—</span>';
+}
+// A ` · `-joined LIST of `path:line` anchors as ONE cell: each anchor its own code link. The
+// transport joins a rule's sites into a single string (`views.auth_surface_rows`), and `srcCell`
+// reads one anchor — handing it the joined string produced a link to a path that does not exist.
+// Empty = the decision is enforced by construction, which is a real state, not a blank.
+function srcListCell(joined) {
+  const parts = String(joined || '').split(' · ').map((w) => w.trim()).filter(Boolean);
+  if (!parts.length) return '<span class="gloss-none">enforced by construction</span>';
+  return `<div class="src-list">${parts.map(srcCell).join('')}</div>`;
 }
 function renderGlossary() {
   const rows = (GRAPH.glossary || []).map((g) =>
@@ -5253,9 +5266,22 @@ function renderSystem() {
   parts.push(sec('Observability', refTable(G.observability, [
     { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
     { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }])));
+  // The auth surface — DERIVED from the `access` business rules (an `access` rule IS a security
+  // surface; the server folds them and any legacy `security[]` row into one row list).
+  //
+  // TWO columns were wrong for a folded map. "Who can reach" was hard-coded empty for every
+  // rule-derived row — only a legacy row ever carried one — so the column was blank on every row of
+  // every rebuilt map; a legacy row's `who` now rides in the Surface cell, the way the markdown view
+  // has always written it, and the dead column is gone. "Auth check" fed the row's WHOLE site list
+  // (`a.ts:1 · b.ts:2 · …`) to `srcCell`, which reads ONE anchor: the cell showed the last file's
+  // name and the button carried the joined string, so clicking it opened the code viewer on a path
+  // that does not exist ("Not tracked in this commit"). Measured on two real maps: 44 of 44 and 47
+  // of 47 access rules have several sites, so the link was broken on every row. Each site is now its
+  // own link, exactly as the markdown view splits them.
   parts.push(sec('Security & auth', refTable(G.security, [
-    { head: 'Surface', get: (r) => r.surface }, { head: 'Who can reach', get: (r) => r.who },
-    { head: 'Auth check', get: (r) => ({ src: r.source }) }, { head: 'Risk', get: (r) => r.risk }])));
+    { head: 'Surface', get: (r) => (r.who || '').trim() ? r.surface + ' — ' + r.who : r.surface },
+    { head: 'Enforced at', get: (r) => ({ html: srcListCell(r.source) }) },
+    { head: 'Risk', get: (r) => r.risk }])));
   parts.push(sec('Config & environments', refTable(G.config, [
     { head: 'Key', get: (r) => r.key }, { head: 'Purpose', get: (r) => r.purpose },
     { head: 'Default', get: (r) => r.default }, { head: 'Per-env / secret?', get: (r) => r.per_env }])));
@@ -5568,9 +5594,14 @@ function renderTests() {
   }));
 }
 
-// The Business logic tab (T7): the decisions this product makes, grouped by block. A rail of blocks
-// on the left, one pane of rules per block on the right — the shape the Data tab uses, because a
-// reader browses decision AREAS the way they browse stores.
+// The Business logic tab (T7): the decisions this product makes, read the way the Use Cases catalog is
+// read — TWO LEVELS, not one. Level 1 is a LIST of decision areas, each holding its rules as one-line
+// rows; level 2 is a rule's OWN page: where it is enforced, at which flow steps, on which entities.
+// The rail-and-panes shape this replaced put every rule's full detail inline, so an area with a dozen
+// rules was a wall of anchors before the reader had chosen anything to look at — and the two halves of
+// the question ("what does this area decide?" and "how is this one decision enforced?") were answered
+// by the same screen. Use Cases already splits them (catalog, then the use case's flow); this is that
+// split, one layer over.
 //
 // NOTHING HERE IS DERIVED IN JS. A site's owning components, a rule's use-case steps and entities,
 // and whether it has been swept all arrive computed by the one Python implementation
@@ -5583,124 +5614,241 @@ function renderTests() {
 function flowStepIndex(uc, container, n) {
   return (FLOWS_NARR[uc] || []).findIndex((st) => st.n === n && (st.sf || uc) === container);
 }
-function renderRules(s) {
-  const rv = RULES_VIEW || {};
-  const blocks = rv.blocks || [];
-  const rules = rv.rules || [];
-  // The pane KEY, not the block id: the "not assigned" group has no id, and an empty-string key
-  // makes its `stateKey` identical to the tab's own — `go()` then no-ops and the group can never be
-  // opened. `none` is the key for that group everywhere: state, pane id, and rail button.
-  const paneId = (key) => 'br-pane-' + (key || 'none');
+// The drill state carries a rule ID (the way a use-case drill carries `uc`), so both levels — and the
+// breadcrumb that titles the page — look the rule up in ONE place.
+function ruleById(id) {
+  return (RULES_VIEW.rules || []).find((r) => r.id === id) || null;
+}
+// A rule's TITLE — the few words every surface names it by (the row heading, the page heading, the
+// breadcrumb, the info-pane cross-links). `name` is required of a rule now, so the fallback is not a
+// policy: it is what a map built before the field existed still renders, instead of a blank.
+function ruleTitle(r) { return (r && ((r.name || '').trim() || r.statement)) || ''; }
+// The decision, as its own line UNDER the title — and '' when the map has no `name`, because there
+// the title already IS the statement and a second copy of it is not a second fact.
+function ruleStatementLine(r) { return (r && (r.name || '').trim()) ? r.statement : ''; }
+// A rule's breadcrumb title — its `name`, which fits. The trim is the guard for a map built before
+// the field existed, where `ruleTitle` falls back to the whole statement and an untrimmed crumb would
+// push the bar off screen.
+function ruleCrumbTitle(id) {
+  // NEVER the raw `BRn` — a rule the payload does not carry (or one with neither field) still gets a
+  // crumb, and an element id on screen is the one thing the viewer does not do.
+  const t = ruleTitle(ruleById(id)) || 'Business rule';
+  return t.length > 58 ? t.slice(0, 57).trimEnd() + '\u2026' : t;
+}
+// The decision areas, depth-first, each with its own rules. Blocks nest (validate supports
+// BLK2.parent = BLK1), so a child is emitted right after its parent and carries the parent's NAME —
+// the list has no rail to indent, so the chip is what says where a nested area sits. A rule whose
+// area the map never declared lands in the trailing "not assigned" group rather than vanishing.
+function ruleBlockGroups() {
+  const rules = RULES_VIEW.rules || [];
+  const blocks = RULES_VIEW.blocks || [];
+  const placed = new Set(blocks.map((b) => b.id));
   const byBlock = new Map();
-  for (const r of rules) byBlock.set(r.block || 'none', (byBlock.get(r.block || 'none') || []).concat([r]));
-
-  // A site: line — component(s). EVERY owner is listed; one nobody claims says so rather than
-  // rendering blank, and a declared absence says what it is instead of pretending to be a gap.
-  const siteRow = (site) => {
-    if (site.declared && !site.where) {
-      return '<li class="br-site br-declared"><span class="br-nowhere">enforced by construction</span>'
-        + (site.why ? ' <span class="br-why">' + esc(site.why) + '</span>' : '') + '</li>';
-    }
-    const owners = site.components || [];
-    const who = owners.length
-      ? owners.map((c) => `<button type="button" class="br-comp" data-id="${esc(c.id)}">${esc(c.name)}</button>`).join('')
-      : '<span class="br-unverified">no component claims this file</span>';
-    return `<li class="br-site${owners.length ? '' : ' br-bare'}">${srcCell(site.where || '')}`
-      + `<span class="br-owners">${who}</span>`
-      + (site.why ? ` <span class="br-why">${esc(site.why)}</span>` : '') + '</li>';
-  };
-
-  // A step link says WHICH step and HOW STRONGLY: the exact line, or the same enclosing function.
-  // The distinction is the honest half — "inside the same function as this step" is a weaker claim
-  // than "this step", and collapsing them would be the readout pretending to be a proof.
-  const stepChip = (l) => {
-    // The sub-flow's NAME, never its id: the viewer speaks the reader's language.
-    const via = l.container === l.uc ? '' : ' \u00b7 ' + esc(l.containerName || l.container);
-    const exact = l.strength === 'exact';
-    // THE NUMBER ON SCREEN IS THE POSITION IN THE FLOW, not the authored `n`. `(container, n)` is a
-    // step's IDENTITY — unique per container, which is why the payload carries it — but a sub-flow's
-    // steps are spliced into every referencing flow keeping their OWN numbering, so one flow's
-    // narrative runs 1..24 over authored ns like [1,2,3,1,2,3,4,…]. Every other surface (the arrow
-    // badge, the sequence list, the step counter) counts positions, so a chip saying "step 6" that
-    // landed on "Step 18 / 24" was promising a number the diagram never shows.
-    const i = flowStepIndex(l.uc, l.container, l.n);
-    const where = i >= 0 ? ` step ${i + 1}` : '';
-    return `<button type="button" class="br-step${exact ? '' : ' br-near'}" data-uc="${esc(l.uc)}" `
-      + `data-i="${esc(String(i))}" `
-      + `title="${exact ? 'this exact step' : 'inside the same function as this step'}">`
-      + `${esc(l.ucName)}${where}${via}</button>`;
-  };
-
-  const ruleCard = (r) => {
-    const tags = (r.access ? '<span class="br-tag br-access">access</span>' : '')
-      + (r.swept ? '' : '<span class="br-tag br-debt">sweep debt</span>')
-      + (r.unverified ? '<span class="br-tag br-warn">unverified</span>' : '')
-      + (r.confidence ? `<span class="br-tag">${esc(r.confidence)}</span>` : '');
-    const steps = (r.steps || []).map(stepChip).join('');
-    const ents = (r.entities || []).map((e) =>
-      `<button type="button" class="br-ent" data-id="${esc(e.id)}">${esc(e.name)}</button>`).join('');
-    return `<article class="br-rule" id="br-${esc(r.id)}"><h3>${esc(r.statement)}${tags}</h3>`
-      + `<ul class="br-sites">${(r.sites || []).map(siteRow).join('')}</ul>`
-      + (steps ? `<div class="br-line"><span class="br-lbl">Enforced at</span>${steps}</div>` : '')
-      + (ents ? `<div class="br-line"><span class="br-lbl">Touches</span>${ents}</div>` : '')
-      + '</article>';
-  };
-
-  const rail = [];
-  const panes = [];
-  // Blocks nest (validate supports BLK2.parent = BLK1), so the rail walks the forest depth-first
-  // and indents a child under its parent. Rendering them flat drew a child as its parent's sibling.
+  for (const r of rules) {
+    const key = placed.has(r.block) ? r.block : 'none';
+    byBlock.set(key, (byBlock.get(key) || []).concat([r]));
+  }
+  const names = new Map(blocks.map((b) => [b.id, b.name]));
   const kids = new Map();
   for (const b of blocks) kids.set(b.parent || '', (kids.get(b.parent || '') || []).concat([b]));
   const groups = [];
-  const walk = (parent, depth, seen) => {
+  const seen = new Set();
+  // A parent the map never declared is not a parent the reader can be shown — `names` has no entry,
+  // and printing the raw `BLK99` would put an element id on screen.
+  const emit = (b, depth) => groups.push({
+    id: b.id, name: b.name, purpose: b.purpose, depth,
+    parentName: names.get(b.parent || '') || '',
+    rules: byBlock.get(b.id) || [] });
+  const walk = (parent, depth) => {
     for (const b of kids.get(parent) || []) {
       if (seen.has(b.id)) continue;          // cycle-safe (a cycle is validate's problem, not ours)
       seen.add(b.id);
-      groups.push([b.id, b.name, b.purpose, depth]);
-      walk(b.id, depth + 1, seen);
+      emit(b, depth);
+      walk(b.id, depth + 1);
     }
   };
-  walk('', 0, new Set());
-  const placed = new Set(blocks.map((b) => b.id));
-  if (rules.some((r) => !placed.has(r.block))) groups.push(['none', 'Not assigned to a block', '', 0]);
-  for (const [bid, name, purpose, depth] of groups) {
-    const mine = byBlock.get(bid) || [];
-    const debt = mine.filter((r) => !r.swept).length;
-    rail.push(`<button type="button" class="dv-store" data-pane="${paneId(bid)}"`
-      + `${depth ? ` style="padding-left:${14 + depth * 14}px"` : ''}>`
-      + `<span class="dv-dot${mine.length ? '' : ' ghost'}"></span>`
-      + `<span class="dv-nm">${esc(name)}</span>`
-      + (debt ? '<span class="br-dot" title="sweep debt"></span>' : '')
-      + `<span class="dv-ct">${mine.length || '\u00b7'}</span></button>`);
-    panes.push(`<section class="dv-pane" id="${paneId(bid)}" role="region" aria-label="${esc(name)}">`
-      + `<div class="dv-panehead"><h2>${esc(name)}</h2>`
-      + `<span class="dv-stat"><b>${mine.length}</b> ${mine.length === 1 ? 'rule' : 'rules'}</span></div>`
-      + (purpose ? `<p class="br-purpose">${mdInline(purpose)}</p>` : '')
-      + (mine.length ? mine.map(ruleCard).join('')
-                     : '<p class="empty">No rules assigned to this block yet.</p>')
-      + '</section>');
+  walk('', 0);
+  // THE WALK STARTS AT THE ROOT, so it reaches only blocks whose ancestry reaches the root. A block
+  // whose `parent` names an area the map never declared — or one inside a parent cycle — is in no
+  // such forest, and would drop off the tab taking every rule it holds with it, leaving nothing to
+  // say so. `validate` reports both shapes; the viewer's job is still to DRAW them. Emitted flat, in
+  // model order, after the forest. (The dangling `rule.block` case above is the same defect one
+  // field over — that one was guarded and this one was not.)
+  for (const b of blocks) if (!seen.has(b.id)) { seen.add(b.id); emit(b, 0); }
+  if (byBlock.has('none')) {
+    groups.push({ id: 'none', name: 'Not assigned to a decision area', purpose: '', depth: 0,
+                  parentName: '', rules: byBlock.get('none') });
   }
-
-  // `dv-content` is the Data tab's scroll container — the pane list must sit in it, or the tab
-  // renders at full height inside a clipped `dv-wrap` and cannot be scrolled at all.
-  diagram.innerHTML = '<div class="dv-wrap">'
-    + `<nav class="dv-rail" aria-label="Decision areas">`
-    + `<div class="dv-railgroup">Decision areas</div>${rail.join('')}</nav>`
-    + `<section class="dv-content">${panes.join('')}</section></div>`;
-
-  // The same show/hide contract the Data tab uses — `.dv-pane.active` + `aria-current` on the rail
-  // button, not a second mechanism with its own CSS.
-  const open = (bid) => {
-    const pid = paneId(bid);
-    diagram.querySelectorAll('.dv-pane').forEach((el) => el.classList.toggle('active', el.id === pid));
-    diagram.querySelectorAll('.dv-store').forEach((b) =>
-      b.setAttribute('aria-current', String(b.dataset.pane === pid)));
-  };
-  const first = (s && s.blk) || (groups[0] ? groups[0][0] : 'none');
-  open(first);
-  diagram.querySelectorAll('.dv-rail .dv-store').forEach((el) => el.addEventListener('click', () => {
-    go({ kind: 'rules', blk: el.getAttribute('data-pane').slice('br-pane-'.length) });
+  return groups;
+}
+// One decision area's card id — the same string on both levels, so a cross-link that names an area
+// and the section it scrolls to cannot drift apart.
+function blockSectionId(bid) { return 'blk-' + (bid || 'none'); }
+// The GROUP a block id actually lands in: itself when the list draws that area, `none` when it does
+// not (an id the map never declared). ONE answer, so a crumb asking to scroll to an area and the
+// list that renders the areas cannot disagree — asking for `#blk-BLK9` when BR7's `BLK9` was never
+// declared found no card and dumped the reader at the top of the list.
+function ruleGroupKeyFor(bid) {
+  return ruleBlockGroups().some((g) => g.id === bid) ? bid : 'none';
+}
+// A rule's state chips, shown on its row AND on its page — one spelling of "sweep debt" and
+// "unverified", so the list and the detail never disagree about a rule.
+//
+// THE TAB BADGES ONLY WHAT IT DERIVES. Both survivors are computed from the site anchors by the one
+// Python implementation. The two authored flags that used to sit beside them are gone:
+//   `confidence` — the agent's own word for its own work ("verified" = I read it in the code), which
+//     nothing derives and nothing checks, and which comes out CONSTANT: every rule in a map carries
+//     the same value, because the dispatch template's example JSON spells one out and each agent
+//     copies it down its whole block. A chip on every row that separates no row from another is
+//     furniture, and stamping an unfalsifiable self-report is what sweep state uses a canary to avoid.
+//   `access` — a real distinction, but it already has a home that says more: the System tab's
+//     Security & auth section IS the access rules, with each one's risk and enforcement sites. A
+//     second rendering as a bare word here added a badge to every row and answered nothing.
+// Both fields still reach the model, the markdown view and the security surface — this is a display
+// decision, not a payload change.
+function ruleTagsHtml(r) {
+  return (r.swept ? '' : '<span class="br-tag br-debt" title="the code was not swept for other places'
+        + ' this decision is made">sweep debt</span>')
+    + (r.unverified ? '<span class="br-tag br-warn" title="a call site no component claims">unverified</span>' : '');
+}
+// A site: line — component(s). EVERY owner is listed; one nobody claims says so rather than
+// rendering blank, and a declared absence says what it is instead of pretending to be a gap.
+function ruleSiteRow(site) {
+  if (site.declared && !site.where) {
+    return '<li class="br-site br-declared"><span class="br-nowhere">enforced by construction</span>'
+      + (site.why ? ' <span class="br-why">' + esc(site.why) + '</span>' : '') + '</li>';
+  }
+  const owners = site.components || [];
+  const who = owners.length
+    ? owners.map((c) => `<button type="button" class="br-comp" data-id="${esc(c.id)}">${esc(c.name)}</button>`).join('')
+    : '<span class="br-unverified">no component claims this file</span>';
+  return `<li class="br-site${owners.length ? '' : ' br-bare'}">${srcCell(site.where || '')}`
+    + `<span class="br-owners">${who}</span>`
+    + (site.why ? ` <span class="br-why">${esc(site.why)}</span>` : '') + '</li>';
+}
+// A step link says WHICH step and HOW STRONGLY: the exact line, or the same enclosing function.
+// The distinction is the honest half — "inside the same function as this step" is a weaker claim
+// than "this step", and collapsing them would be the readout pretending to be a proof.
+function ruleStepChip(l) {
+  // The sub-flow's NAME, never its id: the viewer speaks the reader's language.
+  const via = l.container === l.uc ? '' : ' · ' + esc(l.containerName || l.container);
+  const exact = l.strength === 'exact';
+  // THE NUMBER ON SCREEN IS THE POSITION IN THE FLOW, not the authored `n`. `(container, n)` is a
+  // step's IDENTITY — unique per container, which is why the payload carries it — but a sub-flow's
+  // steps are spliced into every referencing flow keeping their OWN numbering, so one flow's
+  // narrative runs 1..24 over authored ns like [1,2,3,1,2,3,4,…]. Every other surface (the arrow
+  // badge, the sequence list, the step counter) counts positions, so a chip saying "step 6" that
+  // landed on "Step 18 / 24" was promising a number the diagram never shows.
+  const i = flowStepIndex(l.uc, l.container, l.n);
+  const where = i >= 0 ? ` step ${i + 1}` : '';
+  return `<button type="button" class="br-step${exact ? '' : ' br-near'}" data-uc="${esc(l.uc)}" `
+    + `data-i="${esc(String(i))}" `
+    + `title="${exact ? 'this exact step' : 'inside the same function as this step'}">`
+    + `${esc(l.ucName)}${where}${via}</button>`;
+}
+// Level 1 — the decision areas, each listing its rules. A row carries only what it takes to CHOOSE:
+// the decision, its state chips, and where it lives; the anchors are one click away.
+function renderRules(s) {
+  const groups = ruleBlockGroups();
+  const sections = groups.map((g) => {
+    const rows = g.rules.map((r) => {
+      // WHERE, in one line — the components the SERVER resolved for this rule's sites, de-duplicated
+      // because one component can own several of them. Each of the three empty answers reads as what
+      // it is: a declared absence, an unclaimed call site, or no call site at all.
+      const comps = [];
+      for (const site of (r.sites || [])) {
+        for (const c of (site.components || [])) if (comps.indexOf(c.name) < 0) comps.push(c.name);
+      }
+      const sites = r.sites || [];
+      // Three names, then a count. One rule can be enforced in a dozen components (an escaping rule
+      // lives in every generator), and spelling them all out turned a one-line row into a paragraph.
+      const named = comps.length > 3 ? comps.slice(0, 3).join(', ') + ' +' + (comps.length - 3) + ' more'
+                                     : comps.join(', ');
+      const where = comps.length ? 'Enforced in ' + esc(named)
+        : !sites.length ? '<span class="br-nowhere">no call site recorded</span>'
+        : sites.every((site) => site.declared) ? '<span class="br-nowhere">enforced by construction</span>'
+        : '<span class="br-unverified">no component claims its call site</span>';
+      const nst = (r.steps || []).length;
+      const steps = nst ? ` · at ${nst} flow step${nst === 1 ? '' : 's'}` : '';
+      // Three lines, the Use Cases row's shape plus one: the TITLE to scan, the decision itself,
+      // then where it lives. Before `name` existed the sentence WAS the heading, so a list of rules
+      // was a wall of prose with nothing to skim.
+      const decision = ruleStatementLine(r);
+      return `<li class="uc-row" data-br="${esc(r.id)}" tabindex="0">`
+        + `<span class="uc-head"><span class="uc-name">${esc(ruleTitle(r))}</span>${ruleTagsHtml(r)}</span>`
+        + (decision ? `<span class="uc-to">${mdInline(decision)}</span>` : '')
+        + `<span class="br-where">${where}${steps}</span></li>`;
+    }).join('');
+    const parent = g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : '';
+    return `<section class="uc-group" id="${esc(blockSectionId(g.id))}">`
+      + `<h3 class="uc-actor">${esc(g.name)}${parent}`
+      + `<span class="uc-actor-wants">${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}</span></h3>`
+      + (g.purpose ? `<p class="uc-wants">${mdInline(g.purpose)}</p>` : '')
+      + (g.rules.length ? `<ul class="uc-list">${rows}</ul>`
+                        : '<p class="empty">No rules assigned to this area yet.</p>')
+      + '</section>';
+  }).join('');
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + (sections || '<p class="empty">No business rules recorded.</p>') + '</div>';
+  // A row opens the rule's own page — the SAME detail every cross-link into a rule lands on (one home).
+  const open = (li) => go({ kind: 'rule', br: li.getAttribute('data-br') });
+  diagram.querySelectorAll('.uc-row').forEach((li) => {
+    li.addEventListener('click', () => open(li));
+    li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(li); });
+  });
+  // Arriving focused on an AREA (a search hit on a block, the crumb back out of a rule) scrolls that
+  // area's card into view — the list is one scroll, so there is no pane to open.
+  if (s && s.blk) {
+    // An ATTRIBUTE selector, not `#` + the id: `querySelector('#blk-BLK 1')` is a syntax error, so an
+    // id the map should never carry would THROW inside render() instead of simply finding nothing.
+    const card = diagram.querySelector(`[id="${esc(blockSectionId(s.blk))}"]`);
+    if (card) card.scrollIntoView({ block: 'start' });
+  }
+}
+// Level 2 — ONE rule's page: the decision, then the three answers the map holds about it (where the
+// code enforces it, which traced steps it governs, which entities it speaks about). Each section
+// states its empty case rather than disappearing: "no traced flow step reaches this rule" is a fact
+// about the map, and hiding it would read as a rule with nothing to say.
+function renderRule(s) {
+  const r = ruleById(s.br);
+  if (!r) {
+    diagram.innerHTML = '<div class="usecases-wrap"><p class="empty">This business rule is not in the map.</p></div>';
+    return;
+  }
+  const blk = (RULES_VIEW.blocks || []).find((b) => b.id === r.block);
+  const area = blk
+    ? `<button type="button" class="br-blk" data-blk="${esc(blk.id)}">${esc(blk.name)}</button>`
+    : '<span class="br-nowhere">not assigned to a decision area</span>';
+  const sec = (title, count, body) => '<section class="uc-group">'
+    + `<h3 class="uc-actor">${esc(title)}`
+    + (count ? `<span class="uc-actor-wants">${esc(count)}</span>` : '') + '</h3>' + body + '</section>';
+  const nSites = (r.sites || []).length;
+  const nSteps = (r.steps || []).length;
+  const nEnts = (r.entities || []).length;
+  const sites = nSites ? `<ul class="br-sites">${r.sites.map(ruleSiteRow).join('')}</ul>`
+    : '<p class="empty">No call site is recorded for this rule.</p>';
+  const steps = nSteps ? `<div class="br-chips">${r.steps.map(ruleStepChip).join('')}</div>`
+    : '<p class="empty">No traced flow step reaches this rule.</p>';
+  const ents = nEnts
+    ? '<div class="br-chips">' + r.entities.map((e) =>
+        `<button type="button" class="br-ent" data-id="${esc(e.id)}">${esc(e.name)}</button>`).join('') + '</div>'
+    : '<p class="empty">No entity is named by this rule.</p>';
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + '<section class="uc-group">'
+    + `<h3 class="uc-actor">${esc(ruleTitle(r))}${ruleTagsHtml(r)}</h3>`
+    + (ruleStatementLine(r) ? `<p class="br-statement">${mdInline(r.statement)}</p>` : '')
+    + `<p class="uc-wants"><span class="uc-wants-lbl">Decision area:</span> ${area}</p>`
+    + (blk && blk.purpose ? `<p class="uc-wants">${mdInline(blk.purpose)}</p>` : '')
+    + (r.risk ? `<p class="uc-wants"><span class="uc-wants-lbl">If it is wrong:</span> ${mdInline(r.risk)}</p>` : '')
+    + '</section>'
+    + sec('Where it is enforced', nSites ? `${nSites} call site${nSites === 1 ? '' : 's'}` : '', sites)
+    + sec('Enforced at these steps', nSteps ? `${nSteps} flow step${nSteps === 1 ? '' : 's'}` : '', steps)
+    + sec('Touches', nEnts ? `${nEnts} entit${nEnts === 1 ? 'y' : 'ies'}` : '', ents)
+    + '</div>';
+  // The area chip walks back OUT to the list, landing on the area this rule belongs to — the same
+  // move the breadcrumb makes, available where the reader is looking.
+  diagram.querySelectorAll('.br-blk').forEach((b) => b.addEventListener('click', () => {
+    go({ kind: 'rules', blk: b.getAttribute('data-blk') });
   }));
   // A component chip locates that component in its structural diagram; an entity chip its card.
   diagram.querySelectorAll('.br-comp, .br-ent').forEach((el) => el.addEventListener('click', () => {
@@ -5716,12 +5864,7 @@ function renderRules(s) {
     if (i >= 0) selectFlowStep(uc, i, true);   // select AND frame — see selectFlowStep
     else go({ kind: 'usecase', uc });   // step missing from the narrative — open its flow
   }));
-  if (s && s.br) {
-    const card = diagram.querySelector('#br-' + s.br);
-    if (card) card.scrollIntoView({ block: 'center' });
-  }
 }
-
 // `sArg` renders a specific state (defaults to the current history entry); `transient` renders it purely
 // for the drill animation's intermediate "flash" — no panel/selection/camera-restore side effects, so it
 // doesn't disturb history or the info pane.
@@ -5751,6 +5894,9 @@ async function render(sArg, transient) {
   if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
   // The Business logic tab is the block rail + rule panes (HTML) — the same shape as Data.
   if (s.kind === 'rules') { renderRules(s); mainScene = null; showViewIntro(s); renderChrome(s); return; }
+  // One rule's page — the drill out of that list. The right pane keeps the TAB's question: everything
+  // the map holds about this rule is on the page itself, and repeating it beside itself said nothing.
+  if (s.kind === 'rule') { renderRule(s); mainScene = null; showViewIntro({ kind: 'rules' }); renderChrome(s); return; }
   // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,
   // not throw an unhandled rejection that freezes the view mid-navigation. Show a message + keep the
   // chrome (back/forward still work) so the user can step out.
@@ -6150,13 +6296,13 @@ function selectTargetFor(id) {
       return { state: parentKind('subdomain') ? { kind: 'domsub', sd: n.parent } : { kind: 'domain' }, selectId: id };
     case 'process':  // a deployment-unit box lives on the Deployment view; open its card
       return { state: { kind: 'deploymentUnit', unit: n.unit }, selectId: id };
-    // Neither is DRAWN, so neither has a `selectId` — the Business logic tab opens focused on the
-    // block's pane (and, for a rule, scrolled to its card). Without these both fell through to the
-    // default and landed the reader on Dependencies, showing nothing.
+    // Neither is DRAWN, so neither has a `selectId` — a decision area scrolls the list to its card,
+    // and a rule opens its own page. Without these both fell through to the default and landed the
+    // reader on Dependencies, showing nothing.
     case 'block':
       return { state: { kind: 'rules', blk: id } };
     case 'rule':
-      return { state: { kind: 'rules', blk: n.parent || 'none', br: id } };
+      return { state: { kind: 'rule', br: id } };
     default:
       return { state: { kind: 'context' }, selectId: id };  // unknown kind -> the always-present root
   }
@@ -7532,8 +7678,12 @@ function sbBuildStatic() {
 // entity meaning, a glossary meaning — as searchable bodies. Structural fields (name, kind, parent,
 // entry-point path, …) are excluded: they just echo the name/paths the name index already covers. A hit
 // renders as "[field] ElementName — …snippet…" and navigates to the element (or glossary term).
+// A node's IDENTITY field repeats its own name, so indexing it as prose adds a second hit saying
+// exactly what the name hit said. `Rule` joined this list when a rule gained a `name`; `Block` and
+// `Capability` were missing from it all along — the same duplication, one element kind over.
 const SB_PROSE_SKIP = new Set(['Subsystem', 'Component', 'Entry point', 'Name', 'Kind', 'Type',
-                               'Parent', 'Subdomain', 'Actor', 'Use case']);
+                               'Parent', 'Subdomain', 'Actor', 'Use case',
+                               'Rule', 'Block', 'Capability']);
 function sbBuildProse() {
   const items = [];
   const nodes = GRAPH.nodes || {};

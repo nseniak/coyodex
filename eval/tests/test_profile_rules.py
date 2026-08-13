@@ -71,7 +71,7 @@ def make_base_model() -> ProjectModel:
 def make_ruled_model() -> ProjectModel:
     m = make_base_model()
     m.blocks = [Group(id="BLK1", name="Order lifecycle", purpose="who may change an order")]
-    m.rules = [BusinessRule(id="BR1", statement="Only the order's owner may cancel it.",
+    m.rules = [BusinessRule(id="BR1", name="Owner-only cancellation", statement="Only the order's owner may cancel it.",
                             block="BLK1",
                             sites=[RuleSite(where="src/guard.py:3", why="rejects a non-owner")])]
     return m
@@ -118,7 +118,7 @@ def test_two_access_rules_stating_one_thing_count_once() -> None:
     duplicate masks one genuinely dropped surface."""
     m = make_ruled_model()
     m.rules[0].access = True
-    m.rules.append(BusinessRule(id="BR2", statement="Only the order's owner may cancel it.",
+    m.rules.append(BusinessRule(id="BR2", name="Owner-only cancellation", statement="Only the order's owner may cancel it.",
                                 access=True, block="BLK1",
                                 sites=[RuleSite(where="src/guard.py:4", why="a second guard")]))
     assert build_profile_from_model(m).security_surfaces == 1
@@ -140,7 +140,7 @@ def test_the_profile_carries_the_five_derived_rule_fields() -> None:
     assert (p.rules, p.blocks, p.rule_sites) == (1, 1, 1)
     # BR1 lives in C1; the uncovered decision is in C2, so BR1 is swept and the map still has debt
     assert p.rules_swept == 1 and p.rules_unverified == 0
-    m.rules.append(BusinessRule(id="BR2", statement="Only an admin may override a cancel.",
+    m.rules.append(BusinessRule(id="BR2", name="Admin cancel override", statement="Only an admin may override a cancel.",
                                 block="BLK1",
                                 sites=[RuleSite(where="src/admin.py:4", why="the admin gate")]))
     p = build_profile_from_model(m)

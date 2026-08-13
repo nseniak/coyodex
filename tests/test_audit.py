@@ -86,14 +86,15 @@ def make_all_theme_model() -> ProjectModel:
                                  source="src/a.py:30", cadence="every 24h",
                                  cadence_source="src/a.py:31")]                     # cadence
     m.blocks = [Group(id="BLK1", name="Access", purpose="who may act")]
-    m.rules = [BusinessRule(id="BR1", statement="Only an owner may cancel.", block="BLK1",
+    m.rules = [BusinessRule(id="BR1", name="Owner-only cancellation", statement="Only an owner may cancel.", block="BLK1",
                             sites=[RuleSite(where="src/a.py:13",
                                             why="rejects a non-owner")]),          # rule
                # An ACCESS rule, so the order pin is not vacuous on the security tier. Without one,
                # every rule in this fixture was `access=False`, the tier under test emitted nothing
                # security-themed, and a change routing access sites to `security` in the WRONG place
                # (interleaving security · rule · security) still passed.
-               BusinessRule(id="BR2", statement="Only a signed-in user may read a ticket.",
+               BusinessRule(id="BR2", name="Sign-in required to read",
+                            statement="Only a signed-in user may read a ticket.",
                             block="BLK1", access=True, risk="anyone could read any ticket",
                             sites=[RuleSite(where="src/auth/gate.py:22",
                                             why="rejects an anonymous caller")])]  # security

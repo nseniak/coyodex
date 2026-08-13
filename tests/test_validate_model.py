@@ -3290,7 +3290,7 @@ def make_model_with_access_rules(n: int = 2) -> ProjectModel:
     """A valid map carrying `n` access rules and no `security[]` — the shape EVERY map built since
     the T7 fold has, and the shape both real 2026-08-12 builds shipped."""
     m = make_valid_model()
-    m.rules = [BusinessRule(id=f"BR{i + 1}", statement=f"Only an owner may act ({i + 1}).",
+    m.rules = [BusinessRule(id=f"BR{i + 1}", name="Test rule", statement=f"Only an owner may act ({i + 1}).",
                             access=True, risk="privilege escalation",
                             sites=[RuleSite(where=f"src/a.py:{10 + i}", why="rejects a non-owner")])
                for i in range(n)]

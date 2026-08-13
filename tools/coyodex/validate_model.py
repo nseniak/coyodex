@@ -1053,6 +1053,11 @@ def rule_row_problems(m: ProjectModel) -> list[str]:
     block agent about it fails its lint on a defect it does not own and cannot fix."""
     problems: list[str] = []
     for r in m.rules:
+        if not (r.name or "").strip():
+            problems.append(f"{r.id} has no `name` — a rule needs a SHORT title beside its "
+                            "statement, the way a use case has one beside its trigger→outcome. "
+                            "Without it every list of rules is a wall of sentences and every "
+                            "breadcrumb truncates one mid-word")
         if not (r.statement or "").strip():
             problems.append(f"{r.id} states no decision — `statement` is the rule; a site list "
                             "without one is a set of anchors nobody can read")

@@ -517,7 +517,9 @@ is exactly what a reader means by "the interesting, product-specific part". A re
 is special about this application?" gets no answer from a well-formed map without it.
 
 A **rule** is ONE decision, in product language, naming no component: *"only the order's owner may
-cancel it"*, *"own connection first, else oldest shared"*. A **block** groups rules the way a
+cancel it"*, *"own connection first, else oldest shared"*. It carries a short `name` beside that
+sentence ("Owner-only cancellation") — the title every list, breadcrumb and cross-link reads, exactly
+as a use case has a name beside its trigger→outcome. A **block** groups rules the way a
 capability groups use cases — an area a product person would argue about. Rules are written after
 the trace, one agent per block (see *After the trace*), because sweeping a rule's enforcement sites
 needs the flows.
@@ -1287,6 +1289,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
   ```json
   { "rules": [ { "id": "BR1",
+                 "name": "<the SHORT title — a few words a reader scans>",
                  "statement": "<ONE decision, product language, naming no component>",
                  "access": false,
                  "risk": "<what is AT STAKE if this decision is wrong or absent>",
@@ -1296,12 +1299,18 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
                               "no_call_site": false } ] } ] }
   ```
 
+  **`name` is the rule's TITLE** — a few words ("Owner-only cancellation"), the way a use case has a
+  name beside its trigger→outcome sentence. It is REQUIRED and schema-enforced: a rule used to be a
+  full sentence and nothing else, so every list of rules was a wall of prose with nothing to skim and
+  every breadcrumb truncated one mid-word. Name the DECISION, then state it in full in `statement` —
+  a `name` that is just the statement cut short is not a title.
   `access` is `true` when the rule governs WHO MAY DO WHAT; `confidence` is `verified` (read in the
   code) or `inferred` (deduced). **`risk` is REQUIRED on an `access` rule** — it is the one thing a
   `security[]` row carried that a statement, a site and a `why` between them cannot say: not what the
   line does, but what its LIMIT costs. The Security & auth table renders it as its own column, and
-  `lint-fragment` advises on an `access` rule that leaves it empty. Those six keys are the WHOLE
-  authored surface — the full field semantics are in `method/model.md`.
+  **`lint-fragment` FAILS on an `access` rule that leaves it empty** — as an advisory it changed
+  nothing across two real builds, which shipped 47 and 44 access rules without a single risk between
+  them. Those seven keys are the WHOLE authored surface — the full field semantics are in `method/model.md`.
   **`block` is NOT in the fragment** (see below).
   The agent writes `«repo»/.coyodex/build-fragments/«agent-id».json` itself and returns that path
   plus a one-line inventory, under the same rule as every other fragment (never inline it).

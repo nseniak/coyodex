@@ -450,6 +450,23 @@ class BusinessRule:
     most damaging failure — it looked correct on every screen."""
     id: str                      # BRn
     statement: str               # ONE decision, in product language, naming no component
+    name: str = ""               # the SHORT title — a few words, the way a use case has a `name`
+                                 # beside its trigger→outcome sentence. REQUIRED of authored
+                                 # content: the schema lists it (see json_schema._ALSO_REQUIRED),
+                                 # `rule_row_problems` blocks without it, so both `lint-fragment`
+                                 # and `validate` fail on a rule that has none. A rule used to be a
+                                 # full sentence and nothing else, so every list of rules was a wall
+                                 # of prose with nothing to skim and every breadcrumb truncated one
+                                 # mid-word; every other element in the map has a `name`, this was
+                                 # the one that did not.
+                                 #
+                                 # The DEFAULT is what makes the requirement a gate rather than a
+                                 # wall: with no default the dataclass cannot be constructed at all,
+                                 # so a map written before the field existed would fail to LOAD —
+                                 # `coyodex serve` could not open it to show the reader what is
+                                 # wrong, and `validate` could not report it either. It loads, it
+                                 # renders (the views fall back to the statement), and every gate
+                                 # says so until the map is rebuilt.
     block: str | None = None     # BLKn — the decision area this rule belongs to. Assigned at
                                  # synthesis via `reconcile` (symmetric with UseCase.capability):
                                  # `BLK` ids are minted at synthesis while rules are authored after
