@@ -254,8 +254,10 @@ The decisions the product makes, in TWO levels — the same shape the Use Cases 
 it answers the same kind of question. Not a diagram: a decision is not a box, and drawing it as one
 would invent a structure the map does not have.
 
-**Level 1 — the decision areas.** A list of **decision areas** (blocks, nested ones named under their
-parent), each holding its rules as one-line rows. A row carries only what it takes to choose: the
+**Level 1 — the decision areas.** A pinned **section index** across the top (every area at a glance:
+click a chip to jump, and the chip of the area you are scrolled into lights up — the same bar the
+System and Use Cases tabs carry), then a list of **decision areas** (blocks, nested ones named under
+their parent), each holding its rules as one-line rows. A row carries only what it takes to choose: the
 decision, its badges, the components it is enforced in (three, then a count), and how many traced
 flow steps it governs. Clicking a row opens the rule.
 
@@ -272,6 +274,10 @@ and walks back to the rule's own area.
 | Where it is enforced | *line — component(s)*, one row per enforcement site | the line opens the code viewer; a component chip locates it in its structural diagram |
 | Enforced at these steps | step chips: *use case* step *position* (with the sub-flow's NAME when the step was authored in one) | selects and frames that step in the use case's flow |
 | Touches | entity chips, only where a reached step names the entity | locates the entity's card |
+
+Both levels remember how far you had scrolled — restored when you step back to them, and when you
+leave the tab and return. An explicit target (a cross-link naming an area, the crumb out of a rule)
+always wins over the remembered position.
 
 Each of the three lower sections states its empty case ("No traced flow step reaches this rule")
 rather than disappearing: that emptiness is a fact about the map, and hiding it reads as a rule with

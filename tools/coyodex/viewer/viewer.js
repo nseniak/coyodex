@@ -3311,6 +3311,16 @@ let hi = -1;  // index of the current state
 // the zoom + position it was last left at, instead of a fresh fit. (Per-entry `vp` below covers only the
 // exact history slot; this covers the diagram wherever it reappears.)
 const vpByView = {};
+// The same idea for the TEXT tabs, which have no camera but do have a position: how far you had
+// scrolled. Keyed by view identity, so the tab reopens where you left it however you come back —
+// exactly what `vpByView` does for a diagram. The per-entry copy (`s.scroll`, written by
+// captureViewState) is what back/forward restores.
+const scrollByView = {};
+// The scrolling element of whichever text view is on screen. ONE selector: a tab added later is
+// covered by naming its wrapper here, rather than by a second remember-my-position mechanism.
+function textScroller() {
+  return diagram.querySelector('.usecases-wrap, .glossary-wrap, .dv-content');
+}
 // The last state visited under each top-level tab (keyed by topView(kind)), so switching AWAY from a tab
 // and back reopens it exactly where it was left — drill depth, selection, camera and right-pane included —
 // instead of resetting to the tab's overview. Updated on every leave (see captureViewState). Clicking the
@@ -3375,6 +3385,11 @@ function captureViewState() {  // stash the leaving entry's pan/zoom + selection
   // Capture the WHOLE multi-selection (ordered keys), so back/forward restores every selected element, not
   // just the primary. `sels` supersedes the old scalar `sel`; a freshly-built navigation state may still
   // carry a single requested `sel` (a focus-drill / flow-step link) — restoreSelection handles both.
+  const sc = textScroller();
+  if (sc) {
+    history[hi].scroll = sc.scrollTop;
+    scrollByView[stateKey(history[hi])] = sc.scrollTop;
+  }
   history[hi].sels = mainScene ? mainScene.selection.map((d) => d.key) : null;
   history[hi].flow = flowSnapshot();
   history[hi].content = (pendingLeaveContent !== undefined) ? pendingLeaveContent : snapContent();
@@ -3396,7 +3411,7 @@ function pushContentPoint(content) {
   // written by hand; `blk`/`br` are the same shape one view over.
   history.push({ kind: c.kind, sid: c.sid, a: c.a, b: c.b, hp: c.hp, uc: c.uc, sd: c.sd,
                  unit: c.unit, store: c.store, entity: c.entity, blk: c.blk, br: c.br,
-                 bkid: c.bkid, sels: c.sels, flow: c.flow, content });
+                 bkid: c.bkid, sels: c.sels, flow: c.flow, scroll: c.scroll, content });
   hi = history.length - 1;
   renderChrome(history[hi]);  // refresh the nav buttons (Back is now enabled)
 }
@@ -3427,6 +3442,7 @@ function goTab(view) {
 function resetTab(view) {
   const root = { kind: view };
   delete vpByView[stateKey(root)];
+  delete scrollByView[stateKey(root)];   // a reset returns to the top, as it returns to a fresh fit
   if (hi >= 0 && stateKey(history[hi]) === stateKey(root)) { history[hi] = root; render(); }
   else go(root, true);
 }
@@ -5073,7 +5089,11 @@ function renderUseCases() {
   };
   const byCapability = ucGroupBy() === 'capability';
   const shown = byCapability ? capabilityGroups() : groups;
-  const sections = shown.map((g) => {
+  // The pinned index: one chip per group, in render order, whichever axis is grouping — so flipping
+  // Group by rebuilds it with the other axis's names. Ids are positional because a group's identity is
+  // an actor NAME or a capability id, and only one of those is an id at all.
+  const secs = [];
+  const sections = shown.map((g, gi) => {
     // One actor: its kind and what it wants, as before. SEVERAL interchangeable actors: the kind only
     // when they agree on it (they normally do — a human "or" a service is the method's tell that one of
     // them isn't really an actor), and no "wants", because each of them wants something of their own and
@@ -5101,19 +5121,22 @@ function renderUseCases() {
         + (to ? `<span class="uc-to">${mdInline(to)}</span>` : '')
         + '</li>';
     }).join('');
+    const secId = 'ucsec-' + gi;
     if (byCapability) {
       const title = g.cap ? g.cap.name : 'Not assigned to a capability';
+      secs.push({ id: secId, title });
       const lab = g.label ? `<span class="uc-caplabel uc-lab-${esc(g.label.toLowerCase())}">${esc(g.label)}</span>` : '';
       // A plain section, exactly like the actor grouping's: no twisty, nothing to fold. `platform`
       // capabilities used to start collapsed so the background use cases would not bury the product
       // ones — but a section that hides itself is a second thing to learn on a screen whose whole job
       // is to list what the product does, and the `platform` label already says which is which.
-      return `<section class="uc-group" data-cap="${esc(g.cap ? g.cap.id : '')}">`
+      return `<section class="uc-group" id="${secId}" data-cap="${esc(g.cap ? g.cap.id : '')}">`
         + `<h3 class="uc-actor">${esc(title)}${lab}`
         + `<span class="uc-actor-wants">${g.ucs.length} use case${g.ucs.length > 1 ? 's' : ''}</span></h3>`
         + `<ul class="uc-list">${rows}</ul></section>`;
     }
-    return '<section class="uc-group">'
+    secs.push({ id: secId, title: g.actor });
+    return `<section class="uc-group" id="${secId}">`
       + `<h3 class="uc-actor">${esc(g.actor)}${kindBadge(kind)}</h3>${wants}`
       + `<ul class="uc-list">${rows}</ul></section>`;
   }).join('');
@@ -5121,7 +5144,9 @@ function renderUseCases() {
     + `<span class="uc-seg"><button type="button" data-gb="capability"${byCapability ? ' class="on"' : ''}>Capability</button>`
     + `<button type="button" data-gb="actor"${byCapability ? '' : ' class="on"'}>Actor</button></span>`
     + `<span class="uc-groupby-why">${byCapability ? 'What does this product do?' : 'What can each role do?'}</span></div>` : '';
-  diagram.innerHTML = `<div class="usecases-wrap">${sw}${sections || '<p class="empty">No use cases recorded.</p>'}</div>`;
+  diagram.innerHTML = `<div class="usecases-wrap">${tabIndexHtml(secs)}${sw}`
+    + (sections || '<p class="empty">No use cases recorded.</p>') + '</div>';
+  bindTabIndex(diagram.querySelector('.usecases-wrap'));
   diagram.querySelectorAll('.uc-seg button').forEach((b) => {
     b.addEventListener('click', () => { UC_GROUP_BY = b.getAttribute('data-gb'); renderUseCases(); });
   });
@@ -5135,6 +5160,50 @@ function renderUseCases() {
   diagram.querySelectorAll('.uc-hp-pill').forEach((btn) => {
     btn.addEventListener('click', (ev) => { ev.stopPropagation(); go({ kind: 'hp', sel: 'hpuc:' + btn.getAttribute('data-uc') }); });
   });
+}
+
+// The PINNED SECTION INDEX shared by every card-list tab (System, Use Cases, Business logic): a row
+// of chips naming each section, click to jump, and the chip of the section you are in lights up as you
+// scroll. Built for the System tab, where a dozen unlabelled tables were unnavigable; the same problem
+// arrives the moment any of these lists has more categories than fit on a screen.
+//
+// `secs` = [{id, title}], in render order. Fewer than two sections index nothing, so no bar is drawn.
+function tabIndexHtml(secs) {
+  if (!secs || secs.length < 2) return '';
+  return `<nav class="tab-index" aria-label="Sections">${secs.map((sec) =>
+    `<button type="button" class="tab-index-chip" data-target="${esc(sec.id)}">${esc(sec.title)}</button>`
+  ).join('')}</nav>`;
+}
+// Wire an index rendered by `tabIndexHtml`: click-to-jump + scroll-spy. `wrap` is the SCROLL container
+// (the bar is sticky inside it), and its height is measured into `--tab-index-h` so the sections'
+// `scroll-margin-top` — and the System tab's second sticky row, its table headers — line up under the
+// bar even when it wraps onto two rows on a narrow pane.
+function bindTabIndex(wrap) {
+  const nav = wrap && wrap.querySelector('.tab-index');
+  if (!wrap || !nav) return;
+  const chips = [...nav.querySelectorAll('.tab-index-chip')];
+  const sections = chips.map((c) => wrap.querySelector(`[id="${c.dataset.target}"]`));
+  const header0 = wrap.querySelector('.uc-actor');
+  const setH = () => {
+    wrap.style.setProperty('--tab-index-h', nav.offsetHeight + 'px');
+    wrap.style.setProperty('--sys-header-h', (header0 ? header0.offsetHeight : 30) + 'px');
+  };
+  setH();
+  if (window.ResizeObserver) new ResizeObserver(setH).observe(wrap);  // recompute when the pane resizes
+  chips.forEach((chip, i) => chip.addEventListener('click', () => {
+    if (sections[i]) sections[i].scrollIntoView({ block: 'start', behavior: 'smooth' });
+  }));
+  const spy = () => {
+    // The line must clear the sections' `scroll-margin-top` (--tab-index-h + 8px), or a section you
+    // JUST jumped to lands 8px below a 6px line and the chip that lights is the one ABOVE the one you
+    // clicked. Kept a couple of pixels looser than the margin so sub-pixel rounding cannot flip it.
+    const line = nav.getBoundingClientRect().bottom + 12;
+    let active = 0;
+    sections.forEach((sec, i) => { if (sec && sec.getBoundingClientRect().top <= line) active = i; });
+    chips.forEach((c, i) => c.classList.toggle('active', i === active));
+  };
+  wrap.addEventListener('scroll', spy, { passive: true });
+  spy();
 }
 
 // One titled reference table's BODY on the System tab: a `.glossary`-styled table. `cols` = [{head, get}];
@@ -5294,8 +5363,7 @@ function renderSystem() {
   }
   const body = parts.filter(Boolean).join('');
   const nav = secs.length
-    ? `<nav class="sys-index">${secs.map((s) =>
-        `<button type="button" class="sys-index-chip" data-target="${s.id}">${esc(s.title)}</button>`).join('')}</nav>`
+    ? tabIndexHtml(secs)
     : '';
   diagram.innerHTML = `<div class="usecases-wrap system-wrap">${body ? nav + body : '<p class="empty">No system facts recorded.</p>'}</div>`;
   // A System-tab entry-point Component link navigates to that component AND selects the exact entry
@@ -5304,40 +5372,11 @@ function renderSystem() {
     btn.addEventListener('click', () => selectEntryPoint(
       btn.getAttribute('data-id'), parseInt(btn.getAttribute('data-idx'), 10) || 0));
   });
-  bindSysIndex();
+  bindTabIndex(diagram.querySelector('.system-wrap'));
 }
 // Wire the System tab's pinned section index: click a chip to jump to its section, and highlight the chip
 // of the section you're currently scrolled into (scroll-spy). Also measures the index bar's height into a
 // CSS var so the sticky section headers sit just below it.
-function bindSysIndex() {
-  const wrap = diagram.querySelector('.system-wrap');
-  const nav = wrap && wrap.querySelector('.sys-index');
-  if (!wrap || !nav) return;
-  const chips = [...nav.querySelectorAll('.sys-index-chip')];
-  const sections = chips.map((c) => wrap.querySelector('#' + c.dataset.target));
-  // Two stacked sticky offsets: the pinned index (top), then each section header below it, then each
-  // table's column headers below THAT. Measure both heights into CSS vars so the stack lines up even when
-  // the index bar / a header wraps on a narrow pane.
-  const header0 = wrap.querySelector('.uc-actor');
-  const setH = () => {
-    wrap.style.setProperty('--sys-index-h', nav.offsetHeight + 'px');
-    wrap.style.setProperty('--sys-header-h', (header0 ? header0.offsetHeight : 30) + 'px');
-  };
-  setH();
-  if (window.ResizeObserver) new ResizeObserver(setH).observe(wrap);  // recompute when the pane resizes
-  chips.forEach((chip, i) => chip.addEventListener('click', () => {
-    if (sections[i]) sections[i].scrollIntoView({ block: 'start', behavior: 'smooth' });
-  }));
-  const spy = () => {
-    const line = nav.getBoundingClientRect().bottom + 6;  // just under the pinned index
-    let active = 0;
-    sections.forEach((sec2, i) => { if (sec2 && sec2.getBoundingClientRect().top <= line) active = i; });
-    chips.forEach((c, i) => c.classList.toggle('active', i === active));
-  };
-  wrap.addEventListener('scroll', spy, { passive: true });
-  spy();
-}
-
 // ── Data tab (store-centric) ──────────────────────────────────────────────────────────────────────
 // A rail of physical stores → a pane each: the collections (entities keyed by their structured store)
 // with who writes / reads them, the coverage gaps, and — for a broker — its async channels (cards + a
@@ -5750,6 +5789,7 @@ function ruleStepChip(l) {
 // the decision, its state chips, and where it lives; the anchors are one click away.
 function renderRules(s) {
   const groups = ruleBlockGroups();
+  const secs = groups.map((g) => ({ id: blockSectionId(g.id), title: g.name }));
   const sections = groups.map((g) => {
     const rows = g.rules.map((r) => {
       // WHERE, in one line — the components the SERVER resolved for this rule's sites, de-duplicated
@@ -5788,8 +5828,9 @@ function renderRules(s) {
                         : '<p class="empty">No rules assigned to this area yet.</p>')
       + '</section>';
   }).join('');
-  diagram.innerHTML = '<div class="usecases-wrap">'
+  diagram.innerHTML = '<div class="usecases-wrap">' + tabIndexHtml(secs)
     + (sections || '<p class="empty">No business rules recorded.</p>') + '</div>';
+  bindTabIndex(diagram.querySelector('.usecases-wrap'));
   // A row opens the rule's own page — the SAME detail every cross-link into a rule lands on (one home).
   const open = (li) => go({ kind: 'rule', br: li.getAttribute('data-br') });
   diagram.querySelectorAll('.uc-row').forEach((li) => {
@@ -5802,8 +5843,9 @@ function renderRules(s) {
     // An ATTRIBUTE selector, not `#` + the id: `querySelector('#blk-BLK 1')` is a syntax error, so an
     // id the map should never carry would THROW inside render() instead of simply finding nothing.
     const card = diagram.querySelector(`[id="${esc(blockSectionId(s.blk))}"]`);
-    if (card) card.scrollIntoView({ block: 'start' });
-  }
+    if (card) { card.scrollIntoView({ block: 'start' }); return true; }  // an explicit jump beats a
+  }                                                                      // remembered scroll position
+  return false;
 }
 // Level 2 — ONE rule's page: the decision, then the three answers the map holds about it (where the
 // code enforces it, which traced steps it governs, which entities it speaks about). Each section
@@ -5865,6 +5907,17 @@ function renderRule(s) {
     else go({ kind: 'usecase', uc });   // step missing from the narrative — open its flow
   }));
 }
+// Put a just-rendered text view back where it was left: this history point's own offset first (so
+// back/forward lands exactly), else the last offset for this view (so a tab switch does too).
+// `jumped` = the renderer already scrolled somewhere ON PURPOSE — a cross-link naming a decision area,
+// a crumb walking back to one — and an explicit target always beats a remembered position.
+function restoreTextScroll(s, jumped) {
+  if (jumped) return;
+  const sc = textScroller();
+  if (!sc) return;
+  const top = (s.scroll != null) ? s.scroll : scrollByView[stateKey(s)];
+  if (top) sc.scrollTop = top;
+}
 // `sArg` renders a specific state (defaults to the current history entry); `transient` renders it purely
 // for the drill animation's intermediate "flash" — no panel/selection/camera-restore side effects, so it
 // doesn't disturb history or the info pane.
@@ -5883,20 +5936,26 @@ async function render(sArg, transient) {
   // The Glossary tab is a term TABLE, not a mermaid diagram — render it straight into the stage and
   // keep the chrome (breadcrumb + active tab). No panZoom/scene/tree machinery to set up, so return
   // before the diagram path, the same shape as the degraded "could not render" branch below.
-  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
+  if (s.kind === 'glossary') { renderGlossary(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The Use Cases tab is an actor-grouped HTML catalog, not a mermaid diagram — same shape as Glossary.
-  if (s.kind === 'usecases') { renderUseCases(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
+  if (s.kind === 'usecases') { renderUseCases(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The System tab is a set of operational reference tables (HTML), not a mermaid diagram — same shape.
-  if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
+  if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
-  if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); return; }
+  if (s.kind === 'data') { renderData(s); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The Tests tab is the test-completeness gap table (HTML) — same shape as the System/Glossary tabs.
-  if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); return; }
+  if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The Business logic tab is the block rail + rule panes (HTML) — the same shape as Data.
-  if (s.kind === 'rules') { renderRules(s); mainScene = null; showViewIntro(s); renderChrome(s); return; }
+  if (s.kind === 'rules') {
+    const jumped = renderRules(s);   // true when it scrolled to a named decision area
+    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s, jumped); return;
+  }
   // One rule's page — the drill out of that list. The right pane keeps the TAB's question: everything
   // the map holds about this rule is on the page itself, and repeating it beside itself said nothing.
-  if (s.kind === 'rule') { renderRule(s); mainScene = null; showViewIntro({ kind: 'rules' }); renderChrome(s); return; }
+  if (s.kind === 'rule') {
+    renderRule(s); mainScene = null; showViewIntro({ kind: 'rules' }); renderChrome(s);
+    restoreTextScroll(s); return;
+  }
   // Safety net: a missing baked diagram (an unforeseen drill key) or a mermaid parse error must DEGRADE,
   // not throw an unhandled rejection that freezes the view mid-navigation. Show a message + keep the
   // chrome (back/forward still work) so the user can step out.

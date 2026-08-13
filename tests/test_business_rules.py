@@ -1938,7 +1938,7 @@ def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
     assert "if (s.kind === 'rules') return 'Business logic'" in VIEWER_JS  # stateTitle
     assert "if (s.kind === 'rules') return [{ kind: 'rules' }]" in VIEWER_JS  # VIEW_Q trail
     assert "rules: 'What does this product DECIDE" in VIEWER_JS         # the view's question
-    assert "if (s.kind === 'rules') { renderRules(s);" in VIEWER_JS     # render
+    assert "if (s.kind === 'rules') {\n    const jumped = renderRules(s);" in VIEWER_JS   # render
     assert "b.dataset.view === 'rules' && !HAS_RULES" in VIEWER_JS      # the tab gate
 
 
@@ -1981,7 +1981,7 @@ def test_a_rule_drills_into_its_own_page_the_way_a_use_case_does() -> None:
     detail back on the list is exactly what the drill replaced."""
     assert "if (kind === 'rule') return 'rules';" in VIEWER_JS                  # topView
     assert "if (s.kind === 'rule') return ruleCrumbTitle(s.br);" in VIEWER_JS   # stateTitle
-    assert "if (s.kind === 'rule') { renderRule(s);" in VIEWER_JS               # render
+    assert "if (s.kind === 'rule') {\n    renderRule(s);" in VIEWER_JS           # render
     assert "{ kind: 'rule', br: s.br }" in VIEWER_JS                            # ancestors (the trail)
     lst = _js_function("renderRules")
     assert "go({ kind: 'rule', br: li.getAttribute('data-br') })" in lst        # a row drills

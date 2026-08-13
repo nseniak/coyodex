@@ -282,3 +282,79 @@ def test_source_links_are_bound_by_delegation_not_per_render():
     # it must be attached to the STABLE panel host, not the `panel` binding, which is temporarily
     # re-pointed at individual cards while a multi-selection renders.
     assert "[PANEL_HOST, diagram].forEach" in js
+
+
+def test_the_section_index_is_ONE_component_used_by_every_card_list_tab() -> None:
+    """The System tab had a pinned index — all sections at a glance, click to jump, the one you are
+    in lit up — and the two other card-list tabs did not, though they have the same problem the
+    moment a map has more categories than fit on a screen. A second copy per tab is three places for
+    the sticky-offset maths to drift, so the bar is one component all three call."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "function tabIndexHtml(secs)" in js and "function bindTabIndex(wrap)" in js
+    assert "function bindSysIndex" not in js and "sys-index" not in js   # the private copy is gone
+    for fn in ("renderSystem", "renderUseCases", "renderRules"):
+        body = js[js.index(f"function {fn}("):js.index("\nfunction ", js.index(f"function {fn}(") + 10)]
+        assert "tabIndexHtml(" in body and "bindTabIndex(" in body, fn
+    # One section indexes nothing — no bar rather than a bar with one chip.
+    assert "if (!secs || secs.length < 2) return '';" in js
+
+
+def test_the_pinned_index_sticks_to_the_wrappers_top_border() -> None:
+    """`position: sticky; top: 0` inside a scrolling box resolves to the CONTENT edge, so the
+    wrapper's 16px top padding stayed ABOVE the bar as a transparent strip — scrolling rows slid
+    through it and the bar read as floating in the middle of the list. The padding moves onto the
+    bar (only where there IS one) and negative side margins take it full-bleed, so nothing scrolls
+    past above or beside it. Measured in the browser: gap 0, bar width == wrapper width."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".usecases-wrap:has(> .tab-index) { padding-top: 0; }" in css
+    bar = css[css.index(".usecases-wrap .tab-index {"):]
+    bar = bar[:bar.index("}")]
+    assert "position: sticky" in bar and "top: 0" in bar
+    assert "margin: 0 -20px 12px" in bar and "padding: 12px 20px 10px" in bar
+
+
+def test_the_scroll_spy_clears_the_sections_scroll_margin() -> None:
+    """The spy lights the LAST section whose top is above a line just under the bar. That line has
+    to clear the sections' own `scroll-margin-top`, or a section you just JUMPED to lands below the
+    line and the chip that lights is the one ABOVE the one you clicked."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    spy = js[js.index("const spy = () => {"):js.index("wrap.addEventListener('scroll', spy")]
+    assert "getBoundingClientRect().bottom + 12" in spy
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "scroll-margin-top: calc(var(--tab-index-h) + 8px)" in css      # 8 < 12
+
+
+def test_a_text_tab_remembers_where_it_was_scrolled_to() -> None:
+    """The diagram tabs remember their camera twice over — per history point (back/forward lands
+    exactly) and per view (a tab switch lands there too). The text tabs were left out only because
+    they have no camera; the position matters just as much on a 96-rule list. Same two places,
+    saving scrollTop instead of zoom."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "const scrollByView = {};" in js
+    assert "function textScroller()" in js
+    # ONE selector names every text tab's scroll container — Use Cases / Business logic / the rule
+    # page / System / Tests share `.usecases-wrap`; Glossary and Data have their own.
+    assert "'.usecases-wrap, .glossary-wrap, .dv-content'" in js
+    capture = js[js.index("function captureViewState"):js.index("function pushContentPoint")]
+    assert "history[hi].scroll = sc.scrollTop" in capture
+    assert "scrollByView[stateKey(history[hi])] = sc.scrollTop" in capture
+    # …and it survives a right-pane navigation, like every other field the restore reads.
+    assert "scroll: c.scroll" in js[js.index("function pushContentPoint"):js.index("function go(state")]
+    # Every text view restores it on the way out of render().
+    assert js.count("restoreTextScroll(s") >= 7
+    # Clicking the tab you are already ON is a reset — it drops the remembered spot, as it drops the
+    # remembered camera.
+    reset = js[js.index("function resetTab(view)"):js.index("function resetTab(view)") + 400]
+    assert "delete scrollByView[stateKey(root)]" in reset
+
+
+def test_an_explicit_jump_beats_a_remembered_scroll_position() -> None:
+    """A cross-link naming a decision area, or the crumb walking back out of a rule, asks for a
+    SPECIFIC place. Restoring the last scroll offset on top of that would undo the navigation the
+    reader just made."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    restore = js[js.index("function restoreTextScroll(s, jumped)"):]
+    assert "if (jumped) return;" in restore[:200]
+    rules = js[js.index("function renderRules(s)"):js.index("\nfunction ", js.index("function renderRules(s)") + 10)]
+    assert "card.scrollIntoView({ block: 'start' }); return true;" in rules
+    assert "const jumped = renderRules(s);" in js
