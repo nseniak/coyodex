@@ -5667,9 +5667,12 @@ function renderRules(s) {
       + '</section>');
   }
 
+  // `dv-content` is the Data tab's scroll container — the pane list must sit in it, or the tab
+  // renders at full height inside a clipped `dv-wrap` and cannot be scrolled at all.
   diagram.innerHTML = '<div class="dv-wrap">'
-    + `<nav class="dv-rail"><div class="dv-railgroup"><h3>Decision areas</h3>${rail.join('')}</div></nav>`
-    + `<div class="dv-panes">${panes.join('')}</div></div>`;
+    + `<nav class="dv-rail" aria-label="Decision areas">`
+    + `<div class="dv-railgroup">Decision areas</div>${rail.join('')}</nav>`
+    + `<section class="dv-content">${panes.join('')}</section></div>`;
 
   // The same show/hide contract the Data tab uses — `.dv-pane.active` + `aria-current` on the rail
   // button, not a second mechanism with its own CSS.
@@ -5688,15 +5691,18 @@ function renderRules(s) {
   diagram.querySelectorAll('.br-comp, .br-ent').forEach((el) => el.addEventListener('click', () => {
     selectFromTree(el.getAttribute('data-id'));
   }));
-  // A step chip opens the flow AT that step — the same jump the flow-step pane offers back. The
-  // narrative index is not the authored `n` (a sub-flow's steps are spliced in), so resolve it
-  // through the flow's own narration by `(authoring container, n)`, the pair that identifies a step.
+  // A step chip SELECTS that step in the use case's flow — `selectFlowStep`, the same landing an
+  // impact row uses, so the arrow lights up and its pane opens rather than the flow merely opening
+  // at a counter position. The narrative index is not the authored `n` (a sub-flow's steps are
+  // spliced in), so resolve it through the flow's own narration by `(authoring container, n)` —
+  // the pair that identifies a step.
   diagram.querySelectorAll('.br-step').forEach((el) => el.addEventListener('click', () => {
     const uc = el.getAttribute('data-uc');
     const container = el.getAttribute('data-container');
     const n = Number(el.getAttribute('data-n'));
-    const cur = (FLOWS_NARR[uc] || []).findIndex((st) => st.n === n && (st.sf || uc) === container);
-    go({ kind: 'usecase', uc, flow: cur >= 0 ? { cur, active: true } : undefined });
+    const i = (FLOWS_NARR[uc] || []).findIndex((st) => st.n === n && (st.sf || uc) === container);
+    if (i >= 0) selectFlowStep(uc, i, true);   // select AND frame — see selectFlowStep
+    else go({ kind: 'usecase', uc });   // step missing from the narrative — open its flow
   }));
   if (s && s.br) {
     const card = diagram.querySelector('#br-' + s.br);
@@ -5835,6 +5841,13 @@ async function render(sArg, transient) {
     if (pendingMatchTextId) matchTextSize(mainScene.nodeEls[pendingMatchTextId]);
     else if (pendingCenterId) applyZoomAndCenter(mainScene.nodeEls[pendingCenterId], 1);  // centre only, keep the fit zoom
     flowInit(s);  // a flow view: restore this history point's selected/saved step, or start fresh
+    // One-shot: a jump that asked to FRAME its step (see selectFlowStep) does it now, after
+    // flowInit has restored the selection and svgPanZoom exists.
+    if (pendingFrameStep) {
+      const m = (s.sel || '').match(/^flowstep:.*:(\d+)$/);
+      if (m) frameFlowStep(Number(m[1]));
+    }
+    pendingFrameStep = false;
   }
   // Empty-space click behaviour, mirroring the on-element gestures: a plain click deselects; a shift-click
   // is a pure camera move — with no element under it, it fits+centers the WHOLE diagram (the background
@@ -6693,14 +6706,31 @@ function stepsByPath() {
 }
 // Navigate to use case `uc` and select step `i`. stateKey ignores `sel`, so a plain go() to the same
 // use case we're already viewing would no-op — select in place then (mirrors selectFromTree's fallback).
-function selectFlowStep(uc, i) {
+function selectFlowStep(uc, i, frame = false) {
   const state = { kind: 'usecase', uc: uc, sel: 'flowstep:' + uc + ':' + i };
   const cur = history[hi];
   if (cur && stateKey(cur) === stateKey(state) && mainScene && mainScene.selectors[state.sel]) {
     selClear(mainScene); mainScene.selectors[state.sel]();  // select this one step in place (replace)
+    if (frame) frameFlowStep(i);
   } else {
+    // The arrow does not exist yet — the view has not rendered. `render` frames it once `flowInit`
+    // has restored the step, the same one-shot shape `pendingCenter` uses for a focus-drill.
+    pendingFrameStep = frame;
     go(state);
   }
+}
+// `frame` = the shift-click camera move, applied to the step's own arrow: a caller that JUMPED here
+// from somewhere else (a rule's "Enforced at" pill) lands on a whole flow, and the one arrow it meant
+// is a thin line somewhere in it. Selecting glows it; framing is what makes it findable.
+let pendingFrameStep = false;
+function frameFlowStep(i) {
+  if (!flowPlay || !mainPz) return;
+  const els = (flowPlay.msgEls || [])[i] || [];
+  // The arrow's PATH, not its label: the label is a small box that would over-zoom, and `frameArrow`
+  // fits what it is given. Skip anything with no geometry (a step whose pair was not drawn).
+  const el = els.find((e) => e && e.getBoundingClientRect
+                        && (e.getBoundingClientRect().width >= 1 || e.getBoundingClientRect().height >= 1));
+  if (el) frameArrow(el);
 }
 // Every taggable item in the shown file — structural elements anchored here AND use-case steps that pass
 // through here — as a uniform list the code tags and the overview ruler both render. `select` runs the

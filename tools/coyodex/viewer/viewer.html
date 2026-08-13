@@ -99,6 +99,10 @@
                  Each view's caption lives in the info pane's top-level state (see VIEW_Q). -->
             <button data-view="hp">Happy Path</button>  <!-- the landing view; internal kind stays `hp` -->
             <button data-view="usecases">Use Cases</button>  <!-- actor-grouped catalog (hidden when no use cases) -->
+            <!-- Business logic sits with the BEHAVIOURAL tabs, not the reference ones: what the
+                 product decides is read straight after what it does, and long before how it is
+                 built. -->
+            <button data-view="rules">Business logic</button>  <!-- T7: the decisions this product makes (hidden when the map states none) -->
             <!-- Entities before Subsystems: the behavioural tabs are followed by WHAT the system is about
                  (its domain model) and only then by the machine that implements it. -->
             <button data-view="domain">Entities</button>  <!-- internal kind stays `domain`; label only -->
@@ -109,7 +113,6 @@
             <button data-view="system">System</button>  <!-- operational reference tables: run/observability/security/config/entry-points (hidden when empty) -->
             <button data-view="glossary">Glossary</button>  <!-- term table, not a diagram (hidden when empty) -->
             <button data-view="tests">Tests</button>  <!-- test-completeness gap table (hidden when empty) -->
-            <button data-view="rules">Business logic</button>  <!-- T7: the decisions this product makes (hidden when the map states none) -->
 
             <!-- Components tab intentionally removed: the flat whole-repo component map is too heavy to be a
                  landing view. Its generators (gen_mermaid / MERMAID_BASE / MERMAID_DIFF) and the viewer's

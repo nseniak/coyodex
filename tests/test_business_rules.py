@@ -1817,6 +1817,40 @@ def test_the_frontend_never_re_derives_an_owner_or_a_step_link() -> None:
     assert "l.strength" in _js_function("renderRules")
 
 
+def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
+    """Business logic is read straight after what the product DOES, long before how it is built —
+    and its pane list must live in `dv-content`, the Data tab's scroll container. An invented
+    wrapper had no CSS at all, so the tab rendered at full height inside a clipped `dv-wrap` and
+    could not be scrolled."""
+    html = (VIEWER / "viewer.html").read_text(encoding="utf-8")
+    order = re.findall(r'data-view="(\w+)"', html)
+    assert order[:3] == ["hp", "usecases", "rules"], order
+    body = _js_function("renderRules")
+    assert '<section class="dv-content">' in body and "dv-panes" not in body
+
+
+def test_an_enforced_at_pill_selects_and_frames_the_step_in_the_flow() -> None:
+    """`selectFlowStep(uc, i, frame)` — the same landing an impact row uses, so the arrow lights up
+    and its pane opens; restoring a flow SNAPSHOT only moved the counter. `frame` adds the
+    shift-click camera move: a jump from a rule lands on a whole flow, and the one arrow it meant is
+    a thin line somewhere in it."""
+    body = _js_function("renderRules")
+    assert "selectFlowStep(uc, i, true)" in body
+    assert "flow: cur >= 0" not in body
+    step = _js_function("selectFlowStep")
+    assert "frameFlowStep(i)" in step and "pendingFrameStep = frame" in step
+    assert "if (pendingFrameStep)" in VIEWER_JS      # the one-shot, applied after flowInit
+
+
+def test_the_readme_lists_the_business_logic_tab_in_tab_order() -> None:
+    """The tab list is the product's advertised surface — a tab missing from it does not exist for
+    a reader, and one listed out of order contradicts the bar they are looking at."""
+    lines = [l for l in (REPO / "README.md").read_text(encoding="utf-8").splitlines()
+             if l.startswith("- **")]
+    labels = [l.split("**")[1] for l in lines]
+    assert labels[:3] == ["Happy Path", "Use Cases", "Business logic"], labels
+
+
 def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
     """A view that is registered in five of six places renders nothing, or renders and cannot be
     navigated back to. Each of these is one of the six."""

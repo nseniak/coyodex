@@ -15,15 +15,26 @@ annotated in plain language by your coding agent and anchored to code locations.
 Use it to understand what your system does and how, top-down, without reading all
 of it. Drill into the code only where and when you actually need to.
 
+## Why coyodex?
+
+When your agent generates a lot of code for you, you can end up with code you've
+completely lost track of. It runs fine until the day you need to understand it,
+and then you find there's nothing under your feet. This is the Coyote Effect.
+
+coyodex helps you recover from this situation and oversee your agent's work moving forward.
+
+## What coyodex shows
+
 <img src="assets/viewer.png" alt="The coyodex viewer: one group of a project's entities drawn on the left, the plain-language explanation of the selected entity below it, and that entity's source code on the right" width="100%">
 
 *The viewer: one part of a project's domain model, the selected box explained in plain language, and the code it is grounded in.*
 
-The viewer presents the map as a set of tabs. Each tab is a different diagram of the same project,
-and each one answers one question:
+The viewer presents a set of tabs. Each tab is a different diagram of the same project, and each one
+answers one question:
 
 - **Happy Path** — What does this system do, end to end?
 - **Use Cases** — Who uses it, and what does each of them get done?
+- **Business logic** — What does this product DECIDE, and where is each decision enforced?
 - **Entities** — What things does this system know about, and how do they relate?
 - **Subsystems** — How is the code organised, and what depends on what?
 - **Dependencies** — What does it rely on from the outside world?
@@ -32,14 +43,6 @@ and each one answers one question:
 - **System** — The operational facts no diagram holds: how to run it, watch it, secure it, configure it.
 - **Glossary** — What do this project's words mean?
 - **Tests** — What is covered by tests, and what is not?
-
-## Why coyodex?
-
-When your agent generates a lot of code for you, you can end up with code you've
-completely lost track of. It runs fine until the day you need to understand it,
-and then you find there's nothing under your feet. This is the Coyote Effect.
-
-coyodex helps you recover from this situation and oversee your agent's work moving forward.
 
 ## Why not just ask my agent to diagram the code?
 
