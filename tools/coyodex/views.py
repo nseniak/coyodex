@@ -515,7 +515,14 @@ def model_to_markdown(m: ProjectModel) -> str:
             """A step's FULL address. `n` is unique per authoring container, never per use case —
             47 of this repo's 114 anchored steps come from a sub-flow, and 26 `(uc, n)` pairs name
             more than one distinct step. Printing `(UC9) step 3` would point at the wrong row in
-            T6b, and two different steps would render as a byte-identical duplicate."""
+            T6b, and two different steps would render as a byte-identical duplicate.
+
+            THE AUTHORED `n` IS RIGHT HERE, and wrong in the viewer. This view does not expand a
+            sub-flow: T6 renders the reference step inline and T6b lists the sub-flow under its own
+            numbering, so `UC9 → SF50 step 4` is a lookup a reader can follow. The VIEWER splices a
+            sub-flow's steps into each referencing flow and numbers the result by POSITION, so a
+            chip there must show the position instead (viewer.js `flowStepIndex`). Two views, two
+            numbering schemes, each matching what its own reader sees."""
             uc = f"{uc_names.get(l.uc, l.uc)} ({l.uc})"
             return f"{uc} step {l.n}" if l.container == l.uc else f"{uc} → {l.container} step {l.n}"
 

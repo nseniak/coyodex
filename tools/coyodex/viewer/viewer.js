@@ -5576,6 +5576,13 @@ function renderTests() {
 // and whether it has been swept all arrive computed by the one Python implementation
 // (validate_model / views._build_rules_view). Re-deriving any of them from `sites` would be a second
 // answer that eventually disagrees — the exact drift this layer was built to make impossible.
+// A step's POSITION in its use case's rendered flow, from `(authoring container, authored n)` — the
+// pair that identifies it. -1 when the flow does not carry it (an undrawn pair, a missing flow).
+// ONE lookup, used to LABEL a chip and to act on it, so the number a reader clicks and the step
+// they land on can never disagree.
+function flowStepIndex(uc, container, n) {
+  return (FLOWS_NARR[uc] || []).findIndex((st) => st.n === n && (st.sf || uc) === container);
+}
 function renderRules(s) {
   const rv = RULES_VIEW || {};
   const blocks = rv.blocks || [];
@@ -5610,10 +5617,18 @@ function renderRules(s) {
     // The sub-flow's NAME, never its id: the viewer speaks the reader's language.
     const via = l.container === l.uc ? '' : ' \u00b7 ' + esc(l.containerName || l.container);
     const exact = l.strength === 'exact';
+    // THE NUMBER ON SCREEN IS THE POSITION IN THE FLOW, not the authored `n`. `(container, n)` is a
+    // step's IDENTITY — unique per container, which is why the payload carries it — but a sub-flow's
+    // steps are spliced into every referencing flow keeping their OWN numbering, so one flow's
+    // narrative runs 1..24 over authored ns like [1,2,3,1,2,3,4,…]. Every other surface (the arrow
+    // badge, the sequence list, the step counter) counts positions, so a chip saying "step 6" that
+    // landed on "Step 18 / 24" was promising a number the diagram never shows.
+    const i = flowStepIndex(l.uc, l.container, l.n);
+    const where = i >= 0 ? ` step ${i + 1}` : '';
     return `<button type="button" class="br-step${exact ? '' : ' br-near'}" data-uc="${esc(l.uc)}" `
-      + `data-container="${esc(l.container)}" data-n="${esc(String(l.n))}" `
+      + `data-i="${esc(String(i))}" `
       + `title="${exact ? 'this exact step' : 'inside the same function as this step'}">`
-      + `${esc(l.ucName)} step ${esc(String(l.n))}${via}</button>`;
+      + `${esc(l.ucName)}${where}${via}</button>`;
   };
 
   const ruleCard = (r) => {
@@ -5693,14 +5708,11 @@ function renderRules(s) {
   }));
   // A step chip SELECTS that step in the use case's flow — `selectFlowStep`, the same landing an
   // impact row uses, so the arrow lights up and its pane opens rather than the flow merely opening
-  // at a counter position. The narrative index is not the authored `n` (a sub-flow's steps are
-  // spliced in), so resolve it through the flow's own narration by `(authoring container, n)` —
-  // the pair that identifies a step.
+  // at a counter position. The index was resolved when the chip was LABELLED, so the number the
+  // reader clicked and the step they land on cannot disagree.
   diagram.querySelectorAll('.br-step').forEach((el) => el.addEventListener('click', () => {
     const uc = el.getAttribute('data-uc');
-    const container = el.getAttribute('data-container');
-    const n = Number(el.getAttribute('data-n'));
-    const i = (FLOWS_NARR[uc] || []).findIndex((st) => st.n === n && (st.sf || uc) === container);
+    const i = Number(el.getAttribute('data-i'));
     if (i >= 0) selectFlowStep(uc, i, true);   // select AND frame — see selectFlowStep
     else go({ kind: 'usecase', uc });   // step missing from the narrative — open its flow
   }));

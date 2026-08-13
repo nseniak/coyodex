@@ -1829,6 +1829,31 @@ def test_the_tab_sits_with_the_behavioural_views_and_scrolls() -> None:
     assert '<section class="dv-content">' in body and "dv-panes" not in body
 
 
+def test_a_step_chip_is_numbered_by_POSITION_the_way_the_diagram_is() -> None:
+    """The chip said "step 6" and landed on "Step 18 / 24". `(container, n)` is a step's IDENTITY,
+    but a sub-flow's steps are spliced into every referencing flow keeping their OWN numbering — on
+    this repo's map UC9's narrative runs 1..24 over authored ns `[1,2,3,1,2,3,4,…]`. Every other
+    surface counts positions, so the chip must too. ONE lookup labels the chip AND acts on it, so
+    the number a reader clicks and the step they land on cannot disagree."""
+    body = _js_function("renderRules")
+    assert "flowStepIndex(l.uc, l.container, l.n)" in body
+    assert "step ${i + 1}" in body
+    assert "data-i=" in body and "data-n=" not in body     # the click reads the resolved index
+    lookup = _js_function("flowStepIndex")
+    assert "(st.sf || uc) === container" in lookup          # identity is (container, n), not (uc, n)
+
+
+def test_the_two_views_number_steps_differently_on_purpose() -> None:
+    """The markdown does NOT expand sub-flows — T6 renders the reference step inline and T6b lists
+    the sub-flow under its own numbering — so the authored `n` is the number ITS reader can look
+    up. Making the two agree would break one of them."""
+    m = make_checkable_model()
+    m.subflows = [SubFlow(id="SF1", name="Owner check", steps=[
+        FlowStep(n=7, src="C1", dst="E1", phrase="checks", where="src/guard.py:3")])]
+    m.flows[0].steps = [FlowStep(n=1, src="C1", dst="C1", phrase="runs it", subflow="SF1")]
+    assert "→ SF1 step 7" in t7_section(m)                  # the AUTHORED n, matching T6b
+
+
 def test_an_enforced_at_pill_selects_and_frames_the_step_in_the_flow() -> None:
     """`selectFlowStep(uc, i, frame)` — the same landing an impact row uses, so the arrow lights up
     and its pane opens; restoring a flow SNAPSHOT only moved the counter. `frame` adds the

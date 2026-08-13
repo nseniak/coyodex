@@ -259,8 +259,15 @@ does not have.
 | The decision | heading (the rule's statement, in product language) | |
 | access / sweep debt / unverified / confidence | badges | |
 | Site | *line — component(s)*, one row per enforcement site | the line opens the code viewer; a component chip locates it in its structural diagram |
-| Enforced at | step chips: *use case* step *n* (with the sub-flow's id when the step was authored in one) | opens that use case's flow |
+| Enforced at | step chips: *use case* step *position* (with the sub-flow's NAME when the step was authored in one) | selects and frames that step in the use case's flow |
 | Touches | entity chips, only where a reached step names the entity | locates the entity's card |
+
+The step number on a chip is the step's **position in the rendered flow** — the number the arrow
+badge and the step counter show — not the authored `n` the JSON carries. A sub-flow's steps are
+spliced into every referencing flow keeping their own numbering, so one flow's narrative can run
+1..24 over authored numbers like `1,2,3,1,2,3,4,…`. The markdown view numbers by the authored `n`
+instead, and is right to: it does not expand sub-flows, so `UC9 → SF50 step 4` is a lookup its
+reader can follow in T6b.
 
 Three site states, and the difference between them is the whole point:
 
