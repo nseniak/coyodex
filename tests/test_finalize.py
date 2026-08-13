@@ -419,3 +419,32 @@ def test_a_record_with_no_numbers_at_all_is_not_called_stale():
         p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g", "grounding": {}}),
                      encoding="utf-8")
         assert _stale_grounding_pin(p, ["a", "b"]) is None
+
+
+def test_the_shape_line_names_the_access_surface():
+    """The commit states the map's shape, and the access surface is part of it. Before the T7 fold
+    the only mention of auth here was `len(m.security)`, gated on `if m.security:` — which the fold
+    empties, so two real builds committed shapes that said nothing about 47 and 44 access rules."""
+    root, p = make_repo()
+    doc = json.loads(p.read_text())
+    doc["rules"] = [
+        {"id": "BR1", "statement": "Only an owner may cancel.", "access": True,
+         "risk": "anyone could cancel", "sites": [{"where": "a.py:1", "why": "rejects"}]},
+        {"id": "BR2", "statement": "A refund is capped at the paid amount.",
+         "sites": [{"where": "b.py:2", "why": "clamps"}]}]
+    p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    report = finalize.build_report(p, root, [])
+    block = finalize.gate_block(report, report.map_sha256)
+    assert "2 business rules" in block, block
+    assert "(1 access)" in block, block
+
+
+def test_the_shape_line_says_nothing_about_access_when_there_is_none():
+    """A map with no access rule must not gain an empty `(0 access)` clause."""
+    root, p = make_repo()
+    doc = json.loads(p.read_text())
+    doc["rules"] = [{"id": "BR1", "statement": "A refund is capped.",
+                     "sites": [{"where": "b.py:2", "why": "clamps"}]}]
+    p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    report = finalize.build_report(p, root, [])
+    assert "access)" not in finalize.gate_block(report, report.map_sha256)

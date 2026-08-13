@@ -37,7 +37,7 @@ from coyodex.anchor_drift import (apply_drift_exceptions, drift_findings, drift_
                                   load_verdicts)
 from coyodex.audit_model import (EDGE_CLAIM as _EDGE_CLAIM, apply_anchor_corrections,
                                  l2_worklist_model, security_claim as _security_claim)
-from coyodex.model import ProjectModel
+from coyodex.model import ProjectModel, access_rules
 from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
 
 #: The listing's display text for an edge carrying no anchor. Never a value to RECORD.
@@ -325,8 +325,59 @@ def _anchors_to_reconcile(rec_path: Path, corrections: list[tuple[str, str]],
 # (coyodex.reconcile) so the two drop paths reconcile flow steps identically.
 
 
+def _drop_edge_to_reconcile(map_path: Path, rec_path: Path, src: str, verb: str, dst: str,
+                            repoint: str | None, drop_steps: bool) -> int:
+    """Record the drop as a `drop_edges` directive instead of editing the assembled map.
+
+    The edge is verified against the map first — a directive naming an edge that is not there is the
+    `reconcile --dry-run` failure one level down, and `drop_edges` only WARNS on a 0-match at
+    assemble time so it would rot silently."""
+    m, _present = _load(map_path)
+    if not any(e.src == src and e.verb.strip().lower() == verb and e.dst == dst for e in m.edges):
+        print(f"ERROR: no edge '{src} {verb} {dst}' found", file=sys.stderr)
+        return 1
+    doc: dict[str, object] = {}
+    if rec_path.exists():
+        try:
+            loaded = json.loads(rec_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            print(f"ERROR: cannot read {rec_path}: {e}", file=sys.stderr)
+            return 2
+        if not isinstance(loaded, dict):
+            print(f"ERROR: {rec_path} is not a reconcile object", file=sys.stderr)
+            return 2
+        doc = loaded
+    raw = doc.get("drop_edges")
+    drops: list[dict[str, object]] = list(raw) if isinstance(raw, list) else []
+    entry: dict[str, object] = {"src": src, "verb": verb, "dst": dst}
+    if repoint:
+        entry["repoint"] = repoint
+    if drop_steps:
+        entry["drop_steps"] = True
+    already = [d for d in drops if isinstance(d, dict)
+               and (d.get("src"), str(d.get("verb", "")).lower(), d.get("dst")) == (src, verb, dst)]
+    if already:
+        for d in already:
+            d.update(entry)
+        verb_word = "updated"
+    else:
+        drops.append(entry)
+        verb_word = "recorded"
+    doc["drop_edges"] = drops
+    rec_path.parent.mkdir(parents=True, exist_ok=True)
+    # indent=2 + ensure_ascii=False, matching the other two writers of this file.
+    rec_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    riding = riding_steps(m, src, dst)
+    print(f"drop-edge: {verb_word} the drop of '{src} {verb} {dst}' in {rec_path} — the MAP was not "
+          f"edited. Re-run `assemble … --reconcile {rec_path}` to apply it.")
+    if riding and not (repoint or drop_steps):
+        print(f"  {len(riding)} flow step(s) ride this edge; assemble will report them. Add "
+              f"--repoint <newDst> or --drop-steps to heal them in the same directive.")
+    return 0
+
+
 def drop_edge(argv: list[str]) -> int:
-    map_path = new_dst = None
+    map_path = new_dst = to_reconcile = None
     drop_steps = False
     positionals: list[str] = []
     i = 0
@@ -338,6 +389,9 @@ def drop_edge(argv: list[str]) -> int:
         elif a == "--repoint":
             i += 1
             new_dst = _need(argv, i, a)
+        elif a == "--to-reconcile":
+            i += 1
+            to_reconcile = _need(argv, i, a)
         elif a == "--drop-steps":
             drop_steps = True
         elif a.startswith("-"):
@@ -348,12 +402,19 @@ def drop_edge(argv: list[str]) -> int:
         i += 1
     if not map_path or len(positionals) != 3:
         print("ERROR: usage: fix drop-edge --map <map> <src> <verb> <dst> "
-              "[--drop-steps | --repoint <newDst>]", file=sys.stderr)
+              "[--drop-steps | --repoint <newDst>] [--to-reconcile <file>]", file=sys.stderr)
         return 2
     if drop_steps and new_dst:
         print("ERROR: --drop-steps and --repoint are mutually exclusive", file=sys.stderr)
         return 2
     src, verb, dst = positionals[0], positionals[1].lower(), positionals[2]
+    if to_reconcile:
+        # DURABLE form. Without it a refuted edge had to be re-dropped by hand after every assemble
+        # — the drop is re-derived from the fragments each time — and one real build hand-wrote the
+        # same drop three times plus two hand-rolled riding-step scans. `drop_edges` is already a
+        # first-class reconcile directive; this is the writer it never had.
+        return _drop_edge_to_reconcile(Path(map_path), Path(to_reconcile),
+                                       src, verb, dst, new_dst, drop_steps)
     m, _present = _load(Path(map_path))
     if _refuse_fragment_drop(_present, Path(map_path)):
         return 2
@@ -772,7 +833,18 @@ def security_row(argv: list[str]) -> int:
         return 2
     m, present = _load(Path(map_path))
     if not m.security:
+        # A post-T7 map has NO `security[]` by design — an auth surface is a business rule with
+        # `access: true`. Saying only "no security rows" reads as "nothing to do" on a map whose
+        # access surface is 47 rules, and method.md routed refuted access surfaces here for two
+        # releases after the fold. Name the real destination instead of exiting quietly.
         print("security-row: this map holds no security rows.")
+        if access_rules(m):
+            print(f"  It carries {len(access_rules(m))} `access: true` business rule(s) instead — "
+                  f"the T7 fold made an auth surface a RULE, and `security[]` is legacy storage.")
+            print("  A rule's statement / why / risk / access is fixed in its OWNING T7 FRAGMENT, "
+                  "then re-assembled; there is no `fix` verb for it.")
+            print("  A rule SITE whose line moved is `coyodex fix apply-drift` — a site is a "
+                  "claim-shaped, drift-eligible anchor like any other.")
         return 0
     selectors = {"--claim": claim, "--surface": surface, "--at": at}
     given = {k: v for k, v in selectors.items() if v is not None}
@@ -949,6 +1021,11 @@ def dedup_security(argv: list[str]) -> int:
                 print(f"      · {m.security[i2].surface}")
     if not dups:
         print("dedup-security: no security surface is authored more than once.")
+        if not m.security and access_rules(m):
+            print(f"  This map holds no `security[]` rows at all — its access surface is "
+                  f"{len(access_rules(m))} `access: true` business rule(s) (T7).")
+            print("  Two fragments that harvested one auth check are fused in the FRAGMENT: one "
+                  "decision enforced in several places is ONE `access` rule with several sites.")
         return 0
     if not keeps and not accept_suggested:
         print(f"{len(dups)} security surface(s) authored more than once. Keep one anchor per "
@@ -1074,8 +1151,13 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       shortest-path.
 
   drop-edge --map <map> <src> <verb> <dst> [--drop-steps | --repoint <newDst>]
+                [--to-reconcile <file>]
       Remove a refuted backbone edge. By default it REPORTS the flow steps that rode it (for a
       hand reconcile); --drop-steps removes them, --repoint <newDst> re-points them.
+      --to-reconcile writes the drop as a `drop_edges` directive instead of editing the map, so a
+      re-assemble re-applies it (the edge is re-derived from the fragments otherwise, and an
+      in-place drop has to be redone after every assemble). The edge is verified against the map
+      when the directive is written, because `drop_edges` only WARNS on a 0-match at assemble time.
 
   dedup-relation --map <map> [--drop <En:verb:Em> ...]
       With no --drop, LIST the blocking "declared on both cards" / "declared twice" domain-card
@@ -1103,10 +1185,10 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       Rows that are byte-identical are not a choice — one is kept. Rows sharing surface AND anchor
       but differing in `who`/`risk` ARE a choice, and are refused: use `security-row`.
 
-NOTE — `security-row` and `dedup-security` edit the ASSEMBLED map and have no `--to-reconcile`
-form, so their edit is DISCARDED by the next `assemble` (every write prints that warning). Run them
-after the last assemble, or make the same change in the owning fragment. `apply-drift` is the one
-verb here with a durable form.
+NOTE — `security-row`, `dedup-security` and `dedup-relation` edit the ASSEMBLED map and have no
+`--to-reconcile` form, so their edit is DISCARDED by the next `assemble` (every write prints that
+warning). Run them after the last assemble, or make the same change in the owning fragment. The
+verbs with a durable form are `apply-drift`, `dedup-edge` and `drop-edge`.
 
 After any fix, re-run the invariant: validate --check-sources → audit → render."""
 

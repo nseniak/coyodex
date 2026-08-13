@@ -53,6 +53,7 @@ from coyodex.model import (
     Dep,
     Entity,
     ProjectModel,
+    UseCase,
     load_model_path,
 )
 from coyodex.pathmatch import matches
@@ -60,14 +61,20 @@ from coyodex.pathmatch import matches
 _DEFAULT_MAP = ".coyodex/project-map.json"
 _DEFAULT_RECONCILE = ".coyodex/reconcile.json"
 
-# field → the element type it may be set on (mirrors reconcile._SET_FIELD_OWNER, which validates
-# the emitted file again at assemble time — this is the early, friendlier report).
+# field → the element type it may be set on. MIRRORS `reconcile._SET_FIELD_OWNER`, which validates
+# the emitted file again at assemble time — this is the early, friendlier report. The comment used
+# to claim that and be false: `capability` and `entry_points` were consumer-only, so the generator
+# rejected the one assignment the method prescribes for a use case, and two real builds hand-wrote
+# their reconcile file and shipped `entry_points: []` on EVERY use case (43 of 43, 40 of 40).
+# `test_the_generator_accepts_every_field_the_consumer_sets` now holds the two dicts together.
 _FIELD_OWNER: dict[str, type] = {
     "subsystem": Component,
     "runs_in": Component,
     "subdomain": Entity,
     "bucket": Dep,
     "block": BusinessRule,
+    "capability": UseCase,
+    "entry_points": UseCase,
 }
 
 
@@ -76,7 +83,13 @@ class RuleError(Exception):
 
 
 def _elements(m: ProjectModel) -> list[object]:
-    return [*m.components, *m.entities, *m.deps, *m.rules]
+    """Every element a rule may target. `m.use_cases` was missing, so even once `capability` and
+    `entry_points` are legal fields there is nothing to assign them to.
+
+    NOTE for authors: a `UseCase` has no `source`, so `_source_of` returns "" for one and a
+    `source_glob` rule can never match it. `capability` / `entry_points` rules are addressed by
+    `ids` in practice."""
+    return [*m.components, *m.entities, *m.deps, *m.rules, *m.use_cases]
 
 
 def _source_of(el: object) -> str:

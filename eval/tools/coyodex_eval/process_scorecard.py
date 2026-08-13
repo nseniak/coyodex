@@ -152,8 +152,46 @@ class Scorecard:
 
 #: A heredoc body — `<<'EOF' … EOF` or `<<EOF … EOF`. Its contents are DATA, not shell.
 _HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1.*?^\s*\2\s*$", re.S | re.M)
-#: A quoted span that crosses a newline: the body of `python3 -c "…"`. Also data, not shell.
-_MULTILINE_QUOTE = re.compile(r"(['\"])(?:(?!\1).)*?\n(?:(?!\1).)*?\1", re.S)
+
+
+def _strip_multiline_quotes(text: str) -> str:
+    """The text with quoted spans that genuinely CROSS A NEWLINE replaced by a space — the body of
+    `python3 -c "…"`, which is data, not shell.
+
+    Quotes are paired by ALTERNATION: scan left to right, and each quote closes against the next
+    occurrence of the same character. That is the whole fix. The regex this replaced
+    (`(['"])(?:(?!\1).)*?\n(?:(?!\1).)*?\1`) was free to SKIP a quote to find a newline-crossing
+    pair, so it married a CLOSING quote to the next OPENING one and deleted every command in
+    between. The measured cost on a real build: the bash-array idiom
+
+        V=(); for f in …; do V+=(--verdicts "$f"); done
+        $CX grounding write --map … "${V[@]}" --note "…"
+
+    pairs the `"` that closes `"$f"` with the `"` that opens `"${V[@]}"`, swallowing the whole
+    `$CX grounding write` line. Every `grounding write` in both measured builds was invisible, which
+    is why assertions 12, 13 and 30 reported `n/a` over runs that did the thing.
+
+    An odd-quote-count-per-line guard was considered and rejected: it inherits the bad pairing and
+    only filters on top, so it destroys real invocations whenever a note contains an apostrophe
+    (`"…the walk's first WRITE…"` pairs with the `'` in a later `sed -n '1,12p'`). Against both real
+    corpora this scanner is a strict SUPERSET of both the old regex and that variant — it finds every
+    invocation they find, plus 29 (build A) / 22 (build B) more, with no false positives."""
+    out: list[str] = []
+    i, n = 0, len(text)
+    while i < n:
+        ch = text[i]
+        if ch in "\"'":
+            close = text.find(ch, i + 1)
+            if close == -1:                      # unbalanced: the rest is not a closed span
+                out.append(text[i:])
+                break
+            span = text[i:close + 1]
+            out.append(" " if "\n" in span else span)
+            i = close + 1
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
 
 
 def _shell_only(command: str) -> str:
@@ -167,7 +205,7 @@ def _shell_only(command: str) -> str:
     them — `ToolCall.text()` returns the whole input — but nothing that asks 'was this command RUN'
     may look inside them."""
     without_heredoc = _HEREDOC.sub(" ", command)
-    return _MULTILINE_QUOTE.sub(" ", without_heredoc)
+    return _strip_multiline_quotes(without_heredoc)
 
 
 def _segments(command: str) -> list[str]:
@@ -183,6 +221,12 @@ def _segments(command: str) -> list[str]:
 _COYODEX_SUBCOMMANDS = frozenset({
     "preindex", "validate", "audit", "render", "serve", "assemble", "lint-fragment",
     "anchor-drift", "fix", "dump", "reconcile", "balance", "provenance",
+    # Added after two builds scored `n/a` on assertions 12, 13 and 30 over runs that DID the work:
+    # every measured build writes its record as `$CX grounding write …`, and an alias form is only
+    # recognised for a name on this list. `finalize` and `record` were missing for the same reason.
+    # `scope` and `archive` are deliberately NOT here: neither appears behind an alias anywhere in
+    # either corpus, so they would add match surface for two generic words and recover nothing.
+    "grounding", "finalize", "record",
 })
 
 
@@ -250,8 +294,12 @@ def _is_skeptic(call: ToolCall) -> bool:
 
 
 def _at_least_once(count: int) -> tuple[int, int]:
-    """`observed / of` for a 'did this happen at all' assertion: the target is one."""
-    return count, 1
+    """`observed / of` for a 'did this happen at all' assertion: the target is one.
+
+    CLAMPED. Unclamped this printed `2/1` on a real build (assertion 5, two qualifying fan-outs) —
+    a scorecard line that reads as 200% of its own target. `Assertion.score` already caps the ratio
+    at 1.0, so only the printed counts were ever wrong, but the counts are what a reader diffs."""
+    return min(count, 1), 1
 
 
 def _escape_tokens(warning: str) -> tuple[str, ...]:
@@ -1219,6 +1267,15 @@ class ScoreContext:
     #: The advisory TEXTS the committed map produces, for assertions that ask what KIND of advisory
     #: shipped rather than how many. Empty when no map was given or it could not be read.
     map_warning_lines: tuple[str, ...] = ()
+    #: The map's ACCESS SURFACE — `access: true` business rules, which the T7 fold made the single
+    #: home for auth. Read from the model rather than matched out of advisory prose, so these two
+    #: assertions do not break when an advisory is reworded. None when no map was given.
+    access_rules: int | None = None
+    #: How many of those state a `risk`. method.md requires one; two consecutive real builds shipped
+    #: 47 and 44 access rules with NOT ONE between them.
+    access_rules_with_risk: int | None = None
+    #: Whether the map records `security-granularity`. The two readings differ ~5x on the same code.
+    granularity_recorded: bool | None = None
 
 
 def read_score_context(map_path: str | Path | None) -> ScoreContext:
@@ -1234,18 +1291,28 @@ def read_score_context(map_path: str | Path | None) -> ScoreContext:
     g = doc.get("grounding") if isinstance(doc, dict) else None
     warnings: int | None = None
     lines: tuple[str, ...] = ()
+    access: int | None = None
+    with_risk: int | None = None
+    granularity: bool | None = None
     try:
-        from coyodex.model import load_model
-        from coyodex.validate_model import validate_model
-        _problems, warns = validate_model(load_model(p.read_text(encoding="utf-8")))
+        from coyodex.model import access_rules as _access_rules, load_model
+        from coyodex.validate_model import recorded_security_granularity, validate_model
+        model = load_model(p.read_text(encoding="utf-8"))
+        _problems, warns = validate_model(model)
         warnings = len(warns)
         lines = tuple(str(w) for w in warns)
+        rules = _access_rules(model)
+        access = len(rules)
+        with_risk = sum(1 for r in rules if (r.risk or "").strip())
+        granularity = recorded_security_granularity(model) is not None
     except BaseException:
-        # The scorecard is never a gate: an unreadable or schema-invalid map degrades this one
-        # assertion to n/a rather than failing the run.
+        # The scorecard is never a gate: an unreadable or schema-invalid map degrades these
+        # assertions to n/a rather than failing the run.
         warnings = None
     return ScoreContext(map_path=p, grounding=g if isinstance(g, dict) else {},
-                        map_warnings=warnings, map_warning_lines=lines)
+                        map_warnings=warnings, map_warning_lines=lines,
+                        access_rules=access, access_rules_with_risk=with_risk,
+                        granularity_recorded=granularity)
 
 
 
@@ -1900,6 +1967,50 @@ def assert_31_harvest_briefs_cite_the_behavioral_draft(turns: Sequence[Turn]) ->
                                             "citing": len(cited)}),))
 
 
+def assert_32_every_access_rule_states_its_risk(_turns: Sequence[Turn],
+                                               ctx: "ScoreContext") -> Assertion:
+    """32 — every `access: true` rule states what is at stake as its `risk`.
+
+    The T7 fold made an auth surface a business rule. The 130 security rows one map carried before
+    the fold ALL had a populated risk; the two first builds after it shipped 47 and 44 access rules
+    with NOT ONE risk between them, and the rendered Security & auth table's Risk column was blank on
+    every row. method.md:487 requires it. Nothing watched it, in the tool or in this scorecard, which
+    is how a whole column went empty across two repos without a number moving.
+
+    Subject is the committed MAP, not the run — `n/a` when the map carries no access surface."""
+    total, with_risk = ctx.access_rules, ctx.access_rules_with_risk
+    if not total or with_risk is None:
+        return Assertion(32, "every access rule states its risk", 0, 0, (),
+                         "no access rule in the committed map (or no --map given)")
+    return Assertion(32, "every access rule states its risk", with_risk, total, (),
+                     f"{total - with_risk} of {total} access rule(s) have an empty `risk`"
+                     if with_risk < total else f"all {total} access rule(s) state a risk")
+
+
+def assert_33_access_granularity_is_recorded(_turns: Sequence[Turn],
+                                             ctx: "ScoreContext") -> Assertion:
+    """33 — a map with an access surface records the granularity it chose.
+
+    One row per surface FAMILY and one per endpoint-and-condition are both defensible and differ ~5x
+    in row count on the same code, so without the record a later reader cannot tell a re-scoped
+    surface from a lost one. method.md requires it in bold. The safeguard that echoed it was gated on
+    `if m.security:` — which the fold empties — so it went dead exactly when the surface moved, and
+    neither of the two builds after the fold recorded anything.
+
+    The REPORT's version of this assertion watched for a CHANGE in the access-rule count with no new
+    record. That needs the previous map, and the scorecard is given exactly one — assertion 29 exists
+    to enforce that a from-scratch build never reads the map it replaces. This measures the weaker
+    fact that is actually available, and both measured builds fail it."""
+    if not ctx.access_rules or ctx.granularity_recorded is None:
+        return Assertion(33, "access granularity recorded", 0, 0, (),
+                         "no access rule in the committed map (or no --map given)")
+    ok = 1 if ctx.granularity_recorded else 0
+    return Assertion(33, "access granularity recorded", ok, 1, (),
+                     f"{ctx.access_rules} access rule(s) and "
+                     + ("a recorded `security-granularity`" if ok
+                        else "NO `security-granularity` record"))
+
+
 ASSERTIONS = (
     assert_1_preindex_report_used,
     assert_2_preindex_not_hand_parsed,
@@ -1929,6 +2040,8 @@ ASSERTIONS = (
     assert_29_previous_map_not_read_during_the_build,
     assert_30_grounding_write_follows_the_drift_fix,
     assert_31_harvest_briefs_cite_the_behavioral_draft,
+    assert_32_every_access_rule_states_its_risk,
+    assert_33_access_granularity_is_recorded,
 )
 
 
@@ -1943,7 +2056,9 @@ def score_turns(turns: Sequence[Turn], *, transcript: str = "", label: str = "",
     # scorecard that needs the repo cannot score an archived corpus transcript.
     # The context-taking assertions: their subject is the committed MAP, not the run.
     _needs_ctx = {assert_6_grounding_recorded, assert_23_the_build_saw_the_whole_gate,
-                  assert_24_no_inert_recorded_exception}
+                  assert_24_no_inert_recorded_exception,
+                  assert_32_every_access_rule_states_its_risk,
+                  assert_33_access_granularity_is_recorded}
     assertions = tuple(fn(turns, ctx) if fn in _needs_ctx else fn(turns)  # type: ignore[operator]
                        for fn in ASSERTIONS)
     return Scorecard(transcript=transcript, turns=len(turns), assertions=assertions,

@@ -837,3 +837,73 @@ def test_two_corrections_targeting_the_same_element_are_skipped_not_ordered():
     assert counts["edge"] == 0
     assert m.edges[0].where == "a.py:1"
     assert any("accident of order" in n for n in notes)
+
+
+# --- drop-edge --to-reconcile ---------------------------------------------------
+
+def test_drop_edge_to_reconcile_records_the_drop_and_leaves_the_map_alone():
+    """The durable form `drop-edge` never had. A fragment-level drop is re-derived by the next
+    assemble, so an in-place drop has to be redone after every one — one real build hand-wrote the
+    same drop three times. `drop_edges` was already a first-class reconcile directive; only the
+    writer was missing."""
+    m = make_map([{"src": "C1", "verb": "calls", "dst": "E1", "where": "a.py:10"}])
+    with tempfile.TemporaryDirectory() as td:
+        mp, _ = write(td, m)
+        rc = str(Path(td) / "reconcile.json")
+        assert fix.drop_edge(["--map", mp, "C1", "calls", "E1", "--to-reconcile", rc]) == 0
+        doc = json.loads(Path(rc).read_text(encoding="utf-8"))
+        assert doc["drop_edges"] == [{"src": "C1", "verb": "calls", "dst": "E1"}], doc
+        assert len(load_model_path(mp).edges) == 1, "the MAP must not be edited"
+
+
+def test_drop_edge_to_reconcile_refuses_an_edge_the_map_does_not_have():
+    """`drop_edges` only WARNS on a 0-match at assemble time, so a directive naming a missing edge
+    would rot silently. It is verified against the map when it is written instead."""
+    m = make_map([{"src": "C1", "verb": "calls", "dst": "E1", "where": "a.py:10"}])
+    with tempfile.TemporaryDirectory() as td:
+        mp, _ = write(td, m)
+        rc = str(Path(td) / "reconcile.json")
+        assert fix.drop_edge(["--map", mp, "C1", "reads", "E2", "--to-reconcile", rc]) == 1
+        assert not Path(rc).exists(), "nothing may be written for an edge that is not there"
+
+
+def test_drop_edge_to_reconcile_updates_rather_than_duplicating():
+    """Re-running with a heal must not leave two directives for one edge, which assemble would apply
+    twice."""
+    m = make_map([{"src": "C1", "verb": "calls", "dst": "E1", "where": "a.py:10"}])
+    with tempfile.TemporaryDirectory() as td:
+        mp, _ = write(td, m)
+        rc = str(Path(td) / "reconcile.json")
+        fix.drop_edge(["--map", mp, "C1", "calls", "E1", "--to-reconcile", rc])
+        fix.drop_edge(["--map", mp, "C1", "calls", "E1", "--to-reconcile", rc, "--drop-steps"])
+        doc = json.loads(Path(rc).read_text(encoding="utf-8"))
+        assert len(doc["drop_edges"]) == 1, doc
+        assert doc["drop_edges"][0]["drop_steps"] is True
+
+
+def test_drop_edge_to_reconcile_emits_a_directive_the_real_loader_accepts():
+    """The file is input to `assemble --reconcile`, so it must load through the real parser — the
+    `reconcile --dry-run` class of defect is a writer emitting something the consumer rejects."""
+    from coyodex.reconcile import load_reconcile
+    m = make_map([{"src": "C1", "verb": "calls", "dst": "E1", "where": "a.py:10"}])
+    with tempfile.TemporaryDirectory() as td:
+        mp, _ = write(td, m)
+        rc = str(Path(td) / "reconcile.json")
+        fix.drop_edge(["--map", mp, "C1", "calls", "E1", "--to-reconcile", rc, "--repoint", "E2"])
+        doc = load_reconcile(Path(rc).read_text(encoding="utf-8"), "reconcile.json")
+        assert [(d.src, d.verb, d.dst, d.repoint) for d in doc.drop_edges] == [
+            ("C1", "calls", "E1", "E2")]
+
+
+def test_drop_edge_to_reconcile_preserves_directives_another_writer_left():
+    """Three commands write this one file; a writer that clobbered the others would silently undo an
+    anchor correction."""
+    m = make_map([{"src": "C1", "verb": "calls", "dst": "E1", "where": "a.py:10"}])
+    with tempfile.TemporaryDirectory() as td:
+        mp, _ = write(td, m)
+        rc = Path(td) / "reconcile.json"
+        rc.write_text(json.dumps({"set": [{"ids": ["C1"], "subsystem": "S1"}]}), encoding="utf-8")
+        fix.drop_edge(["--map", mp, "C1", "calls", "E1", "--to-reconcile", str(rc)])
+        doc = json.loads(rc.read_text(encoding="utf-8"))
+        assert doc["set"] == [{"ids": ["C1"], "subsystem": "S1"}], doc
+        assert len(doc["drop_edges"]) == 1

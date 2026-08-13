@@ -1590,6 +1590,20 @@ def test_the_fanout_names_access_as_an_authored_field() -> None:
     assert '"access"' in block and "who may do what" in block.lower()
 
 
+def test_the_fanout_names_risk_as_an_authored_field() -> None:
+    """The same gap `access` has a pin for, one field over — and the one that actually shipped.
+
+    The skeleton showed five keys and called them "the WHOLE authored surface", with no `risk`. Two
+    consecutive real builds then shipped 47 and 44 access rules with NOT ONE risk between them: the
+    block agents were OBEYING the method. Three detectors now advise on the absence, so the prompt
+    that causes it has to name the field or every future build collects the complaint it was told to
+    earn."""
+    block = t7_fanout_block()
+    assert '"risk"' in block, "the T7 rule skeleton must show `risk`, or no block agent authors one"
+    assert "at stake" in block.lower()
+    assert "five keys" not in block.lower(), "the key count must match the skeleton it describes"
+
+
 def test_the_exit_criterion_does_not_reward_anchoring_the_steps_line() -> None:
     """The criterion is "the worklist is empty", and a step's `where` is the CALLER's line while
     the decision lives in the callee — so requiring an anchor link would make it reachable only by

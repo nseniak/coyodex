@@ -1289,6 +1289,7 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   { "rules": [ { "id": "BR1",
                  "statement": "<ONE decision, product language, naming no component>",
                  "access": false,
+                 "risk": "<what is AT STAKE if this decision is wrong or absent>",
                  "confidence": "verified",
                  "sites": [ { "where": "path/to/file.py:88",
                               "why": "<what this line does FOR the rule>",
@@ -1296,8 +1297,12 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   ```
 
   `access` is `true` when the rule governs WHO MAY DO WHAT; `confidence` is `verified` (read in the
-  code) or `inferred` (deduced). Those five keys are the WHOLE authored surface — the full field
-  semantics are in `method/model.md`. **`block` is NOT in the fragment** (see below).
+  code) or `inferred` (deduced). **`risk` is REQUIRED on an `access` rule** — it is the one thing a
+  `security[]` row carried that a statement, a site and a `why` between them cannot say: not what the
+  line does, but what its LIMIT costs. The Security & auth table renders it as its own column, and
+  `lint-fragment` advises on an `access` rule that leaves it empty. Those six keys are the WHOLE
+  authored surface — the full field semantics are in `method/model.md`.
+  **`block` is NOT in the fragment** (see below).
   The agent writes `«repo»/.coyodex/build-fragments/«agent-id».json` itself and returns that path
   plus a one-line inventory, under the same rule as every other fragment (never inline it).
   **`access` matters beyond display**: it is what makes a rule part of the auth surface the eval
@@ -1400,8 +1405,11 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   that reads a field the schema renamed. **`dump` also reads a build FRAGMENT**, so use it during
   Phases 1-3 too instead of scripting over `build-fragments/*.json`.) **Batch on the payload's own
   `theme`** — every worklist item carries one from a closed, most-dangerous-first set (`security`,
-  `dep-usage`, `ownership`, `persistence`, `messaging`, `lifecycle`, `cadence`, `backbone`) and
-  `theme_counts` gives you each group's size, so the batches fall out of the data instead of being
+  `rule`, `dep-usage`, `ownership`, `persistence`, `messaging`, `lifecycle`, `cadence`, `backbone`)
+  and **`security` holds every `access: true` rule site** as well as the `enforces`/`encrypts` edges,
+  so the batch that sorts first really is the access-control batch — send the multi-skeptic majority
+  vote there. (A rule site that is NOT an access rule carries `rule`.) `theme_counts` gives you
+  each group's size, so the batches fall out of the data instead of being
   guessed. A live build read this payload, found no field to group by, and fell back to sequential
   chunks of 40 in worklist order. **Batch by theme/risk,
   don't spawn one sub-agent per claim** — the worklist routinely has 100+ items; group the claims into
@@ -1554,10 +1562,15 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   the tool, never a hand script:** `coyodex anchor-drift … --json` emits the corrected anchors and
   `coyodex fix apply-drift --map … --verdicts …` writes them, matching each on the full `(src, verb,
   dst)` triple — a hand script that keyed on endpoints-only once swapped a paired `persists`/`reads`
-  edge. `apply-drift` rewrites a drifted **security-surface** anchor (`security[].source`) the same way,
-  so a skeptic's corrected auth-check line lands with the tool, not a hand re-serialize. To drop a
+  edge. `apply-drift` rewrites a drifted **rule SITE** anchor the same way, so a skeptic's corrected
+  auth-check line lands with the tool, not a hand re-serialize. (It also still rewrites a legacy
+  `security[].source`. **`fix security-row` and `fix dedup-security` act on `security[]` only**, which
+  the T7 fold leaves empty — on a map built with the current method they print "no security rows" and
+  exit 0, so a rule's TEXT is fixed in its fragment, not with a verb.) To drop a
   **refuted** edge as a terminal post-assemble fix, `coyodex fix drop-edge` removes it and reports (or,
-  with `--repoint`/`--drop-steps`, heals) the flow steps that rode it. Reconcile every refutation and
+  with `--repoint`/`--drop-steps`, heals) the flow steps that rode it; **`--to-reconcile <file>`
+  records the drop as a `drop_edges` directive instead of editing the map**, which is what makes it
+  survive the next assemble. Reconcile every refutation and
   every drift (fix the map, or justify and record why); this reconcile is **not delegated**.
 
   **EVERY skeptic outcome has a destination, and the one without a tool is the one that gets lost.**
@@ -1568,12 +1581,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   | --- | --- |
   | refuted, an edge | `coyodex fix drop-edge` (or repoint) |
   | refuted, an anchor moved | `coyodex fix apply-drift` |
-  | refuted, a security surface's TEXT is wrong ("that line guards nothing, the real gate is X") | `coyodex fix security-row --claim <exact claim> --set-surface/--set-risk/--set-source` |
-  | two fragments harvested one auth check | `coyodex fix dedup-security` |
+  | refuted, an ACCESS rule's TEXT is wrong ("that line guards nothing, the real gate is X") | fix the owning T7 fragment's rule (`statement` / `why` / `risk` / `access`) and re-assemble — there is no `fix` verb for a rule's text |
+  | refuted, an access rule's SITE is wrong (the enforcement line moved) | `coyodex fix apply-drift` — a rule site is a claim-shaped, drift-eligible anchor like any other |
+  | two fragments harvested one auth check | fuse them in the fragment: one decision enforced in several places is ONE `access` rule with several sites |
   | **true, but your note / list / transition is wrong** | fix the fragment, or `coyodex record` the decision — it is NOT a refutation and no counter will miss it |
   | unverifiable | the `unverifiable` verdict, and a line in `grounding.note` |
 
-  The fifth row is the one that disappears. On a live build three of those — an incomplete
+  The *true, but your note / list / transition is wrong* row is the one that disappears. On a live build three of those — an incomplete
   messaging publisher list, a wrong state transition, a store note naming a field that is never
   stored — were read, agreed with, and then reached neither the map nor any record, because
   "confirmed" was treated as "nothing to do". The verdict counts cannot witness this: all three
@@ -1632,7 +1646,9 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   - **Where each reconcile lives — reconcile file vs `fix` verbs.** Build-time drop/dedup (a
     cross-agent duplicate edge, a refuted edge you decide during synthesis/trace) belongs in the
     **`--reconcile` file** (`drop_edges`) or the fragments, so a re-assemble re-applies it — do NOT
-    reach for `fix drop-edge` there, its edit is discarded by the next assemble. The `fix` verbs are the
+    reach for a bare `fix drop-edge` there, its edit is discarded by the next assemble (
+    `fix drop-edge --to-reconcile <file>` writes the same drop as a `drop_edges` directive, which is
+    not). The `fix` verbs are the
     **post-assemble anchor-drift** tool only (`apply-drift` for drifted edge/security anchors,
     `drop-edge` for a refuted edge found in Phase 4 after the final assemble). One rule: assignment and
     drop that must survive a rebuild → reconcile file; a terminal anchor fix after the last assemble →

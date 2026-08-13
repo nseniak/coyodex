@@ -46,6 +46,7 @@ from coyodex.model import (
     ID_ARRAYS,
     ID_SHAPE,
     BusinessRule,
+    access_rules,
     Dep,
     Entity,
     EntryPoint,
@@ -1155,6 +1156,20 @@ def check_rules_model(m: ProjectModel,
             "one rule per anchor is a failure even when every rule verifies. Fuse them, or record "
             "'<BLKn>: <why this area really is one decision per site>' under a 'Balance exceptions' "
             "extras heading")
+
+    # GRANULARITY OF THE ACCESS SURFACE. method.md requires the choice be recorded, "precisely
+    # because the two readings differ ~5x on the same code" — one row per surface FAMILY versus one
+    # per endpoint-and-condition. The safeguard that echoed it was gated on `if m.security:` and the
+    # fold empties that, so it went dead exactly when the surface moved: two real builds recorded
+    # nothing and nothing asked them to. Advisory, and only when the map HAS an access surface — a
+    # map with no access rules has no choice to declare.
+    if access_rules(m) and not recorded_security_granularity(m):
+        warnings.append(
+            f"{len(access_rules(m))} `access: true` rule(s) and no granularity record — one rule per "
+            "surface FAMILY and one per endpoint-and-condition are both defensible and differ ~5x in "
+            "row count on the same code, so a later reader cannot tell a re-scoped surface from a "
+            "lost one. Record 'security-granularity: <family | endpoint-and-condition> — <why>' "
+            "under a 'Balance exceptions' extras heading")
 
     debt, silenced = _sweep_debt_split(m, extents)
     if debt:
@@ -4075,9 +4090,17 @@ def _inventory(m: ProjectModel) -> str:
               "C": len(m.components), "D": len(m.deps), "SD": len(m.subdomains),
               "E": len(m.entities)}
     out = ", ".join(f"{k}:{v}" for k, v in sorted(counts.items()) if v)
-    if m.security:
+    # The access surface is read from `rules[access]`, NOT `security[]`. The T7 fold made an auth
+    # surface a business rule and left `security[]` empty by design, so this whole block was dead
+    # code on every post-fold map: two real builds carrying 47 and 44 access rules printed no access
+    # count and no granularity state at all.
+    access = access_rules(m)
+    if access or m.security:
         gran = recorded_security_granularity(m)
-        out += f", security:{len(m.security)}"
+        if access:
+            out += f", access:{len(access)}"
+        if m.security:
+            out += f", security:{len(m.security)} (legacy)"
         out += f" (granularity: {gran})" if gran else " (granularity NOT recorded)"
     return out
 

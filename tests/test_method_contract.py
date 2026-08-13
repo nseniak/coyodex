@@ -997,6 +997,32 @@ def test_every_scoped_runs_in_literal_appears_in_the_method_prose():
         f"build cannot record an escape it has never been told about")
 
 
+def test_every_worklist_theme_is_named_in_the_method():
+    """The method tells a build to batch Phase 4 on `theme`, so the closed set it prints must be the
+    set the tool emits. It was not: `rule` was added to `_THEMES` by the T7 fold and `method.md` went
+    on listing eight themes for two releases, so a lead batching by the method's list had no bucket
+    for the decision layer. Nothing caught it — the flag audit checks commands and flags, not the
+    vocabulary the payload carries."""
+    from coyodex.audit_model import _THEMES
+    prose = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
+    marker = "closed, most-dangerous-first set ("
+    at = prose.find(marker)
+    assert at != -1, f"method.md no longer introduces the theme set with {marker!r}"
+    # Read the PARENTHESISED LIST ONLY. Two weaker versions of this test both passed while the list
+    # was missing `rule`: a document-wide substring check (every theme name is also an ordinary word
+    # somewhere in method.md) and a whole-paragraph check (the prose right after the list explains
+    # what `rule` means, which is enough to satisfy the search). The list is the thing under
+    # contract, so the list is what gets read.
+    open_at = at + len(marker) - 1
+    close_at = prose.find(")", open_at)
+    assert close_at != -1, "the theme set's parenthesis is never closed"
+    listing = prose[open_at:close_at + 1]
+    missing = [t for t in _THEMES if f"`{t}`" not in listing]
+    assert not missing, (
+        f"worklist theme(s) the tool emits but the method's printed set omits: {missing} — a build "
+        f"told to batch on `theme` cannot bucket a value it has never been shown")
+
+
 def test_the_method_no_longer_teaches_the_bare_runs_in_escape():
     """It silences nothing now, and a doc that still prescribes it costs a build an advisory plus
     the turns spent working out why the record did not take."""

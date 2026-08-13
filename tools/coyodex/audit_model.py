@@ -720,6 +720,13 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
             claim=security_claim(s.surface, s.source),
             anchor=_anchor(s.source), theme="security",
             why_risky="security boundary — a false claim here is an access-control hole."))
+    # An `access: true` rule IS an auth surface — that is what the T7 fold made it — so its sites
+    # carry the `security` theme and are ordered with the other security claims. Before this, every
+    # rule site was themed `rule` and `m.security` was empty by design, so the theme the audit orders
+    # FIRST was permanently empty and "the riskiest batch" meant only "the batch that sorted first".
+    # Measured on two real builds: one sent its three-skeptic majority vote to a batch holding 6
+    # access claims of 40 while two 40/40 batches got a single skeptic each.
+    access_items: list[WorkItem] = []
     rule_items: list[WorkItem] = []
     if m.rules:
         from coyodex.validate_model import component_file_owners   # same circular-import exception
@@ -729,11 +736,15 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
                 where = (site.where or "").strip()
                 if not where:
                     continue    # a declared absence claims no line — nothing for a skeptic to read
-                rule_items.append(WorkItem(
+                target = access_items if br.access else rule_items
+                target.append(WorkItem(
                     claim=rule_site_claim(br.statement, where, site.why),
-                    anchor=_anchor(where), theme="rule", drift_eligible=True,
+                    anchor=_anchor(where),
+                    theme="security" if br.access else "rule", drift_eligible=True,
                     detail=_rule_site_detail(m, site, owners),
-                    why_risky=("a product DECISION and the line that enforces it — a false claim "
+                    why_risky=("an ACCESS decision and the line that enforces it — a false claim "
+                               "here is an access-control hole.") if br.access else
+                              ("a product DECISION and the line that enforces it — a false claim "
                                "here reads as a fact about the business, and the map's decision "
                                "layer is the part a reader trusts most.")))
     dep_items: list[WorkItem] = []
@@ -771,6 +782,10 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
     # `items`. Emitting it where the rules are built (before that loop) interleaves
     # security · rule · security and breaks the `_THEMES` declared-order == emission-order contract.
     # Same reason `dep_items` is collected and extended rather than appended in place.
+    # `access_items` are `security`-themed, so they must land BEFORE the `rule` tier for the same
+    # reason: appending them where they are built would interleave the two themes. On the two real
+    # maps that mistake produces 24 and 22 alternating security/rule groups.
+    items.extend(access_items)
     items.extend(rule_items)
     items.extend(dep_items)
     items.extend(entity_items)

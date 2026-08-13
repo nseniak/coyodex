@@ -127,6 +127,10 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
                      "block": "BLKn|null",   // assigned by the LEAD after the rule fan-out, via
                                              // `coyodex reconcile` — never in a fragment
                      "access": false,                          // governs WHO MAY DO WHAT
+                     "risk": "<what is AT STAKE if this decision is wrong or absent>",
+                                             // REQUIRED on an `access` rule: the Security & auth
+                                             // table renders it, and `lint-fragment` advises when
+                                             // an access rule leaves it empty
                      "sites": [ { "where": "<the OPERATIVE path:line|null>", "why",
                                   "no_call_site": false } ],   // where the decision is ENFORCED
                      "confidence" } ],

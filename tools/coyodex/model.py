@@ -933,6 +933,17 @@ def _reject_legacy_store(data: object) -> None:
                 "text. Rebuild the map with the current method, or migrate the row.")
 
 
+def access_rules(m: ProjectModel) -> list[BusinessRule]:
+    """The map's ACCESS SURFACES — the rules the T7 fold made the single home for auth.
+
+    One reader, because "what is this map's access surface" is now asked in five places (the audit's
+    theme routing, validate's inventory, its granularity advisory, finalize's shape line and the
+    rendered Security & auth table) and it was being re-derived at each of them. `security[]` is
+    legacy storage and is NOT counted here: a map built before the fold still renders its rows, but
+    the surface a new map states is its access rules."""
+    return [r for r in m.rules if r.access]
+
+
 def load_model(text: str) -> ProjectModel:
     """Parse + structurally validate a project-map.json document. Raises ModelError on any shape
     violation (bad JSON, wrong type, unknown field, missing required field, wrong id prefix)."""

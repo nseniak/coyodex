@@ -289,3 +289,36 @@ def test_an_enum_card_is_exempt_from_the_fields_rule():
 def test_a_meaning_less_card_fails_the_fragment_lint():
     m = make_fragment({"entities": [make_card(meaning="")]})
     assert any("missing a MEANING" in p for p in lint_fragment.lint_fragment_problems(m, None))
+
+
+def make_access_rule_fragment(risk: str = "") -> dict:
+    """One `access: true` rule with an anchored operative site — the shape a T7 block agent writes."""
+    return {"rules": [{"id": "BR1", "statement": "Only a signed-in user may read a ticket.",
+                       "access": True, "risk": risk,
+                       "sites": [{"where": "src/auth/gate.py:22",
+                                  "why": "rejects an anonymous caller"}]}]}
+
+
+def test_an_access_rule_with_no_risk_is_advised():
+    """method.md requires an auth surface to state what is at stake as its `risk`, and before the T7
+    fold every security row carried one. After it, two consecutive real builds shipped maps where NOT
+    ONE access rule of 47 and 44 had a risk — the rendered Security & auth table's Risk column was
+    blank on every row — and no gate anywhere said so."""
+    warnings = lint_fragment.lint_fragment_warnings(make_fragment(make_access_rule_fragment()))
+    hits = [w for w in warnings if "empty `risk`" in w]
+    assert len(hits) == 1, warnings
+    assert "BR1" in hits[0]
+
+
+def test_an_access_rule_that_states_its_risk_is_not_advised():
+    warnings = lint_fragment.lint_fragment_warnings(
+        make_fragment(make_access_rule_fragment(risk="anyone could read any ticket")))
+    assert not [w for w in warnings if "empty `risk`" in w], warnings
+
+
+def test_a_non_access_rule_with_no_risk_is_not_advised():
+    """`risk` is required of an ACCESS surface, not of every business rule — advising on all of them
+    would fire on the whole decision layer of every map."""
+    frag = make_access_rule_fragment()
+    frag["rules"][0]["access"] = False
+    assert not [w for w in lint_fragment.lint_fragment_warnings(make_fragment(frag)) if "empty `risk`" in w]

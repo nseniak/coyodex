@@ -44,7 +44,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from coyodex.model import ModelError, load_model_path
+from coyodex.model import ModelError, access_rules, load_model_path
 
 #: Where the durable record goes, next to the map it describes.
 REPORT_STEM = "finalize-report"
@@ -390,6 +390,10 @@ def _shape_line(map_path: Path) -> str:
             f"{len(m.use_cases)} use cases, {len(m.edges)} edges, {flows} flows/sub-flows, "
             f"{len(m.entry_points)} entry points, {len(m.rules)} business rules in "
             f"{len(m.blocks)} blocks"
+            # The access surface is part of the shape a commit states. It was invisible here for the
+            # same reason it was invisible in validate's inventory: the only mention of auth was
+            # gated on `security[]`, which the fold empties.
+            + (f" ({len(access_rules(m))} access)" if access_rules(m) else "")
             + (f", {len(m.security)} LEGACY security rows" if m.security else "") + ".")
 
 

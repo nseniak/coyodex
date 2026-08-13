@@ -88,7 +88,15 @@ def make_all_theme_model() -> ProjectModel:
     m.blocks = [Group(id="BLK1", name="Access", purpose="who may act")]
     m.rules = [BusinessRule(id="BR1", statement="Only an owner may cancel.", block="BLK1",
                             sites=[RuleSite(where="src/a.py:13",
-                                            why="rejects a non-owner")])]           # rule
+                                            why="rejects a non-owner")]),          # rule
+               # An ACCESS rule, so the order pin is not vacuous on the security tier. Without one,
+               # every rule in this fixture was `access=False`, the tier under test emitted nothing
+               # security-themed, and a change routing access sites to `security` in the WRONG place
+               # (interleaving security · rule · security) still passed.
+               BusinessRule(id="BR2", statement="Only a signed-in user may read a ticket.",
+                            block="BLK1", access=True, risk="anyone could read any ticket",
+                            sites=[RuleSite(where="src/auth/gate.py:22",
+                                            why="rejects an anonymous caller")])]  # security
     return m
 
 def make_precedence_map(bad: bool = True, create_verb: str = "persists") -> str:
@@ -1788,6 +1796,38 @@ def test_positional_why_ref_silently_retargets_when_the_walk_is_renumbered():
                   ("HP3", "UC2", "needs the org from UC1")])
     assert audit_model.check_why_refs(by_uc) == []
     assert audit_model.happy_path_steps(by_uc)[2].why_uc_refs == ["UC1"]
+
+
+def test_an_access_rule_site_is_a_security_claim_not_a_rule_claim():
+    """The T7 fold made an auth surface a business rule with `access: true`, but the worklist kept
+    theming every rule site `rule`. With `m.security` empty by design, that left the theme the audit
+    orders FIRST permanently empty, so Phase 4's "most dangerous first" was ordering, not risk — on
+    one real build the three-skeptic majority went to a batch holding 6 access claims of 40 while two
+    40/40 batches got one skeptic each."""
+    m = make_all_theme_model()
+    items = audit_model.l2_worklist_model(m)
+    by_theme = {}
+    for it in items:
+        by_theme.setdefault(it.theme, []).append(it)
+    access_claims = [i.claim for i in by_theme.get("security", [])]
+    assert any("signed-in user" in c for c in access_claims), \
+        "an `access: true` rule site must be a SECURITY claim"
+    assert all("signed-in user" not in i.claim for i in by_theme.get("rule", [])), \
+        "an access rule site must not ALSO be emitted as a plain rule claim"
+    assert any("owner may cancel" in i.claim for i in by_theme.get("rule", [])), \
+        "a non-access rule site must still be a `rule` claim"
+
+
+def test_access_and_rule_tiers_do_not_interleave():
+    """Access sites are `security`-themed, so they must be extended BEFORE the `rule` tier. Appending
+    them where they are built interleaves security · rule · security and silently breaks the
+    declared-order == emission-order contract — on the two real maps that mistake produces 24 and 22
+    alternating groups instead of one of each."""
+    import itertools
+    m = make_all_theme_model()
+    themes = [i.theme for i in audit_model.l2_worklist_model(m)]
+    groups = [t for t, _ in itertools.groupby(themes)]
+    assert len(groups) == len(set(themes)), f"themes are not contiguous: {groups}"
 
 
 def test_themes_are_closed_and_match_the_worklist_order():

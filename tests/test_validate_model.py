@@ -37,11 +37,13 @@ from coyodex.model import (
     GlossaryRow,
     HappyStep,
     Group,
+    BusinessRule,
     ExtraSection,
     MessagingRow,
     NonEntityType,
     ProjectModel,
     Role,
+    RuleSite,
     SecurityRow,
     StateMachine,
     StateTransition,
@@ -53,6 +55,7 @@ from coyodex.model import (
 )
 from coyodex.validate_model import (
     _anchor_pairs,
+    _inventory,
     _inheritance_runs_in_warnings,
     check_anchor_existence_model,
     check_domain_coverage_model,
@@ -3279,3 +3282,53 @@ def test_two_surfaces_sharing_one_anchor_are_not_a_duplicate():
         [{"surface": "Admin pages", "source": "ui/Sidebar.tsx:97"},
          {"surface": "Role-gated navigation", "source": "ui/Sidebar.tsx:97"}])))
     assert validate_model_mod.duplicate_security_warnings(m) == []
+
+
+# --- the access surface: read from rules[access], not the emptied security[] ------------
+
+def make_model_with_access_rules(n: int = 2) -> ProjectModel:
+    """A valid map carrying `n` access rules and no `security[]` — the shape EVERY map built since
+    the T7 fold has, and the shape both real 2026-08-12 builds shipped."""
+    m = make_valid_model()
+    m.rules = [BusinessRule(id=f"BR{i + 1}", statement=f"Only an owner may act ({i + 1}).",
+                            access=True, risk="privilege escalation",
+                            sites=[RuleSite(where=f"src/a.py:{10 + i}", why="rejects a non-owner")])
+               for i in range(n)]
+    return m
+
+
+def test_the_inventory_reports_the_access_surface_from_the_rules():
+    """The inventory's access line was gated on `if m.security:`, which the T7 fold empties — so on a
+    post-fold map it printed nothing at all. Two real builds carrying 47 and 44 access rules showed
+    no access count and no granularity state."""
+    line = _inventory(make_model_with_access_rules(3))
+    assert "access:3" in line, line
+    assert "granularity NOT recorded" in line, line
+
+
+def test_the_inventory_says_nothing_about_access_when_the_map_has_none():
+    assert "access:" not in _inventory(make_valid_model())
+
+
+def test_access_rules_with_no_recorded_granularity_are_advised():
+    """method.md requires the granularity choice be recorded, because one row per surface FAMILY and
+    one per endpoint-and-condition differ ~5x on the same code. The safeguard that echoed it was dead
+    code post-fold, and neither real build recorded anything."""
+    hits = [w for w in warnings_of(make_model_with_access_rules())
+            if "no granularity record" in w]
+    assert len(hits) == 1, hits
+    assert "security-granularity" in hits[0] and "Balance exceptions" in hits[0]
+
+
+def test_a_recorded_granularity_silences_the_advisory():
+    """The escape the message names must actually work, or the advisory re-fires forever and gets
+    waved through — the failure the method names in its own words."""
+    m = make_model_with_access_rules()
+    m.extras = [ExtraSection(heading="Balance exceptions",
+                             body="security-granularity: family — one row per surface family.")]
+    assert not [w for w in warnings_of(m) if "no granularity record" in w]
+
+
+def test_a_map_with_no_access_rules_is_not_asked_for_a_granularity():
+    """A map with no access surface has no choice to declare, so the advisory must stay quiet."""
+    assert not [w for w in warnings_of(make_valid_model()) if "no granularity record" in w]

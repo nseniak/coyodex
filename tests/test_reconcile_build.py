@@ -16,7 +16,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex.model import Component, Dep, DeploymentRow, Entity, Group, ProjectModel
+from coyodex.model import (BusinessRule, Component, Dep, DeploymentRow, Entity, Group,
+                           ProjectModel, RuleSite, UseCase)
 from coyodex.reconcile_build import RuleError, coverage_report, expand, load_rules
 
 
@@ -508,3 +509,51 @@ def test_reconcile_carries_forward_directives_it_does_not_author(tmp_path):
     assert doc["set_anchors"] == [{"claim": "C1 reads E1", "corrected": "a.py:9"}]
     assert len(doc["keep_edges"]) == 1
     assert doc["set"]                      # and the regenerated assignments are there too
+
+
+# --------------------------------------------------------------------------------------
+# generator ↔ consumer parity
+# --------------------------------------------------------------------------------------
+
+def test_the_generator_accepts_every_field_the_consumer_sets():
+    """The test `_FIELD_OWNER`'s comment has claimed for two releases and never had.
+
+    The generator listed 5 fields; the consumer `reconcile._SET_FIELD_OWNER` accepts 7. The two extra
+    ones — `capability` and `entry_points` — are exactly what the method prescribes for a use case,
+    so `coyodex reconcile --rules` could not express the assignment it exists to express. Two real
+    builds hand-worked around it and both shipped `entry_points: []` on EVERY use case (43 of 43 on
+    one, 40 of 40 on the other). A drift in either direction is a command that cannot say what the
+    method asks for, or a file that assembles and silently drops a field."""
+    from coyodex.reconcile import _SET_FIELD_OWNER
+    from coyodex.reconcile_build import _FIELD_OWNER
+    consumer = {field: owner for field, (owner, _label) in _SET_FIELD_OWNER.items()}
+    missing = sorted(set(consumer) - set(_FIELD_OWNER))
+    extra = sorted(set(_FIELD_OWNER) - set(consumer))
+    assert not missing, f"field(s) the consumer sets that `reconcile --rules` cannot emit: {missing}"
+    assert not extra, f"field(s) the generator emits that the consumer would reject: {extra}"
+    mismatched = sorted(f for f in _FIELD_OWNER if _FIELD_OWNER[f] is not consumer[f])
+    assert not mismatched, f"field(s) the two dicts disagree about the owner of: {mismatched}"
+
+
+def test_every_owner_type_the_generator_knows_is_reachable_in_a_map():
+    """`_FIELD_OWNER` naming a type that `_elements()` never yields is the same defect one level
+    down: the field validates, matches nothing, and reports "matched NOTHING" forever. `m.use_cases`
+    was missing while `capability`/`entry_points` were being added."""
+    from coyodex.reconcile_build import _FIELD_OWNER, _elements
+    m = make_map()
+    m.use_cases = [UseCase(id="UC1", name="Do it")]
+    m.rules = [BusinessRule(id="BR1", statement="Only an owner may cancel.",
+                            sites=[RuleSite(where="app/plugins/a.py:9", why="rejects a non-owner")])]
+    reachable = {type(el) for el in _elements(m)}
+    unreachable = sorted({t.__name__ for t in _FIELD_OWNER.values()} - {t.__name__ for t in reachable})
+    assert not unreachable, (
+        f"element type(s) a rule may target that `_elements()` never yields: {unreachable}")
+
+
+def test_a_use_case_can_be_assigned_its_entry_points_by_id():
+    """End to end: the assignment the method prescribes, through the real generator."""
+    m = make_map()
+    m.use_cases = [UseCase(id="UC1", name="Do it")]
+    doc, report = expand(m, [{"ids": ["UC1"], "entry_points": ["EP1", "EP2"]}])
+    assert doc["set"] == [{"ids": ["UC1"], "entry_points": ["EP1", "EP2"]}], doc
+    assert any("1 element(s)" in line for line in report), report

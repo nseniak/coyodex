@@ -531,7 +531,12 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # `coyodex record`, a from-scratch rebuild reading the map it replaced, `grounding write` run
     # before the drift fix it had to be measured after, and harvest briefs that cite no behavioral
     # id (the load-bearing version of 22's ordering proxy).
-    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25, *range(26, 32)], ids
+    # 32 and 33 came from the merged 2026-08-13 retrospective of the first two builds to exercise
+    # the T7 security fold: an access rule with no `risk`, and an access surface with no recorded
+    # granularity. Both read the committed MAP rather than the run. A third proposed there — an
+    # access-count CHANGE with no new record — is deliberately absent: it needs the PREVIOUS map,
+    # and the scorecard is given exactly one.
+    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25, *range(26, 34)], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
     assert len(ids) == len(set(ids))
 
@@ -974,6 +979,151 @@ def test_21_still_flags_an_unhealed_count_in_a_captured_digest():
                        results=(("a", "model: C:66 | ops: UNHEALED riding steps 4"),)),)
     a = P.assert_21_final_assemble_digest_is_clean(turns)
     assert (a.observed, a.of) == (0, 1), a
+
+
+def test_a_did_it_happen_assertion_never_prints_more_than_its_target():
+    """Assertion 5 printed `2/1` on a real build — a line reading as 200% of its own target. The
+    ratio was already capped, so only the printed counts were wrong, and the counts are what a
+    reader diffs between runs."""
+    assert P._at_least_once(0) == (0, 1)
+    assert P._at_least_once(1) == (1, 1)
+    assert P._at_least_once(7) == (1, 1)
+
+
+def make_access_ctx(total: int, with_risk: int, granularity: bool) -> "P.ScoreContext":
+    return P.ScoreContext(access_rules=total, access_rules_with_risk=with_risk,
+                          granularity_recorded=granularity)
+
+
+def test_32_flags_access_rules_with_no_risk():
+    """Both real builds after the T7 fold shipped every access rule with an empty `risk`."""
+    a = P.assert_32_every_access_rule_states_its_risk((), make_access_ctx(47, 0, False))
+    assert (a.observed, a.of) == (0, 47), a
+
+
+def test_32_passes_when_every_access_rule_states_a_risk():
+    a = P.assert_32_every_access_rule_states_its_risk((), make_access_ctx(3, 3, True))
+    assert (a.observed, a.of) == (3, 3), a
+
+
+def test_32_is_na_when_the_map_has_no_access_surface():
+    """A map with no access rule has no risk to state — scoring it 0 would accuse every map that
+    happens not to enforce anything."""
+    a = P.assert_32_every_access_rule_states_its_risk((), make_access_ctx(0, 0, False))
+    assert a.of == 0, a
+
+
+def test_32_is_na_without_a_map():
+    assert P.assert_32_every_access_rule_states_its_risk((), P.ScoreContext()).of == 0
+
+
+def test_33_flags_an_access_surface_with_no_recorded_granularity():
+    """The two readings differ ~5x on the same code, so an unrecorded choice makes a re-scoped
+    surface indistinguishable from a lost one."""
+    a = P.assert_33_access_granularity_is_recorded((), make_access_ctx(44, 44, False))
+    assert (a.observed, a.of) == (0, 1), a
+    assert "NO `security-granularity`" in (a.note or "")
+
+
+def test_33_passes_on_a_recorded_granularity():
+    a = P.assert_33_access_granularity_is_recorded((), make_access_ctx(44, 44, True))
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_33_is_na_when_the_map_has_no_access_surface():
+    assert P.assert_33_access_granularity_is_recorded((), make_access_ctx(0, 0, False)).of == 0
+
+
+def test_a_grounding_write_behind_a_bash_array_is_visible():
+    """The M1 regression, in the exact shape both measured builds wrote.
+
+    VERBATIM from build A (mcpolis, session 62051a80), the command that wrote its grounding record.
+    Two bugs hid it and BOTH are needed to see it: the `"` closing `"$f"` paired with the `"` opening
+    `"${V[@]}"` and deleted the `$CX grounding write` line between them, and `grounding` was missing
+    from the alias allowlist. While it was invisible, assertions 12, 13 and 30 scored `n/a` on a run
+    that had done the work, and 13 turned out to be a REAL failure once it could be seen.
+    """
+    cmd = ('cd /Users/nitsanseniak/mee6/repos/mcpolis\n'
+           'CX=/Users/nitsanseniak/Projects/coyodex/.venv/bin/coyodex\n'
+           'V=(); for f in .coyodex/verify/verdicts-*.json; do V+=(--verdicts "$f"); done\n'
+           '$CX grounding write --worklist .coyodex/verify/worklist.json '
+           '--map .coyodex/project-map.json "${V[@]}" \\\n'
+           '  --note "Complete pass over the pinned worklist."\n')
+    assert P._invokes(cmd, "grounding"), "the bash-array idiom must not hide `grounding write`"
+    assert "$CX grounding write" in P._shell_only(cmd)
+
+
+def test_an_apostrophe_in_a_note_does_not_delete_the_next_command():
+    """Build A turn 241, reduced: a `record --line` note containing `walk's`, then a real audit run.
+
+    The apostrophe is INSIDE a double-quoted note, so it opens nothing. Pairing quotes by alternation
+    keeps the `$CX audit` line; a rule that instead asks whether the note's own line holds an odd
+    number of `'` marries that apostrophe to the `'` in `sed -n '1,12p'` two lines down and deletes
+    the audit invocation in between. That variant was measured against this corpus and rejected.
+    """
+    cmd = ('CX=/x/coyodex\n'
+           '$CX record --map f.json --heading "Audit exceptions" '
+           '--line "the walk\'s first WRITE of that entity" >/dev/null\n'
+           '$CX audit .coyodex/project-map.json > /tmp/audit-2.txt 2>&1\n'
+           "sed -n '1,12p' /tmp/audit-2.txt\n")
+    assert P._invokes(cmd, "audit"), "an apostrophe in a note must not delete the next command"
+    assert P._invokes(cmd, "record")
+
+
+def test_a_command_named_inside_a_multi_line_python_body_is_not_counted():
+    """The over-count `_shell_only` exists to prevent — and the ONLY test that proves the stripping
+    still happens.
+
+    The mention has to sit at the START of a line inside the quoted body, because that is the only
+    shape the rest of the pipeline cannot already reject: `_segments` splits on newlines, so such a
+    line becomes a segment whose head really is `coyodex audit`. Two earlier versions of this test
+    put the mention inside `print('coyodex audit')`, which the segment-start rule blocks on its own —
+    they passed with the stripping replaced by an identity function, and so did the whole suite.
+    """
+    body = ('$CX assemble f.json\n'
+            'python3 -c "\n'
+            'import json\n'
+            'coyodex audit m.json\n'
+            '"\n')
+    assert P._invokes(body, "assemble"), "the real command before the body must survive"
+    assert not P._invokes(body, "audit"), "a line INSIDE a python body is not an invocation"
+    assert "coyodex audit" not in P._shell_only(body)
+
+    single = ("$COY dump $MAP | python3 -c '\n"
+              "import sys\n"
+              "coyodex validate m.json\n"
+              "'\n")
+    assert P._invokes(single, "dump"), "the real command before a single-quoted body must survive"
+    assert not P._invokes(single, "validate")
+
+
+def test_a_heredoc_body_is_not_read_as_shell():
+    """The sibling stripper, pinned for the same reason: a `<<'PY'` body naming a command reads as an
+    invocation without it. This was a real over-count — three shape-only anchor-drift runs reported
+    across the corpus where one had happened."""
+    cmd = ("$CX validate m.json\n"
+           "python3 - <<'PY'\n"
+           "coyodex anchor-drift --map m.json\n"
+           "PY\n")
+    assert P._invokes(cmd, "validate")
+    assert not P._invokes(cmd, "anchor-drift")
+
+
+def test_an_unbalanced_quote_does_not_swallow_the_rest_of_the_command():
+    """A lone quote closes nothing, so the scanner emits the tail rather than dropping it. Nothing in
+    either real corpus has an unbalanced quote, so this guards a path the corpus cannot reach."""
+    cmd = '$CX audit m.json --json\necho "unterminated\n'
+    assert P._invokes(cmd, "audit")
+    assert "audit" in P._shell_only(cmd)
+
+
+def test_the_scorecard_allowlist_carries_the_names_the_builds_actually_alias():
+    """`grounding`, `finalize` and `record` are aliased in the measured builds; adding them is what
+    makes assertions 12/13/30 readable. `scope` and `archive` are deliberately absent — neither
+    appears behind an alias anywhere in either corpus, so listing two generic words would add match
+    surface for nothing."""
+    assert {"grounding", "finalize", "record"} <= set(P._COYODEX_SUBCOMMANDS)
+    assert not ({"scope", "archive"} & set(P._COYODEX_SUBCOMMANDS))
 
 
 def test_the_subcommand_allowlist_matches_both_clis():

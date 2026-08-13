@@ -345,6 +345,9 @@ class MapFacts:
     rows: int
     sections: int
     claims_total: int = 0
+    #: How many of `claims_total` a skeptic actually read. Falls back to `claims_total` for a map
+    #: written before the field existed.
+    claims_challenged: int = 0
     claims_refuted: int = 0
     claims_unverifiable: int = 0
 
@@ -364,8 +367,15 @@ def read_map(path: Path) -> MapFacts | None:
         value = grounding.get(key)
         return value if isinstance(value, int) else 0
 
+    # `claims_total` is the SIZE OF THE WORKLIST; `claims_challenged` is how many a skeptic actually
+    # read. On a complete pass they are equal, which is why reading the wrong one went unnoticed —
+    # on a PARTIAL pass they are not, and the refutation rate the method tells you to read was
+    # divided by the wrong denominator: one real build printed 6/1385 = 0.4% for a rate that is
+    # 6/743 = 0.8%.
     return MapFacts(rows=sum(len(v) for v in lists.values()), sections=len(lists),
-                    claims_total=n("claims_total"), claims_refuted=n("claims_refuted"),
+                    claims_total=n("claims_total"),
+                    claims_challenged=n("claims_challenged") or n("claims_total"),
+                    claims_refuted=n("claims_refuted"),
                     claims_unverifiable=n("claims_unverifiable"))
 
 
@@ -585,11 +595,15 @@ def format_report(report: Report) -> str:
                      f"  (in {m['sections']} sections)")
         lines.append(f"  cost per row                        {report.per_row['cost']:>12.4f}")
         lines.append(f"  seconds per row                     {report.per_row['seconds']:>12.2f}")
-        if m["claims_total"]:
-            rate = 100 * m["claims_refuted"] / m["claims_total"]
+        challenged = m.get("claims_challenged") or m["claims_total"]
+        if challenged:
+            rate = 100 * m["claims_refuted"] / challenged
+            partial = ("" if challenged == m["claims_total"]
+                       else f" of {m['claims_total']:,} on the worklist")
             lines.append(f"  claims challenged / refuted         "
-                         f"{m['claims_total']:>7,} / {m['claims_refuted']:<4}"
-                         f"  ({rate:.1f}% refuted, {m['claims_unverifiable']} unverifiable)")
+                         f"{challenged:>7,} / {m['claims_refuted']:<4}"
+                         f"  ({rate:.1f}% refuted, {m['claims_unverifiable']} unverifiable"
+                         f"{partial})")
     return "\n".join(lines)
 
 

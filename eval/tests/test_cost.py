@@ -364,3 +364,32 @@ if __name__ == "__main__":
     import sys
     import pytest
     sys.exit(pytest.main([__file__, "-q"]))
+
+
+def test_the_refutation_rate_is_divided_by_what_was_actually_challenged(tmp_path):
+    """`claims_total` is the size of the WORKLIST; `claims_challenged` is how many a skeptic read.
+
+    They are equal on a complete pass, which is why reading the wrong one survived: one real build's
+    1.26% was right by luck. On a PARTIAL pass they are not — the other real build has 743 challenged
+    of 1,385, and the rate the method tells you to read was printed as 0.4% for a true 0.8%."""
+    from pathlib import Path
+    from dataclasses import asdict
+    from coyodex_eval.cost import read_map
+    p = tmp_path / "m.json"
+    p.write_text(json.dumps({"title": "t", "goal": "g", "grounding": {
+        "claims_total": 1385, "claims_challenged": 743,
+        "claims_refuted": 6, "claims_unverifiable": 0}}), encoding="utf-8")
+    facts = asdict(read_map(Path(p)))
+    assert facts["claims_challenged"] == 743, facts
+    assert 100 * facts["claims_refuted"] / facts["claims_challenged"] > 0.8
+
+
+def test_a_map_without_the_challenged_field_falls_back_to_the_total(tmp_path):
+    """Maps written before the field existed must still report a rate rather than a divide-by-zero."""
+    from pathlib import Path
+    from dataclasses import asdict
+    from coyodex_eval.cost import read_map
+    p = tmp_path / "m.json"
+    p.write_text(json.dumps({"title": "t", "goal": "g", "grounding": {
+        "claims_total": 500, "claims_refuted": 5}}), encoding="utf-8")
+    assert asdict(read_map(Path(p)))["claims_challenged"] == 500

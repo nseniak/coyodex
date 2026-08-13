@@ -15,7 +15,7 @@ from pathlib import Path
 
 from coyodex import grammar
 from coyodex.assemble import load_fragment
-from coyodex.model import ID_SHAPE, ModelError, ProjectModel, all_elements
+from coyodex.model import ID_SHAPE, ModelError, ProjectModel, access_rules, all_elements
 from coyodex.validate_model import (
     _cadence_row_warnings,
     _check_activations,
@@ -193,6 +193,24 @@ def _legacy_security_warnings(m: ProjectModel) -> list[str]:
             "the legacy storage, kept only so a map built before the fold still renders."]
 
 
+def _access_rule_risk_warnings(m: ProjectModel) -> list[str]:
+    """Advisory: an `access: true` rule with no `risk`.
+
+    method.md requires an auth surface to state "what is at stake as its `risk`", and before the fold
+    every security row carried one. After it, two consecutive real builds shipped maps where NOT ONE
+    rule of 69 and 96 had a risk — the rendered Security & auth table's Risk column was blank on
+    every row — and nothing anywhere said so. Advisory rather than blocking, because a fragment
+    author can legitimately be mid-draft, and because failing the lint on a pre-fold map's rules
+    would block a rebuild that is otherwise improving the map."""
+    naked = [r.id for r in access_rules(m) if not (r.risk or "").strip()]
+    if not naked:
+        return []
+    return [f"{len(naked)} `access: true` rule(s) with an empty `risk`: {', '.join(naked[:12])}"
+            + (" …" if len(naked) > 12 else "")
+            + " — an auth surface must say what is at stake if it fails. The Security & auth table "
+              "renders `risk` as its own column, so an empty one ships as a blank cell."]
+
+
 def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     """Advisory (non-blocking) findings for one fragment — the domain-relation *warnings* (the
     field-less-association nudge, the by-name-FK hint) and the use-case *granularity* signals
@@ -221,7 +239,9 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     # answerable now, and the cross-fragment case (the common one) still surfaces at validate.
     return (warnings + _granularity_warnings(m) + roleless_cd_verb_warnings(m)
             + _check_entry_kinds(m) + _cadence_row_warnings(m) + subflow_refcount_warnings(m)
-            + duplicate_security_warnings(m) + confidence_warnings(m))
+            + duplicate_security_warnings(m) + confidence_warnings(m)
+            # Row-local: one rule's own `risk`, answerable by the block agent that wrote it.
+            + _access_rule_risk_warnings(m))
 
 
 # DELIBERATELY ABSENT: a per-fragment nudge about the entry-point per-kind COMPLETENESS statement.
