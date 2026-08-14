@@ -258,6 +258,23 @@ def test_a4_wants_the_shape_only_pass_not_the_verdicts_one():
     assert (verdicts.observed, verdicts.score) == (0, 0.0)
 
 
+def test_a4_counts_the_pass_finalize_runs_for_you():
+    """`coyodex finalize` RUNS the shape-only pass itself, always, and prints it under its own
+    heading. Counting only a bare `anchor-drift` scored 0 on two consecutive builds whose finalize
+    reports both read `## anchor-drift (shape-only) — no drifted anchors`; the assertion was
+    measuring the spelling, not the floor, and L3-DESIGN.md said "nothing yet shows it is reached"
+    on the strength of it."""
+    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . > /tmp/f.txt")))[4]
+    assert (a.observed, a.score) == (1, 1.0), a
+    assert "finalize" in a.note
+
+
+def test_a4_counts_finalize_even_with_verdicts():
+    """`--verdicts` ADDS the verdict-based leg to finalize; it does not replace the shape-only one."""
+    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . --verdicts v.json")))[4]
+    assert (a.observed, a.score) == (1, 1.0), a
+
+
 def test_a5_scores_a_batched_skeptic_fanout_and_zero_when_none_launched():
     batched = score(make_turn(0, make_agent("You are a fresh-context SKEPTIC. Disprove:", "Skeptic 1"),
                               make_agent("You are a fresh-context SKEPTIC. Disprove:", "Skeptic 2")))[5]
@@ -796,6 +813,80 @@ def test_an_aliased_binary_is_counted_but_prose_is_not():
     found = coyodex_subcommands(turns)
     assert (7, "audit") in found
     assert [n for _i, n in found] == ["audit"], found
+
+
+def test_a_quoted_alias_is_counted():
+    """`"$CY" record …` is the CAREFUL spelling — a build reached for it because the unquoted form
+    had just been word-split by zsh — and the pattern did not match it. Forty-two successful
+    `record` calls went missing while the ONE the table reported was the earlier failed attempt, and
+    a retrospective read `record 1` off that table."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(224, make_bash(
+        'rec() { "$CY" record --map .coyodex/build-fragments/extras.json '
+        '--heading "Balance exceptions" --line "$1"; }\nrec "SF20: one atomic write path"'))]
+    assert (224, "record") in coyodex_subcommands(turns)
+
+
+def test_a_heredoc_body_is_not_scanned():
+    """A build writes coyodex-shaped text into heredocs all the time — contract templates, notes,
+    generated docs. One `cat > rules-contract.md <<'EOF'` body made `dump` and `lint-fragment`
+    appear as invocations at a turn that ran neither."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(234, make_bash(
+        "cat > rules-contract.md <<'EOF'\n"
+        "Useful: coyodex dump --map m.json --id C1\n"
+        "Then run coyodex lint-fragment f.json\n"
+        "EOF\n"
+        "coyodex validate m.json --check-sources"))]
+    assert [n for _i, n in coyodex_subcommands(turns)] == ["validate"]
+
+
+def test_a_help_run_is_not_counted_as_the_command_running():
+    """`reconcile --help` reads the interface and does none of the work. Counting it makes "the
+    command ran" true of a build that only looked it up — and `reconcile --help` immediately before
+    hand-writing `reconcile.json` is exactly the shape a retro is trying to see."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(132, make_bash("/p/.venv/bin/coyodex reconcile --help 2>&1")),
+             make_turn(136, make_bash("/p/.venv/bin/coyodex reconcile --rules r.json "
+                                      "--fragments .coyodex/build-fragments/*.json --out rec.json"))]
+    assert [i for i, _n in coyodex_subcommands(turns)] == [136]
+
+
+def test_help_after_a_real_invocation_does_not_swallow_it():
+    """`--help` belongs to the invocation it follows, so the scan stops at the NEXT one."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(9, make_bash("coyodex audit m.json --json; coyodex fix --help"))]
+    assert [n for _i, n in coyodex_subcommands(turns)] == ["audit"]
+
+
+def test_the_two_binaries_are_told_apart_by_resolving_the_alias():
+    """`coyodex` and `coyodex-eval` share subcommand names (`score`, `compare`, `archive`,
+    `process`), and one table headed "coyodex invocation(s)" reported a build's `coyodex-eval
+    archive` runs as build work. Aliases resolve from the `VAR=…` assignment in the SAME command,
+    which is where builds put it — each Bash call is a fresh shell."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(14, make_bash("/p/.venv/bin/coyodex-eval archive /repo")),
+             make_turn(416, make_bash("CY=/p/.venv/bin/coyodex\n$CY assemble f.json --out .coyodex"))]
+    assert [n for _i, n in coyodex_subcommands(turns, binary="coyodex")] == ["assemble"]
+    assert [n for _i, n in coyodex_subcommands(turns, binary="coyodex-eval")] == ["archive"]
+
+
+def test_an_unresolvable_alias_falls_to_coyodex_and_is_reported():
+    """A guess that is never surfaced is indistinguishable from a measurement."""
+    from coyodex_eval.transcript import coyodex_subcommands, unresolved_aliases
+    turns = [make_turn(5, make_bash("$CY audit m.json"))]
+    assert [n for _i, n in coyodex_subcommands(turns, binary="coyodex")] == ["audit"]
+    assert unresolved_aliases(turns) == 1
+
+
+def test_a_directory_env_var_produces_no_invocation():
+    """`COYODEX_HOME=/p/coyodex` names a DIRECTORY, and the alias map cannot tell it from a binary
+    path. That is harmless and this pins why: a directory is used as `$COYODEX_HOME/method.md`,
+    with no space between the variable and what follows, so it never matches an invocation. If the
+    invocation pattern is ever loosened to allow that, this test fails and says so."""
+    from coyodex_eval.transcript import coyodex_subcommands
+    turns = [make_turn(6, make_bash("COYODEX_HOME=/p/coyodex\ncat $COYODEX_HOME/method/dispatch.md"))]
+    assert coyodex_subcommands(turns) == []
 
 
 def test_the_four_fix_verbs_are_reported_apart():
@@ -1446,6 +1537,35 @@ def test_13_is_not_disarmed_by_a_read_only_grounding_command():
     assert a.evidence[0].turn == 3, a.evidence
 
 
+def test_13_allows_the_header_built_backfill_the_method_mandates():
+    """The LAST thing method.md prescribes is backfilling the real build minute: `provenance stamp`
+    prints `built_at`, that string goes into `header.json`, and `assemble` + `render` carry it into
+    the map. So a method-compliant build ALWAYS writes a fragment after `grounding write`, and this
+    assertion scored 0 for both builds that followed the rule — measuring compliance as the defect.
+
+    Safe because of what the header fragment holds: title, goal, commit, committed, built. No claim
+    of any kind, so it cannot add one after the pin, which is the failure being watched."""
+    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash(
+                 "python3 -c \"import json; p='.coyodex/build-fragments/header.json'; "
+                 "d=json.load(open(p)); d['built']='2026-08-14 13:19'; json.dump(d,open(p,'w'))\"\n"
+                 "coyodex assemble .coyodex/build-fragments/*.json --out .coyodex")))
+    a = P.assert_13_grounding_write_is_the_last_write(turns)
+    assert (a.observed, a.of) == (1, 1), a
+
+
+def test_13_still_catches_a_real_fragment_edit_beside_the_header():
+    """The carve-out is header.json ALONE. A segment that touches it and a claim-bearing fragment
+    in the same breath is the shape it must not launder."""
+    turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+             make_turn(3, make_bash(
+                 "python3 - <<'PY'\nimport json\n"
+                 "json.dump({}, open('.coyodex/build-fragments/header.json','w'))\n"
+                 "json.dump({}, open('.coyodex/build-fragments/h05-domain-model.json','w'))\nPY")))
+    a = P.assert_13_grounding_write_is_the_last_write(turns)
+    assert (a.observed, a.of) == (0, 1), a
+
+
 def test_13_does_not_invent_a_record_from_a_help_call():
     """A transcript that only ran `grounding --help` and `grounding report` reported "written at
     turn 229" about a record that was never written."""
@@ -2020,3 +2140,34 @@ def test_34_forgets_a_refusal_that_is_many_turns_old():
                            results=(("z", "ok"),)))
     a = P.assert_34_no_guard_evaded_by_splitting_a_literal(tuple(turns))
     assert (a.observed, a.of) == (1, 1), a
+
+
+# ── --to-turn: the build window closes before the session does ───────────────────────────────────
+
+def test_to_turn_bounds_the_scorecard_to_the_build():
+    """A build SESSION stays open after the map lands and the operator goes on using it, so the
+    transcript grows under a retrospective that takes an hour to write: one went 449 turns to 491
+    while being read, and an unbounded re-score then covered 42 turns of unrelated scratch work as
+    if they were build behaviour. `cost` already took `--to-turn`; this did not, so the retro
+    method could not honestly tell anyone to bound both."""
+    import tempfile
+    from pathlib import Path as _Path
+    records = []
+    for i, cmd in enumerate(["coyodex preindex . --report",
+                             "coyodex assemble f.json --out .coyodex",
+                             "coyodex anchor-drift --map m.json"]):
+        records.append(json.dumps({
+            "type": "assistant",
+            "message": {"id": f"m{i}", "content": [
+                {"type": "tool_use", "id": f"t{i}", "name": "Bash", "input": {"command": cmd}}]}}))
+    with tempfile.TemporaryDirectory() as td:
+        src = _Path(td) / "t.jsonl"
+        src.write_text("\n".join(records) + "\n", encoding="utf-8")
+        whole = P.score_transcript(src)
+        bounded = P.score_transcript(src, to_turn=1)
+        assert whole.turns == 3
+        assert bounded.turns == 2
+        # turn 2 is the only shape-only anchor-drift; bounding it away must move assertion 4.
+        by_id = {a.id: a for a in bounded.assertions}
+        assert by_id[4].observed == 0, by_id[4]
+        assert {a.id: a for a in whole.assertions}[4].observed == 1

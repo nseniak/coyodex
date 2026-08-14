@@ -466,12 +466,16 @@ if __name__ == "__main__":
 def test_a_deployment_unit_losing_its_last_component_is_a_hard_gate():
     """A live rebuild kept all eight units, dropped the two components that owned the nginx and
     vector files, and filled `runs_in` by contiguous component-id range — a formula that can only
-    produce contiguous buckets, so six of eight boxes ended up empty. Nothing watched it."""
-    base = make_profile(deployment_units=8, deployment_units_linked=4)
-    cand = make_profile(deployment_units=8, deployment_units_linked=2)
+    produce contiguous buckets, so six of eight boxes ended up empty. Nothing watched it.
+
+    The two boxes that EMPTIED are the finding, and they held first-party code, so they are orphans
+    (a unit matching an infra dep is expected to be empty and is not counted)."""
+    base = make_profile(deployment_units=8, deployment_units_linked=4, deployment_orphan_units=0)
+    cand = make_profile(deployment_units=8, deployment_units_linked=2, deployment_orphan_units=2)
     report = compare(base, cand, Thresholds())
     gate = next(g for g in report.gates if g.name == "deployment-linkage-no-drop")
     assert not gate.passed, gate.detail
+    assert "0 -> 2" in gate.detail
     assert "4/8 -> 2/8" in gate.detail
     assert report.verdict == "REGRESSED"
 
@@ -480,8 +484,10 @@ def test_runs_in_coverage_rising_does_not_hide_lost_linkage():
     """The trap this gate exists for: the number that WAS being watched moved the right way. Across
     the same rebuild `runs_in` coverage went 93/96 to 66/66 — a perfect score, produced by dumping
     every component into two units."""
-    base = make_profile(components=96, deployment_units=8, deployment_units_linked=4)
-    cand = make_profile(components=66, deployment_units=8, deployment_units_linked=2)
+    base = make_profile(components=96, deployment_units=8, deployment_units_linked=4,
+                        deployment_orphan_units=0)
+    cand = make_profile(components=66, deployment_units=8, deployment_units_linked=2,
+                        deployment_orphan_units=2)
     report = compare(base, cand, Thresholds())
     assert not next(g for g in report.gates if g.name == "deployment-linkage-no-drop").passed
 
@@ -491,6 +497,44 @@ def test_holding_deployment_linkage_passes_the_gate():
     cand = make_profile(deployment_units=8, deployment_units_linked=5)
     assert next(g for g in compare(base, cand, Thresholds()).gates
                 if g.name == "deployment-linkage-no-drop").passed
+
+
+def test_enriching_the_deployment_section_with_infra_is_not_a_linkage_drop():
+    """The gate used to punish a map for getting BETTER.
+
+    One rebuild named 4 units, all first-party runtimes, all linked. Its successor named 11 — the
+    same 3 runtimes plus the proxy, two datastores, the log forwarder, two test instances and two
+    test doubles — and correctly folded a unit that was really a mount inside the backend process
+    into that process. Linked went 4/4 -> 3/11 and the gate FAILED, on a section that had gained
+    seven honest boxes and lost nothing. An infra unit can never be "linked", so every one added
+    drove the watched number down."""
+    base = make_profile(deployment_units=4, deployment_units_linked=4, deployment_orphan_units=0)
+    cand = make_profile(deployment_units=11, deployment_units_linked=3, deployment_orphan_units=0)
+    gate = next(g for g in compare(base, cand, Thresholds()).gates
+                if g.name == "deployment-linkage-no-drop")
+    assert gate.passed, gate.detail
+
+
+def test_a_recorded_runs_in_quality_exception_passes_the_gate_but_is_named():
+    """`validate` honours the recorded literal and stays quiet; the gate must agree, or a build
+    holds one green report and one red gate about the same three units and can act on neither.
+    The bypass is deliberate — and reported, so it cannot be a silent pass."""
+    base = make_profile(deployment_units=4, deployment_units_linked=4, deployment_orphan_units=0)
+    cand = make_profile(deployment_units=11, deployment_units_linked=3, deployment_orphan_units=3,
+                        deployment_orphans_excepted=True)
+    report = compare(base, cand, Thresholds())
+    gate = next(g for g in report.gates if g.name == "deployment-linkage-no-drop")
+    assert gate.passed, gate.detail
+    assert "runs-in/quality" in gate.detail
+    assert any("passed on a RECORD" in n for n in report.notes), report.notes
+
+
+def test_empty_boxes_with_no_record_still_fail_the_gate():
+    """Same three orphans, nothing recorded: the gate is not optional, only waivable in the open."""
+    base = make_profile(deployment_units=4, deployment_units_linked=4, deployment_orphan_units=0)
+    cand = make_profile(deployment_units=11, deployment_units_linked=3, deployment_orphan_units=3)
+    assert not next(g for g in compare(base, cand, Thresholds()).gates
+                    if g.name == "deployment-linkage-no-drop").passed
 
 
 def test_a_map_with_no_deployment_section_is_not_gated():

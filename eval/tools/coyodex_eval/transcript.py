@@ -186,6 +186,15 @@ class Turn:
     #: downgraded from certain to likely for want of that distinction.
     thinking_chars: int = 0
     thinking_signature_bytes: int = 0
+    #: The assistant's VISIBLE prose for this turn, `text` blocks joined. Empty on user turns.
+    #:
+    #: Earned by a retrospective that could not audit a whole class of method rule. `method.md` and
+    #: `dispatch.md` prescribe several steps that produce no tool call at all — show `scope`'s
+    #: output verbatim as the first message, announce the build mode, warn before overwriting a
+    #: baseline, and "the wait at a barrier is a TEXT turn". None of it was visible here, so the
+    #: reviewer went and hand-parsed the raw JSONL — the exact fallback `--full-output` was added
+    #: to prevent for sub-agent returns.
+    text: str = ""
 
     def calls_named(self, *names: str) -> tuple[ToolCall, ...]:
         wanted = frozenset(names)
@@ -239,6 +248,7 @@ class _Group:
     usage_conflicts: int = 0
     thinking_chars: int = 0
     thinking_signature_bytes: int = 0
+    text_parts: list[str] = field(default_factory=list)
     #: `usage` above is the SIGNATURE (a json string, used to detect a grouping violation);
     #: `tokens` is the parsed count the cost report sums.
     tokens: Usage = Usage()
@@ -277,6 +287,7 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                     is_sidechain=g.is_sidechain, timestamp=g.timestamp,
                     thinking_chars=g.thinking_chars,
                     thinking_signature_bytes=g.thinking_signature_bytes,
+                    text="\n".join(g.text_parts).strip(),
                     usage=g.tokens, model=g.model)
         index += 1
         return turn
@@ -316,6 +327,7 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
             calls: list[ToolCall] = []
             results: list[ToolResult] = []
             think_chars = think_sig = 0
+            texts: list[str] = []
             for block in blocks:
                 if not isinstance(block, dict):
                     continue
@@ -328,6 +340,10 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                                           input=args if isinstance(args, dict) else {},
                                           id=uid if isinstance(uid, str) else "",
                                           timestamp=record_ts))
+                elif btype == "text":
+                    body = block.get("text")
+                    if isinstance(body, str) and body.strip():
+                        texts.append(body)
                 elif btype in ("thinking", "redacted_thinking"):
                     body = block.get("thinking")
                     sig = block.get("signature") or block.get("data")
@@ -363,6 +379,7 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
                 group.results.extend(results)
                 group.thinking_chars += think_chars
                 group.thinking_signature_bytes += think_sig
+                group.text_parts.extend(texts)
                 # MERGED, never summed — every record of this message repeats the same counts.
                 group.tokens = _merge_usage(group.tokens, _usage_of(message))
                 group.model = group.model or model
@@ -372,7 +389,7 @@ def iter_turns(path: Path | str, *, include_sidechains: bool = False) -> Iterato
             group = _Group(key=key, role=ASSISTANT, line=lineno, is_sidechain=sidechain,
                            timestamp=timestamp, usage=_usage_signature(message),
                            calls=calls, results=results, thinking_chars=think_chars,
-                           thinking_signature_bytes=think_sig,
+                           thinking_signature_bytes=think_sig, text_parts=texts,
                            tokens=_usage_of(message), model=model)
 
     yield from flush()
@@ -441,20 +458,140 @@ _COYODEX_SUBVERBS = frozenset({"write", "report", "apply-drift", "dedup-edge", "
 #: INVISIBLE there — and a retrospective concluded from the index that `grounding write` "never ran"
 #: in a build that ran it at turn 489, chained behind an `assemble`. The finding was published, then
 #: withdrawn. Counting from the full command text is the fix; the index stays short on purpose.
+#:
+#: The alias branch accepts an OPTIONAL pair of quotes around the expansion. `"$CY" record …` is the
+#: careful spelling — a build reached for it precisely because the unquoted form had just been
+#: word-split by zsh — and it did not match, so 42 successful `record` calls were invisible while
+#: the ONE invocation the table did report was the earlier one that FAILED. A retrospective read
+#: `record 1` off that table and concluded the command had barely been used.
 _COYODEX_CMD = re.compile(
-    r"(?:coyodex(?:-eval)?|\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)\s+"
+    r"""(?:coyodex(?:-eval)?|["']?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?["']?)\s+"""
     r"(?!-)([a-z][a-z0-9-]*)(?:\s+([a-z][a-z0-9-]*))?")
 
+#: `<<'EOF'` / `<<-"PY"` / `<<PY` — the start of a heredoc, capturing its terminator.
+#:
+#: Everything between it and the terminator is DATA, not a command line, and a build writes plenty
+#: of coyodex-shaped text into one: contract templates, notes, generated docs. A live build's
+#: `cat > rules-contract.md <<'EOF'` body made `dump` and `lint-fragment` appear as invocations at a
+#: turn that ran neither, which is the same class of wrong answer as the missed `record` above,
+#: pointing the other way.
+_HEREDOC_START = re.compile(r"<<-?\s*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?")
 
-def coyodex_subcommands(turns: "Sequence[Turn]") -> "list[tuple[int, str]]":
+#: A `--help` / `-h` run reads the interface; it performs none of the work the subcommand names.
+#: Counting it makes "the command ran" true of a build that only looked it up — and `reconcile
+#: --help` immediately before hand-writing `reconcile.json` is exactly the shape a retro is trying
+#: to see. `--dry-run` is NOT here: it does the real resolution and reports it, it just declines to
+#: write.
+_HELP_ONLY = re.compile(r"\s(?:--help|-h)(?:\s|$)")
+
+
+#: `CY=/path/to/.venv/bin/coyodex` / `CX="…/coyodex-eval"` — a shell alias for one of the two CLIs.
+#: Anchored to a word boundary so `MY_CY=…` is its own variable, and to the END of the value so
+#: `COYODEX_HOME=/p/coyodex` (a directory, not the binary) is not read as an alias for it.
+_ALIAS_ASSIGN = re.compile(
+    r"\b([A-Za-z_][A-Za-z0-9_]*)=[\"']?\S*?/(coyodex(?:-eval)?)[\"']?(?:\s|$)")
+
+
+def _alias_binaries(cmd: str) -> dict[str, str]:
+    """`{VAR: "coyodex" | "coyodex-eval"}` for every alias assigned in this command."""
+    return {m.group(1): m.group(2) for m in _ALIAS_ASSIGN.finditer(cmd)}
+
+
+def _binary_of(token: str, aliases: Mapping[str, str]) -> str:
+    """Which CLI `token` invokes — the literal name, the resolved alias, or the `coyodex` fallback."""
+    bare = token.strip("\"'")
+    if bare.endswith("coyodex-eval"):
+        return "coyodex-eval"
+    if bare.endswith("coyodex"):
+        return "coyodex"
+    var = bare.lstrip("$").strip("{}")
+    return aliases.get(var, "coyodex")
+
+
+def unresolved_aliases(turns: "Sequence[Turn]") -> int:
+    """How many counted invocations went through an alias this reader could NOT resolve.
+
+    The fallback in `_binary_of` is a guess, and a guess that is never surfaced is indistinguishable
+    from a measurement. The `--commands` footer prints this so a reader knows how much of the
+    coyodex table rests on it."""
+    n = 0
+    for _idx, cmd in bash_commands(turns):
+        aliases = _alias_binaries(cmd)
+        for m in _COYODEX_CMD.finditer(_strip_heredocs(cmd)):
+            if m.group(1) not in _COYODEX_SUBCOMMANDS:
+                continue
+            token = m.group(0).split()[0].strip("\"'")
+            if token.endswith("coyodex") or token.endswith("coyodex-eval"):
+                continue
+            if token.lstrip("$").strip("{}") not in aliases:
+                n += 1
+    return n
+
+
+def _strip_heredocs(cmd: str) -> str:
+    """`cmd` with every heredoc BODY blanked out, terminators and all else kept.
+
+    Line-based, because that is what a heredoc is: the body runs from the line after the one
+    carrying `<<TAG` to the line whose stripped content is exactly `TAG`. Nesting is not a thing
+    (the shell reads bodies in order), but several heredocs in one command are, so this keeps
+    scanning after each terminator. An UNterminated heredoc (a truncated command) blanks to the end
+    — the safe direction: dropping data can only cost a finding, while keeping it invents one."""
+    out: list[str] = []
+    terminator: str | None = None
+    for line in cmd.splitlines():
+        if terminator is None:
+            out.append(line)
+            m = _HEREDOC_START.search(line)
+            if m:
+                terminator = m.group(1)
+            continue
+        if line.strip() == terminator:
+            terminator = None
+            out.append(line)
+        else:
+            out.append("")
+    return "\n".join(out)
+
+
+def coyodex_subcommands(turns: "Sequence[Turn]", *,
+                        binary: str | None = None) -> "list[tuple[int, str]]":
     """(turn index, `subcommand [verb]`) for every coyodex invocation found ANYWHERE in a Bash
     command — not only at its head. See `_COYODEX_CMD` for why that distinction cost a real
-    finding, and `_COYODEX_SUBCOMMANDS` for why it is an allowlist."""
+    finding, and `_COYODEX_SUBCOMMANDS` for why it is an allowlist.
+
+    Heredoc bodies are excluded (`_strip_heredocs`) and `--help` runs are not counted
+    (`_HELP_ONLY`): both make the table claim work that did not happen.
+
+    `binary` filters by which CLI was invoked — `"coyodex"` or `"coyodex-eval"`. The two share this
+    allowlist because they share subcommand names (`score`, `compare`, `archive`, `process`), so a
+    table headed "coyodex invocation(s)" was counting `coyodex-eval archive` runs as build work.
+
+    An ALIASED invocation (`$CY audit`) names no binary, so the alias is resolved from the `VAR=…`
+    assignment in the SAME command — which is where builds put it, since each Bash call is a fresh
+    shell and the assignment has to be repeated. Returning the call under both filters instead was
+    the first cut, and it made the `coyodex-eval` table claim eight `assemble` runs that were
+    plainly the build's own. An alias that still cannot be resolved falls to `coyodex`: a build runs
+    that binary and rarely the other, so the fallback is right far more often than not, and
+    `unresolved_aliases()` reports how much of the table rests on it."""
     out: list[tuple[int, str]] = []
     for idx, cmd in bash_commands(turns):
-        for m in _COYODEX_CMD.finditer(cmd):
+        aliases = _alias_binaries(cmd)
+        for m in _COYODEX_CMD.finditer(_strip_heredocs(cmd)):
             sub, verb = m.group(1), m.group(2)
             if sub not in _COYODEX_SUBCOMMANDS:
+                continue
+            invocation = m.group(0)
+            if binary is not None:
+                named = _binary_of(invocation.split()[0], aliases)
+                if named != binary:
+                    continue
+            # `--help` belongs to the invocation it follows, so look only as far as the NEXT
+            # invocation (or the end): `coyodex audit m.json; coyodex fix --help` must not read as
+            # a help-only `audit`.
+            tail_start = m.end()
+            nxt = _COYODEX_CMD.search(cmd, tail_start)
+            tail = cmd[tail_start:nxt.start() if nxt else len(cmd)]
+            if _HELP_ONLY.search(tail.split("\n")[0]):
                 continue
             out.append((idx, f"{sub} {verb}" if verb in _COYODEX_SUBVERBS else sub))
     return out
@@ -506,8 +643,25 @@ def format_turns(turns: Sequence[Turn], *, full: bool = False, results: dict[str
     lines: list[str] = []
     unlimited = result_chars < 0
     for turn in turns:
-        if turn.role != ASSISTANT or not turn.tool_calls:
+        if turn.role != ASSISTANT:
             continue
+        # A turn with no tool call is invisible in the INDEX by design — the index is one line per
+        # call. In `full` it must not be, because a whole class of method rule produces exactly that
+        # shape: "show `scope`'s output verbatim as your first message", "announce the mode", warn
+        # before overwriting a baseline, "the wait at a barrier is a TEXT turn". A retrospective
+        # trying to audit those found nothing and fell back to hand-parsing the raw JSONL.
+        if not turn.tool_calls and not (full and turn.text):
+            continue
+        if full and turn.text:
+            said = turn.text.splitlines()
+            kept = said if unlimited else said[:result_lines]
+            lines.append(f"[{turn.index:>4}] (said) " + "\n        . ".join(kept))
+            if len(said) > len(kept):
+                lines.append(f"        . … {len(said) - len(kept)} more line(s) "
+                             f"(--full-output for all of it)")
+            if not turn.tool_calls:
+                lines.append("")
+                continue
         if full and turn.thinking_signature_bytes and not turn.thinking_chars:
             # SAY that reasoning existed and was withheld. Dropping the block silently made
             # "the agent did not consider X" indistinguishable from "the agent's reasoning is
@@ -641,19 +795,37 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if "--commands" in args:
         from collections import Counter
-        found = coyodex_subcommands(ranged)
-        counts = Counter(name for _i, name in found)
-        by_name: dict[str, list[int]] = {}
-        for i, name in found:
-            by_name.setdefault(name, []).append(i)
-        print(f"{len(found)} coyodex invocation(s) across {len(counts)} subcommand(s)"
-              f"{scope}\n")
-        print(f"{'subcommand':28} {'runs':>5}  turns")
-        for name, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
-            turns_s = ", ".join(str(t) for t in by_name[name][:12])
-            if len(by_name[name]) > 12:
-                turns_s += f", … +{len(by_name[name]) - 12} more"
-            print(f"  {name:26} {n:>5}  {turns_s}")
+
+        def table(found: list[tuple[int, str]], heading: str) -> None:
+            counts = Counter(name for _i, name in found)
+            by_name: dict[str, list[int]] = {}
+            for i, name in found:
+                by_name.setdefault(name, []).append(i)
+            print(f"{heading}: {len(found)} invocation(s) across {len(counts)} subcommand(s)"
+                  f"{scope}\n")
+            print(f"{'subcommand':28} {'runs':>5}  turns")
+            for name, n in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])):
+                turns_s = ", ".join(str(t) for t in by_name[name][:12])
+                if len(by_name[name]) > 12:
+                    turns_s += f", … +{len(by_name[name]) - 12} more"
+                print(f"  {name:26} {n:>5}  {turns_s}")
+
+        # SPLIT BY BINARY. The two CLIs share subcommand names (`score`, `compare`, `archive`,
+        # `process`), and one table headed "coyodex invocation(s)" reported a build's three
+        # `coyodex-eval archive` calls as build work. A retro reading that over-counts the build.
+        table(coyodex_subcommands(ranged, binary="coyodex"), "coyodex")
+        evals = coyodex_subcommands(ranged, binary="coyodex-eval")
+        # Only when present: on a build transcript this section is empty, and an empty table
+        # reads as a gap rather than as "the build did not run the eval tool, which is correct".
+        if evals:
+            print()
+            table(evals, "coyodex-eval")
+        unresolved = unresolved_aliases(ranged)
+        print("\n(`--help` runs are not counted, and heredoc bodies are not scanned — both make "
+              "the table\n claim work that did not happen.)")
+        if unresolved:
+            print(f"({unresolved} invocation(s) went through an alias with no `VAR=…/coyodex` "
+                  f"assignment in the\n same command, and are counted as `coyodex`.)")
         return 0
     if "--stats" in args:
         if scope:
@@ -664,6 +836,12 @@ def main(argv: list[str] | None = None) -> int:
     # Filter the CALLS, not just the turns: one turn can carry a dozen calls, and keeping all of
     # them because one matched is not what `--grep` promises. A turn left with no matching call
     # drops out entirely.
+    try:
+        result_chars = -1 if "--full-output" in args else int(opt("--result-chars") or 600)
+    except ValueError:
+        print("ERROR: --result-chars takes an integer", file=sys.stderr)
+        return 2
+    full = "--full" in args or "--full-output" in args
     picked: list[Turn] = []
     for t in ranged:
         calls = t.tool_calls
@@ -673,12 +851,11 @@ def main(argv: list[str] | None = None) -> int:
             calls = tuple(c for c in calls if pattern in c.text().lower())
         if calls:
             picked.append(replace(t, tool_calls=calls))
-    try:
-        result_chars = -1 if "--full-output" in args else int(opt("--result-chars") or 600)
-    except ValueError:
-        print("ERROR: --result-chars takes an integer", file=sys.stderr)
-        return 2
-    full = "--full" in args or "--full-output" in args
+        elif full and t.text and not tool and not pattern:
+            # An UNFILTERED --full read is "everything in this range", and assistant prose is part
+            # of it. A --tool/--grep read is a question about tool calls, so a text-only turn is not
+            # an answer to it and stays out.
+            picked.append(replace(t, tool_calls=()))
     if not picked and (tool or pattern):
         # The empty-RANGE case says so; a filter that matches nothing used to print one blank line,
         # which reads exactly like "the range is empty" and exactly like a crash.

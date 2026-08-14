@@ -145,3 +145,62 @@ def test_the_visible_head_is_still_exactly_the_width():
     line = transcript.summarise_call(call)
     assert line.startswith("z" * 100)
     assert not line.startswith("z" * 101)
+
+
+# --- assistant prose is part of a --full read ------------------------------------
+# `method.md` and `dispatch.md` prescribe several steps that produce no tool call at all: show
+# `scope`'s output verbatim as the first message, announce the build mode, warn before overwriting a
+# baseline, and "the wait at a barrier is a TEXT turn". None of it was readable here, so a
+# retrospective auditing those rules fell back to hand-parsing the raw JSONL — the exact fallback
+# `--full-output` was added to prevent for sub-agent returns.
+
+
+def make_transcript_with_prose(tmp: Path) -> Path:
+    lines = [
+        json.dumps({"type": "assistant", "message": {"id": "m0", "content": [
+            {"type": "text", "text": "I'll archive the current map and rebuild from scratch."}]}}),
+        json.dumps({"type": "assistant", "message": {"id": "m1", "content": [
+            {"type": "text", "text": "Running the pre-index now."},
+            {"type": "tool_use", "id": "t1", "name": "Bash",
+             "input": {"command": "coyodex preindex ."}}]}}),
+    ]
+    p = tmp / "prose.jsonl"
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return p
+
+
+def test_a_text_only_turn_is_invisible_in_the_index():
+    """The index is one line per tool CALL, and stays that way — it is how a lead sees a 450-turn
+    run at a glance."""
+    with tempfile.TemporaryDirectory() as td:
+        turns = transcript.read_turns(make_transcript_with_prose(Path(td)))
+        assert transcript.format_turns(turns).count("preindex") == 1
+        assert "archive the current map" not in transcript.format_turns(turns)
+
+
+def test_full_shows_assistant_prose_including_a_text_only_turn():
+    with tempfile.TemporaryDirectory() as td:
+        p = make_transcript_with_prose(Path(td))
+        turns = transcript.read_turns(p)
+        out = transcript.format_turns(turns, full=True)
+        assert "archive the current map" in out, out
+        assert "Running the pre-index now." in out, out
+        assert "(said)" in out
+
+
+def test_the_reader_carries_prose_on_the_turn(tmp_path=None):
+    with tempfile.TemporaryDirectory() as td:
+        turns = transcript.read_turns(make_transcript_with_prose(Path(td)))
+        assert turns[0].text.startswith("I'll archive")
+        assert turns[0].tool_calls == ()
+        assert turns[1].text == "Running the pre-index now."
+
+
+def test_a_tool_filtered_read_leaves_text_only_turns_out(capsys):
+    """`--tool`/`--grep` ask a question about tool calls; a text-only turn is not an answer to it."""
+    with tempfile.TemporaryDirectory() as td:
+        p = make_transcript_with_prose(Path(td))
+        assert transcript.main([str(p), "--full", "--tool", "Bash"]) == 0
+        out = capsys.readouterr().out
+        assert "archive the current map" not in out
+        assert "preindex" in out

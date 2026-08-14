@@ -480,19 +480,29 @@ def assert_3_fanout_is_one_message(turns: Sequence[Turn]) -> Assertion:
 
 
 def assert_4_shape_only_anchor_drift(turns: Sequence[Turn]) -> Assertion:
-    """4 — `coyodex anchor-drift` runs with NO `--verdicts` (the shape-only pass).
+    """4 — the shape-only anchor-drift pass runs.
 
     The serial-build grounding floor: it needs no skeptics, so a build with none still gets
-    deterministic drift findings. Nothing yet showed it was reached."""
+    deterministic drift findings.
+
+    **`coyodex finalize` runs this pass itself**, always, and prints it under its own heading
+    (`finalize.py`, `kind = "verdict-based" if verdicts else "shape-only"`; `cli.py` describes
+    finalize as "validate + audit + the shape-only anchor-drift pass"). Counting only a bare
+    `anchor-drift` invocation therefore scored 0 on two consecutive builds whose finalize reports
+    both read `## anchor-drift (shape-only) — no drifted anchors`. The assertion was measuring the
+    spelling, not the floor, and `L3-DESIGN.md` still said "nothing yet shows it is reached" on the
+    strength of it. `--verdicts` on `finalize` ADDS the verdict-based leg; it does not replace the
+    shape-only one, so a finalize counts either way."""
     hits: list[Evidence] = []
     for idx, cmd in bash_commands(turns):
-        if not _invokes(cmd, "anchor-drift"):
-            continue
-        if "--verdicts" in cmd:
-            continue
-        hits.append(Evidence(idx, {"command": cmd[:120]}))
+        if _invokes(cmd, "finalize"):
+            hits.append(Evidence(idx, {"via": "finalize", "command": cmd[:120]}))
+        elif _invokes(cmd, "anchor-drift") and "--verdicts" not in cmd:
+            hits.append(Evidence(idx, {"via": "anchor-drift", "command": cmd[:120]}))
     observed, of = _at_least_once(len(hits))
-    return Assertion(4, "shape-only anchor-drift run", observed, of, tuple(hits))
+    via = sorted({str(h.detail.get("via")) for h in hits})
+    return Assertion(4, "shape-only anchor-drift run", observed, of, tuple(hits),
+                     f"reached via {', '.join(via)}" if hits else "")
 
 
 def assert_5_skeptics_fanned_out(turns: Sequence[Turn]) -> Assertion:
@@ -995,6 +1005,29 @@ def _fanout_groups(turns: Sequence[Turn]) -> list[list[tuple[int, float | None]]
 # The scorecard exists to turn a one-off discovery into a number that gets watched.
 
 
+#: A fragment path inside a shell segment, e.g. `.coyodex/build-fragments/h05-domain-model.json`.
+_FRAGMENT_PATH = re.compile(re.escape(FRAGMENT_DIR) + r"/?([\w.\-*]+\.json)?")
+
+
+def _only_the_header_fragment(segment: str) -> bool:
+    """Does this segment write `header.json` and no other fragment or the map?
+
+    The LAST thing `method.md` prescribes is backfilling the real build minute into the header:
+    `provenance stamp` prints `built_at`, that string goes into `header.json`, and `assemble` +
+    `render` carry it into the map and its view. So a method-compliant build ALWAYS writes a
+    fragment after `grounding write`, and this assertion scored 0 for both builds that followed the
+    rule — measuring compliance as the defect.
+
+    The carve-out is safe because of what the header fragment holds: `title`, `goal`, `commit`,
+    `committed`, `built`. No claim of any kind, so it cannot add one after the pin, which is the
+    failure the assertion exists to catch ("21 further writes, four of which ADDED claims no
+    skeptic ever saw"). A segment that touches header.json AND anything else is still counted."""
+    if "project-map.json" in segment:
+        return False
+    named = {m.group(1) for m in _FRAGMENT_PATH.finditer(segment) if m.group(1)}
+    return named == {"header.json"}
+
+
 def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assertion:
     """13 — `grounding write` runs AFTER the last reconcile edit, not before it.
 
@@ -1054,6 +1087,8 @@ def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assert
                 touches = rest
                 if not ((FRAGMENT_DIR in touches or "project-map.json" in touches)
                         and _WRITES_A_FILE.search(rest)):
+                    continue
+                if _only_the_header_fragment(rest):
                     continue
                 edited_after.append(Evidence(turn.index, {"tool": call.name}))
                 continue
@@ -2283,10 +2318,19 @@ def score_turns(turns: Sequence[Turn], *, transcript: str = "", label: str = "",
 
 
 def score_transcript(path: Path | str, *, label: str = "",
-                     map_path: str | Path | None = None) -> Scorecard:
-    """Read a transcript and score it."""
+                     map_path: str | Path | None = None,
+                     to_turn: int | None = None) -> Scorecard:
+    """Read a transcript and score it.
+
+    `to_turn` stops at that turn index (inclusive). A build session stays OPEN after the map lands
+    and the operator goes on using it, so the transcript grows under a retrospective that takes an
+    hour to write: one went 449 turns to 491 while being read, and an unbounded re-score then
+    covered 42 turns of unrelated scratch work as if they were build behaviour. `cost` already took
+    `--to-turn`; this did not, so the retro method could not honestly tell anyone to bound both."""
     p = Path(path)
     turns = read_turns(p)
+    if to_turn is not None:
+        turns = tuple(t for t in turns if t.index <= to_turn)
     return score_turns(turns, transcript=str(p), label=label or p.stem,
                        grouping_consistent=grouping_is_consistent(p),
                        ctx=read_score_context(map_path))
@@ -2402,12 +2446,17 @@ def format_diff(before: Scorecard, after: Scorecard) -> str:
 
 USAGE = """usage: coyodex-eval process <transcript.jsonl> [--map <project-map.json>]
                                   [--out <scorecard.json>] [--json] [--label L]
+                                  [--to-turn N]
        coyodex-eval process --diff <before.json> <after.json> [--json]
 
 Score a build TRANSCRIPT against the L3 process assertions, or diff two scorecards.
 
 --map lets assertion 6 read the built map's `grounding` record instead of inferring it from the
 transcript. Without it that assertion falls back to transcript evidence and says so in its note.
+
+--to-turn N stops at that turn (inclusive). A build SESSION stays open after the map lands, so the
+transcript grows while a retrospective reads it — one went 449 turns to 491 mid-retro — and an
+unbounded score then counts unrelated later turns as build behaviour. Pass the build's last turn.
 
 Without --out, the scorecard is written next to the transcript as <name>.l3-scorecard.json.
 This is a SCORECARD, not a gate: it always exits 0 unless a file is missing or unreadable, and
@@ -2460,7 +2509,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     positional = [a for a in args if not a.startswith("--")]
-    skip = {_arg(args, "--out"), _arg(args, "--label")}
+    skip = {_arg(args, "--out"), _arg(args, "--label"), _arg(args, "--to-turn")}
     positional = [a for a in positional if a not in skip]
     if not positional:
         print("ERROR: give a transcript path\n", file=sys.stderr)
@@ -2484,8 +2533,14 @@ def main(argv: list[str] | None = None) -> int:
                   "       Fix the map, or drop --map to run the transcript-only scorecard "
                   "deliberately.", file=sys.stderr)
             return 2
+    raw_to_turn = _arg(args, "--to-turn")
+    try:
+        to_turn = int(raw_to_turn) if raw_to_turn else None
+    except ValueError:
+        print("ERROR: --to-turn takes an integer", file=sys.stderr)
+        return 2
     card = score_transcript(src, label=_arg(args, "--label") or "",
-                            map_path=given_map)
+                            map_path=given_map, to_turn=to_turn)
     out = Path(_arg(args, "--out") or src.with_suffix(".l3-scorecard.json"))
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(card.as_json(), indent=2), encoding="utf-8")

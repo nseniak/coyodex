@@ -161,6 +161,23 @@ class MapProfile:
     # passed on 2/8 -> 3/10 because a unit had been ADDED, not because code had been placed. This
     # counts DISTINCT non-empty component sets instead, so replicating a shape cannot move it.
     deployment_distinct_hosted_sets: int = 0
+    # The EMPTY boxes: units running no component and no entry point that are not system infra
+    # either (`validate_model.orphan_deployment_units`, the same list `validate` advises on).
+    #
+    # Linkage as an absolute count punished a map for getting BETTER. One rebuild named 4 units, all
+    # first-party runtimes, all linked; the next named 11 — the same 3 runtimes plus the proxy, two
+    # datastores, the log forwarder, two test instances and two test doubles — and correctly folded
+    # a unit that was really a mount inside the backend process into that process. Linked went
+    # 4 -> 3, the gate FAILED, and the Deployment view it was judging had gained seven honest boxes
+    # and lost nothing. Infra units are empty BY NATURE, so counting them as unfilled linkage
+    # measures how COMPLETE the section is and reports completeness as a regression.
+    deployment_orphan_units: int = 0
+    # Did the map RECORD `runs-in/quality`, the literal that tells `validate` those empty boxes are
+    # deliberate? The count above stays raw — a profile states facts about a map — and the policy
+    # decision lives in the gate, which would otherwise contradict the tool: `validate` honours the
+    # record and stays quiet while the gate failed on the same three units. A build reading one
+    # green tool and one red gate about one fact has no way to act on either.
+    deployment_orphans_excepted: bool = False
 
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
@@ -282,6 +299,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         deployment_units=len(unit_names),
         deployment_units_linked=sum(1 for u in unit_names if u in claimed),
         deployment_distinct_hosted_sets=len(set(hosted.values())),
+        deployment_orphan_units=len(validate_model.orphan_deployment_units(m)),
+        deployment_orphans_excepted="runs-in/quality" in balance_lib._exceptions(m),
         use_cases=len({u.id for u in m.use_cases}),
         subsystems=len({s.id for s in m.subsystems}),
         subdomains=len({s.id for s in m.subdomains}),

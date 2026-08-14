@@ -183,6 +183,16 @@ that halves the bill and doubles the refutation rate is not an improvement. If t
 anything before or after the build (an archive step, questions once the map landed), bound it with
 `--from-turn` / `--to-turn`, or time and tokens describe different stretches.
 
+**Bound it even when the session looks finished, because the retro takes an hour and the build
+window is still open.** `retro-precheck` clears you when the build session has been idle for 180
+seconds; it cannot promise the operator will not come back to that window while you read. On the
+2026-08-14 mcpolis retro they did: the transcript went 449 turns / 3.0 MB at the start to 491 turns
+/ 3.4 MB by the time the findings were written, and an unbounded `cost` re-run then covered 42 turns
+of unrelated scratch work. Turn INDICES are stable — records only ever append — so findings keep
+their turn numbers and nothing has to be redone. Note the last build turn once (the `finalize` or
+commit turn), pass `--to-turn` on every `cost` and `process` run, and say in the report which
+snapshot the numbers describe.
+
 The assertions and what each audits are in
 `COYODEX_HOME/eval/fixtures/trapdoor/L3-DESIGN.md` — **all of them, so check the doc against
 `coyodex-eval process` output rather than against any count written here.** This file said "the ten
@@ -231,6 +241,16 @@ Hand every sub-agent the same brief: **the evidence classes below**, the require
 finding carry a **turn number**, and the instruction to return findings only — no fixes, no prose
 essay. Tell each one it is reading a slice, so "I did not see X" means "not in my range", never
 "the build skipped X".
+
+**Tell them not to time a fan-out off the raw JSONL.** A sub-agent that goes looking at the file
+directly will find one assistant record per `tool_use` block, each stamped with the time that block
+*executed* — so a single message that launched fourteen agents looks like fourteen separate turns
+two minutes apart. Three sub-agents on one run independently reported "the fan-out was emitted as N
+separate turns, violating the one-message rule", and all three were wrong: the fourteen records
+shared one `message.id`. The transcript reader groups by that id on purpose (`transcript.py`, "A
+JSONL record is NOT a turn"), and assertion 3 already measures this correctly. Put it in the brief:
+**the turn numbers `coyodex-eval transcript` prints are the turns; a timestamp spread inside one of
+them is streaming, not round trips.**
 
 ### The evidence classes to hunt
 

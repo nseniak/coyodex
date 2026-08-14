@@ -291,9 +291,41 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         # by dumping every component into two units. Coverage was the number being watched and it
         # moved the right way while the view got poorer, which is why this gate counts units that
         # some component actually claims instead.
-        ok = candidate.deployment_units_linked >= baseline.deployment_units_linked
+        #
+        # It counted LINKED UNITS to do that, and then punished a map for getting better. A later
+        # rebuild named 4 units, all first-party runtimes, all linked; its successor named 11 — the
+        # same 3 runtimes plus the proxy, two datastores, the log forwarder, two test instances and
+        # two test doubles — and correctly folded a unit that was really a mount inside the backend
+        # process into that process. Linked went 4/4 -> 3/11 and this gate FAILED, on a section that
+        # had gained seven honest boxes and lost nothing. An infra unit hosts no first-party code BY
+        # NATURE, so it can never be "linked", and every one added drove the number the gate watched
+        # DOWN.
+        #
+        # ORPHANS are the number that means what the gate is for: units running nothing that are not
+        # infra either — the genuinely empty boxes. On the formula-fill rebuild above that is 6, up
+        # from 0, and the gate still fails. On the enriched map it is 0 -> 0 and the gate passes.
+        # It also happens to be the list `validate` already advises on, so the tool and the gate
+        # cannot drift apart (`validate_model.orphan_deployment_units`).
+        # The recorded `runs-in/quality` literal is honoured, because `validate` honours it: without
+        # this the tool stays quiet about three units while the gate fails on the same three, and a
+        # build holding one green report and one red gate about one fact cannot act on either. The
+        # bypass is deliberate and visible — a record is a named, durable judgement, and `validate`
+        # prints how many findings each one swallowed.
+        cand_orphans = 0 if candidate.deployment_orphans_excepted else candidate.deployment_orphan_units
+        base_orphans = 0 if baseline.deployment_orphans_excepted else baseline.deployment_orphan_units
+        ok = cand_orphans <= base_orphans
+        if (candidate.deployment_orphans_excepted
+                and candidate.deployment_orphan_units > base_orphans):
+            notes.append(
+                f"deployment-linkage passed on a RECORD, not on placement: "
+                f"{candidate.deployment_orphan_units} unit(s) run nothing and are not infra, and "
+                f"`runs-in/quality` is recorded. Re-read that record — it silences the whole "
+                f"deployment-quality family, not just these units.")
         gates.append(GateResult("deployment-linkage-no-drop", ok,
-            f"deployment units hosting a component "
+            f"empty deployment units (running nothing, not infra) "
+            f"{base_orphans} -> {cand_orphans}"
+            + (" (recorded `runs-in/quality`)" if candidate.deployment_orphans_excepted else "")
+            + f" · units hosting a component "
             f"{baseline.deployment_units_linked}/{baseline.deployment_units} -> "
             f"{candidate.deployment_units_linked}/{candidate.deployment_units}"
             f" · distinct hosted component sets "

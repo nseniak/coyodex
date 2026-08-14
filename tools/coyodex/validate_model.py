@@ -2699,6 +2699,38 @@ def _check_environments(m: ProjectModel) -> list[str]:
     return problems
 
 
+def system_dep_names(m: ProjectModel) -> list[str]:
+    """Names of the deps that are real SYSTEM infrastructure (a bus, a store, a proxy).
+
+    A deployment unit that matches one of these hosts no first-party code BY NATURE — a `mongo` or
+    `nginx` box is expected to be empty — which is why two checks here and one gate in
+    `coyodex-eval` all need the same list."""
+    return [d.name for d in m.deps
+            if grammar.classify_dep(d.kind or "", d.type) in grammar.DEP_KINDS_SYSTEM]
+
+
+def orphan_deployment_units(m: ProjectModel) -> list[str]:
+    """Deployment units that run no traced component or entry point AND are not system infra.
+
+    These are the genuinely EMPTY boxes in the Deployment view: a unit the map declares, draws, and
+    then puts nothing in, with no infrastructure story to explain it.
+
+    Public because `coyodex-eval`'s deployment gate needs exactly this number and had been counting
+    something else. It compared linked units as an absolute count, so a map that ENRICHED its
+    deployment section — naming the proxy, the two datastores, the log forwarder and the test
+    doubles alongside the three real runtimes — read as a linkage drop (4/4 → 3/11) and failed the
+    gate, while the section it was judging had got strictly more accurate. Orphans answer the
+    question the gate is actually asking, and they are what `validate` already advises on."""
+    hosted: set[str] = set()
+    for c in m.components:
+        hosted.update(c.runs_in)
+    for ep in m.entry_points:
+        hosted.update(ep.runs_in)
+    dep_names = system_dep_names(m)
+    return sorted({d.unit for d in m.deployment if d.unit and d.unit not in hosted
+                   and not any(grammar.unit_name_matches_dep(d.unit, dn) for dn in dep_names)})
+
+
 def _deployment_placement_warnings(m: ProjectModel) -> list[str]:
     """Advisory: once the map USES `runs_in` (the Deployment view is in play), a self-activated entry
     point with no host unit — neither its own `runs_in` nor its component's — is invisible in that view.
@@ -2872,10 +2904,8 @@ def _deployment_quality_warnings_raw(m: ProjectModel) -> list[str]:
         hosted.update(c.runs_in)
     for ep in m.entry_points:
         hosted.update(ep.runs_in)
-    dep_names = [d.name for d in m.deps
-                 if grammar.classify_dep(d.kind or "", d.type) in grammar.DEP_KINDS_SYSTEM]
-    orphan_units = sorted({d.unit for d in m.deployment if d.unit and d.unit not in hosted
-                           and not any(grammar.unit_name_matches_dep(d.unit, dn) for dn in dep_names)})
+    dep_names = system_dep_names(m)
+    orphan_units = orphan_deployment_units(m)
     if orphan_units:
         warnings.append(f"Deployment unit(s) run no traced component or entry point and match no known "
                         f"system dependency: {', '.join(orphan_units)} — is each infra (add it as a "
