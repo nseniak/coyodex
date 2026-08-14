@@ -655,6 +655,53 @@ T8 Component internals · T9 Config/env vars · T10 Data schema.
 
 ## Cross-cutting rules
 
+**A blocked command is a STOP, not a puzzle.** When a shell or safety guard refuses a command, say so
+and ask — never rewrite the command so the guard stops matching. One build hit this twice in one run
+and evaded it both times, each with a comment naming the intent: a guard on dot-env files, whose own
+message said *ask the user before bypassing*, was defeated by assembling the filename from two string
+literals, and a guard on a prod-credential script was defeated by splitting that script's path across
+a `+`. Neither exposed anything and both blocks were arguably false positives — which is exactly why
+it is worth stating: the reasoning that produces a harmless bypass is the same reasoning that produces
+a harmful one, and the guard exists because that judgement is not the agent's to make. If a guard is
+wrong, saying so IS the deliverable. (This rule was itself written through a file-writing tool,
+because composing it in a shell tripped the same guard three times — a different mechanism openly
+reported, not the same command disguised.)
+
+**Two shell hazards this method's own commands keep hitting.** Both cost a live build real turns, and
+both are invisible until the output is wrong rather than absent.
+
+  * **Never `cd` into the coyodex clone in a command that also touches the mapped repo.** The `cd`
+    persists across `;` and `&&`, so a trailing `python3 -c "…open('.coyodex/project-map.json')…"`
+    reads *coyodex's own self-map*. One build did exactly that, reported "7 of 74 isolated entities",
+    and the ids were coyodex's vocabulary rather than the mapped project's — a wrong answer that
+    looked like a right one. Use absolute paths on both sides, or run the CLI by its absolute path
+    without `cd` at all.
+  * **This environment is zsh, and zsh does not word-split an unquoted expansion.** Building a
+    repeated flag as a string — `VD="$VD --verdicts $f"` — arrives as ONE argument and the command
+    refuses it. Use a bash array: `VD=(); VD+=(--verdicts "$f")`. `coyodex fix dedup-edge --help`
+    documents this for `--keep` because it was got wrong twice there; it was then got wrong a third
+    time on `--verdicts`, which is what moved the warning here where it covers every flag.
+
+**Reach for the verb before the heredoc.** Twelve of one build's twenty-eight hand-written scripts
+mutated the map or a fragment where a command already existed, and the scorecard assertion that
+watches this fell from 1.00 to 0.57 in one build. Every one of these replaces a `python3 - <<'PY'`
+block, and each exists because a hand script got the same job wrong once:
+
+| you are about to hand-write | run instead |
+|---|---|
+| a walk over `build-fragments/*.json` counting rows | `coyodex dump --counts` (it reads a FRAGMENT too) |
+| a listing of ids / names / sources | `coyodex dump --legend`, `--id`, `--record`, `--edges`, `--members` |
+| a tally of `true`/`false` across the verdict files | `coyodex grounding report` — the hand tally cannot tell a tie from a stated `unverifiable` |
+| an append into an extras heading | `coyodex record --heading … --line …` (`--replace` to correct one) |
+| a rewrite of a rule's / entity's own TEXT | `coyodex fix row --fragments .coyodex/build-fragments --id <ID> --set-<field> <text>` — it edits the OWNING FRAGMENT, so the edit survives re-assembly |
+| a corrected anchor | `coyodex fix apply-drift --to-reconcile` |
+| a duplicate edge or relation resolved | `coyodex fix dedup-edge` / `dedup-relation --to-reconcile` |
+| a before/after comparison of two maps | `coyodex diff <old> <new>` |
+
+A hand script over `project-map.json` is also how a build ends up reading a field the schema
+renamed, and how it ends up editing the ASSEMBLED map — which the next `assemble` rebuilds from the
+fragments, discarding the edit without a word.
+
 **Read the project's own docs.** Before drafting the behavioral layer, read what the project says
 about itself — `README`, `docs/`, `CONTRIBUTING`, a `CHANGELOG`, package/manifest descriptions, and
 any architecture or design notes. These are the primary source for the parts the code does not spell
@@ -1412,7 +1459,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   members — a subsystem, subdomain, capability or block)
   rather than hand-parsing `project-map.json`, which is how a build ends up with a throwaway script
   that reads a field the schema renamed. **`dump` also reads a build FRAGMENT**, so use it during
-  Phases 1-3 too instead of scripting over `build-fragments/*.json`.) **Batch on the payload's own
+  Phases 1-3 too instead of scripting over `build-fragments/*.json`.
+  **To see what an edit actually did, keep the map you are about to replace and run
+  `coyodex diff <old-map> <new-map>`** — rows added, dropped and changed, with the fields that moved.
+  It is the only row-level before/after signal there is: the assemble digest is one line, and a
+  count gate cannot see a row moving between two arrays. Its scope is two assembles of the SAME
+  work — before and after a `fix`, or one round of edits — never two independent builds, which
+  agree on neither numbering nor wording.) **Batch on the payload's own
   `theme`** — every worklist item carries one from a closed, most-dangerous-first set (`security`,
   `rule`, `dep-usage`, `ownership`, `persistence`, `messaging`, `lifecycle`, `cadence`, `backbone`)
   and **`security` holds every `access: true` rule site** as well as the `enforces`/`encrypts` edges,
@@ -1784,15 +1837,30 @@ git -C <repo> status --porcelain -- . ':(exclude).coyodex'   # empty = code is c
 
 Write the pin into the model's **`commit`** / **`committed`** / **`built`** fields (sha · commit
 date · build time — the header fragment carries them; the generated views render them as the map's
-header line). For **Built**, capture the minute once —
-`date +'%Y-%m-%d %H:%M'` — and reuse that exact string in both the header cell and the stamp below.
+header line).
 
-**Stamp the conversation (provenance for backup).** After the map is written and validated, record
-which conversation built it — run (paths under the coyodex clone, like `.venv/bin/coyodex`):
+**`built` is stamped LAST and copied BACKWARDS — never guessed early and reused.** This used to say
+"capture the minute once and reuse that exact string in both the header cell and the stamp below",
+which is only safe when the two happen minutes apart. They do not. The header fragment is authored
+during Assemble and the stamp belongs after the map is written and validated, so on a real build they
+are an hour apart: one build wrote `built: 2026-08-13 22:30` into its header near the start, passed
+that same string to `--built-at` at the end, and shipped a map whose own files were last written at
+**23:21**. Both the header and `provenance.json` carry the wrong minute permanently, and
+`coyodex-eval retro-precheck` reads exactly that field to decide whether a build has finished.
+
+So: write `header.json` with `built` **empty**, and fill it from the stamp at the end.
+
+**Stamp the conversation (provenance).** After the map is written and validated, record which
+conversation built it — run (paths under the coyodex clone, like `.venv/bin/coyodex`):
 
 ```
-.venv/bin/python tools/map_backup.py stamp <repo> --mode build --built-at '<YYYY-MM-DD HH:MM>'
+.venv/bin/coyodex provenance stamp <repo> --mode build      # NO --built-at: let it take the real clock
+# it prints `built_at=YYYY-MM-DD HH:MM` — put THAT string in header.json's `built`, then
+# re-run `assemble` and `render` so the header and provenance agree.
 ```
+
+Pass `--built-at` only when you are deliberately restating a time you did not just measure (an
+`accept` pass re-stamping an earlier build). On a build it is the flag that makes the map lie.
 
 It reads this session's id from `$CLAUDE_CODE_SESSION_ID` and writes `<repo>/.coyodex/provenance.json`
 (committed — session id + build time), so a later `.venv/bin/python tools/map_backup.py backup <repo>`

@@ -251,7 +251,8 @@ def load_elements(map_path: str | None, frag_paths: list[str],
         # share, so `assemble` and `reconcile` cannot drift on what an argument means. It was
         # briefly duplicated here, which is exactly the shape that lets two readers of the same
         # fragments disagree about the file set.
-        parts, notes, errors = load_fragment_paths([Path(p) for p in frag_paths])
+        loaded = load_fragment_paths([Path(p) for p in frag_paths])
+        parts, notes, errors = loaded.parts, loaded.notes, loaded.errors
         if errors:
             raise RuleError("cannot read the fragments:\n  " + "\n  ".join(errors))
         if not parts:

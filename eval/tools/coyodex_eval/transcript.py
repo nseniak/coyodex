@@ -426,7 +426,7 @@ def bash_commands(turns: Sequence[Turn]) -> tuple[tuple[int, str], ...]:
 #: `files`, `loc`, `map` and `runs`.
 _COYODEX_SUBCOMMANDS = frozenset({
     "anchor-drift", "archive", "assemble", "audit", "balance", "bless", "claims", "compare",
-    "cost", "dump", "finalize", "fix", "grounding", "hash", "judge", "lint-fragment", "preindex",
+    "cost", "diff", "dump", "finalize", "fix", "grounding", "hash", "judge", "lint-fragment", "preindex",
     "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
     "run", "score", "scope", "serve", "transcript", "validate",
 })
@@ -473,6 +473,23 @@ def summarise_call(call: ToolCall, width: int = 100) -> str:
         text = target if isinstance(target, str) else ""
     if not text:
         text = " ".join(call.text().split())
+    if len(text) <= width:
+        return text
+    # Say WHAT the truncation hid, when what it hid is a coyodex subcommand. The index is short on
+    # purpose, but a reader treats it as the list of what ran: a retrospective read this index,
+    # concluded `grounding write` never ran, and published that about a build which ran it at turn
+    # 489 chained behind an `assemble`. The finding was withdrawn. `--commands` was the answer and
+    # nothing in the index pointed at it, so the index now names the subcommands it is cutting off.
+    hidden = []
+    for m in _COYODEX_CMD.finditer(text[width:]):
+        sub, verb = m.group(1), m.group(2)
+        if sub not in _COYODEX_SUBCOMMANDS:
+            continue
+        label = f"{sub} {verb}" if verb in _COYODEX_SUBVERBS else sub
+        if label not in hidden:
+            hidden.append(label)
+    if hidden:
+        return f"{text[:width]} …+{', '.join(hidden)} (use --commands)"
     return text[:width]
 
 

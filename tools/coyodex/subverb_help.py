@@ -60,3 +60,24 @@ def handle(usage: str, verb: str, argv: list[str]) -> int | None:
     block = verb_block(usage, verb)
     print(block if block else usage)
     return 0
+
+
+def usage_error(usage: str, verb: str, message: str, stream: object = None) -> int:
+    """Print an argument error for a sub-verb TOGETHER WITH that verb's usage block. Returns 2.
+
+    A bare `ERROR: unknown option '--src'` names the mistake and withholds the answer. A live build
+    guessed `drop-edge --src C1 --verb reads --dst E24`, got exactly that line five times in a row,
+    and had to spend a turn on `--help` to learn the arguments are positional — the same round trip
+    `wants_help` above was added to remove, arriving from the other direction. The usage text already
+    exists and the dispatcher already knows the verb; withholding it is a choice, not a constraint.
+
+    Every argument-error site in a dispatched verb goes through here, so no parser can be written
+    that reports the error without the cure — the six `--help` holes above were six parsers each
+    forgetting the same thing separately.
+    """
+    import sys
+    out = stream if stream is not None else sys.stderr
+    print(f"ERROR: {message}", file=out)                            # type: ignore[arg-type]
+    print("", file=out)                                             # type: ignore[arg-type]
+    print(verb_block(usage, verb) or usage, file=out)                # type: ignore[arg-type]
+    return 2

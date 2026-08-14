@@ -206,3 +206,104 @@ def test_the_refusal_reports_the_observation_not_a_diagnosis():
             assert "the build is still producing output" not in message
         finally:
             shutil.rmtree(d, ignore_errors=True)
+
+
+# --- a touched transcript is not a live session (retro 2026-08-14) --------------------------------
+# A live retrospective refused to start: `retro-precheck` named a session "active 37s ago" whose
+# newest conversation record was three weeks old and whose byte count did not move across three
+# checks twenty seconds apart. The harness rewrites the trailing sidecar records (`last-prompt`,
+# `ai-title`, `mode`) when a session is merely listed or resumed, and those carry no timestamp.
+
+def make_transcript_with_records(root: Path, session: str, *, last_record_age_seconds: float,
+                                 trailing_sidecars: bool = True) -> Path:
+    """A transcript whose last CONVERSATION record is `last_record_age_seconds` old, written NOW.
+
+    The sidecar tail is the point: it is what the harness appends on a touch, and it carries no
+    timestamp — so a reader that stops at the last line finds nothing to date."""
+    from datetime import datetime, timezone
+
+    d = transcript_dir(root)
+    d.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.fromtimestamp(time.time() - last_record_age_seconds,
+                                   tz=timezone.utc).isoformat().replace("+00:00", "Z")
+    lines = [json.dumps({"type": "user", "timestamp": stamp, "message": {"role": "user"}}),
+             json.dumps({"type": "assistant", "timestamp": stamp, "message": {"role": "assistant"}})]
+    if trailing_sidecars:
+        lines += [json.dumps({"type": "last-prompt", "lastPrompt": "/coyodex"}),
+                  json.dumps({"type": "ai-title", "aiTitle": "Build a map"}),
+                  json.dumps({"type": "mode", "mode": "normal"}),
+                  "Shell cwd was reset to /tmp"]
+    p = d / f"{session}.jsonl"
+    p.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return p
+
+
+def test_a_freshly_touched_transcript_with_a_stale_last_record_is_not_live():
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj")
+        d = transcript_dir(root)
+        try:
+            make_transcripts(root, PREV)
+            make_transcript_with_records(root, LIVE, last_record_age_seconds=3_000_000)
+            ok, message, detail = check(root, this_session=MINE)
+            assert ok, message
+            assert detail["touched_not_live_transcripts"], detail
+            assert detail["touched_not_live_transcripts"][0]["session_id"] == LIVE
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def test_a_transcript_with_a_fresh_last_record_is_still_live():
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj")
+        d = transcript_dir(root)
+        try:
+            make_transcripts(root, PREV)
+            make_transcript_with_records(root, LIVE, last_record_age_seconds=5)
+            ok, message, _detail = check(root, this_session=MINE)
+            assert not ok, message
+            assert LIVE in message
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def test_a_transcript_with_no_readable_timestamp_falls_back_to_mtime_and_stays_live():
+    """Only ever used to DOWNGRADE a recent mtime. With nothing to date, the conservative answer —
+    a false 'finished' produces a whole retrospective about the wrong run — must win."""
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj")
+        d = transcript_dir(root)
+        try:
+            make_transcripts(root, PREV, LIVE)      # `{}` — a record with no timestamp
+            ok, message, _detail = check(root, this_session=MINE)
+            assert not ok, message
+            assert LIVE in message
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def test_a_clock_ahead_of_ours_never_reads_as_idle():
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj")
+        d = transcript_dir(root)
+        try:
+            make_transcripts(root, PREV)
+            make_transcript_with_records(root, LIVE, last_record_age_seconds=-600)
+            ok, message, _detail = check(root, this_session=MINE)
+            assert not ok, message
+        finally:
+            shutil.rmtree(d, ignore_errors=True)
+
+
+def test_the_last_dateable_record_is_found_behind_a_long_sidecar_tail():
+    from coyodex_eval.retro_precheck import last_content_age_seconds
+
+    with tempfile.TemporaryDirectory() as td:
+        root = make_project(Path(td) / "proj")
+        d = transcript_dir(root)
+        try:
+            p = make_transcript_with_records(root, LIVE, last_record_age_seconds=120)
+            age = last_content_age_seconds(p)
+            assert age is not None and 100 < age < 200, age
+        finally:
+            shutil.rmtree(d, ignore_errors=True)

@@ -27,6 +27,8 @@ from pathlib import Path
 
 from coyodex import audit_model, balance_lib, validate_model
 from coyodex.model import ModelError, ProjectModel, load_model
+
+from coyodex_eval.legacy_map import load_model_tolerating_legacy
 from coyodex.preindex_lib import expected_components  # the granularity expectation E, RE-COMPUTED
 # from the repo tree at score time (shared code, never the pre-index's JSON — GR4)
 from coyodex.validate_analysis import compression_coverage_from_refs  # repo-tree coverage (not a
@@ -408,7 +410,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: --repo {repo_root} not found", file=sys.stderr)
         return 1
     try:
-        profile = build_profile(path.read_text(encoding="utf-8"), repo_root=repo_root)
+        # READ-ONLY tolerance for a map an older coyodex wrote. `score` looking backwards at the map a
+        # rebuild replaced is its whole job in a retrospective, and a schema rename used to make that
+        # impossible: exit 1, no profile, and the reviewer hand-patching a copy to get a number.
+        # Writing paths (assemble / validate / fix) keep the strict loader and the loud refusal.
+        model, notes = load_model_tolerating_legacy(path.read_text(encoding="utf-8"))
+        for note in notes:
+            print(f"WARNING: {path}: {note}", file=sys.stderr)
+        profile = build_profile_from_model(model, repo_root=repo_root)
     except ModelError as e:
         print(f"ERROR: {path}: {e}", file=sys.stderr)
         return 1

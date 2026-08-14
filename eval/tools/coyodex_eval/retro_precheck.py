@@ -67,6 +67,63 @@ def age_seconds(p: Path) -> float | None:
         return None
 
 
+#: How much of a transcript's tail to read when dating its last CONTENT record. A JSONL record is a
+#: few KB at most, and the trailing sidecar records (`last-prompt`, `ai-title`, `mode`) that carry no
+#: timestamp are short, so this reaches back many records without loading a 2.5 MB file.
+_TAIL_BYTES = 64 * 1024
+
+
+def last_content_age_seconds(p: Path) -> float | None:
+    """Seconds since the last record in `p` that carries a `timestamp`. None when none is readable.
+
+    A transcript's mtime is not evidence that a session is writing. The harness rewrites the trailing
+    sidecar records (`last-prompt`, `ai-title`, `mode`) when a session is merely listed or resumed,
+    and those records carry no timestamp — so the file is touched with no conversation appended.
+    A live retrospective refused to start because of exactly that: `retro-precheck` named a session
+    as "active 37s ago" whose newest conversation record was from three weeks earlier and whose byte
+    count did not move across three checks twenty seconds apart.
+
+    Reading the tail costs one seek. It is used only to DOWNGRADE a recent mtime, never to upgrade an
+    old one, so the conservative direction the module argues for is preserved: a file nobody has
+    touched stays idle, and a file that is genuinely being appended to has a fresh record to show.
+    """
+    try:
+        size = p.stat().st_size
+        with p.open("rb") as fh:
+            if size > _TAIL_BYTES:
+                fh.seek(size - _TAIL_BYTES)
+                fh.readline()                    # drop the partial record the seek landed inside
+            tail = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return None
+    for line in reversed(tail.splitlines()):
+        line = line.strip()
+        if not line.startswith("{"):
+            continue
+        try:
+            rec = json.loads(line)
+        except ValueError:
+            continue
+        stamp = rec.get("timestamp") if isinstance(rec, dict) else None
+        if not isinstance(stamp, str) or not stamp:
+            continue
+        try:
+            when = _parse_iso_utc(stamp)
+        except ValueError:
+            continue
+        age = time.time() - when
+        # A clock ahead of ours reads as a negative age. Treat it as "just now" rather than as a
+        # nonsense number, so a skewed clock can never make a live session look idle.
+        return max(age, 0.0)
+    return None
+
+
+def _parse_iso_utc(stamp: str) -> float:
+    """Epoch seconds for an ISO-8601 UTC timestamp (`2026-08-13T20:21:33.602Z`)."""
+    from datetime import datetime, timezone
+    return datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone(timezone.utc).timestamp()
+
+
 #: Written by `coyodex-eval archive`, not by a build — a fresh archive must not read as a live build.
 _NOT_BUILD_OUTPUT = ("dev-rebuilds",)
 
@@ -154,16 +211,27 @@ def check(repo: Path, idle_seconds: int = DEFAULT_IDLE_SECONDS,
 
     tdir = transcript_dir(repo)
     live: list[tuple[str, float]] = []
+    touched: list[dict[str, object]] = []      # recent mtime, stale content — not a live session
     if tdir.is_dir():
         for f in tdir.glob("*.jsonl"):
             sid = f.stem
             if sid == built_sid or (this_session and sid == this_session):
                 continue
             a = age_seconds(f)
-            if a is not None and a < idle_seconds:
-                live.append((sid, a))
+            if a is None or a >= idle_seconds:
+                continue
+            # A recent mtime is a REASON TO LOOK, not the answer. Confirm with the last conversation
+            # record; a touched-but-unwritten transcript is not a live session. See
+            # `last_content_age_seconds`.
+            content_age = last_content_age_seconds(f)
+            if content_age is not None and content_age >= idle_seconds:
+                touched.append({"session_id": sid, "mtime_age_seconds": round(a),
+                                "last_record_age_seconds": round(content_age)})
+                continue
+            live.append((sid, content_age if content_age is not None else a))
     live.sort(key=lambda t: t[1])
     detail["live_transcripts"] = [{"session_id": s, "idle_seconds": round(a)} for s, a in live]
+    detail["touched_not_live_transcripts"] = touched
     if live:
         sid, a = live[0]
         return False, (

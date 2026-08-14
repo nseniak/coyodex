@@ -129,15 +129,35 @@ class AnchorDirective:
 
 
 @dataclass
+class DropRelationDirective:
+    """Which occurrence of a domain-card relation is removed.
+
+    `fix dedup-relation` resolves a duplicate relation — the same edge declared twice on one card, or
+    reciprocally on both — and wrote its answer into the ASSEMBLED map, which the next assemble
+    rebuilds from fragments. That is worse than the same gap on `dedup-edge` and `apply-drift`,
+    because a duplicate relation is BLOCKING: the resolution is discarded and the very next assemble
+    re-blocks on the duplicate it had just resolved. It was the only writing verb with no way to
+    record its decision.
+
+    ONE occurrence per directive, matching the verb's own `--drop` semantics: `entity` names the card
+    the relation is declared on, so a reciprocal pair is resolved by recording the side to remove."""
+
+    entity: str
+    verb: str
+    target: str
+
+
+@dataclass
 class Reconcile:
     sets: list[SetDirective] = field(default_factory=list)
     drop_edges: list[DropEdgeDirective] = field(default_factory=list)
     keep_edges: list[KeepEdgeDirective] = field(default_factory=list)
     set_anchors: list[AnchorDirective] = field(default_factory=list)
+    drop_relations: list[DropRelationDirective] = field(default_factory=list)
 
     def is_empty(self) -> bool:
         return (not self.sets and not self.drop_edges and not self.keep_edges
-                and not self.set_anchors)
+                and not self.set_anchors and not self.drop_relations)
 
 
 # ── shared riding-step helpers (also used by `fix drop-edge`) ──────────────────────────────────────
@@ -193,10 +213,10 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         raise ReconcileError(f"{label}: not valid JSON: {e}") from e
     if not isinstance(data, dict):
         raise ReconcileError(f"{label}: top level: expected an object")
-    unknown = set(data) - {"set", "drop_edges", "keep_edges", "set_anchors"}
+    unknown = set(data) - {"set", "drop_edges", "keep_edges", "set_anchors", "drop_relations"}
     if unknown:
         raise ReconcileError(f"{label}: unknown top-level key(s): {', '.join(sorted(unknown))} "
-                             f"(only 'set', 'drop_edges', 'keep_edges' and 'set_anchors' "
+                             f"(only 'set', 'drop_edges', 'keep_edges', 'set_anchors' and 'drop_relations' "
                              f"are allowed)")
     sets: list[SetDirective] = []
     raw_sets = data.get("set", [])
@@ -280,7 +300,25 @@ def load_reconcile(text: str, label: str) -> Reconcile:
                 raise ReconcileError(
                     f"{label}: set_anchors[{i}]: '{req}' is required (a non-empty string)")
         anchors.append(AnchorDirective(claim=d["claim"], corrected=d["corrected"]))
-    return Reconcile(sets=sets, drop_edges=drops, keep_edges=keeps, set_anchors=anchors)
+    raw_relations = data.get("drop_relations", [])
+    if not isinstance(raw_relations, list):
+        raise ReconcileError(f"{label}: 'drop_relations': expected a list")
+    relations: list[DropRelationDirective] = []
+    for i, d in enumerate(raw_relations):
+        if not isinstance(d, dict):
+            raise ReconcileError(f"{label}: drop_relations[{i}]: expected an object")
+        unk = set(d) - {"entity", "verb", "target"}
+        if unk:
+            raise ReconcileError(
+                f"{label}: drop_relations[{i}]: unknown key(s): {', '.join(sorted(unk))}")
+        for req in ("entity", "verb", "target"):
+            if not isinstance(d.get(req), str) or not d[req].strip():
+                raise ReconcileError(
+                    f"{label}: drop_relations[{i}]: '{req}' is required (a non-empty string)")
+        relations.append(DropRelationDirective(entity=d["entity"], verb=d["verb"],
+                                               target=d["target"]))
+    return Reconcile(sets=sets, drop_edges=drops, keep_edges=keeps, set_anchors=anchors,
+                     drop_relations=relations)
 
 
 # ── validate (scoped to the touched fields) ────────────────────────────────────────────────────────
@@ -373,6 +411,18 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
 
 
 # ── apply (after merge + _derive_entity_edges, before write) ───────────────────────────────────────
+
+def _is_reciprocal_relation(m: ProjectModel, dr: "DropRelationDirective") -> bool:
+    """Is this relation ALSO declared from the other card — the reciprocal half of a duplicate?
+
+    `fix dedup-relation` lists two blocking shapes: declared twice on ONE card, and declared on BOTH.
+    The second leaves one occurrence per card, so a one-match is still a legitimate drop there and
+    must not be mistaken for a stale directive."""
+    other = next((e for e in m.entities if e.id == dr.target), None)
+    if other is None:
+        return False
+    return any(r.target == dr.entity for r in other.relations)
+
 
 def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -> list[str]:
     """Apply the directives in place. Assumes `validate_reconcile` already passed (ids/kinds sound), so
@@ -480,4 +530,37 @@ def apply_reconcile(m: ProjectModel, rec: Reconcile, stats: dict[str, object]) -
             notes.append(f"note: {head}.")
     stats["reconcile_edges_dropped"] = dropped_total
     stats["reconcile_riding_unhealed"] = unhealed_total
+    # `drop_relations` LAST, and by itself: a domain-card relation is not an edge and shares none of
+    # the riding-step machinery above. A 0-match WARNS rather than fails, like `drop_edges` — a
+    # reconcile file must not rot when the fragment that declared the duplicate is later fixed.
+    relations_dropped = 0
+    for dr in rec.drop_relations:
+        ent = next((e for e in m.entities if e.id == dr.entity), None)
+        if ent is None:
+            notes.append(f"WARNING: reconcile drop_relations: no entity '{dr.entity}' — skipped "
+                         f"(the card may have been renamed or removed since).")
+            continue
+        matches = [k for k, r in enumerate(ent.relations)
+                   if r.verb.lower() == dr.verb.lower() and r.target == dr.target]
+        if not matches:
+            notes.append(f"WARNING: reconcile drop_relations: {dr.entity} declares no "
+                         f"'{dr.verb} → {dr.target}' — skipped (already resolved in the fragment?).")
+            continue
+        # The directive means "drop ONE OCCURRENCE OF A DUPLICATE". Applying it to a lone occurrence
+        # deletes a real domain fact, and the normal repair order makes that the DEFAULT outcome:
+        # record the directive, then fix the duplicate at source in the fragment, and the next
+        # assemble silently removes the survivor — reported as a `note:` and counted as a success.
+        # So the precondition is re-checked against the model being assembled, every time.
+        if len(matches) == 1 and not _is_reciprocal_relation(m, dr):
+            notes.append(f"WARNING: reconcile drop_relations: {dr.entity} declares "
+                         f"'{dr.verb} → {dr.target}' ONCE — it is no longer a duplicate, so the "
+                         f"directive is stale and was NOT applied (dropping it would delete the only "
+                         f"occurrence). Remove the directive.")
+            continue
+        idx = matches[0]
+        del ent.relations[idx]                        # ONE occurrence, like `fix dedup-relation`
+        relations_dropped += 1
+        notes.append(f"note: reconcile drop_relations '{dr.entity}: {dr.verb} → {dr.target}': "
+                     f"removed 1 relation.")
+    stats["reconcile_relations_dropped"] = relations_dropped
     return notes

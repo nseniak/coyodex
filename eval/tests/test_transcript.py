@@ -99,3 +99,49 @@ def test_a_redacted_thinking_block_is_marked_not_dropped(capsys):
         assert transcript.main([str(p), "--full"]) == 0
         out = capsys.readouterr().out
         assert "thinking redacted" in out and "300 signature byte(s)" in out
+
+
+# --- the index names the subcommands it truncates away (retro 2026-08-14) -------------------------
+# A retrospective read the one-line index, concluded `grounding write` never ran, and published that
+# about a build which ran it at turn 489 chained behind an `assemble`. The finding was withdrawn.
+# `--commands` was the answer and nothing in the index pointed at it.
+
+def make_bash_call(command: str) -> "transcript.ToolCall":
+    return transcript.ToolCall(id="x", name="Bash", input={"command": command})
+
+
+def test_a_subcommand_hidden_past_the_cut_is_named():
+    long_prefix = "cd /a/very/long/path/that/eats/the/width " + "-" * 70
+    call = make_bash_call(f"{long_prefix} && coyodex grounding write --map m.json")
+    line = transcript.summarise_call(call)
+    assert "grounding write" in line, line
+    assert "--commands" in line, line
+
+
+def test_several_hidden_subcommands_are_all_named_once_each():
+    long_prefix = "x" * 120
+    call = make_bash_call(f"{long_prefix}; coyodex assemble a.json; coyodex validate m.json; "
+                          f"coyodex assemble b.json")
+    line = transcript.summarise_call(call)
+    assert "assemble" in line and "validate" in line
+    assert line.count("assemble") == 1, line
+
+
+def test_a_short_command_is_returned_untouched():
+    call = make_bash_call("coyodex validate m.json")
+    assert transcript.summarise_call(call) == "coyodex validate m.json"
+
+
+def test_a_long_command_hiding_no_subcommand_is_truncated_silently():
+    call = make_bash_call("echo " + "y" * 200)
+    line = transcript.summarise_call(call)
+    assert len(line) == 100, line
+    assert "--commands" not in line
+
+
+def test_the_visible_head_is_still_exactly_the_width():
+    long_prefix = "z" * 150
+    call = make_bash_call(f"{long_prefix} && coyodex render m.json")
+    line = transcript.summarise_call(call)
+    assert line.startswith("z" * 100)
+    assert not line.startswith("z" * 101)

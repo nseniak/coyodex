@@ -120,3 +120,58 @@ if __name__ == "__main__":
     for fn in fns:
         fn()
         print(f"ok   {fn.__name__}")
+
+
+# --- the extras fragment is seeded, not demanded (retro 2026-08-14) -------------------------------
+# A build ran 21 well-formed `record` calls in one turn and every one failed with `cannot read …
+# extras.json — no such file`: no fan-out agent owns creating that fragment. The workaround was
+# `echo '{"extras": []}' >`, i.e. the hand-rolled write this command exists to replace.
+
+def test_a_missing_extras_fragment_is_seeded_and_the_record_lands(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        target = Path(td) / "extras.json"
+        assert main(["--map", str(target), "--heading", "Audit exceptions",
+                     "--line", "HP5: seeded out of band by the demo"]) == 0
+        assert "seeded" in capsys.readouterr().out
+        doc = json.loads(target.read_text())
+        assert doc["extras"][0]["heading"] == "Audit exceptions"
+        assert "HP5" in doc["extras"][0]["body"]
+
+
+def test_seeding_is_limited_to_extras_json_so_a_typo_is_still_refused(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        target = Path(td) / "project-mapp.json"          # a plausible typo
+        assert main(["--map", str(target), "--heading", "Audit exceptions", "--line", "HP5: why"]) == 2
+        assert "no such file" in capsys.readouterr().err
+        assert not target.exists(), "a typo'd path must never be created"
+
+
+def test_seeding_does_not_invent_a_missing_parent_directory(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        target = Path(td) / "nope" / "extras.json"
+        assert main(["--map", str(target), "--heading", "Audit exceptions", "--line", "HP5: why"]) == 2
+        capsys.readouterr()
+        assert not target.parent.exists()
+
+
+def test_a_missing_target_is_reported_before_the_argument_shape(capsys):
+    """Probing the failure with a malformed line reported the ARGUMENT complaint first and hid the
+    real cause — the operator learned about their `--line` and not about the path that did not
+    exist."""
+    with tempfile.TemporaryDirectory() as td:
+        target = Path(td) / "gone.json"
+        assert main(["--map", str(target), "--heading", "Audit exceptions",
+                     "--line", "no-why-here"]) == 2
+        err = capsys.readouterr().err
+        assert "no such file" in err, err
+        assert "states no why" not in err, err
+
+
+def test_a_failed_record_leaves_no_stray_seeded_fragment_behind():
+    """Seeding ran before the argument check, so a call that exited 2 on a malformed --line still
+    created `{"extras": []}` on disk."""
+    with tempfile.TemporaryDirectory() as td:
+        target = Path(td) / "extras.json"
+        assert main(["--map", str(target), "--heading", "Audit exceptions",
+                     "--line", "no-why-here"]) == 2
+        assert not target.exists(), "a refused call must not leave a fragment behind"

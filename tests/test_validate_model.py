@@ -3332,3 +3332,53 @@ def test_a_recorded_granularity_silences_the_advisory():
 def test_a_map_with_no_access_rules_is_not_asked_for_a_granularity():
     """A map with no access surface has no choice to declare, so the advisory must stay quiet."""
     assert not [w for w in warnings_of(make_valid_model()) if "no granularity record" in w]
+
+
+# --- a map with only its generated views is NAMED (retro 2026-08-14) ------------------------------
+# One repo sits in this state: `project-map.md` and `project-map.html` present, the model gone. The
+# views still look authoritative to a reader, and `ERROR: … not found` reads as "no coyodex here"
+# when in fact a build ran and its source was lost. The recovery differs from an empty directory's.
+
+def test_views_without_a_model_are_reported_as_such(capsys):
+    import tempfile
+
+    from coyodex import validate_model as vm
+
+    with tempfile.TemporaryDirectory() as td:
+        coy = Path(td) / ".coyodex"
+        coy.mkdir()
+        (coy / "project-map.md").write_text("# a rendered map\n", encoding="utf-8")
+        (coy / "project-map.html").write_text("<html></html>", encoding="utf-8")
+        assert vm.main([str(coy / "project-map.json")]) == 1
+        err = capsys.readouterr().err
+        assert "project-map.md" in err and "project-map.html" in err, err
+        assert "GENERATED views" in err, err
+        assert "build-fragments" in err, err
+
+
+def test_an_empty_map_directory_keeps_the_plain_not_found(capsys):
+    import tempfile
+
+    from coyodex import validate_model as vm
+
+    with tempfile.TemporaryDirectory() as td:
+        coy = Path(td) / ".coyodex"
+        coy.mkdir()
+        assert vm.main([str(coy / "project-map.json")]) == 1
+        err = capsys.readouterr().err
+        assert "not found" in err
+        assert "GENERATED views" not in err, err
+
+
+def test_only_the_markdown_view_surviving_is_still_reported(capsys):
+    import tempfile
+
+    from coyodex import validate_model as vm
+
+    with tempfile.TemporaryDirectory() as td:
+        coy = Path(td) / ".coyodex"
+        coy.mkdir()
+        (coy / "project-map.md").write_text("# a rendered map\n", encoding="utf-8")
+        assert vm.main([str(coy / "project-map.json")]) == 1
+        err = capsys.readouterr().err
+        assert "project-map.md" in err and "project-map.html" not in err, err

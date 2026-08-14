@@ -114,6 +114,26 @@ def main(argv: list[str] | None = None) -> int:
     heading = _arg(argv, "--heading")
     line = _arg(argv, "--line")
     replace = _arg(argv, "--replace")
+    # The TARGET is checked before the payload. A build ran 21 well-formed `record` calls in one turn
+    # and every one failed with `cannot read … extras.json — no such file`, because no fan-out agent
+    # owns creating that fragment; the build worked around it with `echo '{"extras": []}' >`, which is
+    # the hand-rolled write this command exists to replace. Probing the failure with a malformed line
+    # reported the ARGUMENT complaint first and hid the real cause entirely.
+    path = Path(map_path)
+    seed_extras = False
+    if not path.exists():
+        # Seeded, not blindly created: only an `extras.json` inside an existing directory, which is
+        # the one file a build is told to record into and the one nothing else creates. Any other
+        # missing path is a typo, and silently creating it would hide the typo — the direction that
+        # costs an operator an hour.
+        if path.name == "extras.json" and path.parent.is_dir():
+            # Deferred until the arguments are known good: seeding here left a stray
+            # `{"extras": []}` fragment behind every time a call exited 2 on a malformed --line.
+            seed_extras = True
+        else:
+            print(f"ERROR: cannot read {path} — no such file. (An `extras.json` in an existing "
+                  f"directory is seeded automatically; any other path must exist.)", file=sys.stderr)
+            return 2
     if not heading or not line:
         print("ERROR: --heading and --line are required", file=sys.stderr)
         return 2
@@ -126,10 +146,10 @@ def main(argv: list[str] | None = None) -> int:
     if complaint:
         print(f"ERROR: {complaint}", file=sys.stderr)
         return 2
-    path = Path(map_path)
-    if not path.exists():
-        print(f"ERROR: cannot read {path} — no such file", file=sys.stderr)
-        return 2
+    if seed_extras:
+        path.write_text('{\n  "extras": []\n}\n', encoding="utf-8")
+        print(f"note: seeded {path} — nothing else creates the extras fragment, and a record had "
+              f"nowhere to go.")
     from coyodex.assemble import dump_preserving, load_map_or_fragment
     try:
         m, present = load_map_or_fragment(path)

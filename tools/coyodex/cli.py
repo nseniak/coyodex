@@ -46,6 +46,9 @@ Commands:
   record     Append (or --replace) one `<id>: <why>` line under a recorded-exception extras
              heading — the one writer for an advisory an operator judged acceptable, so a
              record is never a hand-rolled string append into the wrong heading.
+  diff       What changed between two maps, ROW BY ROW — added / dropped / changed, with the
+             fields that moved. Two assembles of the SAME work (old map vs new, before vs after a
+             `fix`), never two independent builds: those agree on neither numbering nor wording.
   dump       Emit the parsed model as JSON — whole, or a fixed slice (--id /
              --record / --edges / --members). Read-only lookups over the model.
   reconcile  Expand path RULES into an explicit `reconcile.json` (the synthesis
@@ -117,6 +120,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "assemble":
         from coyodex import assemble  # stdlib-only
         return assemble.main(rest)
+    if cmd == "diff":
+        from coyodex import mapdiff  # stdlib-only; two assembles of the SAME work, never two builds
+        return mapdiff.main(rest)
     if cmd == "dump":
         from coyodex import dump  # stdlib-only; defaults to .coyodex/project-map.json
         return dump.main(rest)

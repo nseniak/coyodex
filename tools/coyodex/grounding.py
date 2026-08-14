@@ -396,8 +396,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 note = rest[i]
         else:
-            print(f"ERROR: unknown option(s): {a}", file=sys.stderr)
-            return 2
+            return subverb_help.usage_error(USAGE, verb, f"unknown option(s): {a}")
         i += 1
     if not worklist_path or not verdicts:
         print(f"ERROR: --worklist and at least one --verdicts are required\n\n{USAGE}",

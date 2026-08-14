@@ -44,6 +44,7 @@ and `process`: discoverable from `coyodex-eval --help`, and reachable without kn
 from __future__ import annotations
 
 import argparse
+import json
 import shutil
 import sys
 from pathlib import Path
@@ -117,6 +118,43 @@ def archive(root: Path, dry_run: bool = False) -> tuple[Path | None, list[Path]]
     return dest, entries
 
 
+
+def previous_maps(root: Path) -> list[tuple[Path, str, str]]:
+    """Every archived map under `.coyodex/`, newest id first: (map path, built_at, session id).
+
+    `archive` could file a map and then never say where any of them were. A retrospective had to
+    locate the baseline by hand — and located it in `.coyodex/.old-ignore-6/`, because the repo used
+    a hand-rolled archive convention that predates this command. Any directory holding a
+    `project-map.json` is reported, not just `dev-rebuilds/NNNN/`: a convention this command did not
+    create is exactly the one a reader cannot guess, and hiding it does not make it go away.
+
+    Provenance is read best-effort — an archive too old to carry one is still listed, with blanks.
+    """
+    coyodex = root / ".coyodex"
+    if not coyodex.is_dir():
+        return []
+    found: list[tuple[Path, str, str]] = []
+    for d in sorted(coyodex.iterdir()) + sorted((coyodex / ARCHIVE_DIR).glob("*")
+                                                if (coyodex / ARCHIVE_DIR).is_dir() else []):
+        if not d.is_dir() or d.name == ARCHIVE_DIR:
+            continue
+        m = d / "project-map.json"
+        if not m.is_file():
+            continue
+        built_at = session = ""
+        try:
+            prov = json.loads((d / "provenance.json").read_text(encoding="utf-8"))
+            sessions = prov.get("sessions") or []
+            if sessions:
+                built_at = str(sessions[-1].get("built_at", ""))
+                session = str(sessions[-1].get("session_id", ""))
+        except (OSError, ValueError, AttributeError, IndexError, TypeError):
+            pass
+        found.append((m, built_at, session))
+    found.sort(key=lambda t: (t[1], t[0].as_posix()), reverse=True)
+    return found
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         prog="coyodex-eval archive",
@@ -124,9 +162,25 @@ def main(argv: list[str] | None = None) -> int:
                     "builds from scratch (dispatch.md reads the WORKING TREE to choose the mode).")
     ap.add_argument("root", type=Path, help="the mapped repo's root directory")
     ap.add_argument("--dry-run", action="store_true", help="show what would move, write nothing")
+    ap.add_argument("--list", action="store_true", dest="list_only",
+                    help="list the archived maps already under .coyodex/ and exit — the baseline a "
+                         "retrospective or a comparison needs, which nothing else could answer")
     args = ap.parse_args(argv)
 
     root: Path = args.root.expanduser().resolve()
+    if args.list_only:
+        rows = previous_maps(root)
+        if not rows:
+            print(f"archive: no archived map under {root / '.coyodex'} — nothing to compare against. "
+                  f"A from-scratch rebuild files one here; a user's map evolves in place and never "
+                  f"accumulates any.")
+            return 0
+        print(f"archived map(s) under {root / '.coyodex'}, newest first:")
+        for m, built_at, session in rows:
+            stamp = built_at or "(no provenance)"
+            sid = f"  session {session[:8]}…" if session else ""
+            print(f"  {stamp:<20} {m.relative_to(root)}{sid}")
+        return 0
     try:
         dest, entries = archive(root, dry_run=args.dry_run)
     except (FileNotFoundError, OSError) as exc:

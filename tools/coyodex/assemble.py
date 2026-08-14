@@ -21,7 +21,7 @@ from __future__ import annotations
 import json
 import re
 import sys
-from dataclasses import MISSING, fields, is_dataclass
+from dataclasses import MISSING, dataclass, fields, is_dataclass
 from pathlib import Path
 from typing import get_args, get_origin, get_type_hints
 
@@ -217,9 +217,38 @@ def expand_directories(paths: list[Path], notes: list[str]) -> list[Path]:
     return out
 
 
-def load_fragment_paths(paths: list[Path]) -> tuple[list[tuple[str, ProjectModel]],
-                                                    list[str], list[str]]:
-    """Read fragment FILES into `merge_fragments` parts. Returns `(parts, notes, errors)`.
+@dataclass(frozen=True)
+class FragmentLoad:
+    """What reading a set of fragment files produced: the parts, what was SKIPPED, what FAILED.
+
+    A dataclass rather than a tuple, and deliberately not a NamedTuple — the whole point is that it
+    CANNOT be unpacked positionally. `load_fragment_paths` used to return
+    `tuple[list[parts], list[str], list[str]]`, and a caller unpacked the two `list[str]`s the wrong
+    way round: `notes` (files deliberately skipped) landed in the variable checked as fatal, and
+    `errors` (files that failed to load) were assigned to `_` and dropped.
+
+    Both halves of that were bugs, and the dropped-errors half loses data: `fix row`'s safety guard
+    re-assembles the fragments to check that an edit does not change which ids survive, and with the
+    errors discarded a fragment that failed to load was silently absent from the set it checked — so
+    an edit that merged two rules away reported nothing and exited 0.
+
+    NOTHING could catch it. Three positional `list[str]`s type-check in any order, so pyright is
+    happy; and the swap is invisible whenever both lists are empty, which is every test that builds
+    well-formed fragments. Re-introducing the bug and running the whole suite: 1914 passed. Named
+    fields make the mistake unwritable instead of merely testable, which is the only fix that holds.
+    """
+
+    parts: list[tuple[str, ProjectModel]]
+    #: Files deliberately not read (a `*.draft.json`, a Phase-4 verdicts file, a directory expanded).
+    #: ADVISORY — a caller that treats these as failures refuses work `assemble` itself accepts.
+    notes: list[str]
+    #: Files that should have loaded and did not. FATAL — a caller that ignores these is reasoning
+    #: about a fragment set that is missing pieces.
+    errors: list[str]
+
+
+def load_fragment_paths(paths: list[Path]) -> FragmentLoad:
+    """Read fragment FILES into `merge_fragments` parts. See `FragmentLoad` for the three results.
 
     Every path is attempted before returning, so one malformed fragment does not hide the next four —
     the lead re-pings all the guilty agents in one round instead of discovering them one build cycle
@@ -261,7 +290,7 @@ def load_fragment_paths(paths: list[Path]) -> tuple[list[tuple[str, ProjectModel
                              f"`anchor-drift` / `fix apply-drift`, not `assemble`)")
                 continue
             errors.append(str(e))
-    return parts, notes, errors
+    return FragmentLoad(parts=parts, notes=notes, errors=errors)
 
 
 def _element_types() -> dict[str, type]:
@@ -364,7 +393,7 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
                     problems.append(f"duplicate id {el.id}: defined by both {id_owner[el.id]} "
                                     f"and {label} — agents must keep to their pre-allocated ID ranges")
                 id_owner.setdefault(el.id, label)
-    _merge_duplicate_deps(out)
+    deps_merged = _merge_duplicate_deps(out)
     actor_stripped = _strip_actor_edges(out)          # actors are never backbone endpoints
     comp_merged = _merge_duplicate_components(out)     # same module harvested by two slices → one
     chan_merged = _merge_duplicate_messaging(out, problems)   # two agents, same example row
@@ -375,6 +404,7 @@ def merge_fragments(parts: list[tuple[str, ProjectModel]],
     _mint_entry_point_ids(out)   # after every merge, so the minted range has no gaps
     extras_merged = _merge_extras_headings(out)
     if stats is not None:
+        stats["deps_merged"] = deps_merged
         stats["actor_edges_stripped"] = actor_stripped
         stats["components_merged"] = comp_merged
         stats["messaging_rows_collapsed"] = chan_merged
@@ -553,12 +583,17 @@ def _dep_identity(d) -> tuple[str, str]:
     return ((d.kind or "").strip().lower(), name)
 
 
-def _merge_duplicate_deps(m: ProjectModel) -> None:
+def _merge_duplicate_deps(m: ProjectModel) -> int:
     """Collapse deps that share a real identity (kind + normalized name) into ONE row, and RE-POINT
     every edge from the merged-away id to the survivor. Multiple agents discovering the same dependency
     is CORRECT input (not an error), so slicing harvest by directory no longer duplicates deps. Only an
     exact identity match merges — a differing kind is a different identity, left as two rows (never a
-    wrong merge). Deterministic: the first occurrence is the survivor."""
+    wrong merge). Deterministic: the first occurrence is the survivor.
+
+    Returns how many rows were merged AWAY, so the digest can report it. It used to return None and
+    the count reached no reader: a dep merge re-points every C→D edge to the survivor, so a silent
+    merge moves edges under a map the operator is reading. Every other auto-clean pass here reports;
+    this one was the only one that could change the graph and say nothing."""
     survivor_of: dict[tuple[str, str], str] = {}
     remap: dict[str, str] = {}
     kept = []
@@ -573,11 +608,12 @@ def _merge_duplicate_deps(m: ProjectModel) -> None:
             survivor_of[ident] = d.id
             kept.append(d)
     if not remap:
-        return
+        return 0
     m.deps = kept
     for e in m.edges:               # edges are the only refs into a dep id (C→D)
         e.src = remap.get(e.src, e.src)
         e.dst = remap.get(e.dst, e.dst)
+    return len(remap)
 
 
 def _entry_point_identity(ep: EntryPoint) -> tuple[str, str, str, str]:
@@ -833,7 +869,8 @@ def main(argv: list[str] | None = None) -> int:
     if not frags:
         print("ERROR: no fragments given", file=sys.stderr)
         return 2
-    parts, notes, errors = load_fragment_paths(frags)
+    loaded = load_fragment_paths(frags)
+    parts, notes, errors = loaded.parts, loaded.notes, loaded.errors
     for note in notes:
         print(note, file=sys.stderr)
     for err in errors:
@@ -937,6 +974,43 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
+#: Every mutation counter the assemble can record, in digest display order: the `stats` key and the
+#: phrase the digest prints for it. THIS TABLE IS THE DIGEST — `_assemble_digest` iterates it and
+#: hand-writes nothing, so a counter cannot be computed and then go unreported.
+#:
+#: It WAS a hand-written chain of `if stats.get(...)` branches, and three of the eight counters had no
+#: branch at all: `duplicate_rules_collapsed`, `duplicate_entry_points_collapsed`, and `deps_merged`
+#: (which did not exist — the pass returned None). Two real map changes were traced to that silence:
+#: editing ONE rule's statement in a fragment splits a merged rule and mints an id that did not exist
+#: before, and re-anchoring ONE entry point re-sorts the minted range so a fifth of the EP ids point at
+#: a different surface. Both printed `ops: none`. `tests/test_assemble.py` parses this module for
+#: `stats[...]` writes and fails when one is missing here — the half a comment cannot enforce.
+_STATS_LABELS: tuple[tuple[str, str], ...] = (
+    ("actor_edges_stripped", "actor-edges stripped"),
+    ("deps_merged", "deps merged"),
+    ("components_merged", "components merged"),
+    ("duplicate_rules_collapsed", "dup-rules collapsed"),
+    ("duplicate_edges_collapsed", "dup-edges collapsed"),
+    ("duplicate_entry_points_collapsed", "dup-entry-points collapsed"),
+    ("entity_edges_derived", "C→E edges derived"),
+    ("messaging_rows_collapsed", "messaging rows collapsed"),
+    ("extras_sections_merged", "extras sections merged"),
+)
+
+#: The same contract for the `--reconcile` counters, which live in a second dict built by
+#: `reconcile.apply_reconcile`. `reconcile_set` (per-field counts) and `reconcile_riding_unhealed`
+#: (a warning, not a plain count) are rendered by hand below and are named in `_REC_STATS_CUSTOM` so
+#: the completeness test can see they are accounted for rather than forgotten.
+_REC_STATS_LABELS: tuple[tuple[str, str], ...] = (
+    ("duplicate_edges_resolved", "reconcile keep_edges"),
+    ("reconcile_edges_dropped", "reconcile drop_edges"),
+    ("anchors_corrected", "reconcile set_anchors"),
+    ("reconcile_relations_dropped", "reconcile drop_relations"),
+)
+
+_REC_STATS_CUSTOM: frozenset[str] = frozenset({"reconcile_set", "reconcile_riding_unhealed"})
+
+
 def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict[str, object]) -> str:
     """One-line, self-describing summary of the assemble: the resulting inventory plus every mutation
     the auto-clean passes and `--reconcile` made (all zero-suppressed) — the WS-T2 transcript trail."""
@@ -944,31 +1018,20 @@ def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict
            "edges": len(model.edges), "S": len(model.subsystems), "SD": len(model.subdomains)}
     parts = [f"model: {', '.join(f'{k}:{v}' for k, v in inv.items() if v)}"]
     ops: list[str] = []
-    if stats.get("actor_edges_stripped"):
-        ops.append(f"actor-edges stripped {stats['actor_edges_stripped']}")
-    if stats.get("components_merged"):
-        ops.append(f"components merged {stats['components_merged']}")
-    if stats.get("duplicate_edges_collapsed"):
-        ops.append(f"dup-edges collapsed {stats['duplicate_edges_collapsed']}")
-    if stats.get("entity_edges_derived"):
-        ops.append(f"C→E edges derived {stats['entity_edges_derived']}")
-    if stats.get("messaging_rows_collapsed"):
-        ops.append(f"messaging rows collapsed {stats['messaging_rows_collapsed']}")
-    if stats.get("extras_sections_merged"):
-        ops.append(f"extras sections merged {stats['extras_sections_merged']}")
+    for key, label in _STATS_LABELS:        # the table IS the digest — see _STATS_LABELS
+        if stats.get(key):
+            ops.append(f"{label} {stats[key]}")
     sc = rec_stats.get("reconcile_set", {})
     if isinstance(sc, dict) and any(sc.values()):
         ops.append("reconcile set " + "/".join(f"{k}:{v}" for k, v in sc.items() if v))
-    if rec_stats.get("duplicate_edges_resolved"):
-        # `keep_edges` removed 51 edges on a real map and the digest said nothing — the same silent
-        # delta this directive was added to stop. It belongs beside drop_edges, not nowhere.
-        ops.append(f"reconcile keep_edges {rec_stats['duplicate_edges_resolved']}")
-    if rec_stats.get("reconcile_edges_dropped"):
-        ops.append(f"reconcile drop_edges {rec_stats['reconcile_edges_dropped']}")
-    if rec_stats.get("anchors_corrected"):
-        # Same reason as keep_edges above. `set_anchors` exists because 14 corrected anchors were
-        # once lost silently; applying them silently is the same failure with the sign flipped.
-        ops.append(f"reconcile set_anchors {rec_stats['anchors_corrected']}")
+    # `keep_edges` removed 51 edges on a real map and the digest said nothing — the same silent
+    # delta the directive was added to stop. `set_anchors` exists because 14 corrected anchors
+    # were once lost silently; applying them silently is the same failure with the sign flipped.
+    # Both are rows in `_REC_STATS_LABELS` now, so neither can be dropped by editing this loop.
+    for key, label in _REC_STATS_LABELS:
+        value = rec_stats.get(key)
+        if isinstance(value, int) and value:
+            ops.append(f"{label} {value}")
     # Unhealed riding steps belong HERE, in the digest, not on the reconcile note further up: the
     # note is line 9 of 13 on a fresh assemble, so `| tail -4` (how a live build read this output)
     # cuts it, while the digest is always in the last three lines. A report-only `drop_edges` that

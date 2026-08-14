@@ -24,6 +24,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Sequence
 
 from coyodex import balance_lib, grammar
 from coyodex.anchors import FILEREF as _FILEREF
@@ -115,12 +116,24 @@ def cadence_claim(kind: str, trigger: str, cadence: str) -> str:
     return f"Entry point [{kind}] {trigger} runs on cadence '{cadence}'"
 
 
+def lifecycle_claim(el_id: str, name: str, states: "Sequence[str]",
+                    transitions: "Sequence[object]") -> str:
+    """An element's lifecycle claim, EXACTLY as `l2_worklist_model` builds it.
+
+    Extracted so the worklist and `apply_anchor_corrections` cannot drift apart. The rule-site claim
+    was once built in one place and re-derived in the other; the two wordings diverged and every rule
+    correction was reported as an unparseable EDGE claim and dropped."""
+    return (f"{el_id} ({name}) has states [{', '.join(states)}]"
+            + (f" with {len(transitions)} transition(s)" if transitions else ""))
+
+
 def apply_anchor_corrections(m: ProjectModel,
                              corrections: list[tuple[str, str]]) -> tuple[dict[str, int], list[str]]:
     """Write each `(claim, corrected anchor)` onto the element its claim identifies.
 
-    Four kinds, matched by recomputing every candidate's claim: an edge's `where`, a security
-    row's `source`, an entry point's `cadence_source`, and a business rule SITE's `where`. Returns
+    Five kinds, matched by recomputing every candidate's claim: an edge's `where`, a security
+    row's `source`, an entry point's `cadence_source`, a business rule SITE's `where`, and an
+    element's `states.source`. Returns
     per-kind counts and the notes to print. A claim matching 0 or >1 elements is NEVER blind-written — it is reported and skipped,
     the same multiplicity rule `fix security-row` enforces, and for the same reason: two rows can
     share a surface, two edges can share a triple, and picking "the first" is how a hand script
@@ -132,7 +145,7 @@ def apply_anchor_corrections(m: ProjectModel,
     re-matched the row the first had just moved, saw two candidates, skipped — and left two
     byte-identical security rows behind. Same inputs, two different maps. Two corrections that land
     on ONE element are refused for the same reason: whichever won would be an accident of order."""
-    counts = {"edge": 0, "security": 0, "cadence": 0, "rule_site": 0}
+    counts = {"edge": 0, "security": 0, "cadence": 0, "rule_site": 0, "lifecycle": 0}
     notes: list[str] = []
     # Pass 1 — resolve every claim against the UNTOUCHED model.
     # (claim, corrected, kind, index, sub-index). `sub` is -1 for the flat arrays and the SITE
@@ -184,9 +197,27 @@ def apply_anchor_corrections(m: ProjectModel,
                 continue
             resolved.append((claim, corrected, "cadence", eps[0], -1))
             continue
-        notes.append(f"WARNING: '{claim}' matches no edge, security surface, rule site or "
-                     f"cadenced entry point in this map — skipped (the claim may have been "
-                     f"rewritten since).")
+        # Lifecycle LAST among the claim-shaped kinds: its target is `states.source` on either an
+        # entity or a component, so `sub` carries WHICH list rather than a nested index. The theme
+        # was drift-ELIGIBLE (the skeptic is sent to the declaring enum, the same line the anchor
+        # holds) with no writer here, so every confirmed lifecycle drift was re-authored by hand —
+        # verbatim the `cadence` gap that this same function was extended to close.
+        life = [(i, which)
+                for which, seq in ((0, m.entities), (1, m.components))
+                for i, el in enumerate(seq)
+                if (sm := getattr(el, "states", None)) is not None and sm.states
+                and (sm.source or "").strip()
+                and lifecycle_claim(el.id, el.name, sm.states, sm.transitions) == claim]
+        if life:
+            if len(life) != 1:
+                notes.append(f"WARNING: '{claim}' matches {len(life)} lifecycles — skipped "
+                             f"(resolve by hand).")
+                continue
+            resolved.append((claim, corrected, "lifecycle", life[0][0], life[0][1]))
+            continue
+        notes.append(f"WARNING: '{claim}' matches no edge, security surface, rule site, "
+                     f"cadenced entry point or lifecycle in this map — skipped (the claim may "
+                     f"have been rewritten since).")
     # Two corrections resolving to ONE element cannot both be honoured; order must not decide.
     # Keyed on the CORRECTED value, not the claim: the same claim listed twice with two different
     # anchors is the same conflict wearing one name, and comparing claims missed it entirely.
@@ -222,6 +253,13 @@ def apply_anchor_corrections(m: ProjectModel,
                 notes.append(f"  {claim}: where {site.where!r} → {corrected!r}")
                 site.where = corrected
                 counts["rule_site"] += 1
+        elif kind == "lifecycle":
+            el = (m.entities if sub == 0 else m.components)[idx]
+            sm = getattr(el, "states", None)
+            if sm is not None and sm.source != corrected:
+                notes.append(f"  {claim}: states.source {sm.source!r} → {corrected!r}")
+                sm.source = corrected
+                counts["lifecycle"] += 1
         else:
             ep = m.entry_points[idx]
             if ep.cadence_source != corrected:
@@ -848,8 +886,7 @@ def l2_worklist_model(m: ProjectModel) -> list[WorkItem]:
         if sm is not None and sm.states:
             src = sm.source or getattr(el, "source", "") or ""
             items.append(WorkItem(
-                claim=f"{el.id} ({el.name}) has states [{', '.join(sm.states)}]"
-                      + (f" with {len(sm.transitions)} transition(s)" if sm.transitions else ""),
+                claim=lifecycle_claim(el.id, el.name, sm.states, sm.transitions),
                 anchor=_anchor(src),
                 drift_eligible=bool((sm.source or "").strip()), theme="lifecycle",
                 why_risky=("lifecycles rot first — verify the declaring enum/constants still "

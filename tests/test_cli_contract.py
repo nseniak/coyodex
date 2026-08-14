@@ -27,7 +27,8 @@ COMMAND_MODULE: dict[str, str] = {
     "preindex": "preindex", "validate": "validate_model", "audit": "audit_model",
     "render": "viewer.render", "serve": "viewer.serve", "assemble": "assemble",
     "lint-fragment": "lint_fragment", "anchor-drift": "anchor_drift", "fix": "fix",
-    "dump": "dump", "reconcile": "reconcile_build", "balance": "balance", "finalize": "finalize",
+    "dump": "dump", "diff": "mapdiff", "reconcile": "reconcile_build",
+    "balance": "balance", "finalize": "finalize",
     "grounding": "grounding", "record": "record", "scope": "scope",
     "provenance": "provenance",
 }
@@ -230,3 +231,121 @@ def test_a_flag_advertised_as_repeatable_reads_every_occurrence():
                 assert "challenged 2 of" in text, (
                     f"{name} read {text.splitlines()[0] if text else '(nothing)'} — a repeatable "
                     f"flag that keeps only the last occurrence")
+
+
+# --- the shape that hides a swap (retro 2026-08-14) -----------------------------------------------
+# `load_fragment_paths` returned two same-typed `list[str]`s positionally, and a caller took them the
+# wrong way round: `notes` (advisory) was checked as fatal, `errors` (fatal) were dropped. That made a
+# safety guard inert in the direction that loses data. NOTHING could catch it — same-typed slots
+# type-check in any order, and the swap is invisible whenever both are empty, which is every test
+# that builds clean input. Re-introducing it and running the whole suite: 1914 passed.
+#
+# The sharpened criterion, measured rather than assumed:
+#   * `validate_model` returns `(problems, warnings)` — swapping it fails 210 tests. COVERED, because
+#     the suite routinely asserts both lists NON-empty.
+#   * `_duplicate_relations` returned `(same_card, reciprocal)` — swapping it passed all 1916. Both
+#     are empty on a healthy map, so no clean fixture can tell them apart. NAMED, like the loader.
+#
+# So the risk is not "two same-typed slots"; it is "two same-typed slots that are BOTH EMPTY on the
+# happy path". A static test cannot decide that, so this records the population instead: a NEW
+# function of this shape has to be considered rather than merged by omission — which is the same
+# reason `COMMAND_MODULE` above is pinned.
+
+SAME_TYPED_COLLECTION_RETURNS: frozenset[str] = frozenset({
+    # The `(problems, warnings)` convention — one uniform family, proven covered by the swap test.
+    "tools/coyodex/validate_model.py::validate_model",
+    "tools/coyodex/validate_model.py::_check_flows",
+    "tools/coyodex/validate_model.py::check_rules_model",
+    "tools/coyodex/validate_model.py::_check_dep_buckets",
+    "tools/coyodex/validate_model.py::_check_messaging",
+    "tools/coyodex/validate_model.py::_check_states",
+    "tools/coyodex/validate_model.py::_check_group_tech",
+    "tools/coyodex/validate_model.py::_check_edges",
+    "tools/coyodex/validate_model.py::check_domain_relations",
+    "tools/coyodex/validate_model.py::_check_domain_cards",
+    "tools/coyodex/validate_model.py::_check_extra_conventions",
+    "tools/coyodex/validate_analysis.py::check_hierarchy",
+    # Pure builders with one call site each, consumed immediately at that site.
+    "tools/coyodex/audit_model.py::_touch_sets",
+    "tools/coyodex/preindex.py::build_symbols",
+    "tools/coyodex/preindex.py::build_imports",
+    "tools/coyodex/viewer/gen_viewer.py::_deployment_edges",
+    "tools/coyodex/views.py::_component_headers",
+    "tools/coyodex/views.py::_dep_headers",
+})
+
+
+_COLLECTION_TYPES = ("list", "dict", "set", "frozenset", "tuple")
+
+
+def _slots_repeat_a_collection(types: list[str]) -> bool:
+    import collections
+
+    return any(n > 1 and t.split("[")[0] in _COLLECTION_TYPES
+               for t, n in collections.Counter(types).items())
+
+
+def _same_typed_collection_returns() -> set[str]:
+    """Every function whose RETURN is two or more same-typed collection slots, positionally.
+
+    Four escape routes were found by review and are all closed here, because a guard with a hole is
+    worse than none — a reader trusts it. `async def` was skipped entirely; a module-level
+    `X = tuple[list[str], list[str]]` alias hid the shape behind a Name; the key was the file's
+    BASENAME, so two `views.py` in different packages collided into one entry; and — the ironic
+    one — a `NamedTuple` with two same-typed collection fields passed, though a NamedTuple is
+    positionally unpackable and is exactly what `assemble.FragmentLoad`'s docstring says not to use.
+    """
+    import ast
+
+    found: set[str] = set()
+    roots = [REPO_ROOT / "tools" / "coyodex", REPO_ROOT / "eval" / "tools"]
+    for root in roots:
+        for f in sorted(root.rglob("*.py")):
+            tree = ast.parse(f.read_text(encoding="utf-8"))
+            key_prefix = f.relative_to(REPO_ROOT).as_posix()
+            # Module-level `X = tuple[...]` aliases, so a return annotated with the alias is seen.
+            aliases: dict[str, list[str]] = {}
+            for node in tree.body:
+                if (isinstance(node, ast.Assign) and len(node.targets) == 1
+                        and isinstance(node.targets[0], ast.Name)
+                        and isinstance(node.value, ast.Subscript)
+                        and ast.unparse(node.value.value) == "tuple"):
+                    sl = node.value.slice
+                    aliases[node.targets[0].id] = [ast.unparse(e) for e in
+                                                   (sl.elts if isinstance(sl, ast.Tuple) else [sl])]
+            for node in ast.walk(tree):
+                # A NamedTuple IS positionally unpackable — the shape this guard is about.
+                if isinstance(node, ast.ClassDef) and any(
+                        ast.unparse(b).split(".")[-1] == "NamedTuple" for b in node.bases):
+                    fields = [ast.unparse(st.annotation) for st in node.body
+                              if isinstance(st, ast.AnnAssign)]
+                    if _slots_repeat_a_collection(fields):
+                        found.add(f"{key_prefix}::{node.name}")
+                    continue
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                r = node.returns
+                if r is None:
+                    continue
+                if isinstance(r, ast.Name) and r.id in aliases:
+                    types = aliases[r.id]
+                elif isinstance(r, ast.Subscript) and ast.unparse(r.value) == "tuple":
+                    types = [ast.unparse(e) for e in
+                             (r.slice.elts if isinstance(r.slice, ast.Tuple) else [r.slice])]
+                else:
+                    continue
+                if _slots_repeat_a_collection(types):
+                    found.add(f"{key_prefix}::{node.name}")
+    return found
+
+
+def test_no_new_function_returns_two_same_typed_collections_unnamed():
+    found = _same_typed_collection_returns()
+    new = sorted(found - SAME_TYPED_COLLECTION_RETURNS)
+    assert not new, (
+        f"new function(s) returning two or more same-typed collection slots positionally: {new}. "
+        f"If BOTH are empty on the happy path, no test can tell a swap from correct behaviour — "
+        f"return a small named dataclass instead (see `assemble.FragmentLoad`). If one is normally "
+        f"non-empty, the suite can cover it: prove that with a swap test, then add it to the list.")
+    gone = sorted(SAME_TYPED_COLLECTION_RETURNS - found)
+    assert not gone, f"listed but no longer of this shape (remove from the list): {gone}"

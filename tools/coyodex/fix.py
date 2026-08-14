@@ -30,14 +30,19 @@ from __future__ import annotations
 import json
 import re
 import sys
+import collections
+import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from coyodex import subverb_help
+from coyodex.subverb_help import usage_error
+from coyodex.assemble import load_fragment_paths, merge_fragments
 from coyodex.anchor_drift import (apply_drift_exceptions, drift_findings, drift_records,
                                   load_verdicts)
 from coyodex.audit_model import (EDGE_CLAIM as _EDGE_CLAIM, apply_anchor_corrections,
                                  l2_worklist_model, security_claim as _security_claim)
-from coyodex.model import ProjectModel, access_rules
+from coyodex.model import ID_ARRAYS, ProjectModel, access_rules
 from coyodex.reconcile import drop_riding, repoint_riding, riding_steps
 
 #: The listing's display text for an edge carrying no anchor. Never a value to RECORD.
@@ -47,16 +52,21 @@ _NO_CALL_SITE = "(no call site)"
 #: `security` covers BOTH the auth-surface rows and the `enforces`/`encrypts` edges — `_EDGE_CLAIM`
 #: sorts those two apart, so this set alone does not choose the writer.
 #:
-#: What reaches the not-applicable branch is `lifecycle`: those claims are drift-ELIGIBLE (the
-#: skeptic is sent to the same declaring line the anchor holds) but have no writer here, so they are
-#: re-authored by hand. `cadence` used to be in that bucket and no longer is — a live build had five
-#: cadence drifts refused and hand-typed them back through a bespoke script. `persistence` and `messaging` never arrive at all —
-#: `anchor_drift._confirmed_drifts` filters them out upstream as report-only.
+#: `lifecycle` used to reach the not-applicable branch: drift-ELIGIBLE (the skeptic is sent to the
+#: declaring enum, the same kind of line the anchor holds) with no writer, so every confirmed
+#: lifecycle drift was re-authored by hand. `cadence` was in that same bucket before it — a live
+#: build had five cadence drifts refused and hand-typed them back through a bespoke script — and the
+#: pattern repeating twice is why the partition test below now allows NO hand-written exception list.
+#: `persistence` and `messaging` never arrive at all: `anchor_drift._confirmed_drifts` filters them
+#: out upstream as report-only, because their skeptic is sent to a DIFFERENT KIND of line than the
+#: anchor holds, so a difference there is not evidence of drift. That is a claim about the CLAIM, not
+#: a missing feature, and completing the partition by writing anchors for them would be wrong.
 #:
 #: A theme added to `audit_model._THEMES` and not classified here silently becomes "not applicable",
 #: which would stop `apply-drift` writing a kind it should write. `tests/test_fix.py` pins the
 #: partition against `_THEMES` for exactly that.
-_WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone", "cadence", "rule"})
+_WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone", "cadence",
+                             "rule", "lifecycle"})
 
 #: Writable themes whose claim is NOT edge-shaped, so `apply_anchor_corrections` can place it by
 #: recomputing the claim rather than by parsing `<Id> <verb> <Id>`. Everything writable and not in
@@ -64,7 +74,7 @@ _WRITABLE_THEMES = frozenset({"security", "dep-usage", "ownership", "backbone", 
 #: This list and `_WRITABLE_THEMES` must move together: `rule` was added to the second and not the
 #: first, and every rule-site correction was then reported as an unparseable EDGE claim and dropped
 #: — verbatim the `cadence` failure that set is documented as having fixed.
-_CLAIM_SHAPED_THEMES = frozenset({"security", "cadence", "rule"})
+_CLAIM_SHAPED_THEMES = frozenset({"security", "cadence", "rule", "lifecycle"})
 
 
 def _load(map_path: Path) -> tuple[ProjectModel, frozenset[str] | None]:
@@ -161,8 +171,7 @@ def apply_drift(argv: list[str]) -> int:
             else:
                 tolerance = int(val)
         else:
-            print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
-            return 2
+            return usage_error(_USAGE, "apply-drift", f"unknown argument '{a}'")
         i += 1
     if not map_path or not verdicts_paths:
         print("ERROR: --map and --verdicts are required", file=sys.stderr)
@@ -218,8 +227,14 @@ def apply_drift(argv: list[str]) -> int:
     for n in notes:
         # An applied rewrite is indented and is the RESULT (stdout); a skip is a warning (stderr).
         print(n, file=sys.stdout if n.startswith("  ") else sys.stderr)
-    edges_applied, sec_applied = counts["edge"], counts["security"]
-    cadence_applied, site_applied = counts["cadence"], counts["rule_site"]
+    #: What each `apply_anchor_corrections` count is CALLED on the result line. Derived from the
+    #: counts dict rather than hand-listed, for the same reason `sum(counts.values())` replaced a
+    #: hand-listed disjunction below: the hand-listed version silently stopped covering a kind the
+    #: moment a new writer existed, and the whole point of adding a writer is that its work shows up.
+    kind_words = {"edge": "edge `where`", "security": "security anchor(s)",
+                  "cadence": "cadence anchor(s)", "rule_site": "rule site(s)",
+                  "lifecycle": "lifecycle anchor(s)"}
+    applied = ", ".join(f"{counts[k]} {kind_words.get(k, k)}" for k in counts)
     stuck = len(not_applicable) + len(unparseable)
     # The counts ride the LAST line, including the not-applicable one. A live build read this output
     # with `| tail -12`, so a total that is not on the final line is a total the reader never sees.
@@ -230,12 +245,11 @@ def apply_drift(argv: list[str]) -> int:
     # existed: the correction applied in memory, printed, and was never persisted.
     if sum(counts.values()):
         _write(Path(map_path), m, _present)
-        print(f"apply-drift: rewrote {edges_applied} edge `where`, {sec_applied} security anchor(s), "
-              f"{cadence_applied} cadence anchor(s) and {site_applied} rule site(s).{tail} "
+        print(f"apply-drift: rewrote {applied}.{tail} "
               f"Re-run: validate --check-sources → audit → render.")
     else:
-        print(f"apply-drift: rewrote nothing — no drifted edge, security, cadence or rule-site "
-              f"anchor to fix.{tail}")
+        print(f"apply-drift: rewrote nothing — no drifted "
+              f"{', '.join(kind_words.get(k, k) for k in counts)} to fix.{tail}")
     return 0
 
 
@@ -395,8 +409,7 @@ def drop_edge(argv: list[str]) -> int:
         elif a == "--drop-steps":
             drop_steps = True
         elif a.startswith("-"):
-            print(f"ERROR: unknown option '{a}'", file=sys.stderr)
-            return 2
+            return usage_error(_USAGE, "drop-edge", f"unknown option '{a}'")
         else:
             positionals.append(a)
         i += 1
@@ -447,10 +460,27 @@ def drop_edge(argv: list[str]) -> int:
 
 # ── fix dedup-relation ───────────────────────────────────────────────────────────────────────────
 
-def _duplicate_relations(m: ProjectModel) -> tuple[list[str], list[str]]:
-    """The blocking domain-card duplicates the validator flags, as (same_card, reciprocal) drop-token
-    lists. A token is `En:verb:Em` — the relation to drop ONE occurrence of. Mirrors
-    `validate_model._check_domain_cards` / `check_domain_relations`."""
+@dataclass(frozen=True)
+class DuplicateRelations:
+    """The blocking domain-card duplicates, split by SHAPE, as drop-token lists.
+
+    Named for the same reason as `assemble.FragmentLoad`, found by the same sweep: two same-typed
+    lists returned positionally, both EMPTY on a healthy map — so a swap is invisible to every test
+    that builds a clean fixture, and identical under a type checker. Verified rather than assumed:
+    swapping this function's two returns passed all 1916 tests. The two shapes need different
+    operator action (drop one of two on ONE card, versus keep one SIDE of a reciprocal pair), so a
+    silent swap mislabels the listing the operator acts on."""
+
+    #: `En:verb:Em` for a relation declared TWICE on one card — drop one occurrence.
+    same_card: list[str]
+    #: `En:verb:Em` for a pair authored from BOTH cards — keep one side, drop the other.
+    reciprocal: list[str]
+
+
+def _duplicate_relations(m: ProjectModel) -> DuplicateRelations:
+    """The blocking domain-card duplicates the validator flags. A token is `En:verb:Em` — the
+    relation to drop ONE occurrence of. Mirrors `validate_model._check_domain_cards` /
+    `check_domain_relations`."""
     same_card: list[str] = []
     directed: dict[tuple[str, str], list[tuple[str, str]]] = {}   # (a,b) → [(verb, token)]
     for e in m.entities:
@@ -466,11 +496,11 @@ def _duplicate_relations(m: ProjectModel) -> tuple[list[str], list[str]]:
         if a < b and (b, a) in directed:
             # both sides authored the pair — offer to drop EITHER side (list the a→b side's token(s))
             reciprocal.extend(tok for _verb, tok in items)
-    return same_card, reciprocal
+    return DuplicateRelations(same_card=same_card, reciprocal=reciprocal)
 
 
 def dedup_relation(argv: list[str]) -> int:
-    map_path = None
+    map_path = to_reconcile = None
     drops: list[str] = []
     i = 0
     while i < len(argv):
@@ -481,16 +511,27 @@ def dedup_relation(argv: list[str]) -> int:
         elif a == "--drop":
             i += 1
             drops.append(_need(argv, i, a))
+        elif a == "--to-reconcile":
+            i += 1
+            to_reconcile = _need(argv, i, a)
         else:
-            print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
-            return 2
+            return usage_error(_USAGE, "dedup-relation", f"unknown argument '{a}'")
         i += 1
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
         return 2
+    if to_reconcile and not drops:
+        # Above the listing branch, not below it: placed after, the listing returned 0 first and the
+        # refusal never ran. `dedup-edge` shipped this exact ordering bug — the flag printed a full
+        # listing, wrote nothing, and exited 0, which reads as success.
+        print("ERROR: --to-reconcile needs a decision — pass the --drop token(s) to record. On its "
+              "own it would print the listing, write nothing, and exit 0, which reads as success.",
+              file=sys.stderr)
+        return 2
     m, _present = _load(Path(map_path))
     if not drops:
-        same_card, reciprocal = _duplicate_relations(m)
+        dupes = _duplicate_relations(m)
+        same_card, reciprocal = dupes.same_card, dupes.reciprocal
         if not same_card and not reciprocal:
             print("dedup-relation: no blocking duplicate relations.")
             return 0
@@ -505,6 +546,7 @@ def dedup_relation(argv: list[str]) -> int:
         print("\nRe-run with the chosen --drop token(s). Each drops ONE occurrence.")
         return 0
     dropped = 0
+    resolved: list[tuple[str, str, str]] = []
     for tok in drops:
         parts = tok.split(":")
         if len(parts) != 3:
@@ -520,13 +562,78 @@ def dedup_relation(argv: list[str]) -> int:
         if idx is None:
             print(f"ERROR: no relation '{verb} → {target}' on {eid}", file=sys.stderr)
             return 1
+        resolved.append((eid, verb, target))
+        if to_reconcile:
+            continue
         del ent.relations[idx]                       # ONE occurrence
         dropped += 1
         print(f"  dropped {eid}: {verb} → {target}")
+    if to_reconcile:
+        return _relations_to_reconcile(Path(to_reconcile), resolved, m)
     _write(Path(map_path), m, _present)
-    print(f"dedup-relation: dropped {dropped} relation(s). "
+    print(f"dedup-relation: dropped {dropped} relation(s). NOTE: this edited the assembled map in "
+          f"place — the next `assemble` rebuilds it from fragments and restores the duplicate, which "
+          f"BLOCKS. Use --to-reconcile to record the decision so it survives. "
           f"Re-run: validate --check-sources → audit → render.")
     return 0
+
+
+def _relations_to_reconcile(rec_path: Path, resolved: list[tuple[str, str, str]],
+                            m: ProjectModel) -> int:
+    """Record the chosen drops as `drop_relations` instead of editing the assembled map.
+
+    A duplicate relation is BLOCKING, and this verb was the only writer with no way to record its
+    answer — so the resolution was discarded by the next assemble and the build re-blocked on the
+    duplicate it had just resolved. Merges into an existing file, and updates rather than duplicating
+    a directive already present for the same (entity, verb, target)."""
+    doc: dict[str, object] = {}
+    if rec_path.exists():
+        try:
+            loaded = json.loads(rec_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            print(f"ERROR: cannot read {rec_path}: {e}", file=sys.stderr)
+            return 2
+        if not isinstance(loaded, dict):
+            print(f"ERROR: {rec_path} is not a reconcile object", file=sys.stderr)
+            return 2
+        doc = loaded
+    existing = doc.get("drop_relations")
+    rows: list[dict[str, str]] = list(existing) if isinstance(existing, list) else []
+    # COUNTED, not set-membership. Presence-based dedup silently refused the SECOND drop a relation
+    # legitimately needs — a token the listing prints three times — while still printing "recorded"
+    # and exiting 0. The operator who follows the listing one token at a time then ships a map that
+    # still blocks, with nothing saying so: the same "writes nothing, reads as success" shape the
+    # `--to-reconcile needs a decision` refusal above exists to kill.
+    recorded = collections.Counter((r.get("entity"), (r.get("verb") or "").lower(), r.get("target"))
+                                   for r in rows if isinstance(r, dict))
+    added, refused = 0, []
+    for eid, verb, target in resolved:
+        key = (eid, verb.lower(), target)
+        ent = next((e for e in m.entities if e.id == eid), None)
+        # The ceiling is how many occurrences the map actually declares — you cannot drop more than
+        # exist, and beyond that a repeat is a mistake worth naming rather than a no-op.
+        occurrences = sum(1 for r in (ent.relations if ent else [])
+                          if r.verb.lower() == verb.lower() and r.target == target)
+        if recorded[key] >= occurrences:
+            refused.append((eid, verb, target, occurrences, recorded[key]))
+            continue
+        rows.append({"entity": eid, "verb": verb, "target": target})
+        recorded[key] += 1
+        added += 1
+        print(f"  recorded {eid}: {verb} → {target}")
+    for eid, verb, target, occurrences, already in refused:
+        print(f"ERROR: {eid}: {verb} → {target} is declared {occurrences} time(s) and {rec_path.name} "
+              f"already records {already} drop(s) — refusing to record another.", file=sys.stderr)
+    if not added:
+        print(f"dedup-relation: recorded NOTHING in {rec_path} — every drop asked for was already "
+              f"recorded. The file is unchanged.", file=sys.stderr)
+        return 2
+    doc["drop_relations"] = rows
+    rec_path.parent.mkdir(parents=True, exist_ok=True)
+    rec_path.write_text(json.dumps(doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"dedup-relation: recorded {added} new drop_relations directive(s) in {rec_path} — the MAP "
+          f"was not edited. `assemble --reconcile` re-applies them on every rebuild.")
+    return 2 if refused else 0
 
 
 # ── fix dedup-edge ──────────────────────────────────────────────────────────────────────────────
@@ -586,8 +693,7 @@ def dedup_edge(argv: list[str]) -> int:
             else:
                 keeps.append(val)
         else:
-            print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
-            return 2
+            return usage_error(_USAGE, "dedup-edge", f"unknown argument '{a}'")
         i += 1
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
@@ -825,8 +931,7 @@ def security_row(argv: list[str]) -> int:
             else:
                 sets[a[len("--set-"):]] = val
         else:
-            print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
-            return 2
+            return usage_error(_USAGE, "security-row", f"unknown argument '{a}'")
         i += 1
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
@@ -975,8 +1080,7 @@ def dedup_security(argv: list[str]) -> int:
             else:
                 keeps.append(val)
         else:
-            print(f"ERROR: unknown argument '{a}'", file=sys.stderr)
-            return 2
+            return usage_error(_USAGE, "dedup-security", f"unknown argument '{a}'")
         i += 1
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
@@ -1108,15 +1212,288 @@ def dedup_security(argv: list[str]) -> int:
     return 0
 
 
+# ── fix row ──────────────────────────────────────────────────────────────────────────────────────
+# The writer for a row's OWN TEXT, in the fragment that authored it.
+#
+# Half the L2 worklist is business rules and access rules (192 of one map's 373 claims), and until
+# now nothing could correct one. `fix security-row` was built for exactly this failure — a hand
+# script matched `'admin' in surface.lower()`, hit two rows and overwrote a CONFIRMED claim with the
+# refuted one's text — and then the T7 fold moved auth surfaces out of `security[]` into `rules`,
+# where that verb does not reach. So the guard existed, the danger existed, and they no longer
+# pointed at each other; a live build hand-edited two security-relevant rule statements with a python
+# heredoc and nothing checked what it hit.
+#
+# WHY THE FRAGMENT AND NOT THE MAP. The assembled map is a build product: `fix` verbs that write it
+# print "if you `assemble` again it is rebuilt from fragments and THIS edit is lost", and the whole
+# `reconcile.json` directive mechanism exists to carry map edits across that rebuild. A correction
+# written into the owning fragment needs none of that — it survives every re-assemble by
+# construction, because it is in the source.
+#
+# WHY NO INDEX FILE. Eleven element families author their ids in the fragment (`model.ID_ARRAYS`),
+# so the owner is found by scanning — 30-odd small files, no new artifact, and nothing that can go
+# stale. An id-keyed sidecar was designed and dropped: entry-point ids are MINTED at assemble and
+# re-sorted by content, so changing one anchor moved 22 of 104 EP ids on a real map. An index keyed
+# on those would silently address the wrong row. `fix row` therefore reaches exactly the rows whose
+# ids are authored, and says so when asked for one that is not.
+
+#: Fields `fix row` will never write, and why. Anchors belong to `apply-drift` (it resolves them from
+#: the skeptics' verdicts and refuses an ambiguous target); ids are identity; and the five
+#: assignment fields are owned by `reconcile.json`, not by any fragment — on one real map ALL 66
+#: rules take their `block` from the reconcile file and no fragment rule carries one, so writing it
+#: here would be overwritten by the next assemble without a word.
+_NEVER_WRITABLE: dict[str, str] = {
+    "id": "an id is identity, not text — renaming a row is a fragment edit plus every reference",
+    "source": "an anchor is `coyodex fix apply-drift`, which resolves it from the verdicts",
+    "where": "an anchor is `coyodex fix apply-drift`, which resolves it from the verdicts",
+    "cadence_source": "an anchor is `coyodex fix apply-drift`",
+    "subsystem": "assignment lives in reconcile.json (`set`), not in the fragment",
+    "subdomain": "assignment lives in reconcile.json (`set`), not in the fragment",
+    "capability": "assignment lives in reconcile.json (`set`), not in the fragment",
+    "runs_in": "assignment lives in reconcile.json (`set`), not in the fragment",
+    "block": "assignment lives in reconcile.json (`set`), not in the fragment",
+    "bucket": "assignment lives in reconcile.json (`set`), not in the fragment",
+}
+
+
+#: Files that live beside fragments and are NOT fragments. Pointing `--fragments` at `.coyodex/`
+#: instead of `.coyodex/build-fragments/` is the obvious slip, and without this list the verb happily
+#: edited `project-map.json` — the assembled build product, which the next `assemble` overwrites.
+#: That silently violates the one thing this verb is for. Named, not guessed: a file the loader
+#: cannot read is an ERROR the caller must see, so "it did not load" must never double as "skip it".
+_NOT_A_FRAGMENT = frozenset({"project-map.json", "preindex.json", "provenance.json",
+                             "reconcile.json", "rules.json", "finalize-report.json"})
+
+
+def _fragment_paths(where: Path) -> tuple[list[Path], list[str]]:
+    """The fragment files to search, and a note per neighbour deliberately skipped."""
+    if not where.is_dir():
+        return [where], []
+    keep, skipped = [], []
+    for p in sorted(where.glob("*.json")):
+        if p.name in _NOT_A_FRAGMENT:
+            skipped.append(p.name)
+        else:
+            keep.append(p)
+    return keep, skipped
+
+
+def _file_is_ascii(path: Path) -> bool:
+    """Was this file written with every non-ASCII character escaped? Then keep it that way."""
+    try:
+        return path.read_bytes().isascii()
+    except OSError:
+        return True
+
+
+def _rows_with_id(doc: object, wanted: str) -> list[tuple[str, int]]:
+    """(array key, index) for every top-level row in one fragment document carrying `wanted`."""
+    hits: list[tuple[str, int]] = []
+    if not isinstance(doc, dict):
+        return hits
+    for key, value in doc.items():
+        if not isinstance(value, list):
+            continue
+        for i, row in enumerate(value):
+            if isinstance(row, dict) and row.get("id") == wanted:
+                hits.append((key, i))
+    return hits
+
+
+def _surviving_ids(paths: list[Path]) -> tuple[frozenset[str], str]:
+    """Every id the fragments assemble to, plus a complaint when they do not assemble at all.
+
+    This is the guard that makes a text edit safe. `assemble` MERGES rows by content — a rule's
+    identity is its normalised statement plus its site set, a component's is file+name, a dep's is
+    kind+name — so editing the very text this command edits can split a merged row (minting an id
+    that did not exist) or collapse two into one (retiring an id every other artifact still cites).
+    Neither is reported by the digest today at the row level, and the audit worklist, the reconcile
+    file and the grounding record are all keyed on ids that would have moved underneath them."""
+    # Named fields, not positions. This read the results as a 3-tuple and got two same-typed lists
+    # the wrong way round, which made the guard inert in the direction that loses data — see
+    # `FragmentLoad`. `errors` is fatal here; `notes` (a `*.draft.json`, a verdicts file) is not,
+    # and treating them as fatal refused every edit in a directory `assemble` itself accepts.
+    loaded = load_fragment_paths(paths)
+    if loaded.errors:
+        return frozenset(), "; ".join(loaded.errors)
+    merged, merge_problems = merge_fragments(loaded.parts)
+    if merge_problems:
+        return frozenset(), "; ".join(merge_problems)
+    ids: set[str] = set()
+    for attr in ID_ARRAYS:
+        ids.update(el.id for el in getattr(merged, attr, []))
+    return frozenset(ids), ""
+
+
+def row(argv: list[str]) -> int:
+    """Rewrite one field of one row, in the fragment that authored it."""
+    if subverb_help.wants_help(argv):
+        return subverb_help.handle(_USAGE, "row", argv) or 0
+    fragments = row_id = None
+    sets: dict[str, str] = {}
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("--fragments", "--id") or a.startswith("--set-"):
+            if i + 1 >= len(argv):
+                return usage_error(_USAGE, "row", f"{a} needs a value")
+            val = argv[i + 1]
+            if val.startswith("--"):
+                # `--set-name --set-risk x` used to set `name` to the literal '--set-risk' and exit 0.
+                return usage_error(_USAGE, "row", f"{a} was given '{val}', which is another flag — "
+                                                  f"a missing value must not be swallowed silently")
+            i += 2
+            if a == "--fragments":
+                fragments = val
+            elif a == "--id":
+                row_id = val
+            else:
+                sets[a[len("--set-"):].replace("-", "_")] = val
+            continue
+        return usage_error(_USAGE, "row", f"unknown argument '{a}'")
+    if not fragments or not row_id:
+        return usage_error(_USAGE, "row", "--fragments and --id are required")
+    if not sets:
+        return usage_error(_USAGE, "row", "give at least one --set-<field> <text>")
+    blank = sorted(f for f, v in sets.items() if not v.strip())
+    if blank:
+        # Emptying a statement, a risk or a meaning is deletion wearing an edit's clothes, and every
+        # other writer here refuses it (`security-row` refuses an empty surface for the same reason).
+        return usage_error(_USAGE, "row", f"refusing to blank {', '.join(blank)} — an empty value "
+                                          f"deletes the text rather than correcting it")
+    for field_name in sets:
+        if field_name in _NEVER_WRITABLE:
+            print(f"ERROR: `{field_name}` is not writable here — {_NEVER_WRITABLE[field_name]}.",
+                  file=sys.stderr)
+            return 2
+
+    where = Path(fragments)
+    if not where.exists():
+        print(f"ERROR: {where} not found", file=sys.stderr)
+        return 2
+    paths, skipped = _fragment_paths(where)
+    if skipped:
+        print(f"note: not a build fragment, skipped: {', '.join(skipped)}")
+    if not paths:
+        print(f"ERROR: no build fragment .json under {where}"
+              + (f" (skipped {', '.join(skipped)} — did you mean "
+                 f"{where / 'build-fragments'}?)" if skipped else ""), file=sys.stderr)
+        return 2
+
+    # Resolve the owner. 0 or >1 is REFUSED with the candidates printed — the same multiplicity rule
+    # every other writer here enforces, and for the same reason.
+    owners: list[tuple[Path, str, int]] = []
+    docs: dict[Path, object] = {}
+    for p in paths:
+        try:
+            docs[p] = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as exc:
+            print(f"ERROR: cannot read {p}: {exc}", file=sys.stderr)
+            return 2
+        owners += [(p, key, idx) for key, idx in _rows_with_id(docs[p], row_id)]
+    if len(owners) != 1:
+        if not owners:
+            print(f"ERROR: no fragment under {where} declares a row with id '{row_id}'.\n"
+                  f"       Entry-point ids are MINTED at assemble and exist in no fragment, so they "
+                  f"cannot be addressed here; correct the entry point by its trigger/source in the "
+                  f"harvest fragment that declares it.", file=sys.stderr)
+        else:
+            print(f"ERROR: '{row_id}' is declared by {len(owners)} fragment rows — refusing rather "
+                  f"than guessing which:", file=sys.stderr)
+            for p, key, idx in owners:
+                print(f"         {p.name}: {key}[{idx}]", file=sys.stderr)
+        return 2
+    path, array_key, index = owners[0]
+    target = docs[path][array_key][index]           # type: ignore[index]
+    unknown = [f for f in sets if f not in target]
+    if unknown:
+        print(f"ERROR: {path.name}: {array_key}[{index}] ('{row_id}') has no field(s) "
+              f"{', '.join(sorted(unknown))}. Present: {', '.join(sorted(target))}.\n"
+              f"       A field the row does not carry is a typo or a field the SCHEMA owns "
+              f"elsewhere; this command never invents one.", file=sys.stderr)
+        return 2
+
+    before_ids, complaint = _surviving_ids(paths)
+    if complaint:
+        print(f"ERROR: the fragments do not assemble as they stand, so the effect of an edit cannot "
+              f"be checked: {complaint}", file=sys.stderr)
+        return 2
+
+    original = {f: target[f] for f in sets}
+    if all(target[f] == v for f, v in sets.items()):
+        print(f"row: {row_id} already says that — nothing written.")
+        return 0
+    for f, v in sets.items():
+        target[f] = v
+    # Match the file's OWN escaping. An agent-authored fragment is usually ASCII-escaped, and dumping
+    # it with `ensure_ascii=False` rewrote every `\uXXXX` in the file — so a one-field edit arrived as
+    # eight unrelated changed lines and buried the actual change in review.
+    was_ascii = docs[path] is not None and _file_is_ascii(path)
+    text = json.dumps(docs[path], indent=2, ensure_ascii=was_ascii) + "\n"
+
+    # Write to a temp sibling, re-assemble from THAT set, and only keep it if no id moved.
+    # The candidate goes in a temp DIRECTORY, never beside the fragments: a leftover
+    # `*.fixrow-check.json` in `build-fragments/` breaks every later assemble with a duplicate-id
+    # conflict, the `.draft.json` skip does not cover that name, and two concurrent runs on one
+    # fragment would race on a single filename.
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td) / path.name
+        tmp.write_text(text, encoding="utf-8")
+        after_ids, complaint = _surviving_ids([tmp if p == path else p for p in paths])
+    if complaint:
+        print(f"ERROR: that edit makes the fragments fail to assemble — nothing was written: "
+              f"{complaint}", file=sys.stderr)
+        return 2
+    if after_ids != before_ids:
+        appeared, vanished = sorted(after_ids - before_ids), sorted(before_ids - after_ids)
+        print(f"ERROR: that edit changes which rows survive assembly — nothing was written.",
+              file=sys.stderr)
+        if vanished:
+            print(f"       id(s) that would DISAPPEAR: {', '.join(vanished)} — the edited text now "
+                  f"matches another row, so assemble would merge them and every reference to the "
+                  f"retired id would be re-pointed.", file=sys.stderr)
+        if appeared:
+            print(f"       id(s) that would APPEAR: {', '.join(appeared)} — the edited text no "
+                  f"longer matches the row it was merged with, so assemble would split them.",
+                  file=sys.stderr)
+        print(f"       Rewrite the text so the merge identity is unchanged, or make the split/merge "
+              f"deliberate by editing every fragment row involved.", file=sys.stderr)
+        return 2
+
+    path.write_text(text, encoding="utf-8")
+    for f, v in sets.items():
+        print(f"  {row_id}.{f}: {original[f]!r} → {v!r}")
+    print(f"row: rewrote {len(sets)} field(s) on {path.name}: {array_key}[{index}].")
+    print(f"     Re-assemble to see it in the map. If the row carries L2 CLAIMS (a rule statement, a "
+          f"site, an entity store, a cadence), their claim TEXT has changed, so the skeptics' "
+          f"verdicts for them no longer match: re-run `coyodex grounding write` AFTER the final "
+          f"assemble, or `finalize` will refuse on a stale `live_claims_digest`.")
+    return 0
+
+
 # ── dispatch ─────────────────────────────────────────────────────────────────────────────────────
 
 _VERBS = {"apply-drift": apply_drift, "drop-edge": drop_edge, "dedup-relation": dedup_relation,
           "dedup-edge": dedup_edge, "security-row": security_row,
-          "dedup-security": dedup_security}
+          "dedup-security": dedup_security, "row": row}
 
 _USAGE = """usage: coyodex fix <verb> [args...]
 
 Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
+
+  row --fragments <dir|file> --id <ID> --set-<field> <text> [--set-<field> <text> ...]
+      Rewrite one row's own TEXT in the FRAGMENT that authored it — a rule's statement or risk, an
+      entity's meaning, a component's purpose. The one writer that is durable by construction: the
+      fragment is the source, so the edit survives every re-assemble with no reconcile directive.
+      Half a real map's L2 worklist is rules with no other repair path; `fix security-row` was built
+      for this failure and the T7 fold moved auth surfaces out of `security[]`, where it reaches.
+      Finds the owner by SCANNING the fragments for the id, and refuses on 0 or >1 rather than
+      guessing. Entry-point ids are minted at assemble and exist in no fragment, so they cannot be
+      addressed here — it says so instead of writing nothing.
+      REFUSES an edit that would change which ids survive assembly: `assemble` merges rows by
+      content (a rule's identity is its statement + sites), so rewording one can split a merged row
+      or collapse two, moving ids the worklist, the reconcile file and the grounding record cite.
+      Anchors (`source`/`where`) are `apply-drift`; assignment (`subsystem`/`block`/…) is
+      reconcile's `set`. Both are refused by name.
 
   apply-drift --map <map> --verdicts <raw.json>... [--tolerance N] [--to-reconcile <file>]
       Write the grounding skeptics' corrected anchor into each drifted element: an edge `where`, a
@@ -1159,9 +1536,13 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       in-place drop has to be redone after every assemble). The edge is verified against the map
       when the directive is written, because `drop_edges` only WARNS on a 0-match at assemble time.
 
-  dedup-relation --map <map> [--drop <En:verb:Em> ...]
+  dedup-relation --map <map> [--drop <En:verb:Em> ...] [--to-reconcile <file>]
       With no --drop, LIST the blocking "declared on both cards" / "declared twice" domain-card
       duplicates and the token to resolve each. With --drop, remove ONE chosen occurrence.
+      --to-reconcile records the choices as `drop_relations` INSTEAD of editing the map. Prefer it:
+      a duplicate relation BLOCKS, and an in-place edit is discarded by the next assemble, which
+      then re-blocks on the duplicate this command had just resolved. This was the only writing
+      verb with no way to record its answer.
 
   security-row --map <map> [--claim <exact claim> | --surface <exact text> | --at <path:line>]
                [--set-surface T] [--set-risk T] [--set-source path:line] [--set-who T] [--json]
@@ -1185,10 +1566,11 @@ Apply a mechanical reconcile edit to .coyodex/project-map.json IN PLACE. Verbs:
       Rows that are byte-identical are not a choice — one is kept. Rows sharing surface AND anchor
       but differing in `who`/`risk` ARE a choice, and are refused: use `security-row`.
 
-NOTE — `security-row`, `dedup-security` and `dedup-relation` edit the ASSEMBLED map and have no
-`--to-reconcile` form, so their edit is DISCARDED by the next `assemble` (every write prints that
-warning). Run them after the last assemble, or make the same change in the owning fragment. The
-verbs with a durable form are `apply-drift`, `dedup-edge` and `drop-edge`.
+NOTE — `security-row` and `dedup-security` edit the ASSEMBLED map and have no `--to-reconcile`
+form, so their edit is DISCARDED by the next `assemble` (every write prints that warning). Run them
+after the last assemble, or make the same change in the owning fragment. The verbs with a durable
+form are `apply-drift`, `dedup-edge`, `drop-edge` and `dedup-relation`; `row` needs none, because it
+edits the fragment itself.
 
 After any fix, re-run the invariant: validate --check-sources → audit → render."""
 

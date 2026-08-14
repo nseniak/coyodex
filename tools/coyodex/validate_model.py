@@ -4185,6 +4185,20 @@ def _run(argv: list[str] | None = None) -> int:
     args = [a for a in argv if not a.startswith("-")]
     path = Path(args[0] if args else ".coyodex/project-map.json")
     if not path.exists():
+        # A map directory holding only the GENERATED views is a state nothing named, and it reads
+        # as "no coyodex here" when in fact a build ran and its source was lost. One repo sits in it:
+        # `project-map.md` and `project-map.html` are present, the model is gone, so nothing can be
+        # validated, audited, fixed, scored or re-rendered — and the views still look authoritative
+        # to a reader. Name it, because the recovery (re-assemble from the fragments, or rebuild) is
+        # different from the recovery for an empty directory.
+        views = [v.name for v in (path.with_suffix(".md"), path.with_suffix(".html")) if v.is_file()]
+        if views:
+            print(f"ERROR: {path} not found — but {' and '.join(views)} are. This map has only its "
+                  f"GENERATED views; the model they were rendered from is missing, so nothing here "
+                  f"can be validated, audited, fixed or re-rendered. Re-assemble from "
+                  f"{path.parent / 'build-fragments'}/ if it survives, or rebuild the map.",
+                  file=sys.stderr)
+            return 1
         print(f"ERROR: {path} not found", file=sys.stderr)
         return 1
     try:

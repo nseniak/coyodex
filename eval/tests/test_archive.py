@@ -11,6 +11,7 @@ Run either way (needs an editable install: `make deps`):
 """
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 from pathlib import Path
@@ -197,3 +198,68 @@ def test_a_missing_coyodex_dir_reports_instead_of_crashing():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+# --- `--list` answers "what was the previous map" (retro 2026-08-14) ------------------------------
+# `archive` filed maps and then could never say where any of them were. A retrospective located its
+# baseline by hand — and found it under a hand-rolled `.old-ignore-N/` convention this command did
+# not create, which is exactly the convention a reader cannot guess.
+
+def make_archived_map(d: Path, built_at: str, session: str) -> None:
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "project-map.json").write_text('{"format": "coyodex-map"}', encoding="utf-8")
+    (d / "provenance.json").write_text(json.dumps({
+        "schema": "coyodex-provenance/v1",
+        "sessions": [{"session_id": session, "built_at": built_at, "mode": "build"}]}),
+        encoding="utf-8")
+
+
+def test_list_reports_maps_archived_by_this_command_newest_first(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        make_archived_map(root / ".coyodex" / "dev-rebuilds" / "0001", "2026-07-13 23:37", "aaa11111")
+        make_archived_map(root / ".coyodex" / "dev-rebuilds" / "0002", "2026-08-02 17:46", "bbb22222")
+        assert archive_map.main([str(root), "--list"]) == 0
+        out = capsys.readouterr().out
+        assert out.index("0002") < out.index("0001"), out
+        assert "bbb22222" in out and "aaa11111" in out
+
+
+def test_list_also_reports_a_hand_rolled_archive_convention(capsys):
+    """The one a reader cannot guess. Hiding it does not make it go away."""
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        make_archived_map(root / ".coyodex" / ".old-ignore-6", "2026-07-29 11:27", "07a8f4e9")
+        assert archive_map.main([str(root), "--list"]) == 0
+        out = capsys.readouterr().out
+        assert ".old-ignore-6" in out, out
+        assert "2026-07-29 11:27" in out
+
+
+def test_list_says_plainly_when_there_is_nothing_to_compare_against(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / ".coyodex").mkdir()
+        assert archive_map.main([str(root), "--list"]) == 0
+        assert "no archived map" in capsys.readouterr().out
+
+
+def test_list_survives_an_archive_too_old_to_carry_provenance(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        d = root / ".coyodex" / "dev-rebuilds" / "0001"
+        d.mkdir(parents=True)
+        (d / "project-map.json").write_text('{"format": "coyodex-map"}', encoding="utf-8")
+        assert archive_map.main([str(root), "--list"]) == 0
+        assert "(no provenance)" in capsys.readouterr().out
+
+
+def test_list_never_writes_anything():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        make_archived_map(root / ".coyodex" / "dev-rebuilds" / "0001", "2026-07-13 23:37", "aaa11111")
+        (root / ".coyodex" / "project-map.json").write_text('{"format": "coyodex-map"}',
+                                                            encoding="utf-8")
+        before = sorted(p.relative_to(root).as_posix() for p in root.rglob("*"))
+        assert archive_map.main([str(root), "--list"]) == 0
+        assert sorted(p.relative_to(root).as_posix() for p in root.rglob("*")) == before

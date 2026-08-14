@@ -557,3 +557,107 @@ def test_a_use_case_can_be_assigned_its_entry_points_by_id():
     doc, report = expand(m, [{"ids": ["UC1"], "entry_points": ["EP1", "EP2"]}])
     assert doc["set"] == [{"ids": ["UC1"], "entry_points": ["EP1", "EP2"]}], doc
     assert any("1 element(s)" in line for line in report), report
+
+
+# --- drop_relations: the blocking duplicate that could not be recorded (retro 2026-08-14) ---------
+# `fix dedup-relation` was the only writing verb with no directive. A duplicate relation BLOCKS, so
+# the in-place resolution was discarded by the next assemble and the build re-blocked on the very
+# duplicate it had just resolved.
+
+def make_relation_map(relations: list[dict]) -> dict:
+    return {"format": "coyodex-map", "title": "t", "goal": "g",
+            "use_cases": [{"id": "UC1", "name": "Do"}],
+            "components": [{"id": "C1", "name": "A", "source": "a.py:1"}],
+            "entities": [{"id": "E1", "name": "Thing", "relations": relations},
+                         {"id": "E2", "name": "Other"}]}
+
+
+def apply_directives(map_doc: dict, directives: dict) -> tuple:
+    from coyodex.model import load_model
+    from coyodex.reconcile import apply_reconcile, load_reconcile
+    m = load_model(json.dumps(map_doc))
+    rec = load_reconcile(json.dumps(directives), "test")
+    stats: dict = {}
+    notes = apply_reconcile(m, rec, stats)
+    return m, stats, notes
+
+
+def test_a_recorded_relation_drop_is_applied_on_re_assembly():
+    doc = make_relation_map([{"verb": "has", "target": "E2"}, {"verb": "has", "target": "E2"}])
+    m, stats, _notes = apply_directives(
+        doc, {"drop_relations": [{"entity": "E1", "verb": "has", "target": "E2"}]})
+    assert len(m.entities[0].relations) == 1, "exactly ONE occurrence is removed"
+    assert stats["reconcile_relations_dropped"] == 1
+
+
+def test_only_one_occurrence_goes_per_directive():
+    doc = make_relation_map([{"verb": "has", "target": "E2"}] * 3)
+    m, _stats, _notes = apply_directives(
+        doc, {"drop_relations": [{"entity": "E1", "verb": "has", "target": "E2"}] * 2})
+    assert len(m.entities[0].relations) == 1
+
+
+def test_a_zero_match_warns_and_never_fails():
+    """A reconcile file must not rot when the fragment that declared the duplicate is later fixed —
+    the same rule `drop_edges` follows."""
+    doc = make_relation_map([{"verb": "has", "target": "E2"}])
+    m, stats, notes = apply_directives(
+        doc, {"drop_relations": [{"entity": "E1", "verb": "owns", "target": "E2"}]})
+    assert len(m.entities[0].relations) == 1
+    assert stats["reconcile_relations_dropped"] == 0
+    assert any("declares no" in n for n in notes), notes
+
+
+def test_an_unknown_entity_warns_rather_than_failing():
+    doc = make_relation_map([{"verb": "has", "target": "E2"}])
+    _m, _stats, notes = apply_directives(
+        doc, {"drop_relations": [{"entity": "E9", "verb": "has", "target": "E2"}]})
+    assert any("no entity 'E9'" in n for n in notes), notes
+
+
+def test_the_verb_match_is_case_insensitive_like_the_fix_verb():
+    doc = make_relation_map([{"verb": "Has", "target": "E2"}, {"verb": "has", "target": "E2"}])
+    m, _stats, _notes = apply_directives(
+        doc, {"drop_relations": [{"entity": "E1", "verb": "has", "target": "E2"}]})
+    assert len(m.entities[0].relations) == 1
+
+
+def test_a_stale_directive_never_deletes_the_LAST_occurrence():
+    """The directive means "drop one occurrence of a DUPLICATE". The normal repair order makes the
+    dangerous case the default: record the directive, then fix the duplicate at source, and the next
+    assemble silently removes the survivor — reported as a note and counted as a success."""
+    doc = make_relation_map([{"verb": "has", "target": "E2"}])          # already repaired
+    m, stats, notes = apply_directives(
+        doc, {"drop_relations": [{"entity": "E1", "verb": "has", "target": "E2"}]})
+    assert len(m.entities[0].relations) == 1, "a real domain fact must survive a stale directive"
+    assert stats["reconcile_relations_dropped"] == 0
+    assert any("no longer a duplicate" in n for n in notes), notes
+
+
+def test_a_reciprocal_pair_is_still_droppable_with_one_occurrence_per_card():
+    """`fix dedup-relation` lists two blocking shapes; the reciprocal one leaves ONE occurrence per
+    card, so a single match is a legitimate drop there and must not read as stale."""
+    doc = {"format": "coyodex-map", "title": "t", "goal": "g",
+           "use_cases": [{"id": "UC1", "name": "Do"}],
+           "components": [{"id": "C1", "name": "A", "source": "a.py:1"}],
+           "entities": [{"id": "E1", "name": "Thing",
+                         "relations": [{"verb": "has", "target": "E2"}]},
+                        {"id": "E2", "name": "Other",
+                         "relations": [{"verb": "belongs to", "target": "E1"}]}]}
+    m, stats, _notes = apply_directives(
+        doc, {"drop_relations": [{"entity": "E1", "verb": "has", "target": "E2"}]})
+    assert m.entities[0].relations == []
+    assert stats["reconcile_relations_dropped"] == 1
+
+
+def test_a_malformed_drop_relations_directive_is_refused_at_load():
+    from coyodex.reconcile import ReconcileError, load_reconcile
+    for bad in ({"drop_relations": "nope"},
+                {"drop_relations": [{"entity": "E1", "verb": "has"}]},
+                {"drop_relations": [{"entity": "E1", "verb": "has", "target": "E2", "x": 1}]},
+                {"drop_relations": [{"entity": "", "verb": "has", "target": "E2"}]}):
+        try:
+            load_reconcile(json.dumps(bad), "test")
+        except ReconcileError:
+            continue
+        raise AssertionError(f"accepted a malformed directive: {bad}")

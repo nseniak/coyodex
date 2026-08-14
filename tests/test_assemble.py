@@ -632,7 +632,8 @@ def test_every_path_is_attempted_so_one_bad_fragment_does_not_hide_the_next():
         a_dir = d / "adir.json"
         a_dir.mkdir()
         missing = d / "missing.json"
-        parts, _notes, errors = load_fragment_paths([broken, a_dir, missing, good])
+        loaded = load_fragment_paths([broken, a_dir, missing, good])
+        parts, errors = loaded.parts, loaded.errors
         # the good one still loaded, and all three failures are reported — not just the first
         assert [label for label, _ in parts] == ["good.json"]
         assert len(errors) == 3, errors
@@ -651,7 +652,8 @@ def test_a_verdicts_file_swept_into_the_glob_is_skipped_with_a_note():
             {"id": "C1", "name": "A", "source": "a.py:1"}]})
         verdicts = make_fragment_file(d, "verdicts-security.json", {"grounding": [
             {"claim": "C1 calls C2", "grounded": False, "evidence": "a.py:1"}]})
-        parts, notes, errors = load_fragment_paths([verdicts, good])
+        loaded = load_fragment_paths([verdicts, good])
+        parts, notes, errors = loaded.parts, loaded.notes, loaded.errors
         assert errors == []
         assert [label for label, _ in parts] == ["good.json"]
         assert len(notes) == 1 and "verdicts-security.json" in notes[0]
@@ -666,7 +668,8 @@ def test_the_grounding_fragment_is_NOT_mistaken_for_a_verdicts_file():
         frag = make_fragment_file(d, "grounding.json", {"grounding": {
             "claims_total": 10, "claims_challenged": 10, "claims_confirmed": 9,
             "claims_refuted": 1, "claims_unverifiable": 0}})
-        parts, notes, errors = load_fragment_paths([frag])
+        loaded = load_fragment_paths([frag])
+        parts, notes, errors = loaded.parts, loaded.notes, loaded.errors
         assert errors == [] and notes == []
         assert [label for label, _ in parts] == ["grounding.json"]
         assert parts[0][1].grounding.claims_total == 10
@@ -696,7 +699,8 @@ def test_a_draft_fragment_is_skipped_by_name():
             {"id": "C1", "name": "A", "source": "a.py:1"}]})
         draft = d / "h-b.json.draft.json"
         draft.write_text('{"components": [{"id": "C2", "name":', encoding="utf-8")  # truncated
-        parts, notes, errors = load_fragment_paths([draft, good])
+        loaded = load_fragment_paths([draft, good])
+        parts, notes, errors = loaded.parts, loaded.notes, loaded.errors
         assert errors == []
         assert [label for label, _ in parts] == ["h-a.json"]
         assert len(notes) == 1 and "draft" in notes[0]
@@ -785,8 +789,9 @@ def test_assemble_accepts_a_bare_fragment_directory():
         (d / "b.json").write_text(json.dumps({
             "components": [{"id": "C2", "name": "B", "purpose": "p", "source": "b.py:1"}]}),
             encoding="utf-8")
-        by_dir, notes, errors = load_fragment_paths([d])
-        by_glob, _n, _e = load_fragment_paths(sorted(d.glob("*.json")))
+        _by_dir_load = load_fragment_paths([d])
+        by_dir, notes, errors = (_by_dir_load.parts, _by_dir_load.notes, _by_dir_load.errors)
+        by_glob = load_fragment_paths(sorted(d.glob("*.json"))).parts
         assert not errors, errors
         assert [name for name, _ in by_dir] == [name for name, _ in by_glob] == ["a.json", "b.json"]
         assert any("expanded to 2 fragment(s)" in n for n in notes), notes
@@ -801,7 +806,7 @@ def test_a_directory_named_json_still_raises_from_assemble():
         d.mkdir()
         (d / "a.json").write_text(json.dumps({"components": []}), encoding="utf-8")
         (d / "inner.json").mkdir()
-        _parts, _notes, errors = load_fragment_paths(sorted(d.glob("*.json")))
+        errors = load_fragment_paths(sorted(d.glob("*.json"))).errors
         assert any("Is a directory" in e for e in errors), errors
 
 
@@ -989,3 +994,138 @@ def test_entry_point_ids_do_not_depend_on_fragment_order():
             m = load_model((out / "project-map.json").read_text(encoding="utf-8"))
             return {ep.id: ep.trigger for ep in m.entry_points}
     assert ids_for(["a.json", "b.json"]) == ids_for(["b.json", "a.json"])
+
+
+# --- the digest reports EVERY mutation counter (retro 2026-08-14) ---------------------------------
+# Three of the eight counters were computed and printed nowhere, so a rule merge and an entry-point
+# renumber — both of which move ids other artifacts already reference — showed `ops: none`. The digest
+# is a table now; these tests pin the table against the code that writes the counters, statically, so
+# a new counter cannot be added without a label.
+
+def _stats_keys_written(module_name: str, dict_name: str) -> set[str]:
+    """Every constant key assigned into `<dict_name>[...]` in a module's source, read with `ast`.
+
+    Static, not runtime: a runtime check only sees the counters the fixture happens to trigger, which
+    is exactly how three of them stayed invisible through 1440 passing tests."""
+    import ast
+    import importlib
+
+    src = Path(importlib.import_module(module_name).__file__ or "").read_text(encoding="utf-8")
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(src)):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if (isinstance(target, ast.Subscript)
+                    and isinstance(target.value, ast.Name) and target.value.id == dict_name
+                    and isinstance(target.slice, ast.Constant) and isinstance(target.slice.value, str)):
+                found.add(target.slice.value)
+    return found
+
+
+def test_every_assemble_stats_counter_has_a_digest_label():
+    written = _stats_keys_written("coyodex.assemble", "stats")
+    labelled = {k for k, _ in assemble._STATS_LABELS}
+    assert written <= labelled, f"counter(s) computed but never printed: {sorted(written - labelled)}"
+    assert labelled <= written, f"label(s) for a counter nothing writes: {sorted(labelled - written)}"
+
+
+def test_every_reconcile_stats_counter_has_a_digest_label_or_a_custom_renderer():
+    written = _stats_keys_written("coyodex.reconcile", "stats")
+    accounted = {k for k, _ in assemble._REC_STATS_LABELS} | set(assemble._REC_STATS_CUSTOM)
+    assert written <= accounted, f"reconcile counter(s) never printed: {sorted(written - accounted)}"
+    assert accounted <= written, f"label(s) for a counter nothing writes: {sorted(accounted - written)}"
+
+
+def test_digest_labels_are_unique_and_ordered_deterministically():
+    keys = [k for k, _ in assemble._STATS_LABELS]
+    labels = [lab for _, lab in assemble._STATS_LABELS]
+    assert len(keys) == len(set(keys)), "duplicate stats key in the digest table"
+    assert len(labels) == len(set(labels)), "two counters would print the same phrase"
+
+
+def make_rule_fragment(frag_id: str, rid: str, statement: str, where: str) -> str:
+    return json.dumps({"rules": [{"id": rid, "name": statement[:20], "statement": statement,
+                                  "sites": [{"where": where}], "confidence": "verified"}]})
+
+
+def test_a_rule_merge_is_named_in_the_digest():
+    # Two fragments stating ONE rule at one site merge into one row. Before the table the count was
+    # computed into `stats` and printed nowhere, so this collapse was invisible.
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / "header.json").write_text(make_header_fragment())
+        (d / "r1.json").write_text(make_rule_fragment("r1", "BR1", "A token is checked", "a.py:1"))
+        (d / "r2.json").write_text(make_rule_fragment("r2", "BR9", "A token is checked", "a.py:1"))
+        out = subprocess.run(ASSEMBLE + [str(d / "header.json"), str(d / "r1.json"),
+                                         str(d / "r2.json"), "--out", str(d)],
+                             capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        assert "dup-rules collapsed 1" in out.stdout, out.stdout
+
+
+def test_a_dep_merge_is_named_in_the_digest():
+    # `_merge_duplicate_deps` RE-POINTS every C→D edge onto the survivor, so a silent merge moves the
+    # graph under a reader. It used to return None and reach no counter at all.
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / "header.json").write_text(make_header_fragment())
+        (d / "a.json").write_text(json.dumps({"deps": [{"id": "D1", "name": "redis", "kind": "library"}]}))
+        (d / "b.json").write_text(json.dumps({"deps": [{"id": "D7", "name": "redis", "kind": "library"}]}))
+        out = subprocess.run(ASSEMBLE + [str(d / "header.json"), str(d / "a.json"), str(d / "b.json"),
+                                         "--out", str(d)], capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        assert "deps merged 1" in out.stdout, out.stdout
+
+
+def test_a_clean_assemble_still_says_ops_none():
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / "header.json").write_text(make_header_fragment())
+        (d / "h.json").write_text(make_harvest_fragment())
+        out = subprocess.run(ASSEMBLE + [str(d / "header.json"), str(d / "h.json"), "--out", str(d)],
+                             capture_output=True, text=True)
+        assert out.returncode == 0, out.stderr
+        assert "ops: none" in out.stdout, out.stdout
+
+
+# --- the loader's result is NAMED, not positional (retro 2026-08-14) ------------------------------
+# `load_fragment_paths` returned `tuple[list[parts], list[str], list[str]]` and a caller unpacked the
+# two same-typed lists the wrong way round: `notes` (files deliberately skipped) landed in the
+# variable checked as fatal, and `errors` (files that failed to load) were assigned to `_` and
+# dropped. Nothing could catch it — three positional lists type-check in any order, and the swap is
+# invisible whenever both are empty, which is every test that builds well-formed fragments.
+# Re-introducing the bug and running the whole suite: 1914 passed.
+
+def test_the_loader_result_cannot_be_unpacked_positionally():
+    """The fix is that the mistake is UNWRITABLE, not that it is tested for. A NamedTuple would have
+    left it writable, so this pins that the result is a plain dataclass."""
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / "h.json").write_text(make_header_fragment(), encoding="utf-8")
+        loaded = load_fragment_paths([d / "h.json"])
+        try:
+            _a, _b, _c = loaded            # type: ignore[misc]
+        except TypeError:
+            pass
+        else:
+            raise AssertionError("the result is still unpackable — a swap stays writable")
+
+
+def test_notes_and_errors_are_reachable_only_by_name_and_mean_different_things():
+    """A NOTE is a file deliberately skipped and is advisory; an ERROR is a file that should have
+    loaded and did not, and is fatal. A caller that confuses them either refuses work `assemble`
+    accepts, or reasons about a fragment set that is missing pieces."""
+    with tempfile.TemporaryDirectory() as td:
+        d = Path(td)
+        (d / "h.json").write_text(make_header_fragment(), encoding="utf-8")
+        (d / "half.draft.json").write_text('{"rules": []}', encoding="utf-8")
+        loaded = load_fragment_paths(sorted(d.glob("*.json")))
+        assert loaded.errors == [], loaded.errors
+        assert any("draft" in n for n in loaded.notes), loaded.notes
+        assert len(loaded.parts) == 1
+
+        (d / "broken.json").write_text('{"extras": "not a list"}', encoding="utf-8")
+        loaded = load_fragment_paths(sorted(d.glob("*.json")))
+        assert loaded.errors and any("extras" in e for e in loaded.errors), loaded.errors
+        assert any("draft" in n for n in loaded.notes), "a note must not be reclassified as an error"

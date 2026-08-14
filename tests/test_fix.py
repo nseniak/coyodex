@@ -11,7 +11,7 @@ import json
 import tempfile
 from pathlib import Path
 
-from coyodex import fix
+from coyodex import audit_model, fix
 from coyodex.model import FORMAT, load_model_path
 
 
@@ -198,20 +198,80 @@ def test_a_drifted_cadence_anchor_is_written_not_refused(capsys):
     assert "cadence_source" in combined and "1 cadence anchor(s)" in combined
 
 
-def test_the_not_applicable_count_rides_the_final_line(capsys):
-    """A live build read this output with `| tail -12`, so a total that is not on the last line is a
-    total the reader never sees — the same lesson as assemble's unhealed-riding-step count."""
-    m = make_map([], entities=[{"id": "E1", "name": "Thing", "states": {
+def make_lifecycle_map() -> dict:
+    return make_map([], entities=[{"id": "E1", "name": "Thing", "states": {
         "source": "a.py:2", "states": ["NEW", "DONE"],
         "transitions": [{"src": "NEW", "dst": "DONE", "on": "finish"}]}}])
-    claim = "E1 (Thing) has states [NEW, DONE] with 1 transition(s)"
+
+
+LIFECYCLE_CLAIM = "E1 (Thing) has states [NEW, DONE] with 1 transition(s)"
+
+
+def test_the_not_applicable_count_rides_the_final_line(capsys):
+    """A live build read this output with `| tail -12`, so a total that is not on the last line is a
+    total the reader never sees — the same lesson as assemble's unhealed-riding-step count.
+
+    Driven by an UNPARSEABLE edge claim: this used to use a lifecycle drift, which is no longer
+    not-applicable now that it has a writer."""
+    m = make_map([{"src": "C1", "verb": "writes to", "dst": "E1", "why": "w", "where": "a.py:1"}])
     with tempfile.TemporaryDirectory() as td:
         (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
-        mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:30")]})
+        mp, vp = write(td, m, {"grounding": [make_vote("C1 writes to E1", True, "a.py:30")]})
         fix.main(["apply-drift", "--map", mp, "--verdicts", vp])
         out = capsys.readouterr()
     last = [ln for ln in out.out.splitlines() if ln.strip()][-1]
     assert "NOT APPLICABLE" in last and "1 drift(s)" in last, last
+
+
+def test_a_drifted_lifecycle_anchor_is_written_not_refused(capsys):
+    """`lifecycle` was drift-ELIGIBLE with no writer, so every confirmed lifecycle drift was
+    re-authored by hand — verbatim the `cadence` gap this same function was extended to close."""
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, make_lifecycle_map(),
+                       {"grounding": [make_vote(LIFECYCLE_CLAIM, True, "a.py:30")]})
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp]) == 0
+        out = capsys.readouterr()
+        m2 = json.loads(Path(mp).read_text())
+    assert m2["entities"][0]["states"]["source"] == "a.py:30"
+    assert "1 lifecycle anchor(s)" in out.out, out.out
+    assert "NOT APPLICABLE" not in out.out, out.out
+
+
+def test_a_lifecycle_correction_on_a_component_lands_on_the_component(capsys):
+    """The target is `states.source` on an entity OR a component, so the write has to carry WHICH."""
+    m = make_map([])
+    m["components"] = [{"id": "C1", "name": "A", "source": "a.py:1", "states": {
+        "source": "a.py:2", "states": ["OPEN", "SHUT"], "transitions": []}}]
+    claim = "C1 (A) has states [OPEN, SHUT]"
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:31")]})
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp]) == 0
+        capsys.readouterr()
+        m2 = json.loads(Path(mp).read_text())
+    assert m2["components"][0]["states"]["source"] == "a.py:31"
+
+
+def test_a_lifecycle_claim_matching_two_elements_is_skipped_not_blind_written(capsys):
+    """Same multiplicity rule as every other writer: picking 'the first' is how a hand script
+    overwrote a claim nobody meant to touch."""
+    # Same id text in the claim from two different arrays is impossible (ids are prefix-typed), so
+    # the collision is built the way it really occurs: two entities whose claim strings are equal.
+    m = make_map([], entities=[
+        {"id": "E1", "name": "Thing", "states": {"source": "a.py:2", "states": ["NEW"],
+                                                 "transitions": []}},
+        {"id": "E1", "name": "Thing", "states": {"source": "a.py:3", "states": ["NEW"],
+                                                 "transitions": []}}])
+    claim = "E1 (Thing) has states [NEW]"
+    with tempfile.TemporaryDirectory() as td:
+        (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
+        mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:30")]})
+        assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp]) == 0
+        out = capsys.readouterr()
+        m2 = json.loads(Path(mp).read_text())
+    assert "matches 2 lifecycles" in (out.out + out.err)
+    assert m2["entities"][0]["states"]["source"] == "a.py:2", "must not be blind-written"
 
 
 def test_an_edge_anchor_is_still_rewritten_and_says_so_on_the_last_line(capsys):
@@ -227,6 +287,35 @@ def test_an_edge_anchor_is_still_rewritten_and_says_so_on_the_last_line(capsys):
     assert "rewrote 1 edge" in last and "NOT APPLICABLE" not in last, last
 
 
+def make_model_touching_every_theme():
+    """A model carrying at least one claim of EVERY theme the audit emits, so the partition test can
+    ask the audit which themes it declares report-only instead of being told in a literal."""
+    from coyodex.model import load_model
+
+    doc = make_map([{"src": "C1", "verb": "reads", "dst": "E1", "why": "w", "where": "a.py:1"},
+                    {"src": "C1", "verb": "uses", "dst": "D1", "why": "w", "where": "a.py:2"},
+                    {"src": "C1", "verb": "persists", "dst": "E1", "why": "w", "where": "a.py:3"}])
+    doc["components"] = [{"id": "C1", "name": "A", "source": "a.py:1"},
+                         {"id": "C2", "name": "B", "source": "b.py:1"}]
+    doc["edges"].append({"src": "C1", "verb": "calls", "dst": "C2", "why": "w", "where": "a.py:4"})
+    doc["deps"] = [{"id": "D1", "name": "redis", "kind": "library"}]
+    doc["entities"] = [
+        {"id": "E1", "name": "Thing", "source": "a.py:9",
+         "store": {"dep": "D1", "container": "things", "mode": "collection"},
+         "states": {"source": "a.py:2", "states": ["NEW", "DONE"], "transitions": []}},
+        {"id": "E2", "name": "Other"}]
+    doc["rules"] = [{"id": "BR1", "name": "A token", "statement": "A token is checked",
+                     "risk": "r", "access": True,
+                     "sites": [{"where": "a.py:5", "why": "guards the API"}]},
+                    {"id": "BR2", "name": "A plan", "statement": "A plan has a cap", "risk": "r",
+                     "sites": [{"where": "a.py:6", "why": "caps the plan"}]}]
+    doc["entry_points"] = [{"kind": "cron", "trigger": "nightly sweep", "source": "a.py:7",
+                            "component": "C1", "cadence": "daily", "cadence_source": "a.py:8"}]
+    doc["messaging"] = [{"name": "jobs", "kind": "queue", "publishers": ["C1"],
+                         "consumers": ["C2"], "payload": "a job", "source": "a.py:10"}]
+    return load_model(json.dumps(doc))
+
+
 def test_the_writable_theme_partition_covers_every_theme_the_audit_emits():
     """F10's pin. `_WRITABLE_THEMES` partitions `audit_model._THEMES`, in a different module, with no
     guard — so a new claim kind would silently become "not applicable", and if it were writable
@@ -236,7 +325,16 @@ def test_the_writable_theme_partition_covers_every_theme_the_audit_emits():
     assert fix._WRITABLE_THEMES <= known, fix._WRITABLE_THEMES - known
     # Every theme is on exactly one side, and the split is the documented one.
     unwritable = known - fix._WRITABLE_THEMES
-    assert unwritable == {"persistence", "messaging", "lifecycle"}, unwritable
+    # The list is NOT a hand-written allow-list any more. A theme is unwritable only when the audit
+    # itself declares its claims report-only (`drift_eligible=False`), which is a statement about the
+    # CLAIM — the skeptic is sent to a different kind of line than the anchor holds, so a difference
+    # there is not evidence of drift. `lifecycle` sat in a hand-written exception list for months
+    # while being drift-ELIGIBLE, so every confirmed lifecycle drift was re-typed by hand; the same
+    # thing had already happened to `cadence`. Twice is a pattern, so the test now derives the split.
+    ineligible = {w.theme for w in audit_model.l2_worklist_model(make_model_touching_every_theme())
+                  if not w.drift_eligible}
+    assert unwritable <= ineligible, (
+        f"theme(s) whose claims ARE drift-eligible but have no writer: {sorted(unwritable - ineligible)}")
 
 
 def test_an_unparseable_edge_claim_is_not_reported_as_a_missing_security_row(capsys):
@@ -699,7 +797,7 @@ def test_a_recorded_anchor_whose_claim_is_gone_notes_and_never_fails():
                           "corrected": "b.py:9"}]}), "rec")
     notes = apply_reconcile(m, rec, {})
     assert m.edges[0].where == "a.py:1"
-    assert any("matches no edge, security surface, rule site or cadenced entry point" in n
+    assert any("matches no edge, security surface, rule site," in n
                for n in notes)
 
 
@@ -767,20 +865,17 @@ def test_dedup_security_json_with_a_decision_is_refused(capsys):
 def test_apply_drift_to_reconcile_names_the_drifts_it_cannot_write(capsys):
     """The tail said "N drift(s) NOT APPLICABLE … (see above)" with nothing above: the report ran
     only on the in-place path, so the claims needing a hand re-anchor were counted, never named."""
-    m = make_map([], entities=[{"id": "E1", "name": "Thing", "states": {
-        "source": "a.py:2", "states": ["NEW", "DONE"],
-        "transitions": [{"src": "NEW", "dst": "DONE", "on": "finish"}]}}])
-    claim = "E1 (Thing) has states [NEW, DONE] with 1 transition(s)"
+    m = make_map([{"src": "C1", "verb": "writes to", "dst": "E1", "why": "w", "where": "a.py:1"}])
     with tempfile.TemporaryDirectory() as td:
         (Path(td) / "a.py").write_text("x = 1\n" * 40, encoding="utf-8")
-        mp, vp = write(td, m, {"grounding": [make_vote(claim, True, "a.py:30")]})
+        mp, vp = write(td, m, {"grounding": [make_vote("C1 writes to E1", True, "a.py:30")]})
         rec = Path(td) / "reconcile.json"
         assert fix.main(["apply-drift", "--map", mp, "--verdicts", vp,
                          "--to-reconcile", str(rec)]) == 0
         out = capsys.readouterr()
     combined = out.out + out.err
     assert "NOT APPLICABLE" in combined
-    assert "[lifecycle]" in combined and "E1 (Thing) has states" in combined
+    assert "C1 writes to E1" in combined
 
 
 def test_apply_drift_to_reconcile_leaves_the_file_alone_when_there_is_nothing_to_record(capsys):
@@ -907,3 +1002,468 @@ def test_drop_edge_to_reconcile_preserves_directives_another_writer_left():
         doc = json.loads(rc.read_text(encoding="utf-8"))
         assert doc["set"] == [{"ids": ["C1"], "subsystem": "S1"}], doc
         assert len(doc["drop_edges"]) == 1
+
+
+# --- an argument error carries the cure (retro 2026-08-14) ---------------------------------------
+# A live build guessed `drop-edge --src C1 --verb reads --dst E24`, got a bare
+# `ERROR: unknown option '--src'` five times, and spent a turn on `--help` to learn the arguments
+# are positional. The usage text existed and the dispatcher knew the verb; withholding it was a
+# choice. Every dispatched verb now answers through `subverb_help.usage_error`.
+
+def test_an_unknown_option_prints_that_verbs_usage_block(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        m = Path(td) / "m.json"
+        m.write_text(json.dumps(make_map([{"src": "C1", "verb": "reads", "dst": "E1",
+                                           "where": "a.py:1"}])), encoding="utf-8")
+        assert fix.main(["drop-edge", "--map", str(m), "--src", "C1"]) == 2
+        err = capsys.readouterr().err
+        assert "unknown option '--src'" in err, err
+        assert "drop-edge --map <map> <src> <verb> <dst>" in err, err
+
+
+def test_the_usage_block_shown_is_the_one_for_the_verb_that_failed(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        m = Path(td) / "m.json"
+        m.write_text(json.dumps(make_map([{"src": "C1", "verb": "reads", "dst": "E1",
+                                           "where": "a.py:1"}])), encoding="utf-8")
+        assert fix.main(["dedup-relation", "--map", str(m), "--nope"]) == 2
+        err = capsys.readouterr().err
+        assert "dedup-relation" in err
+        assert "drop-edge --map <map> <src> <verb> <dst>" not in err, "showed another verb's block"
+
+
+def test_every_dispatched_fix_verb_answers_an_unknown_option_with_usage(capsys):
+    """The six `--help` holes were six parsers forgetting the same thing separately. This is the pin
+    that stops a seventh parser being written without the cure."""
+    from coyodex.subverb_help import verb_block
+
+    with tempfile.TemporaryDirectory() as td:
+        m = Path(td) / "m.json"
+        m.write_text(json.dumps(make_map([{"src": "C1", "verb": "reads", "dst": "E1",
+                                           "where": "a.py:1"}])), encoding="utf-8")
+        for verb in ("apply-drift", "drop-edge", "dedup-relation", "dedup-edge",
+                     "security-row", "dedup-security"):
+            assert fix.main([verb, "--map", str(m), "--definitely-not-a-flag"]) == 2, verb
+            err = capsys.readouterr().err
+            assert "unknown" in err, (verb, err)
+            block = verb_block(fix._USAGE, verb)
+            assert block and block.splitlines()[0].strip() in err, (verb, err)
+
+
+# --- fix row: the writer for a row's own text, in its owning fragment (retro 2026-08-14) ----------
+# Half a real map's L2 worklist (192 of 373 claims) is rules with no repair path. `fix security-row`
+# was built for exactly this failure and the T7 fold moved auth surfaces out of the array it reaches.
+
+def make_frag_dir(td: str, **files: dict) -> Path:
+    d = Path(td) / "frags"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "header.json").write_text(json.dumps({"format": FORMAT, "title": "t", "goal": "g"}),
+                                   encoding="utf-8")
+    for name, doc in files.items():
+        (d / f"{name}.json").write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    return d
+
+
+def make_rule(rid: str, statement: str, *, where: str = "a.py:1", risk: str = "r") -> dict:
+    return {"id": rid, "name": statement[:20], "statement": statement, "risk": risk,
+            "sites": [{"where": where, "why": "guards the API"}]}
+
+
+def test_row_rewrites_the_field_in_the_owning_fragment():
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1",
+                         "--set-risk", "an unguarded surface leaks"]) == 0
+        doc = json.loads((d / "r1.json").read_text())
+        assert doc["rules"][0]["risk"] == "an unguarded surface leaks"
+        assert doc["rules"][0]["statement"] == "A token is checked", "only the named field moves"
+
+
+def test_row_can_set_several_fields_at_once():
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1",
+                         "--set-risk", "R2", "--set-name", "Token gate"]) == 0
+        doc = json.loads((d / "r1.json").read_text())
+        assert (doc["rules"][0]["risk"], doc["rules"][0]["name"]) == ("R2", "Token gate")
+
+
+def test_row_refuses_an_edit_that_would_SPLIT_a_merged_row(capsys):
+    """`assemble` merges rules on normalised statement + site set, so rewording one mints an id that
+    did not exist before — and the digest used to say `ops: none` while it happened."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td,
+                          r1={"rules": [make_rule("BR1", "A token is checked")]},
+                          r2={"rules": [make_rule("BR9", "A token is checked")]})
+        before = (d / "r1.json").read_text()
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1",
+                         "--set-statement", "A token is verified"]) == 2
+        err = capsys.readouterr().err
+        assert "would APPEAR: BR9" in err, err
+        assert (d / "r1.json").read_text() == before, "nothing may be written on a refusal"
+
+
+def test_row_refuses_an_edit_that_would_RETIRE_an_id(capsys):
+    """The inverse: text that comes to match another row collapses two into one, and every reference
+    to the retired id is silently re-pointed."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td,
+                          r1={"rules": [make_rule("BR1", "A token is checked")]},
+                          r2={"rules": [make_rule("BR9", "A plan has a cap")]})
+        before = (d / "r2.json").read_text()
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR9",
+                         "--set-statement", "A token is checked"]) == 2
+        err = capsys.readouterr().err
+        assert "would DISAPPEAR: BR9" in err, err
+        assert (d / "r2.json").read_text() == before
+
+
+def test_row_refuses_an_id_declared_by_two_fragments(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td,
+                          r1={"rules": [make_rule("BR1", "A token is checked")]},
+                          r2={"rules": [make_rule("BR1", "A plan has a cap")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "x"]) == 2
+        err = capsys.readouterr().err
+        assert "declared by 2 fragment rows" in err, err
+        assert "r1.json" in err and "r2.json" in err
+
+
+def test_row_says_why_an_entry_point_id_cannot_be_addressed(capsys):
+    """EP ids are MINTED at assemble and re-sorted by content — one anchor edit moved 22 of 104 on a
+    real map — so an index keyed on them would address the wrong row. The verb reaches authored ids
+    only, and says so rather than reporting a bare 'not found'."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, h1={"entry_points": [
+            {"kind": "cli", "trigger": "run it", "source": "a.py:1", "component": "C1"}]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "EP1", "--set-trigger", "x"]) == 2
+        err = capsys.readouterr().err
+        assert "MINTED at assemble" in err, err
+
+
+def test_row_refuses_an_anchor_field_and_names_the_verb_that_owns_it(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, h1={"components": [{"id": "C1", "name": "A", "source": "a.py:1"}]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "C1", "--set-source", "b.py:2"]) == 2
+        assert "apply-drift" in capsys.readouterr().err
+
+
+def test_row_refuses_a_reconcile_owned_field_and_names_reconcile(capsys):
+    """On one real map ALL 66 rules take their `block` from reconcile.json and no fragment carries
+    one, so writing it here would be overwritten by the next assemble without a word."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        for field_name in ("block", "subsystem", "capability", "runs_in", "subdomain"):
+            assert fix.main(["row", "--fragments", str(d), "--id", "BR1",
+                             f"--set-{field_name}", "X"]) == 2, field_name
+            assert "reconcile.json" in capsys.readouterr().err, field_name
+
+
+def test_row_never_invents_a_field_the_row_does_not_carry(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-porpoise", "x"]) == 2
+        err = capsys.readouterr().err
+        assert "has no field(s) porpoise" in err and "Present:" in err
+
+
+def test_row_is_a_no_op_when_the_text_already_says_that(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked", risk="r")]})
+        before = (d / "r1.json").read_text()
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "r"]) == 0
+        assert "already says that" in capsys.readouterr().out
+        assert (d / "r1.json").read_text() == before
+
+
+def test_row_warns_that_a_text_edit_invalidates_the_skeptics_verdicts(capsys):
+    """A claim is keyed by its rendered TEXT and `grounding.live_claims_digest` is a hash over them,
+    so a statement edit strands every verdict for that row. `finalize` refuses on the stale digest."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1",
+                         "--set-statement", "A token is verified against its issuer"]) == 0
+        out = capsys.readouterr().out
+        assert "grounding write" in out and "live_claims_digest" in out, out
+
+
+def test_row_refuses_when_the_fragments_do_not_assemble_as_they_stand(capsys):
+    """The guard cannot say what an edit changes if the baseline is already broken — so it refuses
+    rather than writing blind."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td,
+                          r1={"rules": [make_rule("BR1", "A token is checked")]},
+                          r2={"rules": [make_rule("BR1", "A plan has a cap")]})
+        (d / "r2.json").write_text(json.dumps({"rules": [make_rule("BR2", "A plan has a cap")],
+                                               "components": [{"id": "C1", "name": "A",
+                                                               "source": "a.py:1"}]}),
+                                   encoding="utf-8")
+        (d / "r3.json").write_text(json.dumps({"components": [{"id": "C1", "name": "B",
+                                                               "source": "b.py:1"}]}),
+                                   encoding="utf-8")
+        rc = fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "x"])
+        capsys.readouterr()
+        assert rc == 2
+
+
+def test_row_edits_a_single_named_fragment_file_too():
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d / "r1.json"), "--id", "BR1",
+                         "--set-risk", "R9"]) == 0
+        assert json.loads((d / "r1.json").read_text())["rules"][0]["risk"] == "R9"
+
+
+def test_row_requires_at_least_one_set_flag(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1"]) == 2
+        assert "at least one --set-" in capsys.readouterr().err
+
+
+def test_row_edits_survive_a_re_assemble_which_is_the_whole_point():
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "durable"]) == 0
+        from coyodex import assemble as _asm
+        assert _asm.main([*[str(p) for p in sorted(d.glob("*.json"))], "--out", str(d.parent)]) == 0
+        m = json.loads((d.parent / "project-map.json").read_text())
+        assert m["rules"][0]["risk"] == "durable"
+
+
+# --- dedup-relation can finally record its answer (retro 2026-08-14) ------------------------------
+
+def make_relation_map_doc(relations: list[dict]) -> dict:
+    return {"format": FORMAT, "title": "t", "goal": "g",
+            "use_cases": [{"id": "UC1", "name": "Do"}],
+            "components": [{"id": "C1", "name": "A", "source": "a.py:1"}],
+            "entities": [{"id": "E1", "name": "Thing", "relations": relations},
+                         {"id": "E2", "name": "Other"}]}
+
+
+def test_dedup_relation_records_the_drop_and_leaves_the_map_alone():
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps(make_relation_map_doc(
+            [{"verb": "has", "target": "E2"}, {"verb": "has", "target": "E2"}])), encoding="utf-8")
+        before = mp.read_text()
+        rec = Path(td) / "reconcile.json"
+        assert fix.main(["dedup-relation", "--map", str(mp), "--drop", "E1:has:E2",
+                         "--to-reconcile", str(rec)]) == 0
+        assert mp.read_text() == before, "the MAP must not be edited on the recording path"
+        assert json.loads(rec.read_text())["drop_relations"] == [
+            {"entity": "E1", "verb": "has", "target": "E2"}]
+
+
+def test_dedup_relation_merges_into_an_existing_reconcile_file():
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps(make_relation_map_doc(
+            [{"verb": "has", "target": "E2"}, {"verb": "has", "target": "E2"}])), encoding="utf-8")
+        rec = Path(td) / "reconcile.json"
+        rec.write_text(json.dumps({"drop_edges": [{"src": "C1", "verb": "reads", "dst": "E2"}]}),
+                       encoding="utf-8")
+        assert fix.main(["dedup-relation", "--map", str(mp), "--drop", "E1:has:E2",
+                         "--to-reconcile", str(rec)]) == 0
+        doc = json.loads(rec.read_text())
+        assert doc["drop_edges"] and doc["drop_relations"], doc
+
+
+def test_dedup_relation_records_each_drop_a_relation_actually_needs(capsys):
+    """A relation declared twice needs TWO drop tokens, and the listing prints the token twice.
+    Presence-based dedup silently refused the second while still printing "recorded" and exiting 0,
+    so an operator following the listing one token at a time shipped a map that still blocked."""
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps(make_relation_map_doc(
+            [{"verb": "has", "target": "E2"}, {"verb": "has", "target": "E2"}])), encoding="utf-8")
+        rec = Path(td) / "reconcile.json"
+        for _ in range(2):
+            assert fix.main(["dedup-relation", "--map", str(mp), "--drop", "E1:has:E2",
+                             "--to-reconcile", str(rec)]) == 0
+        capsys.readouterr()
+        assert len(json.loads(rec.read_text())["drop_relations"]) == 2
+
+
+def test_dedup_relation_refuses_to_record_more_drops_than_the_map_declares(capsys):
+    """The ceiling is what the map actually declares — beyond it a repeat is a mistake worth naming,
+    not a silent no-op that reads as success."""
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps(make_relation_map_doc(
+            [{"verb": "has", "target": "E2"}, {"verb": "has", "target": "E2"}])), encoding="utf-8")
+        rec = Path(td) / "reconcile.json"
+        for _ in range(2):
+            fix.main(["dedup-relation", "--map", str(mp), "--drop", "E1:has:E2",
+                      "--to-reconcile", str(rec)])
+        capsys.readouterr()
+        assert fix.main(["dedup-relation", "--map", str(mp), "--drop", "E1:has:E2",
+                         "--to-reconcile", str(rec)]) == 2
+        err = capsys.readouterr().err
+        assert "already records 2 drop(s)" in err, err
+        assert len(json.loads(rec.read_text())["drop_relations"]) == 2, "the file must be unchanged"
+
+
+def test_dedup_relation_to_reconcile_refuses_when_there_is_no_decision(capsys):
+    """`--to-reconcile` on its own would print the listing, write nothing and exit 0 — which reads as
+    success. `dedup-edge` was fixed for exactly this; the sibling verb inherits the rule."""
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps(make_relation_map_doc(
+            [{"verb": "has", "target": "E2"}, {"verb": "has", "target": "E2"}])), encoding="utf-8")
+        rec = Path(td) / "reconcile.json"
+        assert fix.main(["dedup-relation", "--map", str(mp), "--to-reconcile", str(rec)]) == 2
+        assert "needs a decision" in capsys.readouterr().err
+        assert not rec.exists()
+
+
+def test_the_in_place_dedup_relation_now_says_the_edit_is_not_durable(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps(make_relation_map_doc(
+            [{"verb": "has", "target": "E2"}, {"verb": "has", "target": "E2"}])), encoding="utf-8")
+        assert fix.main(["dedup-relation", "--map", str(mp), "--drop", "E1:has:E2"]) == 0
+        out = capsys.readouterr().out
+        assert "BLOCKS" in out and "--to-reconcile" in out, out
+
+
+# --- regressions from the adversarial review of `fix row` (2026-08-14) ----------------------------
+# Every one of these was a defect the first version shipped.
+
+def test_row_refuses_when_a_SIBLING_fragment_fails_to_load():
+    """THE critical one. `load_fragment_paths` returns `(parts, notes, errors)`; unpacking it as
+    `(parts, problems, notes)` threw the errors away, so a fragment that failed to load was silently
+    DROPPED from the set the guard assembled — and an edit that merged two rules away reported
+    nothing and exited 0."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td,
+                          r1={"rules": [make_rule("BR1", "A token is checked")]},
+                          r2={"rules": [make_rule("BR9", "A plan has a cap")]})
+        (d / "broken.json").write_text(json.dumps({"extras": "a string, not a list"}),
+                                       encoding="utf-8")
+        before = (d / "r1.json").read_text()
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1",
+                         "--set-statement", "A plan has a cap"]) == 2
+        assert (d / "r1.json").read_text() == before, "an unverifiable edit must not be written"
+
+
+def test_a_draft_fragment_is_a_NOTE_and_must_not_block_an_edit():
+    """The mirror failure of the same unpack: `assemble` deliberately SKIPS a `*.draft.json` (the
+    harvest contract tells agents to write one), and reading notes as problems refused every edit in
+    the directory while `assemble` itself was perfectly happy."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        (d / "half-written.draft.json").write_text('{"rules": []}', encoding="utf-8")
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "R"]) == 0
+
+
+def test_row_refuses_a_coyodex_dir_and_never_edits_the_assembled_map(capsys):
+    """Pointing `--fragments` at `.coyodex/` instead of `.coyodex/build-fragments/` is the obvious
+    slip, and it used to edit `project-map.json` — the build product the verb exists to avoid."""
+    with tempfile.TemporaryDirectory() as td:
+        coy = Path(td) / ".coyodex"
+        coy.mkdir()
+        (coy / "project-map.json").write_text(json.dumps(
+            {**make_map([]), "rules": [make_rule("BR1", "A token is checked")]}), encoding="utf-8")
+        (coy / "reconcile.json").write_text("{}", encoding="utf-8")
+        before = (coy / "project-map.json").read_text()
+        assert fix.main(["row", "--fragments", str(coy), "--id", "BR1", "--set-risk", "R"]) == 2
+        assert "build-fragments" in capsys.readouterr().err
+        assert (coy / "project-map.json").read_text() == before
+
+
+def test_row_leaves_no_check_file_behind_in_the_fragment_directory():
+    """A leftover `*.fixrow-check.json` breaks every later assemble with a duplicate-id conflict, and
+    the `.draft.json` skip does not cover that name."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "R"]) == 0
+        assert sorted(p.name for p in d.glob("*.json")) == ["header.json", "r1.json"]
+
+
+def test_row_refuses_a_missing_value_that_is_another_flag(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1",
+                         "--set-name", "--set-risk", "x"]) == 2
+        assert "another flag" in capsys.readouterr().err
+
+
+def test_row_refuses_to_blank_a_field(capsys):
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token is checked")]})
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "   "]) == 2
+        assert "deletes the text" in capsys.readouterr().err
+
+
+def test_row_keeps_an_ascii_escaped_fragment_ascii_escaped():
+    """A one-field edit used to rewrite every `\\uXXXX` in the file, burying the real change."""
+    with tempfile.TemporaryDirectory() as td:
+        d = make_frag_dir(td, r1={"rules": [make_rule("BR1", "A token — checked")]})
+        assert (d / "r1.json").read_bytes().isascii()
+        assert fix.main(["row", "--fragments", str(d), "--id", "BR1", "--set-risk", "R"]) == 0
+        assert (d / "r1.json").read_bytes().isascii(), "escaping style must be preserved"
+
+
+# --- the duplicate-relation listing is labelled by SHAPE, and the labels are pinned ---------------
+# Found by sweeping for the shape that hid the loader bug: two same-typed lists, returned
+# positionally, BOTH EMPTY on a healthy map — so a swap is invisible to every clean-fixture test.
+# Verified before fixing: swapping this function's two returns passed all 1916 tests.
+
+def make_relation_model(entities: list[dict]):
+    from coyodex.model import load_model
+    return load_model(json.dumps({**make_map([]), "entities": entities}))
+
+
+def test_a_relation_declared_twice_on_one_card_is_labelled_same_card():
+    m = make_relation_model([{"id": "E1", "name": "Thing",
+                              "relations": [{"verb": "has", "target": "E2"},
+                                            {"verb": "has", "target": "E2"}]},
+                             {"id": "E2", "name": "Other"}])
+    dupes = fix._duplicate_relations(m)
+    assert dupes.same_card == ["E1:has:E2"]
+    assert dupes.reciprocal == []
+
+
+def test_a_pair_authored_from_both_cards_is_labelled_reciprocal():
+    m = make_relation_model([{"id": "E1", "name": "Thing",
+                              "relations": [{"verb": "has", "target": "E2"}]},
+                             {"id": "E2", "name": "Other",
+                              "relations": [{"verb": "belongs to", "target": "E1"}]}])
+    dupes = fix._duplicate_relations(m)
+    assert dupes.reciprocal == ["E1:has:E2"]
+    assert dupes.same_card == []
+
+
+def test_a_healthy_map_reports_neither_shape():
+    m = make_relation_model([{"id": "E1", "name": "Thing",
+                              "relations": [{"verb": "has", "target": "E2"}]},
+                             {"id": "E2", "name": "Other"}])
+    dupes = fix._duplicate_relations(m)
+    assert (dupes.same_card, dupes.reciprocal) == ([], [])
+
+
+def test_the_two_shapes_are_reachable_only_by_name():
+    m = make_relation_model([{"id": "E1", "name": "Thing", "relations": []}])
+    try:
+        _a, _b = fix._duplicate_relations(m)          # type: ignore[misc]
+    except TypeError:
+        return
+    raise AssertionError("the result is still unpackable — a swap stays writable")
+
+
+def test_the_listing_prints_each_shape_under_its_own_heading(capsys):
+    """The two shapes need different operator action, so a silent swap mislabels the listing the
+    operator acts on — which is what made this worth naming rather than merely documenting."""
+    with tempfile.TemporaryDirectory() as td:
+        mp = Path(td) / "map.json"
+        mp.write_text(json.dumps({**make_map([]), "entities": [
+            {"id": "E1", "name": "Thing", "relations": [{"verb": "has", "target": "E2"},
+                                                        {"verb": "has", "target": "E2"}]},
+            {"id": "E2", "name": "Other", "relations": [{"verb": "belongs to", "target": "E1"}]}]}),
+            encoding="utf-8")
+        assert fix.main(["dedup-relation", "--map", str(mp)]) == 0
+        out = capsys.readouterr().out
+    same_at = out.index("Same-card duplicates")
+    recip_at = out.index("Reciprocal")
+    assert out.index("E1:has:E2", same_at) < recip_at, out

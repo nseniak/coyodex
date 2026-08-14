@@ -68,7 +68,8 @@ COMMAND_MODULE: dict[str, str] = {
     "preindex": "preindex", "validate": "validate_model", "audit": "audit_model",
     "render": "viewer/render", "serve": "viewer/serve", "assemble": "assemble",
     "lint-fragment": "lint_fragment", "anchor-drift": "anchor_drift", "fix": "fix",
-    "dump": "dump", "reconcile": "reconcile_build", "balance": "balance",
+    "dump": "dump", "diff": "mapdiff", "reconcile": "reconcile_build",
+    "balance": "balance",
     "finalize": "finalize", "grounding": "grounding", "record": "record",
     "scope": "scope",
 }
