@@ -257,7 +257,18 @@ _SELF_START_SIGNATURES = ("background", "loop", "cron", "schedul", "timer", "tic
 #   cache      = lives only in a cache tier (a projection of another source of truth)
 #   in-code    = a module-level registry/constants (persisted in the source itself)
 #   enum       = a closed value set (often a bitfield); its "store" is the type definition
-STORE_MODES = ("collection", "embedded", "transient", "cache", "in-code", "enum")
+#   projection = a READ shape over rows another entity owns (a row type a query module returns, a
+#                view assembled in code). The data is durable; this type is not what stores it.
+STORE_MODES = ("collection", "embedded", "transient", "cache", "in-code", "enum", "projection")
+
+# The modes that SAY, in the model, that nothing in this codebase writes this entity: it lives in a
+# parent's row, in the source, or only for the length of a call. They adjudicate the "entity with no
+# owning component" advisory on their own — the mode IS the answer, and it is a validated value that
+# renders next to the element on the Data tab, where a prose exception line sat in a footnote on
+# another tab that nobody read. Live maps wrote that line 67 times on one map, in 11 spellings of the
+# same five sentences; every one of them was restating a mode the model can hold.
+# `cache` and `collection` are NOT here: something writes a cache, and something writes a collection.
+STORE_MODES_UNOWNED = ("embedded", "in-code", "enum", "transient", "projection")
 
 
 # ── Entry-point KIND — the seeded-open naming axis (mirror of the dep PURPOSE bucket) ─────────────

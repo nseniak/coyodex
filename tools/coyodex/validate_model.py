@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from coyodex import balance_lib, grammar
+from coyodex import balance_lib, records, grammar
 from coyodex.audit_model import l2_worklist_model
 from coyodex.reporting import clip as _clip, reset_full_lists, set_full_lists, shown as _shown
 from coyodex.anchors import (
@@ -1365,8 +1365,9 @@ def completeness_counts(m: ProjectModel) -> dict[str, int]:
 # `CAP` and `EP` lead the alternation for the usual first-match reason (`CAP3` also starts with "C",
 # `EP1` with "E") — without that, a recorded `CAP3: <why>` line matched the `C` branch, failed on
 # "AP3", and silently adjudicated nothing.
-_RECORD_LINE = re.compile(
-    r"^\s*(?:[-*]\s+)?\**\s*((?:CAP|EP|UC|HP|R|C|E)\d+(?:/[a-z-]+)?)\**\s*[:(—–-]")
+#: How many records may restate ONE reason before the section is worth collapsing. Three is the
+#: point where the repetition is unmistakable and a multi-key line is plainly shorter.
+_REPEATED_REASON_MIN = 3
 
 
 def _recorded_ids(m: ProjectModel, heading: str, prefixes: tuple[str, ...]) -> set[str]:
@@ -1376,27 +1377,22 @@ def _recorded_ids(m: ProjectModel, heading: str, prefixes: tuple[str, ...]) -> s
     checks — the same device `balance_lib.RUNS_IN_SCOPES` already uses, and for the same reason it
     was introduced there: a bare token silenced a whole family at once, which is the one thing the
     method says a record must never do. Both the bare and the scoped form are returned verbatim, so
-    each caller asks for exactly the token its own check honours."""
-    out: set[str] = set()
-    for body in balance_lib.extras_bodies(m, heading):
-        for line in body.splitlines():
-            hit = _RECORD_LINE.match(line)
-            if hit and hit.group(1).startswith(prefixes):
-                out.add(hit.group(1))
-    return out
+    each caller asks for exactly the token its own check honours.
+
+    ONE line reader (`records`), shared with every other escape family, so a fix to the line shape
+    lands once — and so a record may name SEVERAL ids for one reason (`C101, C148: <why>`) without
+    each family re-inventing the list."""
+    return {k for k in records.recorded_keys(m, heading) if k.startswith(prefixes)}
 
 
 # A recorded coverage-exception line names a repo-relative DIRECTORY at the line start followed by a
 # separator — "mee6/plugins/: coarse whole-monorepo altitude". Line-leading + separator, one per line
-# (the same discipline as `_RECORD_LINE`), so prose naming another path mid-sentence can't pre-exempt it.
-# The separator excludes a BARE hyphen and accepts a SPACED one. A hyphen is legal inside a
-# directory name, and the path token is non-greedy, so a bare hyphen used to end the match at the
-# first one: `third-party/: vendored` recorded `third`, and `mee6-legacy/plugins/: coarse` recorded
-# `mee6`. That silences coverage findings across every sibling sharing the truncated prefix — this
-# escape OVER-exempts when it misreads, which is the dangerous direction. A spaced hyphen can never
-# sit inside a path segment, so `docs - kept deliberately coarse` still records.
-# (Same treatment as `balance_lib._LITERAL_LINE`; see its note.)
-_COVERAGE_DIR_LINE = re.compile(r"^\s*(?:[-*]\s+)?\**\s*([\w./\-]+?)/?\**(?:\s*[:(—–]|\s+-\s)")
+# (the same discipline every family shares through `records`), so prose naming another path
+# mid-sentence can't pre-exempt it. The separator excludes a BARE hyphen and accepts a SPACED one:
+# a hyphen is legal inside a directory name, and when the path token was non-greedy a bare hyphen
+# ended the match at the first one — `third-party/: vendored` recorded `third`, `mee6-legacy/
+# plugins/: coarse` recorded `mee6`, silencing coverage findings across every sibling sharing the
+# truncated prefix. This escape OVER-exempts when it misreads, which is the dangerous direction.
 
 
 def _recorded_coverage_dirs(m: ProjectModel) -> set[str]:
@@ -1406,13 +1402,8 @@ def _recorded_coverage_dirs(m: ProjectModel) -> set[str]:
     completeness warning for anything AT OR UNDER the path (boundary-aware — `plugins` never silences
     `plugins-legacy`). Scoped by directory, so a real gap in an UNLISTED dir still warns; the trailing
     slash is normalized off so it matches the slash-less repo-relative dir keys the coverage walk uses."""
-    out: set[str] = set()
-    for body in balance_lib.extras_bodies(m, "coverage exceptions"):
-        for line in body.splitlines():
-            hit = _COVERAGE_DIR_LINE.match(line)
-            if hit and (p := hit.group(1).strip().rstrip("/")):
-                out.add(p)
-    return out
+    return {p for k in records.recorded_keys(m, "coverage exceptions", records.DIR_KEY, records.SEP)
+            if (p := k.strip().rstrip("/"))}
 
 
 def _under_recorded(path: str, dirs: frozenset[str] | set[str]) -> bool:
@@ -3065,6 +3056,62 @@ def _runs_in_family_warnings(m: ProjectModel) -> list[str]:
     return out
 
 
+def recorded_line_warnings(m: ProjectModel) -> list[str]:
+    """Two advisories about the RECORDS themselves — the shape of the adjudication log, not the map.
+
+    1. REPEATED REASONS. One reason written out once per element is how a recorded section grows
+       into a wall: a live map carried 66 lines holding 15 distinct reasons, the same sentence up to
+       seventeen times in a row. A record may name every element it answers on ONE line, which is
+       the same adjudication in a form a person can read.
+
+       Only for a family whose reader ACCEPTS a comma list, and only when the repeated lines' own
+       keys parse under it. The first version advised every heading alike, and on the seven families
+       with no list grammar — a quoted claim, a `path:line`, a bucket name, a kind plus a contract
+       word — following that advice destroyed the record with nothing said: the tool causing the
+       silent over-suppression this whole module exists to prevent.
+
+    2. A LINE THAT TRIED TO BE A RECORD AND ADJUDICATES NOTHING — a list holding a token that is not
+       a key, a key with no why, or (in the audit family) a list that has lost the check name that
+       scopes it. It must be said out loud, because a dropped record and an answered finding look
+       identical from the outside."""
+    out: list[str] = []
+    for spec in records.HEADINGS:
+        heading = spec.heading
+        lines = records.lines(m, heading)
+        if not lines:
+            continue
+        if spec.key is not None:
+            groups: dict[str, list[str]] = {}
+            for ln in lines:
+                keys = records.keys_on_line(ln, spec.key, spec.seps, spec.lead, spec.strict_multi)
+                _, sep, why = ln.partition(": ")
+                # Only a line THIS family can read, keyed by a single element, can be merged with
+                # another — a line already carrying a list is the fixed form, not the problem.
+                if len(keys) == 1 and sep and (w := _norm_reason(why)):
+                    groups.setdefault(w, []).append(keys[0])
+            repeated = sorted((len(ks), ks) for ks in groups.values() if len(ks) >= _REPEATED_REASON_MIN)
+            if repeated:
+                worst = repeated[-1]
+                out.append(f"'{heading}' repeats one reason across several records: "
+                           f"{sum(n for n, _ in repeated)} of {len(lines)} line(s) restate "
+                           f"{len(repeated)} reason(s), one of them {worst[0]} times — write each "
+                           f"reason ONCE and name every element it answers on that line "
+                           f"({', '.join(worst[1][:3])}{', …' if worst[0] > 3 else ''}: <why>).")
+        for bad in records.malformed_records(m, heading):
+            out.append(f"'{heading}' has a line that tries to be a record and adjudicates NOTHING "
+                       f"(the form is `{spec.merged_form}`): {bad[:96]}")
+    return out
+
+
+#: A recorded reason, compared for repetition. Casefolded, whitespace-collapsed and stripped of
+#: trailing punctuation — the shallowest normalisation that still catches the walls seen in the wild,
+#: where the repeats were byte-identical. It does NOT catch a wall of PARAPHRASES (one live map wrote
+#: 67 lines that restate five sentences in 67 spellings); that one is answered at the source instead,
+#: by `grammar.STORE_MODES_UNOWNED` making most of those lines unnecessary to write at all.
+def _norm_reason(why: str) -> str:
+    return " ".join(why.strip().rstrip(".;,").casefold().split())
+
+
 def unbacked_entity_steps(m: ProjectModel) -> list[tuple[str, FlowStep, str, str]]:
     """C↔E flow steps whose entity touch NO backbone edge carries — returns
     `(container_label, step, c_id, e_id)`. The edge is C→E regardless of the step's authored
@@ -3139,23 +3186,10 @@ def _check_edges(m: ProjectModel) -> tuple[list[str], list[str]]:
     return problems, warnings
 
 
-def _recorded_line_keys(m: ProjectModel, heading: str) -> list[str]:
-    """The non-empty lines recorded under an extras heading, stripped of list bullets."""
-    return [ln.strip().lstrip("-*").strip()
-            for body in balance_lib.extras_bodies(m, heading)
-            for ln in body.splitlines() if ln.strip()]
+_recorded_line_keys = records.lines   # the shared line reader; see `records` for the whole contract
 
 
-def _records_key(lines: list[str], key: str) -> bool:
-    """Is `key` the KEY of one of these recorded lines — i.e. does a line read `<key>: <why>`?
-
-    Prefix-and-colon, never a substring, and never `split(':')[0]`. A substring test let one
-    adjudication silence a DIFFERENT finding (recording `Admin pages (/orgs/:slug/admin/**)`
-    suppressed an un-adjudicated duplicate of `Admin pages`, the shorter being a substring of the
-    longer line). Splitting on the first colon breaks the opposite way, on every key that CONTAINS
-    one — and a URL-shaped auth surface usually does."""
-    k = key.strip()
-    return any(ln.startswith(f"{k}:") for ln in lines)
+_records_key = records.records_key   # the free-text key test; see `records` for why it stays single-key
 
 
 def duplicate_security_warnings(m: ProjectModel) -> list[str]:
@@ -3924,6 +3958,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     problems.extend(_check_runs_in(m))
     problems.extend(_check_environments(m))
     warnings.extend(_runs_in_family_warnings(m))   # the whole `runs_in` family, through ONE counted exit
+    warnings.extend(recorded_line_warnings(m))    # the shape of the adjudication log itself
     edge_problems, edge_warnings = _check_edges(m)
     problems.extend(edge_problems)
     warnings.extend(edge_warnings)
@@ -4069,14 +4104,26 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
         # live leads independently invented exactly this heading for exactly this advisory before
         # it read anything: the vocabulary was already obvious, only the wiring was missing.
         adjudicated = _recorded_ids(m, "persistence exceptions", ("E",))
+        # The MODE answers this on its own where the model can hold the answer: an entity that lives
+        # in a parent's row, in the source, or only for the length of a call HAS no writer by
+        # definition, and saying so as a validated `store.mode` puts the claim on the Data tab next
+        # to the element instead of in a prose footnote on another tab. One live map wrote that
+        # footnote 67 times, restating five sentences in eleven shapes — every one of them a mode.
+        # The recorded line stays for what a mode cannot say — a library that owns its own tables, a
+        # view the database refreshes, a throwaway CI database.
+        by_mode = {e.id for e in m.entities
+                   if e.store and e.store.mode in grammar.STORE_MODES_UNOWNED}
         unowned = sorted(e.id for e in m.entities
-                         if e.id not in owned and e.id not in embedded and e.id not in adjudicated)
+                         if e.id not in owned and e.id not in embedded
+                         and e.id not in adjudicated and e.id not in by_mode)
         if unowned:
             shown = _shown(unowned, 12)
             warnings.append(f"Entities with no owning component (no persists/writes C→E edge): "
-                            f"{shown} — author the owning component's persists/writes edge, or "
-                            f"record '<En>: <why>' under a 'Persistence exceptions' extras heading "
-                            f"(a read-only projection, an external type, a value object)")
+                            f"{shown} — author the owning component's persists/writes edge, set the "
+                            f"entity's `store.mode` when nothing writes it "
+                            f"({', '.join(grammar.STORE_MODES_UNOWNED)}), or record '<En>: <why>' "
+                            f"under a 'Persistence exceptions' extras heading for what a mode "
+                            f"cannot say (a library's own tables, a database-refreshed view)")
     if m.edges:
         targets = {e.dst for e in m.edges}
         # v2: a dep marked deployment_linked has no code call site BY DECLARATION — the nudge must
@@ -4281,6 +4328,11 @@ def _run(argv: list[str] | None = None) -> int:
         print("Unclaimed surfaces")
         print("<!-- paste under an 'Unclaimed surfaces' extras heading; replace each <why> "
               "(dead surface / dev-only / missing use case) or trace a use case instead -->")
+        # One line per component is the DECISION unit, not the writing unit. This block is where the
+        # walls came from: a live map answered 66 of these and wrote 15 distinct reasons, one of them
+        # seventeen times. Say it here, at the moment the lead is about to fill them in.
+        print("<!-- one reason usually covers several: merge those ids onto ONE line — "
+              "`C1, C2, C3: <why>` — instead of repeating the sentence per component -->")
         for cid, eps in ext_rows:
             triggers = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
             print(f"- {cid} ({comp_name.get(cid, cid)}): <why>   # {triggers}")

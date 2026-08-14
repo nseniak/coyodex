@@ -1324,18 +1324,6 @@ Full Phase-4 coverage: all 185 L2 claims from the audit worklist were challenged
 
 ---
 
-## Balance exceptions
-
-- granularity: 36 components against a code-derived expectation of ~11 (band 6–16). The expectation is bound by the LOC ceiling over a 294-LOC median file, which reads a toolkit of single-purpose stdlib modules as far fewer units than it has. Each component here is one module or one clearly separable unit inside an oversized file (the 2.5 kLOC validator is four; the 2.9 kLOC viewer generator is five; the 6.9 kLOC browser app is five), each with its own job, its own command or view, and its own tests. Folding them to reach the band would hide exactly the pipeline this map exists to explain — the altitude is deliberate.
-- store: the entities whose store mode is `transient`, `embedded`, `in-code` or `enum` deliberately carry no `dep`. This project has no database: the only physical store is the local filesystem, already linked on the eight entities that really land in a file. Tagging in-memory view, impact and eval structures with a filesystem dep would state a persistence that does not happen.
-- UC2: 16 steps against the 3–15 band. This is the product's whole spine — read the method, size the tree, fan out, self-check each fragment, merge, apply the synthesis assignments, run the gates, ground the claims, stamp provenance, commit. The gate run is already extracted as a sub-flow (SF10) and counts as one; the remaining steps each carry a distinct call site, so compressing further would drop a real anchor rather than reduce altitude.
-BLK1: the rules here are a 1:1 migration of the security rows; fusing them is the T7 authoring pass, which has not been run on this map
-BLK2: same — a 1:1 migration, not an authored sweep
-BLK3: same — a 1:1 migration, not an authored sweep
-
-
----
-
 ## Coverage exceptions
 
 - tests/: the test suite is measured as coverage of the map's targets in the Tests table, not modelled as components of the product.
@@ -1343,18 +1331,6 @@ BLK3: same — a 1:1 migration, not an authored sweep
 - assets/: two images used by the README.
 - .github/: issue and pull-request templates only; there is no CI workflow in this repo.
 - method/templates/: a documentation-only template showing the shape of the generated markdown view.
-
----
-
-## Unclaimed surfaces
-
-- C5: `python -m coyodex.json_schema` prints the generated JSON Schema of the map document. It is a maintainer/tooling surface for regenerating `method/project-map.schema.json` and for IDE autocomplete — no product use case runs it, and the schema it prints is documentation, not a gate (`coyodex validate`'s checks are hand-rolled and semantic). Deliberately off the use-case list rather than a dead surface.
-
----
-
-## Persistence exceptions
-
-- C41: the backup writes a BUNDLE, not a modelled record — a byte copy of the map folder, the conversation transcripts beside it, and a small manifest naming the project and build time. The bundle has no named type in the code (map_backup.py is stdlib-only and never parses the map), so there is no entity to link. This was confirmed by the grounding pass, which refuted the earlier claim that the backup owns the map document.
 
 ---
 
@@ -1511,6 +1487,31 @@ Every view the server pre-renders, with the Mermaid diagram type it uses.
 | Happy Path | the ordered walk of use cases as messages from each actor to the system (`gen_viewer.py:2392`) | sequenceDiagram |
 | Use-case flow | one use case's ordered steps between the actor and the elements it touches (`gen_viewer.py:2507`) | sequenceDiagram |
 | Broker channels | per broker: publishing components, the channels, and the consumers (`gen_viewer.py:2669`) | flowchart LR |
+
+
+---
+
+## Map maintenance records — the build's own adjudication log
+
+These sections answer this tool's own checks: each line records an element and why a finding about it was judged correct as it stands. They say nothing about the system being mapped.
+
+### Balance exceptions
+
+- granularity: 36 components against a code-derived expectation of ~11 (band 6–16). The expectation is bound by the LOC ceiling over a 294-LOC median file, which reads a toolkit of single-purpose stdlib modules as far fewer units than it has. Each component here is one module or one clearly separable unit inside an oversized file (the 2.5 kLOC validator is four; the 2.9 kLOC viewer generator is five; the 6.9 kLOC browser app is five), each with its own job, its own command or view, and its own tests. Folding them to reach the band would hide exactly the pipeline this map exists to explain — the altitude is deliberate.
+- store: the entities whose store mode is `transient`, `embedded`, `in-code` or `enum` deliberately carry no `dep`. This project has no database: the only physical store is the local filesystem, already linked on the eight entities that really land in a file. Tagging in-memory view, impact and eval structures with a filesystem dep would state a persistence that does not happen.
+- UC2: 16 steps against the 3–15 band. This is the product's whole spine — read the method, size the tree, fan out, self-check each fragment, merge, apply the synthesis assignments, run the gates, ground the claims, stamp provenance, commit. The gate run is already extracted as a sub-flow (SF10) and counts as one; the remaining steps each carry a distinct call site, so compressing further would drop a real anchor rather than reduce altitude.
+BLK1: the rules here are a 1:1 migration of the security rows; fusing them is the T7 authoring pass, which has not been run on this map
+BLK2: same — a 1:1 migration, not an authored sweep
+BLK3: same — a 1:1 migration, not an authored sweep
+
+
+### Unclaimed surfaces
+
+- C5: `python -m coyodex.json_schema` prints the generated JSON Schema of the map document. It is a maintainer/tooling surface for regenerating `method/project-map.schema.json` and for IDE autocomplete — no product use case runs it, and the schema it prints is documentation, not a gate (`coyodex validate`'s checks are hand-rolled and semantic). Deliberately off the use-case list rather than a dead surface.
+
+### Persistence exceptions
+
+- C41: the backup writes a BUNDLE, not a modelled record — a byte copy of the map folder, the conversation transcripts beside it, and a small manifest naming the project and build time. The bundle has no named type in the code (map_backup.py is stdlib-only and never parses the map), so there is no entity to link. This was confirmed by the grounding pass, which refuted the earlier claim that the backup owns the map document.
 
 
 ---

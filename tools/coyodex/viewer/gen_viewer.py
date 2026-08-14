@@ -1358,7 +1358,7 @@ def _context_head(graph: GraphDict) -> list[str]:
     # row (unreadable at ~45 deps); LR stacks them into a narrow, tall column of bucket clusters instead.
     lines = ["flowchart LR", f'  SYS["{title}"]:::cy-SYS', "  class SYS system"]
     for i, r in enumerate(graph["roles"]):
-        rid = "R" + str(i)
+        rid = _actor_id(i)
         label = _safe_label(r["name"])
         if r["kind"] == "service":
             lines.append(f'  {rid}{{{{"{label}"}}}}:::cy-{rid}')   # hexagon = service actor
@@ -1387,6 +1387,25 @@ CONTEXT_CLASSDEFS = [
     f"  classDef libs {CONTAINER_STYLE};",
     f"  classDef bucketfold {CONTAINER_STYLE};",
 ]
+
+
+def _actor_id(i: int) -> str:
+    r"""The VIEW-only id of the Context diagram's actor node for `roles[i]`.
+
+    `ACT<n>`: index-based, and in a PREFIX the model's id grammar does not use, because the plain
+    `R<i>` form it replaced COLLIDED with the model's own role ids. Both were `R\d+`, and the two
+    numberings disagree by one (`R0` is the model's `R1`), so anything that looked a model role id up
+    in the viewer's node map got the NEXT role: a recorded line about the site visitor `R3` rendered
+    as the name of the MCP client application. A view-only node must never be able to answer to a
+    model element's id.
+
+    NO UNDERSCORE, deliberately, unlike the deployment units' `U_<n>`. Mermaid names a link
+    `L_<src>_<dst>_<n>`, so an underscored endpoint is ambiguous to split, and `eachEdge` pays for
+    `U_<n>` by enumerating it in its pattern as "the only ids carrying an underscore". `R_0` was the
+    first spelling tried here and it silently unbound the actor→system arrows: `L_R_0_SYS_0` matched
+    nothing, so the Context view's actor edge cards stopped opening. An underscore-free id needs no
+    pattern to know about it."""
+    return f"ACT{i}"
 
 
 def _external_buckets(graph: GraphDict) -> dict[str, list[dict[str, str]]]:
@@ -1525,7 +1544,7 @@ def add_context_nodes(g: dict[str, Any], graph: GraphDict) -> None:
                          "file": None, "line": None,
                          "fields": {"Overview": graph["goal"]} if graph.get("goal") else {}}
     for i, r in enumerate(graph["roles"]):
-        rid = "R" + str(i)
+        rid = _actor_id(i)
         g["nodes"][rid] = {"id": rid, "kind": r["kind"], "name": r["name"], "file": None, "line": None,
                            "fields": ({"Wants": r["wants"]} if r["wants"] else {})}
     # The collapsed Libraries box is a synthetic node so bindNodes binds it (it skips ids absent from
@@ -2495,7 +2514,7 @@ def gen_context_edges(graph: GraphDict) -> dict[str, dict[str, Any]]:
     title = graph["title"] or "System"
     ce: dict[str, dict[str, Any]] = {}
     for i, r in enumerate(graph["roles"]):
-        rid = "R" + str(i)
+        rid = _actor_id(i)
         ce[rid + ">SYS"] = {"src": rid, "dst": "SYS", "type": "actor",
                             "from": r["name"], "to": title, "wants": r["wants"]}
     # component edges grouped by their target — the "realized by" detail for system→dep

@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
-from coyodex import balance_lib, grammar
+from coyodex import balance_lib, records, grammar
 from coyodex.anchors import FILEREF as _FILEREF
 from coyodex.model import (
     ProjectModel,
@@ -573,11 +573,13 @@ def check_dependency_phrasing(m: ProjectModel) -> list[Finding]:
 #: one heading reader every escape family shares, so matching can never drift between them.
 AUDIT_EXCEPTIONS_HEADING = "Audit exceptions"
 
-#: A recorded line: `<check-name> <Id>: <why>`. Line-leading and per-FINDING on purpose. Recording a
-#: whole family would repeat the `runs-in` mistake documented in `validate_model._RUNS_IN_FAMILY`,
-#: where one literal silenced every advisory in its family and the operator's justification covered
-#: exactly one of them. A `why` is required — an id alone is a dismissal, not a decision.
-_AUDIT_RECORD = re.compile(r"^\s*([a-z][a-z-]+)\s+([A-Z]+\d+)\s*[:—-]\s*\S")
+#: A recorded line: `<check-name> <Id>[, <Id>…]: <why>`. Line-leading and per-FINDING on purpose —
+#: the CHECK is always named, so a record can never silence a whole family the way the `runs-in`
+#: literal once did (`validate_model._RUNS_IN_FAMILY`), where one word silenced every advisory in
+#: its family and the operator's justification covered exactly one of them. Several ids MAY share
+#: one line when one reason genuinely answers all of them (`read-never-created HP1, HP4: <why>`);
+#: the check name still scopes every id on it. A `why` is required — an id alone is a dismissal.
+_AUDIT_FAMILY = re.compile(r"^\s*(?:[-*]\s+)?\**\s*([a-z][a-z-]+)\s+(?=[A-Z])")
 
 
 def audit_exceptions(m: ProjectModel) -> set[tuple[str, str]]:
@@ -590,11 +592,12 @@ def audit_exceptions(m: ProjectModel) -> set[tuple[str, str]]:
     the "advisory waved through" failure the method names in its own words. A live map carried two
     `read-never-created` advisories through its whole build for exactly this reason."""
     out: set[tuple[str, str]] = set()
-    for body in balance_lib.extras_bodies(m, AUDIT_EXCEPTIONS_HEADING):
-        for line in body.splitlines():
-            hit = _AUDIT_RECORD.match(line)
-            if hit:
-                out.add((hit.group(1).lower(), hit.group(2)))
+    for line in records.lines(m, AUDIT_EXCEPTIONS_HEADING):
+        hit = _AUDIT_FAMILY.match(line)
+        if not hit:
+            continue
+        for eid in records.keys_on_line(line[hit.end():], records.ANY_ID_KEY, r"(?:\s*[:—-])"):
+            out.add((hit.group(1).lower(), eid))
     return out
 
 

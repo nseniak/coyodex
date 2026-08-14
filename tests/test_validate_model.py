@@ -1675,6 +1675,80 @@ def test_the_two_sides_of_persistence_exceptions_do_not_cross_silence():
     assert any("C2 writes into D1" in w for w in ws)           # …and only its own job
 
 
+def test_a_no_writer_store_mode_answers_the_unowned_entity_advisory():
+    """The MODE is the answer where the model can hold it: an entity that lives in a parent's row,
+    in the source, or only for the length of a call has no writer by definition. Live maps wrote
+    that as prose 67 times on one map, in 11 spellings of the same five sentences — each of them a
+    mode restated in a footnote on a tab nobody reads."""
+    for mode in ("embedded", "in-code", "enum", "transient", "projection"):
+        m = make_unowned_entity_model()
+        m.entities[1].store = Store(mode=mode)
+        assert not any("no owning component" in w for w in warnings_of(m)), mode
+
+
+def test_a_mode_that_implies_a_writer_leaves_the_unowned_advisory_firing():
+    """`collection` and `cache` are NOT an answer — something writes a collection, and something
+    writes a cache. Silencing on those would turn the check off for the population it is for."""
+    for mode in ("collection", "cache", ""):
+        m = make_unowned_entity_model()
+        m.entities[1].store = Store(dep="D1", container="snapshots", mode=mode)
+        assert any("no owning component" in w and "E2" in w for w in warnings_of(m)), mode or "unset"
+
+
+def test_one_recorded_line_may_adjudicate_several_entities():
+    m = make_unowned_entity_model()
+    m.entities.append(make_entity(eid="E3", name="Draft"))
+    assert any("no owning component" in w and "E2" in w and "E3" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Persistence exceptions",
+                             body="E2, E3: read-only projections built at query time.")]
+    assert not any("no owning component" in w for w in warnings_of(m))
+
+
+def test_a_repeated_reason_across_records_is_reported():
+    """The shape that grew the walls: one sentence written out once per element."""
+    m = make_valid_model()
+    m.extras = [ExtraSection(heading="Unclaimed surfaces",
+                             body="C1: a dev-only surface\nC2: a dev-only surface\n"
+                                  "C3: a dev-only surface")]
+    assert any("repeats one reason" in w and "Unclaimed surfaces" in w for w in warnings_of(m))
+    m.extras = [ExtraSection(heading="Unclaimed surfaces",
+                             body="C1, C2, C3: a dev-only surface")]
+    assert not any("repeats one reason" in w for w in warnings_of(m))
+
+
+def test_a_record_that_tries_to_be_one_and_reads_as_nothing_is_reported():
+    """Three silent shapes, all reported now: a list holding a non-key, a key with no why, and (in
+    the audit family) a list that lost the check name that scopes it."""
+    for heading, body in (("Unclaimed surfaces", "C1, the poller: a dev-only surface"),
+                          ("Unclaimed surfaces", "C1:"),
+                          ("Coverage exceptions", "vendor/, the whole tree: vendored"),
+                          ("Audit exceptions", "HP1, HP2: verified by hand")):
+        m = make_valid_model()
+        m.extras = [ExtraSection(heading=heading, body=body)]
+        assert any("adjudicates NOTHING" in w for w in warnings_of(m)), (heading, body)
+
+
+def test_a_family_with_no_comma_list_is_never_told_to_merge_its_records():
+    """The advice that destroyed records: seven of the eleven families cannot read a bare list, and
+    following the merge instruction wiped their adjudication with nothing said."""
+    for heading, body in (
+            ("Entry-point coverage", "http-route: complete — all of them\ncli: complete — all of them\n"
+                                     "job: complete — all of them"),
+            ("Sweep debt", "a.py:1: mechanics\nb.py:2: mechanics\nc.py:3: mechanics"),
+            ("Bucket vocabulary", "AI: core machinery\nAuth: core machinery\nDocs: core machinery")):
+        m = make_valid_model()
+        m.extras = [ExtraSection(heading=heading, body=body)]
+        assert not any("repeats one reason" in w for w in warnings_of(m)), heading
+
+
+def test_the_merge_advice_names_the_real_keys_of_the_repeated_records():
+    m = make_valid_model()
+    m.extras = [ExtraSection(heading="Unclaimed surfaces",
+                             body="C1: a dev-only surface\nC2: a dev-only surface\nC3: a dev-only surface")]
+    hit = [w for w in warnings_of(m) if "repeats one reason" in w]
+    assert hit and "C1, C2, C3: <why>" in hit[0]
+
+
 def test_stale_view_warns_and_fresh_view_does_not():
     m = make_valid_model()
     with tempfile.TemporaryDirectory() as td:

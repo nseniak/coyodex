@@ -88,7 +88,7 @@ needs no escaping (the markdown-view generator escapes it when rendering tables)
   "subdomains":  [ { "id": "SDn", "name", "purpose", "parent": "SDn|null", "source", "confidence" } ],
   "entities":    [ { "id": "En",  "name",
                      "store": { "dep": "Dn|null", "container": "<collection/table/bucket>",
-                                "mode": "<collection|embedded|transient|cache|in-code|enum|''>",
+                                "mode": "<collection|embedded|transient|cache|in-code|enum|projection|''>",
                                 "notes": "<TTL, cache tiers, …>" } /* or null = not persisted/stated */,
                      "meaning", "subdomain": "SDn|null",
                      "source": "<path:line|null>",
@@ -200,9 +200,13 @@ Semantics, stated on the fields:
   to load with a targeted error): `dep` names the physical datastore/messaging dep (a D-id, so it
   resolves and remaps like any reference), `container` the compartment inside it (collection /
   table / key prefix / bucket / file), `mode` the closed relation vocabulary
-  (`collection`/`embedded`/`transient`/`cache`/`in-code`/`enum` — exact match, `validate` blocks a
-  near-miss), `notes` what the shape can't say (TTL, cache tiers). `null` = not persisted / not
-  stated. This makes "what is persisted in <store>?" a query instead of a prose hunt, and powers
+  (`collection`/`embedded`/`transient`/`cache`/`in-code`/`enum`/`projection` — exact match,
+  `validate` blocks a near-miss), `notes` what the shape can't say (TTL, cache tiers). `null` = not
+  persisted / not stated. `projection` is a READ shape over rows ANOTHER entity owns (the row type a
+  query module returns, a view assembled in code): the data is durable, this type is not what stores
+  it. Set the mode rather than writing an ownership exception — see "Persistence exceptions" below;
+  the five no-writer modes (`embedded`/`in-code`/`enum`/`transient`/`projection`) answer that
+  advisory on their own. This makes "what is persisted in <store>?" a query instead of a prose hunt, and powers
   the **persistence-coverage rule** (advisory, adoption-gated): once any entity structures its
   store, every write-family `C→D` edge into a datastore/messaging dep must be explained by an
   entity that records that dep as its store AND is written by that component — **directly, or
@@ -218,7 +222,7 @@ Semantics, stated on the fields:
   `memberships subscriptions` where the code says `__collection__ = "memberships_subscriptions"`
   (12 of its 37 rows were paraphrases), which defeats the one thing the field exists for: leading a
   reader to the real collection. A space is the tell, so only the modes whose container IS a
-  physical name are checked (`transient`/`in-code`/`enum` legitimately DESCRIBE — "derived",
+  physical name are checked (`transient`/`in-code`/`enum`/`projection` legitimately DESCRIBE — "derived",
   "Chargebee API" — and `embedded` rides its parent) — all three silenced by the literal `store`
   (line-leading) under "Balance exceptions". Each structured store also
   joins the audit L2 skeptic worklist ("En is stored in Dn container 'x'", anchored at the
@@ -288,16 +292,27 @@ Semantics, stated on the fields:
   (the pre-capability form, still read); `Rn: <why>` — a role deliberately without a spine position.
   A record silences exactly one `(check, id)` pair — `CAPn` and `HPn` are different judgements about
   the same capability and never substitute for each other.
-  These two read ids from **line-leading tokens only, one id per line, followed by a separator**
-  — write `C713: <why>` / `- R4: <why>` (an `UC15 (name) — why` form also reads) — so prose that
-  merely mentions another id, or a sentence that starts with one, never silences it. A pair form
-  (`C713 & C714: <why>`) records only the first id — give each its own line. Two more machine-read
-  headings: **"Entry-point coverage"** carries the per-kind T4 completeness contract (`<kind>:
+  These two read ids from **line-leading tokens only, followed by a separator** — write
+  `C713: <why>` / `- R4: <why>` (an `UC15 (name) — why` form also reads) — so prose that merely
+  mentions another id, or a sentence that starts with one, never silences it.
+  **ONE REASON, EVERY ID IT ANSWERS.** When one judgement covers several elements, write it ONCE and
+  list them comma-separated on that line: `C101, C148, C186: <why>`. Do NOT repeat the sentence per
+  element — live maps grew to 66 recorded lines holding 15 distinct reasons that way, and `validate`
+  now says so. Every token before the separator must be an id; a list where one is not records
+  NOTHING (and is reported), because a half-read record leaves you believing a finding is
+  adjudicated while the check keeps firing. An `&` between ids is not a list — use commas.
+  Two more machine-read headings: **"Entry-point coverage"** carries the per-kind T4 completeness contract (`<kind>:
   complete|sampled|partial — <how>`, line-leading kind + separator — see the `entry_points[].kind`
   bullet above), and **"Persistence exceptions"** adjudicates **both sides of ownership** — a
   `Cn: <why>` line for a write-family `C→D` edge no entity's structured store explains (see the
   `entities[].store` bullet below), and an `En: <why>` line for an entity **no component owns**
-  (no `persists`/`writes` `C→E` edge): a read-only projection, an external type, a value object.
+  (no `persists`/`writes` `C→E` edge).
+  **For the `En` side, the MODE is the answer, not a recorded line.** An entity that lives in a
+  parent's row, in the source, or only for the length of a call has no writer BY DEFINITION: set its
+  `store.mode` (`embedded` / `in-code` / `enum` / `transient` / `projection`) and the advisory is
+  answered — a validated value that renders next to the entity on the Data tab, instead of prose in a
+  footnote on another tab. Record an `En` line only for what a mode cannot say: a library that owns
+  its own tables, a view the database refreshes, a throwaway CI database.
   The two never collide — each rule filters the heading by its own id prefix, so a `Cn` line can
   never quiet an ownership gap and an `En` line can never quiet a writer gap. All
   of these headings are machine-read by `validate`,

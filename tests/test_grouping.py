@@ -10,13 +10,15 @@ Stdlib-only — no pytest required. Run either way (needs an editable install: `
 from __future__ import annotations
 
 import json
+import re
 import sys
 import tempfile
 from pathlib import Path
 from typing import cast
 
 from coyodex import grammar
-from coyodex.model import Dep, EntityRelation, ProjectModel, UseCase, load_model
+from coyodex.model import (Dep, EntityRelation, ProjectModel, Role, UseCase, all_elements,
+                           load_model)
 from coyodex.model import TestRow as GapRow  # aliased: a bare `TestRow` trips pytest class collection
 from coyodex.viewer import build_graph, gen_viewer
 from coyodex.views import _relation_item, and_list, model_to_graph
@@ -3938,6 +3940,35 @@ def test_folded_bucket_roster_synthetic_node_and_edge() -> None:
     gen_viewer.add_context_nodes(pg, g)
     assert pg["nodes"]["BKF0"]["kind"] == "bucketfold"       # synthetic panel node so the click bridge resolves it
     assert "SYS>BKF0" in gen_viewer.gen_context_edges(g)     # the SYS→box arrow is a registered context edge
+
+
+def test_a_view_only_node_id_can_never_answer_to_a_model_element_id() -> None:
+    """The Context view's actor nodes were `R0, R1, …` — the model's own role id space, off by one.
+    Anything that looked a model role id up in the viewer's node map got the NEXT role: a recorded
+    line about the site visitor `R3` rendered as the name of the MCP client application.
+
+    Pinned as an INVARIANT over every synthetic node, not just the actors: a view-only id must not
+    be readable as a model id. `ACT<n>` also carries no underscore on purpose — mermaid names a link
+    `L_<src>_<dst>_<n>`, and `R_0` (the first fix attempted) made `L_R_0_SYS_0` unparseable, silently
+    unbinding the actor arrows."""
+    m = ProjectModel(title="Tiny", goal="g")
+    m.roles = [Role(id="R1", name="Tracker", kind="human", wants="x", drives="UC1"),
+               Role(id="R2", name="Superadmin", kind="human", wants="y", drives="UC2"),
+               Role(id="R3", name="Site visitor", kind="human", wants="z", drives="UC3")]
+    m.use_cases = [UseCase(id="UC1", name="Track")]
+    g = model_to_graph(m)
+    pg: dict = {"nodes": {}}
+    gen_viewer.add_context_nodes(pg, g)
+    model_ids = set(all_elements(m))
+    for nid in pg["nodes"]:
+        assert nid not in model_ids, f"view-only node {nid} shadows a model element"
+        assert not grammar.ID_TOKEN.fullmatch(nid), f"view-only node {nid} reads as a model id"
+        assert not re.fullmatch(r"R\d+", nid), f"view-only node {nid} reads as a role id"
+    assert [n["name"] for n in pg["nodes"].values() if n["kind"] == "human"] == [
+        "Tracker", "Superadmin", "Site visitor"]
+    # the actor ids the diagram and the edge cards agree on, and mermaid can split
+    assert "ACT0>SYS" in gen_viewer.gen_context_edges(g)
+    assert "_" not in "".join(k for k in pg["nodes"] if k.startswith("ACT"))
 
 
 def test_bundle_meta_carries_built_and_pin_and_tests() -> None:

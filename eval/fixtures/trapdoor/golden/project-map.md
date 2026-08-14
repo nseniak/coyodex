@@ -386,24 +386,27 @@ Every backbone edge in this map was authored directly against the fixture's own 
 
 ---
 
-## Happy Path coverage
-
-- UC5: taking an advisory lock is an operator action before a bulk job, not part of the product story the spine tells. It keeps its own flow and stays off the walk.
-
----
-
-## Balance exceptions
-
-- granularity: 28 components against a code-derived expectation of ~23 (band 13-33) — inside the band, recorded here only because the FILE cap binds on web/src/components (median file 24 LOC), which is trap G1 and would otherwise read as an unexplained agreement.
-- entity-flows: not recorded — the flows DO touch entities, deliberately, so this token stays absent as the control.
-
----
-
 ## Entry-point coverage
 
 - http-route: complete — walked the six router.add registrations in build_router (src/entrypoints/http.py:34).
 - event-consumer: complete — the fixture has exactly one consumer, CommentConsumer.run_forever.
 - job: complete — the fixture has exactly one scheduled worker, ReportWorker on the SCHEDULE constant.
+
+---
+
+## Map maintenance records — the build's own adjudication log
+
+These sections answer this tool's own checks: each line records an element and why a finding about it was judged correct as it stands. They say nothing about the system being mapped.
+
+### Happy Path coverage
+
+- UC5: taking an advisory lock is an operator action before a bulk job, not part of the product story the spine tells. It keeps its own flow and stays off the walk.
+
+### Balance exceptions
+
+- granularity: 28 components against a code-derived expectation of ~23 (band 13-33) — inside the band, recorded here only because the FILE cap binds on web/src/components (median file 24 LOC), which is trap G1 and would otherwise read as an unexplained agreement.
+- entity-flows: not recorded — the flows DO touch entities, deliberately, so this token stays absent as the control.
+
 
 ---
 

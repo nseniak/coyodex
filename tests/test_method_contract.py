@@ -502,6 +502,13 @@ KNOWN_NO_ESCAPE: dict[str, str] = {
     # indistinguishable from having no findings.
     "recorded `runs_in` exception(s) currently suppressing nothing":
         "the finding IS a dead record; recording another one cannot answer it",
+    # The same META shape: both of these have a RECORD as their subject. Recording an exception to
+    # silence a complaint about the shape of your records is circular; the remedy is to rewrite the
+    # lines the finding names (collapse the repeats onto one line / fix the malformed key list).
+    "'{}' repeats one reason across several records":
+        "the finding IS the record's shape; the fix is to write the reason once with every id on it",
+    "'{}' has a line that tries to be a record and adjudicates NOTHING":
+        "a line that records nothing cannot be answered by recording another one; fix the key list",
     # Row-local well-formedness: the fix is mechanical and local, there is no judgement to record.
     "{}: `no_call_site` is set but a `where` is present":
         "contradictory row; drop one field",
@@ -645,15 +652,17 @@ def _reads_heading(src: str, heading: str) -> bool:
     """Does this source READ the extras heading — not merely mention it in a message?
 
     A read is a call into the readers the tools own (`_recorded_ids` / `extras_bodies` /
-    `_recorded_line_keys`) with the heading as its literal argument. 'Balance exceptions' is also
-    reachable through `balance_lib`'s own `_exceptions()`, which carries the heading in a module
-    constant.
+    `_recorded_line_keys`, and the shared `records` module they now all delegate to) with the
+    heading as its literal argument. 'Balance exceptions' is also reachable through `balance_lib`'s
+    own `_exceptions()`, which carries the heading in a module constant.
 
     `_recorded_line_keys` joined the list when the duplicate-security and bucket-vocabulary escapes
     moved to exact prefix-and-colon keying: it wraps `extras_bodies` and takes the heading as a
     PARAMETER, so neither the direct pattern nor the transitive walk could see the literal, which
-    sits at the call site."""
-    reader = re.compile(r"(?:_recorded_ids|extras_bodies|_recorded_line_keys)\(\s*\w+\s*,\s*[\"']"
+    sits at the call site. `records.recorded_keys` / `records.lines` joined it when the four
+    per-family line parsers were folded into one shared reader."""
+    reader = re.compile(r"(?:_recorded_ids|extras_bodies|_recorded_line_keys"
+                        r"|records\.recorded_keys|records\.lines)\(\s*\w+\s*,\s*[\"']"
                         + re.escape(heading) + r"[\"']", re.I)
     if reader.search(src):
         return True
@@ -816,7 +825,8 @@ def test_the_machine_read_heading_list_matches_the_validator():
     # Case-folded: `extras_bodies` matches headings case-insensitively, so a constant written in
     # title case ("Audit exceptions") and a call-site literal in lower case name the same heading.
     found = {h.lower() for h in
-             re.findall(r'(?:extras_bodies\(m,|_recorded_ids\(m,|_recorded_line_keys\(m,)'
+             re.findall(r'(?:extras_bodies\(m,|_recorded_ids\(m,|_recorded_line_keys\(m,'
+                        r'|records\.recorded_keys\(m,|records\.lines\(m,)'
                         r'\s*"([^"]+)"', src)}
     found |= {h.lower() for h in re.findall(r'_EXCEPTIONS_HEADING\s*=\s*"([^"]+)"', src)}
     assert found == set(MACHINE_READ_HEADINGS), (

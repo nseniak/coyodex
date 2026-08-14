@@ -205,6 +205,19 @@ body.vresizing #stage { pointer-events: none; }
                 letter-spacing: .02em; text-transform: none; border-radius: 8px; padding: 0 6px;
                 color: #b45309; background: #fff7ed; vertical-align: 1px; }
 .sys-extra { font-size: 13px; color: #374151; line-height: 1.55; }
+/* An element id inside authored prose, rendered as the element's NAME and clickable (the viewer
+   never shows a raw id). Sized to sit inside a line of text without breaking its rhythm. */
+.sys-ref { font: inherit; font-weight: 600; color: #1d4ed8; background: none; border: 0;
+  border-bottom: 1px dotted #93c5fd; padding: 0; margin: 0; cursor: pointer; }
+.sys-ref:hover { color: #1e40af; border-bottom-style: solid; }
+/* An element the diagram does not draw (a role, a walk step): its NAME still replaces the id — the
+   rule is that ids stay internal — but there is nothing to navigate to, so it is not a link. */
+.sys-ref-plain { color: #334155; border-bottom: 0; cursor: default; }
+/* The build record: present, auditable, and out of the reading flow until asked for. */
+.sys-record { margin: 0 0 16px; padding: 12px 16px; background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 8px; }
+.sys-record > summary { font-size: 12px; color: #64748b; line-height: 1.5; cursor: pointer; }
+.sys-record[open] > summary { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #e2e8f0; }
 .system-wrap .sys-node { font-family: inherit; font-size: 13px; color: #2563eb; background: none;
                          border: 0; padding: 0; cursor: pointer; text-align: left; }
 .system-wrap .sys-node:hover { text-decoration: underline; }

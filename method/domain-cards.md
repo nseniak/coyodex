@@ -298,9 +298,11 @@ The validator (when domain cards are implemented — see "Implementation status"
 - `MEANING` and `SOURCE` present (the `SOURCE` anchor drives the confidence label).
 - the relation verb is the canonical one for its kind (aliases rejected — see the verb table).
 - the structured `store`: `store.dep` is a D-id resolving to a real (non-folded) dep; `store.mode`
-  is in the closed vocabulary (`collection`/`embedded`/`transient`/`cache`/`in-code`/`enum`). The
-  persistence-coverage rule (advisory, adoption-gated) and the "Persistence exceptions" escape are
-  specified in [the map model](model.md), `entities[].store`.
+  is in the closed vocabulary
+  (`collection`/`embedded`/`transient`/`cache`/`in-code`/`enum`/`projection`). Set the mode for every
+  entity nothing writes — the five no-writer modes ARE the answer to the ownership advisory, so no
+  exception line is needed. The persistence-coverage rule (advisory, adoption-gated) and the
+  "Persistence exceptions" escape are specified in [the map model](model.md), `entities[].store`.
 
 It also emits a **non-blocking warning** (printed, but the build still passes) for a completeness
 gap: an **association** that no field backs (no `FK→`/typed field on either side) **and** has no

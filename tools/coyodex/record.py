@@ -20,6 +20,12 @@ find-and-replace its own text two turns later with a fragile `body.find(...)` + 
     coyodex record --map <map-or-fragment> --heading "Balance exceptions" \\
                    --line "UC5: the two clauses are one goal — <why>" [--replace <prefix>]
 
+One reason may answer SEVERAL elements — write them as one comma-separated list rather than the
+same sentence once per id (live maps grew 66 lines holding 15 distinct reasons that way):
+
+    coyodex record --heading "Unclaimed surfaces" \\
+                   --line "C101, C148, C186: an operator surface in our own back office"
+
 Writes the FRAGMENT when given one, so the next `assemble` carries the record through; writing the
 assembled map instead is the edit the next assemble discards.
 
@@ -30,29 +36,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from coyodex import records
 from coyodex.model import ExtraSection, ProjectModel
 
 USAGE = __doc__
 
-#: The headings the tools actually read. Recording under anything else is a note to nobody: the
-#: check that was supposed to be silenced keeps firing, and the operator believes it was handled.
-#: Sourced from the modules that consume them, so a new escape family cannot drift out of this list.
-KNOWN_HEADINGS = (
-    "Balance exceptions",
-    "Audit exceptions",
-    "Drift exceptions",
-    "Accepted duplications",
-    "Unclaimed surfaces",
-    "Happy Path coverage",
-    "Entry-point coverage",
-    "Bucket vocabulary",
-    "Sweep debt",
-    # 'Coverage exceptions' and 'Persistence exceptions' were read by `validate` and REFUSED here —
-    # `coyodex record` exited 2 on the two headings its own advisories tell an operator to write.
-    # `tests/test_business_rules.py` now pins this list against what the tools actually read.
-    "Coverage exceptions",
-    "Persistence exceptions",
-)
+#: The headings the tools actually read, and which of them are the map's own build record — one
+#: registry, in `records`, shared with the readers and with the views that decide where a section
+#: renders. Recording under anything else is a note to nobody: the check that was supposed to be
+#: silenced keeps firing, and the operator believes it was handled.
+KNOWN_HEADINGS = records.KNOWN_HEADINGS
+
 
 
 def _resolve_heading(heading: str) -> tuple[str, str | None]:

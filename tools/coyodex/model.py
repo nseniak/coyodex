@@ -265,8 +265,10 @@ class Store:
                                      # for a store with no dep (in-memory, in-code registry)
     container: str = ""              # the compartment inside the dep: collection / table / key
                                      # prefix / bucket / file name
-    mode: str = ""                   # grammar.STORE_MODES (collection/embedded/transient/cache/
-                                     # in-code/enum) — closed, exact-match; "" = unstated
+    mode: str = ""                   # grammar.STORE_MODES (collection/embedded/projection/transient/
+                                     # cache/in-code/enum) — closed, exact-match; "" = unstated.
+                                     # The five that mean "nothing writes this" (STORE_MODES_UNOWNED)
+                                     # answer the unowned-entity advisory on their own.
     notes: str = ""                  # what the shape can't say: TTL, cache tiers, compression
 
 

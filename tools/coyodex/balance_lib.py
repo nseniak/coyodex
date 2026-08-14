@@ -28,6 +28,7 @@ import re
 from collections import Counter
 from dataclasses import dataclass, field
 
+from coyodex import records
 from coyodex.model import ProjectModel, group_forests
 
 # ── the bands (named constants so calibration is one edit) ───────────────────────────────────────
@@ -199,13 +200,10 @@ def is_homogeneous(m: ProjectModel, children: list[str]) -> bool:
 
 # ── the always-on advisory (validate hook) ───────────────────────────────────────────────────────
 
-def extras_bodies(m: ProjectModel, heading: str) -> list[str]:
-    """The bodies of every extras section under the given machine-read heading (case-insensitive,
-    whitespace-tolerant) — the one reader all recorded-exception headings share ('Balance
-    exceptions', 'Accepted duplications', 'Unclaimed surfaces', 'Happy Path coverage',
-    'Entry-point coverage'), so heading matching can never drift between the escape families."""
-    want = heading.strip().lower()
-    return [x.body for x in m.extras if x.heading.strip().lower() == want]
+#: The one heading matcher every escape family shares, so matching can never drift between them.
+#: Re-exported from `records` (which owns the whole recorded-line contract) rather than
+#: re-implemented — every caller that already imports it through here keeps working.
+extras_bodies = records.extras_bodies
 
 
 def _exceptions(m: ProjectModel) -> set[str]:

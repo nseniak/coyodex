@@ -185,16 +185,18 @@ def drift_exceptions(m: ProjectModel) -> tuple[set[str], list[str]]:
     read a sibling file — so "fix it" is not always the answer and there was nowhere to say so. On a
     live map a state-machine anchor was hand-verified, dismissed in chat, and shipped unrecorded,
     so the row will re-fire on every future run."""
-    from coyodex import balance_lib
+    from coyodex import records
     out: set[str] = set()
     malformed: list[str] = []
-    for body in balance_lib.extras_bodies(m, DRIFT_EXCEPTIONS_HEADING):
-        for line in body.splitlines():
-            hit = _DRIFT_RECORD.match(line)
-            if hit:
-                out.add(hit.group(2))
-            elif _DRIFT_RECORD_ATTEMPT.match(line):
-                malformed.append(line.strip())
+    # The line ITERATION is shared (`records.lines`); the KEY shape is this family's own — a whole
+    # quoted claim, not an id list — for the reason its regex note gives at length: keying on the
+    # claim's leading id silenced every drift finding on every edge out of that element.
+    for line in records.lines(m, DRIFT_EXCEPTIONS_HEADING):
+        hit = _DRIFT_RECORD.match(line)
+        if hit:
+            out.add(hit.group(2))
+        elif _DRIFT_RECORD_ATTEMPT.match(line):
+            malformed.append(line.strip())
     return out, malformed
 
 

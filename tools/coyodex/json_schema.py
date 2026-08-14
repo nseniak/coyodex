@@ -184,7 +184,8 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("Store", "mode"): {"enum": [*grammar.STORE_MODES, ""],
                          "description": "how the entity relates to its store — closed vocabulary, "
                          "exact match: collection (own compartment) / embedded (inside a parent's "
-                         "row) / transient / cache / in-code / enum; '' = unstated."},
+                         "row) / projection (a read view over rows another entity owns) / transient "
+                         "/ cache / in-code / enum; '' = unstated."},
     ("Store", "container"): {"description": "the compartment inside the dep: collection / table / "
                               "key prefix / bucket / file name."},
     ("Store", "notes"): {"description": "what the shape can't say: TTL, cache tiers, compression."},

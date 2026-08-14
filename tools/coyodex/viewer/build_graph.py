@@ -166,7 +166,18 @@ class GraphDict(TypedDict):
     tests_note: str                         # the "Tests run for this table?" honesty line
     # targets resolved server-side (name + node-locatability) so the Tests tab needs no id parsing.
     tests: list[TestRowView]
-    extras: list[dict[str, str]]            # freeform authored sections: {heading, body}
+    # Authored sections: {heading, body, maintenance}. `maintenance` marks the map's own build
+    # record — the lines that answer this tool's checks — so the System tab can lead with notes
+    # about the code and fold the adjudication log away at the bottom (`records.HEADINGS`).
+    extras: list[ExtraSectionView]
+
+
+class ExtraSectionView(TypedDict):
+    """One authored extras section as the viewer receives it."""
+    heading: str
+    body: str
+    maintenance: bool
+    refs: dict[str, TestTarget]   # element ids named in `body` → {id, name, node}, resolved server-side
 
 
 class DiffChange(TypedDict):

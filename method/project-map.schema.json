@@ -766,9 +766,10 @@
             "cache",
             "in-code",
             "enum",
+            "projection",
             ""
           ],
-          "description": "how the entity relates to its store \u2014 closed vocabulary, exact match: collection (own compartment) / embedded (inside a parent's row) / transient / cache / in-code / enum; '' = unstated."
+          "description": "how the entity relates to its store \u2014 closed vocabulary, exact match: collection (own compartment) / embedded (inside a parent's row) / projection (a read view over rows another entity owns) / transient / cache / in-code / enum; '' = unstated."
         },
         "notes": {
           "type": "string",

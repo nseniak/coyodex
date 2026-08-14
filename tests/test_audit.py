@@ -1886,6 +1886,27 @@ def test_an_audit_advisory_can_be_recorded_and_the_suppression_is_reported():
     assert len(note) == 1 and "read-never-created HP1" in note[0].message
 
 
+def test_one_audit_record_may_answer_several_ids_of_the_SAME_check():
+    """Multi-key, with the check name still scoping every id on the line — the family escape the
+    method forbids stays impossible, because the check is named once and applies to the whole list."""
+    m = make_advisory_map()
+    assert any(f.check == "read-never-created" for f in audit_model.audit_model(m))
+    m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
+                             body="read-never-created HP1, HP9: external config data, written off-path.")]
+    assert not any(f.check == "read-never-created" for f in audit_model.audit_model(m))
+    assert ("read-never-created", "HP9") in audit_model.audit_exceptions(m)
+
+
+def test_an_audit_record_that_lost_its_check_name_silences_nothing():
+    """`HP1: <why>` parses perfectly as an id list and scopes itself to NO check — so it must not
+    silence one. It is reported instead (`validate`'s malformed-record advisory)."""
+    m = make_advisory_map()
+    m.extras = [ExtraSection(heading=audit_model.AUDIT_EXCEPTIONS_HEADING,
+                             body="HP1, HP9: external config data, written off-path.")]
+    assert audit_model.audit_exceptions(m) == set()
+    assert any(f.check == "read-never-created" for f in audit_model.audit_model(m))
+
+
 def test_a_recorded_line_silences_one_pair_never_a_family():
     """The `runs-in` over-suppression bug, designed out: two findings of the SAME check on different
     ids, one recorded, and the other must survive."""

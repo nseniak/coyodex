@@ -214,6 +214,44 @@ const mdInline = (s) => esc(String(s || '').replace(/\[([^\]]+)\]\([^)]+\)/g, '$
   .replace(/`([^`]+)`/g, '<code>$1</code>')
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
 
+// Authored prose is the ONE place the viewer would otherwise print a raw element id: a recorded line
+// is keyed by id ("C101, C148: an operator surface …"), and on the live maps 60-78% of those lines
+// opened with one. Every other view shows NAMES and keeps ids internal, so a reader met a wall of
+// tokens with nothing to click and no way to tell what a line was even about.
+//
+// The id → {name, node} table is resolved SERVER-SIDE (`views._extra_refs`) and shipped with the
+// section. Resolving it here against GRAPH.nodes was the first attempt and it was WRONG: the Context
+// diagram used to mint its own zero-based actor nodes `R0, R1, …`, whose id space collided with the
+// model's roles, so every `Rn` in a recorded line rendered as the name of the NEXT role (`R3`, the
+// site visitor, read as the MCP client application). Those nodes are `ACT<n>` now, but the lesson is
+// the reason this stays server-side: the model's element table is the only thing that knows what an
+// id means; the diagram's node map is a different namespace that merely looks alike.
+// A drawn element becomes a link, an element with no node of its own (a role, a walk step) renders
+// as its name, and an id the map does not define is left exactly as written.
+// The lookbehind keeps an id that is PART of a longer token intact: a sweep-debt key is a
+// `path:line` anchor, and `src/C1_handler.py:42` must stay a copyable path, not sprout a link in the
+// middle of it. `\b` alone does not do this — a `-` or `/` before the id IS a word boundary.
+const _MD_REF = /(?<![\w\-/.])(?:CAP|SD|SF|UC|HP|EP|BLK|BR|[CDERS])\d+\b/g;
+const _MD_CODE = /<code>[\s\S]*?<\/code>/g;   // spans mdInline already produced — left verbatim
+const mdRefs = (s, refs) => {
+  const swap = (text) => text.replace(_MD_REF, (id) => {
+    const r = refs && refs[id];
+    if (!r) return id;
+    return r.node
+      ? `<button type="button" class="sys-ref" data-id="${esc(r.node)}">${esc(r.name)}</button>`
+      : `<span class="sys-ref sys-ref-plain">${esc(r.name)}</span>`;
+  });
+  // Inside a code span the author is quoting text — an id there is a literal, not a reference, and
+  // rewriting it produced `<code><button …>` (markup inside a quotation, un-copyable).
+  const html = mdInline(s);
+  let out = '', last = 0;
+  for (const m of html.matchAll(_MD_CODE)) {
+    out += swap(html.slice(last, m.index)) + m[0];
+    last = m.index + m[0].length;
+  }
+  return out + swap(html.slice(last));
+};
+
 let mode = HAS_DIFF ? 'diff' : 'base';  // a diff render arms the change-impact overlay from the start
 // Live mechanical diff (fetched from api/diff for a chosen range), distinct from the baked AI-report
 // diff that may arrive in the bundle. When LIVE_DIFF is set it OWNS the overlay: DIFF_STATE is derived
@@ -5260,6 +5298,7 @@ function renderSystem() {
   // redefined as acceptable) and off-spine use cases inside a CORE capability (the give-up of moving
   // the spine check to capability altitude, kept visible so it stays a trade, not a silent loss).
   const C = COMPLETENESS || {};
+  let completeness = '';
   if (Object.keys(C).length) {
     const tile = (k, v, of, sub, tone) => {
       const pct = of ? Math.round(100 * v / of) : 0;
@@ -5285,7 +5324,7 @@ function renderSystem() {
       HAS_CAPABILITIES ? tile('Off-spine in a core capability', C.off_spine_in_core_capabilities || 0, 0,
            'reported, not warned — the capability-level check does not see these', '') : '',
     ].join('');
-    parts.push(sec('Map completeness', `<div class="sys-tiles">${tiles}</div>`));
+    completeness = `<div class="sys-tiles">${tiles}</div>`;
   }
   // Entry points — grouped by CANONICAL kind (the server folds alias spellings: `http` and
   // `http-route` rows land in one group, WS-A8); each kind heading carries a small self/external
@@ -5332,9 +5371,9 @@ function renderSystem() {
   // no code — the dependency box standing in for it), and every channel is a Data-tab card with the
   // same fields, its broker implied by the pane it sits in. This tab is for facts NO diagram holds;
   // duplicating a table here just gave each fact two homes that could drift.
-  parts.push(sec('Observability', refTable(G.observability, [
-    { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
-    { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }])));
+  parts.push(sec('Config & environments', refTable(G.config, [
+    { head: 'Key', get: (r) => r.key }, { head: 'Purpose', get: (r) => r.purpose },
+    { head: 'Default', get: (r) => r.default }, { head: 'Per-env / secret?', get: (r) => r.per_env }])));
   // The auth surface — DERIVED from the `access` business rules (an `access` rule IS a security
   // surface; the server folds them and any legacy `security[]` row into one row list).
   //
@@ -5351,17 +5390,32 @@ function renderSystem() {
     { head: 'Surface', get: (r) => (r.who || '').trim() ? r.surface + ' — ' + r.who : r.surface },
     { head: 'Enforced at', get: (r) => ({ html: srcListCell(r.source) }) },
     { head: 'Risk', get: (r) => r.risk }])));
-  parts.push(sec('Config & environments', refTable(G.config, [
-    { head: 'Key', get: (r) => r.key }, { head: 'Purpose', get: (r) => r.purpose },
-    { head: 'Default', get: (r) => r.default }, { head: 'Per-env / secret?', get: (r) => r.per_env }])));
+  parts.push(sec('Observability', refTable(G.observability, [
+    { head: 'Signal', get: (r) => r.signal }, { head: 'Where emitted', get: (r) => r.where_emitted },
+    { head: 'Where viewed', get: (r) => r.where_viewed }, { head: 'Alerts', get: (r) => r.alerts }])));
   parts.push(sec('Types deliberately not modelled', refTable(G.non_entity_types, [
     { head: 'Type', get: (r) => r.name }, { head: 'Source', get: (r) => ({ src: r.source }) },
     { head: 'Why', get: (r) => r.why }])));
-  for (const x of (G.extras || [])) {
-    if (!x || !x.heading) continue;
-    parts.push(sec(x.heading, `<div class="sys-extra">${mdInline(x.body || '')}</div>`));
+  // Authored sections split by what they are FOR (server-decided, `records.HEADINGS`): a note about
+  // the code reads in the flow; a line that exists to answer one of this tool's own checks is the
+  // map's build record and folds away at the bottom. Nothing is dropped — the records stay readable,
+  // and stay machine-read — but a reader reaches the facts about their system first.
+  const extras = (G.extras || []).filter((x) => x && x.heading);
+  for (const x of extras.filter((x) => !x.maintenance)) {
+    parts.push(sec(x.heading, `<div class="sys-extra">${mdRefs(x.body || '', x.refs)}</div>`));
   }
-  const body = parts.filter(Boolean).join('');
+  if (completeness) parts.push(sec('Map completeness', completeness));
+  const record = extras.filter((x) => x.maintenance);
+  const recordHtml = record.length
+    ? sec('Map maintenance records', '<details class="sys-record"><summary>'
+        + `${record.length} section${record.length > 1 ? 's' : ''} answering this tool's own checks`
+        + ' — each line records an element and why a finding about it was judged correct as it '
+        + 'stands. Nothing here describes the system being mapped.</summary>'
+        + record.map((x) => `<h4 class="sys-subhead">${esc(x.heading)}</h4>`
+            + `<div class="sys-extra">${mdRefs(x.body || '', x.refs)}</div>`).join('')
+        + '</details>')
+    : '';
+  const body = parts.filter(Boolean).join('') + recordHtml;
   const nav = secs.length
     ? tabIndexHtml(secs)
     : '';
@@ -5371,6 +5425,9 @@ function renderSystem() {
   diagram.querySelectorAll('.sys-node').forEach((btn) => {
     btn.addEventListener('click', () => selectEntryPoint(
       btn.getAttribute('data-id'), parseInt(btn.getAttribute('data-idx'), 10) || 0));
+  });
+  diagram.querySelectorAll('.sys-ref[data-id]').forEach((btn) => {
+    btn.addEventListener('click', () => selectFromTree(btn.getAttribute('data-id')));
   });
   bindTabIndex(diagram.querySelector('.system-wrap'));
 }
