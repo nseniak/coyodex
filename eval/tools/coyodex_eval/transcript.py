@@ -464,32 +464,176 @@ _COYODEX_SUBVERBS = frozenset({"write", "report", "apply-drift", "dedup-edge", "
 #: word-split by zsh — and it did not match, so 42 successful `record` calls were invisible while
 #: the ONE invocation the table did report was the earlier one that FAILED. A retrospective read
 #: `record 1` off that table and concluded the command had barely been used.
-_COYODEX_CMD = re.compile(
-    r"""(?:coyodex(?:-eval)?|["']?\$\{?[A-Za-z_][A-Za-z0-9_]*\}?["']?)\s+"""
-    r"(?!-)([a-z][a-z0-9-]*)(?:\s+([a-z][a-z0-9-]*))?")
-
-#: `<<'EOF'` / `<<-"PY"` / `<<PY` — the start of a heredoc, capturing its terminator.
 #:
-#: Everything between it and the terminator is DATA, not a command line, and a build writes plenty
-#: of coyodex-shaped text into one: contract templates, notes, generated docs. A live build's
-#: `cat > rules-contract.md <<'EOF'` body made `dump` and `lint-fragment` appear as invocations at a
-#: turn that ran neither, which is the same class of wrong answer as the missed `record` above,
-#: pointing the other way.
-_HEREDOC_START = re.compile(r"<<-?\s*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?")
+#: The separator between binary and subcommand is `[ \t]`, NEVER `\s`. With `\s+` the alias branch
+#: matched ACROSS A NEWLINE: `echo "$PWD"\ncoyodex validate m.json` read as alias `$PWD` + subcommand
+#: `coyodex`, which is not in the allowlist, and `finditer` then resumed PAST the real invocation —
+#: so an ordinary two-line command silently lost its coyodex call.
+#: Groups are NAMED. They were positional, and `summarise_call` read `group(1)`/`group(2)` as
+#: (subcommand, verb) from 60 lines away; adding the binary branch shifted both and the index
+#: silently stopped naming the subcommands it truncates — the very regression that annotation was
+#: added to prevent. Two tests caught it; a name cannot shift.
+_COYODEX_CMD = re.compile(
+    r"""(?:(?P<bin>coyodex(?:-eval)?)|["']?(?P<alias>\$\{?[A-Za-z_][A-Za-z0-9_]*\}?)["']?)"""
+    r"[ \t]+(?!-)(?P<sub>[a-z][a-z0-9-]*)(?:[ \t]+(?P<verb>[a-z][a-z0-9-]*))?")
 
-#: A `--help` / `-h` run reads the interface; it performs none of the work the subcommand names.
-#: Counting it makes "the command ran" true of a build that only looked it up — and `reconcile
-#: --help` immediately before hand-writing `reconcile.json` is exactly the shape a retro is trying
-#: to see. `--dry-run` is NOT here: it does the real resolution and reports it, it just declines to
-#: write.
-_HELP_ONLY = re.compile(r"\s(?:--help|-h)(?:\s|$)")
 
+def _label(m: "re.Match[str]") -> str | None:
+    """`subcommand [verb]` for a match, or None when the subcommand is not one of ours."""
+    sub, verb = m.group("sub"), m.group("verb")
+    if sub not in _COYODEX_SUBCOMMANDS:
+        return None
+    return f"{sub} {verb}" if verb in _COYODEX_SUBVERBS else sub
+
+#: `--help` / `-h` as a standalone word. Applied to ONE shell segment (see `_segments`), never to
+#: "the rest of the line": scanning forward from the match let ANY later program's flag delete a real
+#: invocation — `coyodex dump m.json > f.json && du -h f.json` scored zero `dump` runs, and so did
+#: every `&& df -h`, `&& sort -h` and `&& python build.py --help`. That is the same silent
+#: under-count this whole scan was rewritten to end, re-created by the fix for it.
+_HELP_ONLY = re.compile(r"(?:^|\s)(?:--help|-h)(?:\s|$)")
 
 #: `CY=/path/to/.venv/bin/coyodex` / `CX="…/coyodex-eval"` — a shell alias for one of the two CLIs.
-#: Anchored to a word boundary so `MY_CY=…` is its own variable, and to the END of the value so
-#: `COYODEX_HOME=/p/coyodex` (a directory, not the binary) is not read as an alias for it.
+#:
+#: The value may end at whitespace OR at any shell metacharacter. Requiring whitespace missed the
+#: most natural one-liner, `CY=…/coyodex-eval; $CY score a b`, so a `coyodex-eval` run was booked to
+#: the `coyodex` table — the exact mis-attribution the binary split exists to end.
+#:
+#: This DOES also match `COYODEX_HOME=/p/coyodex`, which names a directory rather than the binary.
+#: That is harmless and `test_a_directory_env_var_produces_no_invocation` pins why: a directory is
+#: used as `$COYODEX_HOME/method.md`, with no space between the variable and what follows, so it
+#: never satisfies `_COYODEX_CMD`.
 _ALIAS_ASSIGN = re.compile(
-    r"\b([A-Za-z_][A-Za-z0-9_]*)=[\"']?\S*?/(coyodex(?:-eval)?)[\"']?(?:\s|$)")
+    r"""\b([A-Za-z_][A-Za-z0-9_]*)=["']?\S*?/(coyodex(?:-eval)?)["']?(?=[\s;&|)]|$)""")
+
+
+def _heredoc_tags(line: str) -> list[str]:
+    """Every heredoc terminator this line OPENS, in order.
+
+    Quote-aware and `<<<`-aware, because a blunt `<<` match blanked the rest of the command on two
+    ordinary shapes: a here-STRING (`python3 -c 'pass' <<< 'x'`) whose third `<` was skipped so the
+    following word became a terminator that never reappeared, and a literal `<<` inside a quoted
+    string (`echo 'use << to redirect'`). In both cases every coyodex call BELOW the line vanished
+    from the count, silently.
+
+    A list rather than one tag: `cat <<A <<B` queues two bodies, and finding only the first left B's
+    body being scanned as commands."""
+    tags: list[str] = []
+    i, n, quote = 0, len(line), ""
+    while i < n:
+        c = line[i]
+        if quote:
+            if c == "\\" and quote == '"':
+                i += 2
+                continue
+            if c == quote:
+                quote = ""
+            i += 1
+            continue
+        if c in "'\"":
+            quote = c
+            i += 1
+            continue
+        if c == "\\":
+            i += 2
+            continue
+        if c == "<" and line.startswith("<<", i):
+            if line.startswith("<<<", i):        # here-STRING: no body, no terminator
+                i += 3
+                continue
+            j = i + 2
+            if j < n and line[j] == "-":         # <<- strips leading tabs; same terminator rules
+                j += 1
+            while j < n and line[j] in " \t":
+                j += 1
+            if j < n and line[j] in "'\"":       # <<'EOF' / <<"EOF" — quoted tag
+                j += 1
+            k = j
+            while k < n and (line[k].isalnum() or line[k] == "_"):
+                k += 1
+            if k > j:
+                tags.append(line[j:k])
+                i = k
+                continue
+            i = j
+            continue
+        i += 1
+    return tags
+
+
+def _strip_heredocs(cmd: str) -> str:
+    """`cmd` with every heredoc BODY blanked out, terminators and all else kept.
+
+    Line-based, because that is what a heredoc is: the body runs from the line after the one
+    carrying `<<TAG` to the line whose stripped content is exactly `TAG`. A build writes plenty of
+    coyodex-shaped text into one — contract templates, notes, generated docs — and a live
+    `cat > rules-contract.md <<'EOF'` body made `dump` and `lint-fragment` appear as invocations at
+    a turn that ran neither.
+
+    Several heredocs queue in the order they were opened. An UNterminated heredoc (a truncated
+    command) blanks to the end — the safe direction: dropping data can only cost a finding, while
+    keeping it invents one."""
+    out: list[str] = []
+    queue: list[str] = []
+    for line in cmd.splitlines():
+        if queue:
+            out.append(line if line.strip() == queue[0] else "")
+            if line.strip() == queue[0]:
+                queue.pop(0)
+            continue
+        out.append(line)
+        queue.extend(_heredoc_tags(line))
+    return "\n".join(out)
+
+
+#: A shell segment boundary OUTSIDE quotes. `;;` is `case`; `|&` is bash's pipe-with-stderr.
+_SEGMENT_SEPARATORS = ("&&", "||", ";;", "|&", ";", "|", "&", "\n")
+
+
+def _segments(text: str) -> list[str]:
+    """`text` split into shell segments — one command each — respecting quotes.
+
+    The unit a `--help` belongs to is the SEGMENT it sits in, not the line and not "up to the next
+    coyodex call". Getting that wrong is what let `&& du -h` erase a real invocation."""
+    parts: list[str] = []
+    buf: list[str] = []
+    i, n, quote = 0, len(text), ""
+    while i < n:
+        c = text[i]
+        if quote:
+            buf.append(c)
+            if c == "\\" and quote == '"' and i + 1 < n:
+                buf.append(text[i + 1])
+                i += 2
+                continue
+            if c == quote:
+                quote = ""
+            i += 1
+            continue
+        if c in "'\"":
+            quote = c
+            buf.append(c)
+            i += 1
+            continue
+        if c == "\\" and i + 1 < n:
+            buf.append(c)
+            buf.append(text[i + 1])
+            i += 2
+            continue
+        hit = next((sep for sep in _SEGMENT_SEPARATORS if text.startswith(sep, i)), "")
+        if hit:
+            parts.append("".join(buf))
+            buf = []
+            i += len(hit)
+            continue
+        buf.append(c)
+        i += 1
+    parts.append("".join(buf))
+    return [p for p in parts if p.strip()]
+
+
+#: A quoted span, for blanking before a `--help` test: `record --line "see --help for details"` is
+#: an argument that happens to mention the flag, not a help run.
+_QUOTED_SPAN = re.compile(r"'[^']*'|\"(?:\\.|[^\"\\])*\"")
 
 
 def _alias_binaries(cmd: str) -> dict[str, str]:
@@ -508,49 +652,60 @@ def _binary_of(token: str, aliases: Mapping[str, str]) -> str:
     return aliases.get(var, "coyodex")
 
 
+@dataclass(frozen=True)
+class Invocation:
+    """One coyodex CLI call found in a Bash command."""
+
+    turn: int
+    name: str               #: `subcommand` or `subcommand verb`
+    binary: str             #: "coyodex" | "coyodex-eval"
+    alias_resolved: bool    #: False when `binary` is the fallback guess rather than a reading
+
+
+def _iter_invocations(turns: "Sequence[Turn]") -> "Iterator[Invocation]":
+    """Every coyodex invocation in these turns, ONE scan.
+
+    Both `coyodex_subcommands` and `unresolved_aliases` read this. They used to scan separately and
+    disagree: the alias footer applied no `--help` filter, so it reported a caveat about invocations
+    the table had never counted.
+
+    Order matters and is the fix for a whole class of bug. Heredoc bodies go first (they are data,
+    not commands), THEN the text is split into segments, and only then is each segment matched. The
+    previous cut matched against the stripped text but read the `--help` tail out of the ORIGINAL —
+    so every character the stripping removed shifted that read earlier, and the two fixes silently
+    mis-composed: a real `audit` was dropped because the `--help` it "saw" was heredoc data, and a
+    genuine `reconcile --help` was counted because the read landed before the flag."""
+    for idx, cmd in bash_commands(turns):
+        aliases = _alias_binaries(cmd)
+        # Join line continuations FIRST: `coyodex reconcile \<newline> --help` is one command, and
+        # splitting on the newline put the flag in a segment of its own where nothing tested it.
+        text = _strip_heredocs(cmd).replace("\\\n", " ")
+        for segment in _segments(text):
+            for m in _COYODEX_CMD.finditer(segment):
+                label = _label(m)
+                if label is None:
+                    continue
+                # `--help` binds to its own segment, and only up to the NEXT invocation inside it.
+                nxt = _COYODEX_CMD.search(segment, m.end())
+                tail = segment[m.end():nxt.start() if nxt else len(segment)]
+                if _HELP_ONLY.search(_QUOTED_SPAN.sub(" ", tail)):
+                    continue
+                token = m.group("bin") or m.group("alias") or ""
+                yield Invocation(
+                    turn=idx,
+                    name=label,
+                    binary=_binary_of(token, aliases),
+                    alias_resolved=bool(m.group("bin"))
+                    or token.lstrip("$").strip("{}\"'") in aliases)
+
+
 def unresolved_aliases(turns: "Sequence[Turn]") -> int:
-    """How many counted invocations went through an alias this reader could NOT resolve.
+    """How many COUNTED invocations went through an alias this reader could not resolve.
 
     The fallback in `_binary_of` is a guess, and a guess that is never surfaced is indistinguishable
     from a measurement. The `--commands` footer prints this so a reader knows how much of the
     coyodex table rests on it."""
-    n = 0
-    for _idx, cmd in bash_commands(turns):
-        aliases = _alias_binaries(cmd)
-        for m in _COYODEX_CMD.finditer(_strip_heredocs(cmd)):
-            if m.group(1) not in _COYODEX_SUBCOMMANDS:
-                continue
-            token = m.group(0).split()[0].strip("\"'")
-            if token.endswith("coyodex") or token.endswith("coyodex-eval"):
-                continue
-            if token.lstrip("$").strip("{}") not in aliases:
-                n += 1
-    return n
-
-
-def _strip_heredocs(cmd: str) -> str:
-    """`cmd` with every heredoc BODY blanked out, terminators and all else kept.
-
-    Line-based, because that is what a heredoc is: the body runs from the line after the one
-    carrying `<<TAG` to the line whose stripped content is exactly `TAG`. Nesting is not a thing
-    (the shell reads bodies in order), but several heredocs in one command are, so this keeps
-    scanning after each terminator. An UNterminated heredoc (a truncated command) blanks to the end
-    — the safe direction: dropping data can only cost a finding, while keeping it invents one."""
-    out: list[str] = []
-    terminator: str | None = None
-    for line in cmd.splitlines():
-        if terminator is None:
-            out.append(line)
-            m = _HEREDOC_START.search(line)
-            if m:
-                terminator = m.group(1)
-            continue
-        if line.strip() == terminator:
-            terminator = None
-            out.append(line)
-        else:
-            out.append("")
-    return "\n".join(out)
+    return sum(1 for inv in _iter_invocations(turns) if not inv.alias_resolved)
 
 
 def coyodex_subcommands(turns: "Sequence[Turn]", *,
@@ -559,42 +714,18 @@ def coyodex_subcommands(turns: "Sequence[Turn]", *,
     command — not only at its head. See `_COYODEX_CMD` for why that distinction cost a real
     finding, and `_COYODEX_SUBCOMMANDS` for why it is an allowlist.
 
-    Heredoc bodies are excluded (`_strip_heredocs`) and `--help` runs are not counted
-    (`_HELP_ONLY`): both make the table claim work that did not happen.
+    Heredoc bodies are excluded and `--help` runs are not counted: both make the table claim work
+    that did not happen. See `_iter_invocations` for the ordering the two together demand.
 
     `binary` filters by which CLI was invoked — `"coyodex"` or `"coyodex-eval"`. The two share this
     allowlist because they share subcommand names (`score`, `compare`, `archive`, `process`), so a
-    table headed "coyodex invocation(s)" was counting `coyodex-eval archive` runs as build work.
-
-    An ALIASED invocation (`$CY audit`) names no binary, so the alias is resolved from the `VAR=…`
-    assignment in the SAME command — which is where builds put it, since each Bash call is a fresh
-    shell and the assignment has to be repeated. Returning the call under both filters instead was
-    the first cut, and it made the `coyodex-eval` table claim eight `assemble` runs that were
-    plainly the build's own. An alias that still cannot be resolved falls to `coyodex`: a build runs
-    that binary and rarely the other, so the fallback is right far more often than not, and
-    `unresolved_aliases()` reports how much of the table rests on it."""
-    out: list[tuple[int, str]] = []
-    for idx, cmd in bash_commands(turns):
-        aliases = _alias_binaries(cmd)
-        for m in _COYODEX_CMD.finditer(_strip_heredocs(cmd)):
-            sub, verb = m.group(1), m.group(2)
-            if sub not in _COYODEX_SUBCOMMANDS:
-                continue
-            invocation = m.group(0)
-            if binary is not None:
-                named = _binary_of(invocation.split()[0], aliases)
-                if named != binary:
-                    continue
-            # `--help` belongs to the invocation it follows, so look only as far as the NEXT
-            # invocation (or the end): `coyodex audit m.json; coyodex fix --help` must not read as
-            # a help-only `audit`.
-            tail_start = m.end()
-            nxt = _COYODEX_CMD.search(cmd, tail_start)
-            tail = cmd[tail_start:nxt.start() if nxt else len(cmd)]
-            if _HELP_ONLY.search(tail.split("\n")[0]):
-                continue
-            out.append((idx, f"{sub} {verb}" if verb in _COYODEX_SUBVERBS else sub))
-    return out
+    table headed "coyodex invocation(s)" was counting `coyodex-eval archive` runs as build work. An
+    ALIASED invocation resolves from the `VAR=…` assignment in the SAME command, which is where
+    builds put it — each Bash call is a fresh shell. An alias that still cannot be resolved falls to
+    `coyodex`: a build runs that binary and rarely the other, and `unresolved_aliases()` reports how
+    much of the table rests on the fallback."""
+    return [(inv.turn, inv.name) for inv in _iter_invocations(turns)
+            if binary is None or inv.binary == binary]
 
 
 def summarise_call(call: ToolCall, width: int = 100) -> str:
@@ -617,13 +748,10 @@ def summarise_call(call: ToolCall, width: int = 100) -> str:
     # concluded `grounding write` never ran, and published that about a build which ran it at turn
     # 489 chained behind an `assemble`. The finding was withdrawn. `--commands` was the answer and
     # nothing in the index pointed at it, so the index now names the subcommands it is cutting off.
-    hidden = []
+    hidden: list[str] = []
     for m in _COYODEX_CMD.finditer(text[width:]):
-        sub, verb = m.group(1), m.group(2)
-        if sub not in _COYODEX_SUBCOMMANDS:
-            continue
-        label = f"{sub} {verb}" if verb in _COYODEX_SUBVERBS else sub
-        if label not in hidden:
+        label = _label(m)
+        if label and label not in hidden:
             hidden.append(label)
     if hidden:
         return f"{text[:width]} …+{', '.join(hidden)} (use --commands)"

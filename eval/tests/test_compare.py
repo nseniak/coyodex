@@ -493,8 +493,8 @@ def test_runs_in_coverage_rising_does_not_hide_lost_linkage():
 
 
 def test_holding_deployment_linkage_passes_the_gate():
-    base = make_profile(deployment_units=8, deployment_units_linked=4)
-    cand = make_profile(deployment_units=8, deployment_units_linked=5)
+    base = make_profile(deployment_units=8, deployment_units_linked=4, deployment_orphan_units=1)
+    cand = make_profile(deployment_units=8, deployment_units_linked=5, deployment_orphan_units=0)
     assert next(g for g in compare(base, cand, Thresholds()).gates
                 if g.name == "deployment-linkage-no-drop").passed
 
@@ -515,26 +515,33 @@ def test_enriching_the_deployment_section_with_infra_is_not_a_linkage_drop():
     assert gate.passed, gate.detail
 
 
-def test_a_recorded_runs_in_quality_exception_passes_the_gate_but_is_named():
-    """`validate` honours the recorded literal and stays quiet; the gate must agree, or a build
-    holds one green report and one red gate about the same three units and can act on neither.
-    The bypass is deliberate — and reported, so it cannot be a silent pass."""
-    base = make_profile(deployment_units=4, deployment_units_linked=4, deployment_orphan_units=0)
-    cand = make_profile(deployment_units=11, deployment_units_linked=3, deployment_orphan_units=3,
-                        deployment_orphans_excepted=True)
-    report = compare(base, cand, Thresholds())
-    gate = next(g for g in report.gates if g.name == "deployment-linkage-no-drop")
-    assert gate.passed, gate.detail
-    assert "runs-in/quality" in gate.detail
-    assert any("passed on a RECORD" in n for n in report.notes), report.notes
+def test_a_recorded_exception_does_not_waive_the_gate():
+    """The first cut honoured the map's recorded `runs-in/quality` literal, and an adversarial review
+    demonstrated the hole end to end: the literal covers five unrelated sub-checks, `validate`
+    actively suggests recording it for reasons that have nothing to do with placement, and nothing
+    requires the justification to mention the orphaned units. One TRUE sentence about the infra units
+    turned a REGRESSED verdict into a full green run on a map with two empty boxes.
 
-
-def test_empty_boxes_with_no_record_still_fail_the_gate():
-    """Same three orphans, nothing recorded: the gate is not optional, only waivable in the open."""
+    `compare` is the method developer's regression check between two builds and a build never runs
+    it, so the "agree with validate" argument that motivated the waiver had no audience. An advisory
+    may be waivable by its subject; a hard gate may not."""
     base = make_profile(deployment_units=4, deployment_units_linked=4, deployment_orphan_units=0)
     cand = make_profile(deployment_units=11, deployment_units_linked=3, deployment_orphan_units=3)
-    assert not next(g for g in compare(base, cand, Thresholds()).gates
-                    if g.name == "deployment-linkage-no-drop").passed
+    report = compare(base, cand, Thresholds())
+    gate = next(g for g in report.gates if g.name == "deployment-linkage-no-drop")
+    assert not gate.passed, gate.detail
+    assert "0 -> 3" in gate.detail
+
+
+def test_a_pre_field_baseline_skips_the_gate_with_a_note():
+    """0 is the STRICTEST value here, so defaulting a pre-field profile to it made the gate fail a
+    map against ITSELF — the bug class the gate was rewritten to fix, reintroduced for every
+    existing baseline. Both sibling deployment gates skip-with-a-note instead."""
+    base = make_profile(deployment_units=8, deployment_units_linked=4)   # field absent -> None
+    cand = make_profile(deployment_units=8, deployment_units_linked=4, deployment_orphan_units=2)
+    report = compare(base, cand, Thresholds())
+    assert not [g for g in report.gates if g.name == "deployment-linkage-no-drop"]
+    assert any("predates the `deployment_orphan_units`" in n for n in report.notes), report.notes
 
 
 def test_a_map_with_no_deployment_section_is_not_gated():
@@ -551,9 +558,9 @@ def test_adding_a_deployment_shape_of_the_same_process_does_not_buy_linkage():
     the IDENTICAL 50 components, one placement decision replicated across three deployment shapes,
     while the other 30 (the whole frontend) sat in no unit at all. Counting DISTINCT hosted sets
     cannot be moved by naming another shape of the same process."""
-    base = make_profile(deployment_units=8, deployment_units_linked=2,
+    base = make_profile(deployment_units=8, deployment_units_linked=2, deployment_orphan_units=0,
                         deployment_distinct_hosted_sets=2)
-    cand = make_profile(deployment_units=10, deployment_units_linked=3,
+    cand = make_profile(deployment_units=10, deployment_units_linked=3, deployment_orphan_units=0,
                         deployment_distinct_hosted_sets=1)
     report = compare(base, cand)
     assert next(g for g in report.gates if g.name == "deployment-linkage-no-drop").passed

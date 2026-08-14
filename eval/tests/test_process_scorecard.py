@@ -259,19 +259,47 @@ def test_a4_wants_the_shape_only_pass_not_the_verdicts_one():
 
 
 def test_a4_counts_the_pass_finalize_runs_for_you():
-    """`coyodex finalize` RUNS the shape-only pass itself, always, and prints it under its own
-    heading. Counting only a bare `anchor-drift` scored 0 on two consecutive builds whose finalize
-    reports both read `## anchor-drift (shape-only) — no drifted anchors`; the assertion was
-    measuring the spelling, not the floor, and L3-DESIGN.md said "nothing yet shows it is reached"
-    on the strength of it."""
-    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . > /tmp/f.txt")))[4]
+    """`coyodex finalize` RUNS the shape-only pass itself and prints it under its own heading.
+    Counting only a bare `anchor-drift` scored 0 on two consecutive builds whose finalize reports
+    both read `## anchor-drift (shape-only) — no drifted anchors`."""
+    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . > /tmp/f.txt", "u1"),
+                        results=(("u1", "finalize: ADVISORIES — 0 blocking, 11 advisory. "
+                                        "Full findings: .coyodex/finalize-report.md"),)))[4]
     assert (a.observed, a.score) == (1, 1.0), a
     assert "finalize" in a.note
 
 
 def test_a4_counts_finalize_even_with_verdicts():
     """`--verdicts` ADDS the verdict-based leg to finalize; it does not replace the shape-only one."""
-    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . --verdicts v.json")))[4]
+    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . --verdicts v.json", "u1"),
+                        results=(("u1", "## anchor-drift (shape-only)\n_no drifted anchors_"),)))[4]
+    assert (a.observed, a.score) == (1, 1.0), a
+
+
+def test_a4_does_not_count_a_finalize_help_screen():
+    """The defect the evidence rule exists for: `finalize.py` returns from `--help` BEFORE the only
+    caller of the drift leg, so an invocation is not a run. Six more paths do the same — a flag
+    missing its value, an unknown option, a missing map, a missing verdicts file, an unloadable map.
+    `method.md` routinely tells agents to consult `--help`, so this is not a contrived input."""
+    a = score(make_turn(0, make_bash("coyodex finalize --help 2>&1 | head -40", "u1"),
+                        results=(("u1", "usage: coyodex finalize <project-map.json> [--repo R]"),)))[4]
+    assert (a.observed, a.score) == (0, 0.0), a
+    assert "not counted" in a.note
+
+
+def test_a4_does_not_count_a_finalize_that_errored_or_did_not_run_a_check():
+    for out in ("ERROR: no map at /nope/project-map.json",
+                "finalize: INCOMPLETE — a check that should have run did not",
+                "finalize: CLEAN — 0 blocking, 0 advisory; DID NOT RUN: validate (failed)"):
+        a = score(make_turn(0, make_bash("coyodex finalize m.json --repo .", "u1"),
+                            results=(("u1", out),)))[4]
+        assert (a.observed, a.score) == (0, 0.0), (out, a)
+
+
+def test_a4_still_counts_a_bare_anchor_drift_without_corroboration():
+    """A bare `anchor-drift` needs no proof — the command has nothing else to do. Only the finalize
+    branch is evidence-based, because only finalize has paths that skip the leg."""
+    a = score(make_turn(0, make_bash("coyodex anchor-drift --map m.json | head -40")))[4]
     assert (a.observed, a.score) == (1, 1.0), a
 
 
@@ -1537,33 +1565,50 @@ def test_13_is_not_disarmed_by_a_read_only_grounding_command():
     assert a.evidence[0].turn == 3, a.evidence
 
 
-def test_13_allows_the_header_built_backfill_the_method_mandates():
-    """The LAST thing method.md prescribes is backfilling the real build minute: `provenance stamp`
-    prints `built_at`, that string goes into `header.json`, and `assemble` + `render` carry it into
-    the map. So a method-compliant build ALWAYS writes a fragment after `grounding write`, and this
-    assertion scored 0 for both builds that followed the rule — measuring compliance as the defect.
+def test_13_counts_the_header_backfill_the_method_mandates_and_says_why():
+    """This assertion scores 0 on a method-compliant build, ON PURPOSE, and the 0 means "not
+    measured correctly" rather than "the build erred".
 
-    Safe because of what the header fragment holds: title, goal, commit, committed, built. No claim
-    of any kind, so it cannot add one after the pin, which is the failure being watched."""
+    A carve-out for `header.json` was tried and removed: a fragment is any subset of the model's
+    top-level arrays, and nothing stops a file with that name carrying `rules` — or a forged
+    `grounding` block, the very record this assertion protects. Verified against the real
+    `lint-fragment` and `assemble`: both accept it. Keying the exemption on a path cannot be made
+    sound, because the same write can be spelled `cd`-relative, through a variable, or inside a
+    heredoc. The fix is to read `grounding.claims_added_since` off the map instead of counting
+    writes; until then this stays a known false alarm rather than a false clean."""
     turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
              make_turn(3, make_bash(
                  "python3 -c \"import json; p='.coyodex/build-fragments/header.json'; "
                  "d=json.load(open(p)); d['built']='2026-08-14 13:19'; json.dump(d,open(p,'w'))\"\n"
                  "coyodex assemble .coyodex/build-fragments/*.json --out .coyodex")))
     a = P.assert_13_grounding_write_is_the_last_write(turns)
-    assert (a.observed, a.of) == (1, 1), a
+    assert (a.observed, a.of) == (0, 1), a
 
 
-def test_13_still_catches_a_real_fragment_edit_beside_the_header():
-    """The carve-out is header.json ALONE. A segment that touches it and a claim-bearing fragment
-    in the same breath is the shape it must not launder."""
+def test_13_catches_claims_smuggled_through_a_header_fragment():
+    """The regression the removed carve-out allowed: `header.json` carrying real claims, written
+    after the record, scored a perfect 1.00."""
     turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
              make_turn(3, make_bash(
-                 "python3 - <<'PY'\nimport json\n"
-                 "json.dump({}, open('.coyodex/build-fragments/header.json','w'))\n"
-                 "json.dump({}, open('.coyodex/build-fragments/h05-domain-model.json','w'))\nPY")))
+                 "cat > .coyodex/build-fragments/header.json <<'EOF'\n"
+                 '{"title":"T","rules":[{"id":"BR1","statement":"a claim no skeptic saw"}]}\n'
+                 "EOF")))
     a = P.assert_13_grounding_write_is_the_last_write(turns)
     assert (a.observed, a.of) == (0, 1), a
+
+
+def test_13_still_catches_a_real_fragment_edit_however_it_is_spelled():
+    """Path spelling must not decide the answer — `cd`-relative and `$VAR` forms are the shapes a
+    path-keyed exemption could not have covered."""
+    for segment in (
+            "cd .coyodex/build-fragments && cat > h05-domain-model.json <<'EOF'\n{}\nEOF",
+            "F=.coyodex/build-fragments; cat > $F/h05-domain-model.json <<'EOF'\n{}\nEOF",
+            "python3 - <<'PY'\nimport json\n"
+            "json.dump({}, open('.coyodex/build-fragments/h05-domain-model.json','w'))\nPY"):
+        turns = (make_turn(1, make_bash("coyodex grounding write --worklist w.json --out g.json")),
+                 make_turn(3, make_bash(segment)))
+        a = P.assert_13_grounding_write_is_the_last_write(turns)
+        assert (a.observed, a.of) == (0, 1), (segment, a)
 
 
 def test_13_does_not_invent_a_record_from_a_help_call():

@@ -171,13 +171,12 @@ class MapProfile:
     # 4 -> 3, the gate FAILED, and the Deployment view it was judging had gained seven honest boxes
     # and lost nothing. Infra units are empty BY NATURE, so counting them as unfilled linkage
     # measures how COMPLETE the section is and reports completeness as a regression.
-    deployment_orphan_units: int = 0
-    # Did the map RECORD `runs-in/quality`, the literal that tells `validate` those empty boxes are
-    # deliberate? The count above stays raw — a profile states facts about a map — and the policy
-    # decision lives in the gate, which would otherwise contradict the tool: `validate` honours the
-    # record and stays quiet while the gate failed on the same three units. A build reading one
-    # green tool and one red gate about one fact has no way to act on either.
-    deployment_orphans_excepted: bool = False
+    #
+    # `None`, not 0, when a profile predates the field: 0 is the STRICTEST value here, so a baseline
+    # blessed before this existed made the gate fail a map against ITSELF. Both sibling deployment
+    # gates handle the same hazard by skipping with a note, and this one has to be able to tell
+    # "not scored" from "scored, and clean".
+    deployment_orphan_units: int | None = None
 
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
@@ -300,7 +299,6 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         deployment_units_linked=sum(1 for u in unit_names if u in claimed),
         deployment_distinct_hosted_sets=len(set(hosted.values())),
         deployment_orphan_units=len(validate_model.orphan_deployment_units(m)),
-        deployment_orphans_excepted="runs-in/quality" in balance_lib._exceptions(m),
         use_cases=len({u.id for u in m.use_cases}),
         subsystems=len({s.id for s in m.subsystems}),
         subdomains=len({s.id for s in m.subdomains}),

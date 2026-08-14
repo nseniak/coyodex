@@ -298,39 +298,45 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         # two test doubles — and correctly folded a unit that was really a mount inside the backend
         # process into that process. Linked went 4/4 -> 3/11 and this gate FAILED, on a section that
         # had gained seven honest boxes and lost nothing. An infra unit hosts no first-party code BY
-        # NATURE, so it can never be "linked", and every one added drove the number the gate watched
-        # DOWN.
+        # NATURE, so it can never be "linked", and every one added drove the number DOWN.
         #
         # ORPHANS are the number that means what the gate is for: units running nothing that are not
-        # infra either — the genuinely empty boxes. On the formula-fill rebuild above that is 6, up
-        # from 0, and the gate still fails. On the enriched map it is 0 -> 0 and the gate passes.
-        # It also happens to be the list `validate` already advises on, so the tool and the gate
-        # cannot drift apart (`validate_model.orphan_deployment_units`).
-        # The recorded `runs-in/quality` literal is honoured, because `validate` honours it: without
-        # this the tool stays quiet about three units while the gate fails on the same three, and a
-        # build holding one green report and one red gate about one fact cannot act on either. The
-        # bypass is deliberate and visible — a record is a named, durable judgement, and `validate`
-        # prints how many findings each one swallowed.
-        cand_orphans = 0 if candidate.deployment_orphans_excepted else candidate.deployment_orphan_units
-        base_orphans = 0 if baseline.deployment_orphans_excepted else baseline.deployment_orphan_units
-        ok = cand_orphans <= base_orphans
-        if (candidate.deployment_orphans_excepted
-                and candidate.deployment_orphan_units > base_orphans):
-            notes.append(
-                f"deployment-linkage passed on a RECORD, not on placement: "
-                f"{candidate.deployment_orphan_units} unit(s) run nothing and are not infra, and "
-                f"`runs-in/quality` is recorded. Re-read that record — it silences the whole "
-                f"deployment-quality family, not just these units.")
-        gates.append(GateResult("deployment-linkage-no-drop", ok,
-            f"empty deployment units (running nothing, not infra) "
-            f"{base_orphans} -> {cand_orphans}"
-            + (" (recorded `runs-in/quality`)" if candidate.deployment_orphans_excepted else "")
-            + f" · units hosting a component "
-            f"{baseline.deployment_units_linked}/{baseline.deployment_units} -> "
-            f"{candidate.deployment_units_linked}/{candidate.deployment_units}"
-            f" · distinct hosted component sets "
-            f"{baseline.deployment_distinct_hosted_sets} -> "
-            f"{candidate.deployment_distinct_hosted_sets}"))
+        # infra either — the genuinely empty boxes. It is also the list `validate` advises on, via
+        # the shared `validate_model.orphan_deployment_units`, so tool and gate cannot drift apart.
+        #
+        # The gate does NOT honour the map's recorded `runs-in/quality` exception, and the first cut
+        # of it did. That was wrong, and an adversarial review demonstrated it end to end: the
+        # literal covers five different sub-checks (unit naming, variant tagging, formula-fill,
+        # orphan units, entry hosts), `validate` actively suggests recording it for reasons that
+        # have nothing to do with placement, and nothing requires the justification to mention the
+        # orphaned units. So one TRUE sentence about the infra units — "the four infra units run no
+        # first-party code by design" — turned a REGRESSED verdict into a full green run on a map
+        # with two genuinely empty boxes. A hard gate whose input is authored by the thing being
+        # gated is not a gate.
+        #
+        # The parity-with-`validate` argument that motivated the waiver does not survive contact
+        # with who reads this: `compare` is the METHOD DEVELOPER's regression check between two
+        # builds, and a build never runs it (assertion 29 exists to keep a build from reading the
+        # previous map at all). Nobody is holding a green `validate` and a red gate about one map.
+        # An advisory may be waivable by its subject; a regression gate may not.
+        if baseline.deployment_orphan_units is None or candidate.deployment_orphan_units is None:
+            # 0 is the STRICTEST value here, so defaulting a pre-field profile to it made the gate
+            # fail a map against ITSELF — the exact bug class this whole gate was rewritten to fix,
+            # reintroduced for every existing baseline. Skip with a note, which is what both sibling
+            # deployment gates do and what this file's policy requires.
+            notes.append("deployment-linkage gate skipped — a profile predates the "
+                         "`deployment_orphan_units` field (re-score and re-bless to enable it)")
+        else:
+            ok = candidate.deployment_orphan_units <= baseline.deployment_orphan_units
+            gates.append(GateResult("deployment-linkage-no-drop", ok,
+                f"empty deployment units (running nothing, not infra) "
+                f"{baseline.deployment_orphan_units} -> {candidate.deployment_orphan_units}"
+                f" · units hosting a component "
+                f"{baseline.deployment_units_linked}/{baseline.deployment_units} -> "
+                f"{candidate.deployment_units_linked}/{candidate.deployment_units}"
+                f" · distinct hosted component sets "
+                f"{baseline.deployment_distinct_hosted_sets} -> "
+                f"{candidate.deployment_distinct_hosted_sets}"))
         # Counting units let a hollow improvement pass: 2/8 -> 3/10 on a map whose three linked
         # units hosted the identical 50 components. Adding a deployment SHAPE of the same process
         # raises the unit count and cannot raise this one. Baselines written before the field carry
@@ -357,7 +363,9 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
                 f"are deployment SHAPES of the same process, so linkage reads higher than the number "
                 f"of real placement decisions. Check that the components in no unit at all are "
                 f"deliberate")
-        if not ok:
+        # Keyed on the ORPHAN count, not on a gate variable: the gate is skipped entirely when a
+        # profile predates the field, and reading its `ok` there was both unbound and meaningless.
+        if candidate.deployment_orphan_units:
             notes.append("a unit nothing runs in is an empty box in the Deployment view — check "
                          "whether the components that owned those files were dropped, and whether "
                          "`runs_in` was filled from the deploy manifests or from an id-range formula")

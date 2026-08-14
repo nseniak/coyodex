@@ -2720,7 +2720,16 @@ def orphan_deployment_units(m: ProjectModel) -> list[str]:
     deployment section — naming the proxy, the two datastores, the log forwarder and the test
     doubles alongside the three real runtimes — read as a linkage drop (4/4 → 3/11) and failed the
     gate, while the section it was judging had got strictly more accurate. Orphans answer the
-    question the gate is actually asking, and they are what `validate` already advises on."""
+    question the gate is actually asking, and they are what `validate` already advises on.
+
+    **The `used` guard is part of the definition, not an optimisation.** A map that places nothing
+    at all has not "orphaned" its units — it has not adopted `runs_in`, which is a different finding
+    under a different recordable literal (`runs-in/unlinked`, `_deployment_unlinked_warning`).
+    Without this guard the function reported every non-infra unit as an orphan on such a map while
+    `validate` said nothing about them, so the gate failed a map its own tool had adjudicated — and
+    the whole point of making this shared was that the two cannot drift apart."""
+    if not (any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)):
+        return []
     hosted: set[str] = set()
     for c in m.components:
         hosted.update(c.runs_in)

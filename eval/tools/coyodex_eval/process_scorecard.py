@@ -479,30 +479,67 @@ def assert_3_fanout_is_one_message(turns: Sequence[Turn]) -> Assertion:
     return Assertion(3, "fan-out emitted as one message", len(batched), len(fanouts), evidence)
 
 
+#: What a finalize run that DID reach the drift leg prints. `finalize` writes its verdict line
+#: (`finalize: ADVISORIES — 0 blocking, 11 advisory`) and its report contains the leg's own heading;
+#: either is proof the leg ran, and a `--help` screen or an early `ERROR:` carries neither.
+_FINALIZE_RAN = re.compile(
+    r"anchor-drift \(shape-only\)"
+    r"|finalize:\s*(?:CLEAN|ADVISORIES|BLOCKED|FAILED)\b"
+    r"|^\s*\*\*Verdict:", re.MULTILINE)
+
+#: An invocation that could not have reached the leg: a help screen, a usage refusal, an argument
+#: error, or a run that says outright a check did not run.
+_FINALIZE_DID_NOT_RUN = re.compile(r"^\s*(?:ERROR:|usage:)|DID NOT RUN|INCOMPLETE", re.MULTILINE)
+
+
 def assert_4_shape_only_anchor_drift(turns: Sequence[Turn]) -> Assertion:
     """4 — the shape-only anchor-drift pass runs.
 
     The serial-build grounding floor: it needs no skeptics, so a build with none still gets
     deterministic drift findings.
 
-    **`coyodex finalize` runs this pass itself**, always, and prints it under its own heading
-    (`finalize.py`, `kind = "verdict-based" if verdicts else "shape-only"`; `cli.py` describes
-    finalize as "validate + audit + the shape-only anchor-drift pass"). Counting only a bare
-    `anchor-drift` invocation therefore scored 0 on two consecutive builds whose finalize reports
-    both read `## anchor-drift (shape-only) — no drifted anchors`. The assertion was measuring the
-    spelling, not the floor, and `L3-DESIGN.md` still said "nothing yet shows it is reached" on the
-    strength of it. `--verdicts` on `finalize` ADDS the verdict-based leg; it does not replace the
-    shape-only one, so a finalize counts either way."""
+    **`coyodex finalize` runs this pass itself** and prints it under its own heading (`finalize.py`,
+    `kind = "verdict-based" if verdicts else "shape-only"`). Counting only a bare `anchor-drift`
+    scored 0 on two consecutive builds whose finalize reports both read `## anchor-drift
+    (shape-only) — no drifted anchors`, and `L3-DESIGN.md` said "nothing yet shows it is reached" on
+    the strength of it.
+
+    But a finalize INVOCATION is not a finalize RUN. `finalize.py` returns before the drift leg on
+    seven paths — `--help`, `-h`, a flag missing its value, an unknown option, a missing map, a
+    missing verdicts file, an unloadable map — so `coyodex finalize --help` scored the floor as
+    reached. That is the same "counted a help lookup as the work" defect this file's sibling
+    instrument had removed days earlier. So the finalize branch is EVIDENCE-BASED: the run's own
+    output must show the leg happened. A bare `anchor-drift` needs no such proof — the command has
+    nothing else to do.
+
+    When a finalize's output was not captured at all (redirected to a file, and the file never
+    read), it does not count. Refusing to guess is the point: `of` stays 1 and the note says how
+    many uncorroborated finalize runs were passed over, so a 0 here reads as "not shown" rather
+    than "not done"."""
     hits: list[Evidence] = []
-    for idx, cmd in bash_commands(turns):
-        if _invokes(cmd, "finalize"):
-            hits.append(Evidence(idx, {"via": "finalize", "command": cmd[:120]}))
-        elif _invokes(cmd, "anchor-drift") and "--verdicts" not in cmd:
-            hits.append(Evidence(idx, {"via": "anchor-drift", "command": cmd[:120]}))
+    unproven = 0
+    results = results_by_tool_use_id(turns)
+    for turn in turns:
+        for call in turn.calls_named("Bash"):
+            cmd = call.command
+            if _invokes(cmd, "anchor-drift") and "--verdicts" not in cmd:
+                hits.append(Evidence(turn.index, {"via": "anchor-drift", "command": cmd[:120]}))
+                continue
+            if not _invokes(cmd, "finalize"):
+                continue
+            out = results.get(call.id, "")
+            if _FINALIZE_RAN.search(out) and not _FINALIZE_DID_NOT_RUN.search(out):
+                hits.append(Evidence(turn.index, {"via": "finalize", "command": cmd[:120]}))
+            else:
+                unproven += 1
     observed, of = _at_least_once(len(hits))
     via = sorted({str(h.detail.get("via")) for h in hits})
-    return Assertion(4, "shape-only anchor-drift run", observed, of, tuple(hits),
-                     f"reached via {', '.join(via)}" if hits else "")
+    note = f"reached via {', '.join(via)}" if hits else ""
+    if unproven:
+        note = (note + "; " if note else "") + (
+            f"{unproven} finalize run(s) not counted — their output did not show the leg running "
+            f"(a --help screen, an early ERROR, or output that was redirected and never read)")
+    return Assertion(4, "shape-only anchor-drift run", observed, of, tuple(hits), note)
 
 
 def assert_5_skeptics_fanned_out(turns: Sequence[Turn]) -> Assertion:
@@ -1005,27 +1042,33 @@ def _fanout_groups(turns: Sequence[Turn]) -> list[list[tuple[int, float | None]]
 # The scorecard exists to turn a one-off discovery into a number that gets watched.
 
 
-#: A fragment path inside a shell segment, e.g. `.coyodex/build-fragments/h05-domain-model.json`.
-_FRAGMENT_PATH = re.compile(re.escape(FRAGMENT_DIR) + r"/?([\w.\-*]+\.json)?")
-
-
-def _only_the_header_fragment(segment: str) -> bool:
-    """Does this segment write `header.json` and no other fragment or the map?
-
-    The LAST thing `method.md` prescribes is backfilling the real build minute into the header:
-    `provenance stamp` prints `built_at`, that string goes into `header.json`, and `assemble` +
-    `render` carry it into the map and its view. So a method-compliant build ALWAYS writes a
-    fragment after `grounding write`, and this assertion scored 0 for both builds that followed the
-    rule — measuring compliance as the defect.
-
-    The carve-out is safe because of what the header fragment holds: `title`, `goal`, `commit`,
-    `committed`, `built`. No claim of any kind, so it cannot add one after the pin, which is the
-    failure the assertion exists to catch ("21 further writes, four of which ADDED claims no
-    skeptic ever saw"). A segment that touches header.json AND anything else is still counted."""
-    if "project-map.json" in segment:
-        return False
-    named = {m.group(1) for m in _FRAGMENT_PATH.finditer(segment) if m.group(1)}
-    return named == {"header.json"}
+# `_only_the_header_fragment` USED TO LIVE HERE, and it was wrong.
+#
+# The problem it addressed is real: `method.md` ends a build by backfilling the measured build
+# minute into `header.json` and re-assembling, so a method-compliant build ALWAYS writes a fragment
+# after `grounding write`, and this assertion scores 0 for obeying the method. Both measured builds
+# scored 0 for exactly that.
+#
+# The fix exempted a write whose only fragment path was `header.json`, on the stated grounds that
+# the header fragment "holds title / goal / commit / committed / built. No claim of any kind." That
+# generalised one build's header file into a guarantee about a FILENAME, and the guarantee does not
+# exist: a fragment is "a PARTIAL model (any subset of the top-level arrays)", and nothing in
+# `lint-fragment` or `assemble` restricts what a file called `header.json` may carry. Demonstrated
+# against the real tools — a `header.json` carrying a business rule and a forged `grounding` block
+# lints OK, assembles, and ships both. So the carve-out opened a named, lint-clean channel for
+# precisely the failure this assertion exists to catch ("21 further writes, four of which ADDED
+# claims no skeptic ever saw"), and scored it 1.00.
+#
+# It is removed rather than narrowed. Keying on a path cannot work: the write can be spelled
+# `cd`-relative, through a `$FRAG` variable, or inside a python heredoc, and each spelling would
+# need its own patch while the hole stays open by construction.
+#
+# So this assertion is KNOWN to score 0 on a method-compliant build, and that 0 means "not measured
+# correctly", not "the build erred" — L3-DESIGN.md says so. The real fix is to stop counting writes
+# and read what the map already witnesses: `grounding.claims_added_since` and `live_claims_digest`
+# record exactly whether a claim entered after the pin, cannot be spoofed by how a write was
+# spelled, and are already available to this scorecard through `--map` (assertion 14 reads them).
+# That is a redesign, not a patch, and it is proposed rather than smuggled in here.
 
 
 def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assertion:
@@ -1087,8 +1130,6 @@ def assert_13_grounding_write_is_the_last_write(turns: Sequence[Turn]) -> Assert
                 touches = rest
                 if not ((FRAGMENT_DIR in touches or "project-map.json" in touches)
                         and _WRITES_A_FILE.search(rest)):
-                    continue
-                if _only_the_header_fragment(rest):
                     continue
                 edited_after.append(Evidence(turn.index, {"tool": call.name}))
                 continue
