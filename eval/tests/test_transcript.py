@@ -204,3 +204,86 @@ def test_a_tool_filtered_read_leaves_text_only_turns_out(capsys):
         out = capsys.readouterr().out
         assert "archive the current map" not in out
         assert "preindex" in out
+
+
+# --- round-two adversarial findings: one shared quote/comment mask ----------------
+# The first repair used TWO hand-rolled quote scanners that disagreed by construction, applied
+# quote-blanking to the `--help` test but not to the match itself, and left the index annotation
+# scanning raw text with a bare regex. Each case below is a repro from that review.
+
+
+def _subs(cmd: str) -> list[str]:
+    call = transcript.ToolCall(name="Bash", input={"command": cmd})
+    turn = transcript.Turn(index=1, role="assistant", tool_calls=(call,))
+    return [n for _i, n in transcript.coyodex_subcommands([turn])]
+
+
+def test_an_apostrophe_in_a_comment_does_not_swallow_the_command():
+    """The regression the first repair introduced: `_segments` tracked quotes over the whole text
+    while `_heredoc_tags` reset per line, so one unbalanced quote merged every segment and a later
+    program's `-h` again deleted a real invocation. Six real commands in the corpus carry a comment
+    apostrophe; each was one `sort -h` away from vanishing."""
+    assert _subs("# don't do this\ncoyodex audit m.json\ndu -h /tmp/x") == ["audit"]
+    assert _subs("# it's fine\ncoyodex validate m.json\npython build.py --help") == ["validate"]
+
+
+def test_a_comment_cannot_open_a_phantom_heredoc():
+    """`# use << EOF to redirect` opened a heredoc whose terminator never came, blanking every
+    invocation below it. The round-one sweep abstracted "`<<` inside a quoted string" and stopped
+    there; a comment is the same class."""
+    assert _subs("# use << EOF to redirect\ncoyodex audit m.json") == ["audit"]
+
+
+def test_coyodex_shaped_prose_inside_a_quoted_string_is_not_a_run():
+    """Quote-blanking was applied to the `--help` tail but never to the match, so the scan ruled
+    that quoted text is not evidence of a help run but IS evidence of an invocation. Across the
+    corpus 130 counted invocations sat inside quoted spans — echoed banners, `sed` replacement
+    strings, commit messages describing what was run."""
+    assert _subs('echo "next step: coyodex reconcile the fragments"') == []
+    assert _subs('coyodex record --map x --line "then runs coyodex assemble"') == ["record"]
+    # the quote DELIMITER is ordinary syntax, so the careful `"$CY"` spelling still counts
+    assert _subs('rec() { "$CY" record --map m --line "$1"; }') == ["record"]
+
+
+def test_a_plain_heredoc_terminator_must_not_be_indented():
+    """Real bash requires column 0 for `<<TAG`; only `<<-` strips leading TABS. Accepting an
+    indented terminator ended the body early and read the rest of it as shell — inventing an
+    invocation, which is what heredoc stripping exists to prevent."""
+    assert _subs("cat <<EOF\n  EOF\ncoyodex dump m.json\nEOF\ncoyodex audit m.json") == ["audit"]
+    assert _subs("cat <<-EOF\n\tEOF\ncoyodex audit m.json") == ["audit"]
+
+
+def test_a_heredoc_tag_may_hold_what_a_filename_may():
+    """`<<'PY-END'` read as `[A-Za-z0-9_]+` truncated to `PY`, so the terminator was never matched
+    and a perfectly valid heredoc blanked every invocation after it."""
+    assert _subs("cat > x <<'PY-END'\nnoise\nPY-END\ncoyodex audit m.json") == ["audit"]
+    assert _subs("cat > x <<'EOF.1'\nnoise\nEOF.1\ncoyodex audit m.json") == ["audit"]
+
+
+def test_a_variable_in_front_of_the_literal_binary_does_not_hide_it():
+    """`$WRAPPER coyodex audit` matched the alias branch with `coyodex` as the subcommand — not in
+    the allowlist — and skipping to the match END stepped over the real binary behind it."""
+    assert _subs("$WRAPPER coyodex audit m.json") == ["audit"]
+    assert _subs("PATH=$X coyodex audit m.json") == ["audit"]
+
+
+def test_the_index_names_only_what_the_commands_table_will_confirm():
+    """The index annotation scanned the truncated text with a bare regex — no heredoc stripping, no
+    `--help` filter — so it named `dump` and `lint-fragment` at turns whose only mention of them was
+    a contract-template body, and pointed the reader at a table that denied them. That annotation
+    exists BECAUSE a retro trusted the index; naming a run the table will not confirm is the same
+    failure pointing the other way."""
+    cmd = ("cat > r.md <<'EOF'\n" + "x" * 110 + "\ncoyodex dump --map m.json\n"
+           "coyodex lint-fragment f.json\nEOF\ncoyodex record --map x")
+    line = transcript.summarise_call(transcript.ToolCall(name="Bash", input={"command": cmd}))
+    named = line.split("…+")[1].replace(" (use --commands)", "") if "…+" in line else ""
+    assert named == "record", line
+    assert _subs(cmd) == ["record"]
+
+
+def test_shell_grammar_that_must_not_split_a_command():
+    """`2>&1` appears in almost every real coyodex call: splitting on its `&` must not orphan the
+    invocation or drag a later `-h` into its segment."""
+    assert _subs("coyodex validate m.json --check-sources 2>&1 | grep -h err") == ["validate"]
+    assert _subs("for b in a b; do coyodex dump $b; done") == ["dump"]
+    assert _subs("x=$(echo a; echo b); coyodex audit m.json") == ["audit"]

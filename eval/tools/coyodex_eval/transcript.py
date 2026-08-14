@@ -506,82 +506,152 @@ _ALIAS_ASSIGN = re.compile(
     r"""\b([A-Za-z_][A-Za-z0-9_]*)=["']?\S*?/(coyodex(?:-eval)?)["']?(?=[\s;&|)]|$)""")
 
 
-def _heredoc_tags(line: str) -> list[str]:
-    """Every heredoc terminator this line OPENS, in order.
+def _mask(text: str) -> list[bool]:
+    """Per-character: is this ORDINARY shell syntax — outside quotes and outside a comment?
 
-    Quote-aware and `<<<`-aware, because a blunt `<<` match blanked the rest of the command on two
-    ordinary shapes: a here-STRING (`python3 -c 'pass' <<< 'x'`) whose third `<` was skipped so the
-    following word became a terminator that never reappeared, and a literal `<<` inside a quoted
-    string (`echo 'use << to redirect'`). In both cases every coyodex call BELOW the line vanished
-    from the count, silently.
+    ONE scanner, because there were two and they disagreed by construction. `_heredoc_tags` reset
+    its quote state per line while `_segments` ran over the whole text, so a single unbalanced quote
+    — `# don't do this` at the top of a command — swallowed every later newline and separator into
+    one segment, and a later program's `-h` again deleted a real invocation. That is the round-one
+    defect returning through a different door, and six real commands across the transcript corpus
+    are one `sort -h` away from it.
 
-    A list rather than one tag: `cat <<A <<B` queues two bodies, and finding only the first left B's
-    body being scanned as commands."""
-    tags: list[str] = []
-    i, n, quote = 0, len(line), ""
-    while i < n:
-        c = line[i]
-        if quote:
-            if c == "\\" and quote == '"':
+    Quote DELIMITERS count as ordinary; only their CONTENT does not. `"$CY" record` must still be
+    found, while `echo "…coyodex reconcile…"` must not.
+
+    Comments are handled here rather than anywhere else, and that is what actually fixes the case
+    above: `#` outside quotes, at the start of a word, comments out the rest of the LINE — so the
+    apostrophe in `don't` never enters quote state at all. It also closes `# use << EOF to redirect`,
+    which used to open a phantom heredoc and blank everything below it.
+
+    UNBALANCED quotes fall back to "no quoting at all" (comments still apply). An unterminated quote
+    is broken input; letting it mask the rest of the command turns one typo into a silent, total
+    under-count, and over-counting a fragment of prose is the cheaper error."""
+    for ignore_quotes in (False, True):
+        out: list[bool] = []
+        quote = ""
+        comment = False
+        i, n = 0, len(text)
+        balanced = True
+        while i < n:
+            c = text[i]
+            if c == "\n":
+                comment = False
+                quote = quote if not ignore_quotes else ""
+                out.append(True)
+                i += 1
+                continue
+            if comment:
+                out.append(False)
+                i += 1
+                continue
+            if quote:
+                if c == "\\" and quote == '"' and i + 1 < n:
+                    out.extend((False, False))
+                    i += 2
+                    continue
+                out.append(c == quote)          # the closing delimiter is ordinary again
+                if c == quote:
+                    quote = ""
+                i += 1
+                continue
+            if c == "\\" and i + 1 < n:
+                out.extend((True, False))
                 i += 2
                 continue
-            if c == quote:
-                quote = ""
-            i += 1
-            continue
-        if c in "'\"":
-            quote = c
-            i += 1
-            continue
-        if c == "\\":
-            i += 2
-            continue
-        if c == "<" and line.startswith("<<", i):
-            if line.startswith("<<<", i):        # here-STRING: no body, no terminator
-                i += 3
+            if c in "'\"" and not ignore_quotes:
+                quote = c
+                out.append(True)                # the opening delimiter is ordinary
+                i += 1
                 continue
-            j = i + 2
-            if j < n and line[j] == "-":         # <<- strips leading tabs; same terminator rules
-                j += 1
-            while j < n and line[j] in " \t":
-                j += 1
-            if j < n and line[j] in "'\"":       # <<'EOF' / <<"EOF" — quoted tag
-                j += 1
-            k = j
-            while k < n and (line[k].isalnum() or line[k] == "_"):
-                k += 1
+            if c == "#" and (i == 0 or text[i - 1] in " \t\n;&|("):
+                comment = True
+                out.append(False)
+                i += 1
+                continue
+            out.append(True)
+            i += 1
+        balanced = not quote
+        if balanced or ignore_quotes:
+            return out
+    return out                                   # unreachable; the loop's second pass always returns
+
+
+#: A heredoc tag may hold anything a filename may — `<<'PY-END'`, `<<"EOF.1"`. Reading it as
+#: `[A-Za-z0-9_]+` truncated the tag, so the terminator was never recognised and the body blanked
+#: every invocation below it: a valid heredoc silently deleted the rest of the command.
+_TAG_CHARS = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.+"
+
+
+def _heredoc_opens(line: str, mask: Sequence[bool]) -> list[tuple[str, bool]]:
+    """Every heredoc this line opens, as `(terminator, leading tabs allowed)`, in order.
+
+    `<<-` is the only form whose terminator may be indented, and only by TABS. Accepting an indented
+    terminator for a plain `<<TAG` ended the body early and read the rest of it as shell — inventing
+    invocations, which is what heredoc stripping exists to prevent.
+
+    Quote- and comment-awareness comes from the shared mask; `<<<` is a here-STRING with no body."""
+    opens: list[tuple[str, bool]] = []
+    i, n = 0, len(line)
+    while i < n:
+        if not (mask[i] and line.startswith("<<", i)):
+            i += 1
+            continue
+        if line.startswith("<<<", i):
+            i += 3
+            continue
+        j = i + 2
+        dashed = j < n and line[j] == "-"
+        if dashed:
+            j += 1
+        while j < n and line[j] in " \t":
+            j += 1
+        if j < n and line[j] in "'\"":
+            quote = line[j]
+            k = line.find(quote, j + 1)
             if k > j:
-                tags.append(line[j:k])
-                i = k
+                opens.append((line[j + 1:k], dashed))
+                i = k + 1
                 continue
-            i = j
+            i = j + 1
             continue
-        i += 1
-    return tags
+        k = j
+        while k < n and line[k] in _TAG_CHARS:
+            k += 1
+        if k > j:
+            opens.append((line[j:k], dashed))
+            i = k
+            continue
+        i = j + 1
+    return opens
 
 
 def _strip_heredocs(cmd: str) -> str:
     """`cmd` with every heredoc BODY blanked out, terminators and all else kept.
 
-    Line-based, because that is what a heredoc is: the body runs from the line after the one
-    carrying `<<TAG` to the line whose stripped content is exactly `TAG`. A build writes plenty of
-    coyodex-shaped text into one — contract templates, notes, generated docs — and a live
-    `cat > rules-contract.md <<'EOF'` body made `dump` and `lint-fragment` appear as invocations at
-    a turn that ran neither.
+    A build writes plenty of coyodex-shaped text into one — contract templates, notes, generated
+    docs — and a live `cat > rules-contract.md <<'EOF'` body made `dump` and `lint-fragment` appear
+    as invocations at a turn that ran neither.
 
     Several heredocs queue in the order they were opened. An UNterminated heredoc (a truncated
-    command) blanks to the end — the safe direction: dropping data can only cost a finding, while
-    keeping it invents one."""
+    command) blanks to the end — the safe direction there: dropping data can only cost a finding,
+    while keeping it invents one."""
+    mask = _mask(cmd)
     out: list[str] = []
-    queue: list[str] = []
+    queue: list[tuple[str, bool]] = []
+    pos = 0
     for line in cmd.splitlines():
+        line_mask = mask[pos:pos + len(line)]
+        pos += len(line) + 1
         if queue:
-            out.append(line if line.strip() == queue[0] else "")
-            if line.strip() == queue[0]:
+            tag, dashed = queue[0]
+            ends = (line.lstrip("\t") if dashed else line) == tag
+            out.append(line if ends else "")
+            if ends:
                 queue.pop(0)
             continue
         out.append(line)
-        queue.extend(_heredoc_tags(line))
+        queue.extend(_heredoc_opens(line, line_mask))
     return "\n".join(out)
 
 
@@ -589,46 +659,28 @@ def _strip_heredocs(cmd: str) -> str:
 _SEGMENT_SEPARATORS = ("&&", "||", ";;", "|&", ";", "|", "&", "\n")
 
 
-def _segments(text: str) -> list[str]:
-    """`text` split into shell segments — one command each — respecting quotes.
+def _segments(text: str) -> list[tuple[str, list[bool]]]:
+    """`text` split into shell segments — one command each — with each segment's mask.
 
     The unit a `--help` belongs to is the SEGMENT it sits in, not the line and not "up to the next
     coyodex call". Getting that wrong is what let `&& du -h` erase a real invocation."""
-    parts: list[str] = []
-    buf: list[str] = []
-    i, n, quote = 0, len(text), ""
+    mask = _mask(text)
+    out: list[tuple[str, list[bool]]] = []
+    start = 0
+    i, n = 0, len(text)
     while i < n:
-        c = text[i]
-        if quote:
-            buf.append(c)
-            if c == "\\" and quote == '"' and i + 1 < n:
-                buf.append(text[i + 1])
-                i += 2
-                continue
-            if c == quote:
-                quote = ""
-            i += 1
-            continue
-        if c in "'\"":
-            quote = c
-            buf.append(c)
-            i += 1
-            continue
-        if c == "\\" and i + 1 < n:
-            buf.append(c)
-            buf.append(text[i + 1])
-            i += 2
-            continue
-        hit = next((sep for sep in _SEGMENT_SEPARATORS if text.startswith(sep, i)), "")
+        hit = ""
+        if mask[i]:
+            hit = next((s for s in _SEGMENT_SEPARATORS if text.startswith(s, i)
+                        and all(mask[i:i + len(s)])), "")
         if hit:
-            parts.append("".join(buf))
-            buf = []
+            out.append((text[start:i], mask[start:i]))
             i += len(hit)
+            start = i
             continue
-        buf.append(c)
         i += 1
-    parts.append("".join(buf))
-    return [p for p in parts if p.strip()]
+    out.append((text[start:], mask[start:]))
+    return [(t, m) for t, m in out if t.strip()]
 
 
 #: A quoted span, for blanking before a `--help` test: `record --line "see --help for details"` is
@@ -665,38 +717,57 @@ class Invocation:
 def _iter_invocations(turns: "Sequence[Turn]") -> "Iterator[Invocation]":
     """Every coyodex invocation in these turns, ONE scan.
 
-    Both `coyodex_subcommands` and `unresolved_aliases` read this. They used to scan separately and
-    disagree: the alias footer applied no `--help` filter, so it reported a caveat about invocations
-    the table had never counted.
+    Both `coyodex_subcommands` and `unresolved_aliases` read this, and so does the index annotation
+    in `summarise_call`. They used to scan separately and disagree: the alias footer applied no
+    `--help` filter, and the index applied nothing at all — so it named `dump` and `lint-fragment`
+    at turns whose only mention of them was a heredoc contract-template body, pointing the reader
+    at a `--commands` table that denied them.
 
     Order matters and is the fix for a whole class of bug. Heredoc bodies go first (they are data,
-    not commands), THEN the text is split into segments, and only then is each segment matched. The
-    previous cut matched against the stripped text but read the `--help` tail out of the ORIGINAL —
-    so every character the stripping removed shifted that read earlier, and the two fixes silently
-    mis-composed: a real `audit` was dropped because the `--help` it "saw" was heredoc data, and a
-    genuine `reconcile --help` was counted because the read landed before the flag."""
+    not commands), THEN the text is split into segments, and only then is each segment matched. An
+    earlier cut matched against the stripped text but read the `--help` tail out of the ORIGINAL, so
+    every character the stripping removed shifted that read earlier and the two fixes silently
+    mis-composed."""
     for idx, cmd in bash_commands(turns):
-        aliases = _alias_binaries(cmd)
-        # Join line continuations FIRST: `coyodex reconcile \<newline> --help` is one command, and
-        # splitting on the newline put the flag in a segment of its own where nothing tested it.
-        text = _strip_heredocs(cmd).replace("\\\n", " ")
-        for segment in _segments(text):
-            for m in _COYODEX_CMD.finditer(segment):
-                label = _label(m)
-                if label is None:
-                    continue
-                # `--help` binds to its own segment, and only up to the NEXT invocation inside it.
-                nxt = _COYODEX_CMD.search(segment, m.end())
-                tail = segment[m.end():nxt.start() if nxt else len(segment)]
-                if _HELP_ONLY.search(_QUOTED_SPAN.sub(" ", tail)):
-                    continue
-                token = m.group("bin") or m.group("alias") or ""
-                yield Invocation(
-                    turn=idx,
-                    name=label,
-                    binary=_binary_of(token, aliases),
-                    alias_resolved=bool(m.group("bin"))
-                    or token.lstrip("$").strip("{}\"'") in aliases)
+        for inv in _invocations_in(cmd):
+            yield replace(inv, turn=idx)
+
+
+def _invocations_in(cmd: str) -> "list[Invocation]":
+    """Every coyodex invocation in ONE shell command. `turn` is 0; callers stamp it."""
+    stripped = _strip_heredocs(cmd).replace("\\\n", " ")
+    # The alias map comes from the STRIPPED text: a `COY=…/coyodex` line inside a contract template
+    # written into a heredoc is documentation, and treating it as an assignment made an outer `$COY`
+    # look resolved when it was still a guess — under-reporting the footer's own uncertainty.
+    aliases = _alias_binaries(stripped)
+    out: list[Invocation] = []
+    for segment, mask in _segments(stripped):
+        pos = 0
+        while pos < len(segment):
+            m = _COYODEX_CMD.search(segment, pos)
+            if m is None:
+                break
+            # Advance by ONE on a non-match, never past the match: `$WRAPPER coyodex audit m.json`
+            # matched the alias branch with `coyodex` as the subcommand, which is not in the
+            # allowlist, and skipping to `m.end()` stepped over the real binary behind it.
+            label = _label(m)
+            if label is None or not mask[m.start()]:
+                pos = m.start() + 1
+                continue
+            nxt = _COYODEX_CMD.search(segment, m.end())
+            tail = segment[m.end():nxt.start() if nxt else len(segment)]
+            if _HELP_ONLY.search(_QUOTED_SPAN.sub(" ", tail)):
+                pos = m.end()
+                continue
+            token = m.group("bin") or m.group("alias") or ""
+            out.append(Invocation(
+                turn=0,
+                name=label,
+                binary=_binary_of(token, aliases),
+                alias_resolved=bool(m.group("bin"))
+                or token.lstrip("$").strip("{}\"'") in aliases))
+            pos = m.end()
+    return out
 
 
 def unresolved_aliases(turns: "Sequence[Turn]") -> int:
@@ -748,11 +819,15 @@ def summarise_call(call: ToolCall, width: int = 100) -> str:
     # concluded `grounding write` never ran, and published that about a build which ran it at turn
     # 489 chained behind an `assemble`. The finding was withdrawn. `--commands` was the answer and
     # nothing in the index pointed at it, so the index now names the subcommands it is cutting off.
+    # Ask the SHARED scan, not a bare regex over the truncated tail. Scanning the tail counted
+    # heredoc bodies and `--help` lookups, so the index named runs the `--commands` table denied —
+    # and this annotation exists because a retro trusted the index. Naming something the table will
+    # not confirm is the same failure pointing the other way.
+    visible = {i.name for i in _invocations_in(text[:width])}
     hidden: list[str] = []
-    for m in _COYODEX_CMD.finditer(text[width:]):
-        label = _label(m)
-        if label and label not in hidden:
-            hidden.append(label)
+    for inv in _invocations_in(call.command):
+        if inv.name not in visible and inv.name not in hidden:
+            hidden.append(inv.name)
     if hidden:
         return f"{text[:width]} …+{', '.join(hidden)} (use --commands)"
     return text[:width]
