@@ -326,6 +326,16 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
             # deployment gates do and what this file's policy requires.
             notes.append("deployment-linkage gate skipped — a profile predates the "
                          "`deployment_orphan_units` field (re-score and re-bless to enable it)")
+        elif baseline.deployment_runs_in_adopted and not candidate.deployment_runs_in_adopted:
+            # Orphans are 0 by construction on a map that places nothing, so the emptiest possible
+            # Deployment view scored better than a partly-filled one. This is the one shape where
+            # the orphan count cannot speak, so the gate answers it directly rather than reporting
+            # an improvement on a section that just went blank.
+            gates.append(GateResult("deployment-linkage-no-drop", False,
+                f"the candidate sets `runs_in` NOWHERE, so all "
+                f"{candidate.deployment_units} declared unit(s) are empty boxes — the baseline "
+                f"placed code in {baseline.deployment_units_linked}. Orphans read 0 here only "
+                f"because nothing is placed at all"))
         else:
             ok = candidate.deployment_orphan_units <= baseline.deployment_orphan_units
             gates.append(GateResult("deployment-linkage-no-drop", ok,

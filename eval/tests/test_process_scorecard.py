@@ -32,13 +32,16 @@ from coyodex_eval.transcript import ToolCall, Turn, read_turns
 
 # --- builders -------------------------------------------------------------------------
 
-def make_turn(index: int, *calls: ToolCall, results: tuple[tuple[str, str], ...] = ()) -> Turn:
-    """One assistant turn. `results` is (tool_use_id, text) pairs carried on the same Turn for
-    brevity — the assertions read them through `results_by_tool_use_id`, which does not care which
-    turn a result arrived on."""
+def make_turn(index: int, *calls: ToolCall, results: tuple[tuple, ...] = ()) -> Turn:
+    """One assistant turn. `results` is (tool_use_id, text) or (tool_use_id, text, is_error) pairs,
+    carried on the same Turn for brevity — the assertions read them through
+    `results_by_tool_use_id` / `errored_tool_use_ids`, neither of which cares which turn a result
+    arrived on."""
     from coyodex_eval.transcript import ToolResult
     return Turn(index=index, role="assistant", tool_calls=calls,
-                tool_results=tuple(ToolResult(tool_use_id=i, content=t) for i, t in results))
+                tool_results=tuple(ToolResult(tool_use_id=r[0], content=r[1],
+                                              is_error=bool(r[2]) if len(r) > 2 else False)
+                                   for r in results))
 
 
 def make_bash(command: str, uid: str = "") -> ToolCall:
@@ -259,47 +262,60 @@ def test_a4_wants_the_shape_only_pass_not_the_verdicts_one():
 
 
 def test_a4_counts_the_pass_finalize_runs_for_you():
-    """`coyodex finalize` RUNS the shape-only pass itself and prints it under its own heading.
-    Counting only a bare `anchor-drift` scored 0 on two consecutive builds whose finalize reports
-    both read `## anchor-drift (shape-only) — no drifted anchors`."""
-    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . > /tmp/f.txt", "u1"),
-                        results=(("u1", "finalize: ADVISORIES — 0 blocking, 11 advisory. "
-                                        "Full findings: .coyodex/finalize-report.md"),)))[4]
+    """`coyodex finalize` RUNS the shape-only pass itself. Counting only a bare `anchor-drift`
+    scored 0 on two builds whose finalize reports both read `## anchor-drift (shape-only)`."""
+    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . > /tmp/f.txt", "u1")))[4]
     assert (a.observed, a.score) == (1, 1.0), a
     assert "finalize" in a.note
 
 
-def test_a4_counts_finalize_even_with_verdicts():
-    """`--verdicts` ADDS the verdict-based leg to finalize; it does not replace the shape-only one."""
-    a = score(make_turn(0, make_bash("coyodex finalize m.json --repo . --verdicts v.json", "u1"),
-                        results=(("u1", "## anchor-drift (shape-only)\n_no drifted anchors_"),)))[4]
+def test_a4_counts_a_bare_shape_only_anchor_drift():
+    a = score(make_turn(0, make_bash("coyodex anchor-drift --map m.json | head -40", "u1")))[4]
     assert (a.observed, a.score) == (1, 1.0), a
 
 
-def test_a4_does_not_count_a_finalize_help_screen():
-    """The defect the evidence rule exists for: `finalize.py` returns from `--help` BEFORE the only
-    caller of the drift leg, so an invocation is not a run. Six more paths do the same — a flag
-    missing its value, an unknown option, a missing map, a missing verdicts file, an unloadable map.
-    `method.md` routinely tells agents to consult `--help`, so this is not a contrived input."""
-    a = score(make_turn(0, make_bash("coyodex finalize --help 2>&1 | head -40", "u1"),
-                        results=(("u1", "usage: coyodex finalize <project-map.json> [--repo R]"),)))[4]
-    assert (a.observed, a.score) == (0, 0.0), a
-    assert "not counted" in a.note
+def test_a4_does_not_count_a_help_lookup_on_EITHER_branch():
+    """The class is "an invocation is not a run". A first fix closed it on the finalize branch only
+    and left the other counting a bare invocation, on the stated premise that `anchor-drift` "has
+    nothing else to do" — false: `--help` prints usage and returns, as do five more early exits.
+    A previous test asserted that false premise and pinned the defect in place."""
+    for cmd in ("coyodex finalize --help 2>&1 | head -40",
+                "coyodex anchor-drift --help",
+                "coyodex anchor-drift -h"):
+        a = score(make_turn(0, make_bash(cmd, "u1")))[4]
+        assert (a.observed, a.score) == (0, 0.0), (cmd, a)
+        assert "not a run" in a.note
 
 
-def test_a4_does_not_count_a_finalize_that_errored_or_did_not_run_a_check():
-    for out in ("ERROR: no map at /nope/project-map.json",
-                "finalize: INCOMPLETE — a check that should have run did not",
-                "finalize: CLEAN — 0 blocking, 0 advisory; DID NOT RUN: validate (failed)"):
-        a = score(make_turn(0, make_bash("coyodex finalize m.json --repo .", "u1"),
-                            results=(("u1", out),)))[4]
-        assert (a.observed, a.score) == (0, 0.0), (out, a)
+def test_a4_does_not_count_an_invocation_that_exited_non_zero():
+    """Six of finalize's seven early returns exit non-zero (unknown flag, missing map, missing
+    verdicts file, a flag with no value). Exit status settles all of them at once, which reading
+    stdout could not."""
+    for cmd in ("coyodex finalize /nope/project-map.json",
+                "coyodex finalize --bogus",
+                "coyodex anchor-drift --map /nope.json"):
+        a = score(make_turn(0, make_bash(cmd, "u1"), results=(("u1", "ERROR: ...", True),)))[4]
+        assert (a.observed, a.score) == (0, 0.0), (cmd, a)
 
 
-def test_a4_still_counts_a_bare_anchor_drift_without_corroboration():
-    """A bare `anchor-drift` needs no proof — the command has nothing else to do. Only the finalize
-    branch is evidence-based, because only finalize has paths that skip the leg."""
-    a = score(make_turn(0, make_bash("coyodex anchor-drift --map m.json | head -40")))[4]
+def test_a4_counts_a_finalize_whose_output_is_read_in_a_later_turn():
+    """Requiring the call's OWN stdout to prove the leg ran scored 0 on the shape `finalize --help`
+    itself recommends — redirect to the report file, read it after — and the note then said the
+    output was "never read" when it had been."""
+    turns = (make_turn(0, make_bash("coyodex finalize m.json --repo . > /tmp/f.txt 2>&1", "u1"),
+                       results=(("u1", ""),)),
+             make_turn(1, make_bash("tail -6 /tmp/f.txt", "u2"),
+                       results=(("u2", "finalize: ADVISORIES — 0 blocking, 11 advisory"),)))
+    a = P.score_turns(turns).assertions[3]
+    assert a.id == 4 and (a.observed, a.score) == (1, 1.0), a
+
+
+def test_a4_is_not_rejected_by_a_sibling_commands_error_in_the_same_call():
+    """A Bash call chains several commands into ONE result buffer, so scanning it for `ERROR:`
+    rejected a finalize that had run fine. Seen on a real transcript."""
+    a = score(make_turn(0, make_bash("$CX anchor-drift --map m --verdicts v; $CX finalize m", "u1"),
+                        results=(("u1", "ERROR: unknown argument '--verdicts'\n"
+                                        "finalize: BLOCKED — 1 blocking, 0 advisory"),)))[4]
     assert (a.observed, a.score) == (1, 1.0), a
 
 

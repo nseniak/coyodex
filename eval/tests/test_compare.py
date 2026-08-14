@@ -588,3 +588,30 @@ def test_a_stale_baseline_says_the_distinct_hosts_gate_is_off():
                         deployment_distinct_hosted_sets=1)
     report = compare(base, cand)
     assert any("deployment-distinct-hosts gate is vacuous" in n for n in report.notes), report.notes
+
+
+def test_a_candidate_that_places_nothing_cannot_pass_by_having_no_orphans():
+    """Orphans are 0 by construction on a map that sets `runs_in` nowhere, so stripping every
+    placement made the EMPTIEST possible Deployment view score better than a partly-filled one:
+    16 declared units, none linked, `0 -> 0`, gate green. `validate` fires an unlinked canary there
+    and nothing in the comparison read it."""
+    base = make_profile(deployment_units=8, deployment_units_linked=4, deployment_orphan_units=0,
+                        deployment_runs_in_adopted=True)
+    cand = make_profile(deployment_units=16, deployment_units_linked=0, deployment_orphan_units=0,
+                        deployment_runs_in_adopted=False)
+    report = compare(base, cand, Thresholds())
+    gate = next(g for g in report.gates if g.name == "deployment-linkage-no-drop")
+    assert not gate.passed, gate.detail
+    assert "NOWHERE" in gate.detail
+
+
+def test_a_baseline_that_never_placed_anything_does_not_trip_the_new_check():
+    """Only the LOSS of placement is the finding. A project that has not adopted `runs_in` on either
+    side is measured by the orphan count as before."""
+    base = make_profile(deployment_units=8, deployment_units_linked=0, deployment_orphan_units=0,
+                        deployment_runs_in_adopted=False)
+    cand = make_profile(deployment_units=8, deployment_units_linked=0, deployment_orphan_units=0,
+                        deployment_runs_in_adopted=False)
+    gate = next(g for g in compare(base, cand, Thresholds()).gates
+                if g.name == "deployment-linkage-no-drop")
+    assert gate.passed, gate.detail

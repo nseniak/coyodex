@@ -911,6 +911,17 @@ def results_by_tool_use_id(turns: Sequence[Turn]) -> dict[str, str]:
     return out
 
 
+def errored_tool_use_ids(turns: Sequence[Turn]) -> set[str]:
+    """The ids of calls whose result the harness flagged as an error.
+
+    `is_error` was parsed, carried on `ToolResult`, and then thrown away by every consumer — so an
+    assertion asking "did this command run" could not tell a completed run from one that exited 2 on
+    an unknown flag, and reached for stdout text instead. Exit status is the cheaper and far more
+    robust answer: of the seven paths on which `coyodex finalize` returns before doing its work, six
+    exit non-zero and the seventh is `--help`."""
+    return {r.tool_use_id for t in turns for r in t.tool_results if r.is_error and r.tool_use_id}
+
+
 # --- CLI -------------------------------------------------------------------------------
 
 USAGE = """usage: coyodex-eval transcript <transcript.jsonl> [--from N] [--to N]

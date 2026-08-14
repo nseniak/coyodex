@@ -177,6 +177,12 @@ class MapProfile:
     # gates handle the same hazard by skipping with a note, and this one has to be able to tell
     # "not scored" from "scored, and clean".
     deployment_orphan_units: int | None = None
+    # Does ANY component or entry point set `runs_in`? Orphans are defined only on a map that
+    # places something: a map placing nothing has not orphaned its units, it has not adopted the
+    # field, which is a different finding. That definition left the WORST section un-gateable —
+    # strip every `runs_in` and the orphan count is 0 by construction, so 16 empty boxes scored
+    # `0 -> 0` and passed. `validate` fires an unlinked canary there; nothing here read it.
+    deployment_runs_in_adopted: bool | None = None
 
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
@@ -299,6 +305,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
         deployment_units_linked=sum(1 for u in unit_names if u in claimed),
         deployment_distinct_hosted_sets=len(set(hosted.values())),
         deployment_orphan_units=len(validate_model.orphan_deployment_units(m)),
+        deployment_runs_in_adopted=bool(
+            any(c.runs_in for c in m.components) or any(ep.runs_in for ep in m.entry_points)),
         use_cases=len({u.id for u in m.use_cases}),
         subsystems=len({s.id for s in m.subsystems}),
         subdomains=len({s.id for s in m.subdomains}),

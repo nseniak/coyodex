@@ -35,7 +35,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from coyodex_eval.transcript import (ToolCall, Turn, bash_commands, grouping_is_consistent,
-                                     read_turns, results_by_tool_use_id)
+                                     read_turns, results_by_tool_use_id,
+                                     errored_tool_use_ids)
 
 EvidenceValue = str | int | float | bool
 
@@ -479,17 +480,9 @@ def assert_3_fanout_is_one_message(turns: Sequence[Turn]) -> Assertion:
     return Assertion(3, "fan-out emitted as one message", len(batched), len(fanouts), evidence)
 
 
-#: What a finalize run that DID reach the drift leg prints. `finalize` writes its verdict line
-#: (`finalize: ADVISORIES — 0 blocking, 11 advisory`) and its report contains the leg's own heading;
-#: either is proof the leg ran, and a `--help` screen or an early `ERROR:` carries neither.
-_FINALIZE_RAN = re.compile(
-    r"anchor-drift \(shape-only\)"
-    r"|finalize:\s*(?:CLEAN|ADVISORIES|BLOCKED|FAILED)\b"
-    r"|^\s*\*\*Verdict:", re.MULTILINE)
-
-#: An invocation that could not have reached the leg: a help screen, a usage refusal, an argument
-#: error, or a run that says outright a check did not run.
-_FINALIZE_DID_NOT_RUN = re.compile(r"^\s*(?:ERROR:|usage:)|DID NOT RUN|INCOMPLETE", re.MULTILINE)
+#: `--help` / `-h` as a standalone word anywhere in the command. An invocation that only reads the
+#: interface performs none of the work its subcommand names.
+_HELP_LOOKUP = re.compile(r"(?:^|\s)(?:--help|-h)(?:\s|$)")
 
 
 def assert_4_shape_only_anchor_drift(turns: Sequence[Turn]) -> Assertion:
@@ -498,47 +491,52 @@ def assert_4_shape_only_anchor_drift(turns: Sequence[Turn]) -> Assertion:
     The serial-build grounding floor: it needs no skeptics, so a build with none still gets
     deterministic drift findings.
 
-    **`coyodex finalize` runs this pass itself** and prints it under its own heading (`finalize.py`,
-    `kind = "verdict-based" if verdicts else "shape-only"`). Counting only a bare `anchor-drift`
-    scored 0 on two consecutive builds whose finalize reports both read `## anchor-drift
+    Two spellings reach it. A bare `coyodex anchor-drift` with no `--verdicts`, and **`coyodex
+    finalize`, which runs the pass itself** and prints it under its own heading. Counting only the
+    first scored 0 on two consecutive builds whose finalize reports both read `## anchor-drift
     (shape-only) — no drifted anchors`, and `L3-DESIGN.md` said "nothing yet shows it is reached" on
     the strength of it.
 
-    But a finalize INVOCATION is not a finalize RUN. `finalize.py` returns before the drift leg on
-    seven paths — `--help`, `-h`, a flag missing its value, an unknown option, a missing map, a
-    missing verdicts file, an unloadable map — so `coyodex finalize --help` scored the floor as
-    reached. That is the same "counted a help lookup as the work" defect this file's sibling
-    instrument had removed days earlier. So the finalize branch is EVIDENCE-BASED: the run's own
-    output must show the leg happened. A bare `anchor-drift` needs no such proof — the command has
-    nothing else to do.
+    **An invocation is not a run**, and that is the part two successive attempts got wrong. First
+    the finalize branch counted `--help`; then it was made to require its own stdout to prove the
+    leg happened, while the anchor-drift branch was left counting a bare invocation on the stated
+    premise that "the command has nothing else to do" — which is false, `anchor-drift --help` prints
+    usage and returns, as do five more early exits. The class is "an invocation is not a run", and a
+    fix that treats one branch and not the other is a fix of the spelling.
 
-    When a finalize's output was not captured at all (redirected to a file, and the file never
-    read), it does not count. Refusing to guess is the point: `of` stays 1 and the note says how
-    many uncorroborated finalize runs were passed over, so a 0 here reads as "not shown" rather
-    than "not done"."""
+    Both branches now apply ONE rule, and it is exit status rather than stdout. Of the seven paths
+    on which `finalize` returns before the drift leg, six exit non-zero and the seventh is `--help`;
+    `anchor-drift` is the same shape. Reading stdout instead was brittle in three ways that were all
+    reproduced on real transcripts: a build that redirects to a file and reads it in a LATER turn
+    scored 0 with a note saying its output was "never read"; `| head -1` scored 0 because finalize's
+    first line is the git hint, not the verdict; and because a Bash call chains several commands
+    into one result buffer, a SIBLING command's `ERROR:` rejected a finalize that had run fine."""
     hits: list[Evidence] = []
-    unproven = 0
-    results = results_by_tool_use_id(turns)
+    skipped: list[str] = []
+    errored = errored_tool_use_ids(turns)
     for turn in turns:
         for call in turn.calls_named("Bash"):
             cmd = call.command
-            if _invokes(cmd, "anchor-drift") and "--verdicts" not in cmd:
-                hits.append(Evidence(turn.index, {"via": "anchor-drift", "command": cmd[:120]}))
-                continue
-            if not _invokes(cmd, "finalize"):
-                continue
-            out = results.get(call.id, "")
-            if _FINALIZE_RAN.search(out) and not _FINALIZE_DID_NOT_RUN.search(out):
-                hits.append(Evidence(turn.index, {"via": "finalize", "command": cmd[:120]}))
+            if _invokes(cmd, "finalize"):
+                via = "finalize"
+            elif _invokes(cmd, "anchor-drift") and "--verdicts" not in cmd:
+                via = "anchor-drift"
             else:
-                unproven += 1
+                continue
+            if _HELP_LOOKUP.search(cmd):
+                skipped.append(f"{via} --help")
+                continue
+            if call.id in errored:
+                skipped.append(f"{via} (exited non-zero)")
+                continue
+            hits.append(Evidence(turn.index, {"via": via, "command": cmd[:120]}))
     observed, of = _at_least_once(len(hits))
-    via = sorted({str(h.detail.get("via")) for h in hits})
-    note = f"reached via {', '.join(via)}" if hits else ""
-    if unproven:
+    via_seen = sorted({str(h.detail.get("via")) for h in hits})
+    note = f"reached via {', '.join(via_seen)}" if hits else ""
+    if skipped:
         note = (note + "; " if note else "") + (
-            f"{unproven} finalize run(s) not counted — their output did not show the leg running "
-            f"(a --help screen, an early ERROR, or output that was redirected and never read)")
+            f"{len(skipped)} invocation(s) not counted — an invocation is not a run "
+            f"({', '.join(sorted(set(skipped)))})")
     return Assertion(4, "shape-only anchor-drift run", observed, of, tuple(hits), note)
 
 
