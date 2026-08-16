@@ -448,3 +448,33 @@ def test_the_shape_line_says_nothing_about_access_when_there_is_none():
     p.write_text(json.dumps(doc, indent=2), encoding="utf-8")
     report = finalize.build_report(p, root, [])
     assert "access)" not in finalize.gate_block(report, report.map_sha256)
+
+
+def test_the_disposition_table_keys_an_audit_advisory_on_the_pair_not_the_family():
+    """`finalize` says every advisory is "either fixed or recorded under the extras heading its
+    message names", and used to check nothing — nine shipped on one map neither fixed nor recorded,
+    invisible because every read of the list had been narrowed by a grep.
+
+    The first draft of the table reproduced the bug it reports on: reading every id under 'Audit
+    exceptions' marked a `flow-title UC25` advisory "recorded" on the strength of an unrelated
+    `actor-attribution UC25` line. A record adjudicates one (check, id) pair, never a family."""
+    from coyodex.finalize import advisory_disposition, FinalizeReport, Leg, RAN
+    import json, tempfile, os
+    m = {"format": "coyodex-map", "title": "t", "goal": "g",
+         "extras": [{"heading": "Audit exceptions",
+                     "body": "actor-attribution UC25: the scheduler opens it, deliberate."}]}
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "m.json")
+        with open(p, "w") as fh:
+            json.dump(m, fh)
+        rep = FinalizeReport(
+            map_path=p, map_sha256="x", verdict="ADVISORIES",
+            legs=[Leg("audit", RAN, advisory=[
+                "flow-title: UC25 — a renamed use case whose flow was never re-traced. "
+                "Record 'flow-title <id>: <why>' under an 'Audit exceptions' extras heading.",
+                "actor-attribution: UC25 — declared actors do not include the opener. "
+                "Record 'actor-attribution <id>: <why>' under an 'Audit exceptions' extras heading."])],
+            advisory_total=2, blocking_total=0)
+        by_msg = {a.split(":", 1)[0]: d for d, _h, a in advisory_disposition(Path(p), rep)}
+    assert by_msg["flow-title"] == "UNRECORDED", "an unrelated check's record must not count"
+    assert by_msg["actor-attribution"] == "recorded"

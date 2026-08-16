@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -351,6 +352,19 @@ def format_report(r: FinalizeReport) -> str:
                "heading its message names; \"gates clean\" may only be claimed when this file says "
                "CLEAN.")
     out.append("")
+    disp = advisory_disposition(Path(r.map_path), r)
+    if disp:
+        counts: dict[str, int] = {}
+        for d, _h, _a in disp:
+            counts[d] = counts.get(d, 0) + 1
+        out.append("## Advisory disposition")
+        out.append("Each advisory, against what the map actually records. "
+                   + " · ".join(f"{k}: {v}" for k, v in sorted(counts.items())))
+        out.append("")
+        for d, h, a in disp:
+            tag = f"**{d}**" if d in ("UNRECORDED", "UNSURE") else d
+            out.append(f"- {tag}{f' [{h}]' if h else ''} — {a}")
+        out.append("")
     for leg in r.legs:
         out.append(f"## {leg.name}")
         if not leg.ran:
@@ -413,6 +427,65 @@ def _grounding_line(map_path: Path) -> str:
     return (f"Grounding (from the map): {g.claims_challenged} of {g.claims_total} claim(s) "
             f"challenged — {g.claims_confirmed} confirmed, {g.claims_refuted} refuted, "
             f"{g.claims_unverifiable} unverifiable.")
+
+
+#: Ids an advisory names, for matching against what the map recorded.
+_ADVISORY_IDS = re.compile(r"\b((?:UC|CAP|HP|SF|BLK|BR|SD|S|C|D|E|R)\d+)\b")
+
+
+def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[str, str, str]]:
+    """(disposition, heading-or-'', advisory) for every advisory the gates raised.
+
+    `finalize` already SAYS "each one is either fixed or recorded under the extras heading its
+    message names", and then checked nothing — so nine advisories shipped on one map neither fixed
+    nor recorded, and no transcript could show it because every read of the list had been narrowed
+    by a grep. Both halves are here already: the advisory list, and the map. Comparing them needs
+    no transcript and no model.
+
+    The heading is matched against the CLOSED registry in `records.KNOWN_HEADINGS`, never parsed out
+    of prose — the message names one of a known set or it names none. An advisory that names no
+    heading is `carried`: it has no escape by design and can only be fixed."""
+    from coyodex import records
+    from coyodex.assemble import load_map_or_fragment
+    try:
+        m, _present = load_map_or_fragment(map_path)
+    except Exception:
+        return []
+    out: list[tuple[str, str, str]] = []
+    for leg in report.legs:
+        for a in leg.advisory:
+            low = a.lower()
+            heading = next((h for h in records.KNOWN_HEADINGS if h.lower() in low), "")
+            if not heading:
+                out.append(("carried (no escape)", "", a))
+                continue
+            if heading.lower() == "audit exceptions":
+                # PAIRS, not ids. Reading every id under this heading marked a `flow-title UC25`
+                # advisory "recorded" on the strength of an unrelated `actor-attribution UC25`
+                # line — the same family-vs-pair error the heading exists to prevent, reproduced
+                # in the tool that reports on it. The check name leads the advisory text.
+                from coyodex.audit_model import audit_exceptions
+                check = a.split(":", 1)[0].strip().lower()
+                recorded = {eid for c, eid in audit_exceptions(m) if c.lower() == check}
+                ids = set(_ADVISORY_IDS.findall(a))
+                if ids and check.replace("-", "").isalpha():
+                    # Both halves of the key are known, so absence is DEFINITIVE, not unsure.
+                    out.append(("recorded" if ids & recorded else "UNRECORDED", heading, a))
+                    continue
+            else:
+                recorded = records.recorded_keys(m, heading)
+            ids = set(_ADVISORY_IDS.findall(a))
+            if ids and recorded and ids & recorded:
+                out.append(("recorded", heading, a))
+            elif not records.lines(m, heading):
+                out.append(("UNRECORDED", heading, a))
+            else:
+                # The heading exists but nothing in it keys this advisory. Free-text families
+                # (`Sweep debt`, `Bucket vocabulary`) key on a path or a name, not an id, so an
+                # id-less advisory beside a populated heading is reported as UNSURE rather than
+                # accused — the point is to make the operator look, not to be clever.
+                out.append(("recorded" if not ids else "UNSURE", heading, a))
+    return out
 
 
 def gate_block(report: FinalizeReport, map_sha: str) -> str:
