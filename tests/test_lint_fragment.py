@@ -374,3 +374,22 @@ def test_the_verdict_survives_a_truncating_pipe():
             assert any(l.startswith(("LINT OK", "LINT FAILED", "LINT DID NOT RUN")) for l in heads), (
                 f"{name}: no verdict in the first line of either stream: {heads}")
             assert merged, f"{name}: no output at all"
+
+
+def test_lint_catches_a_relation_authored_on_both_cards():
+    """`lint-fragment` ran two of validate's three domain-card checks and not this one, so a T5
+    fragment self-checked OK and `validate` then failed the ASSEMBLED map on 33 of these — every
+    one of them inside that fragment. A self-check that cannot fail on the commonest domain-card
+    mistake sends the agent home with a fragment that bounces at assembly."""
+    from coyodex.lint_fragment import lint_fragment_problems
+    m = make_fragment({"entities": [
+        {"id": "E1", "name": "Order", "source": "a/x.py:1", "meaning": "an order",
+         "store": {"dep": "D1", "container": "orders", "mode": "collection"},
+         "relations": [{"target": "E2", "verb": "hasMany", "how": "order_id"}]},
+        {"id": "E2", "name": "Line", "source": "a/y.py:1", "meaning": "a line",
+         "store": {"dep": "D1", "container": "lines", "mode": "collection"},
+         "relations": [{"target": "E1", "verb": "belongsTo", "how": "order_id"}]},
+    ]})
+    problems = lint_fragment_problems(m, None, None)
+    assert any("declared on both cards" in p for p in problems), (
+        f"the reciprocal relation must fail the fragment lint, got: {problems}")

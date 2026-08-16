@@ -3374,17 +3374,28 @@ def domain_card_shape_problems(entities: list[Entity]) -> list[str]:
     return problems
 
 
+def reciprocal_relation_problems(entities: list[Entity]) -> list[str]:
+    """One relation authored on BOTH cards — blocking, and answerable from the entities alone.
+
+    Its own function because `lint-fragment` needs it: it ran the other two domain-card checks and
+    not this one, so a T5 fragment self-checked OK and `validate` then failed the assembled map on
+    33 of these, every one of them inside that fragment. A self-check that cannot fail on the
+    commonest domain-card mistake sends the agent home with a fragment that bounces at assembly.
+
+    Sorted: the caller prints these, and iterating a set of pairs made the list churn between
+    identical runs."""
+    directed: set[tuple[str, str]] = set()
+    for e in entities:
+        for r in e.relations:
+            directed.add((e.id, r.target))
+    return [f"Relation between {a} and {b} is declared on both cards — author it on one side only"
+            for a, b in sorted(directed) if a < b and (b, a) in directed]
+
+
 def _check_domain_cards(m: ProjectModel) -> tuple[list[str], list[str]]:
     problems, warnings = check_domain_relations(m.entities)
     problems.extend(domain_card_shape_problems(m.entities))
-    directed: set[tuple[str, str]] = set()
-    for e in m.entities:
-        for r in e.relations:
-            directed.add((e.id, r.target))
-    for a, b in directed:
-        if a < b and (b, a) in directed:
-            problems.append(f"Relation between {a} and {b} is declared on both cards — author it "
-                            f"on one side only")
+    problems.extend(reciprocal_relation_problems(m.entities))
     return problems, warnings
 
 

@@ -35,6 +35,7 @@ from coyodex.validate_model import (
     check_entity_sources_model,
     rule_row_problems,
     domain_card_shape_problems,
+    reciprocal_relation_problems,
     duplicate_security_warnings,
     roleless_cd_verb_warnings,
     subflow_refcount_warnings,
@@ -130,6 +131,9 @@ def lint_fragment_problems(m: ProjectModel, repo_root: Path | None,
     # the assembled map, which is how a T5 fragment linted clean and then failed the lead's
     # `validate` a phase later, eight cards at a time.
     problems += domain_card_shape_problems(m.entities)
+    # The same reciprocal check `validate` runs. Omitting it let a T5 fragment self-check OK
+    # and fail the assembled map on 33 of these, all of them inside that one fragment.
+    problems += reciprocal_relation_problems(m.entities)
     problems += _check_stores(m)  # row-local store-shape rules (dep id shape, closed mode); the
     # folded-dep check self-disables when the fragment doesn't define the dep (it can't resolve it)
     state_problems, _state_warnings = _check_states(m)  # row-local machine rules (empty list, dup
