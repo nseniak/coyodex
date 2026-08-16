@@ -129,10 +129,16 @@ Stop and say what is missing if the map or the provenance is absent. A retro wit
 still do Steps 1 and 6, and must say that Steps 2–5 were skipped — including the
 `Verification status` block, which has nothing to report.
 
-**Then read the previous retro, before you create your own directory.** Take the highest-numbered
-directory under `.coyodex-eval/retro/` — and note that once you create yours, the newest one is
-yours, the same trap this step already warns about for transcripts. Read its `Proposals` and check in
-one pass which landed.
+**Then read the backlog and the previous retro, before you create your own directory.**
+
+`COYODEX_HOME/eval/retro/backlog.md` is the durable record of what past retros proposed and where
+each item stands. Read it first — it is tracked, whereas a report is not: `.coyodex-eval/` is
+git-ignored scratch, one `git clean` from gone, which is exactly why the backlog exists.
+
+Then, if the reviewed project still has one, take the highest-numbered directory under
+`.coyodex-eval/retro/` — noting that once you create yours, the newest one is yours, the same trap
+this step already warns about for transcripts — and read its `Proposals` for anything the backlog
+has not absorbed.
 
 Do this FIRST, not at the end. It changes what the rest of the retro looks for, and skipping it
 wastes a fan-out re-finding what is already fixed. Two failure modes it catches, both seen:
@@ -598,5 +604,8 @@ instrument, and much of what a retro finds does not live there — an assertion 
 a per-agent transcript is a different piece of work from one that greps the lead's commands, and one
 nobody can implement is a proposal that quietly dies. Tag each with its source.
 
-**Report what the previous retro's proposals did.** You read them in Step 0; say in `Proposals`
-which landed, which did not, and which were overtaken by a fix that arrived in between.
+**Report what the previous proposals did, and update the backlog.** You read
+`COYODEX_HOME/eval/retro/backlog.md` in Step 0; say in `Proposals` which items landed, which did not,
+and which were overtaken by a fix that arrived in between. Then say what the backlog should become —
+new items to add, items to move to Landed, status lines that are now wrong. **Proposing that edit is
+the deliverable; making it is not** — the report-only rule covers the backlog too.
