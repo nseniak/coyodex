@@ -87,6 +87,24 @@ def scope_report(root: Path) -> list[str]:
         " (node_modules/, dist/, build output, lock files and friends).",
     ]
 
+    # A PREVIOUS MAP sitting in the tree is source as far as the walk is concerned. `.coyodex/` is
+    # excluded by name; a hand-made copy beside it is not, and a build that archived its old map by
+    # hand — `mv .coyodex .coyodex-archive-<date>` — silently pulled ~59 files of it into the harvest
+    # scope (2731 analysed against 2672 after the archive was filed properly). That is the one
+    # artifact the method forbids a rebuild from reading, so it cannot be left to the reader to spot
+    # in a file count. `coyodex-eval archive` is the supported way to file one.
+    strays = sorted(d.name for d in root.iterdir()
+                    if d.is_dir() and d.name.startswith(".coyodex") and d.name != ".coyodex")
+    if strays:
+        out += [
+            "",
+            f"  WARNING: {len(strays)} coyodex-looking folder(s) beside .coyodex/ are being read as "
+            f"SOURCE: {', '.join(strays)}.",
+            "  A previous map is not source. If this is an archive, file it with "
+            "`coyodex-eval archive` (it lands under .coyodex/dev-rebuilds/, which is excluded);",
+            "  otherwise add it to .coyodex/.ignore. Leaving it here maps your own map.",
+        ]
+
     # The ignore file gets its own per-pattern block, never a bare total: it is the one input that
     # can hide a real gap from the checks whose job is finding gaps, so a pattern that removed
     # nothing must be visible as such (same rule, and the same wording, as `validate`'s disclosure).

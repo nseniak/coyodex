@@ -352,26 +352,32 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     clean = True
     unreadable = False
+    # Buffered, so the VERDICT can be printed before the detail. It used to print last, after every
+    # advisory row — and a harvest agent's own `head -40` cut it off twice: rounds that had already
+    # returned 0 problems looked identical to failing ones, so the agent kept iterating on a
+    # fragment that was finished. A verdict a pipe can remove is a verdict that does not exist.
+    detail: list[tuple[str, bool]] = []   # (line, to_stderr)
+    say = lambda line, err=True: detail.append((line, err))
     for p in frags:
         # "cannot read it" and "it breaks a rule" are different answers, and they used to print the
         # same verdict: a wrong path produced `ERROR: … not found` followed by "LINT FAILED: fix the
         # rows above", sending the agent hunting for a rule violation in a file nobody opened. A
         # live build lost two turns to it, both times from running the command in another directory.
         if not p.exists():
-            print(f"ERROR: cannot read {p} — no such file. (The fragment path and --repo are both "
-                  f"resolved from the CURRENT directory.)", file=sys.stderr)
+            say(f"ERROR: cannot read {p} — no such file. (The fragment path and --repo are both "
+                f"resolved from the CURRENT directory.)")
             unreadable = True
             continue
         try:
             text = p.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as e:
-            print(f"ERROR: cannot read {p}: {e}", file=sys.stderr)
+            say(f"ERROR: cannot read {p}: {e}")
             unreadable = True
             continue
         try:
             m = load_fragment(text, p.name)
         except ModelError as e:
-            print(f"{p.name}: SCHEMA — {e}", file=sys.stderr)
+            say(f"{p.name}: SCHEMA — {e}")
             clean = False
             continue
         problems = lint_fragment_problems(m, repo_root, known_ids)
@@ -380,21 +386,36 @@ def main(argv: list[str] | None = None) -> int:
         if problems:
             clean = False
             for pr in problems:
-                print(f"{p.name}: {pr}", file=sys.stderr)
+                say(f"{p.name}: {pr}")
         else:
-            print(f"{p.name}: OK")
+            say(f"{p.name}: OK", False)
         # advisory warnings never fail the lint — heuristic nudges the agent can act on or ignore
         for w in lint_fragment_warnings(m) + _budget_warnings(m, expect):
-            print(f"{p.name}: warning: {w}", file=sys.stderr)
+            say(f"{p.name}: warning: {w}")
+    n_warn = sum(1 for line, _ in detail if ": warning: " in line)
+    n_prob = sum(1 for line, err in detail if err and ": warning: " not in line
+                 and not line.startswith("ERROR: "))
+    if unreadable:
+        verdict, code = "LINT DID NOT RUN", 2
+    elif not clean:
+        verdict, code = f"LINT FAILED — {n_prob} problem(s), {n_warn} advisory warning(s)", 1
+    else:
+        verdict, code = f"LINT OK — 0 problems, {n_warn} advisory warning(s)", 0
+    # FIRST line, always: a truncating pipe keeps the head. Flush BOTH streams before any detail —
+    # stderr is unbuffered and stdout is block-buffered when piped, so without this the verdict
+    # loses the race against its own detail rows under `2>&1 | head`, which is how it is read.
+    print(verdict, file=sys.stderr if code else sys.stdout)
+    sys.stdout.flush()
+    sys.stderr.flush()
+    for line, err in detail:
+        print(line, file=sys.stderr if err else sys.stdout)
     if unreadable:
         print("LINT DID NOT RUN on the file(s) above — they could not be read, so nothing was "
               "checked. This is not a rule violation; fix the path and re-run.", file=sys.stderr)
-        return 2
-    if not clean:
+    elif not clean:
         print("LINT FAILED: fix the rows above before returning this fragment. "
               "(`warning:` lines are advisory heuristics — they do not fail the lint.)", file=sys.stderr)
-        return 1
-    return 0
+    return code
 
 
 if __name__ == "__main__":

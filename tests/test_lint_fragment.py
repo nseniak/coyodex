@@ -340,3 +340,37 @@ def test_an_already_built_map_still_validates_without_risks():
     m = make_fragment(make_access_rule_fragment())
     assert not [p for p in rule_row_problems(m) if "empty `risk`" in p]
     assert not [p for p in check_rules_model(m)[0] if "empty `risk`" in p]
+
+
+def test_the_verdict_survives_a_truncating_pipe():
+    """The verdict used to print LAST, after every advisory row. A harvest agent's own `head -40`
+    cut it off on two consecutive rounds, so rounds that had already returned zero problems looked
+    identical to failing ones and it kept iterating on a finished fragment.
+
+    Both orderings are checked under MERGED streams, because that is how an agent reads it: stderr
+    is unbuffered and stdout is block-buffered when piped, so the verdict has to be flushed before
+    any detail or it loses the race to its own rows.
+    """
+    import subprocess, sys, json, tempfile, os
+    cases = {
+        # passes, but emits an advisory row that used to precede the verdict
+        "warn.json": {"components": [{"id": "C1", "name": "A", "source": "x.py:1",
+                                      "confidence": "nope"}]},
+        "fail.json": {"roles": [{"id": "R1", "name": "User", "description": "a person"}]},
+    }
+    with tempfile.TemporaryDirectory() as d:
+        for name, body in cases.items():
+            with open(os.path.join(d, name), "w") as fh:
+                json.dump(body, fh)
+            out = subprocess.run(
+                [sys.executable, "-c",
+                 "import sys;from coyodex.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
+                 name],
+                capture_output=True, text=True, cwd=d,
+                stdin=subprocess.DEVNULL)
+            merged = (out.stdout + out.stderr).splitlines()
+            # The verdict must be reachable in the first line of whichever stream carries it.
+            heads = [l for l in (out.stdout.splitlines()[:1] + out.stderr.splitlines()[:1])]
+            assert any(l.startswith(("LINT OK", "LINT FAILED", "LINT DID NOT RUN")) for l in heads), (
+                f"{name}: no verdict in the first line of either stream: {heads}")
+            assert merged, f"{name}: no output at all"

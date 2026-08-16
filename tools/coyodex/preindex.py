@@ -20,7 +20,7 @@ validator never reads this file; it re-measures (GR4).
 Usage:
   coyodex preindex [--root .] [--out .coyodex/preindex.json] [--since <rev|date>]
                    [--pairs pairs.json] [--max-depth N]
-  coyodex preindex --report [--root <repo> | --in <path>] [--depth N] [--top N]
+  coyodex preindex --report [--root <repo> | --in <path>] [--depth N] [--top N | --dirs a,b,c]
 """
 from __future__ import annotations
 
@@ -334,6 +334,8 @@ def report(argv: list[str]) -> int:
     try:
         depth = int(_arg(argv, "--depth", "2") or 2)
         top = int(_arg(argv, "--top", "40") or 40)
+        raw_dirs = _arg(argv, "--dirs", "") or ""
+        dirs = [d.strip().rstrip("/") for d in raw_dirs.split(",") if d.strip()]
     except ValueError:
         sys.stderr.write("preindex --report: --depth and --top take an integer\n")
         return 2
@@ -370,13 +372,25 @@ def report(argv: list[str]) -> int:
                     "        unit-sized mass. Expect the honest altitude to sit BELOW E here; if you",
                     "        build under the band, record the literal `granularity` under a",
                     "        'Balance exceptions' extras heading with the why."]
-    out += ["  Hand each harvest agent ITS slice's number — never a gut estimate (method.md).",
-            "  per-directory E (top %d):" % top]
     per = gran.get("per_dir") or {}
-    for k, v in sorted(per.items(), key=lambda kv: (-kv[1], kv[0]))[:top]:
-        out.append(f"    {v:6d}  {k}")
-    if len(per) > top:
-        out.append(f"    … {len(per) - top} more dir(s) — raise --top to see them")
+    out.append("  Hand each harvest agent ITS slice's number — never a gut estimate (method.md).")
+    if dirs:
+        # A RANKING cannot answer "E for the slices I chose". The lead picks slices by product
+        # boundary, and the small ones it needs most are never in a top-N — one build asked for 32
+        # directories of which several score 1, so it hand-parsed the JSON instead, which is the one
+        # thing `--report` exists to stop. Lookup order is the ORDER ASKED, not by size.
+        out.append(f"  per-directory E for the {len(dirs)} director(y/ies) you named:")
+        for d in dirs:
+            v = per.get(d)
+            out.append(f"    {v:6d}  {d}" if v is not None
+                       else f"         -  {d}   (no such directory in the pre-index)")
+    else:
+        out.append("  per-directory E (top %d):" % top)
+        for k, v in sorted(per.items(), key=lambda kv: (-kv[1], kv[0]))[:top]:
+            out.append(f"    {v:6d}  {k}")
+        if len(per) > top:
+            out.append(f"    … {len(per) - top} more dir(s) — raise --top, or name them with "
+                       f"--dirs a,b,c")
 
     out += ["", "COVERAGE — what the pre-index could NOT see (unparsed = UNKNOWN, not empty)",
             f"  files counted: {_fmt_int(cov.get('files_counted'))} "
@@ -416,11 +430,14 @@ def report(argv: list[str]) -> int:
 
 USAGE = """usage: coyodex preindex [--root .] [--out .coyodex/preindex.json] [--since <rev|date>]
                         [--pairs pairs.json] [--max-depth N]
-       coyodex preindex --report [--root <repo> | --in <path>] [--depth N] [--top N]
+       coyodex preindex --report [--root <repo> | --in <path>] [--depth N] [--top N | --dirs a,b,c]
 
 Build the structural pre-index, or (--report) print an existing one as a readable summary:
 the weight tree, the per-directory component expectation E, and the coverage block.
 --report READS the JSON and writes nothing.
+--dirs a,b,c prints E for exactly those directories, in the order asked, instead of the
+top-N ranking — a ranking cannot answer "E for the slices I chose", and the small slices a
+harvest plan needs are never in it.
 
 --report picks the file to read as: --in <path> if given, else <root>/.coyodex/preindex.json
 if --root is given, else ./.coyodex/preindex.json. Pass --root (or --in) whenever you run the
@@ -486,7 +503,7 @@ def main(argv: list[str] | None = None) -> int:
     # rewriting a committed artifact the caller never meant to touch. It was the last command in the
     # package that did not refuse, and the only one where the silence is destructive.
     known = {"--root", "--out", "--since", "--pairs", "--max-depth", "--report", "--in", "--depth",
-             "--top"}
+             "--top", "--dirs"}
     unknown = [a for a in argv if a.startswith("-") and a not in known]
     if unknown:
         print(f"ERROR: unknown option(s): {', '.join(unknown)}", file=sys.stderr)
