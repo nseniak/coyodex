@@ -143,6 +143,43 @@ FIX_RECIPES: dict[str, object] = {
 }
 
 
+#: `grounding` verb -> argv builder. Its own set for the same reason `fix` has one: a command with
+#: a second-level dispatch is not covered by exercising one of its verbs.
+GROUNDING_RECIPES: dict[str, object] = {
+    "report": lambda t, m: ["grounding", "report", "--map", str(m),
+                            "--worklist", str(_worklist(t, m)),
+                            "--verdicts", str(_verdicts(t, m))],
+    "lint":   lambda t, m: ["grounding", "lint", "--verdicts", str(_verdicts(t, m))],
+    "write":  lambda t, m: ["grounding", "write", "--map", str(m),
+                            "--worklist", str(_worklist(t, m)),
+                            "--verdicts", str(_verdicts(t, m)),
+                            "--partial", "--note", "sweep",
+                            "--out", str(t / "grounding.json")],
+}
+
+
+def test_every_grounding_verb_has_a_sweep_recipe():
+    """Read from the dispatch, like the others — a hand-kept list stops being complete quietly."""
+    import re
+    src = (REPO / "tools" / "coyodex" / "grounding.py").read_text(encoding="utf-8")
+    m = re.search(r'verb not in \(([^)]*)\)', src)
+    assert m, "could not read the grounding verb tuple — the gate would pass vacuously"
+    verbs = set(re.findall(r'"([a-z-]+)"', m.group(1)))
+    assert verbs, "no verbs parsed"
+    missing = sorted(verbs - set(GROUNDING_RECIPES))
+    stale = sorted(set(GROUNDING_RECIPES) - verbs)
+    assert not missing, f"{missing} are `grounding` verbs with no sweep recipe"
+    assert not stale, f"{stale} in GROUNDING_RECIPES but no longer a verb"
+
+
+@pytest.mark.parametrize("verb", sorted(GROUNDING_RECIPES))
+def test_the_grounding_verb_survives_a_realistic_map(verb, tmp_path):
+    m = _assembled(tmp_path / "m")
+    r = cli(*GROUNDING_RECIPES[verb](tmp_path, m))
+    assert "Traceback" not in r.stderr, f"grounding {verb} crashed:\n{r.stderr[-3000:]}"
+    assert r.returncode in (0, 1), f"grounding {verb} exited {r.returncode}\n{r.stderr[-1500:]}"
+
+
 def test_every_advertised_command_has_a_sweep_recipe():
     """THE COMPLETENESS GATE. Without it "comprehensive" decays the moment a command is added:
     the sweep keeps passing while covering less of the tool every release."""

@@ -463,3 +463,56 @@ def test_a_worklist_given_as_a_bare_list_is_read_not_crashed_on():
         assert _worklist_claims(bare) == ["C1 calls C2", "C2 writes E1"]
         assert _worklist_claims(wrapped) == _worklist_claims(bare), \
             "both shapes must read identically — the wrapper is presentation, not meaning"
+
+
+def _write(tmp, name, obj):
+    import json
+    from pathlib import Path
+    p = Path(tmp) / name
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(obj))
+    return str(p)
+
+
+def test_lint_catches_the_quoted_boolean_at_the_skeptic_not_a_hundred_turns_later():
+    """`grounding write` already refuses this — at the END of the build, where the skeptic that
+    produced it finished long ago. One live build shipped 40 rows with `grounded` as the STRING
+    "true" and paid four turns of hand-repair on the critical path. The skeptic's own self-check
+    could not have caught it: printing str(value) renders 'true' for a string and a boolean alike."""
+    import tempfile
+    from coyodex.grounding import lint_verdicts
+    with tempfile.TemporaryDirectory() as d:
+        bad = _write(d, "v.json", {"grounding": [
+            {"claim": "c", "grounded": "true", "evidence": "a.py:1", "skeptic": "s", "note": "n"}]})
+        assert any("unrecognised" in p for p in lint_verdicts([bad]).problems)
+        good = _write(d, "g.json", {"grounding": [
+            {"claim": "c", "grounded": True, "evidence": "a.py:1", "skeptic": "s", "note": "n"},
+            {"claim": "d", "grounded": "unverifiable", "evidence": "b.py:2", "skeptic": "s",
+             "note": "n"}]})
+        assert not lint_verdicts([good]).problems, "both legal shapes must pass"
+
+
+def test_lint_catches_a_note_claiming_a_read_the_agent_never_made():
+    """The worst thing a retrospective found: a skeptic settled 40 claims in 95 seconds from one
+    directory-wide grep, generated every row from a script, and opened each note `Read <file>:` for
+    files it never opened. Forty fabricated confirmations reached a shipped grounding record and
+    nothing in the toolchain could see them. The agent's own transcript can."""
+    import tempfile, json
+    from pathlib import Path
+    from coyodex.grounding import lint_verdicts
+    with tempfile.TemporaryDirectory() as d:
+        agents = Path(d) / "agents"
+        agents.mkdir()
+        (agents / "agent-a1.jsonl").write_text(json.dumps(
+            {"type": "assistant", "message": {"content": [
+                {"type": "tool_use", "name": "Bash",
+                 "input": {"command": "sed -n 1,60p db/schema/workspaces.ts"}}]}}) + "\n")
+        v = _write(d, "v.json", {"grounding": [
+            {"claim": "c1", "grounded": True, "evidence": "x:1", "skeptic": "a1",
+             "note": "Read db/schema/workspaces.ts: it does"},
+            {"claim": "c2", "grounded": True, "evidence": "y:1", "skeptic": "a1",
+             "note": "Read db/schema/never_opened.ts: it does"}]})
+        problems = lint_verdicts([v], agents).problems
+        assert any("never_opened.ts" in p for p in problems), problems
+        assert not any("workspaces.ts" in p for p in problems), \
+            "the file it really did open must not be accused"

@@ -25,14 +25,17 @@ Stdlib-only (the cli.py firewall).
 from __future__ import annotations
 
 import json
+import re
 import sys
 from collections.abc import Iterable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from coyodex import subverb_help
 from coyodex.anchor_drift import load_verdicts
 
-USAGE = """usage: coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
+USAGE = """usage: coyodex grounding lint   --verdicts <raw.json>... [--agent-transcripts <dir>]
+       coyodex grounding write  --worklist <audit.json> --verdicts <raw.json>... \\
                                [--out <fragment.json>] [--json] [--partial]
                                [--note <text> | --note-file <path> | --keep-note]
                                [--map <project-map.json>]
@@ -355,21 +358,106 @@ def _worklist_claims(path: Path) -> list[str]:
     return [str(i.get("claim", "")) for i in items if isinstance(i, dict)]
 
 
+@dataclass
+class VerdictLint:
+    """The lint's answer. A dataclass, not a `(list, list)` tuple — both are empty on the happy
+    path, so a swapped pair reads as correct behaviour and no test can tell the difference. Same
+    reason `assemble.FragmentLoad` exists."""
+    problems: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+
+def lint_verdicts(paths: list[str], agent_dir: Path | None = None) -> VerdictLint:
+    """Shape check over raw verdict files, WITHOUT needing a worklist or a map.
+
+    `grounding write` already refuses a malformed record — but it runs at the very end of a build,
+    and the skeptic that produced the bad file finished a hundred turns earlier. One live build
+    shipped 40 rows whose `grounded` was the STRING `"true"`; the refusal came at the last step and
+    cost four turns of hand-repair on the critical path. The same check, runnable the moment a
+    skeptic returns, costs nothing and fails where the fix is cheap.
+
+    With `--agent-transcripts <dir>` it also answers the question no shape check can: did the
+    skeptic READ what its note says it read. One skeptic settled 40 claims in 95 seconds from a
+    single directory-wide grep and generated every row from a script, each `note` opening
+    `Read <file>:` for files it never opened. Those forty fabricated confirmations reached a
+    shipped grounding record, and nothing in the toolchain could see them.
+    """
+    out = VerdictLint()
+    rows, load_notes = load_verdicts(paths)
+    out.notes += load_notes
+    if not rows:
+        out.problems.append("no verdict rows found in " + ", ".join(paths))
+        return out
+
+    bad = sorted({f"{r.get('grounded')!r}" for r in rows
+                  if not (r.get("grounded") is True or r.get("grounded") is False
+                          or (isinstance(r.get("grounded"), str)
+                              and r.get("grounded", "").lower() == "unverifiable"))})
+    if bad:
+        out.problems.append(
+            f"{len(bad)} unrecognised `grounded` value(s): {', '.join(bad)}. The vocabulary is the "
+            f"JSON booleans true / false, or the string \"unverifiable\" — `\"true\"` quoted is the "
+            f"one that has actually shipped, and a skeptic's own self-check cannot see it because "
+            f"printing str(value) renders 'true' either way.")
+
+    for field in ("claim", "evidence", "skeptic"):
+        missing = sum(1 for r in rows if not str(r.get(field) or "").strip())
+        if missing:
+            out.problems.append(f"{missing} row(s) have no `{field}` — "
+                            + {"claim": "the record pairs rows to claims by that exact string",
+                               "evidence": "a verdict with no line is an opinion",
+                               "skeptic": "it is what tells two independent votes from one file "
+                                          "passed in twice"}[field])
+
+    if agent_dir is not None:
+        out.problems += _fabricated_evidence(rows, agent_dir)
+    return out
+
+
+#: A note asserting the skeptic opened something — the claim this check tests against the record of
+#: what it actually opened.
+_CLAIMS_A_READ = re.compile(r"\bread\s+([\w./-]+\.[A-Za-z0-9]+)", re.I)
+
+
+def _fabricated_evidence(rows: list[dict], agent_dir: Path) -> list[str]:
+    """Files a note says were read, that the agent's own transcript never opened."""
+    opened: set[str] = set()
+    seen_any = False
+    for f in sorted(agent_dir.glob("*.jsonl")):
+        seen_any = True
+        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+            for m in re.finditer(r"[\w./-]+\.[A-Za-z0-9]+", line):
+                opened.add(m.group(0).lstrip("./"))
+    if not seen_any:
+        return [f"--agent-transcripts {agent_dir} holds no .jsonl — nothing to check evidence against"]
+    claimed: dict[str, int] = {}
+    for r in rows:
+        for hit in _CLAIMS_A_READ.findall(str(r.get("note") or "")):
+            claimed[hit.lstrip("./")] = claimed.get(hit.lstrip("./"), 0) + 1
+    ghosts = sorted(f for f in claimed if f not in opened)
+    if not ghosts:
+        return []
+    return [f"{len(ghosts)} file(s) are named as READ in a note but appear nowhere in the agent's "
+            f"transcript: {', '.join(ghosts[:8])}{' …' if len(ghosts) > 8 else ''}. A note that says "
+            f"you read something is a statement about your own work; {sum(claimed[g] for g in ghosts)} "
+            f"row(s) rest on one."]
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(USAGE)
         return 0
     verb, rest = argv[0], argv[1:]
-    if verb not in ("write", "report"):
-        print(f"ERROR: unknown verb '{verb}' (expected `write` or `report`)\n\n{USAGE}",
+    if verb not in ("write", "report", "lint"):
+        print(f"ERROR: unknown verb '{verb}' (expected `write`, `report` or `lint`)\n\n{USAGE}",
               file=sys.stderr)
         return 2
     # Same hole `coyodex fix` had: the option loop below rejects `--help` as an unknown option.
     helped = subverb_help.handle(USAGE, verb, rest)
     if helped is not None:
         return helped
-    worklist_path = out_path = map_path = None
+    worklist_path = out_path = map_path = agent_dir = None
     verdicts: list[str] = []
     note = ""
     note_file: str | None = None
@@ -379,7 +467,13 @@ def main(argv: list[str] | None = None) -> int:
     i = 0
     while i < len(rest):
         a = rest[i]
-        if a == "--json":
+        if a == "--agent-transcripts":
+            i += 1
+            if i >= len(rest):
+                print("ERROR: --agent-transcripts needs a directory", file=sys.stderr)
+                return 2
+            agent_dir = rest[i]
+        elif a == "--json":
             as_json = True
         elif a == "--partial":
             partial = True
@@ -405,6 +499,29 @@ def main(argv: list[str] | None = None) -> int:
         else:
             return subverb_help.usage_error(USAGE, verb, f"unknown option(s): {a}")
         i += 1
+    if verb == "lint":
+        # LINT NEEDS ONLY THE VERDICTS. Requiring a worklist and a map here would put it at the end
+        # of the build again, which is the whole thing it exists to move earlier.
+        if not verdicts:
+            print("ERROR: grounding lint needs at least one --verdicts <file>", file=sys.stderr)
+            return 2
+        lint = lint_verdicts(verdicts, Path(agent_dir) if agent_dir else None)
+        problems = lint.problems
+        for n in lint.notes:
+            print(n, file=sys.stderr)
+        if problems:
+            print(f"VERDICTS FAILED — {len(problems)} problem(s)", file=sys.stderr)
+            for pr in problems:
+                print(f"  - {pr}", file=sys.stderr)
+            print("Fix these before `grounding write`; it refuses the same shapes at the END of "
+                  "the build, where the skeptic that produced them is a hundred turns gone.",
+                  file=sys.stderr)
+            return 1
+        print(f"VERDICTS OK — {len(verdicts)} file(s) well-formed"
+              + ("" if agent_dir else "; pass --agent-transcripts <dir> to also check that every "
+                                      "note claiming a read is backed by the agent's transcript"))
+        return 0
+
     if not worklist_path or not verdicts:
         print(f"ERROR: --worklist and at least one --verdicts are required\n\n{USAGE}",
               file=sys.stderr)
