@@ -343,8 +343,15 @@ def format_report(worklist_claims: list[str], grounding_rows: list[dict],
 
 
 def _worklist_claims(path: Path) -> list[str]:
+    """Claims from a worklist file, in either shape it legitimately arrives in.
+
+    A BARE LIST is what `coyodex audit --json | jq .worklist` produces, and it is the obvious way
+    to hand this command its input. The list case was already intended — the `isinstance` test was
+    written — but it sat inside the default argument of `.get()`, so reaching it required the
+    attribute access that had already raised. The guard could never run, and the one input shape it
+    existed for was the one that crashed with a traceback."""
     payload = json.loads(path.read_text(encoding="utf-8"))
-    items = payload.get("worklist", payload if isinstance(payload, list) else [])
+    items = payload if isinstance(payload, list) else payload.get("worklist", [])
     return [str(i.get("claim", "")) for i in items if isinstance(i, dict)]
 
 

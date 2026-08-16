@@ -441,3 +441,25 @@ def test_keep_note_and_note_file_together_are_refused(capsys):
         assert main(["write", "--worklist", wl, "--verdicts", vd, "--out",
                      str(Path(td) / "g.json"), "--keep-note", "--note-file", str(nf)]) == 2
         assert "Pick one" in capsys.readouterr().err
+
+
+def test_a_worklist_given_as_a_bare_list_is_read_not_crashed_on():
+    """`coyodex audit --json | jq .worklist` yields a BARE LIST, which is the obvious way to hand
+    this command its input — and it crashed with an AttributeError traceback.
+
+    The list case was already intended: the `isinstance` test existed. It sat inside the default
+    argument of `.get()`, so reaching it required the very attribute access that had already
+    raised. A guard in an unreachable position is not a guard, and the one input shape it was
+    written for was the one that failed."""
+    import json, tempfile, os
+    from coyodex.grounding import _worklist_claims
+    from pathlib import Path
+    rows = [{"claim": "C1 calls C2", "anchor": "a.py:1"}, {"claim": "C2 writes E1"}]
+    with tempfile.TemporaryDirectory() as d:
+        bare = Path(d) / "bare.json"
+        bare.write_text(json.dumps(rows))
+        wrapped = Path(d) / "wrapped.json"
+        wrapped.write_text(json.dumps({"worklist": rows}))
+        assert _worklist_claims(bare) == ["C1 calls C2", "C2 writes E1"]
+        assert _worklist_claims(wrapped) == _worklist_claims(bare), \
+            "both shapes must read identically — the wrapper is presentation, not meaning"
