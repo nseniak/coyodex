@@ -29,19 +29,30 @@ from coyodex import balance_lib
 from coyodex.model import ModelError, ProjectModel, load_model
 
 
-def _fanout_rows(m: ProjectModel) -> list[tuple[str, str, int, str]]:
-    """(diagram id, name, fan-out, flag) for every S-forest diagram, root first."""
-    children = balance_lib.subsystem_children(m)
-    names = {s.id: s.name for s in m.subsystems}
+def _fanout_rows(m: ProjectModel, forest: str = "S") -> list[tuple[str, str, int, str]]:
+    """(diagram id, name, fan-out, flag) for every diagram in a forest, root first.
+
+    `forest="SD"` walks the DOMAIN forest — subdomains over entities — which is the same shape and
+    was simply never rendered. `validate` has always advised on subdomain fan-out, in a message
+    ending "(`coyodex balance` proposes splits)", and `balance` reported nothing about subdomains
+    at all: the advisory pointed the reader at a tool that could not answer it.
+    """
+    if forest == "SD":
+        children = balance_lib.subdomain_children(m)
+        groups, leaves = m.subdomains, m.entities
+    else:
+        children = balance_lib.subsystem_children(m)
+        groups, leaves = m.subsystems, m.components
+    names = {g.id: g.name for g in groups}
     rows: list[tuple[str, str, int, str]] = []
-    order: list[str | None] = [None] + [s.id for s in m.subsystems]
+    order: list[str | None] = [None] + [g.id for g in groups]
     for sid in order:
         kids = children.get(sid, [])
         n = len(kids)
         homog = balance_lib.is_homogeneous(m, kids)
         if sid is None:
             flag = ("SPARSE" if n < balance_lib.FANOUT_LO
-                    and len(m.components) >= balance_lib.SUBSYSTEMS_RECOMMENDED_ABOVE else
+                    and len(leaves) >= balance_lib.SUBSYSTEMS_RECOMMENDED_ABOVE else
                     "DENSE" if n > balance_lib.FANOUT_HARD_HI and not (
                         homog and n <= balance_lib.FANOUT_HOMOG_HI) else
                     "soft" if n > balance_lib.FANOUT_SOFT_HI else "ok")
@@ -143,6 +154,20 @@ def _report(m: ProjectModel) -> str:
     for sid, name, fan, flag in rows:
         marker = "" if flag in ("ok", "empty") else f"   ← {flag}"
         out.append(f"  {sid:>5}  {fan:>3}  {name}{marker}")
+
+    # THE DOMAIN FOREST, same table. `validate` advises on subdomain fan-out and ends that advisory
+    # with "(`coyodex balance` proposes splits)" — which was a promise this command could not keep,
+    # because it only ever rendered the subsystem forest.
+    sd_rows = _fanout_rows(m, "SD") if m.subdomains else []
+    interesting = [r for r in sd_rows if r[3] not in ("ok", "empty")]
+    if sd_rows:
+        out.append("")
+        out.append(f"Per-subdomain fan-out over {len(m.entities)} entit(y/ies) (target 5±2):")
+        for sid, name, fan, flag in sd_rows:
+            marker = "" if flag in ("ok", "empty") else f"   ← {flag}"
+            out.append(f"  {sid:>5}  {fan:>3}  {name}{marker}")
+        if not interesting:
+            out.append("  every domain diagram is inside the band — nothing to split.")
 
     pairs = balance_lib.cc_pairs(m)
     if m.subsystems and pairs:

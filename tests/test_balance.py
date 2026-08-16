@@ -517,3 +517,35 @@ def test_the_seam_list_is_stable_across_processes():
             seam = [l for l in out.stdout.splitlines() if "↔" in l]
             seen.add(tuple(seam))
         assert len(seen) == 1, f"balance is not reproducible across hash seeds: {len(seen)} distinct outputs"
+
+
+def test_the_domain_forest_gets_its_own_fanout_table():
+    """`validate` advises on subdomain fan-out and ends the advisory with "(`coyodex balance`
+    proposes splits)". `balance` rendered only the subsystem forest, so that sentence pointed the
+    reader at a tool that could not answer it — and on a live map the four dense domain diagrams
+    (13, 23, 22 and 27 children) were filtered out of the build's view and never addressed."""
+    from coyodex import balance
+    from coyodex.model import Entity, Group
+    m = make_subsystem_model({"S1": 5, "S2": 5})
+    m.subdomains = [Group(id="SD1", name="Wide"), Group(id="SD2", name="Narrow")]
+    # Spread across directories on purpose: a same-directory family is HOMOGENEOUS and the tool
+    # exempts it from the density flag, correctly. A test that missed that would be asserting the
+    # exemption is broken rather than that the table works.
+    for i in range(16):
+        m.entities.append(Entity(id=f"E{i}", name=f"Ent{i}", source=f"pkg{i}/x.py:1",
+                                 meaning="m", subdomain="SD1" if i < 14 else "SD2",
+                                 store={"dep": "D1", "container": f"c{i}", "mode": "collection"}))
+    text = balance._report(m)
+    assert "Per-subdomain fan-out" in text, "the domain forest must get a table"
+    sd_line = next(l for l in text.splitlines() if l.strip().startswith("SD1"))
+    assert "14" in sd_line and "DENSE" in sd_line, sd_line
+    assert any(l.strip().startswith("SD2") for l in text.splitlines()), \
+        "every subdomain gets a row, not only the flagged ones"
+
+
+def test_a_map_with_no_subdomains_gets_no_domain_table():
+    """Silence, not an empty heading — most maps of small repos have no domain forest at all."""
+    from coyodex import balance
+    m = make_subsystem_model({"S1": 5, "S2": 5})
+    m.subdomains = []
+    assert "Per-subdomain fan-out" not in balance._report(m)
