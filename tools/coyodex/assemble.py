@@ -57,7 +57,8 @@ from coyodex.validate_model import rule_identity, unbacked_entity_steps
 # it is written by the Phase-4 reconcile as its own fragment, and omitting it meant `assemble`
 # silently dropped the field on the only code path that writes a map — so the coverage record could
 # never survive to the committed model, and `validate` then reported the map as never grounded.
-_SINGLETONS = ("title", "goal", "commit", "committed", "built", "tests_note", "grounding")
+_SINGLETONS = ("title", "goal", "commit", "committed", "built", "tool_commit",
+               "tool_committed", "tests_note", "grounding")
 
 # Phase-4 verdicts files ({"grounding": [...]}) sometimes land in build-fragments/ and get caught by
 # a `*.json` glob — they are NOT fragments. Recognised so `assemble` skips them with a note instead
@@ -954,6 +955,8 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
     from coyodex.views import model_to_markdown
 
+    _stamp_tool_build(model)
+
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "project-map.json").write_text(to_canonical_json(model), encoding="utf-8")
     (out_dir / "project-map.md").write_text(model_to_markdown(model), encoding="utf-8")
@@ -1043,6 +1046,26 @@ def _assemble_digest(model: ProjectModel, stats: dict[str, int], rec_stats: dict
     parts.append("ops: " + ("; ".join(ops) if ops else "none"))
     return " | ".join(parts)
 
+
+
+def _stamp_tool_build(model: ProjectModel) -> None:
+    """Record WHICH coyodex produced this map, beside the analysed repo's own commit.
+
+    A map is only comparable against another when you know the tool that made each. `compare`
+    once reported REGRESSED for a map that was simply newer: auth surfaces had moved from their
+    own table into business rules — a documented breaking change with no migration — and nothing in
+    either map said which side of it that map was built on. The same blindness makes a retrospective
+    quote a tool bug that was fixed hours earlier.
+
+    Best-effort: a coyodex installed outside a git clone has no commit to report, and a map that
+    predates this stamp carries nothing. Both read as unknown, never as equal.
+    """
+    from coyodex.provenance import git_value
+    home = Path(__file__).resolve().parents[2]
+    if not (home / ".git").exists():
+        return
+    model.tool_commit = git_value(home, "rev-parse", "--short", "HEAD")
+    model.tool_committed = git_value(home, "log", "-1", "--format=%cd", "--date=short")
 
 def _unconsumed_fragment_notes(out_dir: Path, consumed: list[Path]) -> list[str]:
     """Warn about fragments sitting in `<out>/build-fragments/` that were NOT passed to assemble — a

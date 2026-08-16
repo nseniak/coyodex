@@ -174,7 +174,7 @@ def members_of(m: ProjectModel, gid: str) -> list[dict[str, object]]:
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────
 
-_USAGE = """usage: coyodex dump [<project-map.json>]
+_USAGE = """usage: coyodex dump [<project-map.json> | --map <project-map.json>]
                     [--id <ID> | --record <ID> | --edges <ID> | --members <Sn|SDn|CAPn|BLKn>
                      | --legend | --counts]
 
@@ -187,6 +187,10 @@ Emit the parsed model as JSON — whole (no flag), or one FIXED slice:
   --legend        every element as id · name · kind · parent · source — the shared id universe a
                   fan-out needs (builds kept hand-writing this walk and handing it to sub-agents)
   --counts        how many rows each array holds — the whole inventory, not assemble's C/D/E subset
+The map is positional, and `--map <path>` is accepted as the same thing: its siblings disagree
+about which spelling they take, and a contract handed to 13 sub-agents told every one of them to
+write `dump --map ...`, which used to exit 2 on stderr — read through a `2>/dev/null` as "this id
+has no record".
 Reads an assembled map OR a build FRAGMENT, so it works during Phases 1-3 as well as after
 assembly (the help never said so, and a build spent a turn on `dump --help` finding out).
 Read-only; complements reading the map, never replaces the whole-map read."""
@@ -214,6 +218,12 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"ERROR: {a} needs an element ID", file=sys.stderr)
                 return 2
             slices.append((a, argv[i]))
+        elif a == "--map":
+            i += 1
+            if i >= len(argv):
+                print("ERROR: --map needs a path", file=sys.stderr)
+                return 2
+            positional.append(argv[i])
         elif a.startswith("-"):
             print(f"ERROR: unknown option '{a}'\n{_USAGE}", file=sys.stderr)
             return 2
@@ -223,6 +233,10 @@ def main(argv: list[str] | None = None) -> int:
     if len(slices) > 1:
         print("ERROR: give at most ONE slice flag "
               "(--id/--record/--edges/--members/--legend/--counts)", file=sys.stderr)
+        return 2
+    if len(positional) > 1:
+        print(f"ERROR: give ONE map path, got {len(positional)}: {', '.join(positional)}",
+              file=sys.stderr)
         return 2
     path = Path(positional[0] if positional else ".coyodex/project-map.json")
     if not path.exists():

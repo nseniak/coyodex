@@ -566,6 +566,11 @@ class ProjectModel:
     commit: str | None = None
     committed: str | None = None
     built: str | None = None
+    #: The coyodex build that produced this map — NOT the analysed repo's commit above. Two maps of
+    #: one repo are only comparable when read against the tool that made each: a breaking schema
+    #: change once made `compare` report REGRESSED for a map that was simply newer.
+    tool_commit: str | None = None
+    tool_committed: str | None = None
     roles: list[Role] = field(default_factory=list)
     glossary: list[GlossaryRow] = field(default_factory=list)
     capabilities: list[Group] = field(default_factory=list)  # the use-case forest — the container

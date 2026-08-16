@@ -271,6 +271,11 @@ FIELD_META: dict[tuple[str, str], dict] = {
     ("ProjectModel", "format"): {"const": FORMAT},
     ("ProjectModel", "commit"): {"description": "short commit sha the map was built at."},
     ("ProjectModel", "committed"): {"description": "YYYY-MM-DD."},
+    ("ProjectModel", "tool_commit"): {
+        "description": "short commit sha of the COYODEX build that produced this map — not the "
+                       "analysed repo's. Two maps are only comparable against the tools that made "
+                       "them; absent on maps built before this was stamped."},
+    ("ProjectModel", "tool_committed"): {"description": "YYYY-MM-DD."},
     ("ProjectModel", "built"): {"description": "YYYY-MM-DD HH:MM."},
 }
 

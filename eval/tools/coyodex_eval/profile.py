@@ -146,6 +146,15 @@ class MapProfile:
     #                                            stamps: counting only rules where EVERY site fails
     #                                            under-reports precisely the partly-grounded rule,
     #                                            which is the interesting one.
+    # ── provenance of the TOOL, not the analysed repo ───────────────────────────────────────────
+    #: Which coyodex build produced the map. Not a gate and not a quality signal — context, so a
+    #: comparison across a tool change is READ as one. A comparison once reported REGRESSED for a
+    #: map that was simply newer, across a documented breaking change with no migration, and
+    #: nothing in either profile said the two maps came from different tools. `None` on any map
+    #: built before the stamp existed, which reads as unknown, never as equal.
+    tool_commit: str | None = None
+    tool_committed: str | None = None
+
     # ── deployment linkage ──────────────────────────────────────────────────────────────────────
     # A Deployment view is only a view if components point at units. A live rebuild kept all eight
     # units, dropped the two components that owned the nginx and vector files, and filled `runs_in`
@@ -301,6 +310,8 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
             hosted[u] = members
 
     return MapProfile(
+        tool_commit=m.tool_commit,
+        tool_committed=m.tool_committed,
         deployment_units=len(unit_names),
         deployment_units_linked=sum(1 for u in unit_names if u in claimed),
         deployment_distinct_hosted_sets=len(set(hosted.values())),

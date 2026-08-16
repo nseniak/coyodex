@@ -576,7 +576,7 @@ def format_report(report: Report) -> str:
                      f" their tokens are counted, their cost is NOT in the total")
     if len(report.models) > 1:
         lines.append("  models: " + ", ".join(f"{m} x{n}" for m, n in
-                                              sorted(report.models.items(), key=lambda kv: -kv[1])))
+                                              sorted(report.models.items(), key=lambda kv: (-kv[1], kv[0]))))
 
     lines.append("")
     lines.append("STRUCTURE")

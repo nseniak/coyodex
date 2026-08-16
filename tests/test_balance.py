@@ -482,3 +482,38 @@ def test_an_empty_subsystem_is_described_as_empty_not_as_sparse():
     text = balance._report(m)
     assert "1 declared with no children at all: S9" in text
     assert "S9" not in next((l for l in text.splitlines() if "below the band" in l), "")
+
+
+def test_the_seam_list_is_stable_across_processes():
+    """The busiest-seam list sorted on weight alone, so equal-weight seams arrived in the iteration
+    order of a SET of frozensets — and Python randomises string hashing per process. Five identical
+    runs of `coyodex balance` on one map printed three different top-6 lists.
+
+    That makes a gate a build reads and quotes non-reproducible, and it puts spurious churn into
+    every before/after map comparison, which is what the eval harness is for. Sorting on
+    (-weight, name) settles ties by name instead.
+
+    Run in SUBPROCESSES on purpose: within one process the hash seed is fixed, so an in-process
+    loop cannot catch this class at all.
+    """
+    import subprocess, sys, json, tempfile, os
+    from coyodex import balance
+    m = make_subsystem_model({"S1": 4, "S2": 4, "S3": 4, "S4": 4})
+    # Equal-weight cross-subsystem seams are what tie; build several by hand.
+    from coyodex.model import to_canonical_json
+    members = {s.id: [c.id for c in m.components if c.subsystem == s.id] for s in m.subsystems}
+    for a, b in (("S1", "S2"), ("S1", "S3"), ("S2", "S3"), ("S1", "S4"), ("S2", "S4"), ("S3", "S4")):
+        m.edges.append(Edge(src=members[a][0], dst=members[b][0], verb="calls"))
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "m.json")
+        with open(p, "w") as fh:
+            fh.write(to_canonical_json(m))
+        seen = set()
+        for seed in ("0", "1", "2", "3", "4"):
+            env = {**os.environ, "PYTHONHASHSEED": seed}
+            out = subprocess.run([sys.executable, "-c",
+                                  "import sys;from coyodex.balance import main;sys.exit(main([sys.argv[1]]))",
+                                  p], capture_output=True, text=True, env=env)
+            seam = [l for l in out.stdout.splitlines() if "↔" in l]
+            seen.add(tuple(seam))
+        assert len(seen) == 1, f"balance is not reproducible across hash seeds: {len(seen)} distinct outputs"

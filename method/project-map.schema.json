@@ -36,6 +36,20 @@
       ],
       "description": "YYYY-MM-DD HH:MM."
     },
+    "tool_commit": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "short commit sha of the COYODEX build that produced this map \u2014 not the analysed repo's. Two maps are only comparable against the tools that made them; absent on maps built before this was stamped."
+    },
+    "tool_committed": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "description": "YYYY-MM-DD."
+    },
     "roles": {
       "type": "array",
       "items": {

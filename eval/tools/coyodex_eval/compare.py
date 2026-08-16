@@ -180,6 +180,9 @@ class DeltaReport:
     notes: list[str]              # informational (skipped gates, drifted names) — never gating
     judge_bands: list[JudgeBand] = field(default_factory=list)  # empty unless judge reports were given
     granularity: GranularityResult | None = None  # None when no profile carries E (scored without --repo)
+    tool_delta: str | None = None  # set when the two maps were built by different coyodex builds.
+    # Its own field, not a note: notes print last, and this one changes how everything above it is
+    # read — a delta that spans a tool change is not evidence about the method.
 
     def to_json(self) -> str:
         return json.dumps(asdict(self), indent=2, sort_keys=True)
@@ -249,6 +252,15 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
     t = thresholds or Thresholds()
     gates: list[GateResult] = []
     notes: list[str] = []
+    tool_delta: str | None = None
+    if baseline.tool_commit != candidate.tool_commit:
+        # A tool change moves what a map can even CONTAIN — one moved auth surfaces between two
+        # storages with no migration — so a delta across it is not a delta in map quality.
+        # Informational, never gating: which side regressed is not knowable from here.
+        def _tool(c: str | None, d: str | None) -> str:
+            return f"{c} ({d})" if c and d else (c or "unknown, built before the stamp existed")
+        tool_delta = (f"baseline {_tool(baseline.tool_commit, baseline.tool_committed)}, "
+                      f"candidate {_tool(candidate.tool_commit, candidate.tool_committed)}")
 
     if t.validate_must_not_regress:
         ok = candidate.validate_problems <= baseline.validate_problems
@@ -461,7 +473,7 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         verdict = DRIFT
     else:
         verdict = PASS
-    return DeltaReport(verdict, gates, bands, notes, jbands, granularity)
+    return DeltaReport(verdict, gates, bands, notes, jbands, granularity, tool_delta)
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────────
@@ -469,6 +481,12 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
 def format_report(report: DeltaReport) -> str:
     # Judge/quality deltas lead; the raw structural counts come last — they are the noisiest signal.
     out = [f"Comparison verdict: {report.verdict}", ""]
+    if report.tool_delta:
+        out.append(f"DIFFERENT COYODEX BUILDS — {report.tool_delta}.")
+        out.append("Every delta below spans a tool change. Rule the tool out before reading one as "
+                   "the method: a breaking change with no migration once made this report say "
+                   "REGRESSED about a map that was simply newer.")
+        out.append("")
     if report.judge_bands:
         out.append("Judge bands (drop vs baseline):")
         for j in report.judge_bands:

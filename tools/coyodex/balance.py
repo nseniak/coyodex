@@ -149,8 +149,11 @@ def _report(m: ProjectModel) -> str:
         top = balance_lib.partition_at(m, "top")
         cov, _q = balance_lib.modularity(pairs, top)
         matrix = balance_lib.inter_group_matrix(pairs, top)
+        # Tie-break on the seam name: the weights come from a Counter over a SET of frozensets,
+        # so equal-weight seams arrive in hash order and PYTHONHASHSEED is randomised per process.
+        # Sorting on weight alone made this gate print a different top-6 on identical runs.
         cross = sorted(((k, v) for k, v in matrix.items() if k[0] != k[1]),
-                       key=lambda kv: -kv[1])
+                       key=lambda kv: (-kv[1], kv[0]))
         out.append("")
         out.append(f"C→C graph: {len(pairs)} pairs across {n} components; top-cut intra-group "
                    f"share {cov:.2f}. (No Q here on purpose — modularity rewards tech-tier cuts; "

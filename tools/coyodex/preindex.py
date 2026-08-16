@@ -541,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
         "files_skipped_ignored": walk.skipped_ignored,
         "ignore_patterns": list(ignore_rep.per_rule) if ignore_rep else [],
         "ignore_patterns_unused": list(ignore_rep.unused) if ignore_rep else [],
-        "languages_seen": dict(sorted(lang_counts.items(), key=lambda kv: -kv[1])),
+        "languages_seen": dict(sorted(lang_counts.items(), key=lambda kv: (-kv[1], kv[0]))),
         "languages_with_symbols": sym_meta["languages_with_symbols"],
         "languages_seen_without_extractor": sym_meta["languages_seen_without_extractor"],
         "symbol_files_parsed": sym_meta["files_parsed"],
