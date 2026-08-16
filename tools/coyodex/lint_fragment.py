@@ -361,7 +361,16 @@ def main(argv: list[str] | None = None) -> int:
     # returned 0 problems looked identical to failing ones, so the agent kept iterating on a
     # fragment that was finished. A verdict a pipe can remove is a verdict that does not exist.
     detail: list[tuple[str, bool]] = []   # (line, to_stderr)
-    say = lambda line, err=True: detail.append((line, err))
+    # COUNTED AS EMITTED, never re-derived from the text. Classifying the buffered lines by string
+    # match (`": warning: " in line`) miscounts whenever a fragment's own free text contains the
+    # marker — a messaging row named `jobs: warning: retries` produced "0 problem(s), 1 advisory
+    # warning(s)" directly above "LINT FAILED: fix the rows above", telling the agent there was
+    # nothing to fix. Any problem message quoting a name, statement or path is in that class.
+    tally = {"problem": 0, "warning": 0}
+    def say(line: str, err: bool = True, kind: str | None = None) -> None:
+        detail.append((line, err))
+        if kind:
+            tally[kind] += 1
     for p in frags:
         # "cannot read it" and "it breaks a rule" are different answers, and they used to print the
         # same verdict: a wrong path produced `ERROR: … not found` followed by "LINT FAILED: fix the
@@ -381,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             m = load_fragment(text, p.name)
         except ModelError as e:
-            say(f"{p.name}: SCHEMA — {e}")
+            say(f"{p.name}: SCHEMA — {e}", kind="problem")
             clean = False
             continue
         problems = lint_fragment_problems(m, repo_root, known_ids)
@@ -390,15 +399,13 @@ def main(argv: list[str] | None = None) -> int:
         if problems:
             clean = False
             for pr in problems:
-                say(f"{p.name}: {pr}")
+                say(f"{p.name}: {pr}", kind="problem")
         else:
             say(f"{p.name}: OK", False)
         # advisory warnings never fail the lint — heuristic nudges the agent can act on or ignore
         for w in lint_fragment_warnings(m) + _budget_warnings(m, expect):
-            say(f"{p.name}: warning: {w}")
-    n_warn = sum(1 for line, _ in detail if ": warning: " in line)
-    n_prob = sum(1 for line, err in detail if err and ": warning: " not in line
-                 and not line.startswith("ERROR: "))
+            say(f"{p.name}: warning: {w}", kind="warning")
+    n_prob, n_warn = tally["problem"], tally["warning"]
     if unreadable:
         verdict, code = "LINT DID NOT RUN", 2
     elif not clean:

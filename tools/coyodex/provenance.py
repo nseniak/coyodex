@@ -113,9 +113,15 @@ class Provenance:
 
 def git_value(repo: Path, *args: str) -> str | None:
     try:
+        # TIMEOUT, and a wide except: this runs inside `assemble`, immediately before the map is
+        # written. A `git` that blocks — a credential prompt, a stalled filesystem, a hook — used
+        # to lose the whole assembly rather than the one optional value it was fetching. No git
+        # answer is ever worth more than the work already done.
         out = subprocess.run(["git", "-C", str(repo), *args],
-                             capture_output=True, text=True, check=True)
-    except (subprocess.CalledProcessError, FileNotFoundError):
+                             capture_output=True, text=True, check=True, timeout=5,
+                             stdin=subprocess.DEVNULL,
+                             env={**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_OPTIONAL_LOCKS": "0"})
+    except (subprocess.SubprocessError, OSError):
         return None
     return out.stdout.strip() or None
 

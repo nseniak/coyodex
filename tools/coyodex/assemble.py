@@ -1063,8 +1063,14 @@ def _stamp_tool_build(model: ProjectModel) -> None:
     from coyodex.provenance import git_value
     home = Path(__file__).resolve().parents[2]
     if not (home / ".git").exists():
+        # An ordinary install puts the package under `site-packages/`, so there is no clone and
+        # nothing honest to record. Left as None, which `compare` reports as unknown.
         return
-    model.tool_commit = git_value(home, "rev-parse", "--short", "HEAD")
+    # `--dirty` because a development clone is the NORMAL case, and without it a map built from
+    # modified working-tree code is stamped with a commit that does not contain that code. That is
+    # a false provenance record, and a false one is worse than none: the whole point is to tell a
+    # reader which tool produced the map.
+    model.tool_commit = git_value(home, "describe", "--always", "--dirty", "--abbrev=7")
     model.tool_committed = git_value(home, "log", "-1", "--format=%cd", "--date=short")
 
 def _unconsumed_fragment_notes(out_dir: Path, consumed: list[Path]) -> list[str]:

@@ -478,3 +478,32 @@ def test_the_disposition_table_keys_an_audit_advisory_on_the_pair_not_the_family
         by_msg = {a.split(":", 1)[0]: d for d, _h, a in advisory_disposition(Path(p), rep)}
     assert by_msg["flow-title"] == "UNRECORDED", "an unrelated check's record must not count"
     assert by_msg["actor-attribution"] == "recorded"
+
+
+def test_the_table_never_says_recorded_without_naming_the_key_that_records_it():
+    """The first draft defaulted to `recorded` whenever a heading existed and the advisory carried
+    no id — so it reported "recorded" for an advisory whose own text reads "and no granularity
+    record". That is the exact failure the table exists to catch, committed by the table.
+
+    And a DISCLOSURE — an advisory that reports what a record silenced — is not an advisory asking
+    to be recorded. Marking those `recorded` filed the whole "a recorded gap is still a gap" family
+    under "handled", cancelling the disclosure that had just been added to raise it."""
+    from coyodex.finalize import advisory_disposition, FinalizeReport, Leg, RAN
+    import json, tempfile, os
+    m = {"format": "coyodex-map", "title": "t", "goal": "g",
+         "extras": [{"heading": "Balance exceptions", "body": "granularity: deliberate.\nUC2: fine."}]}
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "m.json")
+        with open(p, "w") as fh:
+            json.dump(m, fh)
+        rep = FinalizeReport(
+            map_path=p, map_sha256="x", verdict="ADVISORIES",
+            legs=[Leg("validate", RAN, advisory=[
+                "44 `access: true` rule(s) and no granularity record — record "
+                "'security-granularity: <why>' under a 'Balance exceptions' extras heading",
+                "66 component(s) with unclaimed surfaces are suppressed by a recorded "
+                "'Unclaimed surfaces' line and counted as CLAIMED because of it: C1, C2"])],
+            advisory_total=2, blocking_total=0)
+        got = [d for d, _h, _a in advisory_disposition(Path(p), rep)]
+    assert got[0] != "recorded", "an unrecorded advisory must never be filed as recorded"
+    assert got[1] == "disclosure", "a disclosure of records is not itself a recordable advisory"

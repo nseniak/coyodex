@@ -433,18 +433,36 @@ def _grounding_line(map_path: Path) -> str:
 _ADVISORY_IDS = re.compile(r"\b((?:UC|CAP|HP|SF|BLK|BR|SD|S|C|D|E|R)\d+)\b")
 
 
+#: An advisory that REPORTS suppression rather than asking for it. These name a heading and quote
+#: the very keys recorded under it, so any "is this recorded?" test answers yes — and the answer is
+#: meaningless: they exist BECAUSE something was recorded. Marking them `recorded` filed the whole
+#: "a recorded gap is still a gap" family under "handled", which cancelled the disclosure outright.
+_DISCLOSURE = re.compile(
+    r"suppressed by (?:a )?recorded|counted as (?:CLAIMED|SWEPT)|and NOT re-nudged|"
+    r"is NOT re-reported above", re.I)
+
+
 def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[str, str, str]]:
     """(disposition, heading-or-'', advisory) for every advisory the gates raised.
 
     `finalize` already SAYS "each one is either fixed or recorded under the extras heading its
     message names", and then checked nothing — so nine advisories shipped on one map neither fixed
     nor recorded, and no transcript could show it because every read of the list had been narrowed
-    by a grep. Both halves are here already: the advisory list, and the map. Comparing them needs
-    no transcript and no model.
+    by a grep. Both halves are here already: the advisory list, and the map.
 
-    The heading is matched against the CLOSED registry in `records.KNOWN_HEADINGS`, never parsed out
-    of prose — the message names one of a known set or it names none. An advisory that names no
-    heading is `carried`: it has no escape by design and can only be fixed."""
+    Four dispositions, and the design rule is that **the table never says `recorded` unless it can
+    name the key that records it**. The first draft did the opposite — it defaulted to `recorded`
+    whenever a heading existed and the advisory carried no id — and so reported "recorded" for an
+    advisory whose own text reads "and no granularity record". That is the exact failure this
+    function exists to catch, committed by the function itself.
+
+    - `recorded` — the key this advisory is about is present under the heading it names.
+    - `UNRECORDED` — the key is absent, and both halves of the key are known, so absence is a fact.
+    - `UNSURE` — the heading keys on free text (a path, a bucket name) and this advisory carries no
+      id, so the pairing cannot be decided here. Say so; do not guess either way.
+    - `disclosure` — the advisory reports what a record silenced. Asking whether it is recorded is
+      a category error.
+    - `carried (no escape)` — names no heading; can only be fixed."""
     from coyodex import records
     from coyodex.assemble import load_map_or_fragment
     try:
@@ -456,35 +474,35 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
         for a in leg.advisory:
             low = a.lower()
             heading = next((h for h in records.KNOWN_HEADINGS if h.lower() in low), "")
+            if _DISCLOSURE.search(a):
+                out.append(("disclosure", heading, a))
+                continue
             if not heading:
                 out.append(("carried (no escape)", "", a))
                 continue
+            ids = set(_ADVISORY_IDS.findall(a))
             if heading.lower() == "audit exceptions":
                 # PAIRS, not ids. Reading every id under this heading marked a `flow-title UC25`
                 # advisory "recorded" on the strength of an unrelated `actor-attribution UC25`
-                # line — the same family-vs-pair error the heading exists to prevent, reproduced
-                # in the tool that reports on it. The check name leads the advisory text.
+                # line — the family-vs-pair error the heading exists to prevent.
                 from coyodex.audit_model import audit_exceptions
                 check = a.split(":", 1)[0].strip().lower()
-                recorded = {eid for c, eid in audit_exceptions(m) if c.lower() == check}
-                ids = set(_ADVISORY_IDS.findall(a))
                 if ids and check.replace("-", "").isalpha():
-                    # Both halves of the key are known, so absence is DEFINITIVE, not unsure.
+                    recorded = {eid for c, eid in audit_exceptions(m) if c.lower() == check}
                     out.append(("recorded" if ids & recorded else "UNRECORDED", heading, a))
-                    continue
-            else:
-                recorded = records.recorded_keys(m, heading)
-            ids = set(_ADVISORY_IDS.findall(a))
-            if ids and recorded and ids & recorded:
+                else:
+                    out.append(("UNSURE", heading, a))
+                continue
+            recorded = records.recorded_keys(m, heading)
+            if not ids:
+                # Free-text key, or an advisory that names none. UNDECIDABLE here — and it must not
+                # fall through to `recorded`, which is how "no granularity record" got filed as
+                # recorded beside a heading holding unrelated lines.
+                out.append(("UNSURE", heading, a))
+            elif ids & recorded:
                 out.append(("recorded", heading, a))
-            elif not records.lines(m, heading):
-                out.append(("UNRECORDED", heading, a))
             else:
-                # The heading exists but nothing in it keys this advisory. Free-text families
-                # (`Sweep debt`, `Bucket vocabulary`) key on a path or a name, not an id, so an
-                # id-less advisory beside a populated heading is reported as UNSURE rather than
-                # accused — the point is to make the operator look, not to be clever.
-                out.append(("recorded" if not ids else "UNSURE", heading, a))
+                out.append(("UNRECORDED", heading, a))
     return out
 
 

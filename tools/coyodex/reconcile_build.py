@@ -184,16 +184,26 @@ def expand(m: ProjectModel, rules: list[dict]) -> tuple[dict, list[str]]:
         "runs_in": {u.unit for u in (m.deployment or [])},
         "entry_points": {ep.id for ep in m.entry_points if ep.id},
     }
+    label = {"runs_in": "deployment unit"}
     for i, r in enumerate(rules):
         for f, space in declared.items():
-            if f not in r or not space:
+            if f not in r:
                 continue
             vals = r[f] if isinstance(r[f], list) else [r[f]]
             missing = [v for v in vals if v not in space]
-            if missing:
-                report.append(f"rules[{i}]: assigns {f}={', '.join(map(str, missing))}, which "
-                              f"nothing declares — the map has no such {f}. `assemble` will REFUSE "
-                              f"this; declare it or fix the value.")
+            if not missing:
+                continue
+            # An EMPTY declared space is the case this check was written for, not a reason to skip.
+            # Groups are declared in the synthesis fragment, so a reconcile over harvest fragments
+            # alone sees every space empty — which is exactly when `assemble` later refuses. The
+            # earlier `not space: continue` disabled the check precisely on the `--fragments` path.
+            # It cannot distinguish "declared nowhere" from "declared in a fragment not passed
+            # here", so it says both.
+            where = ("nothing in this input declares any " + label.get(f, f) + " at all"
+                     if not space else "nothing declares it")
+            report.append(f"rules[{i}]: assigns {f}={', '.join(map(str, missing))} — {where}. "
+                          f"`assemble` REFUSES an undeclared target, so either it is declared in a "
+                          f"fragment not passed here, or this will fail assembly.")
 
     # collapse to the compact `set` shape: one entry per distinct field-value combination
     groups: dict[str, list[str]] = {}
@@ -336,15 +346,23 @@ def main(argv: list[str] | None = None) -> int:
     # re-running the command and grepping it — a live build ran it four times to get there. The
     # summary answers it once; `--only-unmatched` prints just those lines for a rules file being
     # iterated on.
+    # By RULE, not by line: one rule with two bad fields printed two lines and the summary counted
+    # it twice, then called it "matched" as well — a rule that will kill assembly reported as fine.
+    def _rule_ids(pred) -> set[str]:
+        return {l.split(":", 1)[0] for l in report if pred(l)}
+    unmatched_rules = _rule_ids(lambda l: "matched NOTHING" in l)
+    undeclared_rules = _rule_ids(lambda l: "REFUSES an undeclared target" in l)
     unmatched = [l for l in report if "matched NOTHING" in l]
-    undeclared = [l for l in report if "which nothing declares" in l]
+    undeclared = [l for l in report if "REFUSES an undeclared target" in l]
     shown_lines = (unmatched + undeclared) if only_unmatched else report
     for line in shown_lines:
         print(("  " if "→" in line else "  WARN ") + line, file=sys.stderr)
     for line in coverage_report(m, doc):
         print("  WARN " + line, file=sys.stderr)
-    print(f"  SUMMARY: {len(rules)} rule(s) — {len(rules) - len(unmatched)} matched, "
-          f"{len(unmatched)} matched nothing, {len(undeclared)} assign an undeclared target."
+    bad = unmatched_rules | undeclared_rules
+    print(f"  SUMMARY: {len(rules)} rule(s) — {len(rules) - len(bad)} clean, "
+          f"{len(unmatched_rules)} matched nothing, "
+          f"{len(undeclared_rules)} assign an undeclared target."
           + ("" if not (unmatched or undeclared) else
              "  Re-run with --only-unmatched to see just those."), file=sys.stderr)
     total = sum(len(s["ids"]) for s in doc["set"])

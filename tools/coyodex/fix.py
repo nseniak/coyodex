@@ -524,8 +524,15 @@ def dedup_relation(argv: list[str]) -> int:
             if not fp.exists():
                 print(f"ERROR: --drop-file {fp} not found", file=sys.stderr)
                 return 2
-            drops += [ln.strip().removeprefix("--drop").strip()
-                      for ln in fp.read_text(encoding="utf-8").splitlines() if ln.strip()]
+            # The listing VERBATIM — headings, blank lines, trailer and all. The point of the
+            # flag is that you save what the tool printed and hand it back; erroring on the
+            # heading it printed one line earlier puts the caller straight back into grep/sed,
+            # which is the shell fiddling this exists to remove. A token is `En:verb:Em`;
+            # anything that is not one is not a token.
+            for ln in fp.read_text(encoding="utf-8").splitlines():
+                tok = ln.strip().removeprefix("--drop").strip().rstrip("\r")
+                if re.fullmatch(r"E\d+:[^:\s]+:E\d+", tok):
+                    drops.append(tok)
         elif a == "--drop-all":
             drop_all = True
         elif a == "--to-reconcile":
@@ -537,13 +544,17 @@ def dedup_relation(argv: list[str]) -> int:
     if not map_path:
         print("ERROR: --map is required", file=sys.stderr)
         return 2
-    if to_reconcile and not drops:
+    if to_reconcile and not drops and not drop_all:
         # Above the listing branch, not below it: placed after, the listing returned 0 first and the
         # refusal never ran. `dedup-edge` shipped this exact ordering bug — the flag printed a full
         # listing, wrote nothing, and exited 0, which reads as success.
-        print("ERROR: --to-reconcile needs a decision — pass the --drop token(s) to record. On its "
-              "own it would print the listing, write nothing, and exit 0, which reads as success.",
-              file=sys.stderr)
+        #
+        # `--drop-all` IS a decision, so it satisfies this guard. Without that clause the one
+        # combination that makes a 33-token sweep survive the next assemble was impossible, while
+        # the success message told the caller to use `--to-reconcile`.
+        print("ERROR: --to-reconcile needs a decision — pass the --drop token(s) to record, or "
+              "--drop-all for the mechanical same-card ones. On its own it would print the "
+              "listing, write nothing, and exit 0, which reads as success.", file=sys.stderr)
         return 2
     m, _present = _load(Path(map_path))
     if drop_all:
@@ -553,13 +564,26 @@ def dedup_relation(argv: list[str]) -> int:
         # own header calls out ("a wrong drop deletes a real domain fact"). Sweeping those would
         # make the judgement silently, which is worse than the quoting problem this flag solves.
         dupes = _duplicate_relations(m)
-        if dupes.reciprocal:
-            print(f"ERROR: --drop-all covers same-card duplicates only; {len(dupes.reciprocal)} "
-                  f"reciprocal pair(s) need a per-pair decision about which side survives. Pass "
-                  f"those as --drop tokens (or --drop-file), then re-run with --drop-all.",
+        # Only the reciprocals the caller has NOT already decided. The refusal used to fire on any
+        # reciprocal at all — including when the explicit --drop tokens it asks for were sitting
+        # right there in the same command line, which made its own instructions impossible to
+        # follow. A pair is decided when either of its two directions is among the drops.
+        def _pair(tok: str) -> frozenset[str]:
+            parts = tok.split(":")
+            return frozenset(parts[::2]) if len(parts) == 3 else frozenset({tok})
+        decided = {_pair(t) for t in drops}
+        undecided = [t for t in dupes.reciprocal if _pair(t) not in decided]
+        if undecided:
+            print(f"ERROR: --drop-all covers same-card duplicates only; "
+                  f"{len(set(_pair(t) for t in undecided))} reciprocal pair(s) still need a "
+                  f"per-pair decision about which side survives. Pass those as --drop tokens "
+                  f"(or --drop-file) in this same command; --drop-all takes the rest.",
                   file=sys.stderr)
             return 2
-        drops = list(dupes.same_card)
+        # UNION, never assignment: the refusal above tells the caller to resolve reciprocals with
+        # explicit --drop tokens and then re-run with --drop-all, so overwriting silently threw
+        # away the very tokens the message asked for — and exited 0 having ignored them.
+        drops = sorted(set(drops) | set(dupes.same_card))
         if not drops:
             print("dedup-relation: no same-card duplicates to drop.")
             return 0

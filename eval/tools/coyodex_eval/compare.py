@@ -253,7 +253,14 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
     gates: list[GateResult] = []
     notes: list[str] = []
     tool_delta: str | None = None
-    if baseline.tool_commit != candidate.tool_commit:
+    if baseline.tool_commit is None and candidate.tool_commit is None:
+        # UNKNOWN vs UNKNOWN is not equality. Two maps from two different installs both stamp
+        # None, and `!=` alone read that as "same tool" — the one conclusion this field exists to
+        # prevent. Every map built before the stamp existed is in this case.
+        tool_delta = ("neither map records which coyodex built it — both predate the stamp, or "
+                      "both were built by an install outside a clone. They may be from different "
+                      "tools; nothing here can tell")
+    elif baseline.tool_commit != candidate.tool_commit:
         # A tool change moves what a map can even CONTAIN — one moved auth surfaces between two
         # storages with no migration — so a delta across it is not a delta in map quality.
         # Informational, never gating: which side regressed is not knowable from here.
@@ -482,10 +489,10 @@ def format_report(report: DeltaReport) -> str:
     # Judge/quality deltas lead; the raw structural counts come last — they are the noisiest signal.
     out = [f"Comparison verdict: {report.verdict}", ""]
     if report.tool_delta:
-        out.append(f"DIFFERENT COYODEX BUILDS — {report.tool_delta}.")
-        out.append("Every delta below spans a tool change. Rule the tool out before reading one as "
-                   "the method: a breaking change with no migration once made this report say "
-                   "REGRESSED about a map that was simply newer.")
+        out.append(f"COYODEX BUILD — {report.tool_delta}.")
+        out.append("A delta below may belong to the tool rather than the method. Rule the tool out "
+                   "before reading one as the method: a breaking change with no migration once made "
+                   "this report say REGRESSED about a map that was simply newer.")
         out.append("")
     if report.judge_bands:
         out.append("Judge bands (drop vs baseline):")

@@ -393,3 +393,23 @@ def test_lint_catches_a_relation_authored_on_both_cards():
     problems = lint_fragment_problems(m, None, None)
     assert any("declared on both cards" in p for p in problems), (
         f"the reciprocal relation must fail the fragment lint, got: {problems}")
+
+
+def test_the_verdict_counts_are_not_string_matched_out_of_free_text():
+    """The counts were derived by scanning the buffered lines for `": warning: "`. A fragment's own
+    free text can contain that: a messaging row named `jobs: warning: retries` produced
+    "0 problem(s), 1 advisory warning(s)" directly above "LINT FAILED: fix the rows above" — the
+    verdict and the trailer telling the agent opposite things. Counted as emitted instead."""
+    import subprocess, sys, json, tempfile, os
+    frag = {"messaging": [{"name": "jobs: warning: retries", "kind": "queue",
+                           "broker": "NOTADEP", "source": "a.py:1"}]}
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "m.json"), "w") as fh:
+            json.dump(frag, fh)
+        out = subprocess.run(
+            [sys.executable, "-c",
+             "import sys;from coyodex.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
+             "m.json"], capture_output=True, text=True, cwd=d, stdin=subprocess.DEVNULL)
+    verdict = (out.stdout + out.stderr).splitlines()[0]
+    assert verdict.startswith("LINT FAILED"), verdict
+    assert "0 problem(s)" not in verdict, f"a failing lint cannot report zero problems: {verdict}"
