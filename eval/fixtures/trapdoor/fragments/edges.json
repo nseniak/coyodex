@@ -1,0 +1,340 @@
+{
+ "edges": [
+  {
+   "src": "C14",
+   "verb": "routes-to",
+   "dst": "C1",
+   "why": "mounts the three read routes on the read handlers",
+   "where": "src/entrypoints/http.py:37",
+   "no_call_site": false
+  },
+  {
+   "src": "C14",
+   "verb": "routes-to",
+   "dst": "C2",
+   "why": "mounts the three mutating routes on the write handlers",
+   "where": "src/entrypoints/http.py:40",
+   "no_call_site": false
+  },
+  {
+   "src": "C1",
+   "verb": "uses",
+   "dst": "C3",
+   "why": "forwards every read to the ticket service and renders what comes back",
+   "where": "src/api/passthrough_controller.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C2",
+   "verb": "uses",
+   "dst": "C3",
+   "why": "forwards every mutation to the ticket service",
+   "where": "src/api/record_controller.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C1",
+   "verb": "enforces",
+   "dst": "C5",
+   "why": "authorises each read against the caller's tenant before touching the service",
+   "where": "src/api/passthrough_controller.py:29",
+   "no_call_site": false
+  },
+  {
+   "src": "C2",
+   "verb": "enforces",
+   "dst": "C5",
+   "why": "authorises each mutation against scope, tenant and lifecycle state",
+   "where": "src/api/record_controller.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C3",
+   "verb": "uses",
+   "dst": "C4",
+   "why": "loads and stores every ticket, comment and lock through the repository",
+   "where": "src/services/ticket_service.py:24",
+   "no_call_site": false
+  },
+  {
+   "src": "C3",
+   "verb": "uses",
+   "dst": "C6",
+   "why": "checks each requested move against the declared transition table",
+   "where": "src/services/ticket_service.py:43",
+   "no_call_site": false
+  },
+  {
+   "src": "C3",
+   "verb": "uses",
+   "dst": "C8",
+   "why": "announces state changes on the event channel after a successful transition",
+   "where": "src/services/ticket_service.py:46",
+   "no_call_site": false
+  },
+  {
+   "src": "C3",
+   "verb": "reads",
+   "dst": "E1",
+   "why": "filters tickets by tenant and state before returning them",
+   "where": "src/services/ticket_service.py:25",
+   "no_call_site": false
+  },
+  {
+   "src": "C3",
+   "verb": "writes",
+   "dst": "E2",
+   "why": "appends new comments to a ticket's thread",
+   "where": "src/services/ticket_service.py:50",
+   "no_call_site": false
+  },
+  {
+   "src": "C3",
+   "verb": "writes",
+   "dst": "E5",
+   "why": "records the holder of a claimed advisory lock",
+   "where": "src/services/ticket_service.py:56",
+   "no_call_site": false
+  },
+  {
+   "src": "C4",
+   "verb": "persists",
+   "dst": "E1",
+   "why": "upserts the ticket document, which is the system of record for the ticket",
+   "where": "src/store/ticket_repo.py:46",
+   "no_call_site": false
+  },
+  {
+   "src": "C4",
+   "verb": "persists",
+   "dst": "E2",
+   "why": "writes the embedded comment thread as part of the ticket document",
+   "where": "src/store/ticket_repo.py:46",
+   "no_call_site": false
+  },
+  {
+   "src": "C4",
+   "verb": "persists",
+   "dst": "E3",
+   "why": "writes the embedded attachment pointers as part of the ticket document",
+   "where": "src/store/ticket_repo.py:46",
+   "no_call_site": false
+  },
+  {
+   "src": "C4",
+   "verb": "persists",
+   "dst": "E5",
+   "why": "upserts the advisory lock rows",
+   "where": "src/store/ticket_repo.py:58",
+   "no_call_site": false
+  },
+  {
+   "src": "C4",
+   "verb": "writes",
+   "dst": "D1",
+   "why": "upserts ticket and lock documents into the document store",
+   "where": "src/store/ticket_repo.py:46",
+   "no_call_site": false
+  },
+  {
+   "src": "C4",
+   "verb": "writes",
+   "dst": "D3",
+   "why": "re-indexes each ticket's searchable fields into the search index",
+   "where": "src/store/ticket_repo.py:50",
+   "no_call_site": false
+  },
+  {
+   "src": "C8",
+   "verb": "emits",
+   "dst": "D2",
+   "why": "publishes the three named channels through the injected transport",
+   "where": "src/messaging/publisher.py:41",
+   "no_call_site": false
+  },
+  {
+   "src": "C9",
+   "verb": "listens-to",
+   "dst": "D2",
+   "why": "drains the comment channel in a continuous loop",
+   "where": "src/messaging/consumer.py:32",
+   "no_call_site": false
+  },
+  {
+   "src": "C11",
+   "verb": "extends",
+   "dst": "C10",
+   "why": "implements the template's work step as a resolved-ticket rollup",
+   "where": "src/base/report_worker.py:15",
+   "no_call_site": false
+  },
+  {
+   "src": "C11",
+   "verb": "uses",
+   "dst": "C4",
+   "why": "loads each tenant's tickets to build the rollup",
+   "where": "src/base/report_worker.py:31",
+   "no_call_site": false
+  },
+  {
+   "src": "C11",
+   "verb": "reads",
+   "dst": "E1",
+   "why": "counts resolved tickets per tenant",
+   "where": "src/base/report_worker.py:36",
+   "no_call_site": false
+  },
+  {
+   "src": "C15",
+   "verb": "uses",
+   "dst": "C9",
+   "why": "builds the consumer the worker process drains its channel with",
+   "where": "src/entrypoints/worker.py:15",
+   "no_call_site": false
+  },
+  {
+   "src": "C15",
+   "verb": "uses",
+   "dst": "C11",
+   "why": "supervises the report worker's passes and stops the consumer when it fails repeatedly",
+   "where": "src/entrypoints/worker.py:27",
+   "no_call_site": false
+  },
+  {
+   "src": "C7",
+   "verb": "uses",
+   "dst": "C11",
+   "why": "the rollup pass consults the breach budget before paging",
+   "where": null,
+   "no_call_site": true
+  },
+  {
+   "src": "C16",
+   "verb": "emits",
+   "dst": "D4",
+   "why": "queues one analytics event per Slack reaction",
+   "where": "src/plugins/p01/handler.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C17",
+   "verb": "emits",
+   "dst": "D4",
+   "why": "queues one analytics event per Teams reaction",
+   "where": "src/plugins/p02/handler.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C18",
+   "verb": "emits",
+   "dst": "D4",
+   "why": "queues one analytics event per audit reaction",
+   "where": "src/plugins/p03/handler.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C19",
+   "verb": "emits",
+   "dst": "D4",
+   "why": "queues one analytics event per email-digest reaction",
+   "where": "src/plugins/p04/handler.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C20",
+   "verb": "emits",
+   "dst": "D4",
+   "why": "queues one analytics event per webhook reaction",
+   "where": "src/plugins/p05/handler.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C21",
+   "verb": "emits",
+   "dst": "D4",
+   "why": "queues one analytics event per pager reaction",
+   "where": "src/plugins/p06/handler.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C22",
+   "verb": "emits",
+   "dst": "D4",
+   "why": "queues one analytics event per metrics reaction",
+   "where": "src/plugins/p07/handler.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C23",
+   "verb": "emits",
+   "dst": "D4",
+   "why": "queues one analytics event per archive reaction",
+   "where": "src/plugins/p08/handler.py:30",
+   "no_call_site": false
+  },
+  {
+   "src": "C16",
+   "verb": "uses",
+   "dst": "C12",
+   "why": "takes the configured analytics handle the factory built",
+   "where": "src/plugins/p01/handler.py:21",
+   "no_call_site": false
+  },
+  {
+   "src": "C9",
+   "verb": "uses",
+   "dst": "C16",
+   "why": "fans each drained message out to the registered plugin handlers",
+   "where": "src/messaging/consumer.py:32",
+   "no_call_site": false
+  },
+  {
+   "src": "C1",
+   "verb": "uses",
+   "dst": "C27",
+   "why": "the browser tree renders the queue and thread payloads these handlers return",
+   "where": null,
+   "no_call_site": true
+  },
+  {
+   "src": "C27",
+   "verb": "uses",
+   "dst": "C28",
+   "why": "builds every element through the hyperscript helper",
+   "where": "web/src/components/TicketRow.tsx:18",
+   "no_call_site": false
+  },
+  {
+   "src": "C13",
+   "verb": "uses",
+   "dst": "C12",
+   "why": "the backoff header rides the client calls the factory configures",
+   "where": null,
+   "no_call_site": true
+  },
+  {
+   "src": "C24",
+   "verb": "uses",
+   "dst": "C25",
+   "why": "quantitative validators reuse the shared trimming and length rules the text validators declare first",
+   "where": null,
+   "no_call_site": true
+  },
+  {
+   "src": "C3",
+   "verb": "uses",
+   "dst": "C24",
+   "why": "normalises the state and tenant strings a request carries before storing them",
+   "where": null,
+   "no_call_site": true
+  },
+  {
+   "src": "C4",
+   "verb": "uses",
+   "dst": "C26",
+   "why": "maps ticket documents through the generated wire types on the way in and out",
+   "where": null,
+   "no_call_site": true
+  }
+ ]
+}

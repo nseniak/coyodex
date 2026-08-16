@@ -1,0 +1,255 @@
+{
+ "deps": [
+  {
+   "id": "D1",
+   "name": "MongoDB",
+   "kind": "datastore",
+   "type": "document database",
+   "used_for": "Stores the ticket documents, their embedded comment threads, and the advisory lock rows. The system of record for everything the product remembers.",
+   "bucket": "Data & storage",
+   "where_configured": "config.default.env:16",
+   "confidence": "verified",
+   "deployment_linked": false,
+   "package": "",
+   "alternative": "",
+   "evidence": [],
+   "extra": {}
+  },
+  {
+   "id": "D2",
+   "name": "Redis",
+   "kind": "messaging",
+   "type": "pub/sub broker",
+   "used_for": "Carries the three named channels the publisher writes and the one the consumer drains.",
+   "bucket": "Messaging & delivery",
+   "where_configured": "config.default.env:20",
+   "confidence": "verified",
+   "deployment_linked": false,
+   "package": "",
+   "alternative": "",
+   "evidence": [],
+   "extra": {}
+  },
+  {
+   "id": "D3",
+   "name": "OpenSearch",
+   "kind": "datastore",
+   "type": "search index",
+   "used_for": "Holds a denormalised copy of each ticket's title, body and tenant so the queue can be searched. Shares its name with the compose service that runs it.",
+   "bucket": "Data & storage",
+   "where_configured": "config.default.env:24",
+   "confidence": "verified",
+   "deployment_linked": false,
+   "package": "",
+   "alternative": "",
+   "evidence": [],
+   "extra": {}
+  },
+  {
+   "id": "D4",
+   "name": "Analytics SaaS",
+   "kind": "service",
+   "type": "hosted product-analytics service",
+   "used_for": "Receives one event per plugin reaction. The client is built centrally and used by the eight plugins.",
+   "bucket": "Observability",
+   "where_configured": "config.default.env:28",
+   "confidence": "verified",
+   "deployment_linked": false,
+   "package": "",
+   "alternative": "",
+   "evidence": [],
+   "extra": {}
+  },
+  {
+   "id": "D5",
+   "name": "Error reporting SaaS",
+   "kind": "service",
+   "type": "hosted error tracker",
+   "used_for": "Receives unhandled exceptions. Its client is constructed by the factory and, in this fixture, wired to nothing else.",
+   "bucket": "Observability",
+   "where_configured": "config.default.env:30",
+   "confidence": "inferred",
+   "deployment_linked": true,
+   "package": "",
+   "alternative": "",
+   "evidence": [],
+   "extra": {}
+  }
+ ],
+ "deployment": [
+  {
+   "unit": "api",
+   "runs_on": "A Python 3.11 container built from Dockerfile.api, started with the http entry module.",
+   "exposed_as": "HTTP on port 8080",
+   "config_source": "config.default.env, injected by the compose env_file directive",
+   "variants": []
+  },
+  {
+   "unit": "worker",
+   "runs_on": "The same Dockerfile.api image, started with the worker entry module instead.",
+   "exposed_as": "No listener — self-activated work only",
+   "config_source": "config.default.env, injected by the compose env_file directive",
+   "variants": []
+  },
+  {
+   "unit": "web-dev",
+   "runs_on": "A node:20-alpine container running the Vite dev server. This is the ONLY environment in which the frontend is a live process; elsewhere it is a bundle baked into another image.",
+   "exposed_as": "HTTP on port 5173",
+   "config_source": "web/package.json scripts",
+   "variants": [
+    {
+     "env": "dev",
+     "source": "docker-compose.yml:48"
+    }
+   ]
+  },
+  {
+   "unit": "standalone",
+   "runs_on": "A single container built from Dockerfile.standalone, serving both the API and the baked frontend bundle.",
+   "exposed_as": "HTTP on port 80",
+   "config_source": "config.default.env, copied into the image",
+   "variants": [
+    {
+     "env": "standalone",
+     "source": "docker-compose.yml:55"
+    }
+   ]
+  }
+ ],
+ "environments": [
+  "dev",
+  "cloud",
+  "standalone"
+ ],
+ "observability": [
+  {
+   "signal": "Analytics events, one per plugin reaction",
+   "where_emitted": "Each plugin handler queues an event on the analytics client the factory built; the queue is in-process and flushed by the client.",
+   "where_viewed": "The hosted analytics product configured by ANALYTICS_URL.",
+   "alerts": "None configured in this fixture."
+  },
+  {
+   "signal": "Unhandled exceptions",
+   "where_emitted": "The error client the factory constructs. In this fixture nothing installs it as a handler, so nothing is actually reported — a deliberate gap.",
+   "where_viewed": "The hosted error tracker configured by ERRORS_URL.",
+   "alerts": "None configured in this fixture."
+  }
+ ],
+ "config": [
+  {
+   "key": "PRIMARY_URI",
+   "purpose": "Document-store connection string.",
+   "default": "mongodb://primary:27017/trapdoor",
+   "per_env": "Per environment; credentials are injected by the platform, never stored in the file."
+  },
+  {
+   "key": "BROKER_URL",
+   "purpose": "Broker connection string for the pub/sub channels.",
+   "default": "redis://broker:6379/0",
+   "per_env": "Per environment."
+  },
+  {
+   "key": "SEARCH_URL",
+   "purpose": "Search-index endpoint the repository re-indexes into.",
+   "default": "http://search:9200",
+   "per_env": "Present in the cloud profile only."
+  },
+  {
+   "key": "ANALYTICS_TOKEN",
+   "purpose": "Credential for the hosted analytics service.",
+   "default": "__injected_at_deploy__",
+   "per_env": "SECRET — the committed file carries a placeholder; the real value is injected at deploy time."
+  },
+  {
+   "key": "ESCALATION_GRACE_SECONDS",
+   "purpose": "How long an escalation waits before it may page.",
+   "default": "900",
+   "per_env": "Same everywhere."
+  }
+ ],
+ "tests": [
+  {
+   "targets": [
+    "C5"
+   ],
+   "tested": "no",
+   "label": "Authorisation gate — the composed write predicate",
+   "tests": [],
+   "gap": "Nothing exercises the scope/tenant/state composition. Its value to the regression suite is as an ANCHOR trap, not as behaviour under test.",
+   "confidence": "inferred"
+  },
+  {
+   "targets": [
+    "C4"
+   ],
+   "tested": "partial",
+   "label": "Ticket repository — the upsert that makes it the system of record",
+   "tests": [
+    {
+     "file": "tests/test_trapdoor_tools.py",
+     "why": "feeds the repository's write anchor and the entity's definition line into anchor-drift as an 'is stored in' claim (trap A3)"
+    }
+   ],
+   "gap": "The repository's own behaviour is never run; only the map's claims about it are checked.",
+   "confidence": "inferred"
+  },
+  {
+   "targets": [
+    "C8",
+    "C9"
+   ],
+   "tested": "no",
+   "label": "Publisher and consumer — channel naming and the drain loop",
+   "tests": [],
+   "gap": "No test drives a message end to end. The messaging traps are asserted against the map and the tree, not against a running broker.",
+   "confidence": "inferred"
+  },
+  {
+   "targets": [
+    "UC3"
+   ],
+   "tested": "no",
+   "label": "The transition use case end to end",
+   "tests": [],
+   "gap": "No integration test walks route to store to channel.",
+   "confidence": "inferred"
+  }
+ ],
+ "messaging": [
+  {
+   "name": "ticket.state.changed",
+   "kind": "topic",
+   "broker": "D2",
+   "publishers": [
+    "C8"
+   ],
+   "consumers": [],
+   "payload": "",
+   "source": "src/messaging/publisher.py:29"
+  },
+  {
+   "name": "ticket.comment.added",
+   "kind": "topic",
+   "broker": "D2",
+   "publishers": [
+    "C8"
+   ],
+   "consumers": [
+    "C9"
+   ],
+   "payload": "",
+   "source": "src/messaging/publisher.py:30"
+  },
+  {
+   "name": "escalation.paged",
+   "kind": "topic",
+   "broker": "D2",
+   "publishers": [
+    "C8"
+   ],
+   "consumers": [],
+   "payload": "",
+   "source": "src/messaging/publisher.py:31"
+  }
+ ]
+}

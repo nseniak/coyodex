@@ -1,0 +1,45 @@
+{
+ "extras": [
+  {
+   "heading": "Coverage exceptions",
+   "body": "- src/generated/: machine-emitted wire types regenerated from a schema; ~900 LOC folded into one component on purpose (trap G3). Reading it line by line buys nothing a reader needs.\n- src/flatpack/: split into two cohesive components rather than one box (trap G2), so its individual files are deliberately not one-component-each."
+  },
+  {
+   "heading": "Happy Path coverage",
+   "body": "- UC5: taking an advisory lock is an operator action before a bulk job, not part of the product story the spine tells. It keeps its own flow and stays off the walk."
+  },
+  {
+   "heading": "Balance exceptions",
+   "body": "- granularity: 28 components against a code-derived expectation of ~23 (band 13-33) — inside the band, recorded here only because the FILE cap binds on web/src/components (median file 24 LOC), which is trap G1 and would otherwise read as an unexplained agreement.\n- entity-flows: not recorded — the flows DO touch entities, deliberately, so this token stays absent as the control."
+  },
+  {
+   "heading": "Entry-point coverage",
+   "body": "- http-route: complete — walked the six router.add registrations in build_router (src/entrypoints/http.py:34).\n- event-consumer: complete — the fixture has exactly one consumer, CommentConsumer.run_forever.\n- job: complete — the fixture has exactly one scheduled worker, ReportWorker on the SCHEDULE constant."
+  }
+ ],
+ "security": [
+  {
+   "surface": "Ticket write routes (transition, comment, lock)",
+   "who": "Any caller the router reaches, carrying a principal with scopes and a tenant.",
+   "source": "src/auth/gate.py:62",
+   "risk": "The check composes scope, tenant and lifecycle state and raises about thirty lines below its own header. Anchoring it at the header is trap A1: the header cannot act, so a header anchor claims enforcement at a line that never enforces."
+  },
+  {
+   "surface": "Ticket read routes",
+   "who": "Any caller the router reaches; the only gate is the tenant comparison.",
+   "source": "src/auth/gate.py:72",
+   "risk": "Tenant-only. No scope is required to read, so any authenticated principal of a tenant sees every ticket in it."
+  }
+ ],
+ "grounding": {
+  "claims_total": 42,
+  "claims_challenged": 42,
+  "claims_confirmed": 42,
+  "claims_refuted": 0,
+  "claims_unverifiable": 0,
+  "claims_superseded": 0,
+  "claims_added_since": 0,
+  "live_claims_digest": "",
+  "note": "Every backbone edge in this map was authored directly against the fixture's own source, which is 1.5 kLOC of hand-written code the author of the map also wrote. That makes the grounding complete but NOT independent — there was no fresh-context skeptic pass, and this map has not been through Phase 4. Treat the number as a statement about coverage, not about adversarial confidence."
+ }
+}

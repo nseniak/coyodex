@@ -1,0 +1,490 @@
+{
+ "roles": [
+  {
+   "id": "R1",
+   "name": "Reporter",
+   "kind": "human",
+   "wants": "to add context to a ticket they raised and see what happened to it",
+   "drives": "UC2, UC4"
+  },
+  {
+   "id": "R2",
+   "name": "Support agent",
+   "kind": "human",
+   "wants": "to work a tenant's queue: find tickets, read them, and move them along the lifecycle",
+   "drives": "UC1, UC2, UC3, UC5"
+  }
+ ],
+ "glossary": [
+  {
+   "term": "Tenant",
+   "meaning": "the customer account a ticket belongs to; every read and write is scoped to one",
+   "source": "src/auth/gate.py:32"
+  },
+  {
+   "term": "Lifecycle",
+   "meaning": "the five declared ticket states and the transitions between them",
+   "source": "src/lifecycle/states.py:14"
+  },
+  {
+   "term": "Channel",
+   "meaning": "a named pub/sub topic the publisher writes and (sometimes) a consumer drains",
+   "source": "src/messaging/publisher.py:29"
+  },
+  {
+   "term": "Trap",
+   "meaning": "a defect deliberately planted in this tree, declared in traps.yaml, asserted by one regression layer",
+   "source": "traps.yaml:1"
+  }
+ ],
+ "use_cases": [
+  {
+   "id": "UC1",
+   "name": "Browse a tenant's tickets",
+   "actors": [
+    "R2"
+   ],
+   "trigger_outcome": "An agent asks for a tenant's queue, optionally filtered by state -> they get the list of tickets they are allowed to see, each with its state and comment count.",
+   "capability": null,
+   "entry_points": []
+  },
+  {
+   "id": "UC2",
+   "name": "Read one ticket",
+   "actors": [
+    "R2"
+   ],
+   "trigger_outcome": "Someone opens a ticket by id -> they see its title, state, assignee and its comment thread, or a 404 when the ticket belongs to another tenant.",
+   "capability": null,
+   "entry_points": []
+  },
+  {
+   "id": "UC3",
+   "name": "Move a ticket along its lifecycle",
+   "actors": [
+    "R2"
+   ],
+   "trigger_outcome": "An agent posts a target state -> the transition is checked against the declared table, the ticket is stored in its new state, re-indexed, and a state-change event is published.",
+   "capability": null,
+   "entry_points": []
+  },
+  {
+   "id": "UC4",
+   "name": "Comment on a ticket",
+   "actors": [
+    "R1"
+   ],
+   "trigger_outcome": "A reporter posts text on a ticket they may write -> the comment is appended to the ticket document and the thread comes back one longer.",
+   "capability": null,
+   "entry_points": []
+  },
+  {
+   "id": "UC5",
+   "name": "Take an advisory lock",
+   "actors": [
+    "R2"
+   ],
+   "trigger_outcome": "An operator claims a named lock before a bulk job -> the lock row records the holder, so a second claim can see who holds it.",
+   "capability": null,
+   "entry_points": []
+  }
+ ],
+ "happy_path": [
+  {
+   "id": "HP1",
+   "title": "Support agent browses the tenant queue",
+   "uc": "UC1",
+   "why": null
+  },
+  {
+   "id": "HP2",
+   "title": "Support agent opens one ticket",
+   "uc": "UC2",
+   "why": "needs a ticket id from the queue listed in HP1"
+  },
+  {
+   "id": "HP3",
+   "title": "Reporter adds context as a comment",
+   "uc": "UC4",
+   "why": "the ticket opened in HP2 is the one being commented on"
+  },
+  {
+   "id": "HP4",
+   "title": "Support agent moves the ticket to resolved",
+   "uc": "UC3",
+   "why": "the comment thread from HP3 is what the agent read before deciding"
+  }
+ ],
+ "flows": [
+  {
+   "uc": "UC1",
+   "title": "Browse a tenant's tickets",
+   "steps": [
+    {
+     "n": 1,
+     "src": "R2",
+     "dst": "C1",
+     "phrase": "asks for the tenant's queue, optionally filtered by state",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 2,
+     "src": "C1",
+     "dst": "C5",
+     "phrase": "checks the caller may read this tenant",
+     "note": "",
+     "where": "src/api/passthrough_controller.py:36",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 3,
+     "src": "C1",
+     "dst": "C3",
+     "phrase": "asks the service for the tenant's tickets",
+     "note": "",
+     "where": "src/api/passthrough_controller.py:37",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 4,
+     "src": "C3",
+     "dst": "C4",
+     "phrase": "loads each candidate ticket document",
+     "note": "",
+     "where": "src/services/ticket_service.py:34",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 5,
+     "src": "C3",
+     "dst": "E1",
+     "phrase": "reads each Ticket to filter the list by state",
+     "note": "",
+     "where": "src/services/ticket_service.py:36",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 6,
+     "src": "C1",
+     "dst": "R2",
+     "phrase": "returns the rendered queue",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    }
+   ]
+  },
+  {
+   "uc": "UC2",
+   "title": "Read one ticket",
+   "steps": [
+    {
+     "n": 1,
+     "src": "R2",
+     "dst": "C1",
+     "phrase": "opens a ticket by id",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 2,
+     "src": "C1",
+     "dst": "C5",
+     "phrase": "checks the caller may read this tenant",
+     "note": "",
+     "where": "src/api/passthrough_controller.py:29",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 3,
+     "src": "C1",
+     "dst": "C3",
+     "phrase": "asks the service for the ticket",
+     "note": "",
+     "where": "src/api/passthrough_controller.py:30",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 4,
+     "src": "C3",
+     "dst": "C4",
+     "phrase": "loads the ticket document by id",
+     "note": "",
+     "where": "src/services/ticket_service.py:24",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 5,
+     "src": "C3",
+     "dst": "E1",
+     "phrase": "reads the Ticket and rejects it when the tenant does not match",
+     "note": "",
+     "where": "src/services/ticket_service.py:25",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 6,
+     "src": "C1",
+     "dst": "R2",
+     "phrase": "returns the ticket with its comment thread",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    }
+   ]
+  },
+  {
+   "uc": "UC3",
+   "title": "Move a ticket along its lifecycle",
+   "steps": [
+    {
+     "n": 1,
+     "src": "R2",
+     "dst": "C2",
+     "phrase": "posts the target state for a ticket",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 2,
+     "src": "C2",
+     "dst": "C3",
+     "phrase": "fetches the ticket the transition applies to",
+     "note": "",
+     "where": "src/api/record_controller.py:26",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 3,
+     "src": "C2",
+     "dst": "C5",
+     "phrase": "checks the caller may write in the ticket's current state",
+     "note": "",
+     "where": "src/api/record_controller.py:30",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 4,
+     "src": "C3",
+     "dst": "C6",
+     "phrase": "checks the move against the declared transition table",
+     "note": "",
+     "where": "src/services/ticket_service.py:43",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 5,
+     "src": "C3",
+     "dst": "E1",
+     "phrase": "writes the Ticket in its new state",
+     "note": "",
+     "where": "src/services/ticket_service.py:44",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 6,
+     "src": "C4",
+     "dst": "D1",
+     "phrase": "upserts the ticket document",
+     "note": "",
+     "where": "src/store/ticket_repo.py:46",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 7,
+     "src": "C4",
+     "dst": "D3",
+     "phrase": "re-indexes the ticket's searchable fields",
+     "note": "",
+     "where": "src/store/ticket_repo.py:50",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 8,
+     "src": "C3",
+     "dst": "C8",
+     "phrase": "announces the state change on its channel",
+     "note": "",
+     "where": "src/services/ticket_service.py:46",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 9,
+     "src": "C8",
+     "dst": "D2",
+     "phrase": "sends the state-change body to the broker",
+     "note": "",
+     "where": "src/messaging/publisher.py:41",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 10,
+     "src": "C2",
+     "dst": "R2",
+     "phrase": "returns the ticket's new state",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    }
+   ]
+  },
+  {
+   "uc": "UC4",
+   "title": "Comment on a ticket",
+   "steps": [
+    {
+     "n": 1,
+     "src": "R1",
+     "dst": "C2",
+     "phrase": "posts comment text on a ticket",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 2,
+     "src": "C2",
+     "dst": "C3",
+     "phrase": "fetches the ticket being commented on",
+     "note": "",
+     "where": "src/api/record_controller.py:35",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 3,
+     "src": "C2",
+     "dst": "C5",
+     "phrase": "checks the reporter may write in this state",
+     "note": "",
+     "where": "src/api/record_controller.py:38",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 4,
+     "src": "C3",
+     "dst": "E2",
+     "phrase": "appends the new Comment to the ticket's thread",
+     "note": "",
+     "where": "src/services/ticket_service.py:50",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 5,
+     "src": "C4",
+     "dst": "D1",
+     "phrase": "upserts the ticket document carrying the new comment",
+     "note": "",
+     "where": "src/store/ticket_repo.py:46",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 6,
+     "src": "C2",
+     "dst": "R1",
+     "phrase": "returns the new thread length",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    }
+   ]
+  },
+  {
+   "uc": "UC5",
+   "title": "Take an advisory lock",
+   "steps": [
+    {
+     "n": 1,
+     "src": "R2",
+     "dst": "C2",
+     "phrase": "claims a named lock before a bulk job",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 2,
+     "src": "C2",
+     "dst": "C5",
+     "phrase": "checks the caller may write in this tenant",
+     "note": "",
+     "where": "src/api/record_controller.py:51",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 3,
+     "src": "C2",
+     "dst": "C3",
+     "phrase": "asks the service to take the lock",
+     "note": "",
+     "where": "src/api/record_controller.py:52",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 4,
+     "src": "C3",
+     "dst": "E5",
+     "phrase": "writes the LockDoc recording the holder",
+     "note": "",
+     "where": "src/services/ticket_service.py:56",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 5,
+     "src": "C4",
+     "dst": "D1",
+     "phrase": "upserts the lock row",
+     "note": "",
+     "where": "src/store/ticket_repo.py:58",
+     "no_call_site": false,
+     "subflow": null
+    },
+    {
+     "n": 6,
+     "src": "C2",
+     "dst": "R2",
+     "phrase": "returns the key and its holder",
+     "note": "",
+     "where": null,
+     "no_call_site": false,
+     "subflow": null
+    }
+   ]
+  }
+ ]
+}

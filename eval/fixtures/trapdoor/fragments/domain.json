@@ -1,0 +1,323 @@
+{
+ "subdomains": [
+  {
+   "id": "SD1",
+   "name": "Ticket thread",
+   "purpose": "The ticket and everything embedded in it — the comment thread and the attachments hanging off each comment.",
+   "parent": null,
+   "label": "",
+   "source": "src/domain/models.py:21",
+   "confidence": "verified",
+   "tech": "",
+   "tech_source": ""
+  },
+  {
+   "id": "SD2",
+   "name": "Operational records",
+   "purpose": "Rows the product writes for its own operation rather than for a user: the audit trail and the advisory locks.",
+   "parent": null,
+   "label": "",
+   "source": "src/domain/models.py:66",
+   "confidence": "verified",
+   "tech": "",
+   "tech_source": ""
+  }
+ ],
+ "entities": [
+  {
+   "id": "E1",
+   "name": "Ticket",
+   "store": {
+    "dep": "D1",
+    "container": "tickets",
+    "mode": "collection",
+    "notes": "one document per ticket, with the comment thread embedded"
+   },
+   "meaning": "A unit of work raised by a reporter and worked by an assignee, carrying its position in the declared lifecycle.",
+   "subdomain": "SD1",
+   "source": "src/domain/models.py:21",
+   "fields": [
+    {
+     "name": "id",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "tenant",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "title",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "state",
+     "type": "TicketState",
+     "markers": []
+    },
+    {
+     "name": "reporter",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "assignee",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "comments",
+     "type": "E2",
+     "markers": []
+    }
+   ],
+   "relations": [
+    {
+     "verb": "contains",
+     "target": "E2",
+     "src_card": "1",
+     "dst_card": "*",
+     "display": "",
+     "how": null,
+     "keyed_by": []
+    }
+   ],
+   "states": {
+    "states": [
+     "TRIAGE",
+     "ACCEPTED",
+     "IN_PROGRESS",
+     "RESOLVED",
+     "ARCHIVED"
+    ],
+    "transitions": [
+     {
+      "src": "TRIAGE",
+      "dst": "ACCEPTED",
+      "on": ""
+     },
+     {
+      "src": "TRIAGE",
+      "dst": "ARCHIVED",
+      "on": ""
+     },
+     {
+      "src": "ACCEPTED",
+      "dst": "IN_PROGRESS",
+      "on": ""
+     },
+     {
+      "src": "ACCEPTED",
+      "dst": "ARCHIVED",
+      "on": ""
+     },
+     {
+      "src": "IN_PROGRESS",
+      "dst": "RESOLVED",
+      "on": ""
+     },
+     {
+      "src": "RESOLVED",
+      "dst": "ARCHIVED",
+      "on": ""
+     }
+    ],
+    "source": "src/lifecycle/states.py:14"
+   }
+  },
+  {
+   "id": "E2",
+   "name": "Comment",
+   "store": {
+    "dep": "D1",
+    "container": "tickets",
+    "mode": "embedded",
+    "notes": "rides its parent ticket document"
+   },
+   "meaning": "A note appended to a ticket. Embedded in its ticket document rather than stored as its own row.",
+   "subdomain": "SD1",
+   "source": "src/domain/models.py:41",
+   "fields": [
+    {
+     "name": "id",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "ticket_id",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "author",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "text",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "attachments",
+     "type": "E3",
+     "markers": []
+    }
+   ],
+   "relations": [
+    {
+     "verb": "contains",
+     "target": "E3",
+     "src_card": "1",
+     "dst_card": "*",
+     "display": "",
+     "how": null,
+     "keyed_by": []
+    }
+   ],
+   "states": null
+  },
+  {
+   "id": "E3",
+   "name": "Attachment",
+   "store": {
+    "dep": "D1",
+    "container": "tickets",
+    "mode": "embedded",
+    "notes": "rides the comment that rides the ticket"
+   },
+   "meaning": "A file hung off a comment. Only the pointer is stored here; the bytes live in object storage.",
+   "subdomain": "SD1",
+   "source": "src/domain/models.py:50",
+   "fields": [
+    {
+     "name": "id",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "comment_id",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "filename",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "object_key",
+     "type": "str",
+     "markers": []
+    }
+   ],
+   "relations": [],
+   "states": null
+  },
+  {
+   "id": "E4",
+   "name": "AuditEntry",
+   "store": {
+    "dep": "D1",
+    "container": "audit_entries",
+    "mode": "collection",
+    "notes": "appended through the generic plugin bus, so no component carries a write edge to it"
+   },
+   "meaning": "An immutable record of one ticket state change. TRAP P1: nothing in this fixture persists it, so it lands in the no-owning-component advisory, which offers no recordable escape.",
+   "subdomain": "SD2",
+   "source": "src/domain/models.py:60",
+   "fields": [
+    {
+     "name": "id",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "ticket_id",
+     "type": "str",
+     "markers": [
+      "FK→E1"
+     ]
+    },
+    {
+     "name": "actor",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "from_state",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "to_state",
+     "type": "str",
+     "markers": []
+    }
+   ],
+   "relations": [
+    {
+     "verb": "references",
+     "target": "E1",
+     "src_card": "*",
+     "dst_card": "1",
+     "display": "",
+     "how": null,
+     "keyed_by": []
+    }
+   ],
+   "states": null
+  },
+  {
+   "id": "E5",
+   "name": "LockDoc",
+   "store": {
+    "dep": "D1",
+    "container": "locks",
+    "mode": "collection",
+    "notes": "infra-only; named by no use case narrative"
+   },
+   "meaning": "An advisory lock row recording who holds a named lock and until when.",
+   "subdomain": "SD2",
+   "source": "src/domain/models.py:78",
+   "fields": [
+    {
+     "name": "key",
+     "type": "str",
+     "markers": []
+    },
+    {
+     "name": "holder",
+     "type": "str",
+     "markers": []
+    }
+   ],
+   "relations": [],
+   "states": null
+  }
+ ],
+ "non_entity_types": [
+  {
+   "name": "Principal",
+   "source": "src/auth/gate.py:18",
+   "why": "the request-scoped caller identity, not a stored concept the map describes"
+  },
+  {
+   "name": "WorkerResult",
+   "source": "src/base/worker_base.py:16",
+   "why": "the return shape of one worker pass, never persisted"
+  },
+  {
+   "name": "ClientConfig",
+   "source": "src/clients/analytics_factory.py:16",
+   "why": "connection settings read from the environment, not a domain concept"
+  },
+  {
+   "name": "Escalation",
+   "source": "src/lifecycle/escalation.py:29",
+   "why": "in-memory breach counting; nothing stores it"
+  }
+ ]
+}

@@ -1,0 +1,5 @@
+{"rules": [
+  {"source_glob": "src/auth/**", "subsystem": "S2"},
+  {"source_glob": "src/clients/**", "subsystem": "S3"},
+  {"ids": ["E1"], "subdomain": "SD1"}
+]}

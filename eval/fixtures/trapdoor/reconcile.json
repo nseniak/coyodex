@@ -1,0 +1,23 @@
+{
+  "set": [
+    {
+      "ids": [
+        "E1"
+      ],
+      "subdomain": "SD1"
+    },
+    {
+      "ids": [
+        "C5"
+      ],
+      "subsystem": "S2"
+    },
+    {
+      "ids": [
+        "C12",
+        "C13"
+      ],
+      "subsystem": "S3"
+    }
+  ]
+}
