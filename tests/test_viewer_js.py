@@ -10,8 +10,10 @@ Conventions: top-level test functions, no classes/fixtures.
 """
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -32,6 +34,57 @@ def _node_check(js_path: Path) -> None:
 
 def test_viewer_js_parses() -> None:
     _node_check(VIEWER_DIR / "viewer.js")
+
+
+def _run_js(snippet: str) -> str:
+    """Run a snippet against the REAL `esc` / `mdInline` / `mdRefs` lifted out of viewer.js.
+
+    The frontend has no module system (one hand-edited script, loaded whole), so the only way to
+    exercise a function of it is to slice its source and evaluate that. Sliced by the marker lines
+    around each definition, so a rename fails loudly here instead of silently testing nothing."""
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node not installed — skipping viewer JS behaviour gate")
+    js = (VIEWER_DIR / "viewer.js").read_text(encoding="utf-8")
+    start = js.index("const esc = (s) =>")
+    end = js.index("let mode = HAS_DIFF")
+    lifted = js[start:end]
+    assert "const mdRefs" in lifted, "mdRefs moved out of the lifted region — fix the slice"
+    with tempfile.TemporaryDirectory() as td:
+        f = Path(td) / "probe.mjs"
+        f.write_text(lifted + "\n" + snippet, encoding="utf-8")
+        r = subprocess.run([node, str(f)], capture_output=True, text=True)
+    assert r.returncode == 0, f"probe failed:\n{r.stderr}"
+    return r.stdout.strip()
+
+
+def test_authored_prose_never_shows_a_raw_element_id() -> None:
+    """The rule the whole viewer follows — ids stay internal, names go on screen — enforced where it
+    was actually broken: the recorded lines, which are KEYED by id, are the only prose that carries
+    them. This is a behavioural gate, not a source read: it runs the real function.
+
+    It also pins the three things that must NOT be rewritten — an id inside a code span (the author
+    is quoting), an id inside a longer token (a `path:line` anchor must stay copyable), and an id the
+    map does not define (leave it exactly as written rather than half-translate it)."""
+    refs = {"C54": {"id": "C54", "name": "Request Context Middleware", "node": "C54"},
+            "R3": {"id": "R3", "name": "Site visitor", "node": None}}
+    body = ("C54, R3: an operator surface. See `C54` and src/C54_handler.py:42 for the detail; "
+            "C99 is long gone.")
+    out = _run_js(f"""
+const refs = {json.dumps(refs)};
+const html = mdRefs({json.dumps(body)}, refs);
+const text = html.replace(/<[^>]+>/g, '');
+console.log(JSON.stringify({{ html, text }}));
+""")
+    got = json.loads(out)
+    # every id the server resolved is GONE from what the reader sees, replaced by its name
+    for eid, ref in refs.items():
+        assert ref["name"] in got["text"], f"{eid} did not render as its name"
+    assert "C54, R3:" not in got["text"], "the recorded line still opens with raw ids"
+    # …and the three exceptions survive verbatim
+    assert "<code>C54</code>" in got["html"], "an id inside a code span was rewritten"
+    assert "src/C54_handler.py:42" in got["text"], "an id inside a longer token was rewritten"
+    assert "C99 is long gone" in got["text"], "an undefined id was not left as written"
 
 
 def test_flow_step_keeps_relationship_navigation_on_the_arrow() -> None:

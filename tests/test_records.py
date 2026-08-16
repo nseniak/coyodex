@@ -12,6 +12,9 @@ Run either way (needs an editable install: `make deps`):
 """
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from coyodex import records
 from coyodex.model import ExtraSection, ProjectModel
 
@@ -148,6 +151,31 @@ def test_the_markdown_puts_notes_before_the_build_record():
     assert md.index("## Coverage exceptions") < md.index("Map maintenance records")
     assert md.index("Map maintenance records") < md.index("### Persistence exceptions")
     assert "E2: a value object." in md   # kept verbatim, never dropped
+
+
+def test_every_element_named_in_a_committed_map_resolves_to_a_name():
+    """The server half of the same rule: whatever the viewer is asked to render, the refs table must
+    already know. Scanned with a DELIBERATELY BROADER pattern than `views._PROSE_ID` and filtered by
+    the map's own element table, so dropping a prefix from that pattern — which is exactly how the
+    role ids went unresolved — fails here instead of shipping raw ids to the screen."""
+    from coyodex.model import all_elements, load_model
+    from coyodex.views import model_to_graph
+    repo = Path(__file__).resolve().parent.parent
+    maps = [repo / ".coyodex" / "project-map.json",
+            repo / "tests" / "fixtures" / "mcpolis-project-map.json",
+            repo / "eval" / "fixtures" / "trapdoor" / "golden" / "project-map.json"]
+    checked = 0
+    for path in maps:
+        if not path.is_file():
+            continue
+        m = load_model(path.read_text(encoding="utf-8"))
+        elems = set(all_elements(m))
+        for section in model_to_graph(m)["extras"]:
+            named = {t for t in re.findall(r"\b[A-Z]+\d+\b", section["body"]) if t in elems}
+            missing = named - set(section["refs"])
+            assert not missing, f"{path.name} / {section['heading']}: unresolved {sorted(missing)}"
+            checked += len(named)
+    assert checked, "no committed map names an element in its extras — this gate proved nothing"
 
 
 def _main() -> int:

@@ -28,6 +28,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 import threading
 import webbrowser
 from dataclasses import dataclass
@@ -132,6 +133,60 @@ def load_project(folder: str) -> Project | None:
     return Project(slug=root.name or "project", repo_root=root, map_json=map_json, commit=commit,
                    title=str(graph.get("title") or "").strip() or (root.name or "project"),
                    goal=str(graph.get("goal") or "").strip(), map_mtime=mtime)
+
+
+# ── stale-process guard ──────────────────────────────────────────────────────────────────────────
+# `viewer.js` / `viewer.css` are read from disk per request and sent `no-store`, so a frontend edit is
+# already live on the next refresh. The BUNDLE is not: it is built by this process's Python, cached
+# per map version, and no cache-drop can pick up an edit to code that is already imported. Nothing
+# said so, which is the whole problem — a session spent three restarts discovering, each time, that
+# the page was showing what the old code produced. Now the server says it, once per change.
+_PY_SOURCES = Path(__file__).resolve().parent.parent   # tools/coyodex/
+_STALE_CHECK_EVERY_NS = 2_000_000_000                  # at most one directory walk every 2s
+
+
+def _sources_stamp() -> int:
+    """Newest mtime across this tool's Python sources — 0 when the tree cannot be read."""
+    newest = 0
+    try:
+        for f in _PY_SOURCES.rglob("*.py"):
+            if "__pycache__" in f.parts:
+                continue
+            try:
+                newest = max(newest, f.stat().st_mtime_ns)
+            except OSError:
+                continue
+    except OSError:
+        return 0
+    return newest
+
+
+_STARTED_STAMP = _sources_stamp()
+_LAST_STALE_CHECK = 0
+_STALE_REPORTED = 0
+
+
+def warn_if_code_changed() -> bool:
+    """Say (once per change, on the console) that this process is serving OLD Python.
+
+    Returns whether the sources have moved since startup. Deliberately a WARNING and not a reload:
+    re-importing a live module graph mid-request is how a server starts answering from two versions
+    of itself at once. The operator restarts; the point is that they know to."""
+    global _LAST_STALE_CHECK, _STALE_REPORTED
+    now = time.monotonic_ns()
+    if now - _LAST_STALE_CHECK < _STALE_CHECK_EVERY_NS:
+        return _STALE_REPORTED > _STARTED_STAMP
+    _LAST_STALE_CHECK = now
+    stamp = _sources_stamp()
+    if stamp <= _STARTED_STAMP:
+        return False
+    if stamp > _STALE_REPORTED:
+        _STALE_REPORTED = stamp
+        print("coyodex serve: this process is running OLD code — a Python source under "
+              f"{_PY_SOURCES.name}/ changed since startup. The frontend (viewer.js/css) reloads on "
+              "refresh, but the view bundle is built in-process: RESTART to see server-side changes.",
+              file=sys.stderr)
+    return True
 
 
 def ensure_fresh(proj: Project) -> None:
@@ -530,6 +585,7 @@ class Handler(BaseHTTPRequestHandler):
             if proj is None:
                 return self._send(404, "text/plain; charset=utf-8", b"unknown project")
             ensure_fresh(proj)  # a map edited while the server runs is picked up on the next request
+            warn_if_code_changed()  # …but an edit to THIS tool's Python needs a restart; say so
             return self._project(proj, parts[2:], query)
         return self._send(404, "text/plain; charset=utf-8", b"not found")
 
