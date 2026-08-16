@@ -499,6 +499,33 @@ def check_why_refs(m: ProjectModel) -> list[Finding]:
     return findings
 
 
+def check_flow_title(m: ProjectModel) -> list[Finding]:
+    """A use case's NAME against its own flow's TITLE — the half of a late rename that gets left
+    behind.
+
+    Sibling of `check_actor_attribution`: same shape, same heading, same failure. A live map had
+    two use cases repointed and renamed near the end of a build without re-tracing; the actor half
+    fired here and was recorded, while the stale title went unnoticed by anything.
+
+    High precision, measured before it was written: across three live maps the name and the title
+    agree 39/40, 26/27 and everywhere else, and BOTH exceptions were exactly this defect. A
+    deliberately different title is legitimate — it just has to be said out loud."""
+    uc_name = {u.id: u.name for u in m.use_cases}
+    findings: list[Finding] = []
+    for f in m.flows:
+        name = uc_name.get(f.uc)
+        if not name or not f.title:
+            continue
+        if name.strip().lower() == f.title.strip().lower():
+            continue
+        findings.append(Finding(
+            "flow-title", ADVISORY, f"{f.uc} — {name}",
+            f"the use case is named '{name}' but its flow is titled '{f.title}' — a renamed use "
+            f"case whose flow was never re-traced, or a deliberate difference. "
+            f"Record 'flow-title <id>: <why>' under an 'Audit exceptions' extras heading if this is deliberate."))
+    return findings
+
+
 def check_actor_attribution(m: ProjectModel) -> list[Finding]:
     """The Use-cases table's declared actors vs the flow's opening actor — now a deterministic id-set
     membership test (no string matching): both sides are role ids, so a mismatch is unambiguous."""
@@ -618,7 +645,8 @@ def _recordable_id(location: str) -> str | None:
 
 def audit_model(m: ProjectModel) -> list[Finding]:
     findings: list[Finding] = []
-    for check in (check_precedence, check_why_refs, check_actor_attribution, check_whyless_steps,
+    for check in (check_precedence, check_why_refs, check_actor_attribution, check_flow_title,
+                  check_whyless_steps,
                   check_dependency_phrasing):
         findings.extend(check(m))
     findings.sort(key=lambda f: (_SEV_RANK.get(f.severity, 9), f.check, f.location))

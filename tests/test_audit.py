@@ -1990,3 +1990,31 @@ def _theme_batches_carry_the_anchor(tmp_path: str) -> None:
     assert total == len(worklist), "every worklist claim lands in exactly one batch"
     assert anchored > total * 0.9, (
         f"only {anchored}/{total} dispatched claims carry an anchor — the defect this removes")
+
+
+def test_a_renamed_use_case_that_left_its_flow_title_behind_is_flagged():
+    """The other half of a late rename. A live map had two use cases repointed and renamed near the
+    end of a build without re-tracing: `actor-attribution` fired on the actor half and was recorded,
+    while the stale flow title went unnoticed by anything. Measured before writing: across three
+    live maps name and title agree 39/40, 26/27 and everywhere else, and both exceptions were
+    exactly this defect."""
+    from coyodex.audit_model import check_flow_title
+    m = ProjectModel(title="t", goal="g")
+    m.use_cases = [UseCase(id="UC1", name="Rebuild the company knowledge graph", actors=["R1"])]
+    m.flows = [Flow(uc="UC1", title="Build the knowledge graph from connected sources", steps=[])]
+    assert [f for f in check_flow_title(m) if f.check == "flow-title"]
+    m.flows[0].title = "Rebuild the company knowledge graph"
+    assert not check_flow_title(m), "an agreeing title must not fire"
+
+
+def test_a_flow_title_record_does_not_silence_a_different_check_on_the_same_use_case():
+    """A record adjudicates one (check, id) PAIR, never a whole family. Reading every UC id under
+    'Audit exceptions' — rather than the pairs — let an unrelated `actor-attribution` record
+    silence this check on the same use case, which hid the very case it was written for."""
+    from coyodex.audit_model import audit_exceptions
+    m = ProjectModel(title="t", goal="g")
+    m.extras = [ExtraSection(heading="Audit exceptions",
+                             body="actor-attribution UC1: the scheduler opens it, deliberate.")]
+    pairs = audit_exceptions(m)
+    assert ("actor-attribution", "UC1") in pairs
+    assert ("flow-title", "UC1") not in pairs
