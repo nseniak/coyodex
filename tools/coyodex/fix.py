@@ -1391,10 +1391,11 @@ def row(argv: list[str]) -> int:
         return subverb_help.handle(_USAGE, "row", argv) or 0
     fragments = row_id = None
     sets: dict[str, str] = {}
+    json_sets: dict[str, object] = {}
     i = 0
     while i < len(argv):
         a = argv[i]
-        if a in ("--fragments", "--id") or a.startswith("--set-"):
+        if a in ("--fragments", "--id") or a.startswith(("--set-", "--set-json-")):
             if i + 1 >= len(argv):
                 return usage_error(_USAGE, "row", f"{a} needs a value")
             val = argv[i + 1]
@@ -1407,21 +1408,34 @@ def row(argv: list[str]) -> int:
                 fragments = val
             elif a == "--id":
                 row_id = val
+            elif a.startswith("--set-json-"):
+                # STRUCTURED fields. `--set-<field> <text>` writes a string, which is right for a
+                # statement, a meaning or a purpose and useless for the rest: an entity's `states`
+                # block, a lifecycle `states.source`, a messaging row's `consumers` list, a rule's
+                # `sites`. Those were the four edits builds hand-scripted into fragments with
+                # `python3 - <<'PY'`, which is the failure `fix` exists to remove — and the reason
+                # they hand-scripted them is that no flag could express a nested value.
+                field = a[len("--set-json-"):].replace("-", "_")
+                try:
+                    json_sets[field] = json.loads(val)
+                except json.JSONDecodeError as e:
+                    return usage_error(_USAGE, "row", f"--set-json-{field} needs valid JSON: {e}")
             else:
                 sets[a[len("--set-"):].replace("-", "_")] = val
             continue
         return usage_error(_USAGE, "row", f"unknown argument '{a}'")
     if not fragments or not row_id:
         return usage_error(_USAGE, "row", "--fragments and --id are required")
-    if not sets:
-        return usage_error(_USAGE, "row", "give at least one --set-<field> <text>")
+    if not sets and not json_sets:
+        return usage_error(_USAGE, "row",
+                           "give at least one --set-<field> <text> or --set-json-<field> <json>")
     blank = sorted(f for f, v in sets.items() if not v.strip())
     if blank:
         # Emptying a statement, a risk or a meaning is deletion wearing an edit's clothes, and every
         # other writer here refuses it (`security-row` refuses an empty surface for the same reason).
         return usage_error(_USAGE, "row", f"refusing to blank {', '.join(blank)} — an empty value "
                                           f"deletes the text rather than correcting it")
-    for field_name in sets:
+    for field_name in (*sets, *json_sets):
         if field_name in _NEVER_WRITABLE:
             print(f"ERROR: `{field_name}` is not writable here — {_NEVER_WRITABLE[field_name]}.",
                   file=sys.stderr)
@@ -1479,11 +1493,20 @@ def row(argv: list[str]) -> int:
               f"be checked: {complaint}", file=sys.stderr)
         return 2
 
-    original = {f: target[f] for f in sets}
-    if all(target[f] == v for f, v in sets.items()):
+    # Text and structured edits share every guard below — the assembly check, the surviving-id
+    # check, the escaping. Only the value's TYPE differs, so they merge here rather than forking.
+    edits: dict[str, object] = {**sets, **json_sets}
+    missing = sorted(f for f in edits if f not in target)
+    if missing:
+        print(f"ERROR: {row_id} has no field(s) {', '.join(missing)} — a new key here is a schema "
+              f"change, not a correction. Present fields: {', '.join(sorted(target))}",
+              file=sys.stderr)
+        return 2
+    original = {f: target[f] for f in edits}
+    if all(target[f] == v for f, v in edits.items()):
         print(f"row: {row_id} already says that — nothing written.")
         return 0
-    for f, v in sets.items():
+    for f, v in edits.items():
         target[f] = v
     # Match the file's OWN escaping. An agent-authored fragment is usually ASCII-escaped, and dumping
     # it with `ensure_ascii=False` rewrote every `\uXXXX` in the file — so a one-field edit arrived as
@@ -1521,9 +1544,9 @@ def row(argv: list[str]) -> int:
         return 2
 
     path.write_text(text, encoding="utf-8")
-    for f, v in sets.items():
+    for f, v in edits.items():
         print(f"  {row_id}.{f}: {original[f]!r} → {v!r}")
-    print(f"row: rewrote {len(sets)} field(s) on {path.name}: {array_key}[{index}].")
+    print(f"row: rewrote {len(edits)} field(s) on {path.name}: {array_key}[{index}].")
     print(f"     Re-assemble to see it in the map. If the row carries L2 CLAIMS (a rule statement, a "
           f"site, an entity store, a cadence), their claim TEXT has changed, so the skeptics' "
           f"verdicts for them no longer match: re-run `coyodex grounding write` AFTER the final "

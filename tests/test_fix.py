@@ -1496,3 +1496,61 @@ def test_drop_all_refuses_to_make_a_reciprocal_judgement_for_you():
             after = json.load(fh)
         assert len(after["entities"][0]["relations"]) == 1
         assert len(after["entities"][1]["relations"]) == 1
+
+
+def _frag_dir(tmp, doc):
+    import json, os
+    d = os.path.join(tmp, "frags")
+    os.makedirs(d, exist_ok=True)
+    with open(os.path.join(d, "domain.json"), "w") as fh:
+        json.dump(doc, fh)
+    return d
+
+
+def _entity_doc():
+    return {"deps": [{"id": "D1", "name": "db", "kind": "datastore"}],
+            "entities": [{"id": "E1", "name": "Order", "source": "a.py:1", "meaning": "an order",
+                          "store": {"dep": "D1", "container": "o", "mode": "collection"},
+                          "states": {"states": ["new", "done"],
+                                     "transitions": [{"src": "new", "dst": "done", "on": "finish"}],
+                                     "source": "a.py:9"}}]}
+
+
+def test_a_structured_field_can_be_rewritten_without_a_hand_script():
+    """`--set-<field> <text>` writes a STRING, which is right for a meaning or a statement and
+    useless for the rest: an entity's `states` block, a lifecycle `states.source`, a messaging row's
+    consumers, a rule's sites. Those are exactly the four edits builds hand-scripted into fragments
+    with `python3 - <<'PY'` — the failure `fix` exists to remove — and the reason they hand-scripted
+    them is that no flag could express a nested value."""
+    import json, tempfile, os
+    from coyodex.fix import main
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _frag_dir(tmp, _entity_doc())
+        new = {"states": ["open", "closed"],
+               "transitions": [{"src": "open", "dst": "closed", "on": "resolve"}],
+               "source": "b.py:3"}
+        assert main(["row", "--fragments", d, "--id", "E1",
+                     "--set-json-states", json.dumps(new)]) == 0
+        with open(os.path.join(d, "domain.json")) as fh:
+            assert json.load(fh)["entities"][0]["states"] == new
+
+
+def test_a_structured_edit_that_would_break_assembly_is_refused_like_a_text_one():
+    """The JSON path must inherit every guard the text path has — it is the same write."""
+    import json, tempfile, os
+    from coyodex.fix import main
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _frag_dir(tmp, _entity_doc())
+        before = open(os.path.join(d, "domain.json")).read()
+        assert main(["row", "--fragments", d, "--id", "E1", "--set-json-states", '"not an object"']) == 2
+        assert open(os.path.join(d, "domain.json")).read() == before, "nothing may be written"
+
+
+def test_a_field_the_row_does_not_have_is_refused_rather_than_invented():
+    """Adding a key is a schema change, not a correction — and a typo'd field name would otherwise
+    write a new one silently and pass every downstream check."""
+    import tempfile
+    from coyodex.fix import main
+    with tempfile.TemporaryDirectory() as tmp:
+        d = _frag_dir(tmp, _entity_doc())
+        assert main(["row", "--fragments", d, "--id", "E1", "--set-json-staets", "[]"]) == 2
