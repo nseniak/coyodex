@@ -602,7 +602,13 @@ def test_every_assertion_id_is_unique_and_skips_the_reserved_eleven():
     # reassembling the blocked literal from pieces, and a `cd` into the coyodex clone leaking into a
     # trailing relative path so a script read the TOOL's own map and reported its ids as the mapped
     # project's. Nothing else here can see either — both runs look entirely healthy.
-    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25, *range(26, 36)], ids
+    # 36-39 came from the 2026-08-13 coworker retrospective. Three watch a READ that discards what
+    # it asked for — an exit code taken through a pipe (so a REFUSED precheck read as 0), a gate's
+    # filter widening run over run until the families removed from view shipped unfixed, and a
+    # `--json` written and never opened while its contents were re-derived by hand to a different
+    # answer. The fourth reads the MAP: the audit's `security` theme going empty after auth surfaces
+    # moved into rules, which left 200 access claims triaged as ordinary ones for two builds.
+    assert ids == [*range(1, 11), *range(12, 19), 21, 22, 23, 24, 25, *range(26, 40)], ids
     assert 11 not in ids, "id 11 is reserved for the fixture-specific golden-map assertion"
     assert len(ids) == len(set(ids))
 
@@ -2232,3 +2238,34 @@ def test_to_turn_bounds_the_scorecard_to_the_build():
         by_id = {a.id: a for a in bounded.assertions}
         assert by_id[4].observed == 0, by_id[4]
         assert {a.id: a for a in whole.assertions}[4].observed == 1
+
+
+def test_37_sees_a_filter_applied_to_the_file_the_gate_wrote():
+    """The shape that matters is `validate … > v.txt; grep -E … v.txt | grep -vE "…"` — one Bash
+    call, the gate redirected to a file and the filter applied to the FILE.
+
+    Two earlier versions of this assertion could not see it. The first only measured filters inside
+    the gate's own pipeline and returned 11/11 on the very transcript it was written from; the
+    second followed the file but skipped any call that also contained a gate statement, which is
+    every call of this shape. An assertion that cannot catch its founding case is worse than none —
+    it reports a clean number over the defect."""
+    def call(cmd):
+        return {"type": "assistant", "message": {"id": "m", "content": [
+            {"type": "tool_use", "id": "t", "name": "Bash", "input": {"command": cmd}}]}}
+    narrow = ('coyodex validate m.json > v.txt 2>&1; '
+              'grep -E "^  - " v.txt | grep -vE "Balance:|unclaimed" | head -40')
+    wider = ('coyodex validate m.json > v.txt 2>&1; '
+             'grep -E "^  - " v.txt | grep -vE "Balance:|unclaimed|bucket|entry-point kind" | head -25')
+    turns = P.read_turns_from_records([call(narrow), call(wider)]) \
+        if hasattr(P, "read_turns_from_records") else None
+    if turns is None:                      # build turns the same way the module's own tests do
+        from coyodex_eval.transcript import read_turns
+        import json, tempfile, os
+        with tempfile.TemporaryDirectory() as d:
+            p = os.path.join(d, "t.jsonl")
+            with open(p, "w") as fh:
+                fh.write("\n".join(json.dumps(r) for r in (call(narrow), call(wider))) + "\n")
+            turns = read_turns(p)
+    a = P.assert_37_gate_filter_did_not_grow(turns)
+    grew = [e for e in a.evidence if e.detail.get("filter grew") == "True"]
+    assert grew, f"a filter that gained two exclusions must be caught: {a.observed}/{a.of}"

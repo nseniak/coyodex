@@ -312,3 +312,28 @@ Its one limitation is stated in the code and worth repeating: the truth is compu
 repo-reading checks, since the scorecard has no repo. So the count can only be too small, and the
 assertion under-detects rather than falsely accusing — the direction this family's own rule
 demands.
+
+### 36–39, from the 2026-08-13 coworker retrospective
+
+Three of the four watch a READ that discards the thing it asked for. That is a different family from
+"a command failed and nobody noticed": here every command succeeds, and the answer is thrown away
+between the tool and the reader.
+
+| # | assertion | the fix it audits |
+|---|---|---|
+| 36 | a command's exit code is not read through a pipe | `cmd \| tail -3; echo $?` reports `tail`'s status. A build printed `PRECHECK_EXIT=0` over the words "REFUSED — provenance names THIS session" and caught it only by re-running the command bare. The same shape swallowed a `dump --map` usage error into an empty read that was taken for "this id has no record" |
+| 37 | a gate's output filter did not GROW between consecutive runs of that gate | the measurable form of withdrawn assertion 19. An inverting `grep` is not wrong by itself; a filter that WIDENS run over run is, because each look sees less than the last. One build read a `validate` through `grep -v "Balance:\|…"` (23 of 27 lines), then added `bucket` and `entry-point kind` to the same filter (10 of 24) — and the families removed from view were never fixed and never recorded |
+| 38 | a `--json` output that was written is afterwards read | a build redirected `validate … --json` to a file, never opened it, and re-derived its contents by hand twice — 53 from the gate, 63 from the script, because the script lacked the gate's composition-target exclusion. Ten of the recorded exceptions that followed named entities the gate had never flagged, and a recorded exception is what silences a future gate |
+| 39 | the audit's `security` theme is non-empty when the map carries `access: true` rules | reads the MAP, not the run. `method.md` moved auth surfaces out of `security[]` into rules with `access: true` and the worklist builder was not updated, so the theme the audit orders FIRST went permanently empty and 200 access-control claims triaged as ordinary ones. Two builds shipped that way and nothing in the toolchain could see it. `n/a` without `--map` |
+
+**26 also widened here**, rather than becoming a new number: `reconcile` and `balance` joined the
+gates whose output may not be reduced to a count. A build read `coyodex reconcile … | grep -cE
+"WARN"` as `0` while the command had died on `rules[111]: assigns nothing` and written nothing — the
+stale reconcile file was re-applied, twelve dep buckets vanished from the map, and
+`validate --check-sources --check-coverage` exited 0 over the result. One count that could not
+distinguish "no warnings" from "no output at all", and four turns before anyone noticed.
+
+**On 37's measurement.** It scores consecutive same-gate pairs, and compares a crude filter WIDTH
+(how many inverting greps, and how many alternatives inside them). Crude on purpose: the finding is
+the direction of change, not the absolute amount of filtering, and a build that legitimately narrows
+once and stays there is not the defect.

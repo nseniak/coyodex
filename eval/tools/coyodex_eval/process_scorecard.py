@@ -1797,8 +1797,16 @@ def _gate_statements(command: str) -> list[str]:
     anywhere else in the same call. Scanning `_segments` instead: that splits pipelines, so the
     gate stage lost the `| grep -c` that is the entire finding."""
     return [s for s in _statements(command)
-            if any(_invokes(seg, g) for seg in _segments(s)
-                   for g in ("validate", "audit", "finalize"))]
+            if any(_invokes(seg, g) for seg in _segments(s) for g in _GATES)]
+
+
+#: The commands whose output is a FINDING LIST, so reducing one to a count discards the finding.
+#: `reconcile` joined them after a live build read it as `| grep -cE "WARN"` -> `0` while the
+#: command had actually died on `rules[111]: assigns nothing` and written nothing: the stale
+#: reconcile file was then re-applied, twelve dep buckets went missing from the map, and
+#: `validate --check-sources --check-coverage` exited 0 over the result. Four turns before anyone
+#: noticed, from one count that could not distinguish "no warnings" from "no output at all".
+_GATES = ("validate", "audit", "finalize", "reconcile", "balance")
 
 
 def _raw_blob(call: ToolCall) -> str:
@@ -2300,6 +2308,166 @@ def assert_35_no_relative_map_path_after_cd_into_the_clone(turns: Sequence[Turn]
 
 
 
+#: `$?` read straight after a PIPELINE. The shell reports the LAST stage's status, so the command's
+#: own exit code is gone — and both halves of this have shipped.
+_EXIT_AFTER_PIPE = re.compile(
+    r"\|[^\n;&]*(?:head|tail|grep|sed|awk|wc|jq)[^\n;&]*[;\n]\s*(?:echo[^\n]*)?\$\?")
+
+
+def assert_36_exit_code_not_read_through_a_pipe(turns: Sequence[Turn]) -> Assertion:
+    """36 — a command's exit code is not read through a pipe.
+
+    `cmd | tail -3; echo $?` reports `tail`'s status. A live build ran exactly that on
+    `retro-precheck` and printed `PRECHECK_EXIT=0` over the words "REFUSED — provenance names THIS
+    session"; it caught itself only by re-running the command bare. The same shape swallowed a
+    `dump --map` usage error into an empty read that was taken for "this id has no record".
+
+    Cheap and unambiguous: the pipeline and the `$?` are one statement apart in the same call."""
+    hits: list[Evidence] = []
+    total = 0
+    for idx, cmd in bash_commands(turns):
+        if "$?" not in cmd:
+            continue
+        total += 1
+        if _EXIT_AFTER_PIPE.search(cmd):
+            hits.append(Evidence(idx, {"command": cmd[:160]}))
+    observed, of = (total - len(hits), total) if total else (0, 0)
+    return Assertion(36, "exit code not read through a pipe", observed, of, tuple(hits))
+
+
+#: An inverting grep and the pattern it excludes — quoted (which may contain `|`) or bare.
+_INVERTING_GREP = re.compile(
+    r"(?:grep|egrep|rg)\s+(?:-[\w-]+\s+)*-[\w]*v[\w]*\s+(?:(['\"])(.*?)\1|(\S+))")
+
+
+def assert_37_gate_filter_did_not_grow(turns: Sequence[Turn]) -> Assertion:
+    """37 — a gate's output filter did not GROW between consecutive runs of that gate.
+
+    Assertion 19 was withdrawn as unmeasurable: an inverting `grep` is not wrong by itself. This is
+    the measurable form of the same defect — the filter widening run over run, so each look sees
+    less than the last. On a live build one `validate` was read through
+    `grep -vE "Balance:|unclaimed|no use case reaches"`, the next added `bucket` and
+    `entry-point kind` to the same filter, and the families removed from view were never fixed and
+    never recorded.
+
+    **It follows the FILE.** The first version only measured filters inside the gate's own pipeline
+    and so could not see that build at all: the gate was redirected to a scratch file and the
+    `grep -v` was applied to the file in a separate statement, which is the normal shape. Scored
+    against the real transcript it returned 11/11 on the very run it was written from. A filter on
+    the gate's output is a filter on the gate's output, whichever statement applies it.
+
+    `of` counts consecutive same-gate pairs; `observed` counts those whose filter did not grow."""
+    #: An inverting grep and, when it carries a quoted pattern, how many alternatives it excludes.
+    def _width(text: str) -> int:
+        # Capture the PATTERN, not the invocation. Bounding the invocation at the next `|` — the
+        # obvious way to stop at a pipe — truncated at the first alternative INSIDE the quotes, so
+        # `"Balance:|unclaimed"` and `"Balance:|unclaimed|bucket|entry-point kind"` both measured
+        # as one term and the widening was invisible.
+        hits = _INVERTING_GREP.findall(text)
+        if not hits:
+            return 0
+        terms = sum((pat.count("|") + 1) if pat else 1 for _q, pat, bare in hits
+                    for pat in (pat or bare,))
+        return len(hits) * 100 + terms
+
+    runs: list[tuple[int, str, int]] = []
+    pending: dict[str, str] = {}          # redirect target -> gate that wrote it
+    for idx, cmd in bash_commands(turns):
+        # 1. the gate's own statement: note any file it wrote, and any filter applied inline.
+        for seg in _gate_statements(cmd):
+            gate = next((g for g in _GATES for x in _segments(seg) if _invokes(x, g)), None)
+            if gate is None:
+                continue
+            targets = _redirect_targets(seg)
+            if targets:
+                for t in targets:
+                    pending[t] = gate
+                continue                   # the reading happens later, against the file
+            runs.append((idx, gate, _width(seg)))
+        # 2. ANY statement that reads a file a gate wrote — that is this gate's view of it.
+        # Including statements in the SAME Bash call: `validate … > v.txt; grep -E … v.txt |
+        # grep -vE …` is one call and the commonest shape there is. Requiring a separate call
+        # skipped exactly the two runs this assertion was written from.
+        for st in _statements(cmd):
+            if any(_invokes(x, g) for x in _segments(st) for g in _GATES):
+                continue                   # the writer, not a read of it
+            for target, gate in pending.items():
+                if target in st:
+                    runs.append((idx, gate, _width(st)))
+                    break
+    good: list[Evidence] = []
+    bad: list[Evidence] = []
+    by_gate: dict[str, tuple[int, int]] = {}
+    for idx, gate, width in runs:
+        prev = by_gate.get(gate)
+        if prev is not None:
+            grew = width > prev[1]
+            (bad if grew else good).append(
+                Evidence(idx, {"gate": gate, "previous run": prev[0], "filter grew": str(grew)}))
+        by_gate[gate] = (idx, width)
+    return Assertion(37, "a gate's filter did not grow between runs",
+                     len(good), len(good) + len(bad), tuple(bad or good))
+
+
+def assert_38_written_json_is_read(turns: Sequence[Turn]) -> Assertion:
+    """38 — a `--json` output that was WRITTEN is afterwards read.
+
+    A live build ran `validate … --json > v.json`, never opened it, and re-derived its contents by
+    hand twice — getting 53 from the gate and 63 from the hand script, because the script lacked the
+    gate's composition-target exclusion. Ten of the resulting recorded exceptions named entities the
+    gate had never flagged, and a recorded exception is what silences a future gate.
+
+    `of` counts files a gate's `--json` was redirected into; `observed` counts those a later turn
+    names again."""
+    written: dict[str, int] = {}
+    for idx, cmd in bash_commands(turns):
+        for seg in _gate_statements(cmd):
+            if "--json" not in seg:
+                continue
+            for target in _redirect_targets(seg):
+                written.setdefault(target, idx)
+    if not written:
+        return Assertion(38, "a written --json is read", 0, 0, (),
+                         "no gate --json was redirected to a file")
+    good: list[Evidence] = []
+    bad: list[Evidence] = []
+    for target, at in written.items():
+        later = any(target in cmd for idx, cmd in bash_commands(turns) if idx > at)
+        (good if later else bad).append(Evidence(at, {"file": target, "read later": str(later)}))
+    return Assertion(38, "a written --json is read", len(good), len(good) + len(bad),
+                     tuple(bad or good))
+
+
+def assert_39_security_theme_is_fed(turns: Sequence[Turn],
+                                    ctx: "ScoreContext | None" = None) -> Assertion:
+    """39 — the audit's `security` theme is non-empty when the map carries `access: true` rules.
+
+    Its subject is the MAP, not the run. `method.md` moved auth surfaces out of `security[]` and
+    into business rules with `access: true`; the worklist builder was not updated, so the theme the
+    audit orders FIRST went permanently empty and 200 access-control claims triaged as ordinary
+    ones. A one-line cross-check would have caught it on any build after the change, and nothing
+    did for two."""
+    if ctx is None or ctx.map_path is None:
+        return Assertion(39, "the security theme is fed", 0, 0, (),
+                         "no --map given, so the map's own themes cannot be read")
+    try:
+        from coyodex.audit_model import l2_worklist_model
+        from coyodex.model import load_model
+        m = load_model(Path(ctx.map_path).read_text(encoding="utf-8"))
+    except Exception as e:
+        return Assertion(39, "the security theme is fed", 0, 0, (), f"map unreadable ({e})")
+    access = sum(1 for r in getattr(m, "rules", []) if getattr(r, "access", False))
+    if not access and not getattr(m, "security", []):
+        return Assertion(39, "the security theme is fed", 0, 0, (),
+                         "the map declares no access rules and no security rows")
+    themed = sum(1 for w in l2_worklist_model(m) if w.theme == "security")
+    ok = themed > 0
+    return Assertion(39, "the security theme is fed", 1 if ok else 0, 1,
+                     () if ok else (Evidence(0, {"access rules": str(access),
+                                                 "security-theme claims": str(themed)}),),
+                     f"{access} access rule(s), {themed} claim(s) in the security theme")
+
+
 ASSERTIONS = (
     assert_1_preindex_report_used,
     assert_2_preindex_not_hand_parsed,
@@ -2333,6 +2501,10 @@ ASSERTIONS = (
     assert_33_access_granularity_is_recorded,
     assert_34_no_guard_evaded_by_splitting_a_literal,
     assert_35_no_relative_map_path_after_cd_into_the_clone,
+    assert_36_exit_code_not_read_through_a_pipe,
+    assert_37_gate_filter_did_not_grow,
+    assert_38_written_json_is_read,
+    assert_39_security_theme_is_fed,
 )
 
 
@@ -2349,7 +2521,8 @@ def score_turns(turns: Sequence[Turn], *, transcript: str = "", label: str = "",
     _needs_ctx = {assert_6_grounding_recorded, assert_23_the_build_saw_the_whole_gate,
                   assert_24_no_inert_recorded_exception,
                   assert_32_every_access_rule_states_its_risk,
-                  assert_33_access_granularity_is_recorded}
+                  assert_33_access_granularity_is_recorded,
+                  assert_39_security_theme_is_fed}
     assertions = tuple(fn(turns, ctx) if fn in _needs_ctx else fn(turns)  # type: ignore[operator]
                        for fn in ASSERTIONS)
     return Scorecard(transcript=transcript, turns=len(turns), assertions=assertions,
