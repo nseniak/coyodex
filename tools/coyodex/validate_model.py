@@ -1268,7 +1268,8 @@ def unclaimed_self_entry_points(m: ProjectModel) -> list[EntryPoint]:
             and not (ep.id and ep.id in triggered)]
 
 
-def _group_unclaimed_by_component(m: ProjectModel, eps: list[EntryPoint]
+def _group_unclaimed_by_component(m: ProjectModel, eps: list[EntryPoint],
+                                  silenced_out: list[str] | None = None
                                   ) -> list[tuple[str, list[EntryPoint]]]:
     """Group unclaimed entry points by owning component, MINUS the ones already adjudicated (a `Cn`
     recorded under an 'Unclaimed surfaces' heading) or folded under a recorded 'Coverage exceptions'
@@ -1293,6 +1294,8 @@ def _group_unclaimed_by_component(m: ProjectModel, eps: list[EntryPoint]
     out: list[tuple[str, list[EntryPoint]]] = []
     for cid, group in sorted(by_comp.items()):
         if cid in accepted:
+            if silenced_out is not None:
+                silenced_out.append(cid)
             continue  # adjudicated by the operator — recorded in the map, so it stays quiet
         if cov_dirs and cid in comp_dir and _under_recorded(comp_dir[cid], cov_dirs):
             continue  # the owning component sits under a recorded 'Coverage exceptions' dir
@@ -1300,17 +1303,19 @@ def _group_unclaimed_by_component(m: ProjectModel, eps: list[EntryPoint]
     return out
 
 
-def unclaimed_surface_components(m: ProjectModel) -> list[tuple[str, list[EntryPoint]]]:
+def unclaimed_surface_components(m: ProjectModel, silenced_out: list[str] | None = None
+                                 ) -> list[tuple[str, list[EntryPoint]]]:
     """The EXTERNAL unclaimed surfaces, grouped per component. Shared by the completeness warning
     and `validate --emit-unclaimed`, which prints this same set as a ready extras block so the lead
     adjudicates ~a hundred surfaces at once instead of hand-typing them."""
-    return _group_unclaimed_by_component(m, unclaimed_external_entry_points(m))
+    return _group_unclaimed_by_component(m, unclaimed_external_entry_points(m), silenced_out)
 
 
-def unclaimed_self_components(m: ProjectModel) -> list[tuple[str, list[EntryPoint]]]:
+def unclaimed_self_components(m: ProjectModel, silenced_out: list[str] | None = None
+                              ) -> list[tuple[str, list[EntryPoint]]]:
     """The SELF-activated unclaimed surfaces, grouped per component — the class that used to be
     exempt automatically."""
-    return _group_unclaimed_by_component(m, unclaimed_self_entry_points(m))
+    return _group_unclaimed_by_component(m, unclaimed_self_entry_points(m), silenced_out)
 
 
 def completeness_counts(m: ProjectModel) -> dict[str, int]:
@@ -1436,14 +1441,15 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
     warnings: list[str] = []
     if m.entry_points and m.flows:
         comp_name = {c.id: c.name for c in m.components}
-        for cid, eps in unclaimed_surface_components(m):
+        silenced: list[str] = []
+        for cid, eps in unclaimed_surface_components(m, silenced):
             shown = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
             warnings.append(
                 f"{cid} ({comp_name.get(cid, cid)}): {len(eps)} externally-activated entry "
                 f"point(s) unclaimed by any use case ({shown}) — a missing use case or a dead "
                 f"surface; trace a use case through {cid}, or record '{cid}: <why>' under an "
                 "'Unclaimed surfaces' extras heading")
-        for cid, eps in unclaimed_self_components(m):
+        for cid, eps in unclaimed_self_components(m, silenced):
             shown = "; ".join(f"[{ep.kind}] {_clip(ep.trigger)}" for ep in eps)
             warnings.append(
                 f"{cid} ({comp_name.get(cid, cid)}): {len(eps)} self-activated entry point(s) no "
@@ -1451,6 +1457,19 @@ def _completeness_warnings(m: ProjectModel) -> list[str]:
                 "so this may be a missing use case; but a cron or a startup hook often has no actor "
                 f"to claim it, in which case record '{cid}: <why>' under an 'Unclaimed surfaces' "
                 "extras heading")
+        if silenced:
+            # THE DEBT KEEPS COUNTING. Recording an unclaimed surface silences the advisory, and a
+            # silence you cannot see reads exactly like coverage. One build recorded, honestly,
+            # "C455: a REAL GAP, recorded rather than dressed as ops" and "C192: … a genuine
+            # customer capability with fourteen live surfaces and no use case behind it" — after
+            # which `validate` reported `unclaimed: 0`. The honesty was real; the mechanism could
+            # not tell justified non-coverage from acknowledged debt. Same disclosure shape as
+            # 'Sweep debt', which had this problem first.
+            warnings.append(
+                f"{len(sorted(set(silenced)))} component(s) with unclaimed surfaces are suppressed "
+                f"by a recorded 'Unclaimed surfaces' line and counted as CLAIMED because of it: "
+                f"{_shown(sorted(set(silenced)), 10, unit='component(s)')}. A recorded gap is still "
+                f"a gap — re-read one by validating a copy with that line removed")
         for i, ep in enumerate(m.entry_points):
             if (grammar.effective_activation(ep.activation, ep.kind) == "external"
                     and not ep.component.strip()):

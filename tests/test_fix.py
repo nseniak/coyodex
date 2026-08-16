@@ -1467,3 +1467,32 @@ def test_the_listing_prints_each_shape_under_its_own_heading(capsys):
     same_at = out.index("Same-card duplicates")
     recip_at = out.index("Reciprocal")
     assert out.index("E1:has:E2", same_at) < recip_at, out
+
+
+def test_drop_all_refuses_to_make_a_reciprocal_judgement_for_you():
+    """`--drop-all` exists because passing 33 printed tokens back as 33 flags cost five turns of
+    shell quoting. It must NOT extend to reciprocal pairs: which of two cards keeps the relation is
+    a modelling judgement, and `fix`'s own header warns that a wrong drop deletes a real domain
+    fact. Sweeping those silently would trade a quoting problem for a correctness one."""
+    import json, tempfile, os
+    from coyodex.fix import main
+    m = {"format": "coyodex-map", "title": "t", "goal": "g",
+         "entities": [
+             {"id": "E1", "name": "Order", "source": "a.py:1", "meaning": "m",
+              "store": {"dep": "D1", "container": "o", "mode": "collection"},
+              "relations": [{"target": "E2", "verb": "hasMany", "how": "oid"}]},
+             {"id": "E2", "name": "Line", "source": "b.py:1", "meaning": "m",
+              "store": {"dep": "D1", "container": "l", "mode": "collection"},
+              "relations": [{"target": "E1", "verb": "belongsTo", "how": "oid"}]},
+         ],
+         "deps": [{"id": "D1", "name": "db", "kind": "datastore"}]}
+    with tempfile.TemporaryDirectory() as d:
+        p = os.path.join(d, "m.json")
+        with open(p, "w") as fh:
+            json.dump(m, fh)
+        assert main(["dedup-relation", "--map", p, "--drop-all"]) == 2
+        # and the map is untouched
+        with open(p) as fh:
+            after = json.load(fh)
+        assert len(after["entities"][0]["relations"]) == 1
+        assert len(after["entities"][1]["relations"]) == 1

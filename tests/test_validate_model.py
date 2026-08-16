@@ -1191,14 +1191,24 @@ def test_component_claimed_only_via_subflow_is_quiet():
     assert not any("unclaimed" in w for w in warnings_of(m))
 
 
-def test_unclaimed_surfaces_heading_silences_the_component():
+def test_unclaimed_surfaces_heading_silences_the_component_but_the_debt_keeps_counting():
+    """The record retires the PER-COMPONENT advisory and leaves a disclosure naming what it
+    silenced. Full silence was the old behaviour and it hid real debt: one build recorded, in its
+    own words, "C455: a REAL GAP" and "C192: a genuine customer capability with fourteen live
+    surfaces and no use case behind it", after which `validate` reported `unclaimed: 0`. The
+    honesty was real; the mechanism could not tell justified non-coverage from acknowledged debt.
+    'Sweep debt' already discloses its suppressions this way."""
     m = make_valid_model()
     m.components.append(Component(id="C2", name="Debug routes", purpose="ops"))
     m.entry_points = [make_entry_point("C2", trigger="GET /debug")]
-    assert any("unclaimed" in w for w in warnings_of(m))
+    assert any("unclaimed by any use case" in w for w in warnings_of(m))
     m.extras = [ExtraSection(heading="Unclaimed surfaces",
                              body="C2: superadmin debug surface — deliberate, no use case.")]
-    assert not any("unclaimed" in w for w in warnings_of(m))
+    after = warnings_of(m)
+    assert not any("unclaimed by any use case" in w for w in after), (
+        "the per-component advisory must be retired by the record")
+    debt = [w for w in after if "counted as CLAIMED" in w]
+    assert debt and "C2" in debt[0], f"the silenced component must stay visible as debt: {after}"
 
 
 def test_unclaimed_surfaces_record_is_read_from_line_starts_only():

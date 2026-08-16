@@ -11,6 +11,7 @@ canonical serializer (validity guaranteed by the serializer, never by hand):
                       `(src, verb, dst)` triple, so paired edges sharing endpoints never swap.
   fix drop-edge     — remove a refuted backbone edge and surface (or heal) the flow steps that rode it.
   fix dedup-relation — resolve the blocking "relation declared on both cards" / "declared twice"
+                       (--drop tok | --drop-file <path> | --drop-all for same-card only)
                       domain-card duplicates by dropping ONE human-chosen occurrence (never silent —
                       a wrong drop deletes a real domain fact).
   fix security-row  — rewrite a REFUTED security surface's text (and/or anchor), selected exactly.
@@ -502,6 +503,7 @@ def _duplicate_relations(m: ProjectModel) -> DuplicateRelations:
 def dedup_relation(argv: list[str]) -> int:
     map_path = to_reconcile = None
     drops: list[str] = []
+    drop_all = False
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -511,6 +513,21 @@ def dedup_relation(argv: list[str]) -> int:
         elif a == "--drop":
             i += 1
             drops.append(_need(argv, i, a))
+        elif a == "--drop-file":
+            # The listing's own tokens, one per line, straight back in. Passing 33 of them as
+            # separate flags cost five turns of shell word-splitting on a live build — an unquoted
+            # variable, then `xargs -a` (which macOS does not have), then a string-built argument
+            # list — before a bash array worked. A tool that prints N tokens and demands N flags
+            # back is asking the caller to solve a quoting problem to use it.
+            i += 1
+            fp = Path(_need(argv, i, a))
+            if not fp.exists():
+                print(f"ERROR: --drop-file {fp} not found", file=sys.stderr)
+                return 2
+            drops += [ln.strip().removeprefix("--drop").strip()
+                      for ln in fp.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        elif a == "--drop-all":
+            drop_all = True
         elif a == "--to-reconcile":
             i += 1
             to_reconcile = _need(argv, i, a)
@@ -529,6 +546,23 @@ def dedup_relation(argv: list[str]) -> int:
               file=sys.stderr)
         return 2
     m, _present = _load(Path(map_path))
+    if drop_all:
+        # RECIPROCAL only. A same-card duplicate is one card saying the same thing twice, so
+        # dropping either occurrence is the same edit — mechanical. A reciprocal pair is TWO cards
+        # each claiming the relation, and which side survives is a modelling judgement the tool's
+        # own header calls out ("a wrong drop deletes a real domain fact"). Sweeping those would
+        # make the judgement silently, which is worse than the quoting problem this flag solves.
+        dupes = _duplicate_relations(m)
+        if dupes.reciprocal:
+            print(f"ERROR: --drop-all covers same-card duplicates only; {len(dupes.reciprocal)} "
+                  f"reciprocal pair(s) need a per-pair decision about which side survives. Pass "
+                  f"those as --drop tokens (or --drop-file), then re-run with --drop-all.",
+                  file=sys.stderr)
+            return 2
+        drops = list(dupes.same_card)
+        if not drops:
+            print("dedup-relation: no same-card duplicates to drop.")
+            return 0
     if not drops:
         dupes = _duplicate_relations(m)
         same_card, reciprocal = dupes.same_card, dupes.reciprocal
@@ -544,6 +578,9 @@ def dedup_relation(argv: list[str]) -> int:
             for tok in reciprocal:
                 print(f"  --drop {tok}")
         print("\nRe-run with the chosen --drop token(s). Each drops ONE occurrence.")
+        if same_card:
+            print("  Same-card duplicates are mechanical: `--drop-all` takes them all in one go.")
+        print("  Or save these lines to a file and pass `--drop-file <path>` — no shell quoting.")
         return 0
     dropped = 0
     resolved: list[tuple[str, str, str]] = []
