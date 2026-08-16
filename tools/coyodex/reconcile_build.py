@@ -16,10 +16,10 @@ code path that writes.
 Read the FRAGMENTS during a build (the synthesis pass), a MAP when re-assigning on a built one:
 
     coyodex reconcile --rules rules.json --fragments .coyodex/build-fragments/*.json \\
-                      --out .coyodex/reconcile.json [--dry-run]
+                      --out .coyodex/reconcile.json [--dry-run] [--only-unmatched]
 
     coyodex reconcile --rules rules.json --map .coyodex/project-map.json \\
-                      --out .coyodex/reconcile.json [--dry-run]
+                      --out .coyodex/reconcile.json [--dry-run] [--only-unmatched]
 
 `--fragments` exists because `--map` alone made this command unreachable at the one moment a build
 needs it. The reconcile file is an INPUT to `assemble`, and `assemble` is what produces the map — so
@@ -171,6 +171,30 @@ def expand(m: ProjectModel, rules: list[dict]) -> tuple[dict, list[str]]:
             report.append(f"rules[{i}]: '{where}' → {len(kept)} element(s) "
                           f"[{', '.join(sorted(fields))}]")
 
+    # THE TARGET must exist too, not just the source. A rule may name a perfectly good glob and
+    # assign it to a group nobody declared — `subdomain: SD9` while `subdomains` holds SD1..SD8 —
+    # and the dry run reported three clean passes over exactly that before `assemble` died with
+    # "E62 parent SD9 is undefined … ASSEMBLY FAILED", four turns later. Checking the source and
+    # not the destination is half a check.
+    declared: dict[str, set[str]] = {
+        "subsystem": {g.id for g in m.subsystems},
+        "subdomain": {g.id for g in m.subdomains},
+        "block": {g.id for g in m.blocks},
+        "capability": {g.id for g in m.capabilities},
+        "runs_in": {u.unit for u in (m.deployment or [])},
+        "entry_points": {ep.id for ep in m.entry_points if ep.id},
+    }
+    for i, r in enumerate(rules):
+        for f, space in declared.items():
+            if f not in r or not space:
+                continue
+            vals = r[f] if isinstance(r[f], list) else [r[f]]
+            missing = [v for v in vals if v not in space]
+            if missing:
+                report.append(f"rules[{i}]: assigns {f}={', '.join(map(str, missing))}, which "
+                              f"nothing declares — the map has no such {f}. `assemble` will REFUSE "
+                              f"this; declare it or fix the value.")
+
     # collapse to the compact `set` shape: one entry per distinct field-value combination
     groups: dict[str, list[str]] = {}
     for eid, fields in assign.items():
@@ -283,6 +307,7 @@ def main(argv: list[str] | None = None) -> int:
     frag_paths = _args_after(argv, "--fragments")
     out_path = _arg(argv, "--out", _DEFAULT_RECONCILE) or _DEFAULT_RECONCILE
     dry = "--dry-run" in argv
+    only_unmatched = "--only-unmatched" in argv
     if not rules_path:
         print("ERROR: --rules is required", file=sys.stderr)
         return 2
@@ -307,10 +332,21 @@ def main(argv: list[str] | None = None) -> int:
           else f"reading map {map_path or _DEFAULT_MAP}", file=sys.stderr)
 
     doc, report = expand(m, rules)
-    for line in report:
+    # One line per rule and no summary meant "which rules matched nothing" could only be answered by
+    # re-running the command and grepping it — a live build ran it four times to get there. The
+    # summary answers it once; `--only-unmatched` prints just those lines for a rules file being
+    # iterated on.
+    unmatched = [l for l in report if "matched NOTHING" in l]
+    undeclared = [l for l in report if "which nothing declares" in l]
+    shown_lines = (unmatched + undeclared) if only_unmatched else report
+    for line in shown_lines:
         print(("  " if "→" in line else "  WARN ") + line, file=sys.stderr)
     for line in coverage_report(m, doc):
         print("  WARN " + line, file=sys.stderr)
+    print(f"  SUMMARY: {len(rules)} rule(s) — {len(rules) - len(unmatched)} matched, "
+          f"{len(unmatched)} matched nothing, {len(undeclared)} assign an undeclared target."
+          + ("" if not (unmatched or undeclared) else
+             "  Re-run with --only-unmatched to see just those."), file=sys.stderr)
     total = sum(len(s["ids"]) for s in doc["set"])
     if total == 0:
         print("ERROR: no element matched any rule — nothing written (check the source_glob "

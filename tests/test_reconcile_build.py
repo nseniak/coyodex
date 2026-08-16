@@ -661,3 +661,14 @@ def test_a_malformed_drop_relations_directive_is_refused_at_load():
         except ReconcileError:
             continue
         raise AssertionError(f"accepted a malformed directive: {bad}")
+
+
+def test_a_rule_assigning_an_undeclared_group_is_reported_before_assemble_refuses_it():
+    """Checking the SOURCE glob and not the DESTINATION is half a check. A rules file assigned
+    `subdomain: SD9` while the map declared SD1..SD8; three `--dry-run` passes reported clean and
+    `assemble` then died with "E62 parent SD9 is undefined … ASSEMBLY FAILED", four turns later."""
+    m = make_map()
+    m.entities.append(Entity(id="E1", name="Thing", source="app/plugins/x.py:1"))
+    _doc, report = expand(m, [{"ids": ["E1"], "subdomain": "SD99"}])
+    bad = [r for r in report if "SD99" in r and "nothing declares" in r]
+    assert bad, f"an undeclared assignment target must be reported, got: {report}"
