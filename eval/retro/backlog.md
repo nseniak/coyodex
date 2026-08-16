@@ -65,7 +65,7 @@ These are `method.md` at the repo root and `method/templates/`, not the retro me
 
 | # | change | why |
 |---|---|---|
-| 1 | `skeptic-contract.md` needs an explicit falsification mandate outweighing its WARNING block, plus a per-theme overclaim hint including a `rule` entry | The template contains no instance of *disprove*, *falsify* or "try to refute", while `method.md` says each skeptic is told to disprove the claim. Its largest block argues against refuting. Outcome: 823 verdict rows, 0 unverifiable, 6 refuted. **Run an experiment first** — inject known-false claims into a batch, or re-run an already-verdicted batch under a falsification-framed prompt. The wording is a hypothesis about the cause; changing it blind means never learning whether it was. |
+| 1 | ~~`skeptic-contract.md` needs an explicit falsification mandate~~ **WITHDRAWN — measured, 2026-08-16** | The experiment it was gated on ran: 10 planted falsehoods, four shapes, both contracts, two skeptics each. **10/10 detection either way, zero false positives, identical verdict splits** — the wording made no measurable difference, and the hardest shape (a two-clause rule with only the second clause reversed) was caught every time. The low refutation rate is much better explained by the map being right. Write-up and answer key in `eval/experiments/`. |
 | 2 | ~~The skeptic contract must require the claim's own anchor line to be opened per row, and forbid machine-generated `evidence`/`note`~~ **LANDED** `898233a` |
 | 3 | ~~Make the harvest contract fillable — complete it with the row shapes, or generate it~~ **LANDED** `80e77e3` (SERVES slot; the contract is still hand-filled) |
 | 4 | ~~Harvest and trace briefs must cite the UC/CAP/HP ids their slice serves~~ **LANDED** `80e77e3` |
