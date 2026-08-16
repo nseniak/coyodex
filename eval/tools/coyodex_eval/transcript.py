@@ -443,7 +443,8 @@ def bash_commands(turns: Sequence[Turn]) -> tuple[tuple[int, str], ...]:
 #: `files`, `loc`, `map` and `runs`.
 _COYODEX_SUBCOMMANDS = frozenset({
     "anchor-drift", "archive", "assemble", "audit", "balance", "bless", "claims", "compare",
-    "cost", "diff", "dump", "finalize", "fix", "grounding", "hash", "judge", "lint-fragment", "preindex",
+    "cost", "diff", "dump", "finalize", "fix", "grounding", "hash", "judge", "lint-fragment",
+    "mutate", "preindex",
     "process", "protocol", "provenance", "reconcile", "record", "render", "retro-precheck",
     "run", "score", "scope", "serve", "transcript", "validate",
 })

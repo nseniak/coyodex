@@ -117,6 +117,9 @@ RECIPES: dict[str, tuple] = {
     "bless":          (lambda t: ["bless", str(_run_dir(t, "run")), str(_run_dir(t, "baseline"))], OK),
     "archive":        (lambda t: ["archive", str(t / "empty"), "--list"], (0, 1, 2)),
     "retro-precheck": (lambda t: ["retro-precheck", "--repo", str(t / "empty"), "--json"], (0, 1)),
+    "mutate":         (lambda t: ["mutate", "plant", str(FIXTURE / "claims-sample.json"),
+                                  "--n", "2", "--repo", str(FIXTURE),
+                                  "--out", str(t / "m.json"), "--key", str(t / "k.json")], OK),
     "run":            (lambda t: ["run", "--project", "trapdoor", "--map", str(MAP),
                                   "--repo", str(FIXTURE)], OK),
 }

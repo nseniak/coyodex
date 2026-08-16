@@ -1,0 +1,38 @@
+{
+ "schema": "coyodex/theme-batch/v1",
+ "theme": "rule",
+ "claims": [
+  {
+   "claim": "Auth surface 'Ticket write routes (transition, comment, lock)' is protected by: src/auth/gate.py:62",
+   "anchor": "src/auth/gate.py:62",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole.",
+   "theme": "security",
+   "drift_eligible": true
+  },
+  {
+   "claim": "Auth surface 'Ticket read routes' is protected by: src/auth/gate.py:72",
+   "anchor": "src/auth/gate.py:72",
+   "detail": null,
+   "why_risky": "security boundary — a false claim here is an access-control hole.",
+   "theme": "security",
+   "drift_eligible": true
+  },
+  {
+   "claim": "C1 enforces C5",
+   "anchor": "src/api/passthrough_controller.py:29",
+   "detail": "From: C1 = Ticket read handlers (src/api/passthrough_controller.py:21); entry points: GET /tickets/{id} — an agent opens one ticket (src/entrypoints/http.py:37); GET /tickets — an agent lists a tenant's queue (src/entrypoints/http.py:38); GET /tickets/{id}/comments — an agent reads a thread (src/entrypoints/http.py:39); To: C5 = Authorisation gate (src/auth/gate.py:34)",
+   "why_risky": "'enforces' is a security-critical relationship — verify the code actually does it.",
+   "theme": "security",
+   "drift_eligible": true
+  },
+  {
+   "claim": "C2 enforces C5",
+   "anchor": "src/api/record_controller.py:30",
+   "detail": "From: C2 = Ticket write handlers (src/api/record_controller.py:20); entry points: POST /tickets/{id}/transition — an agent moves a ticket (src/entrypoints/http.py:40); POST /tickets/{id}/comments — a reporter appends a comment (src/entrypoints/http.py:41); POST /locks/{key} — an operator claims an advisory lock (src/entrypoints/http.py:42); To: C5 = Authorisation gate (src/auth/gate.py:34)",
+   "why_risky": "'enforces' is a security-critical relationship — verify the code actually does it.",
+   "theme": "security",
+   "drift_eligible": true
+  }
+ ]
+}
