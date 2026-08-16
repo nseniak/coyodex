@@ -2730,7 +2730,10 @@ def orphan_deployment_units(m: ProjectModel) -> list[str]:
     deployment section — naming the proxy, the two datastores, the log forwarder and the test
     doubles alongside the three real runtimes — read as a linkage drop (4/4 → 3/11) and failed the
     gate, while the section it was judging had got strictly more accurate. Orphans answer the
-    question the gate is actually asking, and they are what `validate` already advises on.
+    question the gate is actually asking, and they are the same computation `validate` advises
+    on — though not the same REPORTED set: `validate` suppresses its advisory when the map
+    records `runs-in/quality`, and the gate deliberately does not honour that record, so a map
+    can print zero orphan advisories while this returns three.
 
     **The `used` guard is part of the definition, not an optimisation.** A map that places nothing
     at all has not "orphaned" its units — it has not adopted `runs_in`, which is a different finding
