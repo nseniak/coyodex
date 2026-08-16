@@ -1,0 +1,715 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How coyodex works</title>
+<style>
+:root{
+  --bg:#fbf9f5; --surface:#ffffff; --surface2:#f5f1e9;
+  --ink:#22201c; --ink2:#54504a; --ink3:#847d73;
+  --line:#e2dbcd; --line2:#cfc5b2;
+  --rust:#b1502a; --rust-soft:#f6e6de;
+  --sky:#2e6f8e; --sky-soft:#e0eef4;
+  --sand:#a8842c; --sand-soft:#f7eed6;
+  --moss:#4c7a4a; --moss-soft:#e5f0e2;
+  --plum:#7a4f86; --plum-soft:#f0e7f3;
+  --radius:12px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#17161a; --surface:#1f1e23; --surface2:#26242b;
+    --ink:#eceaea; --ink2:#bab5b0; --ink3:#8b857f;
+    --line:#36333b; --line2:#4a4650;
+    --rust:#e08b62; --rust-soft:#3a2820;
+    --sky:#79b6d2; --sky-soft:#1e2c34;
+    --sand:#d6b45f; --sand-soft:#332c1c;
+    --moss:#8dbd88; --moss-soft:#202c1f;
+    --plum:#bb96c6; --plum-soft:#2b2231;
+  }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.65 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  overflow-x:hidden;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px 96px;display:grid;grid-template-columns:1fr;gap:0}
+@media(min-width:1080px){
+  .wrap{grid-template-columns:230px minmax(0,1fr);gap:56px;padding-top:8px}
+  nav.toc{position:sticky;top:0;align-self:start;max-height:100vh;overflow:auto;padding:48px 0 40px}
+}
+nav.toc{font-size:14px;line-height:1.5}
+nav.toc .toc-title{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);margin-bottom:12px}
+nav.toc a{display:block;padding:5px 0;color:var(--ink2);text-decoration:none;border-left:2px solid var(--line);padding-left:12px}
+nav.toc a:hover{color:var(--rust);border-left-color:var(--rust)}
+nav.toc a.sub{padding-left:24px;font-size:13px;color:var(--ink3)}
+@media(max-width:1079px){nav.toc{display:none}}
+
+main{min-width:0;padding-top:8px}
+
+header.hero{padding:64px 0 40px;border-bottom:1px solid var(--line);margin-bottom:44px}
+header.hero .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--rust);font-weight:600}
+h1{font-size:clamp(32px,5vw,46px);line-height:1.12;margin:14px 0 16px;letter-spacing:-.02em}
+header.hero p.lede{font-size:19px;line-height:1.6;color:var(--ink2);margin:0;max-width:62ch}
+
+h2{font-size:27px;line-height:1.25;margin:64px 0 6px;letter-spacing:-.015em;scroll-margin-top:24px}
+h2 .num{color:var(--rust);font-variant-numeric:tabular-nums;margin-right:10px;font-size:20px;vertical-align:2px}
+h2+p.sub{color:var(--ink3);margin:0 0 26px;font-size:16px}
+h3{font-size:19px;margin:38px 0 10px;letter-spacing:-.01em}
+h4{font-size:15px;margin:26px 0 8px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink3)}
+p{margin:0 0 16px;max-width:70ch}
+ul,ol{max-width:70ch;padding-left:22px;margin:0 0 18px}
+li{margin:0 0 9px}
+strong{font-weight:640}
+code{font-family:var(--mono);font-size:.88em;background:var(--surface2);border:1px solid var(--line);border-radius:5px;padding:1px 5px}
+a{color:var(--rust)}
+hr{border:0;border-top:1px solid var(--line);margin:52px 0}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;margin:0 0 20px}
+.callout{border-left:3px solid var(--rust);background:var(--rust-soft);border-radius:0 var(--radius) var(--radius) 0;padding:16px 20px;margin:22px 0}
+.callout p:last-child{margin-bottom:0}
+.callout .tag{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--rust);font-weight:700;margin-bottom:6px}
+
+.grid2{display:grid;grid-template-columns:1fr;gap:16px;margin:22px 0}
+@media(min-width:720px){.grid2{grid-template-columns:1fr 1fr}}
+.grid3{display:grid;grid-template-columns:1fr;gap:16px;margin:22px 0}
+@media(min-width:720px){.grid3{grid-template-columns:repeat(3,1fr)}}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:18px}
+.tile h5{margin:0 0 8px;font-size:15px}
+.tile p{font-size:14.5px;color:var(--ink2);margin:0;max-width:none}
+
+.tablewrap{overflow-x:auto;margin:22px 0;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:520px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink3);font-weight:600;background:var(--surface2)}
+tr:last-child td{border-bottom:0}
+td code{white-space:nowrap}
+
+/* ---------- diagram primitives ---------- */
+figure.dg{margin:28px 0;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);padding:22px 20px 16px;overflow-x:auto}
+figure.dg figcaption{margin-top:16px;padding-top:12px;border-top:1px solid var(--line);font-size:13.5px;color:var(--ink3);line-height:1.5}
+figure.dg figcaption b{color:var(--ink2);font-weight:620}
+.dgtitle{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin-bottom:16px}
+
+.row{display:flex;align-items:stretch;gap:10px;flex-wrap:wrap}
+.row.center{align-items:center}
+.col{display:flex;flex-direction:column;gap:10px}
+.grow{flex:1 1 0;min-width:0}
+
+.node{border:1px solid var(--line2);border-radius:9px;background:var(--surface2);padding:11px 13px;font-size:13.5px;line-height:1.4;min-width:0}
+.node b{display:block;font-size:13.5px;font-weight:640;margin-bottom:2px}
+.node span{display:block;color:var(--ink3);font-size:12.5px}
+.node.rust{background:var(--rust-soft);border-color:var(--rust)}
+.node.sky{background:var(--sky-soft);border-color:var(--sky)}
+.node.sand{background:var(--sand-soft);border-color:var(--sand)}
+.node.moss{background:var(--moss-soft);border-color:var(--moss)}
+.node.plum{background:var(--plum-soft);border-color:var(--plum)}
+.node.ghost{background:transparent;border-style:dashed}
+.node.wide{flex:1 1 100%}
+
+.arr{display:flex;align-items:center;justify-content:center;color:var(--ink3);font-size:19px;padding:0 2px;flex:0 0 auto}
+.arr.down{padding:2px 0;justify-content:flex-start;padding-left:26px}
+.arr small{font-size:11.5px;color:var(--ink3);margin-left:6px}
+
+.lane{border:1px dashed var(--line2);border-radius:10px;padding:12px;background:transparent}
+.lane .lanelabel{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink3);font-weight:700;margin-bottom:10px}
+
+.steps{display:flex;flex-direction:column;gap:0}
+.step{display:grid;grid-template-columns:34px minmax(0,1fr);gap:14px;padding:0 0 18px;position:relative}
+.step:not(:last-child)::before{content:"";position:absolute;left:17px;top:30px;bottom:0;width:2px;background:var(--line)}
+.step .bullet{width:34px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;background:var(--surface2);border:1px solid var(--line2);font-size:12px;font-weight:700;color:var(--ink2);font-variant-numeric:tabular-nums}
+.step.fan .bullet{background:var(--sky-soft);border-color:var(--sky);color:var(--sky)}
+.step.gate .bullet{background:var(--rust-soft);border-color:var(--rust);color:var(--rust)}
+.step .body b{display:block;font-size:15px;margin:5px 0 4px}
+.step .body p{font-size:14.5px;color:var(--ink2);margin:0 0 6px;max-width:66ch}
+.step .body .out{font-size:13px;color:var(--ink3)}
+.step .body .out em{font-style:normal;color:var(--moss);font-weight:600}
+
+.pill{display:inline-block;font-size:11.5px;padding:2px 8px;border-radius:99px;border:1px solid var(--line2);background:var(--surface2);color:var(--ink2);margin:0 6px 6px 0}
+.pill.fan{background:var(--sky-soft);border-color:var(--sky);color:var(--sky)}
+.pill.solo{background:var(--sand-soft);border-color:var(--sand);color:var(--sand)}
+.pill.check{background:var(--rust-soft);border-color:var(--rust);color:var(--rust)}
+
+.timeline{display:flex;gap:0;align-items:flex-start;overflow-x:auto;padding-bottom:6px}
+.tl{flex:1 1 0;min-width:130px;padding:0 10px;border-top:2px solid var(--line);position:relative;padding-top:16px}
+.tl::before{content:"";position:absolute;top:-6px;left:10px;width:10px;height:10px;border-radius:99px;background:var(--rust)}
+.tl b{display:block;font-size:13.5px;margin-bottom:3px}
+.tl span{font-size:12.5px;color:var(--ink3)}
+
+footer{margin-top:72px;padding-top:24px;border-top:1px solid var(--line);color:var(--ink3);font-size:13.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="toc">
+  <div class="toc-title">Contents</div>
+  <a href="#what">1 · What it does</a>
+  <a href="#principle">2 · The principle</a>
+  <a href="#challenges">3 · The hard parts</a>
+  <a href="#map">4 · What is in a map</a>
+  <a href="#phases">5 · How a map is built</a>
+  <a href="#quality">6 · The quality gates</a>
+  <a href="#deliverables">7 · What you get</a>
+  <a href="#loop">8 · Shaping the map</a>
+  <a href="#daily">9 · The commands</a>
+</nav>
+
+<main>
+
+<header class="hero">
+  <div class="eyebrow">coyodex</div>
+  <h1>How coyodex works</h1>
+  <p class="lede">coyodex turns a codebase into a map you can read top-down: what the system does, who
+  uses it, which parts do the work, and where each of those claims lives in the code. This page
+  explains the tool from the outside in — the goal first, then the idea behind it, then the steps
+  it runs and what each step leaves behind.</p>
+</header>
+
+<!-- ===================================================================== -->
+<h2 id="what"><span class="num">1</span>What the tool does</h2>
+<p class="sub">The problem, and the shape of the answer.</p>
+
+<p>When a coding agent writes a lot of code for you, you end up owning code you never read. It works
+until the day you need to change it or judge it, and then you have nothing to stand on. coyodex
+exists to give you that ground back.</p>
+
+<p>You point it at a repository. It reads the project's own documents and its code, and produces a
+<strong>map</strong>: a set of connected descriptions, written in plain language, where every single
+statement is attached to a real file and line number. The map is saved next to your code, committed
+with it, and opened in a browser as an interactive picture you can click into — from "what this
+product does" all the way down to the exact line that does it.</p>
+
+<figure class="dg">
+  <div class="dgtitle">Diagram 1 — the whole tool in one picture</div>
+  <div class="row center">
+    <div class="node grow"><b>Your repository</b><span>source code, README, design notes, build files, deploy files</span></div>
+    <div class="arr">→</div>
+    <div class="node rust grow"><b>coyodex</b><span>a written method the coding agent follows, plus measuring and checking programs</span></div>
+    <div class="arr">→</div>
+    <div class="node sky grow"><b>The map</b><span>one structured file, stored beside your code and committed with it</span></div>
+  </div>
+  <div class="arr down">↓</div>
+  <div class="row">
+    <div class="node moss grow"><b>An interactive picture</b><span>opened in a browser; zoom from the whole product down to a line of code</span></div>
+    <div class="node moss grow"><b>A readable text version</b><span>committed too, so changes to the map show up in ordinary code review</span></div>
+  </div>
+  <figcaption><b>Read it as:</b> coyodex is not a drawing tool. It produces one data file; everything you
+  look at is generated from that file, so no picture can ever disagree with the map.</figcaption>
+</figure>
+
+<p>Three things make it different from asking an agent to "draw me a diagram of this repo":</p>
+
+<div class="grid3">
+  <div class="tile"><h5>It is anchored</h5><p>Every box, arrow and sentence carries a file and line
+  number. You click a claim and land on the code that backs it.</p></div>
+  <div class="tile"><h5>It is explained</h5><p>Every element carries a plain-language description of
+  what it is for — not just a name lifted from a folder.</p></div>
+  <div class="tile"><h5>It is challenged</h5><p>The map is measured, cross-checked against itself, and
+  then re-read by fresh agents whose only job is to prove it wrong.</p></div>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="principle"><span class="num">2</span>The principle it works on</h2>
+<p class="sub">One idea, four consequences.</p>
+
+<p>The idea is this: <strong>a description of software is only useful if it can be checked.</strong>
+Prose about a codebase rots silently — nobody can tell a correct paragraph from a confident wrong
+one. So coyodex refuses to produce prose. It produces a structured record where every claim is small,
+typed, and points at evidence, which makes the record checkable by a program, by another agent, and
+by you.</p>
+
+<p>Four consequences follow from that one idea, and they explain nearly every design choice in the
+tool.</p>
+
+<h3>a. The map is data; everything you see is generated</h3>
+<p>There is exactly one stored map file. The readable text version and the interactive picture are
+both produced from it on demand and are never edited by hand. So the diagram cannot drift from the
+description, and the description cannot drift from the record. If you want the map changed, the
+record changes and the views follow.</p>
+
+<h3>b. Every claim carries its evidence</h3>
+<p>A relationship such as "the sign-up page sends the form to the accounts service" is stored with the
+line in the page's own code where that call happens. Same for the definition of every part, every
+outside service, every stored thing, every security check, every step in every story. A claim with no
+location is treated as an unfinished claim, not as a small omission — the tooling blocks on it.</p>
+
+<h3>c. The map is written twice, on purpose, so the two copies can argue</h3>
+<p>coyodex records the system on two sides that are built from different sources and must agree.</p>
+
+<figure class="dg">
+  <div class="dgtitle">Diagram 2 — the two sides of a map, and the joint between them</div>
+  <div class="row">
+    <div class="lane grow">
+      <div class="lanelabel">The story side — why and who</div>
+      <div class="col">
+        <div class="node sand"><b>The goal</b><span>the problem the project solves, and for whom</span></div>
+        <div class="node sand"><b>The words</b><span>the project's own vocabulary, defined once and used everywhere</span></div>
+        <div class="node sand"><b>The people and systems that start things</b><span>each with what they want</span></div>
+        <div class="node sand"><b>The jobs they get done</b><span>one goal each: a trigger and an outcome</span></div>
+        <div class="node sand"><b>The main walk-through</b><span>those jobs in one end-to-end order that tells a coherent story</span></div>
+      </div>
+    </div>
+    <div class="arr">⇄</div>
+    <div class="lane grow">
+      <div class="lanelabel">The machine side — the parts that do it</div>
+      <div class="col">
+        <div class="node sky"><b>Groups and parts</b><span>the code organised into readable levels</span></div>
+        <div class="node sky"><b>Ways in</b><span>every route, command, webhook, scheduled job, background loop</span></div>
+        <div class="node sky"><b>Things it knows about</b><span>the real named data types, their fields and how they relate</span></div>
+        <div class="node sky"><b>Outside services</b><span>databases, queues, third-party systems, libraries</span></div>
+        <div class="node sky"><b>Links</b><span>who calls, reads, writes, enforces what — each with a code line</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="arr down">↓</div>
+  <div class="row">
+    <div class="node rust wide"><b>The joint: one step-by-step story per job</b><span>each job's flow is an ordered list of interactions between the parts, each step with its own action sentence and its own code line. The story side says what should happen; the flow says which parts actually do it. Because the same fact is recorded on both sides, a program can make them contradict each other.</span></div>
+  </div>
+  <figcaption><b>Why this matters:</b> a single-sided description can only be judged by a human reading it.
+  A double-sided one can be tested. For example: if the walk-through claims a step reads something
+  that only a later step creates, that is a contradiction the tool finds with no code and no model.</figcaption>
+</figure>
+
+<h3>d. Nothing is trusted because a smart agent wrote it</h3>
+<p>The map is produced by an agent, so the method assumes the agent is wrong in predictable ways and
+builds the answer around that assumption: measure the code with programs instead of guessing sizes,
+check the record with programs instead of re-reading it, and hand the finished claims to
+<strong>different agents that never saw the reasoning</strong> and are asked to disprove them. That is
+covered in section 6.</p>
+
+<!-- ===================================================================== -->
+<h2 id="challenges"><span class="num">3</span>The hard parts, and how each is handled</h2>
+<p class="sub">Five real problems in mapping a codebase, and the specific answer to each.</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th style="width:23%">The challenge</th><th style="width:33%">Why it defeats the naive approach</th><th>What coyodex does</th></tr></thead>
+<tbody>
+<tr>
+  <td><b>The codebase does not fit in one head</b></td>
+  <td>One agent reading a whole repo runs out of room and starts summarising instead of reading, so whole areas quietly become one vague box.</td>
+  <td>The work is split into slices with no overlap and given to many agents at once, each returning a small structured result instead of text. A separate step merges them and settles the naming.</td>
+</tr>
+<tr>
+  <td><b>An agent describing code invents things</b></td>
+  <td>Plausible-sounding architecture is easy to produce and impossible to spot later. Typical inventions: crediting a part with an outside call that a helper it uses actually makes, or calling a part the owner of data it only passes along.</td>
+  <td>Every claim must carry the line that proves it. Programs then check those lines exist and actually do something. Finally fresh agents re-read the code and try to refute each claim, and a refutation is itself re-checked before the map is edited.</td>
+</tr>
+<tr>
+  <td><b>Choosing the right level of detail</b></td>
+  <td>Too coarse and a heavy area collapses into one meaningless box; too fine and you get 400 boxes nobody can read. Judged by eye, this drifts wildly between runs.</td>
+  <td>The code is measured first — size, file counts, change history per folder — and that measurement produces an expected number of parts, with a generous tolerance band. The agent still decides; the number tells it where to look and forces it to write down a reason when it disagrees.</td>
+</tr>
+<tr>
+  <td><b>Diagrams that are technically right but unreadable</b></td>
+  <td>A correct picture with 40 boxes on one screen teaches nobody anything.</td>
+  <td>A readability rule sizes the screens: each level shows about five to seven boxes, and deeper levels are created until that holds. A checking program reports every screen outside the band.</td>
+</tr>
+<tr>
+  <td><b>The map goes stale the day after it is written</b></td>
+  <td>A document that describes last month's code is worse than none, because people still trust it.</td>
+  <td>The map records exactly which commit it describes, and is committed together with the code. So there is never any doubt about which version of the code a map is talking about, or how far the code has moved since — unlike a document with no date on it, which people keep trusting long after it stopped being true.</td>
+</tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout">
+  <span class="tag">The failure this is really guarding against</span>
+  <p>A map that has never been challenged and a map that has been fully verified look identical, read
+  identically, and pass every automatic check identically. That is why the verification pass is
+  compulsory, why it is done by agents that did not build the map, and why the map itself stores the
+  count of how many claims were challenged and how many survived. An unchallenged map says so.</p>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="map"><span class="num">4</span>What is actually in a map</h2>
+<p class="sub">The contents, and how you move through them.</p>
+
+<p>A map is one record holding the following, all cross-linked. You never read it as a file — you read
+it through the browser view, one level at a time.</p>
+
+<div class="grid2">
+  <div class="tile"><h5>The story</h5><p>The goal in a paragraph. The project's vocabulary. Who starts
+  things and what they want. The jobs the system does. One end-to-end walk-through of those jobs.</p></div>
+  <div class="tile"><h5>The structure</h5><p>Parts of the code grouped into nested levels, each with a
+  purpose, the technology it is written in, and where it lives.</p></div>
+  <div class="tile"><h5>The ways in</h5><p>Every route, command, tool, webhook — and, separately, everything
+  that starts by itself: scheduled jobs, background loops, queue readers, startup hooks, with how often
+  each runs.</p></div>
+  <div class="tile"><h5>The things it knows about</h5><p>The real named data types with their fields and
+  the relations between them, grouped into areas when there are many, plus where each one is stored.</p></div>
+  <div class="tile"><h5>The links</h5><p>One project-wide list of who calls, reads, writes, routes to,
+  enforces or persists what — each with a short reason and a code line.</p></div>
+  <div class="tile"><h5>The step-by-step stories</h5><p>One ordered flow per job. Machinery shared by
+  several stories is written once and referenced, so it is told the same way everywhere.</p></div>
+  <div class="tile"><h5>The running system</h5><p>Which processes exist, what runs inside each one, which
+  ones talk to which, and which environments each one is deployed in.</p></div>
+  <div class="tile"><h5>The operational facts</h5><p>How to run and build it, what it logs and where,
+  what the access-control surfaces are and where each check is enforced, what the settings are.</p></div>
+  <div class="tile"><h5>The test gaps</h5><p>Not a coverage percentage — a list of the things that matter,
+  each marked tested or not, with the risk of the gap.</p></div>
+  <div class="tile"><h5>The honesty record</h5><p>Confidence on every element (checked against code, or
+  inferred), how many claims were challenged and how many held up, and any warning the team decided
+  to accept, with the reason written into the map.</p></div>
+</div>
+
+<figure class="dg">
+  <div class="dgtitle">Diagram 3 — how you move through it: one map, many depths</div>
+  <div class="col">
+    <div class="node rust"><b>The system in the world</b><span>the product, the people who use it, the outside services it depends on — one screen</span></div>
+    <div class="arr down">↓ <small>open a group</small></div>
+    <div class="node sand"><b>Groups</b><span>the big areas of the system, and what depends on what between them</span></div>
+    <div class="arr down">↓ <small>open a group again — repeats as deep as the project needs</small></div>
+    <div class="node sky"><b>Parts</b><span>module-sized units inside a group, with their labelled arrows</span></div>
+    <div class="arr down">↓ <small>click any element</small></div>
+    <div class="node moss"><b>The code</b><span>the file and line, shown in the browser exactly as it was at the map's commit</span></div>
+  </div>
+  <div class="arr down">↕ <small>and across, at any point:</small></div>
+  <div class="row">
+    <div class="node plum grow"><b>The walk-through</b><span>the whole product as a sequence of jobs; click a step to open that job's flow</span></div>
+    <div class="node plum grow"><b>A job's flow</b><span>a step-by-step diagram of the parts involved; click a step to open the exact line</span></div>
+    <div class="node plum grow"><b>Backwards</b><span>from any part or data type, see every job whose story passes through it</span></div>
+  </div>
+  <figcaption><b>Both directions work.</b> Forward is "what does this product do, and by what machinery".
+  Backward is "if I change this file, which user-visible jobs does it sit under". The second direction is
+  never written by hand — it is worked out from the stories, so it cannot fall out of step with them.</figcaption>
+</figure>
+
+<p>The browser view presents these as separate tabs, ordered from what the system does towards how it
+runs: the walk-through, the jobs by user, the structure, the data types, the outside dependencies,
+the storage, the processes, the operational tables, the vocabulary, and the test gaps. Each tab
+states in one line the question it answers.</p>
+
+<!-- ===================================================================== -->
+<h2 id="phases"><span class="num">5</span>How a map gets built</h2>
+<p class="sub">The build, step by step, and what each step leaves behind.</p>
+
+<p>You type one command and the agent runs the sequence below. Some steps are done by a single agent
+working alone; some fan out to many agents working at the same time; some are checking programs. The
+order is not cosmetic — each step needs the previous one's output, and the two "everyone stops here"
+points exist to prevent specific mistakes.</p>
+
+<p>
+  <span class="pill solo">one agent</span>
+  <span class="pill fan">many agents at once</span>
+  <span class="pill check">a checking program</span>
+</p>
+
+<div class="steps">
+
+  <div class="step">
+    <div class="bullet">0</div>
+    <div class="body">
+      <b>Decide what is being asked <span class="pill solo">one agent</span></b>
+      <p>Before anything else the tool looks for an existing map. No map means build a new one. A map
+      that exists is left alone — a rebuild throws away a reviewed, corrected map, so it only happens if
+      you ask for it in so many words.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="bullet">1</div>
+    <div class="body">
+      <b>Read what the project says about itself <span class="pill solo">one agent</span></b>
+      <p>The README, the docs folder, the contributing guide, the package descriptions. These are the
+      only source for the parts the code cannot tell you: what the product is for, who it is for, and
+      which features matter most. They are treated as intentions, not facts — anything taken from them
+      stays marked as inferred until the code confirms it, and where docs and code disagree, the code
+      wins.</p>
+      <div class="out">Leaves behind: <em>the story side in draft</em> — goal, vocabulary, the people
+      involved, the jobs, a first ordering of the walk-through.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="bullet">2</div>
+    <div class="body">
+      <b>Measure the code <span class="pill check">a checking program</span></b>
+      <p>A program walks the whole tree and reports, per folder: how much code, how many files, how
+      often it changes in git, plus an index of where every class and function is defined. From that it
+      computes how many parts a map of this repo should have, roughly, and where the heavy areas are.
+      It also reports what it could not read, so unparsed areas are treated as unknown rather than
+      empty.</p>
+      <p>This deliberately runs <em>after</em> the story draft, so that the numbers set where to look
+      and the human story still sets the names.</p>
+      <div class="out">Leaves behind: <em>a measurement file</em>, committed with the map — the browser
+      view also uses it to search for symbols.</div>
+    </div>
+  </div>
+
+  <div class="step fan">
+    <div class="bullet">3</div>
+    <div class="body">
+      <b>Collect the pieces <span class="pill fan">many agents at once</span></b>
+      <p>The repo is cut into slices with no overlap, sized from the measurement so no slice becomes the
+      one everybody waits for, and all the agents are launched together in a single instruction. Each
+      one reads its slice and returns structured rows, never file dumps: the parts and their purposes,
+      the ways in, the outside services, the data types with their fields and relations, the build and
+      run commands.</p>
+      <p>Two rules here come from real failures. Every agent writes its work to a draft file as it goes,
+      so an agent that dies does not lose an hour of reading. And exactly one agent owns the data-type
+      pass for the whole repo — split that up and the relations between data types come out thin.</p>
+      <p>There is also a required second sweep for everything that starts <em>by itself</em>: scheduled
+      jobs, background loops, queue readers, startup hooks. These have no caller, so a search that
+      follows callers never finds them, and a long-running service that reports none of them is treated
+      as a red flag.</p>
+      <div class="out">Leaves behind: <em>one structured file per slice</em>.</div>
+    </div>
+  </div>
+
+  <div class="step gate">
+    <div class="bullet">4</div>
+    <div class="body">
+      <b>Merge — everyone stops here <span class="pill solo">one agent</span></b>
+      <p>One agent merges the slices: removes duplicates, settles the final names and identifiers,
+      groups the parts into levels, groups the data types into areas, and links each part to the process
+      it runs in by reading the deployment files.</p>
+      <p>This is a hard stop for one reason only: identifiers must be final before anything references
+      them, or later work points at names that no longer exist. Everything else here is written as a
+      declarative assignment file, so re-merging the pieces always reproduces the same result — a map
+      that cannot be rebuilt from its inputs has quietly stopped being generated.</p>
+      <p>It is also the moment the drafted jobs are checked against reality in both directions: a job the
+      docs describe with no way into the system behind it, and a real public entry point that no job
+      claims. Both happen, and both are fixed here rather than traced wrongly afterwards.</p>
+      <div class="out">Leaves behind: <em>the first complete map</em> — all the parts, none of the links.</div>
+    </div>
+  </div>
+
+  <div class="step fan">
+    <div class="bullet">5</div>
+    <div class="body">
+      <b>Follow the stories through the code <span class="pill fan">many agents at once</span></b>
+      <p>One agent per job (or per area, on a big repo). Each traces its job from the way in to the
+      outcome and writes the ordered steps: which part hands to which part, what happens at that point in
+      one present-tense phrase, and the exact line where that step fires. Steps may go backwards too —
+      the response the user sees, an error path, a callback — because those carry meaning.</p>
+      <p>The same agents record the links for their slice: who calls, reads, writes, enforces what, each
+      with its reason and a witnessing line. Machinery that appears in two or more stories is pulled out
+      and written once, so it is told at the same depth everywhere.</p>
+      <div class="out">Leaves behind: <em>every story, and the project-wide list of links</em>.</div>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="bullet">6</div>
+    <div class="body">
+      <b>Re-check the grouping, now that the links exist <span class="pill solo">one agent</span> <span class="pill check">a checking program</span></b>
+      <p>The grouping in step 4 was decided before any link had been traced, so it was made half-blind.
+      A program now reports the fan-out of every screen, the traffic between groups, and where a split
+      would help. Each finding is either fixed or given a written reason that is stored in the map — so
+      the same warning does not re-appear forever with nobody remembering why it was accepted.</p>
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="bullet">7</div>
+    <div class="body">
+      <b>Compare against the tests <span class="pill solo">one agent</span></b>
+      <p>Walk the finished inventory — jobs, ways in, data types, risky branches — and for each ask
+      whether a test exercises it. The output is a risk-ranked list of gaps, not a percentage. Reading
+      the tests gives an inferred answer; only running them with coverage makes it measured, and the map
+      states which of the two happened.</p>
+      <div class="out">Leaves behind: <em>the test-gap table</em>.</div>
+    </div>
+  </div>
+
+  <div class="step gate">
+    <div class="bullet">8</div>
+    <div class="body">
+      <b>Try to disprove it <span class="pill fan">many agents at once</span></b>
+      <p>The checking program produces a worklist of every claim that no program can settle — "this part
+      really does call that service", "this part really is the owner of that data", "this check really
+      enforces access here" — ranked most dangerous first. The claims are grouped by theme and handed to
+      fresh agents that have never seen the build reasoning, one batch each, each asked to <em>refute</em>
+      its claims against the code.</p>
+      <p>Three verdicts are allowed and all three are real: confirmed, refuted, or cannot be settled
+      either way. For the most dangerous claims, an odd number of at least three agents vote. Every
+      refutation is then re-checked against the code before the map is edited, because a wrong
+      refutation corrupts the map just as silently as the error it claims to fix.</p>
+      <div class="out">Leaves behind: <em>the corrected map</em>, plus a stored record: how many claims
+      existed, how many were challenged, how many were confirmed, refuted, or unsettled.</div>
+    </div>
+  </div>
+
+  <div class="step gate">
+    <div class="bullet">9</div>
+    <div class="body">
+      <b>The gates, then publish <span class="pill check">a checking program</span></b>
+      <p>One command runs all the checks and writes the findings to a report <em>file</em> — deliberately
+      a file, because a summary written from memory has been wrong before. It also states whether every
+      check actually ran, since a check that was skipped otherwise looks exactly like a check that
+      passed.</p>
+      <p>Then the map is stamped with the commit it describes and committed together with your code.</p>
+      <div class="out">Leaves behind: <em>the committed map, its readable version, the measurement file,
+      and the gate report</em>.</div>
+    </div>
+  </div>
+
+</div>
+
+<figure class="dg">
+  <div class="dgtitle">Diagram 4 — the same sequence, as a shape</div>
+  <div class="row center">
+    <div class="node sand grow"><b>Story draft</b><span>from the project's own docs</span></div>
+    <div class="arr">→</div>
+    <div class="node grow"><b>Measure</b><span>size, churn, symbols, expected number of parts</span></div>
+  </div>
+  <div class="arr down">↓</div>
+  <div class="row">
+    <div class="lane grow">
+      <div class="lanelabel">Fan out — collect the pieces</div>
+      <div class="row">
+        <div class="node sky grow">ways in</div>
+        <div class="node sky grow">outside services</div>
+        <div class="node sky grow">data types</div>
+        <div class="node sky grow">run &amp; build</div>
+        <div class="node sky grow">…one per slice</div>
+      </div>
+    </div>
+  </div>
+  <div class="arr down">↓</div>
+  <div class="row"><div class="node rust wide"><b>Everyone stops · merge and settle the names</b><span>duplicates removed, identifiers final, grouping assigned, jobs cross-checked against the real ways in</span></div></div>
+  <div class="arr down">↓</div>
+  <div class="row">
+    <div class="lane grow">
+      <div class="lanelabel">Fan out — follow the stories</div>
+      <div class="row">
+        <div class="node sky grow">job 1</div>
+        <div class="node sky grow">job 2</div>
+        <div class="node sky grow">job 3</div>
+        <div class="node sky grow">…one per job</div>
+      </div>
+    </div>
+  </div>
+  <div class="arr down">↓</div>
+  <div class="row">
+    <div class="node grow"><b>Re-check the grouping</b><span>now that traffic is known</span></div>
+    <div class="node grow"><b>Compare against tests</b><span>gaps, ranked by risk</span></div>
+  </div>
+  <div class="arr down">↓</div>
+  <div class="row">
+    <div class="lane grow">
+      <div class="lanelabel">Fan out — fresh readers, asked to refute</div>
+      <div class="row">
+        <div class="node plum grow">access control</div>
+        <div class="node plum grow">outside calls</div>
+        <div class="node plum grow">data ownership</div>
+        <div class="node plum grow">…one per theme</div>
+      </div>
+    </div>
+  </div>
+  <div class="arr down">↓</div>
+  <div class="row"><div class="node moss wide"><b>Gates · stamp the commit · commit the map with the code</b></div></div>
+  <figcaption><b>Why two stopping points and not more:</b> stopping costs real time, so the method stops
+  only where an unsynchronised step would produce garbage — once to make identifiers final before anything
+  references them, and once to send unbiased readers at a finished map. Everything else overlaps.</figcaption>
+</figure>
+
+<!-- ===================================================================== -->
+<h2 id="quality"><span class="num">6</span>The quality gates</h2>
+<p class="sub">Three layers of checking, each catching what the one before it cannot.</p>
+
+<figure class="dg">
+  <div class="dgtitle">Diagram 5 — what each layer of checking can and cannot see</div>
+  <div class="col">
+    <div class="node sky"><b>1 · Is the record well-formed? <span style="color:var(--ink3);font-weight:400">— a program, no code reading</span></b>
+      <span>Every reference points at something that exists. Every location is written in the one allowed form, and the file and line really exist on disk. Nothing required is missing. The published text version matches the record. Screens are not overcrowded; the number of parts is near the measured expectation; folders nobody claimed are reported.<br><b style="color:var(--rust)">Blind to:</b> whether any statement is true.</span></div>
+    <div class="arr down">↓</div>
+    <div class="node sand"><b>2 · Does the map contradict itself? <span style="color:var(--ink3);font-weight:400">— a program, still no code reading</span></b>
+      <span>Because the same facts are recorded on the story side and the machine side, the two can be made to argue. A step that reads something a later step creates. A story whose parts disagree with the story's stated owner about who drives it. A reason that points forwards at a step that has not happened yet.<br><b style="color:var(--rust)">Blind to:</b> a claim that is consistently wrong on both sides.</span></div>
+    <div class="arr down">↓</div>
+    <div class="node plum"><b>3 · Is the claim actually true? <span style="color:var(--ink3);font-weight:400">— fresh agents, reading only the code</span></b>
+      <span>The remaining claims — the ones only reading the code can settle — are ranked most dangerous first, grouped by theme, and given to agents that never saw how the map was built. Each is asked to disprove its claims. Ties and unsettleable claims are recorded as such rather than rounded into a yes or a no.<br><b style="color:var(--rust)">Blind to:</b> nothing structural — but it is expensive, so how far down the list it got is written into the map.</span></div>
+  </div>
+  <figcaption><b>The design rule behind the layers:</b> never spend an agent on something a program can
+  decide. A separate deterministic pass, for example, flags any evidence line pointing at something that
+  cannot act — a function header, an import, a comment — which is a common and completely mechanical error.</figcaption>
+</figure>
+
+<h3>Two habits that make the checking real</h3>
+<ul>
+  <li><strong>A warning is answered, never hidden.</strong> Each accepted warning is written into the map
+  with its reason, under a heading the checking program reads — so it stops firing, and the reason
+  survives for the next person. Filtering a warning out of your own view is not an answer, and the tool
+  reports how many warnings a written reason silenced so a quiet check is never mistaken for a clean one.</li>
+  <li><strong>Confidence is stated per element.</strong> Structure read from source is marked checked;
+  intent taken from documents is marked inferred. The distinction is visible in the view, so you know
+  which parts of the map to trust and which to sanity-check.</li>
+</ul>
+
+<!-- ===================================================================== -->
+<h2 id="deliverables"><span class="num">7</span>What you get, on disk</h2>
+<p class="sub">Three files and a local server.</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th style="width:30%">Artefact</th><th style="width:16%">Committed?</th><th>What it is for</th></tr></thead>
+<tbody>
+<tr><td><code>.coyodex/project-map.json</code></td><td>yes</td><td>The map itself — the only source. Written by the tooling, never by hand. Records the commit it describes.</td></tr>
+<tr><td><code>.coyodex/project-map.md</code></td><td>yes</td><td>A readable text rendering of the same map, so a change to the map shows up as a reviewable diff in a pull request.</td></tr>
+<tr><td><code>.coyodex/preindex.json</code></td><td>yes</td><td>The code measurement taken at that commit; the browser view uses it to find symbols.</td></tr>
+<tr><td>The interactive view</td><td>not a file</td><td>Served on demand from the map by a small local server, so the picture can never be out of step with the record. It reads your source from git at the map's commit, so what you see matches the map even if your working copy has moved on.</td></tr>
+<tr><td><code>.coyodex/.ignore</code></td><td>optional</td><td>Code that is committed but is not part of what the map should describe — a vendored copy, a fixture tree, generated output. Everything that measures the repo respects it, and the tool always reports how many files it removed, because excluding too much would make the map look more complete than it is.</td></tr>
+</tbody>
+</table>
+</div>
+
+<!-- ===================================================================== -->
+<h2 id="loop"><span class="num">8</span>Shaping the map after it is built</h2>
+<p class="sub">The first map is a starting point, not a verdict.</p>
+
+<p>A built map is rarely right in every judgement the first time: a grouping reads oddly, a name is
+the code's name rather than the product's, one area deserves more detail than the rest. You do not
+have to rebuild to fix that, and you do not have to edit the stored file by hand. You ask, in plain
+language, and the tool rewrites the map and re-runs the same checks it runs on any other write.</p>
+
+<p>Two things you can ask for:</p>
+<ul>
+  <li><strong>Reorganise or rename</strong> — "move the payments module into a new billing group",
+  "split this part in two", "rename this group". The tool edits the map directly and runs the same gates
+  as any other write. It will reorganise and rename what exists, but it will not add something the code
+  does not back.</li>
+  <li><strong>Go deeper in one area</strong> — when a part turns out to be a whole area, it becomes a
+  group and its real units become the parts under it, with its links re-traced to the specific new parts.
+  Detail can be uneven: you refine only where you need it, and everything else stays one box. This
+  always happens inside the one map — there is never a second map file, because a second file means a
+  second set of names that nothing can link across.</li>
+</ul>
+
+<!-- ===================================================================== -->
+<h2 id="daily"><span class="num">9</span>The commands you will actually type</h2>
+<p class="sub">Everything above is driven from these.</p>
+
+<div class="tablewrap">
+<table>
+<thead><tr><th style="width:26%">Command</th><th>What happens</th></tr></thead>
+<tbody>
+<tr><td><code>/coyodex</code></td><td>Builds a map, running the whole sequence in section 5. It never silently rebuilds over a map that is already there.</td></tr>
+<tr><td><code>/coyodex &lt;request&gt;</code></td><td>Any plain-language request about the map itself — move, split, rename, or go deeper in one area (section 8).</td></tr>
+<tr><td><code>make start</code></td><td>Starts the local server once. Every project you map appears there as a card; leave it running.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="callout">
+  <span class="tag">Worth knowing before you rely on it</span>
+  <p>coyodex is early and experimental. The stored format still changes, so treat maps as replaceable;
+  it has been exercised mainly on small and medium repositories; and the quality of a map depends on the
+  coding agent that built it — expect to read it and correct it. The verification pass exists precisely
+  because that is true, not as a substitute for your own eyes.</p>
+</div>
+
+<footer>
+  Written from the coyodex method documents and tooling in this repository. If a detail here disagrees
+  with <code>method.md</code>, the method is the source of truth.
+</footer>
+
+</main>
+</div>
+</body>
+</html>
