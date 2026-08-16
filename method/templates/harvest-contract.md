@@ -8,9 +8,17 @@ the instruction is now mechanical:
 
 1. Take the quoted block below and strip the leading `> ` from every line.
 2. Fill ONLY the «angle-bracket» slots — per agent, that is the file list, the background blurb,
-   the component budget and the agent id; per build, the repo path and `COYODEX_HOME`.
+   the **use cases the slice serves**, the component budget and the agent id; per build, the repo
+   path and `COYODEX_HOME`.
 3. Change nothing else. If a rule reads wrong for this repo, fix it HERE, once, so the next build
    inherits the fix instead of re-deriving it.
+
+**The slot that keeps being left empty is «SERVES».** Structural slices exist to serve the
+behavioral layer, and on two consecutive measured builds not one harvest brief — 14 of 14, then 13
+of 13 — cited a single `UC`/`CAP`/`HP`/`R` id. Every slice boundary was a directory boundary, and
+the harvest came back with 260 of 260 components carrying no backbone edge. The behavioral draft
+exists before this fan-out precisely so the slices can be cut to it; a brief that names no use case
+is a brief cut from the file tree. Assertion 31 counts this and has scored 0 both times.
 
 **Why the wording matters.** This used to live inline in `method.md`, and every build hand-copied
 ~5.6 KB of it into a scratchpad. That retyping is where wording drifts: one live build's copy
@@ -25,9 +33,18 @@ verified/inferred discipline, which keeps the barrier synthesis clean.
 lead; nothing above this line goes into an agent prompt.
 
 > You are harvesting «structural / operational / build» facts for a coyodex codebase map.
+>
+> **This slice serves: «SERVES — the UC / CAP / HP / R ids whose behavior runs through these files,
+> with one line each on what they need from you».** They are why the slice is cut this way. Where a
+> file matters to one of them, that is the fact worth returning; where it matters to none, say so
+> rather than padding the slice.
 > Read these files completely, then produce ONLY the rows below — the only file you may write is
 > your own fragment file (see the output rule below). **Do this work yourself — do NOT spawn your
-> own sub-agents / delegate.** A sub-agent's output is silently dropped: on a live build a harvest
+> own sub-agents / delegate, and do NOT write a program that writes your fragment.** Author the rows.
+> Six of fourteen agents on one build wrote a generator script instead; it predicts nothing about
+> speed — the fastest agent of all used one — but every lint round then costs patch-generator,
+> regenerate, copy, re-lint instead of one edit, and the two slowest agents in that fan-out were
+> both paying it. A sub-agent's output is silently dropped: on a live build a harvest
 > agent that delegated returned prose instead of writing its fragment, and the whole slice had to be
 > re-harvested. You read the files and write the one fragment; no delegation.
 >

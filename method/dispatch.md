@@ -80,6 +80,13 @@ copy as the baseline when the working-tree file is gone.** Fall through to Build
 Create it. Read `method.md` (+ `method/model.md`, `method/domain-cards.md`): agents return
 structured rows and `coyodex assemble` writes the model + views.
 
+**Archiving an existing map is `coyodex-eval archive <repo>`.** Say so before the rest of this
+paragraph, because the rest is a prohibition and the command is the permitted action: a build asked
+to archive first did it by hand — `mv .coyodex .coyodex-archive-<date>` — before the skill was even
+loaded, which left ~59 files of the old map inside the harvest scope (2731 analysed against 2672
+once it was filed properly), and then spent four turns discovering the command in `--help`. It files
+the map under `.coyodex/dev-rebuilds/NNNN/`, which is excluded from the walk.
+
 **Do not open a previous map while building.** Not the one git still has, and not one filed under
 `.coyodex/dev-rebuilds/` (the coyodex author's own archive; a user of coyodex never has that
 directory). A build that reads the map it is replacing is no longer independent of it: on a live

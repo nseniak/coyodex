@@ -1047,6 +1047,17 @@ synthesis → parallel trace.**
     security slice are the reliably heaviest in Phase 1; in Phase 3 it is whichever use case owns
     the most sub-flows and the widest "where to look" list. Send those first, the small ones last.
     (L3 assertion 16 watches this.)
+
+    **Order by expected MINUTES, not by item count.** They are not the same number: in one
+    Phase-4 fan-out the per-claim cost ran from 2.4s to 32.6s across batches, so the batch with the
+    most claims was not the longest. Where a per-item cost is known to vary — state-machine and
+    lifecycle work is the reliably expensive kind — weight by that, not by rows. This is measured
+    on a single build, so treat it as a tie-breaker rather than a formula until more runs agree.
+
+    **And size the fan-out to the harness's concurrency cap.** A 23-agent fan-out met a 20-agent
+    limit: three were rejected, re-sent 98-141s later over three extra turns, and one of the
+    bumped batches then closed the barrier 4 minutes after its second-to-last sibling. Most of
+    that tail was the delay, not the work. Merge to fit the cap, or plan a deliberate second wave.
   - **Exactly one agent owns T5, in every fan-out mode — non-optional.** The T5 model is a single
     whole-domain slice: one dedicated agent reads the domain/model layer across the repo and returns
     **per-entity cards with FIELDS *and* RELATIONS** (the `E↔E` class diagram). This holds even when
@@ -1996,6 +2007,18 @@ live build quoted the verdict honestly in chat ("that is not a clean pass") and 
 clauses against its own report, with an anchor count copied from a validate run 32 minutes earlier.
 The commit is the only record a future reader sees. `finalize --emit-gate-block <file>` writes the
 block to paste, so the durable record is generated rather than remembered.
+
+**Then actually commit.** The build is not over at `finalize`. A live build ran the gates, wrote the
+report, and stopped — leaving `.coyodex/` untracked, so the map it had just spent 103 minutes and
+$300 building existed only in one working tree. Two of the scorecard's assertions have never had an
+opportunity to score on that project because both read the commit, and the whole argument for
+generating the gate block is that the commit is the durable half. `finalize` prints the exact
+`git add -f` line to use; run it, and commit the pre-index and provenance with the map.
+
+**`finalize` also reads the advisory disposition now** — each advisory as fixed / recorded / carried,
+against what the map's extras actually record. It states the rule ("either fixed or recorded") and
+used to check nothing; nine shipped on one map neither fixed nor recorded, invisible because every
+read of the list had been narrowed by a grep. Read that table rather than the raw list.
 
 **ADVISORIES is not a pass** — fix each one, or record it under the extras heading its message names.
 **Where a verb exists, use it.** `validate`'s "the '<verb>' edge is declared N times with differing call sites" has one: **`coyodex fix dedup-edge --map … --repo …`** lists every conflicting triple with its competing anchors and suggests the likeliest true site, and `--keep <src:verb:dst:path:line>` drops the rest. A live build hand-wrote a 40-line script for 24 of them and dropped 29 rows unreviewed, against this method's own rule that these mechanical edits are never hand-scripted.
