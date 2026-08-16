@@ -430,7 +430,18 @@ def _grounding_line(map_path: Path) -> str:
 
 
 #: Ids an advisory names, for matching against what the map recorded.
-_ADVISORY_IDS = re.compile(r"\b((?:UC|CAP|HP|SF|BLK|BR|SD|S|C|D|E|R)\d+)\b")
+#:
+#: A CANDIDATE id — the shape only. Shape alone cannot settle it: `S3` in "stores artifacts in S3",
+#: `C4` in "the C4 container view" (this tool's own vocabulary) and `D3` in "the D3 chart library"
+#: are all well-formed ids and none of them is one. So candidates are intersected with the ids the
+#: map actually DEFINES, below, which is decisive and free — the model is already loaded.
+#:
+#: A false id is not cosmetic: it can collide with something the map really did record and flip a
+#: genuine unrecorded gap to `recorded`, the one direction this table must never fail in.
+#: `EP` is included because entry-point ids are in the records vocabulary and were missing, so an
+#: advisory naming only those fell through to the id-less branch.
+_ADVISORY_IDS = re.compile(
+    r"(?<![A-Za-z0-9])((?:UC|CAP|BLK|SD|SF|EP|HP|BR|C|D|E|R|S)\d+)(?![A-Za-z0-9])")
 
 
 #: An advisory that REPORTS suppression rather than asking for it. These name a heading and quote
@@ -469,6 +480,10 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
         m, _present = load_map_or_fragment(map_path)
     except Exception:
         return []
+    # The id universe: nothing outside it is an id, whatever it looks like.
+    from coyodex.model import all_elements
+    defined = set(all_elements(m)) | {g.id for g in m.happy_path} | {
+        ep.id for ep in m.entry_points if ep.id}
     out: list[tuple[str, str, str]] = []
     for leg in report.legs:
         for a in leg.advisory:
@@ -480,7 +495,7 @@ def advisory_disposition(map_path: Path, report: FinalizeReport) -> list[tuple[s
             if not heading:
                 out.append(("carried (no escape)", "", a))
                 continue
-            ids = set(_ADVISORY_IDS.findall(a))
+            ids = set(_ADVISORY_IDS.findall(a)) & defined
             if heading.lower() == "audit exceptions":
                 # PAIRS, not ids. Reading every id under this heading marked a `flow-title UC25`
                 # advisory "recorded" on the strength of an unrelated `actor-attribution UC25`

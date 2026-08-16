@@ -93,16 +93,31 @@ def scope_report(root: Path) -> list[str]:
     # scope (2731 analysed against 2672 after the archive was filed properly). That is the one
     # artifact the method forbids a rebuild from reading, so it cannot be left to the reader to spot
     # in a file count. `coyodex-eval archive` is the supported way to file one.
-    strays = sorted(d.name for d in root.iterdir()
-                    if d.is_dir() and d.name.startswith(".coyodex") and d.name != ".coyodex")
+    # KEYED ON CONTENT, not on a name. Matching `.coyodex*` caught the hand-made archive that
+    # prompted this and missed every other shape a copied map takes — `map-backups/`, which is where
+    # this tool's OWN backup command writes, and any `coyodex-old/`. The thing that makes a
+    # directory a stray is that it holds a map, so that is what to look for. Only inside the files
+    # the walk is actually going to analyse: a map under an ignored path is already excluded, and
+    # warning about it would be noise.
+    homes: set[str] = set()
+    for f in walk.files:
+        if f.name not in ("project-map.json", "project-map.md"):
+            continue
+        try:
+            rel = f.resolve().relative_to(root.resolve())
+        except ValueError:
+            continue
+        homes.add(rel.parent.as_posix() or ".")
+    strays = sorted(h for h in homes if h != ".coyodex" and not h.startswith(".coyodex/"))
     if strays:
         out += [
             "",
-            f"  WARNING: {len(strays)} coyodex-looking folder(s) beside .coyodex/ are being read as "
-            f"SOURCE: {', '.join(strays)}.",
-            "  A previous map is not source. If this is an archive, file it with "
-            "`coyodex-eval archive` (it lands under .coyodex/dev-rebuilds/, which is excluded);",
-            "  otherwise add it to .coyodex/.ignore. Leaving it here maps your own map.",
+            f"  WARNING: {len(strays)} folder(s) inside the analysis set contain a project map and "
+            f"will be read as SOURCE: {', '.join(strays)}.",
+            "  A previous map is not source — mapping your own map inflates every count and feeds "
+            "the rebuild the one artifact the method forbids it to read.",
+            "  If it is an archive, file it with `coyodex-eval archive` (it lands under "
+            ".coyodex/dev-rebuilds/, which is excluded); otherwise add it to .coyodex/.ignore.",
         ]
 
     # The ignore file gets its own per-pattern block, never a bare total: it is the one input that

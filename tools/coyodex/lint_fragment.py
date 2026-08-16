@@ -9,6 +9,7 @@ lead's `validate`). Reports every finding it can in one pass. Stdlib-only (the c
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -412,14 +413,28 @@ def main(argv: list[str] | None = None) -> int:
         verdict, code = f"LINT FAILED — {n_prob} problem(s), {n_warn} advisory warning(s)", 1
     else:
         verdict, code = f"LINT OK — 0 problems, {n_warn} advisory warning(s)", 0
-    # FIRST line, always: a truncating pipe keeps the head. Flush BOTH streams before any detail —
-    # stderr is unbuffered and stdout is block-buffered when piped, so without this the verdict
-    # loses the race against its own detail rows under `2>&1 | head`, which is how it is read.
-    print(verdict, file=sys.stderr if code else sys.stdout)
+    # FIRST line, always, and on STDERR whichever way the lint went. Two reasons, both learned:
+    #
+    #  * a truncating pipe must keep the verdict, so it leads and both streams are flushed before
+    #    any detail — stderr is unbuffered and stdout is block-buffered when piped, so without the
+    #    flush it loses the race to its own rows under `2>&1 | head`, which is how it is read;
+    #  * putting it on stdout for a PASS created a collision: on failure stdout's first line is
+    #    some other fragment's `name: OK` row, so `| head -1 | grep OK` matched either way. The
+    #    verdict is a diagnostic; the per-fragment `OK` rows stay on stdout, unchanged.
+    print(verdict, file=sys.stderr)
     sys.stdout.flush()
     sys.stderr.flush()
-    for line, err in detail:
-        print(line, file=sys.stderr if err else sys.stdout)
+    try:
+        for line, err in detail:
+            print(line, file=sys.stderr if err else sys.stdout)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # `| head -1` closes the pipe mid-write. The verdict — the only line that reader asked for —
+        # is already out. A traceback here would turn the endorsed usage into a crash.
+        try:
+            os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+        except OSError:
+            pass
     if unreadable:
         print("LINT DID NOT RUN on the file(s) above — they could not be read, so nothing was "
               "checked. This is not a rule violation; fix the path and re-run.", file=sys.stderr)

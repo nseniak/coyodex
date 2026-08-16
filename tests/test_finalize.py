@@ -460,7 +460,13 @@ def test_the_disposition_table_keys_an_audit_advisory_on_the_pair_not_the_family
     `actor-attribution UC25` line. A record adjudicates one (check, id) pair, never a family."""
     from coyodex.finalize import advisory_disposition, FinalizeReport, Leg, RAN
     import json, tempfile, os
+    # UC25 must be DEFINED: candidate ids are intersected with the map's real id universe, because
+    # shape alone cannot tell subsystem `S3` from Amazon S3, and a false id can flip a genuine gap
+    # to "recorded". A map that references an id it never declares is not a realistic input.
     m = {"format": "coyodex-map", "title": "t", "goal": "g",
+         "roles": [{"id": "R2", "name": "Admin", "kind": "human"}],
+         "use_cases": [{"id": "UC25", "name": "Rebuild the graph", "actors": ["R2"],
+                        "trigger_outcome": "an admin asks -> it rebuilds"}],
          "extras": [{"heading": "Audit exceptions",
                      "body": "actor-attribution UC25: the scheduler opens it, deliberate."}]}
     with tempfile.TemporaryDirectory() as d:

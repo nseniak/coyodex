@@ -413,3 +413,25 @@ def test_the_verdict_counts_are_not_string_matched_out_of_free_text():
     verdict = (out.stdout + out.stderr).splitlines()[0]
     assert verdict.startswith("LINT FAILED"), verdict
     assert "0 problem(s)" not in verdict, f"a failing lint cannot report zero problems: {verdict}"
+
+
+def test_the_verdict_does_not_collide_with_a_fragment_ok_row_on_stdout():
+    """On a PASS the verdict used to print to stdout, where the per-fragment `name: OK` rows also
+    live. On a FAILURE stdout's first line is some other fragment's `good.json: OK` — so
+    `| head -1 | grep OK` matched either way, and a caller could not tell the two apart. The
+    verdict is a diagnostic and belongs on stderr in both directions."""
+    import subprocess, sys, json, tempfile, os
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "good.json"), "w") as fh:
+            json.dump({"roles": [{"id": "R1", "name": "User", "kind": "human"}]}, fh)
+        with open(os.path.join(d, "bad.json"), "w") as fh:
+            json.dump({"roles": [{"id": "R2", "name": "X", "nope": 1}]}, fh)
+        out = subprocess.run(
+            [sys.executable, "-c",
+             "import sys;from coyodex.lint_fragment import main;sys.exit(main(sys.argv[1:]))",
+             "good.json", "bad.json"],
+            capture_output=True, text=True, cwd=d, stdin=subprocess.DEVNULL)
+    assert out.returncode == 1, "the bad fragment must fail the lint"
+    assert out.stderr.splitlines()[0].startswith("LINT FAILED"), out.stderr[:200]
+    assert not any(l.startswith("LINT ") for l in out.stdout.splitlines()), (
+        f"no verdict line may sit on stdout beside the OK rows: {out.stdout[:200]!r}")

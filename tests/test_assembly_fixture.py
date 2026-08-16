@@ -144,8 +144,12 @@ def test_every_committed_fragment_passes_its_own_self_check():
     shape would otherwise fail later, inside assembly, with a worse message."""
     for p in FRAGMENTS:
         r = _cli("lint-fragment", "--repo", str(FIXTURE), str(p))
-        first = (r.stdout + r.stderr).splitlines()[0] if (r.stdout or r.stderr) else ""
         assert r.returncode == 0, f"{p.name} fails its own lint:\n{r.stdout}\n{r.stderr}"
+        # The verdict leads STDERR, both ways. It used to go to stdout on a pass, which collided
+        # with the per-fragment `name: OK` rows that live there — `| head -1 | grep OK` matched on
+        # failure too. Stderr is the diagnostic stream; the OK rows stay on stdout for parsers.
+        first = r.stderr.splitlines()[0] if r.stderr else ""
         assert first.startswith("LINT OK"), (
-            f"{p.name}: the verdict must be the FIRST line — a truncating pipe hid a pass twice "
-            f"on a live build, and the agent kept working on a finished fragment. Got: {first!r}")
+            f"{p.name}: the verdict must be the FIRST line of stderr — a truncating pipe hid a "
+            f"pass twice on a live build, and the agent kept working on a finished fragment. "
+            f"Got: {first!r}")

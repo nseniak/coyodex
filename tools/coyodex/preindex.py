@@ -379,11 +379,22 @@ def report(argv: list[str]) -> int:
         # boundary, and the small ones it needs most are never in a top-N — one build asked for 32
         # directories of which several score 1, so it hand-parsed the JSON instead, which is the one
         # thing `--report` exists to stop. Lookup order is the ORDER ASKED, not by size.
+        # NORMALISED, and honest about what "not found" means. The lookup is against the slice set
+        # the pre-index RECORDED, not the disk — so `./eval` and `EVAL` missed a directory that is
+        # right there, and a bare dash is exactly the prompt for the gut estimate this feature
+        # exists to remove. A directory that exists but scores nothing is a different answer from
+        # one the pre-index never saw, and the reader needs to tell them apart.
+        norm = {k.strip("./").lower(): k for k in per}
+        root_dir = Path(_arg(argv, "--root", ".") or ".")
         out.append(f"  per-directory E for the {len(dirs)} director(y/ies) you named:")
         for d in dirs:
-            v = per.get(d)
-            out.append(f"    {v:6d}  {d}" if v is not None
-                       else f"         -  {d}   (no such directory in the pre-index)")
+            key = norm.get(d.strip("./").lower())
+            if key is not None:
+                out.append(f"    {per[key]:6d}  {key}" + ("" if key == d else f"   (matched {d})"))
+            elif (root_dir / d).is_dir():
+                out.append(f"         0  {d}   (exists, but anchors no component-forming source)")
+            else:
+                out.append(f"         -  {d}   (not a directory under {root_dir})")
     else:
         out.append("  per-directory E (top %d):" % top)
         for k, v in sorted(per.items(), key=lambda kv: (-kv[1], kv[0]))[:top]:
