@@ -27,29 +27,30 @@ Verified against the working tree on **2026-08-16**.
 | `reconcile` can express the assignment the method prescribes | `reconcile_build.py` `_FIELD_OWNER` now carries `capability` and `entry_points`, matching the consumer it claims to mirror. |
 | `cost --map` divides refutations by what was challenged, not by the worklist total | `cost.py` — falls back to `claims_total` only when `claims_challenged` is absent, and prints the partial denominator. The old form understated the rate by about half on both measured builds. |
 | The retro method reads the per-agent transcripts, refutes its own findings, and checks the map | `method.md` in this directory (commit `6c2fb24`). |
+| The map records WHICH coyodex built it; `compare` leads with the difference | `0a57a81`. Closes the cross-schema guard properly: it records the fact instead of inferring it, so it also catches tool changes that are not schema changes. |
+| `balance` is reproducible | `0a57a81`. It was not: five identical runs printed three different seam lists, because equal-weight seams fell back to set iteration order. Found by a before/after harness on its first use. |
+| `dump --map <path>` | `0a57a81`. |
+| `lint-fragment` leads with its verdict, and runs the reciprocal domain-card check | `4d0ecd9`, `ac59f4f`. The verdict used to print last, so an agent's `head -40` hid a pass twice; the missing check let 33 blocking errors reach assembly. |
+| `scope` warns when a previous map is being read as source | `4d0ecd9`. |
+| `preindex --report --dirs a,b,c` | `4d0ecd9`. A ranking cannot answer "E for the slices I chose". |
+| `reconcile` checks the assignment TARGET exists, and summarises | `f086f0b`. Plus `--only-unmatched`. |
 
 ---
 
 ## Open — tools
 
-Ranked as the source retro ranked them. `scope` here means what the change would have to read.
+What is still open. Landed items move to the table above, with the commit. `scope` here means
+what the change would have to read.
 
 | # | change | why | scope |
 |---|---|---|---|
-| 1 | Rank inside a theme before chunking into batches | Work items are emitted in map-rule order and cut at the cap, so which claims get three skeptics rather than one is an accident of id order. The three-vote batch held 6 access claims; two batches that were 40-of-40 access got one each. Half of this landed (the theme routing); the ranking did not. | `audit_model.py` |
 | 2 | A verdict lint — reject a malformed `grounded` value, and flag machine-generated evidence | A malformed value was caught only at `grounding write`, ~100 turns after the skeptic that produced it. Separately, one skeptic generated 40 confirmations from a grep table with `note` lines citing 16 files it never opened. Both are mechanically detectable. | verdict files + per-agent transcripts |
 | 3 | `finalize`: emit an advisory-disposition table — each advisory as fixed / recorded / carried | `finalize` states the rule in its own output and does not check it. Nine advisories shipped waved through, and no transcript could show it because every read of the list had been filtered. Needs no transcript: `finalize` already holds both the advisory list and the map. | `finalize.py` + map extras |
-| 4 | `dump`: accept `--map` as well as positional; make an empty result distinguishable from a failure | `dump --map` exits 2 with the error on stderr. That spelling was written into the contract handed to 13 sub-agents, so the prescribed "read the map's anchors first" step could not run as written for any of them; one later read the empty output as "no record". Sibling commands are inconsistent — some take the map positionally, some take `--map`. | `dump.py`; consider normalising all subcommands |
-| 5 | `lint-fragment`: add validate's reciprocal-relation (domain-card) check, and print its verdict line FIRST | The check is not imported, so 33 blocking errors could only surface after assemble. And one agent's own `head -40` cut the verdict off a run that had already passed, so it iterated twice more — a verdict-first line makes that impossible. | `lint_fragment.py` |
-| 6 | `reconcile --dry-run`: validate that assignment targets exist; end with a summary; add `--only-unmatched` | Three clean dry-runs over rules naming subdomains no fragment declared; `assemble` then failed. Separately, "which rules matched nothing" cost four executions because the output is one line per rule with no summary. | `reconcile_build.py` |
 | 7 | `record`: repeatable `--line` / `--lines-from -`, and create the extras fragment when absent | It reads only the first `--line`, so 51 separate process spawns in one build; and it cannot bootstrap the file, so 20 calls failed and 20 long prose lines were re-typed after an `echo '{}' >`. | `record.py` |
 | 8 | `fix`: `--drop-all` / `--drop-file` for `dedup-relation`; verbs for a messaging consumers list, a rule site's `why`, an entity `states` block, and a lifecycle `states.source` | `dedup-relation` prints 33 drop tokens and demands all 33 back as separate flags — five turns went to shell word-splitting. The missing verbs are where builds hand-edit fragments, which is the failure `fix` exists to prevent. | `fix.py` |
-| 9 | `preindex --report --dirs a,b,c`; `validate --json` full lists without the `+N more` truncation | `--report` ranks the top N, so the small slices a lead actually needs are never in it and it hand-parses the JSON instead. And a truncated readable list is why builds re-derive worklists by hand — one such re-derivation produced ten recorded exceptions the gate never flagged. | `preindex_lib.py`, `reporting.py` |
 | 10 | `balance`: subdomain analysis, and each diagram's verdict beside the fan-out table | `validate`'s subdomain message points the reader at `coyodex balance`, which has no subdomain analysis. And the per-diagram verdicts sit ~55 lines below the table, so a `head -60` reader hand-authored 12 subsystems without seeing them. | `balance_lib.py` |
-| 11 | `validate`: cross-check a use case's declared `actors` against the actor of its own flow's first step, and its name against its flow's title | A late rewrite left two use cases declaring one actor while their flows start with another, one still carrying its pre-rename flow title, and one first step belonging to a different flow. `validate` exited 0. | `validate_model.py` |
+| 11 | Nothing compares a use case's NAME to its flow's TITLE | **The actor half was WITHDRAWN** — `audit` has run that as an `actor-attribution` advisory all along, and it FIRED on the two use cases the retro cited; the build recorded an exception, which is why `validate` exited 0. The retro claimed "nothing cross-checks" without looking. The stale-title half is real and unchecked: a renamed use case left its pre-rename flow title behind. | `validate_model.py` |
 | 12 | An extras debt token that keeps counting, the way `Sweep debt` does | Recording an honest "REAL GAP" silences the coverage gate — `unclaimed: 0` — so acknowledged debt is indistinguishable from justified non-coverage. | `validate_model.py` |
-| 13 | `compare`: refuse or flag a cross-schema comparison; drop the name-level note when overlap is zero | It reported REGRESSED across the breaking `security[]` → `access: true` change, on a count delta of 2 between two lists sharing no names, then printed all 46 baseline names as "dropped". | `compare.py` |
-| 14 | `scope`: warn on or exclude `.coyodex*` siblings | A hand-made archive directory was counted as source — 2731 files against 2672 — so ~59 files of the previous map sat inside the harvest scope with no warning. | `scope.py` |
 
 ---
 
