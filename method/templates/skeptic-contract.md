@@ -5,8 +5,13 @@ scratchpad from `method.md`'s Phase-4 section, and every build before it did the
 came out good — but re-deriving it each time is where wording drifts, and one clause in particular
 has been got wrong before in a way that silently destroys the phase (see the WARNING below).
 
-Fill the «angle-bracket» parts. One skeptic per batch; batches cut by THEME and risk, most-dangerous
-first; cap each batch at ~40 claims.
+Fill the «angle-bracket» parts. There are exactly THREE — «MAP», «REPO», «BATCH» — each spelled
+the same way everywhere, so a fill is three substitutions. An earlier version spelled the map and
+the repo two ways each: the fill needed four patterns for two values and shipped with four
+placeholders still in it.
+
+One skeptic per batch; batches cut by THEME and risk, most-dangerous first; cap each batch at ~40
+claims.
 
 ---
 
@@ -15,9 +20,9 @@ it was built — your value is that you do not share its author's assumptions.
 
 ## What you are given
 
-- The map: `«path to project-map.json»`
-- The repository: `«repo root»`
-- Your batch of claims, verbatim, below.
+- The map: `«MAP»`
+- The repository: `«REPO»`
+- Your batch of claims: read them from the claims file named at the end of this contract. They are NOT pasted here.
 
 You may read any file in the repository. You may run read-only commands. Change nothing.
 
@@ -30,18 +35,28 @@ For each claim, decide whether the CODE supports it, and return one row per clai
   {"claim": "<the claim text, VERBATIM from the batch>",
    "grounded": true,
    "evidence": "path/to/file.py:123",
-   "skeptic": "«your batch id, e.g. security-a»",
+   "skeptic": "«BATCH»",
    "note": "<one or two sentences: what you read, and why it settles the claim>"}
 ]}
 ```
 
 - `claim` must match the batch text **character for character** — the tool pairs rows to claims by
   that string, and a reworded claim silently becomes an orphan the record refuses.
-- `grounded` is `true`, `false`, or the string `"unverifiable"`.
+- `grounded` is a JSON **boolean** — `true` or `false`, unquoted — or the string `"unverifiable"`.
+  Not `"true"`. One skeptic built its rows as tuples starting `("true", …)` and shipped 40 quoted
+  strings; `grounding write` refused the whole record ~100 turns later, at the end of the build,
+  and its own self-check could not have caught it because printing `str(row["grounded"])` renders
+  `'true'` for both.
 - `evidence` is the ONE `path:line` where the thing actually happens — the true call site. If the
   claim is true but the map's stored anchor points somewhere else, still say `true` and give the
   line YOU found: a drifted anchor does not refute a true relationship, and the drift check exists
   to reconcile exactly that difference.
+- **Open the claim's own anchor, for every row, and write `evidence` and `note` by hand.** Do not
+  generate them. One skeptic settled 40 claims in 95 seconds from a single directory-wide
+  `grep -n 'pgTable("'`, then emitted all 40 rows from a script — every `note` beginning
+  `Read <file>:` for files it never opened. Those 40 fabricated confirmations are in a shipped
+  grounding record. A `note` that says you read something is a statement of fact about your own
+  work, and it is checkable against your transcript.
 - `skeptic` is your batch id. It is what lets two independent skeptics agreeing be told apart from
   one file passed in twice.
 
@@ -76,10 +91,10 @@ that is the lead's problem, not yours.
 
 ## Your inputs and output
 
-- **Claims file** (read it; do not expect them pasted below): `«.coyodex/verify/claims-<batch>.json»`
+- **Claims file**: `.coyodex/verify/claims-«BATCH».json`
   — written by `coyodex audit <map> --batches .coyodex/verify --cap 40`.
-- **Map**: `«.coyodex/project-map.json»` · **Repo root**: `«/abs/path/to/repo»`
-- **Write your verdicts to**: `«.coyodex/verify/verdicts-<batch>.json»`
+- **Map**: `«MAP»` · **Repo root**: `«REPO»`
+- **Write your verdicts to**: `.coyodex/verify/verdicts-«BATCH».json`
 
-Your batch id is `«<batch>»`. Use it in the output filename exactly as given, so the lead's glob
+Your batch id is `«BATCH»`. Use it in the output filename exactly as given, so the lead's glob
 finds it.

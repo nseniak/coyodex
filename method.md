@@ -748,8 +748,12 @@ columns and relationship rows harden last (they need tracing) — keep them infe
 traced. Drilling can correct an inferred upper row; upper tables get more accurate as the
 reader drills.
 
-**Pre-index (structural input — run it after the behavioral draft, before the structural
-harvest).** On a non-trivial repo, don't choose altitude from a *count* ("65 plugins, too many")
+**Pre-index (structural input).** LAUNCH it whenever you like — backgrounding it before the
+behavioral draft is strictly better use of the wait. What must not happen before the draft exists is
+READING it: GR1 guards the judgement, not the subprocess, and a build that read the rule as a ban on
+launching serialised itself for no gain.
+
+On a non-trivial repo, don't choose altitude from a *count* ("65 plugins, too many")
 or from maintainer diagrams alone — that is how a heavy area silently collapses into one box.
 First draft the behavioral layer (Goal → Glossary → Roles → Use cases → Happy-Path skeleton),
 **then** run the pre-index and let it *size and locate* while you keep *naming and judging*:
@@ -1017,7 +1021,10 @@ synthesis → parallel trace.**
     sanction "a `run_in_background` waiter" was the loophole: a backgrounded `until ls …; sleep 45`
     satisfies that clause while breaking the `ls` ban in the same sentence, and a build that had
     loaded `Monitor` in its second minute went on to launch **34** backgrounded polling waiters — 21
-    of them `until ls …`, the rest `until [ -f … ]`, thirteen alive at once — never calling `Monitor`. (`Monitor` is a deferred tool — run `ToolSearch select:Monitor` once to load its
+    of them `until ls …`, the rest `until [ -f … ]`, thirteen alive at once — never calling `Monitor`.
+    **`ListAgents` counts too**: a later build polled it twice mid-barrier to count running
+    skeptics. It is cheap, but it is the same shape — the barrier already tells you when it
+    closes, and a turn spent asking is a turn. (`Monitor` is a deferred tool — run `ToolSearch select:Monitor` once to load its
     schema before the first call, or that first call fails with an `InputValidationError`.) Hand every
     agent an **absolute** fragment output path
     (`<repo-root>/.coyodex/build-fragments/<id>.json`) so it can never land in a subdirectory; `assemble`
