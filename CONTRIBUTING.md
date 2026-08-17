@@ -40,7 +40,43 @@ By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 - **`README.md`** — user-facing overview and the install / usage steps.
 
 > `internal/` (design notes, working drafts) is **not** part of the method and is
-> git-ignored. Don't treat it as instructions or as input to a map.
+> git-ignored — with ONE tracked exception, `internal/docs/method-rationale.md`, described
+> below. Don't treat any of it as instructions or as input to a map.
+
+## Writing method prose — keep the three registers apart
+
+`method.md`, the `method/` docs and the templates in `method/templates/` are not
+documentation. They are the **prompt** an agent reads on every build, and the templates are
+copied verbatim into 12-20 sub-agent prompts per run. Every sentence you add there is paid
+for on every build, by every agent.
+
+Three registers get written into a rule, and only two of them belong in the prompt:
+
+| register | example | where it goes |
+|---|---|---|
+| **Contract** — what a map must contain | "every edge carries a `Where`" | the method |
+| **Procedure** — what to do, and the mechanism that makes it matter | "never `ls` the fragment dir: a not-ready file reads as an error and burns the turn" | the method |
+| **Incident record** — the build that went wrong, and how the wording got here | "a live build spent 88 of its 278 tool calls polling; the prose had already been escalated twice" | `internal/docs/method-rationale.md` |
+
+**Write the rule and its mechanism. Put the incident in the record.** The mechanism is
+timeless and lets an agent reason about a case nobody anticipated; the story is evidence for
+*you*, when you later ask whether the rule still earns its place. The corpus grew to ~48k
+words largely by accretion of the third kind.
+
+**One exception, used sparingly:** where a measured magnitude is itself the deterrent — the
+rules agents are tempted to skip, like polling a barrier or hand-writing a script a command
+already does — keep a short marker (`32 % of a build's tool calls`) and put the full account
+in the record.
+
+**Every record entry carries an `Anchor`** — a phrase quoting the rule it explains, which
+must still appear in the named doc. `tests/test_method_rationale.py` checks all of them, so a
+rule cannot be reworded or deleted away from its evidence: change the rule and the suite tells
+you which entry to reconcile. Anchors must quote the rule's own words, not just the bold
+heading above it — a heading survives its paragraph being gutted, so it certifies nothing.
+
+**Never link from the method to the record.** The method tells agents to ignore `internal/`;
+a method doc pointing there would contradict that in the same breath. The link runs one way
+only, and the anchors are what keep it honest.
 
 ## Local setup
 
