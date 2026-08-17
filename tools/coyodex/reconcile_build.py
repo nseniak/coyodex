@@ -205,6 +205,20 @@ def expand(m: ProjectModel, rules: list[dict]) -> tuple[dict, list[str]]:
                           f"`assemble` REFUSES an undeclared target, so either it is declared in a "
                           f"fragment not passed here, or this will fail assembly.")
 
+    # WITNESS every entry-point id with the anchor it has right now. `EPn` is minted by `assemble`
+    # from harvested content: order-independent, but it RENUMBERS when a surface is added, so a file
+    # authored against an older harvest re-points a use case at a different front door while every
+    # id still resolves. `validate_reconcile` compares the witness and refuses. Emitted here so the
+    # check is one the normal path satisfies by default rather than one only a careful hand can meet.
+    ep_source = {ep.id: (ep.source or "").strip() for ep in m.entry_points if ep.id}
+    for fields in assign.values():
+        eps = fields.get("entry_points")
+        if not isinstance(eps, list):
+            continue
+        fields["entry_points"] = [
+            {"id": e, "source": ep_source[e]} if isinstance(e, str) and ep_source.get(e) else e
+            for e in eps]
+
     # collapse to the compact `set` shape: one entry per distinct field-value combination
     groups: dict[str, list[str]] = {}
     for eid, fields in assign.items():

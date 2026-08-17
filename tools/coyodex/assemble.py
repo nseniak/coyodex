@@ -660,11 +660,13 @@ def _mint_entry_point_ids(m: ProjectModel) -> None:
     it happily and the warning count did not move. Sorting by the content key removes that whole
     class: the same set of surfaces gets the same ids however the fragments are ordered.
 
-    RESIDUAL RISK, deliberately left: the ids are order-independent, not ADD-stable. Harvesting a
-    NEW surface that sorts before an existing one still shifts the numbers after it, so a reconcile
-    file authored against an older harvest can still mis-point. The durable fix is a content witness
-    beside the id (`{"id": "EP1", "source": "orders.py:9"}`) that `validate_reconcile` checks — until
-    that lands, re-author `entry_points` whenever the entry-point set changes."""
+    NOT ADD-STABLE, and that is now GUARDED rather than merely known: harvesting a new surface that
+    sorts before an existing one still shifts the numbers after it, so a reconcile file authored
+    against an older harvest points a use case at a different front door — with the id resolving, so
+    no other check has anything to object to. The content witness this docstring used to name as the
+    future fix has landed: `reconcile` emits `{"id": "EP1", "source": "orders.py:9"}` and
+    `validate_reconcile` refuses a file whose witness no longer matches, naming both anchors. A bare
+    id stays legal for a hand-authored file and buys no protection."""
     seen: dict[tuple[str, str, str, str], EntryPoint] = {}
     kept: list[EntryPoint] = []
     for ep in m.entry_points:

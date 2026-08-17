@@ -1162,8 +1162,11 @@ synthesis → parallel trace.**
     ids and the `(id, source)` pairs the rules match are the same either way. **`EPn` is the one id
     family the tooling mints rather than an agent authoring it, and it is order-independent but NOT
     add-stable**: harvesting a new surface that sorts before an existing one shifts every number after
-    it. So re-author a use case's `entry_points` whenever the entry-point set changes — a shifted id
-    silently re-points a use case at a different front door, and `validate` resolves it happily.
+    it, which re-points a use case at a different front door while the id still resolves. You do not
+    have to remember this: `reconcile` WITNESSES each entry point with the anchor it had when the file
+    was written — `{"id": "EP1", "source": "orders.py:9"}` — and `assemble` refuses a file whose
+    witness no longer matches, naming both anchors. A bare `"EP1"` is still legal and buys no
+    protection, so let the tool write the file.
     ```
     .venv/bin/coyodex reconcile --rules rules.json --fragments .coyodex/build-fragments/*.json \
                                 --out .coyodex/reconcile.json [--dry-run]
@@ -1175,7 +1178,8 @@ synthesis → parallel trace.**
     ```json
     { "rules": [ {"source_glob": "mee6/plugins/*",     "subsystem": "S12"},
                  {"source_glob": "gateway/**",         "runs_in": ["gateway"]},
-                 {"ids": ["E7","E8"],                  "subdomain": "SD2"} ] }
+                 {"ids": ["E7","E8"],                  "subdomain": "SD2"},
+                 {"ids": ["UC1"],                      "entry_points": ["EP3"]} ] }
     ```
     It reports **every rule that matched nothing** instead of silently emitting an empty assignment
     — which is the whole point: a hand-rolled generator reports the assignments it *emitted*, and

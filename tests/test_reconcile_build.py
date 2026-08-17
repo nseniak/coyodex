@@ -17,7 +17,7 @@ import tempfile
 from pathlib import Path
 
 from coyodex.model import (BusinessRule, Component, Dep, DeploymentRow, Entity, Group,
-                           ProjectModel, RuleSite, UseCase)
+                           EntryPoint, ProjectModel, RuleSite, UseCase)
 from coyodex.reconcile_build import RuleError, coverage_report, expand, load_rules
 
 
@@ -672,3 +672,89 @@ def test_a_rule_assigning_an_undeclared_group_is_reported_before_assemble_refuse
     _doc, report = expand(m, [{"ids": ["E1"], "subdomain": "SD99"}])
     bad = [r for r in report if "SD99" in r and "nothing declares" in r]
     assert bad, f"an undeclared assignment target must be reported, got: {report}"
+
+
+# --------------------------------------------------------------------------------------
+# the entry-point witness — `EPn` renumbers, so an id that RESOLVES is not an id that still
+# means the same surface
+# --------------------------------------------------------------------------------------
+
+def make_map_with_entry_points() -> ProjectModel:
+    """A map whose EP ids are what a previous assemble minted. The two surfaces are deliberately the
+    pair from the incident the tool records: an order route and an admin wipe, which traded ids when
+    numbering followed argument order."""
+    m = make_map()
+    m.use_cases = [UseCase(id="UC1", name="Place an order", trigger_outcome="buyer submits -> recorded")]
+    m.entry_points = [
+        EntryPoint(id="EP1", kind="http-route", trigger="POST /orders",
+                   component="C4", source="web/orders.py:9"),
+        EntryPoint(id="EP2", kind="http-route", trigger="DELETE /admin/wipe",
+                   component="C4", source="web/admin.py:4"),
+    ]
+    return m
+
+
+def make_witnessed_reconcile(ep_id: str, seen: str):
+    """A reconcile file in the witnessed form the generator now emits."""
+    from coyodex.reconcile import load_reconcile
+    return load_reconcile(json.dumps({"set": [{"ids": ["UC1"],
+                                               "entry_points": [{"id": ep_id, "source": seen}]}]}),
+                          "reconcile.json")
+
+
+def test_a_witness_that_still_matches_the_map_passes():
+    from coyodex.reconcile import validate_reconcile
+    m = make_map_with_entry_points()
+    assert not validate_reconcile(m, make_witnessed_reconcile("EP1", "web/orders.py:9"))
+
+
+def test_a_renumbered_entry_point_is_refused_and_names_both_anchors():
+    """The failure this exists for. The id resolves, so every other check passes and the map ships
+    claiming the wrong front door — one build had `POST /orders` and `DELETE /admin/wipe-database`
+    trade ids, the use case claimed the wrong one, and the warning count did not move."""
+    from coyodex.reconcile import validate_reconcile
+    m = make_map_with_entry_points()
+    probs = validate_reconcile(m, make_witnessed_reconcile("EP1", "web/admin.py:4"))
+    assert len(probs) == 1
+    assert "witnesses EP1 at 'web/admin.py:4'" in probs[0]
+    assert "is now 'web/orders.py:9'" in probs[0]
+    assert "different" in probs[0] and "front door" in probs[0]
+
+
+def test_a_bare_id_still_works_and_witnesses_nothing():
+    """The un-witnessed form stays legal — a small map is hand-authorable — but it buys no protection,
+    which is why the generator emits the witnessed one."""
+    from coyodex.reconcile import load_reconcile, validate_reconcile
+    m = make_map_with_entry_points()
+    rec = load_reconcile(json.dumps({"set": [{"ids": ["UC1"], "entry_points": ["EP1"]}]}), "r.json")
+    assert rec.sets[0].entry_points == ["EP1"]
+    assert rec.sets[0].entry_point_witness == {}
+    assert not validate_reconcile(m, rec)
+
+
+def test_a_corrected_line_in_the_same_file_is_not_a_renumbering():
+    """Lenient on purpose. An anchor-drift fix between authoring and applying moves the LINE, not the
+    surface — failing on that would fire the check on the one thing that is not the bug."""
+    from coyodex.reconcile import validate_reconcile
+    m = make_map_with_entry_points()
+    assert not validate_reconcile(m, make_witnessed_reconcile("EP1", "web/orders.py:11"))
+
+
+def test_a_witness_missing_its_source_is_a_parse_error_naming_the_id():
+    from coyodex.reconcile import ReconcileError, load_reconcile
+    payload = json.dumps({"set": [{"ids": ["UC1"], "entry_points": [{"id": "EP1"}]}]})
+    try:
+        load_reconcile(payload, "r.json")
+    except ReconcileError as e:
+        assert "'source' is required" in str(e) and "EP1" in str(e)
+    else:
+        raise AssertionError("a witness with no source must be refused")
+
+
+def test_the_generator_witnesses_every_entry_point_it_emits():
+    """A check nobody can satisfy is theatre. The normal path has to produce the witnessed form."""
+    m = make_map_with_entry_points()
+    with tempfile.TemporaryDirectory() as tmp:
+        rules = write_rules([{"ids": ["UC1"], "entry_points": ["EP1"]}], tmp)
+        doc, _report = expand(m, load_rules(rules))
+    assert doc["set"][0]["entry_points"] == [{"id": "EP1", "source": "web/orders.py:9"}]

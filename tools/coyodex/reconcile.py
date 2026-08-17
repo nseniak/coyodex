@@ -84,6 +84,14 @@ class SetDirective:
     runs_in: list[str] | None = None
     bucket: str | None = None
     block: str | None = None
+    #: id → the `source` anchor the author SAW on that entry point, for the witnessed form
+    #: `{"id": "EP1", "source": "orders.py:9"}`. Empty when every value was written bare.
+    #: `EPn` is minted by `assemble` from harvested content and is order-independent but NOT
+    #: add-stable: a new surface that sorts earlier shifts every number after it, so a file authored
+    #: against an older harvest silently re-points a use case at a different front door — the id
+    #: still resolves, so no existing check has anything to complain about. The witness is what turns
+    #: that into a stop.
+    entry_point_witness: dict[str, str] = field(default_factory=dict)
 
     def assigned_fields(self) -> list[str]:
         return [f for f in _SET_FIELD_OWNER if getattr(self, f) is not None]
@@ -242,7 +250,32 @@ def load_reconcile(text: str, label: str) -> Reconcile:
         if "runs_in" in d:
             sd.runs_in = _as_str_list(d["runs_in"], f"{label}: set[{i}].runs_in")
         if "entry_points" in d:
-            sd.entry_points = _as_str_list(d["entry_points"], f"{label}: set[{i}].entry_points")
+            raw_eps = d["entry_points"]
+            if not isinstance(raw_eps, list):
+                raise ReconcileError(f"{label}: set[{i}].entry_points: expected a list")
+            eps: list[str] = []
+            for j, v in enumerate(raw_eps):
+                where = f"{label}: set[{i}].entry_points[{j}]"
+                if isinstance(v, str):
+                    eps.append(v)
+                elif isinstance(v, dict):
+                    unk_ep = set(v) - {"id", "source"}
+                    if unk_ep:
+                        raise ReconcileError(f"{where}: unknown key(s): {', '.join(sorted(unk_ep))} "
+                                             f"(a witnessed entry point is {{\"id\", \"source\"}})")
+                    eid_v, src_v = v.get("id"), v.get("source")
+                    if not isinstance(eid_v, str) or not eid_v:
+                        raise ReconcileError(f"{where}: 'id' is required (a non-empty string)")
+                    if not isinstance(src_v, str) or not src_v:
+                        raise ReconcileError(f"{where}: 'source' is required (the `path:line` you "
+                                             f"saw on {eid_v}) — omit the object and write the bare "
+                                             f"id if you have no anchor to witness with")
+                    eps.append(eid_v)
+                    sd.entry_point_witness[eid_v] = src_v
+                else:
+                    raise ReconcileError(f"{where}: expected an id string or "
+                                         f"{{\"id\": …, \"source\": …}}")
+            sd.entry_points = eps
         if not sd.assigned_fields():
             raise ReconcileError(f"{label}: set[{i}]: assigns no field — give at least one of "
                                  f"{', '.join(_SET_FIELD_OWNER)}")
@@ -323,6 +356,21 @@ def load_reconcile(text: str, label: str) -> Reconcile:
 
 # ── validate (scoped to the touched fields) ────────────────────────────────────────────────────────
 
+
+def _same_anchor(actual: str, seen: str) -> bool:
+    """Does a witnessed anchor still identify the same surface?
+
+    Compared leniently on purpose. The witness exists to catch a RENUMBERING — one id now naming a
+    different route in a different file — not to police how the anchor was written. So a witness that
+    names the file and a line inside the same file matches: the entry point's own `source` may have
+    been corrected by a drift fix between authoring and applying, and failing on that would make the
+    check fire on the one thing that is not the bug."""
+    a, s = actual.strip(), seen.strip()
+    if not a or not s:
+        return True
+    return a == s or a.rsplit(":", 1)[0] == s.rsplit(":", 1)[0]
+
+
 def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
     """Scoped, apply-time validation: every `set` id resolves and is the right KIND for the field, each
     `runs_in` value resolves to a `deployment[].unit`, each `subsystem`/`subdomain` value is a defined
@@ -355,6 +403,7 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
     cap_ids = {c.id for c in m.capabilities}
     blk_ids = {b.id for b in m.blocks}
     ep_ids = {ep.id for ep in m.entry_points if ep.id}
+    ep_sources = {ep.id: (ep.source or "").strip() for ep in m.entry_points if ep.id}
     hier_parents: dict[str, str] = {}                # touched child → intended parent, for check_hierarchy
     for si, sd in enumerate(rec.sets):
         for eid in sd.ids:
@@ -395,6 +444,22 @@ def validate_reconcile(m: ProjectModel, rec: Reconcile) -> list[str]:
                                         f"point(s): {', '.join(bad_eps)} — ids are minted by "
                                         f"`assemble` from the harvested T4 rows, so author them "
                                         f"against the ids THIS assemble produces")
+                    # The WITNESS check. An `EPn` that resolves is not an `EPn` that still means the
+                    # same surface: the ids are minted from content and renumber when a surface is
+                    # added, so a file authored against an older harvest points a use case at a
+                    # different front door with nothing to see. Blocking, because the failure is
+                    # silent and the map ships claiming the wrong door.
+                    for ep_id, seen in (sd.entry_point_witness or {}).items():
+                        actual = ep_sources.get(ep_id)
+                        if actual is None or _same_anchor(actual, seen):
+                            continue
+                        problems.append(
+                            f"reconcile set[{si}] {eid}: entry_points witnesses {ep_id} at "
+                            f"'{seen}', but {ep_id} is now '{actual}' — entry-point ids are minted "
+                            f"from content and RENUMBER when a surface is added, so this file was "
+                            f"authored against an older harvest and would point {eid} at a different "
+                            f"front door. Re-author the entry_points assignments against this "
+                            f"assemble's ids (`coyodex dump --id {ep_id}` shows what it is now)")
                 elif fld == "runs_in":
                     bad = [u for u in (sd.runs_in or []) if u not in units]
                     if bad:
