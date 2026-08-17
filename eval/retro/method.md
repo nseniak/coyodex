@@ -180,6 +180,14 @@ component count against the code-derived expectation E, the map's own `grounding
 every count that moved against the previous
 map.
 
+**And read `compare`'s NOTES, not only its gates and bands.** One of them is not a count and cannot
+be: the share of the auth surface's ENFORCEMENT LINES the two maps agree on, plus the files that hold
+access enforcement in one map and are named by no access rule in the other. Two rebuilds of ONE
+commit have come in at 25 % agreement — 163 lines against 116, 57 shared, 17 files covered by only
+the older map and 16 by only the newer — while the statement count moved just 50 → 44 and every other
+signal read clean. A count can hold steady through a wholesale change of content, so this is the only
+place that churn is visible. Report the number and name the lost files; they are the reading list.
+
 **Read `compare`'s verdict as information, not judgement.** A DRIFT on a rebuild is expected — two
 LLM builds of one repo never match.
 

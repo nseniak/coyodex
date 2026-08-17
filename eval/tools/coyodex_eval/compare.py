@@ -292,8 +292,14 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
             f"auth surfaces {baseline.security_surfaces} -> {candidate.security_surfaces}"))
         dropped = [s for s in baseline.auth_surfaces if s not in set(candidate.auth_surfaces)]
         if dropped:
-            notes.append("auth surfaces in baseline but not (by name) in candidate — names drift with "
-                         f"LLM wording, so verify rather than trust: {', '.join(dropped)}")
+            # TRUNCATED, and it was not: a real pair dumped 50 full rule statements here — hundreds
+            # of words that pushed the two readable notes below it off the operator's screen. A
+            # statement is a paragraph, so even one is long; the point of this note is the COUNT plus
+            # a taste, and the site notes below carry the part worth acting on.
+            head = "; ".join(s[:90] + ("…" if len(s) > 90 else "") for s in dropped[:3])
+            more = f" (+{len(dropped) - 3} more, in the JSON report)" if len(dropped) > 3 else ""
+            notes.append(f"{len(dropped)} auth surface(s) in baseline but not (by name) in candidate "
+                         f"— names drift with LLM wording, so verify rather than trust: {head}{more}")
         notes.extend(_auth_site_notes(baseline, candidate))
 
     if t.deployment_linkage_must_not_drop and not baseline.deployment_units:

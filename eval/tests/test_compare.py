@@ -670,3 +670,24 @@ def test_two_maps_with_no_access_surface_at_all_say_nothing() -> None:
     rep = compare(make_profile(auth_sites=[], security_surfaces=0, auth_surfaces=[]),
                   make_profile(auth_sites=[], security_surfaces=0, auth_surfaces=[]))
     assert not any("ENFORCEMENT LINES" in n for n in rep.notes)
+
+
+def test_the_dropped_by_name_note_is_truncated() -> None:
+    """A rule statement is a paragraph, and a real pair produced FIFTY of them in one note —
+    hundreds of words that pushed the readable notes off the screen. The count leads, three
+    statements give a taste, and the rest stay in the JSON report."""
+    base = make_profile(auth_surfaces=[f"statement number {i} " + "x" * 200 for i in range(50)],
+                        security_surfaces=50)
+    cand = make_profile(auth_surfaces=[], security_surfaces=50)
+    note = next(n for n in compare(base, cand).notes if "not (by name) in candidate" in n)
+    assert note.startswith("50 auth surface(s)")
+    assert "+47 more" in note
+    assert len(note) < 600
+
+
+def test_a_short_dropped_list_is_not_truncated() -> None:
+    """Three or fewer need no "+N more" — the note should read as the whole list."""
+    base = make_profile(auth_surfaces=["a", "b", "c"], security_surfaces=3)
+    cand = make_profile(auth_surfaces=["a"], security_surfaces=3)
+    note = next(n for n in compare(base, cand).notes if "not (by name) in candidate" in n)
+    assert "more" not in note and "b" in note and "c" in note
