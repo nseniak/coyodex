@@ -225,7 +225,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 ### R40 — What closing a trace gap actually costs
 - **Where**: `method.md`
 - **Anchor**: `Do not reach for a coverage rule that redefines the`
-- **Evidence**: Measured on a real build (session `55f982ae`, 32 agents): closing a 15-of-25 trace gap is ~12 % of total build tokens. Trace is 19.1 % of a 56 M-token build, at ~669 k tokens per use case.
+- **Evidence**: Measured on a real 32-agent build: closing a 15-of-25 trace gap is ~12 % of total build tokens. Trace is 19.1 % of a 56 M-token build, at ~669 k tokens per use case.
 
 ### R41 — The 13-minute monetization trace
 - **Where**: `method.md`
@@ -442,10 +442,10 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 - **Anchor**: `in the COMMIT MESSAGE too, not only in chat.** Its stdout can be piped away:`
 - **Evidence**: A live build quoted the verdict honestly in chat ("that is not a clean pass") and then wrote `validate … clean … anchor-drift clean … each reconciled or recorded` into its commit: three false clauses against its own report, with an anchor count copied from a validate run 32 minutes earlier.
 
-### R82 — A $300 map left in one working tree
+### R82 — A map that cost hours and hundreds of dollars, left in one working tree
 - **Where**: `method.md`
 - **Anchor**: `**Then actually commit.** The build is not over at `finalize`. Stopping there`
-- **Evidence**: A live build ran the gates, wrote the report, and stopped — leaving `.coyodex/` untracked, so the map it had just spent 103 minutes and $300 building existed only in one working tree. Two of the scorecard's assertions have never had an opportunity to score on that project, because both read the commit.
+- **Evidence**: A live build ran the gates, wrote the report, and stopped — leaving `.coyodex/` untracked, so the map it had just spent 103 minutes and hundreds of dollars building existed only in one working tree. Two of the scorecard's assertions have never had an opportunity to score on that project, because both read the commit.
 
 ### R83 — Nine advisories neither fixed nor recorded
 - **Where**: `method.md`

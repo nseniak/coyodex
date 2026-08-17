@@ -78,6 +78,16 @@ heading above it — a heading survives its paragraph being gutted, so it certif
 a method doc pointing there would contradict that in the same breath. The link runs one way
 only, and the anchors are what keep it honest.
 
+**The record is PUBLISHED, so describe the build and never identify it.** It is the one tracked file
+under `internal/`, and it grows every time a rule earns evidence. What makes an account useful is the
+mechanism and the magnitude — "32 % of a build's tool calls", "103 minutes", "5 of ~11 state machines
+refuted" — never which project, which session, or what it cost in money. Those identify a private
+codebase and add nothing a reader can act on. `tests/test_method_rationale.py` refuses absolute home
+paths, session ids, currency amounts, hostnames and email addresses outright; for project NAMES, which
+no pattern can catch, it reads an optional git-ignored `internal/docs/.private-names` — one name per
+line, so the check enforces on the machine where those projects exist without the names ever entering
+the repo.
+
 ## Local setup
 
 The skill itself needs no build — install it once from the repo root (macOS/Linux).

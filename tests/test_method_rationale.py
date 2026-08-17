@@ -48,6 +48,22 @@ METHOD_DOCS: frozenset[str] = frozenset({
 #: rule and leaving a heading behind keeps the test green.
 MIN_ANCHOR_CHARS = 30
 
+#: Shapes that identify a PRIVATE project rather than describing a defect. The record is committed to
+#: a public repo, so these are refused outright. They are patterns, not a name list: a denylist of the
+#: author's own project names, committed here, would publish exactly what it exists to protect.
+CONFIDENTIAL = (
+    (re.compile(r'/(?:Users|home)/[a-z]'), "an absolute path inside somebody's home directory"),
+    (re.compile(r'\bsession `?[0-9a-f]{8}\b'), "a session id"),
+    (re.compile(r'\$\s?\d'), "a currency amount — say the order of magnitude instead"),
+    (re.compile(r'https?://(?!localhost|127\.)[\w.-]+'), "a URL naming a host"),
+    (re.compile(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b'), "an email address"),
+)
+
+#: OPTIONAL, git-ignored: one private project name per line. Present on the author's machine, absent
+#: everywhere else, so the name check enforces where the names exist and skips where they do not —
+#: and the names never enter the repo. `internal/` is ignored apart from the record itself.
+PRIVATE_NAMES = "internal/docs/.private-names"
+
 _HEADING = re.compile(r"^### (?P<id>R\d+) — (?P<title>.+)$")
 _FIELD = re.compile(r"^- \*\*(?P<key>Where|Anchor|Evidence)\*\*: (?P<value>.+)$")
 
@@ -212,3 +228,36 @@ def test_the_method_never_points_readers_at_the_rationale_record():
         "the agent-facing method must not reference the author's rationale record "
         f"({RATIONALE}); it is under internal/, which the method tells agents to ignore: "
         + ", ".join(offenders))
+
+
+def test_the_record_carries_nothing_that_identifies_a_private_project():
+    """The record is COMMITTED to a public repo, and it grows every time a rule earns evidence.
+
+    What makes an account useful is the mechanism and the magnitude — "32 % of a build's tool calls",
+    "103 minutes" — never which project, which session, or what it cost. Those identify a private
+    codebase and add nothing a reader can act on. Two slipped in before this check existed: a session
+    id and a build's invoice."""
+    text = make_record_text()
+    hits: list[str] = []
+    for lineno, line in enumerate(text.splitlines(), start=1):
+        for pattern, what in CONFIDENTIAL:
+            m = pattern.search(line)
+            if m:
+                hits.append(f"line {lineno}: {what} — {m.group(0)!r}")
+    assert not hits, ("this file is published; describe the build, never identify it:\n  "
+                      + "\n  ".join(hits))
+
+
+def test_the_record_never_names_a_private_project():
+    """Names cannot be checked by shape, so they come from a git-ignored list the author keeps
+    locally. Absent, this skips — which is honest: only somebody who HAS those projects can leak one,
+    and they are the person who has the list."""
+    names_file = REPO_ROOT / PRIVATE_NAMES
+    if not names_file.is_file():
+        return
+    wanted = [n.strip() for n in names_file.read_text(encoding="utf-8").splitlines()
+              if n.strip() and not n.startswith("#")]
+    low = make_record_text().lower()
+    found = sorted({n for n in wanted if n.lower() in low})
+    assert not found, (f"{RATIONALE} names a private project: {', '.join(found)}. Describe it — "
+                       "'a live build', 'a large monorepo' — rather than naming it.")
