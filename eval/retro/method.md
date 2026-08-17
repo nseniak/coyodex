@@ -135,6 +135,11 @@ still do Steps 1 and 6, and must say that Steps 2–5 were skipped — including
 each item stands. Read it first — it is tracked, whereas a report is not: `.coyodex-eval/` is
 git-ignored scratch, one `git clean` from gone, which is exactly why the backlog exists.
 
+It carries two kinds of item and both bear on this run. The proposals stop you re-finding what is
+already fixed. **"Open — questions a retro could not answer" stops you re-parking a question that is
+already parked** — if one of them is about the build you are reading, say whether this run answers it,
+narrows it, or leaves it alone, and only add a new question when none of them covers it.
+
 Then, if the reviewed project still has one, take the highest-numbered directory under
 `.coyodex-eval/retro/` — noting that once you create yours, the newest one is yours, the same trap
 this step already warns about for transcripts — and read its `Proposals` for anything the backlog
@@ -584,6 +589,15 @@ say it plainly
 - **Numbers with evidence, never verdicts.** No PASS/FAIL. `observed / of` and turn numbers.
 - **Say what you could not assess.** A retro that only lists what it found reads as complete when
   it is not. Semantic map quality is NOT assessed here — that is `/coyodex-eval`. Say so.
+  **And propose a backlog line for every item in `Not assessed` that is a QUESTION about this build,
+  not a permanent limit.** Naming the owning tool is not the same as handing the question over: this
+  report lives in `.coyodex-eval/`, which is git-ignored scratch, so a deferral that stops here dies
+  with it. One retro correctly parked "same code, 50 access rules became 44 — merged or lost?" as the
+  quality eval's job; it survived only because somebody read the report before the folder was
+  cleaned, and the answer turned out to be neither (the two maps shared 25 % of their enforcement
+  lines). Distinguish the two kinds and only propose the first: a QUESTION has an answer somebody
+  could go and get ("does X still hold on this map?"), while a permanent limit is just this
+  instrument's shape ("a single build proves nothing about a trend") and belongs in the report alone.
 - **A single build proves nothing about a trend.** Where a number moved against the previous build,
   say it moved; do not say the method improved. Two data points are two data points.
 - **Propose, do not apply.** End by asking which proposals the user wants implemented.

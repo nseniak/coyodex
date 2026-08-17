@@ -156,6 +156,17 @@ These are `method.md` at the repo root and `method/templates/`, not the retro me
 
 ---
 
+## Open — questions a retro could not answer
+
+A retro's `Not assessed` block names the tool that owns each question it parked. That naming used to
+be the end of it, and the report it lives in is git-ignored scratch — so the question died with the
+folder. These are the parked ones, with who can answer them.
+
+| # | question | owner | raised |
+|---|---|---|---|
+| 1 | Do the 44 access rules of the 2026-08-17 mcpolis map SAY what the previous map's 50 said? The deterministic half is answered — the two maps share 25 % of their enforcement lines, 17 files lost their coverage and 16 gained it, so it is neither a clean merge nor a clean loss. What no deterministic check can settle is whether the surviving statements cover the same decisions. | `/coyodex-eval` (judges) | 2026-08-17 |
+| 2 | Which of the 17 files that lost access coverage hold enforcement the map should still be claiming? Two were verified by hand as real — a sign-in signature check and a credential encryption call — and one old anchor was a config constant rather than enforcement. The remaining fourteen are unread. | a human, or a targeted skeptic pass | 2026-08-17 |
+
 ## Candidate L3 assertions
 
 **Five landed as 36-39 plus a widening of 26 (`e138a2a`)**: the piped exit code, the growing gate
