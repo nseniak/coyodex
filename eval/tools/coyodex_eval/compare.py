@@ -294,6 +294,7 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
         if dropped:
             notes.append("auth surfaces in baseline but not (by name) in candidate — names drift with "
                          f"LLM wording, so verify rather than trust: {', '.join(dropped)}")
+        notes.extend(_auth_site_notes(baseline, candidate))
 
     if t.deployment_linkage_must_not_drop and not baseline.deployment_units:
         # Silence here is indistinguishable from "the gate passed". A baseline blessed before this
@@ -484,6 +485,49 @@ def compare(baseline: MapProfile, candidate: MapProfile, thresholds: Thresholds 
 
 
 # ── CLI ──────────────────────────────────────────────────────────────────────────────────────────────
+
+
+def _auth_site_notes(baseline: MapProfile, candidate: MapProfile) -> list[str]:
+    """How much of the auth surface's ENFORCEMENT LOCATIONS the two maps agree on.
+
+    `auth-surfaces-no-drop` counts distinct STATEMENTS, which are LLM prose. That gate is necessary
+    and it is not sufficient: on two mcpolis builds of the SAME commit the count moved 50 -> 44
+    (caught) while the anchor sets shared only 57 of 163 and 17 files holding access enforcement in
+    one map were claimed by no access rule in the other (invisible). A count can hold steady through
+    a wholesale change of content, so the count alone cannot say whether a surface was re-worded,
+    merged, lost, or newly found.
+
+    Reported, never gated. Two independent LLM builds legitimately differ, so a hard gate here would
+    fail every rebuild; what the operator needs is the churn in front of them, with the wording-free
+    part — a file that lost its access coverage entirely — named. The dropped-by-name note above
+    tells you to "verify rather than trust", and these are the numbers to verify against.
+    """
+    if baseline.auth_sites is None or candidate.auth_sites is None:
+        # Silence would read as agreement. A profile blessed before `auth_sites` existed carries
+        # None, exactly like the deployment-linkage gate's own version of this.
+        return ["auth-site comparison skipped — a profile predates the `auth_sites` field "
+                "(re-bless the baseline to enable it)"]
+    b, c = set(baseline.auth_sites), set(candidate.auth_sites)
+    if not b and not c:
+        return []
+    shared = b & c
+    notes = [f"auth ENFORCEMENT LINES: {len(b)} -> {len(c)}, {len(shared)} in both "
+             f"({100 * len(shared) // max(len(b | c), 1)} % of the union). A statement count can hold "
+             f"steady while the lines it points at change wholesale, so read this beside the gate."]
+    bf = {a.rsplit(":", 1)[0] for a in b}
+    cf = {a.rsplit(":", 1)[0] for a in c}
+    lost = sorted(bf - cf)
+    if lost:
+        shown = ", ".join(lost[:8]) + (f", +{len(lost) - 8} more" if len(lost) > 8 else "")
+        notes.append(f"{len(lost)} file(s) held access enforcement in the baseline and are named by "
+                     f"NO access rule in the candidate — wording-independent, so these are the ones "
+                     f"to read first: {shown}")
+    gained = sorted(cf - bf)
+    if gained:
+        notes.append(f"{len(gained)} file(s) carry access enforcement only in the candidate — the "
+                     f"baseline missed them, so neither map's surface is complete.")
+    return notes
+
 
 def format_report(report: DeltaReport) -> str:
     # Judge/quality deltas lead; the raw structural counts come last — they are the noisiest signal.

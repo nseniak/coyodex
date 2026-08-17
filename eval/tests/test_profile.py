@@ -994,3 +994,62 @@ def test_distinct_hosted_sets_counts_entry_point_placement_too():
     p = build_profile(json.dumps(doc))
     assert p.deployment_units_linked == 4, "nginx is linked through the entry point"
     assert p.deployment_distinct_hosted_sets == 2, "the monolith set, and nginx's entry point"
+
+
+def make_auth_sites_map() -> str:
+    """An access surface addressed by LOCATION: two access rules, one with two sites and one whose
+    single site is `no_call_site` (enforced by construction, so it has no line to compare), plus a
+    legacy `security[]` row carrying its own anchor. A NON-access rule's site must not appear."""
+    return """{
+  "format": "coyodex-map",
+  "title": "", "goal": "", "commit": null, "committed": null, "built": null,
+  "roles": [], "glossary": [], "use_cases": [], "subsystems": [], "subdomains": [],
+  "components": [], "deps": [], "entities": [], "edges": [], "happy_path": [], "flows": [],
+  "entry_points": [], "run_commands": [], "deployment": [], "observability": [],
+  "config": [], "tests": [], "extras": [], "capabilities": [], "blocks": [],
+  "security": [
+    {"surface": "legacy row", "who": "admin", "source": "legacy/gate.py:7", "risk": "r"}
+  ],
+  "rules": [
+    {"id": "BR1", "name": "Owner-only cancellation", "statement": "only the owner may cancel",
+     "access": true, "risk": "anyone cancels", "confidence": "verified",
+     "sites": [{"where": "orders/api.py:40", "why": "checks the owner"},
+               {"where": "orders/service.py:88", "why": "re-checks on the write path"}]},
+    {"id": "BR2", "name": "Schema-enforced tenancy", "statement": "every row carries its org",
+     "access": true, "risk": "cross-tenant read", "confidence": "verified",
+     "sites": [{"why": "enforced by the schema", "no_call_site": true}]},
+    {"id": "BR3", "name": "Empty list returns early", "statement": "an empty list returns early",
+     "access": false, "confidence": "verified",
+     "sites": [{"where": "orders/api.py:12", "why": "not an access decision"}]}
+  ]
+}"""
+
+
+def test_auth_sites_collects_every_anchored_access_location() -> None:
+    """Both storages, deduped and sorted. The legacy row's own anchor counts: a map built before the
+    security-to-rules fold keeps its surface there, and the comparison must not read that as zero."""
+    p = build_profile(make_auth_sites_map())
+    assert p.auth_sites == ["legacy/gate.py:7", "orders/api.py:40", "orders/service.py:88"]
+
+
+def test_auth_sites_excludes_a_site_with_no_line_to_compare() -> None:
+    """`no_call_site` is a declared absence, not a gap — it has no location, so it cannot take part
+    in a location comparison. It still counts as a SURFACE, which is what `auth_surfaces` holds."""
+    p = build_profile(make_auth_sites_map())
+    assert not any("schema" in a for a in p.auth_sites or [])
+    assert len(p.auth_surfaces) == 3          # two access rules + the legacy row
+
+
+def test_auth_sites_ignores_a_non_access_rule() -> None:
+    """A rule that does not govern who-may-do-what is not part of the auth surface, however well
+    anchored. `orders/api.py:12` belongs to BR3 and must not appear."""
+    p = build_profile(make_auth_sites_map())
+    assert "orders/api.py:12" not in (p.auth_sites or [])
+
+
+def test_old_baseline_without_auth_sites_loads_as_none() -> None:
+    """A profile blessed before the field must still load, and must read None rather than [] — the
+    comparison distinguishes "no data" from "no sites", and [] would read as agreement."""
+    p = build_profile(make_counts_map())
+    text = p.to_json().replace('"auth_sites"', '"retired_field"')
+    assert MapProfile.from_json(text).auth_sites is None

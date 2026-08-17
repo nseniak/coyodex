@@ -195,6 +195,16 @@ class MapProfile:
 
     # ── concept sets (names, for the comparator's set diffs + the auth-surface gate) ──
     auth_surfaces: list[str] = field(default_factory=list)
+    #: WHERE the auth surface is enforced — every anchored access site as a bare `path:line`, sorted.
+    #: `auth_surfaces` holds the STATEMENTS, which are LLM prose: two builds of one commit describe
+    #: the same decision in different words, so a name comparison reports almost everything as
+    #: dropped and the operator is told to "verify rather than trust" with nothing to verify against.
+    #: The anchors are wording-independent. Measured on two mcpolis builds of the SAME commit: the
+    #: statement count moved 50 -> 44 while the anchor sets shared only 57 of 163, and 17 files
+    #: holding access enforcement in one map were named by no access rule in the other. `None` on a
+    #: profile written before this field existed — the comparison says so rather than reading 0 as
+    #: agreement.
+    auth_sites: list[str] | None = None
     use_case_names: list[str] = field(default_factory=list)
     entity_names: list[str] = field(default_factory=list)
 
@@ -266,6 +276,13 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
                  + [r.statement.strip() for r in m.rules if r.access]):
         if name and name not in surfaces:
             surfaces.append(name)
+    # The same surface, addressed by LOCATION. Both storages again: a legacy `security[]` row carries
+    # its own `source`, and an `access` rule carries one anchor per site. A site declared
+    # `no_call_site` has no location to compare, so it is absent here and present in `auth_surfaces`.
+    auth_sites = sorted({a.strip() for a in (
+        [s.source for s in m.security]
+        + [site.where for r in m.rules if r.access for site in r.sites])
+        if a and ":" in a})
     owners = validate_model.component_file_owners(m)   # built once; the derivation's shared index
     n_components = len({c.id for c in m.components})
     n_edges = len(m.edges)
@@ -369,6 +386,7 @@ def build_profile_from_model(m: ProjectModel, repo_root: Path | None = None) -> 
                                      for s in r.sites))
                           if m.rules else None),
         auth_surfaces=surfaces,
+        auth_sites=auth_sites,
         use_case_names=[u.name for u in m.use_cases if u.name.strip()],
         entity_names=[e.name for e in m.entities],
     )

@@ -31,6 +31,7 @@ def make_profile(**over: object) -> MapProfile:
         contradictions=0, audit_advisories=1, audit_warnings=0, l2_claims=6,
         coverage_flags=0, edges_per_component=2.0,
         auth_surfaces=["a", "b", "c", "d", "e"], use_case_names=[], entity_names=[],
+        auth_sites=["gate.py:1", "gate.py:2", "org.py:9"],
     )
     base.update(over)
     return MapProfile(**base)  # type: ignore[arg-type]
@@ -615,3 +616,57 @@ def test_a_baseline_that_never_placed_anything_does_not_trip_the_new_check():
     gate = next(g for g in compare(base, cand, Thresholds()).gates
                 if g.name == "deployment-linkage-no-drop")
     assert gate.passed, gate.detail
+
+
+def test_auth_site_churn_is_reported_when_the_statement_count_holds() -> None:
+    """The gap this closes. The count gate sees nothing — five surfaces before, five after — while
+    every enforcement line moved. Measured on two mcpolis builds of one commit: 50 -> 44 statements
+    (caught) against 57 of 163 shared anchors (invisible)."""
+    base = make_profile(auth_sites=["a.py:1", "a.py:2", "b.py:3"])
+    cand = make_profile(auth_sites=["c.py:7", "c.py:8", "d.py:9"])
+    rep = compare(base, cand)
+    assert any("auth-surfaces-no-drop" in g.name and g.passed for g in rep.gates)
+    assert any("ENFORCEMENT LINES: 3 -> 3, 0 in both" in n for n in rep.notes)
+
+
+def test_a_file_that_lost_all_its_access_coverage_is_named() -> None:
+    """The wording-independent half. Two builds may describe one decision differently, but a file
+    that no access rule names any more is a fact about coverage, not about prose."""
+    base = make_profile(auth_sites=["kept.py:1", "gone.py:4", "gone.py:9"])
+    cand = make_profile(auth_sites=["kept.py:1"])
+    notes = " ".join(compare(base, cand).notes)
+    assert "1 file(s) held access enforcement in the baseline" in notes
+    assert "gone.py" in notes and "kept.py" not in notes.split("read first:")[-1]
+
+
+def test_a_file_only_the_candidate_covers_says_neither_map_is_complete() -> None:
+    """Churn runs both ways, and that is the point: on the real pair each build found ~16 files of
+    access enforcement the other missed, so the union is larger than either map claims."""
+    base = make_profile(auth_sites=["kept.py:1"])
+    cand = make_profile(auth_sites=["kept.py:1", "found.py:2"])
+    notes = " ".join(compare(base, cand).notes)
+    assert "1 file(s) carry access enforcement only in the candidate" in notes
+    assert "neither map's surface is complete" in notes
+
+
+def test_auth_site_churn_never_gates() -> None:
+    """Two independent LLM builds legitimately differ, so gating on churn would fail every rebuild.
+    A total change of anchors, with the statement count held, must still PASS."""
+    base = make_profile(auth_sites=["a.py:1"])
+    cand = make_profile(auth_sites=["z.py:99"])
+    assert compare(base, cand).verdict == "PASS"
+
+
+def test_a_baseline_predating_auth_sites_says_so_rather_than_going_quiet() -> None:
+    """Silence is indistinguishable from agreement. The deployment-linkage gate learned this the
+    same way: a baseline blessed before the field carried 0 and turned its gate off invisibly."""
+    base = make_profile(auth_sites=None)
+    cand = make_profile(auth_sites=["a.py:1"])
+    assert any("auth-site comparison skipped" in n for n in compare(base, cand).notes)
+
+
+def test_two_maps_with_no_access_surface_at_all_say_nothing() -> None:
+    """A project with no auth surface should not produce a note about one."""
+    rep = compare(make_profile(auth_sites=[], security_surfaces=0, auth_surfaces=[]),
+                  make_profile(auth_sites=[], security_surfaces=0, auth_surfaces=[]))
+    assert not any("ENFORCEMENT LINES" in n for n in rep.notes)
