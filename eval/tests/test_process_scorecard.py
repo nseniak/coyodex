@@ -230,14 +230,32 @@ def test_a2_catches_a_hand_parse_inside_a_heredoc():
 
 # --- assertion 3: the headline --------------------------------------------------------
 
-def test_a3_scores_batched_fanouts_against_all_fanouts():
-    """`of` is every turn that launched an agent; `observed` is those that launched two or more."""
+def test_a3_scores_batched_fanouts_against_fanouts_only():
+    """`of` counts batched turns plus SERIALISED ones; a lone dispatch is neither.
+
+    It used to count every turn that launched an agent, so a build that gave one job to one agent
+    lost a share of this line with nothing to fix — two consecutive measured builds did."""
     turns = (make_turn(0, make_agent(), make_agent(), make_agent()),   # batched
-             make_turn(1, make_agent()),                              # one per turn
-             make_turn(2, make_bash("ls")))                           # not a fan-out
+             make_turn(1, make_agent()),                              # ONE job, one agent
+             make_turn(2, make_bash("ls")))                           # not a dispatch
     a = score(*turns)[3]
-    assert (a.observed, a.of, a.score) == (1, 2, 0.5)
+    assert (a.observed, a.of, a.score) == (1, 1, 1.0)
+    # the isolated dispatch is still reported, so the distribution stays visible
     assert [e.detail["agents"] for e in a.evidence] == [3, 1]
+
+
+def test_a3_still_scores_zero_for_a_serialised_fanout():
+    """The shape this assertion exists for: N agents launched one per turn, back to back."""
+    turns = tuple(make_turn(i, make_agent()) for i in range(5))
+    a = score(*turns)[3]
+    assert (a.observed, a.of, a.score) == (0, 5, 0.0)
+
+
+def test_a3_is_not_applicable_when_the_run_held_no_fanout():
+    turns = (make_turn(0, make_agent()), make_turn(1, make_bash("ls")))
+    a = score(*turns)[3]
+    assert (a.observed, a.of) == (0, 0) and a.score is None
+    assert "no fan-out" in (a.note or "")
 
 
 def test_a3_is_not_applicable_when_nothing_fanned_out():
@@ -464,7 +482,9 @@ def test_loading_a_foreign_json_is_refused():
 
 def test_the_diff_reports_direction_relative_to_the_previous_run():
     """Relative like `coyodex-eval`'s gates: which way each number moved. No threshold, no verdict."""
-    before = P.score_turns((make_turn(0, make_agent()),), label="before")
+    # `before` must be a SERIALISED fan-out (two adjacent one-agent turns), not a lone dispatch:
+    # a single agent for a single job is n/a on this line, not a zero.
+    before = P.score_turns((make_turn(0, make_agent()), make_turn(1, make_agent())), label="before")
     after = P.score_turns((make_turn(0, make_agent(), make_agent()),), label="after")
     rows = {d.id: d for d in P.diff(before, after)}
     assert rows[3].before == 0.0 and rows[3].after == 1.0 and rows[3].direction == "up"
@@ -472,7 +492,8 @@ def test_the_diff_reports_direction_relative_to_the_previous_run():
 
 
 def test_the_diff_marks_an_assertion_that_became_not_applicable():
-    before = P.score_turns((make_turn(0, make_agent()),), label="before")
+    # two adjacent one-agent turns = a serialised fan-out, which scores; one alone does not
+    before = P.score_turns((make_turn(0, make_agent()), make_turn(1, make_agent())), label="before")
     after = P.score_turns((make_turn(0, make_bash("ls")),), label="after")
     rows = {d.id: d for d in P.diff(before, after)}
     assert rows[3].after is None and rows[3].direction == "gone"
@@ -480,8 +501,10 @@ def test_the_diff_marks_an_assertion_that_became_not_applicable():
 
 def test_the_cli_writes_a_scorecard_next_to_the_transcript_and_never_gates():
     """A scorecard, not a gate: exit 0 whatever the numbers say."""
-    records = [make_record("assistant", message_id="m1",
-                           blocks=[{"type": "tool_use", "id": "t", "name": "Agent", "input": {}}])]
+    records = [make_record("assistant", message_id=f"m{i}",
+                           blocks=[{"type": "tool_use", "id": f"t{i}", "name": "Agent",
+                                    "input": {}}])
+               for i in (1, 2)]                    # serialised: one agent per turn, back to back
     with tempfile.TemporaryDirectory() as td:
         src = make_transcript_file(Path(td), records)
         assert P.main([str(src)]) == 0
@@ -2269,3 +2292,61 @@ def test_37_sees_a_filter_applied_to_the_file_the_gate_wrote():
     a = P.assert_37_gate_filter_did_not_grow(turns)
     grew = [e for e in a.evidence if e.detail.get("filter grew") == "True"]
     assert grew, f"a filter that gained two exclusions must be caught: {a.observed}/{a.of}"
+
+
+# --- 31 follows a brief that lives in a file --------------------------------------
+# A build dispatching fifteen long briefs writes each to a file and sends a pointer. Scoring the
+# Agent call's own text then read the POINTER, found no behavioral id, and reported 0.00 about a
+# build whose fifteen briefs ALL cited use cases. L3-DESIGN.md carried no false-alarm note for this
+# line, so the zero read as a real miss.
+
+
+def test_31_follows_a_pointer_to_the_brief_on_disk():
+    with tempfile.TemporaryDirectory() as td:
+        brief = Path(td) / "prompt-h-domain.md"
+        brief.write_text("Own C1-C20. Your slice serves UC3, UC7 and CAP2.\n", encoding="utf-8")
+        pointer = f"Read {brief} completely and follow it end to end. Your AGENT_ID is h-domain."
+        turns = (make_turn(0, make_agent(prompt=pointer), make_agent(prompt=pointer)),
+                 make_turn(1, make_bash("coyodex assemble f.json")))
+        a = score(*turns)[31]
+        assert (a.observed, a.of, a.score) == (1, 1, 1.0)
+
+
+def test_31_says_cannot_tell_when_the_pointed_at_brief_is_gone():
+    """A build scratchpad is temporary. A retro run days later must not read that as a miss."""
+    pointer = "Read /nonexistent/scratchpad/prompt-h-domain.md completely and follow it."
+    turns = (make_turn(0, make_agent(prompt=pointer), make_agent(prompt=pointer)),
+             make_turn(1, make_bash("coyodex assemble f.json")))
+    a = score(*turns)[31]
+    assert (a.observed, a.of) == (0, 0) and a.score is None
+    assert "files are gone" in (a.note or "")
+
+
+def test_31_still_fails_a_brief_that_cites_nothing():
+    turns = (make_turn(0, make_agent(prompt="own backend/src/adapters, return components"),
+                       make_agent(prompt="own frontend/src, return components")),
+             make_turn(1, make_bash("coyodex assemble f.json")))
+    a = score(*turns)[31]
+    assert (a.observed, a.of, a.score) == (0, 1, 0.0)
+
+
+# --- 38 sees through the shell variable the method pushes builds toward -----------
+# The write spelled the path absolutely and every read spelled it `$CO/verify/worklist.json`, so a
+# file read four times scored 0/1.
+
+
+def test_38_resolves_a_shell_variable_in_the_redirect_target():
+    turns = (make_bash_turn(1, "CO=/repo/.coyodex\n"
+                               "coyodex audit $CO/project-map.json --json > $CO/verify/w.json"),
+             make_bash_turn(2, "CO=/repo/.coyodex\n"
+                               "coyodex grounding write --worklist $CO/verify/w.json"))
+    a = P.score_turns(turns).by_id()[38]
+    assert (a.observed, a.of, a.score) == (1, 1, 1.0)
+
+
+def test_38_still_flags_a_json_nobody_opened():
+    turns = (make_bash_turn(1, "CO=/repo/.coyodex\n"
+                               "coyodex audit $CO/project-map.json --json > $CO/verify/w.json"),
+             make_bash_turn(2, "coyodex validate /repo/.coyodex/project-map.json"))
+    a = P.score_turns(turns).by_id()[38]
+    assert (a.observed, a.of, a.score) == (0, 1, 0.0)

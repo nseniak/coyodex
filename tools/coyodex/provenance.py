@@ -173,6 +173,7 @@ _MODES = ("build", "accept", "rebuild")
 
 USAGE = """usage: coyodex provenance stamp [<repo>] [--mode build|accept|rebuild]
                                 [--session-id <id>] [--built-at 'YYYY-MM-DD HH:MM']
+                                [--update-header <header-fragment.json>]
        coyodex provenance show [<repo>]
 
 stamp   Record this session's id + minute-precise build time in <repo>/.coyodex/provenance.json —
@@ -200,11 +201,11 @@ def main(argv: list[str] | None = None) -> int:
         return helped
     repo_arg = None
     mode = "build"
-    session_id = built_at = None
+    session_id = built_at = header_path = None
     i = 0
     while i < len(rest):
         a = rest[i]
-        if a in ("--mode", "--session-id", "--built-at"):
+        if a in ("--mode", "--session-id", "--built-at", "--update-header"):
             i += 1
             if i >= len(rest):
                 print(f"ERROR: {a} needs a value", file=sys.stderr)
@@ -213,6 +214,8 @@ def main(argv: list[str] | None = None) -> int:
                 mode = rest[i]
             elif a == "--session-id":
                 session_id = rest[i]
+            elif a == "--update-header":
+                header_path = rest[i]
             else:
                 built_at = rest[i]
         elif a.startswith("-"):
@@ -247,10 +250,40 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     for w in warnings:
         print(f"coyodex provenance: {w}", file=sys.stderr)
+    if header_path is not None:
+        rc = _write_header_built(Path(header_path), entry.built_at)
+        if rc:
+            return rc
     # stdout carries the one value the build must copy verbatim; the human line goes to stderr, so
     # `built_at=$(coyodex provenance stamp)` is a usable idiom.
     print(f"built_at={entry.built_at}")
     print(f"stamped {path} (session {entry.session_id}, mode {entry.mode})", file=sys.stderr)
+    return 0
+
+
+def _write_header_built(header: Path, built_at: str) -> int:
+    """Put `built_at` in the header fragment's `built`. Returns a non-zero exit on failure.
+
+    The alternative, and what builds actually did, is a `python3 - <<'PY'` heredoc that json-loads
+    the fragment, sets one string and dumps it back — a hand-written map write in the middle of the
+    one sequence, for a value the tool had just printed. It is a two-line edit, which is exactly why
+    it should not be hand-rolled: the failure mode is a header and a provenance file that disagree,
+    and nothing downstream compares them."""
+    try:
+        data = json.loads(header.read_text(encoding="utf-8"))
+    except OSError as exc:
+        print(f"ERROR: --update-header {header}: {exc}", file=sys.stderr)
+        return 2
+    except json.JSONDecodeError as exc:
+        print(f"ERROR: --update-header {header} is not JSON: {exc}", file=sys.stderr)
+        return 2
+    if not isinstance(data, dict):
+        print(f"ERROR: --update-header {header} is not a fragment object", file=sys.stderr)
+        return 2
+    was = data.get("built")
+    data["built"] = built_at
+    header.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"header {header.name}: built {was!r} -> {built_at!r}", file=sys.stderr)
     return 0
 
 

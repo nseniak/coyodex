@@ -241,8 +241,10 @@ def test_coyodex_shaped_prose_inside_a_quoted_string_is_not_a_run():
     strings, commit messages describing what was run."""
     assert _subs('echo "next step: coyodex reconcile the fragments"') == []
     assert _subs('coyodex record --map x --line "then runs coyodex assemble"') == ["record"]
-    # the quote DELIMITER is ordinary syntax, so the careful `"$CY"` spelling still counts
-    assert _subs('rec() { "$CY" record --map m --line "$1"; }') == ["record"]
+    # the quote DELIMITER is ordinary syntax, so the careful `"$CY"` spelling still counts —
+    # now via the CALL, because a function definition on its own is a template nobody ran
+    assert _subs('rec() { "$CY" record --map m --line "$1"; }\nrec "Sweep debt" "a: why"') \
+        == ["record"]
 
 
 def test_a_plain_heredoc_terminator_must_not_be_indented():
@@ -287,3 +289,62 @@ def test_shell_grammar_that_must_not_split_a_command():
     assert _subs("coyodex validate m.json --check-sources 2>&1 | grep -h err") == ["validate"]
     assert _subs("for b in a b; do coyodex dump $b; done") == ["dump"]
     assert _subs("x=$(echo a; echo b); coyodex audit m.json") == ["audit"]
+
+
+# --- the subverb allowlist, and the shell-function template ----------------------
+# `coyodex fix row` was tabled as a bare `fix` and `provenance stamp` as `provenance`, because six
+# of the twelve dispatched verbs were missing from the allowlist. Worse, a build that has six
+# near-identical edits writes the invocation once in a shell function and calls it six times, so
+# the scan counted the DEFINITION and reported one run. A retrospective read the resulting table
+# and published "no `fix row` invocation in the whole build"; the verb had run six times.
+
+
+def test_subverbs_cover_every_dispatched_verb():
+    """The allowlist is checked against the dispatch tables, not against a comment."""
+    from coyodex import fix, grounding, provenance  # the tools this reader measures
+
+    dispatched = set(fix._VERBS)
+    dispatched |= {"write", "report", "lint"}          # grounding.main's own `verb not in (...)`
+    dispatched |= {"stamp", "show"}                    # provenance.main's own guard
+    missing = sorted(dispatched - transcript._COYODEX_SUBVERBS)
+    assert not missing, (
+        f"{missing} are dispatched but absent from _COYODEX_SUBVERBS, so `--commands` will report "
+        f"them at bare-subcommand granularity and a reader cannot tell them apart")
+    # And the two source lists this test hard-codes must still be what the tools parse.
+    assert "lint" in grounding.USAGE
+    assert "stamp" in provenance.USAGE
+
+
+def test_a_verb_called_through_a_shell_function_is_counted_per_call():
+    cmd = ("CX=.venv/bin/coyodex\n"
+           'run(){ echo "--- $1"; $CX fix row --fragments $FR --id "$1" "${@:2}" 2>&1 | tail -2; }\n'
+           'run BR177 --set-statement "a"\n'
+           'run BR181 --set-statement "b"\n'
+           'run BR158 --set-statement "c"\n')
+    names = [i.name for i in transcript._invocations_in(cmd)]
+    assert names == ["fix row"] * 3, names
+    # The binary is resolved from the alias assigned OUTSIDE the function.
+    assert all(i.binary == "coyodex" and i.alias_resolved
+               for i in transcript._invocations_in(cmd))
+
+
+def test_a_defined_but_never_called_function_counts_nothing():
+    """The old scan counted the definition. A template nobody ran is not work that happened."""
+    cmd = ("CX=.venv/bin/coyodex\n"
+           "rec(){ $CX record --map $F --heading \"$1\" --line \"$2\"; }\n"
+           "echo 'defined, never called'\n")
+    assert transcript._invocations_in(cmd) == []
+
+
+def test_a_helper_with_no_coyodex_call_expands_to_nothing():
+    cmd = ("hunt(){ grep -rn \"$1\" backend/src; }\n"
+           "hunt policy_engine\n"
+           "coyodex validate map.json\n")
+    assert [i.name for i in transcript._invocations_in(cmd)] == ["validate"]
+
+
+def test_an_unbalanced_brace_leaves_the_text_alone():
+    """Guessing at a broken definition would silently drop a real invocation."""
+    cmd = "run(){ coyodex validate map.json\ncoyodex audit map.json\n"
+    names = [i.name for i in transcript._invocations_in(cmd)]
+    assert "audit" in names

@@ -314,8 +314,13 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R58 — The two-skeptic split the lead broke by hand
 - **Where**: `method.md`
-- **Anchor**: `with N ODD, and N ≥ 3.** Two skeptics cannot form a majority, and a tie broken`
+- **Anchor**: `with N ODD, and N ≥ 3.** **Where the cut falls`
 - **Evidence**: A live build ran exactly two skeptics on its security claims, they split, and the lead broke the tie by hand against the code.
+
+### R58b — The vote's scope was written twice and differently
+- **Where**: `method.md`
+- **Anchor**: `**Where the cut falls: the WHOLE `security` theme, every batch of it.** "the riskiest claims`
+- **Evidence**: "the riskiest claims (auth, scoping, encryption)" and "the `security` theme" both stood as the rule, so a build guessed: it triple-voted 80 of the security theme's 123 claims and single-voted 43, and 8 of its 10 applied refutations then came from single-vote batches. The same build's three-way batches disagreed on the verdict 0 times across 160 rows.
 
 ### R59 — Ties described as unverifiable
 - **Where**: `method.md`
@@ -389,8 +394,13 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R73 — The two orderings that could not both hold
 - **Where**: `method.md`
-- **Anchor**: `is second-to-last.** The sequence below is the single one; where an older note disagrees, this wins. ``` 1. every structural / fragment change, including the refutation reconcile 2. coyodex anchor-drift`
+- **Anchor**: `is second-to-last.** The sequence below is the single one; where an older note disagrees, this wins.`
 - **Evidence**: This used to be stated in two places that could not both hold: "`grounding write` runs after the final reconcile edit, followed by ONE assemble", and "the anchor-drift reconcile is the TERMINAL write, no re-assemble". A live build followed the second, `finalize` then raised `live_claims_digest does not match this map`, and the whole tail — drift fixes, record, assemble — was redone by hand.
+
+### R73b — Four steps the single sequence did not name
+- **Where**: `method.md`
+- **Anchor**: `**Steps 5, 8, 9 and 12 are here because the list without them cost real builds.** `grounding`
+- **Evidence**: The block called itself the one sequence while omitting `grounding report`, `provenance stamp`, the header `built` backfill and the combined `finalize`. A build that followed it literally wrote the grounding record twice (once without a note, then again after reading `report`), and ran `finalize` twice — the second run, without `--verdicts`, overwrote the report and dropped its verdict-based anchor-drift leg and the "challenged N of M" coverage line from the committed record.
 
 ### R74 — Three builds lost their fix edits
 - **Where**: `method.md`

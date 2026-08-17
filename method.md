@@ -987,6 +987,20 @@ synthesis → parallel trace.**
     **command itself must not be an `ls` poll**: wrapping `for i in $(seq 1 240) … sleep 20` in
     `Monitor` satisfies "use the Monitor tool" in letter while reproducing the exact poll this
     paragraph bans.
+    **What the text turn should CARRY.** Emitting no tool call is the rule; saying nothing useful is
+    not the point of it. When a returning agent hands you something actionable — a refutation, a
+    contradiction between two slices, a lint failure it could not fix — the acknowledgement turn is
+    where you write down what you will do with it, and the NEXT turn that has work available is
+    where you do it. On one build the lead named a refuted edge at the barrier and did not open the
+    file for eighteen turns; every verdict file it needed was already on disk. Verify a refutation
+    when it arrives, not when the barrier closes.
+  - **Shared state goes in the CONTRACT, never in a per-slice option.** Anything every agent in a
+    fan-out must know — the id legend, the sub-flow catalogue, the "do not re-author these edges"
+    list — belongs in the copied contract that all of them read. A build whose slice generator made
+    the shared-machinery block an opt-in argument passed it to 12 of 14 slices and omitted it from
+    two, one of them the slice its own comment called the heaviest in the build. That cost a repair
+    round on one slice; **the other was never repaired and its omission shipped into the map.** A
+    block that is optional per slice is a block that will be missing from one.
   - **Dispatch the known-longest slice FIRST, in every fan-out.** Launch order is the one lever you
     have over when the barrier closes: a straggler dispatched last holds it for its whole runtime.
     T5 and the security slice are the reliably heaviest in Phase 1; in Phase 3 it is whichever use
@@ -1358,7 +1372,13 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   **sweep worklist** — anchored flow steps that read like a decision no rule covers — is empty or
   fully recorded under the `Sweep debt` extras heading (`coyodex record --map
   .coyodex/build-fragments/extras.json --heading "Sweep debt" --line "<the step's anchor>: <why>"`
-  — name the FRAGMENT, or the next assemble discards the record).
+  — name the FRAGMENT, or the next assemble discards the record). **`--line` REPEATS, and
+  `--lines-from <file|->` reads a batch** — one process, one write, and every line shape-checked
+  before anything is written. Every `record` example in this file used to show exactly one `--line`
+  and `--lines-from` appeared nowhere, so a build spawned **40 processes for 40 lines**. `record`
+  also SEEDS the extras fragment when the path does not exist yet and prints a note saying so, so
+  never `echo '{"extras": []}' >` it first: that is a truncating redirect one later run away from
+  wiping a populated file.
 
   **A step is covered two ways, and the second one is why you never anchor a decoy.** By ANCHOR: a
   site lands on the step's line, or inside the same function. Or STRUCTURALLY: a rule is enforced in
@@ -1419,8 +1439,16 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   and retyping** — `cp COYODEX_HOME/method/templates/skeptic-contract.md
   <scratch>/skeptic-contract.md`, then fill the «angle-bracket» slots. The instruction on its own
   does not stop this: a `Read` followed by a `Write` is one keystroke away from a rewrite, and `cp`
-  is not. For the riskiest claims (auth, scoping, encryption) run **N skeptics + majority vote —
-  with N ODD, and N ≥ 3.** Two skeptics cannot form a majority, and a tie broken by the lead reading
+  is not. For the riskiest claims run **N skeptics + majority vote — with N ODD, and N ≥ 3.**
+  **Where the cut falls: the WHOLE `security` theme, every batch of it.** "the riskiest claims
+  (auth, scoping, encryption)" and "the `security` theme" were both written here and they are not
+  the same instruction, so a build had to guess: one triple-voted 80 of the security theme's 123
+  claims and single-voted the other 43, and 8 of its 10 applied refutations then came from
+  single-vote batches. Before spending the budget, weigh what the vote actually bought on that run:
+  across 160 redundant rows the three skeptics disagreed on the verdict ZERO times and on the
+  evidence anchor once. Unanimity is a real result — it is the only evidence that the
+  highest-risk claims are not one agent's blind spot — but it is not discovery, and if the budget
+  is tight a second single-vote batch elsewhere finds more. Two skeptics cannot form a majority, and a tie broken by the lead reading
   the code is the build-context blind spot the fresh-context rule exists to break, reintroduced at
   the last step. Give each row a `skeptic` id so two independent agreements are never mistaken for
   one vote counted twice. And note what a tie IS: `grounding write` files it under `unverifiable`,
@@ -1467,11 +1495,14 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   the code could not settle the claim either way — and folding it into either of the others is what
   makes the record lie. `validate` warns when coverage is thin, and warns when a map with a real
   claim surface carries no `grounding` record at all: an unchallenged map and a fully-verified one
-  otherwise look identical in every view and pass every gate the same way. **First run the free
-  pass:** `coyodex validate --check-sources` (and `coyodex anchor-drift --map …` with NO
-  `--verdicts`) flags every call-site anchor pointing at a line that cannot act — a `def` header, an
+  otherwise look identical in every view and pass every gate the same way. **GATE — run the free pass BEFORE you dispatch a single
+  skeptic, not after the barrier:** `coyodex validate --check-sources` (and `coyodex anchor-drift
+  --map …` with NO `--verdicts`) flags every call-site anchor pointing at a line that cannot act — a `def` header, an
   import, a comment. That is deterministic, needs no skeptics, and on live maps it reproduced what
-  the skeptics found by reading; spend the skeptics on what it cannot decide. Keep the split WITHIN
+  the skeptics found by reading; spend the skeptics on what it cannot decide. Stated as prose in
+  this paragraph it was read as advice and skipped: one build ran `anchor-drift` exactly once, at
+  the very end and WITH `--verdicts`, and paid three separate skeptics to report drifted anchors by
+  hand. It is a gate with an order, not a suggestion. Keep the split WITHIN
   a theme (related claims still travel together). Each is told to *disprove* the claim, and to use
   the THREE-WAY verdict honestly: **refuted when the code contradicts the claim; `unverifiable` when
   the code cannot settle it either way**. Do not tell a skeptic to "default to refuted on doubt" —
@@ -1484,8 +1515,25 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   skeptics' output as the **verdicts file** `anchor-drift` consumes: `{"grounding": [{"claim": <the
   worklist claim string>, "grounded": true|false|"unverifiable", "evidence": "path:line"}]}` — one
   row per claim (or per vote when N skeptics run), `claim` matching the worklist text verbatim so
-  the tool can pair it, `evidence` the true call site. **Write the record with `coyodex grounding
-  write`, never a hand tally:**
+  the tool can pair it, `evidence` the true call site.
+
+  **LINT the verdicts as they land, at the barrier — `coyodex grounding lint`.** It is the one
+  mechanical check on the pass and it goes unrun because nothing named it: on one build it appeared
+  zero times in the transcript, zero times in this file, and zero times in the skill, while the lead
+  hand-wrote half of it twice.
+
+  ```
+  coyodex grounding lint --verdicts .coyodex/verify/verdicts-a.json \
+                         --verdicts .coyodex/verify/verdicts-b.json … \
+                         --agent-transcripts <the session's subagents/ dir>
+  ```
+
+  Note the shape: **`--verdicts` REPEATS, one flag per file** — it does not take a list, so a bare
+  glob after one flag is an error. Run it the moment the barrier closes, not at `grounding write`:
+  `write` refuses the same malformed shapes at the END of the build, where the skeptic that produced
+  them is a hundred turns gone. `--agent-transcripts` adds the check no shape test can make — whether
+  a note claiming a read is backed by the agent's own transcript. **Write the record with `coyodex
+  grounding write`, never a hand tally:**
 
   ```
   # CAPTURE the worklist BEFORE any refutation is applied, and keep the file — the record is
@@ -1603,16 +1651,37 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     single one; where an older note disagrees, this wins.
 
     ```
+    0. coyodex grounding lint --verdicts <v> … --agent-transcripts <dir>   # at COLLECTION, not here
     1. every structural / fragment change, including the refutation reconcile
     2. coyodex anchor-drift --map … --verdicts …            # what drifted
     3. coyodex fix apply-drift … --to-reconcile <file>      # RECORD it; the map is not edited
     4. coyodex assemble … --reconcile <file>                # last STRUCTURAL assemble; applies set_anchors
-    5. coyodex grounding write …                            # measured against the map it describes
-    6. coyodex assemble … --reconcile <file>                # carries the RECORD in; idempotent, and
+    5. coyodex grounding report --worklist … --verdicts …   # WHICH claims were refuted / tied /
+                                                            #   unvoted — the reconcile worklist, and
+                                                            #   what `grounding.note` is written from
+    6. coyodex grounding write … --note …                   # measured against the map it describes
+    7. coyodex assemble … --reconcile <file>                # carries the RECORD in; idempotent, and
                                                             #   not optional — skip it and the
                                                             #   grounding record never reaches the map
-    7. coyodex validate --check-sources → coyodex audit → coyodex render → coyodex finalize
+    8. coyodex provenance stamp <repo>                      # prints built_at=…
+    9. put that exact minute in header.json's `built`, then assemble + render again
+   10. coyodex lint-fragment … header.json                  # the one hand-authored fragment
+   11. coyodex validate --check-sources → coyodex audit → coyodex render
+   12. coyodex finalize … --verdicts <v> … --emit-gate-block <file>   # ONE run, both flags
+   13. commit the map, the .md, the pre-index and provenance
     ```
+
+    **Steps 5, 8, 9 and 12 are here because the list without them cost real builds.** `grounding
+    report` used to live only in prose 74 lines above, so a build that followed this block literally
+    wrote the record, then read `report`, then wrote the record AGAIN with the note — one wasted
+    invocation every time, because `report` reads the worklist, the map and the verdicts and never
+    consumes the record. `provenance stamp` and the header backfill were prescribed 160 lines away
+    while this block called itself the single sequence, so the third `assemble` they force appeared
+    to contradict step 4's "last STRUCTURAL assemble" (it does not: the header carries no claim, and
+    `finalize` re-reads the shipped bytes). And `finalize` was run twice on one build — once with
+    `--verdicts`, once with `--emit-gate-block` — where the second run overwrote the report and
+    dropped its verdict-based anchor-drift leg, including the "challenged N of M" coverage line. The
+    flags combine; run it once.
 
     Steps 3 and 4 are the change. `fix` edits the ASSEMBLED map, and the source of truth is the
     fragments, so a later `assemble` silently discards every `fix` edit. `--to-reconcile` makes the
@@ -1677,6 +1746,16 @@ then fill the «angle-bracket» slots in place. Do not `Read` it and `Write` you
 keystroke from a rewrite, and a retyped contract drifts from the tool it describes, silently
 dropping rules (the anchor rules for `edges[].where`, `subsystems[].source` and `tests[].file` are
 the ones that have gone missing) from the contract every agent is handed.
+
+**Business-rule contract (Phase 3).** The copyable contract is
+[method/templates/rules-contract.md](method/templates/rules-contract.md). Copy it the same way —
+`cp COYODEX_HOME/method/templates/rules-contract.md <scratch>/rules-contract.md`, then fill the
+«angle-bracket» slots — and for the same reason. This template exists because one build had none:
+the lead composed the rules contract from prose and told all eleven rule agents to put a `block`
+field on every rule, which `lint-fragment` treats as BLOCKING. The failure fired in 13 of that
+build's 71 agent transcripts and every one of the eleven fragments had to be repaired. `block` is
+the lead's to assign, through `reconcile`, after the fan-out — an agent states its block id in its
+REPLY and never in its fragment.
 
 **Completeness check before the barrier (lead, not delegated).** Before the Phase 2 synthesis, the
 lead confirms **every prescribed slice came back with its sections** — in particular that the T5 owner

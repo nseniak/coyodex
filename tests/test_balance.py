@@ -549,3 +549,23 @@ def test_a_map_with_no_subdomains_gets_no_domain_table():
     m = make_subsystem_model({"S1": 5, "S2": 5})
     m.subdomains = []
     assert "Per-subdomain fan-out" not in balance._report(m)
+
+
+def test_map_is_accepted_as_a_named_flag_too():
+    """`record`, `anchor-drift` and every `fix` verb take `--map`; `balance` took only a positional,
+    so a build that had just run `record --map …` wrote `balance --map …` and got exit 2. The
+    spelling a caller reaches for should not depend on which subcommand it is."""
+    import json as _json
+    import tempfile as _tempfile
+    from pathlib import Path as _Path
+
+    from coyodex.balance import main as _main
+    from coyodex.model import FORMAT as _FORMAT
+    with _tempfile.TemporaryDirectory() as td:
+        p = _Path(td) / "m.json"
+        p.write_text(_json.dumps({
+            "format": _FORMAT, "title": "t", "goal": "g",
+            "components": [{"id": "C1", "name": "A", "purpose": "p", "subsystem": "S1"}],
+            "subsystems": [{"id": "S1", "name": "One", "purpose": "p"}],
+        }), encoding="utf-8")
+        assert _main(["--map", str(p)]) == _main([str(p)])

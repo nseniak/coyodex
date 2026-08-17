@@ -513,3 +513,45 @@ def test_the_table_never_says_recorded_without_naming_the_key_that_records_it():
         got = [d for d, _h, _a in advisory_disposition(Path(p), rep)]
     assert got[0] != "recorded", "an unrecorded advisory must never be filed as recorded"
     assert got[1] == "disclosure", "a disclosure of records is not itself a recordable advisory"
+
+
+# --- a leg nobody asked for is not silence ----------------------------------------
+# A build ran `finalize … --verdicts <30 files>`, then re-ran it with `--emit-gate-block` and NO
+# `--verdicts` purely to emit the block. The second run overwrote the report, so what shipped — and
+# what the commit message quoted — carried only the shape-only anchor-drift leg, losing the
+# verdict-based leg and its `challenged N of M worklist claim(s)` coverage line. Nothing said so.
+
+
+def _with_verdicts_beside_the_map(root: Path) -> Path:
+    verify = root / ".coyodex" / "verify"
+    verify.mkdir()
+    for name in ("verdicts-a.json", "verdicts-b.json"):
+        (verify / name).write_text(json.dumps({"grounding": []}), encoding="utf-8")
+    return verify
+
+
+def test_verdict_files_beside_the_map_are_named_when_the_run_was_given_none():
+    root, p = make_repo()
+    _with_verdicts_beside_the_map(root)
+    assert finalize.main([str(p), "--repo", str(root)]) == 0        # still not a gate
+    report = (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+    assert "NOT RUN" in report
+    assert "2 verdict file(s)" in report
+    assert "--emit-gate-block` combine in ONE invocation" in report
+
+
+def test_the_nag_is_gone_once_the_verdicts_are_passed():
+    root, p = make_repo()
+    verify = _with_verdicts_beside_the_map(root)
+    args = [str(p), "--repo", str(root)]
+    for f in sorted(verify.glob("verdicts-*.json")):
+        args += ["--verdicts", str(f)]
+    assert finalize.main(args) == 0
+    report = (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")
+    assert "NOT RUN" not in report
+
+
+def test_a_map_with_no_verdicts_anywhere_says_nothing_about_them():
+    root, p = make_repo()
+    assert finalize.main([str(p), "--repo", str(root)]) == 0
+    assert "NOT RUN" not in (root / ".coyodex" / "finalize-report.md").read_text(encoding="utf-8")

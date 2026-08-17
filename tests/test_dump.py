@@ -221,3 +221,62 @@ def test_two_slice_flags_are_still_refused(capsys):
         p.write_text(to_canonical_json(make_model()), encoding="utf-8")
         assert main([str(p), "--counts", "--legend"]) == 2
         assert "at most ONE slice flag" in capsys.readouterr().err
+
+
+# --- the reads that did not exist -------------------------------------------------
+# A rules contract handed to eleven agents advertised `dump --id UC31   # a use case, with its flow
+# steps and their anchors`. It answered `"members": []`, there was NO dump path to a flow at all,
+# `--id SF200` said `"kind": "unknown"` about a sub-flow the map defines, and 0 of 311 entry points
+# were addressable. Agents fell back to hand-parsing project-map.json with `python3 -c` — the exact
+# thing "never hand-parse the map" forbids, made unavoidable by the reader.
+
+
+def _model_with_a_flow() -> ProjectModel:
+    from coyodex.model import Flow, FlowStep, SubFlow
+    return ProjectModel(
+        use_cases=[UseCase(id="UC1", name="Sign in")],
+        flows=[Flow(uc="UC1", title="Sign in", steps=[
+            FlowStep(n=1, src="R1", dst="C1", phrase="opens the page",
+                     where="frontend/App.tsx:10"),
+            FlowStep(n=2, src="C1", dst="C2", phrase="verifies the token",
+                     where="backend/auth.py:42")])],
+        subflows=[SubFlow(id="SF1", name="Resolve the caller", steps=[
+            FlowStep(n=1, src="C3", dst="C4", phrase="looks the org up",
+                     where="backend/org.py:7")])],
+        entry_points=[EntryPoint(id="EP1", kind="http-route", component="C1",
+                                 trigger="POST /login", source="backend/routes.py:5")],
+    )
+
+
+def test_id_on_a_use_case_returns_its_flow_steps_with_anchors():
+    got = resolve_id(_model_with_a_flow(), "UC1")
+    assert got is not None and got["kind"] == "use_case"
+    assert [s["n"] for s in got["members"]] == [1, 2]
+    assert got["members"][1]["where"] == "backend/auth.py:42"
+
+
+def test_id_on_a_sub_flow_knows_its_kind_and_returns_its_steps():
+    got = resolve_id(_model_with_a_flow(), "SF1")
+    assert got is not None
+    assert got["kind"] == "sub_flow"          # was "unknown": SF was missing from the prefix table
+    assert [s["where"] for s in got["members"]] == ["backend/org.py:7"]
+
+
+def test_id_on_an_entry_point_resolves():
+    """Entry points are minted by `assemble` and live outside ID_ARRAYS, so every EP id answered
+    `not defined in the map` — in the reader whose job is to stop agents parsing the JSON."""
+    got = resolve_id(_model_with_a_flow(), "EP1")
+    assert got is not None
+    assert got["kind"] == "entry_point"
+    assert got["source"] == "backend/routes.py:5"
+    assert got["members"] == [{"component": "C1", "kind": "http-route"}]
+
+
+def test_id_on_an_unknown_entry_point_is_still_none():
+    assert resolve_id(_model_with_a_flow(), "EP99") is None
+
+
+def test_a_use_case_with_no_flow_yet_has_no_members():
+    m = ProjectModel(use_cases=[UseCase(id="UC9", name="Not traced yet")])
+    got = resolve_id(m, "UC9")
+    assert got is not None and got["members"] == []

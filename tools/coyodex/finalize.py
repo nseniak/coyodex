@@ -308,12 +308,46 @@ def _drift_leg(map_path: Path, repo: Path, verdicts: list[Path]) -> Leg:
                      + (f" · {coverage}" if coverage else "")))
 
 
+#: Where a build keeps the skeptics' verdicts. `finalize` looks here when it was given none, so it
+#: can say that a leg it CAN run was not asked for.
+_VERDICTS_GLOB = "verify/verdicts-*.json"
+
+
+def _unasked_verdicts(map_path: Path, verdicts: list[Path]) -> list[Path]:
+    """Verdict files sitting beside the map that this run was not given.
+
+    A build ran `finalize … --verdicts <30 files>`, then re-ran it with `--emit-gate-block` and NO
+    `--verdicts` purely to emit the block. The second run overwrote the report, so what shipped and
+    what the commit message quoted had only the shape-only anchor-drift leg — losing the
+    verdict-based leg and, with it, the `challenged N of M worklist claim(s)` coverage line whose
+    whole job is to stop "the gate did not run" reading as "the gate passed".
+
+    This cannot be an INCOMPLETE: that verdict is for a leg that FAILED, and a leg nobody asked for
+    did not fail. So it is reported as a leg in its own right — visible in the report, in the gate
+    block and on stdout — which is the thing the silent version did not do."""
+    if verdicts:
+        return []
+    return sorted(map_path.parent.glob(_VERDICTS_GLOB))
+
+
+def _unasked_verdicts_leg(found: list[Path]) -> Leg:
+    names = ", ".join(p.name for p in found[:3]) + (" …" if len(found) > 3 else "")
+    return Leg(name="anchor-drift (verdict-based)", status=RAN, blocking=[], advisory=[
+        f"NOT RUN — {len(found)} verdict file(s) sit beside this map ({names}) and this run was "
+        f"given none, so the verdict-based anchor-drift leg and its coverage attestation are "
+        f"missing from this report. Re-run with `--verdicts <file>` per file; `--verdicts` and "
+        f"`--emit-gate-block` combine in ONE invocation."],
+               note="the leg was skipped because no --verdicts was passed")
+
+
 def build_report(map_path: Path, repo: Path, verdicts: list[Path]) -> FinalizeReport:
+    unasked = _unasked_verdicts(map_path, verdicts)
     legs = [
         _validate_leg(map_path, repo),
         _audit_leg(map_path, verdicts),
         _drift_leg(map_path, repo, []),
         *([_drift_leg(map_path, repo, verdicts)] if verdicts else []),
+        *([_unasked_verdicts_leg(unasked)] if unasked else []),
     ]
     blocking = sum(len(l.blocking) for l in legs)
     advisory = sum(len(l.advisory) for l in legs)

@@ -435,3 +435,26 @@ def test_the_verdict_does_not_collide_with_a_fragment_ok_row_on_stdout():
     assert out.stderr.splitlines()[0].startswith("LINT FAILED"), out.stderr[:200]
     assert not any(l.startswith("LINT ") for l in out.stdout.splitlines()), (
         f"no verdict line may sit on stdout beside the OK rows: {out.stdout[:200]!r}")
+
+
+def test_runs_in_in_a_fragment_is_an_advisory_not_a_failure():
+    """Two harvest slices wrote `runs_in: ["backend"]` — not real deployment-unit names, which are
+    authored by a slice running in parallel. Their own lint passed clean and the lead's `validate`
+    raised 17 BLOCKING lines. It is ADVISORY on purpose: the lead's own synthesis fragment
+    legitimately carries `runs_in` (the committed corpus has one with 35 such rows) and this linter
+    cannot tell the two apart."""
+    from coyodex.lint_fragment import lint_fragment_problems, lint_fragment_warnings
+    from coyodex.model import Component, ProjectModel
+    m = ProjectModel(components=[
+        Component(id="C1", name="A", purpose="p", source="a.py:1", runs_in=["backend"])])
+    assert lint_fragment_problems(m, None) == []
+    warnings = lint_fragment_warnings(m)
+    assert any("carry `runs_in`" in w for w in warnings)
+    assert any("hard-fails the lead's `validate`" in w for w in warnings)
+
+
+def test_a_fragment_without_runs_in_says_nothing_about_it():
+    from coyodex.lint_fragment import lint_fragment_warnings
+    from coyodex.model import Component, ProjectModel
+    m = ProjectModel(components=[Component(id="C1", name="A", purpose="p", source="a.py:1")])
+    assert not any("runs_in" in w for w in lint_fragment_warnings(m))

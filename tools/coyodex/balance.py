@@ -230,7 +230,7 @@ def _json_report(m: ProjectModel) -> str:
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
-        print("usage: coyodex balance [--focus <Sn>] [--json] [.coyodex/project-map.json]\n\n"
+        print("usage: coyodex balance [--focus <Sn>] [--json] [--map <path> | .coyodex/project-map.json]\n\n"
               "Report per-diagram fan-out (target 5±2), the inter-subsystem C→C matrix, and\n"
               "advisory split proposals for over-dense diagrams. Advisory only — exit 0 always;\n"
               "apply accepted proposals via a Direct map change (validate → audit → render).")
@@ -244,6 +244,18 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         focus = argv[i + 1]
         del argv[i:i + 2]
+    # `--map <path>` as a synonym for the positional. `record`, `anchor-drift` and every `fix` verb
+    # take `--map`, `balance` / `audit` / `validate` take a positional, and `dump` accepts both —
+    # so a build that had just run `record --map …` wrote `balance --map …` and got exit 2. The
+    # spelling a caller reaches for should not depend on which subcommand it is.
+    if "--map" in argv:
+        i = argv.index("--map")
+        if i + 1 >= len(argv):
+            print("ERROR: --map needs a path", file=sys.stderr)
+            return 2
+        map_arg = argv[i + 1]
+        del argv[i:i + 2]
+        argv.append(map_arg)
     unknown = [a for a in argv if a.startswith("-") and a != "--json"]
     if unknown:
         # Silently ignoring a typo'd flag is the same defect `audit` had: the command runs, prints

@@ -123,8 +123,43 @@ class Actor:
 
     @property
     def duration(self) -> float:
+        """First record to last, MINUS any stretch the actor spent blocked on its coordinator.
+
+        A sub-agent that returns its answer and is then sent a follow-up keeps one transcript, so
+        its raw span includes the round trip it had no part in. On a measured build the two
+        "slowest" agents of the run — 18.9 min and 15.6 min — held 4.7 and 6.9 minutes of exactly
+        that, and the rework after each reply took about a minute: the second agent's headline
+        number was more idle than work. Ranking stragglers on the raw span, or charging a batch's
+        `waste` with it, measures the LEAD's latency and calls it the agent's."""
+        s, e = self.start, self.end
+        if s is None or e is None:
+            return 0.0
+        return max(0.0, (e - s) - self.blocked_seconds)
+
+    @property
+    def span(self) -> float:
+        """First record to last, blocked time included. What a naive file read reports."""
         s, e = self.start, self.end
         return (e - s) if (s is not None and e is not None) else 0.0
+
+    @property
+    def blocked_seconds(self) -> float:
+        """Time between this actor finishing an answer and its coordinator's next message.
+
+        Keyed on the RESUME, never on gap length alone: a slow tool call also leaves a gap, and
+        subtracting those would understate real work. The boundary is an assistant turn followed by
+        a user turn that is not a tool result — which is what a coordinator follow-up looks like,
+        and what an ordinary tool round trip never does."""
+        total = 0.0
+        previous: "Turn | None" = None
+        for turn in self.turns:
+            if (previous is not None and previous.role == "assistant" and turn.role == "user"
+                    and not turn.tool_results):
+                a, b = _seconds(previous.timestamp), _seconds(turn.timestamp)
+                if a is not None and b is not None and b > a:
+                    total += b - a
+            previous = turn
+        return total
 
     @property
     def requests(self) -> tuple[Turn, ...]:

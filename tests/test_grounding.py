@@ -516,3 +516,68 @@ def test_lint_catches_a_note_claiming_a_read_the_agent_never_made():
         assert any("never_opened.ts" in p for p in problems), problems
         assert not any("workspaces.ts" in p for p in problems), \
             "the file it really did open must not be accused"
+
+
+# --- `--verdicts` is variadic, as the usage line always said -----------------------
+# Usage prints `--verdicts <raw.json>...`. It took exactly one value, so the documented spelling
+# died on `unknown option(s): b.json` — while `write` and `report` are routinely handed thirty
+# files. A retrospective following the printed usage got an error instead of a run.
+
+
+def _verdict_file(tmp: Path, name: str, claim: str) -> Path:
+    p = tmp / name
+    p.write_text(json.dumps({"grounding": [
+        {"claim": claim, "grounded": True, "evidence": "a.py:1", "skeptic": name}]}),
+        encoding="utf-8")
+    return p
+
+
+def test_verdicts_accepts_several_paths_after_one_flag():
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        a = _verdict_file(tmp, "a.json", "claim one")
+        b = _verdict_file(tmp, "b.json", "claim two")
+        assert main(["lint", "--verdicts", str(a), str(b)]) == 0
+
+
+def test_the_repeated_flag_form_still_works():
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        a = _verdict_file(tmp, "a.json", "claim one")
+        b = _verdict_file(tmp, "b.json", "claim two")
+        assert main(["lint", "--verdicts", str(a), "--verdicts", str(b)]) == 0
+
+
+def test_a_flag_after_the_paths_is_still_a_flag():
+    """The swallow stops at the next `-`, or `--verdicts a.json --json` would eat the `--json`."""
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        a = _verdict_file(tmp, "a.json", "claim one")
+        agents = tmp / "agents"
+        agents.mkdir()
+        (agents / "agent-1.jsonl").write_text("a.py\n", encoding="utf-8")
+        assert main(["lint", "--verdicts", str(a), "--agent-transcripts", str(agents)]) == 0
+
+
+def test_lint_says_how_much_of_the_pass_the_evidence_check_could_test(capsys):
+    """It printed the same line with and without `--agent-transcripts`, so a run that tested 16 of
+    949 rows and a run that tested none were indistinguishable."""
+    from coyodex.grounding import main
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        p = tmp / "v.json"
+        p.write_text(json.dumps({"grounding": [
+            {"claim": "c1", "grounded": True, "evidence": "a.py:1", "skeptic": "s",
+             "note": "Read a.py and it holds"},
+            {"claim": "c2", "grounded": True, "evidence": "b.py:2", "skeptic": "s",
+             "note": "the anchor is the operative line"}]}), encoding="utf-8")
+        (tmp / "agents").mkdir()
+        (tmp / "agents" / "agent-1.jsonl").write_text("a.py\n", encoding="utf-8")
+        assert main(["lint", "--verdicts", str(p),
+                     "--agent-transcripts", str(tmp / "agents")]) == 0
+        out = capsys.readouterr().out
+        assert "2 verdict row(s)" in out
+        assert "covered 1 of 2 row(s)" in out

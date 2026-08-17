@@ -471,13 +471,41 @@ def assert_3_fanout_is_one_message(turns: Sequence[Turn]) -> Assertion:
     THE HEADLINE. `method.md` requires a fan-out to be emitted as one message; the study that
     motivated L3 measured 26 of 26 fan-outs launching exactly one agent per turn.
 
-    `of` is the number of fan-out turns (any turn launching at least one agent); `observed` is how
-    many of those launched two or more. Every fan-out turn is carried in the evidence with its agent
-    count, so the shape of the distribution is visible and not just its summary."""
-    fanouts = [(t.index, len(t.agent_calls)) for t in turns if t.agent_calls]
-    batched = [n for _idx, n in fanouts if n >= 2]
-    evidence = tuple(Evidence(idx, {"agents": n}) for idx, n in fanouts)
-    return Assertion(3, "fan-out emitted as one message", len(batched), len(fanouts), evidence)
+    `of` is the number of turns that launched MORE THAN ONE agent's worth of work — see below;
+    `observed` is how many of those put them in one message. Every dispatch turn is carried in the
+    evidence with its agent count, so the shape of the distribution is visible and not just its
+    summary.
+
+    The denominator used to be "any turn launching at least one agent", which quietly penalised a
+    build for dispatching a lone agent for a lone job: a turn with exactly one agent CANNOT contain
+    two, so it scored as a failed fan-out with nothing to fix. Two consecutive measured builds lost
+    a sixth and a ninth of this line to a single such turn. A one-agent turn is now neither
+    numerator nor denominator, and `n/a` means the run held no fan-out at all — which is the honest
+    reading, not a pass."""
+    dispatches = [(t.index, len(t.agent_calls)) for t in turns if t.agent_calls]
+    evidence = tuple(Evidence(idx, {"agents": n}) for idx, n in dispatches)
+    batched = [n for _idx, n in dispatches if n >= 2]
+    # A serialised fan-out is N consecutive one-agent turns, and that is what this line exists to
+    # catch — so a lone dispatch counts against the build only when another one sits beside it.
+    serialised = _serialised_dispatch_turns(dispatches)
+    of = len(batched) + len(serialised)
+    if not of:
+        return Assertion(3, "fan-out emitted as one message", 0, 0, evidence,
+                         "no fan-out in this run — every dispatch was a single agent for a "
+                         "single job, which cannot be batched")
+    return Assertion(3, "fan-out emitted as one message", len(batched), of, evidence)
+
+
+def _serialised_dispatch_turns(dispatches: "Sequence[tuple[int, int]]") -> "list[int]":
+    """One-agent turns that are part of a run of them — the serialised fan-out this assertion hunts.
+
+    The motivating study measured 26 of 26 fan-outs launching exactly one agent per turn. That shape
+    is a sequence of adjacent one-agent dispatch turns, and it must still score zero; an isolated
+    one-agent dispatch is a single job and must not."""
+    singles = [idx for idx, n in dispatches if n == 1]
+    order = {idx: i for i, (idx, _n) in enumerate(dispatches)}
+    return [idx for idx in singles
+            if any(other != idx and abs(order[other] - order[idx]) == 1 for other in singles)]
 
 
 #: `--help` / `-h` as a standalone word anywhere in the command. An invocation that only reads the
@@ -2067,6 +2095,32 @@ def assert_30_grounding_write_follows_the_drift_fix(turns: Sequence[Turn]) -> As
 #: from the file tree alone and the behavioral draft informed nothing.
 _BEHAVIORAL_ID = re.compile(r"\b(?:UC\d+|CAP\d+|HP\d+|R\d+)\b")
 
+#: An absolute path to a brief the prompt tells the agent to read. A build dispatching fifteen long
+#: briefs does not inline them — it writes each to a file and sends a pointer:
+#:
+#:     Read /…/scratchpad/prompt-h-domain.md completely and follow it end to end.
+#:
+#: Scoring the Agent call's own text then reads the POINTER and finds no behavioral id, so a build
+#: whose fifteen briefs all cite use cases scored 0.00 and the scorecard reported the exact opposite
+#: of what happened. Follow the pointer.
+_BRIEF_POINTER = re.compile(r"(/[\w.@+-]+(?:/[\w.@+-]+)*\.(?:md|txt))\b")
+
+
+def _brief_text(call: "ToolCall") -> "tuple[str, bool]":
+    """`(everything the agent was told to read, whether a pointer could not be resolved)`.
+
+    The prompt itself always counts. A pointer counts when the file is still on disk — a build's
+    scratchpad is temporary, so a retro run days later may find it gone, and that is the case this
+    returns the flag for: it is "cannot tell", not "the build did not cite"."""
+    text = call.text()
+    unresolved = False
+    for path in _BRIEF_POINTER.findall(text):
+        try:
+            text += "\n" + Path(path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            unresolved = True
+    return text, unresolved
+
 
 def assert_31_harvest_briefs_cite_the_behavioral_draft(turns: Sequence[Turn]) -> Assertion:
     """31 — the structural slice briefs actually cite the behavioral layer.
@@ -2097,7 +2151,16 @@ def assert_31_harvest_briefs_cite_the_behavioral_draft(turns: Sequence[Turn]) ->
     if not candidates:
         return Assertion(31, "harvest briefs cite the behavioral draft", 0, 0)
     best = max(candidates, key=lambda t: len(t.agent_calls))
-    cited = [c for c in best.agent_calls if _BEHAVIORAL_ID.search(c.text())]
+    cited, unresolved = [], False
+    for c in best.agent_calls:
+        text, missing = _brief_text(c)
+        unresolved = unresolved or missing
+        if _BEHAVIORAL_ID.search(text):
+            cited.append(c)
+    if not cited and unresolved:
+        return Assertion(31, "harvest briefs cite the behavioral draft", 0, 0, (),
+                         "the briefs were dispatched as file pointers and the files are gone — "
+                         "cannot tell; re-run while the build scratchpad still exists")
     return Assertion(31, "harvest briefs cite the behavioral draft", 1 if cited else 0, 1,
                      (Evidence(best.index, {"agents": len(best.agent_calls),
                                             "citing": len(cited)}),))
@@ -2409,6 +2472,30 @@ def assert_37_gate_filter_did_not_grow(turns: Sequence[Turn]) -> Assertion:
                      len(good), len(good) + len(bad), tuple(bad or good))
 
 
+#: `CO=/path/to/.coyodex` — a shell variable assignment at the head of a command. Builds put the
+#: long paths here (assertion 35 all but requires it, since a relative path after a `cd` into the
+#: clone reads the TOOL's map), so a redirect target and the later read of it are routinely spelled
+#: `$CO/verify/worklist.json` on one side and the absolute path on the other.
+_SHELL_ASSIGN = re.compile(r"(?:^|[;&|\n]|\A)\s*([A-Za-z_][A-Za-z0-9_]*)=(\"[^\"]*\"|'[^']*'|[^\s;&|]+)")
+_SHELL_VAR = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?")
+
+
+def _shell_vars(cmd: str) -> dict[str, str]:
+    """`{NAME: value}` for every assignment in this command. Each Bash call is a fresh shell, so the
+    assignment and its use are always in the same command — which is what makes this resolvable."""
+    return {m.group(1): m.group(2).strip("\"'") for m in _SHELL_ASSIGN.finditer(cmd)}
+
+
+def _expand_shell_vars(text: str, variables: "Mapping[str, str]") -> str:
+    """`text` with `$NAME` / `${NAME}` replaced from `variables`; unknown names are left alone.
+
+    Comparing raw strings made assertion 38 report 0/1 for a worklist that was read FOUR times: the
+    write spelled the path absolutely and every read spelled it `$CO/verify/worklist.json`. A
+    detector that cannot see through the variable the method pushes builds toward is measuring
+    spelling, not behaviour."""
+    return _SHELL_VAR.sub(lambda m: variables.get(m.group(1), m.group(0)), text)
+
+
 def assert_38_written_json_is_read(turns: Sequence[Turn]) -> Assertion:
     """38 — a `--json` output that was WRITTEN is afterwards read.
 
@@ -2425,14 +2512,15 @@ def assert_38_written_json_is_read(turns: Sequence[Turn]) -> Assertion:
             if "--json" not in seg:
                 continue
             for target in _redirect_targets(seg):
-                written.setdefault(target, idx)
+                written.setdefault(_expand_shell_vars(target, _shell_vars(cmd)), idx)
     if not written:
         return Assertion(38, "a written --json is read", 0, 0, (),
                          "no gate --json was redirected to a file")
     good: list[Evidence] = []
     bad: list[Evidence] = []
     for target, at in written.items():
-        later = any(target in cmd for idx, cmd in bash_commands(turns) if idx > at)
+        later = any(target in _expand_shell_vars(cmd, _shell_vars(cmd))
+                    for idx, cmd in bash_commands(turns) if idx > at)
         (good if later else bad).append(Evidence(at, {"file": target, "read later": str(later)}))
     return Assertion(38, "a written --json is read", len(good), len(good) + len(bad),
                      tuple(bad or good))

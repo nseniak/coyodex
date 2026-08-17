@@ -122,3 +122,40 @@ def test_an_unknown_mode_is_refused(capsys):
 if __name__ == "__main__":
     import pytest
     raise SystemExit(pytest.main([__file__, "-q"]))
+
+
+def test_update_header_writes_the_stamped_minute_into_the_header_fragment():
+    """The tool printed `built_at=…` and told the build to copy it by hand, so every build ran a
+    `python3` heredoc that json-loaded header.json, set one string and dumped it back — a
+    hand-written map write in the middle of the one prescribed sequence, for a value the tool had
+    just computed. The failure mode is a header and a provenance file that disagree, and nothing
+    downstream compares them."""
+    import json as _json
+    import tempfile as _tempfile
+    from pathlib import Path as _Path
+
+    from coyodex.provenance import main as _main
+    with _tempfile.TemporaryDirectory() as td:
+        repo = _Path(td)
+        frag = repo / ".coyodex" / "build-fragments"
+        frag.mkdir(parents=True)
+        header = frag / "header.json"
+        header.write_text('{"title": "t", "goal": "g", "built": ""}', encoding="utf-8")
+        assert _main(["stamp", str(repo), "--session-id", "s1",
+                      "--built-at", "2026-08-17 12:16",
+                      "--update-header", str(header)]) == 0
+        assert _json.loads(header.read_text(encoding="utf-8"))["built"] == "2026-08-17 12:16"
+        prov = _json.loads((repo / ".coyodex" / "provenance.json").read_text(encoding="utf-8"))
+        assert prov["sessions"][-1]["built_at"] == "2026-08-17 12:16"
+
+
+def test_update_header_on_a_missing_file_is_an_error_not_a_silent_skip():
+    import tempfile as _tempfile
+    from pathlib import Path as _Path
+
+    from coyodex.provenance import main as _main
+    with _tempfile.TemporaryDirectory() as td:
+        repo = _Path(td)
+        (repo / ".coyodex").mkdir()
+        assert _main(["stamp", str(repo), "--session-id", "s1",
+                      "--update-header", str(repo / "nope.json")]) == 2

@@ -51,7 +51,7 @@ lead; nothing above this line goes into an agent prompt.
 > invent them. **Return exactly this fixed set of sections — one per prescribed slice — and if you
 > cannot fill one, return its header with `(none found)` and say why; never silently omit a
 > section.** Your output is **ONE JSON fragment** — a partial map model per
-> [method/model.md](method/model.md): an object holding only the top-level arrays your slice owns
+> [model.md](«COYODEX_HOME»/method/model.md): an object holding only the top-level arrays your slice owns
 > («e.g. `components`, `entry_points`, `deps`, `deployment`, `observability`, `security`,
 > `config`»), each entry using that array's exact field names. **WRITE the fragment to
 > `«repo»/.coyodex/build-fragments/«agent-id».json` yourself and return only that path plus a
@@ -80,6 +80,27 @@ lead; nothing above this line goes into an agent prompt.
 > (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`). (c) Every anchor is **repo-root-relative**: the repo root
 > is «absolute repo path» — prefix every path with it. Minimal valid fragment:
 > `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
+> **WRITE A DRAFT AS YOU GO (required).** Do not hold the fragment in your head until the end: an
+> agent that dies mid-run (API outage, machine sleep) loses ALL its reading. Write incremental
+> progress to `«repo»/.coyodex/build-fragments/«agent-id».draft.json` and RENAME it to
+> `«agent-id».json` only when complete. Spell it `«agent-id».draft.json`, never
+> `«agent-id».json.draft` and never a doubled suffix: `assemble` SKIPS any path ending
+> `.draft.json`, which is what keeps a half-written fragment out of the glob — and what makes a
+> fragment left with that name never assemble at all. The RENAME is what makes your work land.
+> **Fields you must NOT author** (the lead assigns them after the fan-out, through `coyodex
+> reconcile`; a fragment carrying one is either rejected or silently wrong): `runs_in` — the
+> deployment-unit names are minted by a DIFFERENT slice running beside you, so a plausible guess
+> like `["backend"]` passes your own lint and hard-fails the lead's `validate`; `subsystem`;
+> `subdomain`; `bucket`; `block`; an `id` key on `entry_points` (`assemble` mints `EP` ids from
+> content); and a `security` array unless your slice was told it owns one.
+> **Scratch files: put your AGENT_ID in the name.** Every agent in this fan-out shares one
+> scratchpad directory. A helper script called `build.py` or `notes.py` WILL be overwritten by a
+> sibling mid-run — it has happened, and one agent's script then wrote another agent's output file.
+> Name it `«agent-id»-<what>.py` and use absolute paths.
+> **Quote your shell separators.** The Bash tool runs zsh, where a bare `=word` is EQUALS expansion:
+> `echo ====` aborts the command line THERE, so everything after it on that line silently does not
+> run and you get a partial read you believe is complete. Write `echo "===="`. Measured on one
+> build: 61 truncated command lines across 18 of 71 agents.
 > **SELF-CHECK BEFORE RETURNING (required):** run
 > `«COYODEX_HOME»/.venv/bin/coyodex lint-fragment --repo «repo» --expect «N» «your-fragment».json` and
 > fix every row it reports until it exits clean — this catches schema / anchor-format / extra-key /
@@ -96,13 +117,13 @@ lead; nothing above this line goes into an agent prompt.
 > **If you are the T5 DOMAIN-MODEL owner** (one agent owns T5 — see the harvest plan), your fragment
 > also carries the **`entities` array — per-entity objects, never a flat table** (`id`, `name`,
 > `store`, `meaning`, `source`, `fields`, `relations` — the semantic spec is
-> [domain-cards.md](method/domain-cards.md)), with **a `relations` item wherever two entities
+> [domain-cards.md](«COYODEX_HOME»/method/domain-cards.md)), with **a `relations` item wherever two entities
 > relate** — the entities + their `E↔E` relations are the whole point of the slice. Each entity is a
 > **real named type** (class / dataclass / enum) whose `source` anchors its **definition** — do NOT
 > synthesize an entity for an unnamed concept; type embedded fields by their entity (`auth:E7`) so
 > relations carry the field name. For a **field-less** relation a store realizes by keying (no FK on
 > the row — e.g. a per-parent store keyed by `parent_id`), set the relation's **`keyed_by`** so the
-> arrow shows the key (`«key» parent_id`) instead of a bare line — see [domain-cards.md](method/domain-cards.md).
+> arrow shows the key (`«key» parent_id`) instead of a bare line — see [domain-cards.md](«COYODEX_HOME»/method/domain-cards.md).
 > Mark plumbing types you deliberately did NOT model in `non_entity_types` (name + why). A directory- or subsystem-sliced agent that is **not** the T5
 > owner returns its components / entry-points only and leaves `entities` to the owner.
 > (Edges — including `C→E` — are traced in Phase 3, NOT harvested here; this phase returns nodes.)

@@ -226,6 +226,31 @@ def _access_rule_risk_problems(m: ProjectModel) -> list[str]:
               "renders `risk` as its own column, so an empty one ships as a blank cell."]
 
 
+def _authored_runs_in_warnings(m: ProjectModel) -> list[str]:
+    """Advisory: this fragment authors `runs_in`, which is the lead's to assign.
+
+    The deployment-unit NAMES are authored by a different slice running in parallel, so a harvest
+    agent cannot know them and writes something plausible — `["backend"]`,
+    `["backend","standalone"]`. Its own lint passed clean and the lead's `validate` then raised 17
+    BLOCKING `runs_in names unknown deployment unit(s)` lines, hand-patched with a heredoc.
+
+    ADVISORY, not blocking, and the distinction is load-bearing: a LEAD-authored synthesis fragment
+    legitimately carries `runs_in` (the committed corpus has one with 35 such rows), and this linter
+    cannot tell a synthesis fragment from a harvest slice. It also cannot check the NAME — the
+    vocabulary lives in a sibling fragment. What it can do is put the field in front of the agent
+    that can explain it, at the moment it is cheap, which is the whole point of the self-check."""
+    rows = [c.id for c in m.components if c.runs_in]
+    rows += [ep.id or ep.source for ep in m.entry_points if ep.runs_in]
+    if not rows:
+        return []
+    shown = ", ".join(str(x) for x in rows[:6]) + (" …" if len(rows) > 6 else "")
+    return [f"{len(rows)} row(s) carry `runs_in`: {shown} — if you are a HARVEST slice, drop it: "
+            f"`runs_in` is assigned by the lead through `coyodex reconcile` after the fan-out, and "
+            f"the deployment-unit names come from a different slice running beside you, so a guess "
+            f"passes this lint and hard-fails the lead's `validate`. If you are the lead's own "
+            f"synthesis fragment, this is yours to keep."]
+
+
 def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     """Advisory (non-blocking) findings for one fragment — the domain-relation *warnings* (the
     field-less-association nudge, the by-name-FK hint) and the use-case *granularity* signals
@@ -239,6 +264,7 @@ def lint_fragment_warnings(m: ProjectModel) -> list[str]:
     signal is vacuous or a guaranteed false positive, so it runs in `validate` only."""
     _problems, warnings = check_domain_relations(m.entities)
     warnings += _legacy_security_warnings(m)
+    warnings += _authored_runs_in_warnings(m)
     # The roleless-C→D-verb nudge rides THIS non-blocking channel (never `lint_fragment_problems`,
     # which would promote it to a blocking problem — trap T7), so an authoring agent SEES it and
     # decides, without a legitimately-generic `uses` failing the lint. The entry-point-kind nudges

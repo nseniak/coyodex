@@ -46,6 +46,62 @@ Verified against the working tree on **2026-08-16**. Commits are on `main`, unpu
 | A committed fragment corpus + assembly regression tests | `f9fbc05`. |
 | CLI sweeps for both binaries, with completeness gates read from the dispatch | `760c80a`, `560a471`. Found a live crash in `grounding report` on its first run. |
 
+
+### Landed 2026-08-17 — from the mcpolis build of that morning (session `0b3af67e`)
+
+Uncommitted in the working tree. Gates: `pytest tests eval/tests` **2,125 passed**;
+`pyright tools/coyodex eval/tools` **0 errors**. Every one was verified against the real build's
+artifacts, not only against a fixture.
+
+**Measurement (`coyodex-eval`)**
+
+| what | evidence |
+|---|---|
+| Assertion 31 follows a brief that lives in a file | The 15 harvest prompts were one-line pointers (`Read …/prompt-h-domain.md completely`), so the detector scored the pointer and reported 0.00 about a build whose 15 briefs ALL cite use cases. It reads 1.00 now, while the previous build — briefs inline, citing nothing — still reads 0.00. A pointer whose file is gone reads `n/a`, never 0. |
+| `_COYODEX_SUBVERBS` holds every dispatched verb, and `--commands` expands a shell function | `row`, `security-row`, `dedup-security`, `lint`, `stamp`, `show` were all missing, and the scan counted a function DEFINITION instead of its calls. On the build's own transcript the table goes `fix 1` → `fix row 6`, `provenance` → `provenance stamp`, `record 8` → `record 40`; 73 invocations → 111. `test_subverbs_cover_every_dispatched_verb` reads the three dispatch tables so the next verb cannot ship missing. |
+| Assertion 38 resolves a shell variable in a redirect target | The worklist was written absolutely and read four times as `$CO/verify/worklist.json`. 0/1 → 1/1. |
+| Assertion 3 stops counting a lone dispatch as a failed fan-out | `of` is now batched turns plus SERIALISED one-agent turns; an isolated single-agent job is neither. 5/6 → 5/5. The serialised shape the assertion exists for still scores 0. |
+| `cost` excludes coordinator round-trip idle from an agent's duration | The two "slowest" agents held 4.7 and 6.9 minutes waiting for a follow-up; the rework after each took about a minute. Slowest in the trace batch 18.9m → 16.9m, in the rules batch 15.6m → 10.6m. `Actor.span` keeps the raw figure. |
+
+**Tools (`coyodex`)**
+
+| what | evidence |
+|---|---|
+| `grounding lint\|write\|report --verdicts` is variadic, as its usage line always said | `--verdicts a.json b.json` died on `unknown option(s)`. A bare glob works now; the repeated-flag form still does. |
+| `grounding lint` says how much of the pass the evidence check could test | It printed the same line with and without `--agent-transcripts`. On the real build it now says `949 verdict row(s); evidence check covered 16 of 949` — the number this retro had to compute by hand. |
+| `dump` reads a flow, a sub-flow and an entry point | `--id UC29` returned `members: []` while a contract handed to 11 agents advertised it as "a use case, with its flow steps and their anchors"; `--id SF200` said `kind: unknown`; 0 of 311 entry points were addressable. All three now resolve. |
+| `finalize` names a verdict-based leg it was not asked to run | A second `finalize` (for `--emit-gate-block`, without `--verdicts`) overwrote the report and dropped the leg and its `challenged N of M` coverage line. It cannot be INCOMPLETE — that verdict is for a leg that FAILED — so it is a loud advisory naming the files it found beside the map. |
+| `lint-fragment` warns on an authored `runs_in` | Two harvest slices guessed unit names; their own lint passed and the lead's `validate` raised 17 blocking lines. ADVISORY, not blocking: the committed corpus has a lead-authored fragment with 35 legitimate `runs_in` rows, and a single-fragment linter cannot tell the two apart. |
+| `record --remove <prefix>` | A stale record was deleted with a `python3` splice of `extras.json`. Removing the last line takes the heading with it. |
+| `provenance stamp --update-header <fragment>` | Closes the 2026-08-14 proposal 10: the build hand-edited `header.json` with a heredoc because the tool only printed the string. |
+| `balance --map <path>` | Exit 2 before, while `record` / `anchor-drift` / every `fix` verb take `--map`. |
+
+**Method and templates**
+
+| what | evidence |
+|---|---|
+| The ordering block names all 13 steps | It omitted `grounding report`, `provenance stamp`, the header backfill and the combined `finalize`, while calling itself the one sequence — so a compliant build wrote the grounding record twice and ran `finalize` twice. |
+| `grounding lint` is named at verdict collection, with its repeated-flag shape | It appeared 0 times in `method.md`, `method/` and the skill; the lead hand-rolled half of it twice. |
+| The harvest template carries the `.draft.json` rule, the do-not-author list (`runs_in` first), per-agent scratch names and the zsh quoting rule | `draft.json` appeared 0 times in the template and 0 times in all 15 dispatched prompts, so the crash-resilience rule reached no agent. |
+| A `rules-contract.md` template ships | There was none, so a lead composed one from prose and told all 11 rule agents to write a `block` field `lint-fragment` treats as blocking — the failure fired in 13 of 71 agent transcripts. |
+| The skeptic contract has a `«CLAIMS»` slot, plus scratch-naming and quoting rules | An N-vote batch forced the generator to append an "## Override — read this, it corrects one path above" block contradicting the body, in 6 of 30 prompts. Ten skeptics wrote to the same `build_verdicts.py` and one process wrote another skeptic's verdicts file. |
+| The anchor-drift pre-pass is a GATE before the skeptic dispatch | Stated as prose it was read as advice: one build ran it once, at the end, with `--verdicts`, and paid three skeptics to report drift by hand. |
+| The N≥3 vote's scope is named (the whole `security` theme), with the counter-argument | Two different cuts were written; a build guessed and 8 of its 10 refutations came from single-vote batches. |
+| Shared fan-out state must live in the contract, never a per-slice option | 12 of 14 slices got the shared-machinery block; of the two that did not, one was repaired and **the other shipped uncorrected**. |
+| `record --line` repeats, `--lines-from` exists, `record` seeds the extras fragment | Every example showed one `--line`; the build spawned 40 processes for 40 lines and defended against a non-problem with a truncating `echo … >`. |
+| `method/diagrams.md` is in dispatch's Build reading list; `method.md` says read it in windows | It was cited as authority and never opened; two whole-file reads overflowed the result cap into files nobody opened. |
+| The barrier text turn should carry what happens next | The tool-less wait turn is MANDATED and is not the defect; the 18-turn gap between naming a refutation and opening the file is. |
+
+**Not done, deliberately**
+
+| what | why |
+|---|---|
+| Assertion 10 counting tool-less barrier turns as idle | Proposed before a refuter established that `method.md` REQUIRES a tool-less text turn at a barrier. Implementing it as written would penalise compliant behaviour — the exact bug class this batch fixes. What is worth measuring is the gap between naming a refutation and verifying it, which needs a different detector. |
+| `audit --batches` balancing within a theme | Real (6 batches of ≤10 claims each cost a whole fresh-context agent), untouched — it changes how every future build is sliced and deserves its own measured change. |
+| A recordable heading for the minted-entry-point-kind and single-reference-sub-flow advisories | Real (5 of 11 advisories are "carried (no escape)", so CLEAN is unreachable), but it is a change to the recorded-exception vocabulary, not a bug fix. |
+| `reconcile` merge mode | Still open from 2026-08-14 (proposal 6). |
+| Splitting `method.md` | The windowed-read note landed instead; the split is a large structural change. |
+
 ---
 
 ## Open — tools

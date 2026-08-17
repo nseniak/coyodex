@@ -19,6 +19,7 @@ find-and-replace its own text two turns later with a fragile `body.find(...)` + 
 
     coyodex record --map <map-or-fragment> --heading "Balance exceptions" \\
                    --line "UC5: the two clauses are one goal — <why>" [--replace <prefix>]
+    coyodex record --map <map-or-fragment> --heading "Sweep debt" --remove "<prefix>"
 
 `--line` REPEATS, and `--lines-from <file|->` reads one per line (blank lines and `#` comments
 skipped). One process, one write. Reading only the first `--line` is why a build with 57 records to
@@ -105,6 +106,36 @@ def append_line(m: ProjectModel, heading: str, line: str,
     return True, f"recorded under '{heading}': {line}"
 
 
+def remove_line(m: ProjectModel, heading: str, prefix: str) -> tuple[bool, str]:
+    """Delete the recorded line under `heading` that starts with `prefix`.
+
+    A record can go STALE: one build recorded a sweep-debt line, then ten turns later wrote a
+    business rule covering the same anchor, so the record now silenced a step the map claims. There
+    was `--replace` and no way to remove, so the deletion went out as a `python3 - <<'PY'` splice of
+    `extras.json` — the hand-rolled JSON append this command exists to end, wearing the other
+    direction. Removing the whole section when its last line goes is deliberate: an empty heading
+    still reads as "an exception was recorded here"."""
+    section = next((x for x in m.extras if x.heading.strip().lower() == heading.strip().lower()),
+                   None)
+    if section is None:
+        return False, f"no '{heading}' heading — nothing removed"
+    lines = section.body.splitlines()
+    hit = next((i for i, ln in enumerate(lines)
+                if ln.strip().lstrip("-* ").startswith(prefix)), None)
+    if hit is None:
+        return False, (f"no existing line under '{heading}' starts with '{prefix}' "
+                       f"— nothing removed")
+    gone = lines.pop(hit)
+    kept = [ln for ln in lines if ln.strip()]
+    if kept:
+        section.body = "\n".join(kept).strip() + "\n"
+    else:
+        m.extras.remove(section)
+        return True, (f"removed under '{heading}': {gone.strip()}\n"
+                      f"  (that was its last line, so the heading is gone too)")
+    return True, f"removed under '{heading}': {gone.strip()}"
+
+
 def _arg(argv: list[str], flag: str, default: str = "") -> str:
     if flag in argv:
         i = argv.index(flag)
@@ -137,6 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     lines = _all_args(argv, "--line")
     from_file = _arg(argv, "--lines-from")
     replace = _arg(argv, "--replace")
+    remove = _arg(argv, "--remove")
     # The TARGET is checked before the payload. A build ran 21 well-formed `record` calls in one turn
     # and every one failed with `cannot read … extras.json — no such file`, because no fan-out agent
     # owns creating that fragment; the build worked around it with `echo '{"extras": []}' >`, which is
@@ -149,7 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         # the one file a build is told to record into and the one nothing else creates. Any other
         # missing path is a typo, and silently creating it would hide the typo — the direction that
         # costs an operator an hour.
-        if path.name == "extras.json" and path.parent.is_dir():
+        if path.name == "extras.json" and path.parent.is_dir() and not remove:
             # Deferred until the arguments are known good: seeding here left a stray
             # `{"extras": []}` fragment behind every time a call exited 2 on a malformed --line.
             seed_extras = True
@@ -174,7 +206,15 @@ def main(argv: list[str] | None = None) -> int:
         # Blank lines and `#` comments dropped, so the file a lead pastes together can be annotated.
         lines += [ln.strip() for ln in text.splitlines()
                   if ln.strip() and not ln.lstrip().startswith("#")]
-    if not heading or not lines:
+    if remove:
+        if lines or from_file or replace:
+            print("ERROR: --remove deletes one record and takes no --line / --lines-from / "
+                  "--replace — do the removal in its own call.", file=sys.stderr)
+            return 2
+        if not heading:
+            print("ERROR: --remove needs --heading", file=sys.stderr)
+            return 2
+    elif not heading or not lines:
         print("ERROR: --heading and at least one --line (or --lines-from) are required",
               file=sys.stderr)
         return 2
@@ -185,7 +225,8 @@ def main(argv: list[str] | None = None) -> int:
     # A key with no why is a dismissal, not a record — the rule every escape family already states.
     # Checked for EVERY line before anything is written: a partial append would leave the fragment
     # holding some of a batch, and the caller cannot tell which without re-reading it.
-    for bad in [ln for ln in lines if ":" not in ln or not ln.split(":", 1)[1].strip()]:
+    for bad in [] if remove else [ln for ln in lines
+                                 if ":" not in ln or not ln.split(":", 1)[1].strip()]:
         print(f"ERROR: a record is `<id or claim>: <why>` — '{bad}' states no why. A key alone is "
               f"a dismissal, and the point of recording is that the reason survives.", file=sys.stderr)
         return 2
@@ -204,10 +245,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
     any_changed = False
-    for ln in lines:
-        changed, message = append_line(m, canonical, ln, replace)
+    if remove:
+        any_changed, message = remove_line(m, canonical, remove)
         print(message)
-        any_changed = any_changed or changed
+        if not any_changed:
+            return 1
+    else:
+        for ln in lines:
+            changed, message = append_line(m, canonical, ln, replace)
+            print(message)
+            any_changed = any_changed or changed
     if not any_changed:
         return 1 if replace else 0
     # ONE write for the whole batch. Writing per line would leave the file half-updated if a later

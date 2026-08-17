@@ -419,6 +419,12 @@ def lint_verdicts(paths: list[str], agent_dir: Path | None = None) -> VerdictLin
 _CLAIMS_A_READ = re.compile(r"\bread\s+([\w./-]+\.[A-Za-z0-9]+)", re.I)
 
 
+def _read_claim_coverage(rows: list[dict]) -> tuple[int, int]:
+    """`(rows, rows whose note the evidence check can actually test)`."""
+    testable = sum(1 for r in rows if _CLAIMS_A_READ.search(str(r.get("note") or "")))
+    return len(rows), testable
+
+
 def _fabricated_evidence(rows: list[dict], agent_dir: Path) -> list[str]:
     """Files a note says were read, that the agent's own transcript never opened."""
     opened: set[str] = set()
@@ -489,7 +495,16 @@ def main(argv: list[str] | None = None) -> int:
             elif a == "--map":
                 map_path = rest[i]
             elif a == "--verdicts":
+                # VARIADIC, as the usage line has always said (`--verdicts <raw.json>...`): swallow
+                # every following non-flag path, not just one. It took exactly one value, so the
+                # documented spelling `--verdicts a.json b.json` died on
+                # `unknown option(s): b.json` — while `write` and `report` are routinely handed
+                # thirty files, and a build that trusted the usage line got an error instead of a
+                # run. All three verbs share this loop, so all three were wrong together.
                 verdicts.append(rest[i])
+                while i + 1 < len(rest) and not rest[i + 1].startswith("-"):
+                    i += 1
+                    verdicts.append(rest[i])
             elif a == "--out":
                 out_path = rest[i]
             elif a == "--note-file":
@@ -517,9 +532,19 @@ def main(argv: list[str] | None = None) -> int:
                   "the build, where the skeptic that produced them is a hundred turns gone.",
                   file=sys.stderr)
             return 1
-        print(f"VERDICTS OK — {len(verdicts)} file(s) well-formed"
-              + ("" if agent_dir else "; pass --agent-transcripts <dir> to also check that every "
-                                      "note claiming a read is backed by the agent's transcript"))
+        # SAY WHAT WAS CHECKED, not just that nothing failed. With `--agent-transcripts` this
+        # printed the same "well-formed" line as without it, so a run that tested 16 of 949 rows
+        # and a run that tested none were indistinguishable — and the operator read the silence as
+        # a clean bill of health on the whole pass. The evidence check can only speak about a note
+        # that NAMES a file it read; that number belongs on screen beside the verdict.
+        lint_rows, _ = load_verdicts(verdicts)
+        rows_total, rows_testable = _read_claim_coverage(lint_rows)
+        print(f"VERDICTS OK — {len(verdicts)} file(s) well-formed, {rows_total} verdict row(s)"
+              + ("; pass --agent-transcripts <dir> to also check that every note claiming a read "
+                 "is backed by the agent's transcript" if not agent_dir else
+                 f"; evidence check covered {rows_testable} of {rows_total} row(s) — the ones "
+                 f"whose `note` names a file it read. A row that cites its anchor only in "
+                 f"`evidence` cannot be tested this way"))
         return 0
 
     if not worklist_path or not verdicts:

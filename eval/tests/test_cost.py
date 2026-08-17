@@ -393,3 +393,44 @@ def test_a_map_without_the_challenged_field_falls_back_to_the_total(tmp_path):
     p.write_text(json.dumps({"title": "t", "goal": "g", "grounding": {
         "claims_total": 500, "claims_refuted": 5}}), encoding="utf-8")
     assert asdict(read_map(Path(p)))["claims_challenged"] == 500
+
+
+# --- an agent is not charged for its coordinator's latency -------------------------
+# The two "slowest" agents of a measured build held 4.7 and 6.9 minutes of sitting still between
+# returning an answer and the follow-up arriving; the rework after each reply took about a minute.
+# Ranking stragglers on the raw span measures the LEAD's round trip and calls it the agent's.
+
+
+def _turn(index: int, role: str, stamp: str, *, tool_results=()):
+    from coyodex_eval.transcript import Turn as T
+    return T(index=index, role=role, timestamp=stamp, tool_results=tool_results)
+
+
+def test_duration_excludes_the_wait_for_a_coordinator_follow_up():
+    from coyodex_eval.cost import Actor
+    from coyodex_eval.transcript import ToolResult
+    agent = Actor(name="trace-gateway", role="trace", turns=(
+        _turn(0, "assistant", "2026-08-17T09:13:00Z"),
+        # an ordinary tool round trip: the user turn CARRIES a result, so it is work, not a block
+        _turn(1, "user", "2026-08-17T09:14:00Z",
+              tool_results=(ToolResult(tool_use_id="t", content="ok"),)),
+        _turn(2, "assistant", "2026-08-17T09:15:00Z"),      # the agent's answer
+        _turn(3, "user", "2026-08-17T09:20:00Z"),           # coordinator follow-up, 5 min later
+        _turn(4, "assistant", "2026-08-17T09:21:00Z"),      # 1 min of rework
+    ))
+    assert agent.span == 8 * 60
+    assert agent.blocked_seconds == 5 * 60
+    assert agent.duration == 3 * 60
+
+
+def test_an_agent_that_was_never_resumed_is_unchanged():
+    from coyodex_eval.cost import Actor
+    from coyodex_eval.transcript import ToolResult
+    agent = Actor(name="skeptic-rule-1", role="verify", turns=(
+        _turn(0, "assistant", "2026-08-17T09:53:00Z"),
+        _turn(1, "user", "2026-08-17T09:56:00Z",
+              tool_results=(ToolResult(tool_use_id="t", content="ok"),)),
+        _turn(2, "assistant", "2026-08-17T09:59:00Z"),
+    ))
+    assert agent.blocked_seconds == 0.0
+    assert agent.duration == agent.span == 6 * 60

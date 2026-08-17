@@ -39,6 +39,7 @@ METHOD_DOCS: frozenset[str] = frozenset({
     "method/model.md",
     "method/templates/harvest-contract.md",
     "method/templates/project-map.template.md",
+    "method/templates/rules-contract.md",
     "method/templates/skeptic-contract.md",
 })
 

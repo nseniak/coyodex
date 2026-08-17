@@ -4,11 +4,19 @@
 and one clause in particular has been got wrong before in a way that silently destroys the phase
 (see the WARNING below).
 
-Fill the «angle-bracket» parts. There are exactly THREE — «MAP», «REPO», «BATCH» — each spelled the
-same way everywhere, so a fill is three substitutions.
+Fill the «angle-bracket» parts. There are exactly FOUR — «MAP», «REPO», «BATCH», «CLAIMS» — each
+spelled the same way everywhere, so a fill is four substitutions.
 
-One skeptic per batch; batches cut by THEME and risk, most-dangerous first; cap each batch at ~40
-claims.
+**«BATCH» is this skeptic's OWN id; «CLAIMS» is the claims file it reads.** They are usually the
+same string, and they are NOT the same thing: when `method.md` calls for N skeptics and a majority
+vote on the riskiest claims, N agents read one claims file and write N different verdict files. The
+template used to carry only «BATCH» and hardcode `claims-«BATCH».json`, so a vote forced the
+generator to append an "## Override — read this, it corrects one path above" block contradicting the
+body it had just filled in — on one build, in 6 of 30 prompts. With «CLAIMS» separate, a vote is
+`«BATCH»=security-1a, «CLAIMS»=security-1` and nothing has to be retracted.
+
+One skeptic per batch, unless the lead is running a vote; batches cut by THEME and risk,
+most-dangerous first; cap each batch at ~40 claims.
 
 ---
 
@@ -83,10 +91,23 @@ that is the lead's problem, not yours.
 
 ## Your inputs and output
 
-- **Claims file**: `.coyodex/verify/claims-«BATCH».json`
+- **Claims file**: `.coyodex/verify/claims-«CLAIMS».json`
   — written by `coyodex audit <map> --batches .coyodex/verify --cap 40`.
 - **Map**: `«MAP»` · **Repo root**: `«REPO»`
 - **Write your verdicts to**: `.coyodex/verify/verdicts-«BATCH».json`
 
-Your batch id is `«BATCH»`. Use it in the output filename exactly as given, so the lead's glob
-finds it.
+Your skeptic id is `«BATCH»`. Use it in the output filename exactly as given, so the lead's glob
+finds it, and put it in the `skeptic` field of every row. When several skeptics share one claims
+file, `«CLAIMS»` is that file's id and `«BATCH»` is yours alone — that is what tells two independent
+votes apart from one file counted twice.
+
+**Name every scratch file after your skeptic id.** All the skeptics in this fan-out share one
+scratchpad directory and nothing namespaces it. On one build ten agents wrote to
+`build_verdicts.py`, one of them ran a script that was not its own, and its process wrote ANOTHER
+skeptic's verdicts file. Call yours `build_verdicts_«BATCH».py` and use absolute paths.
+
+**Quote your shell separators.** The Bash tool runs zsh, where a bare `=word` is EQUALS expansion:
+`echo ====` aborts the command line THERE, so every read after it on that line silently does not
+happen and you are left believing you made it. Write `echo "===="`. Measured on one build: 61
+truncated command lines across 18 of 71 agents — in the phase whose entire job is reading the
+anchor line for yourself.

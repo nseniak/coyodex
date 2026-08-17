@@ -25,18 +25,23 @@ from pathlib import Path
 from coyodex.model import (
     Component,
     Entity,
+    FlowStep,
     Group,
     ModelError,
     ProjectModel,
+    SubFlow,
+    UseCase,
     all_elements,
     load_model,
     to_canonical_json,
 )
 
 _PREFIX = re.compile(r"^[A-Z]+")
+#: `SF` was missing, so `dump --id SF200` answered `"kind": "unknown"` about a sub-flow the map
+#: defines — the id prefix table and `model.ID_ARRAYS` disagreed, and only this one was consulted.
 _KIND = {"UC": "use_case", "HP": "happy_path_step", "S": "subsystem", "C": "component",
          "D": "dep", "SD": "subdomain", "E": "entity", "R": "role", "CAP": "capability",
-         "EP": "entry_point", "BLK": "block", "BR": "business_rule"}
+         "EP": "entry_point", "SF": "sub_flow", "BLK": "block", "BR": "business_rule"}
 _MD_LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 
@@ -70,10 +75,31 @@ def _group_member_ids(m: ProjectModel, gid: str) -> list[str]:
             + [s.id for s in m.subsystems if s.parent == gid])
 
 
+def _steps_as_members(steps: "list[FlowStep]") -> list[object]:
+    """Flow steps as `--id` members: the walk, with each step's own anchor.
+
+    A use case answered with `"members": []` and there was NO `dump` path to a flow at all, while a
+    contract handed to a rules fan-out advertised `dump --id UC31   # a use case, with its flow
+    steps and their anchors`. Agents fell back to hand-parsing `project-map.json` with `python3 -c`
+    — the exact thing the "never hand-parse the map" rule forbids, made unavoidable by the reader."""
+    return [{"n": st.n, "src": st.src, "dst": st.dst, "phrase": st.phrase,
+             "where": st.where, "subflow": st.subflow} for st in steps]
+
+
 def resolve_id(m: ProjectModel, eid: str) -> dict[str, object] | None:
     """The `--id` slice: kind + display name + canonical source + members. Members are the
     group's derived children; for a component, its member entry points (every T4 row naming it —
-    the same set the self-describing L2 claims carry)."""
+    the same set the self-describing L2 claims carry); for a use case or a sub-flow, its steps."""
+    if eid.startswith("EP"):
+        # Entry points are minted by `assemble` and live outside `ID_ARRAYS`, so every EP id was
+        # `not defined in the map` — 0 of 311 addressable on one build, in a reader whose whole
+        # job is to stop agents parsing the JSON by hand.
+        for ep in m.entry_points:
+            if ep.id == eid:
+                return {"id": eid, "kind": "entry_point", "name": ep.trigger,
+                        "source": _href(ep.source),
+                        "members": [{"component": ep.component, "kind": ep.kind}]}
+        return None
     el = all_elements(m).get(eid)
     if el is None:
         return None
@@ -93,6 +119,11 @@ def resolve_id(m: ProjectModel, eid: str) -> dict[str, object] | None:
         members = list(_group_member_ids(m, eid))
     elif isinstance(el, Entity):
         source = el.source
+    elif isinstance(el, UseCase):
+        flow = next((f for f in m.flows if f.uc == eid), None)
+        members = _steps_as_members(flow.steps) if flow else []
+    elif isinstance(el, SubFlow):
+        members = _steps_as_members(el.steps)
     return {"id": eid, "kind": kind, "name": name, "source": source, "members": members}
 
 

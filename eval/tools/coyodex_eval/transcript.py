@@ -450,9 +450,27 @@ _COYODEX_SUBCOMMANDS = frozenset({
 })
 
 #: Sub-verbs worth reporting separately: `grounding write` and `grounding report` are different
-#: acts, and so are the four `fix` verbs. Anything else is reported at subcommand granularity.
-_COYODEX_SUBVERBS = frozenset({"write", "report", "apply-drift", "dedup-edge", "drop-edge",
-                               "dedup-relation"})
+#: acts, and so are the `fix` verbs. Anything else is reported at subcommand granularity.
+#:
+#: This list must hold EVERY verb the three multi-verb subcommands dispatch on — `fix`, `grounding`
+#: and `provenance` — and it did not. `row`, `security-row`, `dedup-security`, `lint`, `stamp` and
+#: `show` were missing, so `coyodex fix row` was tabled as a bare `fix` and `provenance stamp` as
+#: `provenance`. On a live build that hid SIX `fix row` calls behind one `fix 1` row, and a
+#: retrospective reading this index — which the retro method tells it to trust — published "no
+#: `fix row` invocation in the whole build". Same bug class as the alias-blind subcommand list
+#: above, at the next level down.
+#:
+#: `test_subverbs_cover_every_dispatched_verb` reads the three dispatch tables and fails when a new
+#: verb ships without landing here, which is the half a comment cannot enforce.
+_COYODEX_SUBVERBS = frozenset({
+    # fix
+    "apply-drift", "drop-edge", "dedup-relation", "dedup-edge", "security-row", "dedup-security",
+    "row",
+    # grounding
+    "write", "report", "lint",
+    # provenance
+    "stamp", "show",
+})
 
 #: `coyodex <subcommand>` anywhere in a shell command, including behind `;`, `&&` or a `$CX` alias.
 #: The one-line index truncates at 100 characters, so a subcommand chained after another was
@@ -734,6 +752,45 @@ def _iter_invocations(turns: "Sequence[Turn]") -> "Iterator[Invocation]":
             yield replace(inv, turn=idx)
 
 
+#: `name() {` / `function name {` — a shell function definition, whose body is a TEMPLATE that runs
+#: once per call, not once per definition.
+_FUNC_DEF = re.compile(r"(?:function[ \t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \t]*\([ \t]*\)[ \t]*\{")
+
+
+def _extract_functions(text: str) -> "tuple[str, dict[str, str]]":
+    """`(text with the definitions removed, {name: body})`, brace-matched outside quotes.
+
+    A build that has 6 near-identical edits to make writes the invocation ONCE in a function and
+    calls it 6 times. Scanning the raw text counts the DEFINITION — one — and misses every call, so
+    `coyodex fix row` run six times at one turn was tabled as a single `fix`, and a retrospective
+    reading this index concluded the verb never ran. Removing the definition before segmenting and
+    replaying its body per call is what makes the count the number of RUNS.
+
+    Only definitions are lifted here; whether a body holds a coyodex call is decided by the caller,
+    so a helper that wraps `grep` costs nothing and expands to nothing."""
+    mask = _mask(text)
+    bodies: dict[str, str] = {}
+    spans: list[tuple[int, int]] = []
+    for m in _FUNC_DEF.finditer(text):
+        if not mask[m.start()]:
+            continue
+        depth, i, n = 1, m.end(), len(text)
+        while i < n and depth:
+            if mask[i]:
+                if text[i] == "{":
+                    depth += 1
+                elif text[i] == "}":
+                    depth -= 1
+            i += 1
+        if depth:                      # unbalanced — leave the text alone rather than guess
+            continue
+        bodies[m.group(1)] = text[m.end():i - 1]
+        spans.append((m.start(), i))
+    for lo, hi in reversed(spans):     # reversed so earlier offsets stay valid
+        text = text[:lo] + " " + text[hi:]
+    return text, bodies
+
+
 def _invocations_in(cmd: str) -> "list[Invocation]":
     """Every coyodex invocation in ONE shell command. `turn` is 0; callers stamp it."""
     stripped = _strip_heredocs(cmd).replace("\\\n", " ")
@@ -741,8 +798,25 @@ def _invocations_in(cmd: str) -> "list[Invocation]":
     # written into a heredoc is documentation, and treating it as an assignment made an outer `$COY`
     # look resolved when it was still a guess — under-reporting the footer's own uncertainty.
     aliases = _alias_binaries(stripped)
+    # Aliases are read BEFORE the definitions are lifted: `CX=…/coyodex` sits outside the function
+    # that uses `$CX`, and a body scanned without it resolves to the fallback binary.
+    stripped, functions = _extract_functions(stripped)
+    expansions = {name: _scan_segments(body, aliases) for name, body in functions.items()}
+    expansions = {name: invs for name, invs in expansions.items() if invs}
     out: list[Invocation] = []
-    for segment, mask in _segments(stripped):
+    for segment, _mask_unused in _segments(stripped):
+        first = segment.strip().split(None, 1)[0] if segment.strip() else ""
+        if first in expansions:
+            out.extend(expansions[first])
+            continue
+        out.extend(_scan_segments(segment, aliases))
+    return out
+
+
+def _scan_segments(text: str, aliases: "Mapping[str, str]") -> "list[Invocation]":
+    """Every coyodex invocation in `text`, segment by segment. `turn` is 0; callers stamp it."""
+    out: list[Invocation] = []
+    for segment, mask in _segments(text):
         pos = 0
         while pos < len(segment):
             m = _COYODEX_CMD.search(segment, pos)

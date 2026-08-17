@@ -76,8 +76,15 @@ copy as the baseline when the working-tree file is gone.** Fall through to Build
 
 ### No baseline → Build
 
-Create it. Read `method.md` (+ `method/model.md`, `method/domain-cards.md`): agents return
+Create it. Read `method.md` (+ `method/model.md`, `method/domain-cards.md`, and
+`method/diagrams.md` — `method.md` cites it as the authority on Happy-Path rendering and the
+leaf-only map, and it was missing from this list, so a whole build never opened it): agents return
 structured rows and `coyodex assemble` writes the model + views.
+
+**`method.md` is ~2,000 lines and cannot be read in one tool call.** A `cat` and a `sed -n
+'1,400p'` both overflow the tool-result cap and spill into a persisted-output file that nobody then
+opens; one build burned a turn finding that out. Read it in windows — `Read` with `offset`/`limit`,
+about 300 lines at a time, no gaps — and do that FIRST rather than after two failed attempts.
 
 **Archiving an existing map is `coyodex-eval archive <repo>`.** Say so before the rest of this
 paragraph, because the rest is a prohibition and the command is the permitted action: a build asked

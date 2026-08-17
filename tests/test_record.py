@@ -175,3 +175,45 @@ def test_a_failed_record_leaves_no_stray_seeded_fragment_behind():
         assert main(["--map", str(target), "--heading", "Audit exceptions",
                      "--line", "no-why-here"]) == 2
         assert not target.exists(), "a refused call must not leave a fragment behind"
+
+
+# --- removing a record that went stale --------------------------------------------
+# A build recorded a sweep-debt line, then ten turns later wrote a business rule covering the same
+# anchor — so the record now silenced a step the map claims. There was `--replace` and no way to
+# remove, so the deletion went out as a `python3 - <<'PY'` splice of extras.json: the hand-rolled
+# JSON write this command exists to end, in the other direction.
+
+
+def test_remove_deletes_the_line_that_starts_with_the_prefix():
+    from coyodex.record import remove_line
+    m = ProjectModel(extras=[ExtraSection(heading="Sweep debt",
+                                          body="a.py:1: one\nb.py:2: two\n")])
+    changed, message = remove_line(m, "Sweep debt", "a.py:1")
+    assert changed and "removed under 'Sweep debt'" in message
+    assert m.extras[0].body.strip() == "b.py:2: two"
+
+
+def test_removing_the_last_line_takes_the_heading_with_it():
+    """An empty heading still reads as 'an exception was recorded here'."""
+    from coyodex.record import remove_line
+    m = ProjectModel(extras=[ExtraSection(heading="Sweep debt", body="a.py:1: one\n")])
+    changed, message = remove_line(m, "Sweep debt", "a.py:1")
+    assert changed and "the heading is gone too" in message
+    assert m.extras == []
+
+
+def test_removing_something_that_is_not_there_changes_nothing():
+    from coyodex.record import remove_line
+    m = ProjectModel(extras=[ExtraSection(heading="Sweep debt", body="a.py:1: one\n")])
+    changed, message = remove_line(m, "Sweep debt", "zzz")
+    assert not changed and "nothing removed" in message
+    assert m.extras[0].body.strip() == "a.py:1: one"
+
+
+def test_remove_refuses_to_combine_with_a_write():
+    from coyodex.record import main
+    with tempfile.TemporaryDirectory() as td:
+        p = Path(td) / "extras.json"
+        p.write_text('{"extras": []}', encoding="utf-8")
+        assert main(["--map", str(p), "--heading", "Sweep debt",
+                     "--remove", "a.py:1", "--line", "b.py:2: two"]) == 2
