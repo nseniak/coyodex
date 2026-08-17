@@ -1,6 +1,15 @@
 .claude/settings.json
 .DS_Store
-internal/
+# internal/ stays out of git — design notes and working plans are the author's local
+# scratch. ONE exception: the method rationale record, which holds the incident evidence
+# behind each method rule. tests/test_method_rationale.py pairs the two, so the record has to be
+# COMMITTABLE: a committed test cannot depend on a file git refuses to track. NOTE it is only safe
+# once actually committed — while untracked-and-un-ignored, a plain `git clean -d` removes it. So
+# commit it in the same commit as the method docs.
+internal/*
+!internal/docs/
+internal/docs/*
+!internal/docs/method-rationale.md
 .firecrawl/
 __pycache__/
 .playwright-mcp/

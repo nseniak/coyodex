@@ -1,14 +1,11 @@
 # Phase-4 skeptic contract — the copyable template
 
-**Copy this file; do not compose it from prose.** A live build wrote a ~5 KB skeptic contract into a
-scratchpad from `method.md`'s Phase-4 section, and every build before it did the same. The contract
-came out good — but re-deriving it each time is where wording drifts, and one clause in particular
-has been got wrong before in a way that silently destroys the phase (see the WARNING below).
+**Copy this file; do not compose it from prose.** Re-deriving it each time is where wording drifts,
+and one clause in particular has been got wrong before in a way that silently destroys the phase
+(see the WARNING below).
 
-Fill the «angle-bracket» parts. There are exactly THREE — «MAP», «REPO», «BATCH» — each spelled
-the same way everywhere, so a fill is three substitutions. An earlier version spelled the map and
-the repo two ways each: the fill needed four patterns for two values and shipped with four
-placeholders still in it.
+Fill the «angle-bracket» parts. There are exactly THREE — «MAP», «REPO», «BATCH» — each spelled the
+same way everywhere, so a fill is three substitutions.
 
 One skeptic per batch; batches cut by THEME and risk, most-dangerous first; cap each batch at ~40
 claims.
@@ -43,29 +40,26 @@ For each claim, decide whether the CODE supports it, and return one row per clai
 - `claim` must match the batch text **character for character** — the tool pairs rows to claims by
   that string, and a reworded claim silently becomes an orphan the record refuses.
 - `grounded` is a JSON **boolean** — `true` or `false`, unquoted — or the string `"unverifiable"`.
-  Not `"true"`. One skeptic built its rows as tuples starting `("true", …)` and shipped 40 quoted
-  strings; `grounding write` refused the whole record ~100 turns later, at the end of the build,
-  and its own self-check could not have caught it because printing `str(row["grounded"])` renders
-  `'true'` for both.
+  Not `"true"`. A quoted `"true"` makes `grounding write` refuse the whole record — and it is
+  refused at the END of the build. A self-check that prints `str(row["grounded"])` cannot catch it,
+  because that renders `'true'` either way.
 - `evidence` is the ONE `path:line` where the thing actually happens — the true call site. If the
   claim is true but the map's stored anchor points somewhere else, still say `true` and give the
   line YOU found: a drifted anchor does not refute a true relationship, and the drift check exists
   to reconcile exactly that difference.
 - **Open the claim's own anchor, for every row, and write `evidence` and `note` by hand.** Do not
-  generate them. One skeptic settled 40 claims in 95 seconds from a single directory-wide
-  `grep -n 'pgTable("'`, then emitted all 40 rows from a script — every `note` beginning
-  `Read <file>:` for files it never opened. Those 40 fabricated confirmations are in a shipped
-  grounding record. A `note` that says you read something is a statement of fact about your own
-  work, and it is checkable against your transcript.
+  generate them. Rows emitted from one directory-wide grep are fabricated confirmations, and they
+  end up in a shipped grounding record. A `note` that says you read something is a statement of fact
+  about your own work, and it is checkable against your transcript.
 - `skeptic` is your batch id. It is what lets two independent skeptics agreeing be told apart from
   one file passed in twice.
 
 ## WARNING — do not default to refuted
 
-**Never instruct yourself, and never be instructed, to "default to refuted on doubt".** A live build
-put that clause in every batch prompt and got `0` unverifiable claims out of 408 — the third verdict
-was unreachable, so every claim the code could not settle was recorded as a refutation the map then
-"fixed". `"unverifiable"` is the honest answer and it is a first-class outcome:
+**Never instruct yourself, and never be instructed, to "default to refuted on doubt".** That clause
+makes the third verdict unreachable, so every claim the code cannot settle gets recorded as a
+refutation the map then "fixes" — measured: **0 unverifiable out of 408** across 13 agents handed
+that line. `"unverifiable"` is the honest answer and a first-class outcome:
 
 - `true` — you found the code that does it.
 - `false` — you found the code, and it does something else. Say what.
@@ -83,11 +77,9 @@ that is the lead's problem, not yours.
 - **One claim, one row.** No summaries, no grouping, no "same as above".
 - **Do not fix the map.** You report; the lead reconciles. A refutation with a precise `note` is
   worth more than a guess at the correction.
-- **WRITE the JSON to your output path, then say only that you wrote it.** Your final message is
-  NOT the verdicts file: `coyodex grounding write --verdicts <file>` and `coyodex anchor-drift
-  --verdicts <file>` both read FILES, and the lead's barrier collects files. A contract that says
-  "your final message IS the verdicts file" is why every build so far has rewritten this template
-  instead of copying it.
+- **WRITE the JSON to your output path, then say only that you wrote it.** Your final message is NOT
+  the verdicts file: `coyodex grounding write --verdicts <file>` and `coyodex anchor-drift
+  --verdicts <file>` both read FILES, and the lead's barrier collects files.
 
 ## Your inputs and output
 

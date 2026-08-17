@@ -198,35 +198,33 @@ Semantics, stated on the fields:
   advisory; the escape is the literal `cadence` under a **"Balance exceptions"** heading.
 - **`entities[].store`** is a STRUCTURED object (never free text — the pre-retype prose form fails
   to load with a targeted error): `dep` names the physical datastore/messaging dep (a D-id, so it
-  resolves and remaps like any reference), `container` the compartment inside it (collection /
-  table / key prefix / bucket / file), `mode` the closed relation vocabulary
+  resolves and remaps like any reference), `container` the compartment inside it (collection / table
+  / key prefix / bucket / file), `mode` the closed relation vocabulary
   (`collection`/`embedded`/`transient`/`cache`/`in-code`/`enum`/`projection` — exact match,
   `validate` blocks a near-miss), `notes` what the shape can't say (TTL, cache tiers). `null` = not
   persisted / not stated. `projection` is a READ shape over rows ANOTHER entity owns (the row type a
   query module returns, a view assembled in code): the data is durable, this type is not what stores
   it. Set the mode rather than writing an ownership exception — see "Persistence exceptions" below;
   the five no-writer modes (`embedded`/`in-code`/`enum`/`transient`/`projection`) answer that
-  advisory on their own. This makes "what is persisted in <store>?" a query instead of a prose hunt, and powers
-  the **persistence-coverage rule** (advisory, adoption-gated): once any entity structures its
-  store, every write-family `C→D` edge into a datastore/messaging dep must be explained by an
-  entity that records that dep as its store AND is written by that component — **directly, or
-  through it as a store ADAPTER** (one write-family hop: `C1 persists C30`, C30 carries the
-  physical `writes D1` — the layered-architecture shape a live rebuild false-positived on). An
-  unexplained pair is how real collections with no named type (locks, token stores, schema-hash
-  docs) escape the domain model. The operator's escape is the C id under a **"Persistence
-  exceptions"** extras heading (line-leading `Cn: <why>`); notes-only stores draw one aggregated
-  "structure them" nudge, a named container in a dep-linkable mode (collection/cache) with no
-  `dep` draws its own (two of three live rebuilds shipped `dep: null` on every row — the T5 agent
-  needs the deps legend, or synthesis backfills), and a container that reads as PROSE rather than a
-  NAME draws a third — `container` is the LITERAL compartment name, and a live map recorded
-  `memberships subscriptions` where the code says `__collection__ = "memberships_subscriptions"`
-  (12 of its 37 rows were paraphrases), which defeats the one thing the field exists for: leading a
-  reader to the real collection. A space is the tell, so only the modes whose container IS a
-  physical name are checked (`transient`/`in-code`/`enum`/`projection` legitimately DESCRIBE — "derived",
-  "Chargebee API" — and `embedded` rides its parent) — all three silenced by the literal `store`
-  (line-leading) under "Balance exceptions". Each structured store also
-  joins the audit L2 skeptic worklist ("En is stored in Dn container 'x'", anchored at the
-  entity's source).
+  advisory on their own. This makes "what is persisted in <store>?" a query instead of a prose hunt,
+  and powers the **persistence-coverage rule** (advisory, adoption-gated): once any entity
+  structures its store, every write-family `C→D` edge into a datastore/messaging dep must be
+  explained by an entity that records that dep as its store AND is written by that component —
+  **directly, or through it as a store ADAPTER** (one write-family hop: `C1 persists C30`, C30
+  carries the physical `writes D1` — the layered-architecture shape this rule would otherwise
+  false-positive on). An unexplained pair is how real collections with no named type (locks, token
+  stores, schema-hash docs) escape the domain model. The operator's escape is the C id under a
+  **"Persistence exceptions"** extras heading (line-leading `Cn: <why>`); notes-only stores draw one
+  aggregated "structure them" nudge, a named container in a dep-linkable mode (collection/cache)
+  with no `dep` draws its own (the T5 agent needs the deps legend, or synthesis backfills), and a
+  container that reads as PROSE rather than a NAME draws a third — `container` is the LITERAL
+  compartment name, so `memberships subscriptions` where the code says `__collection__ =
+  "memberships_subscriptions"` defeats the one thing the field exists for: leading a reader to the
+  real collection. A space is the tell, so only the modes whose container IS a physical name are
+  checked (`transient`/`in-code`/`enum`/`projection` legitimately DESCRIBE — "derived", "Chargebee
+  API" — and `embedded` rides its parent) — all three silenced by the literal `store` (line-leading)
+  under "Balance exceptions". Each structured store also joins the audit L2 skeptic worklist ("En is
+  stored in Dn container 'x'", anchored at the entity's source).
 - **`messaging`** catalogs the async half of the system — one NAME-keyed row per channel / queue /
   topic (no id prefix: nothing points at a channel; the row itself is the join, like a deployment
   unit). `broker` is the D-id of the bus/store carrying it, `publishers`/`consumers` are C-ids,
@@ -236,11 +234,10 @@ Semantics, stated on the fields:
   and the change-impact ripple only walk edges. Blocking: duplicate names, malformed ids, a broker
   that is a folded framework/library. A channel with no consumers draws a dead-letter nudge. Each
   row joins the audit L2 skeptic worklist (verify the enqueue/consume sites name this channel).
-  `kind` is seeded-open (`queue`/`topic`/`stream`/`pubsub`/`job-queue`; mint when none fits).
-  **The empty-catalog canary**: emit/listen-family `C→D` edges into a messaging- or
-  datastore-kind dep with an EMPTY catalog draw one aggregated advisory (three live rebuilds
-  shipped rich broker edges and zero rows); the escape is the literal `messaging` (line-leading)
-  under a "Balance exceptions" heading.
+  `kind` is seeded-open (`queue`/`topic`/`stream`/`pubsub`/`job-queue`; mint when none fits). **The
+  empty-catalog canary**: emit/listen-family `C→D` edges into a messaging- or datastore-kind dep
+  with an EMPTY catalog draw one aggregated advisory; the escape is the literal `messaging`
+  (line-leading) under a "Balance exceptions" heading.
 - **`states`** (optional, on entities AND components) records a lifecycle the code actually
   implements — state names + transitions (`{src, dst, on}`) + a `source` anchoring the line that
   DECLARES them (an enum, status constants, a dispatch table). Entity lifecycles (a subscription's

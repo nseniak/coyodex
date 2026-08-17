@@ -1,10 +1,8 @@
 # Harvest contract (Phase 1) — the copyable template
 
-**Copy this file; do not retype it from prose.** Which, taken literally, was impossible: the body
+**Copy this file; do not retype it from prose.** Taken literally that was impossible — the body
 below is a `>`-quoted skeleton full of «angle-bracket» slots, so it cannot be handed to an agent
-as-is, and every build has "copied" it by rewriting it — a live one produced 9.5 KB of replacement
-prose and dropped the AGENT_ID clause in the process, exactly the drift this file warns about. So
-the instruction is now mechanical:
+as-is, and every build "copied" it by rewriting it. So the instruction is mechanical:
 
 1. Take the quoted block below and strip the leading `> ` from every line.
 2. Fill ONLY the «angle-bracket» slots — per agent, that is the file list, the background blurb,
@@ -14,16 +12,9 @@ the instruction is now mechanical:
    inherits the fix instead of re-deriving it.
 
 **The slot that keeps being left empty is «SERVES».** Structural slices exist to serve the
-behavioral layer, and on two consecutive measured builds not one harvest brief — 14 of 14, then 13
-of 13 — cited a single `UC`/`CAP`/`HP`/`R` id. Every slice boundary was a directory boundary, and
-the harvest came back with 260 of 260 components carrying no backbone edge. The behavioral draft
-exists before this fan-out precisely so the slices can be cut to it; a brief that names no use case
-is a brief cut from the file tree. Assertion 31 counts this and has scored 0 both times.
-
-**Why the wording matters.** This used to live inline in `method.md`, and every build hand-copied
-~5.6 KB of it into a scratchpad. That retyping is where wording drifts: one live build's copy
-promised that a `.draft.json` suffix "keeps a half-written file out of the assemble glob", which was
-not true of the tool at the time and had to be fixed in both places.
+behavioral layer. The behavioral draft exists before this fan-out precisely so the slices can be cut
+to it; a brief that names no use case is a brief cut from the file tree, and the harvest then comes
+back with components carrying no backbone edge at all. Assertion 31 counts this.
 
 Give every harvest agent the same skeleton — only the file list and the background blurb change per
 agent. Reusing one contract is what makes each agent return the same row shapes with the same
@@ -41,12 +32,11 @@ lead; nothing above this line goes into an agent prompt.
 > Read these files completely, then produce ONLY the rows below — the only file you may write is
 > your own fragment file (see the output rule below). **Do this work yourself — do NOT spawn your
 > own sub-agents / delegate, and do NOT write a program that writes your fragment.** Author the rows.
-> Six of fourteen agents on one build wrote a generator script instead; it predicts nothing about
-> speed — the fastest agent of all used one — but every lint round then costs patch-generator,
-> regenerate, copy, re-lint instead of one edit, and the two slowest agents in that fan-out were
-> both paying it. A sub-agent's output is silently dropped: on a live build a harvest
-> agent that delegated returned prose instead of writing its fragment, and the whole slice had to be
-> re-harvested. You read the files and write the one fragment; no delegation.
+> Speed is not the argument — the fastest agent on a measured build used one. The cost is every lint
+> round: patch-generator, regenerate, copy, re-lint instead of one edit. A sub-agent's output is
+> silently dropped: an agent
+> that delegates returns prose instead of a fragment, and the whole slice has to be re-harvested.
+> You read the files and write the one fragment; no delegation.
 >
 > **Files:** «absolute paths this agent owns; list a directory first, then read each file».
 > **Background:** «what the main agent already learned about this slice, handed down so you
@@ -87,7 +77,7 @@ lead; nothing above this line goes into an agent prompt.
 > **required** field is present and non-null; for an **optional** field with no value **omit the key**
 > entirely — do NOT emit `null` (rejected on defaulted-string fields) and do NOT emit a placeholder like
 > `(none)` (fails the anchor gate). (b) Use **only** each array's exact field names — no stray keys
-> (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`); it was listed here as a stray key while the same template demanded it. (c) Every anchor is **repo-root-relative**: the repo root
+> (`notes`, `slice`, `loc`, …) — but `confidence` IS a real field, required above and enumerated in the schema (`verified` / `inferred`). (c) Every anchor is **repo-root-relative**: the repo root
 > is «absolute repo path» — prefix every path with it. Minimal valid fragment:
 > `{"components":[{"id":"C1","name":"AuthGate","purpose":"verifies tokens","source":"backend/auth/gate.py:10"}]}`.
 > **SELF-CHECK BEFORE RETURNING (required):** run
@@ -95,9 +85,8 @@ lead; nothing above this line goes into an agent prompt.
 > fix every row it reports until it exits clean — this catches schema / anchor-format / extra-key /
 > missing-file errors in YOUR context (in parallel), so nothing bounces back from the lead's
 > `assemble`. Pass `--expect «N»` with the component budget this slice was dispatched with: it is
-> advisory, and it puts the over/undershoot in front of the agent that can explain it. On a live build
-> nine slices dispatched with budgets summing to ~55 delivered 86 components, every slice over, and
-> nobody noticed until the lead's granularity advisory fired after assembly.
+> advisory, and it puts the over/undershoot in front of the agent that can explain it — otherwise
+> nobody sees it until the lead's granularity advisory fires after assembly.
 > If the lint prints `warning:` lines (advisory), either FIX them or **repeat them verbatim in your
 > reply with one line of justification each** — never silently shrug an advisory off; the lead must
 > not rediscover a warning your own lint already showed you.

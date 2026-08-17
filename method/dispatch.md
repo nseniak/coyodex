@@ -35,10 +35,9 @@ the briefing, not because it happens before the mode is known.
 
 Then, with the mode decided, act on what the briefing said about the pin:
 
-- **Uncommitted code, and the mode is Build (or a rebuild)** → ask before starting the work, and
-  say which mode you are in so the question has a reason. This is the same A/B choice `method.md`'s
-  pin gate asks, moved from the END of the build to the front, where changing your mind is free (a
-  build once lost ~2 hours blocked on it after the fact):
+- **Uncommitted code, and the mode is Build (or a rebuild)** → ask before starting the work, and say
+  which mode you are in so the question has a reason. This is the same A/B choice `method.md`'s pin
+  gate asks, moved from the END of the build to the front, where changing your mind is free:
   - **A (recommended)** — **the user** commits or stashes the code, then you re-run `coyodex scope`
     (show it again — it is the same briefing about a now-different tree) and continue. Never commit
     or stash the user's code yourself: it is their working tree and their commit message, and this
@@ -89,15 +88,12 @@ the map under `.coyodex/dev-rebuilds/NNNN/`, which is excluded from the walk.
 
 **Do not open a previous map while building.** Not the one git still has, and not one filed under
 `.coyodex/dev-rebuilds/` (the coyodex author's own archive; a user of coyodex never has that
-directory). A build that reads the map it is replacing is no longer independent of it: on a live
-rebuild the lead printed the archived map's title and goal, and the new goal then reproduced the old
-one near-verbatim for two sentences, while the dep buckets were inherited on purpose "for stability".
-Both may even be the right text — the problem is that nobody can tell any more, and an eval
-comparing two maps of one repo reads the agreement as convergence when it is copying. Archiving the
-old map (`coyodex-eval archive`) is filing it, not consulting it, and stays fine. If a project
-genuinely needs a vocabulary to stay stable across rebuilds, record it in the map (`Bucket
-vocabulary`) so the next build inherits it from a DECLARATION rather than by reading the artifact.
-(L3 assertion 29 watches this.)
+directory). A build that reads the map it is replacing is no longer independent of it: the new text
+may even be right, but nobody can tell any more, and an eval comparing two maps of one repo reads
+the agreement as convergence when it is copying. Archiving the old map (`coyodex-eval archive`) is
+filing it, not consulting it, and stays fine. If a project genuinely needs a vocabulary to stay
+stable across rebuilds, record it in the map (`Bucket vocabulary`) so the next build inherits it
+from a DECLARATION rather than by reading the artifact. (L3 assertion 29 watches this.)
 
 ### Baseline exists → default to Analyze (never silently rebuild)
 
@@ -171,33 +167,29 @@ maps are **not supported**.
 
 ## Waiting at a barrier (every fan-out, every phase)
 
-This is here, in the file the skill points at, because the rule lived only in `method.md` — inside a
-block introduced by "**Parallel mode covers HARVESTING ONLY … Verification is NOT part of it**", and
-this file did not contain the words *poll*, *sleep*, *Monitor*, *notification*, *wait* or *barrier*
-anywhere. Every build reads this file. It applies to **every** fan-out: harvest, trace, and the
-Phase-4 skeptics.
+This is here, in the file the skill points at, because the rules it governs otherwise live inside a
+parallel-mode block that a serial build can read as inapplicable — and this file, every build reads.
+It applies to **every** fan-out: harvest, trace, and the Phase-4 skeptics.
 
 **The wait is a TEXT turn. Emit no tool call at all.**
 
 - **Never** `sleep`, `until … sleep …`, or a keep-alive like `echo ok` — foreground or backgrounded.
   A no-op turn costs a full model round trip and yields the turn no better than ending on text.
 - **Never** `ls` the fragment or verdicts directory. A not-ready file reads as an error and burns
-  the turn. It is also unsafe: on a live build a verdicts file was tallied 22 seconds before the
-  agent writing it finished, and only luck kept the read from being truncated JSON.
+  the turn. It is also unsafe: a half-written verdicts file tallies wrong, or parses as truncated
+  JSON.
 - **The agents' completion notifications ARE the barrier signal.** They arrive named and carrying
-  the agent's result. A live build had all fifteen and counted files anyway.
+  the agent's result.
 - If you genuinely must block on a condition, use the **`Monitor` tool with an until-condition** —
   and `Monitor`'s command must not itself be an `ls`/`sleep` poll. (`Monitor` is deferred: run
   `ToolSearch select:Monitor` once before the first call.) **One barrier means ONE `Monitor`.**
 
-The measured cost of ignoring this: one build spent **88 of its 278 tool calls (32 %)** on
-`sleep 1; echo ok`, 77 of them inside a single 9-minute barrier — one poll every 7 seconds — and
-never called `Monitor` or `ToolSearch` once in 560 turns. The prose in `method.md` had already been
-escalated twice, citing an earlier build that wasted 22 %. **L3 assertion 10 is the enforcement;
-this paragraph is the courtesy.**
+The measured cost of ignoring this has run to **32 % of a build's tool calls** — one poll every 7
+seconds through a 9-minute barrier, with `Monitor` never called. **L3 assertion 10 is the
+enforcement; this paragraph is the courtesy.**
 
 **Dispatch the known-longest slice FIRST** — launch order is the only lever on when a barrier
 closes. Where the slices are deliberately uniform (the Phase-4 skeptic batches are capped at the
-same claim count) that lever does not exist: identical 40-claim batches have run 4m54s to 10m31s,
-a 2.1× spread with nothing to sort on. There, **probe the straggler** with `SendMessage` after a
-couple of minutes of silence — not with a late `ls` sweep, and not by waiting out the tail.
+same claim count) that lever does not exist — identical batches vary more than 2× with nothing to
+sort on. There, **probe the straggler** with `SendMessage` after a couple of minutes of silence —
+not with a late `ls` sweep, and not by waiting out the tail.
