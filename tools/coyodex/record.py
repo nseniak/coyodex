@@ -20,6 +20,20 @@ find-and-replace its own text two turns later with a fragile `body.find(...)` + 
     coyodex record --map <map-or-fragment> --heading "Balance exceptions" \\
                    --line "UC5: the two clauses are one goal — <why>" [--replace <prefix>]
 
+`--line` REPEATS, and `--lines-from <file|->` reads one per line (blank lines and `#` comments
+skipped). One process, one write. Reading only the first `--line` is why a build with 57 records to
+make spawned 57 processes — twenty of them re-typing long prose after the first attempt failed — for
+what are independent appends under one heading:
+
+    coyodex record --heading "Entry-point coverage" \\
+                   --line "http-route: partial — <why>" \\
+                   --line "ui-route: complete — <why>"
+    coyodex record --heading "Entry-point coverage" --lines-from coverage.txt
+
+Every line is shape-checked BEFORE anything is written, so a bad one in a batch of twenty leaves the
+fragment untouched rather than holding half a batch. `--replace` corrects one record, so it refuses
+to combine with a batch.
+
 One reason may answer SEVERAL elements — write them as one comma-separated list rather than the
 same sentence once per id (live maps grew 66 lines holding 15 distinct reasons that way):
 
@@ -99,6 +113,20 @@ def _arg(argv: list[str], flag: str, default: str = "") -> str:
     return default
 
 
+def _all_args(argv: list[str], flag: str) -> list[str]:
+    """EVERY value given to `flag`, in order — not just the first.
+
+    `_arg` reads one, and this command takes one record per process as a result: a build that had 57
+    lines to record spawned 57 processes, twenty of them re-typing long prose after a failed first
+    attempt. The lines are independent appends under one heading, so there was never a reason for
+    them to be separate runs."""
+    out: list[str] = []
+    for i, a in enumerate(argv):
+        if a == flag and i + 1 < len(argv) and not argv[i + 1].startswith("--"):
+            out.append(argv[i + 1])
+    return out
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or "-h" in argv or "--help" in argv:
@@ -106,7 +134,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     map_path = _arg(argv, "--map", ".coyodex/project-map.json")
     heading = _arg(argv, "--heading")
-    line = _arg(argv, "--line")
+    lines = _all_args(argv, "--line")
+    from_file = _arg(argv, "--lines-from")
     replace = _arg(argv, "--replace")
     # The TARGET is checked before the payload. A build ran 21 well-formed `record` calls in one turn
     # and every one failed with `cannot read … extras.json — no such file`, because no fan-out agent
@@ -128,12 +157,36 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR: cannot read {path} — no such file. (An `extras.json` in an existing "
                   f"directory is seeded automatically; any other path must exist.)", file=sys.stderr)
             return 2
-    if not heading or not line:
-        print("ERROR: --heading and --line are required", file=sys.stderr)
+    if from_file:
+        if replace:
+            # --replace corrects ONE record by prefix; a file of lines has no single target, and
+            # guessing which one it meant is the kind of silent mis-write this command exists to
+            # prevent.
+            print("ERROR: --replace corrects one record and --lines-from carries many — do the "
+                  "replacement in its own call.", file=sys.stderr)
+            return 2
+        src = Path("/dev/stdin") if from_file == "-" else Path(from_file)
+        try:
+            text = sys.stdin.read() if from_file == "-" else src.read_text(encoding="utf-8")
+        except OSError as exc:
+            print(f"ERROR: cannot read --lines-from {from_file}: {exc}", file=sys.stderr)
+            return 2
+        # Blank lines and `#` comments dropped, so the file a lead pastes together can be annotated.
+        lines += [ln.strip() for ln in text.splitlines()
+                  if ln.strip() and not ln.lstrip().startswith("#")]
+    if not heading or not lines:
+        print("ERROR: --heading and at least one --line (or --lines-from) are required",
+              file=sys.stderr)
+        return 2
+    if replace and len(lines) > 1:
+        print(f"ERROR: --replace corrects one record; {len(lines)} --line values were given.",
+              file=sys.stderr)
         return 2
     # A key with no why is a dismissal, not a record — the rule every escape family already states.
-    if ":" not in line or not line.split(":", 1)[1].strip():
-        print(f"ERROR: a record is `<id or claim>: <why>` — '{line}' states no why. A key alone is "
+    # Checked for EVERY line before anything is written: a partial append would leave the fragment
+    # holding some of a batch, and the caller cannot tell which without re-reading it.
+    for bad in [ln for ln in lines if ":" not in ln or not ln.split(":", 1)[1].strip()]:
+        print(f"ERROR: a record is `<id or claim>: <why>` — '{bad}' states no why. A key alone is "
               f"a dismissal, and the point of recording is that the reason survives.", file=sys.stderr)
         return 2
     canonical, complaint = _resolve_heading(heading)
@@ -150,10 +203,15 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 2
-    changed, message = append_line(m, canonical, line, replace)
-    print(message)
-    if not changed:
+    any_changed = False
+    for ln in lines:
+        changed, message = append_line(m, canonical, ln, replace)
+        print(message)
+        any_changed = any_changed or changed
+    if not any_changed:
         return 1 if replace else 0
+    # ONE write for the whole batch. Writing per line would leave the file half-updated if a later
+    # line failed, and would rewrite the fragment N times for N records.
     path.write_text(dump_preserving(m, present), encoding="utf-8")
     if present is None:
         print(f"wrote {path} — note this is the ASSEMBLED map, so the next `assemble` discards it. "

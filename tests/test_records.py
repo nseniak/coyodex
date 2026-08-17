@@ -193,3 +193,70 @@ def _main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(_main())
+
+
+def _extras(tmp):
+    import os
+    p = os.path.join(tmp, "extras.json")
+    return p
+
+
+def test_line_repeats_so_one_process_records_a_batch():
+    """`_arg` read one value, so this command took one record per process: a build with 57 records
+    to make spawned 57 processes, twenty of them re-typing long prose after the first attempt
+    failed. They are independent appends under one heading — there was never a reason to separate
+    them."""
+    import json, tempfile
+    from coyodex.record import main
+    with tempfile.TemporaryDirectory() as tmp:
+        p = _extras(tmp)
+        assert main(["--map", p, "--heading", "Entry-point coverage",
+                     "--line", "http-route: partial — per module",
+                     "--line", "ui-route: complete — every page",
+                     "--line", "cli: complete — every script entry"]) == 0
+        body = json.load(open(p))["extras"][0]["body"]
+        for key in ("http-route", "ui-route", "cli"):
+            assert key in body, f"{key} was dropped: {body!r}"
+
+
+def test_lines_from_reads_a_file_and_skips_comments_and_blanks():
+    """So the lead can paste a batch together, annotate it, and hand it over as-is."""
+    import json, os, tempfile
+    from coyodex.record import main
+    with tempfile.TemporaryDirectory() as tmp:
+        src = os.path.join(tmp, "lines.txt")
+        with open(src, "w") as fh:
+            fh.write("# the two Temporal kinds\njob: complete — nine schedules\n\n"
+                     "poller: complete — the sweep\n")
+        p = _extras(tmp)
+        assert main(["--map", p, "--heading", "Entry-point coverage", "--lines-from", src]) == 0
+        body = json.load(open(p))["extras"][0]["body"]
+        assert "job" in body and "poller" in body
+        assert "the two Temporal kinds" not in body, "a `#` comment is not a record"
+
+
+def test_a_bad_line_in_a_batch_leaves_the_fragment_untouched():
+    """Every line is shape-checked BEFORE anything is written. A partial append would leave the
+    fragment holding some of a batch, and the caller cannot tell which without re-reading it."""
+    import tempfile
+    from coyodex.record import main
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(_extras(tmp))
+        assert main(["--map", str(p), "--heading", "Entry-point coverage",
+                     "--line", "job: complete — nine schedules"]) == 0
+        before = p.read_bytes()
+        assert main(["--map", str(p), "--heading", "Entry-point coverage",
+                     "--line", "poller: complete — the sweep",
+                     "--line", "no-why-here"]) == 2
+        assert p.read_bytes() == before, "nothing may be written when any line is malformed"
+
+
+def test_replace_refuses_a_batch():
+    """`--replace` corrects ONE record by prefix; a batch has no single target, and guessing which
+    one it meant is the silent mis-write this command exists to prevent."""
+    import tempfile
+    from coyodex.record import main
+    with tempfile.TemporaryDirectory() as tmp:
+        assert main(["--map", _extras(tmp), "--heading", "Entry-point coverage",
+                     "--replace", "job", "--line", "a: x", "--line", "b: y"]) == 2

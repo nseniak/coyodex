@@ -55,7 +55,7 @@ what the change would have to read.
 
 | # | change | why | scope |
 |---|---|---|---|
-| 7 | `record`: repeatable `--line` / `--lines-from -`, and create the extras fragment when absent | It reads only the first `--line`, so 51 separate process spawns in one build; and it cannot bootstrap the file, so 20 calls failed and 20 long prose lines were re-typed after an `echo '{}' >`. | `record.py` |
+| 7 | ~~`record`: repeatable `--line` / `--lines-from`, and seed the extras fragment~~ **LANDED** | The seeding half was yours; `--line` now repeats and `--lines-from <file|->` reads a batch, one process and one write. Every line is shape-checked before anything is written, so a bad one in a batch of twenty leaves the fragment untouched. |
 
 ---
 
