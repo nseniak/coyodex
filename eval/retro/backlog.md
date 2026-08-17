@@ -115,6 +115,23 @@ what the change would have to read.
 
 ---
 
+### Instrumentation lesson from that investigation (2026-08-17)
+
+Three of four hand-rolled measures over the worker logs were WRONG, and each wrong one pointed at a
+different conclusion:
+
+| the measure | what it did | how it was caught |
+|---|---|---|
+| classify rule workers from their prose | found 9 and 8 workers, then 2 and 0 on a second attempt | the two attempts disagreed |
+| identify them by the fragment they wrote | matched `r01-…` in one build, silently ZERO in the other | the two builds name fragments differently |
+| count `Read`/`Grep`/`Glob` calls | reported **1** read for a worker that read 30 files | these workers read code through `sed -n`/`grep` in Bash |
+| count distinct source files named in a log | said the newer workers read MORE (38 vs 36) — the opposite of the truth | a file NAMED in the brief a worker was handed is not a file it read |
+
+Every map-based finding held; every shaky number came from hand-parsing transcripts while
+`coyodex-eval transcript` was available and unused — the method's own "reach for the verb before the
+heredoc" rule, broken by the retro tooling's own author. A retro reading worker logs should use the
+command, and should cross-check any per-worker number against a second signal before reporting it.
+
 ## Open — build method and templates
 
 These are `method.md` at the repo root and `method/templates/`, not the retro method.
@@ -135,6 +152,7 @@ These are `method.md` at the repo root and `method/templates/`, not the retro me
 | 12 | ~~Name `ListAgents` in the anti-polling rule, or bless it as a cheap one-shot~~ **LANDED** `898233a` |
 | 13 | When a build request includes a retro, say up front that the retro needs a fresh chat | One build reached turn 537 before finding out. |
 | 14 | ~~The build must commit~~ **LANDED** `80e77e3` |
+| 15 | **The rules contract must say that a file handed to a worker is a file to OPEN.** A brief carries each candidate's component record, source anchor included; the contract has to state that receiving one is not the same as checking it, and that a candidate dismissed without being read is reported as dismissed. | Two builds of ONE commit (bb21a2d) share 25 % of their access enforcement lines: 163 -> 116, 57 shared, 17 files covered only by the older map and 16 only by the newer. Investigated 2026-08-17, three causes ELIMINATED — not the block cuts (the areas are re-cut every build, one name of ten repeated, but coverage does not follow them), not trace coverage (103 of the 106 lost lines sit in files the newer map still anchors), and not effort (median 31 vs 33 code reads per rule worker). The matched pair settles it: on `encryption.py` the older secrets worker ran three commands — the file body, decrypt-failure handling, then the Mongo wrapper against the settings route — and anchored a rule at line 82; the newer worker never ran one command against it, and the file appears exactly ONCE in its whole log, inside the brief it was handed, carrying that same `encryption.py:82`. The candidate was in its hands with the line number. `method/templates/rules-contract.md` (new 2026-08-17) is the first shared wording for this fan-out, so the next build is its first fair test — check whether its secrets worker opens what its brief hands it. |
 
 ---
 
