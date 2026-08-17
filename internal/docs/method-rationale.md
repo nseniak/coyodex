@@ -234,7 +234,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R42 — Trace-prompt discipline was all measured
 - **Where**: `method.md`
-- **Anchor**: `Trace-prompt discipline: - **Prescribe likely sub-flows in the prompts.** The`
+- **Anchor**: `Trace-prompt discipline — what the contract carries, here so you can see what you hand over: - **Prescribe likely sub-flows in the prompts.**`
 - **Evidence**: Every item under this heading was proven on a live build.
 
 ### R43 — The build that shipped zero sub-flows

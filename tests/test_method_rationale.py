@@ -41,6 +41,7 @@ METHOD_DOCS: frozenset[str] = frozenset({
     "method/templates/project-map.template.md",
     "method/templates/rules-contract.md",
     "method/templates/skeptic-contract.md",
+    "method/templates/trace-contract.md",
 })
 
 #: Shortest anchor that can plausibly quote a rule rather than label one. Below this, deleting the

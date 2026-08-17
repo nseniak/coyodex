@@ -1210,7 +1210,15 @@ synthesis → parallel trace.**
   barrier for everybody. Split a heavy slice into two agents at LAUNCH, **always at use-case
   boundaries — never split one use case's flow across agents** (a flow traced by two contexts loses
   coherence; per-agent SF ranges + cross-fragment `--ids build-fragments/` handle any shared
-  sub-flow between them). Trace-prompt discipline:
+  sub-flow between them).
+  **The copyable contract is
+  [method/templates/trace-contract.md](method/templates/trace-contract.md)** — hand every trace agent
+  that file's contents, changing only the «angle-bracket» slots. **Copy it with a command:**
+  `cp COYODEX_HOME/method/templates/trace-contract.md <scratch>/trace-contract.md`, then fill them in
+  place; a `Read` followed by a `Write` is one keystroke from a rewrite. This was the largest fan-out
+  with no contract of its own, and the rules fan-out shows what that costs: composed from memory, it
+  told eleven agents to author a field they must never author, which lint treats as blocking.
+  Trace-prompt discipline — what the contract carries, here so you can see what you hand over:
   - **Prescribe likely sub-flows in the prompts.** The lead can usually see from the use-case list
     which machinery is shared ("UC10 and UC13 walk the same tool-call path — EXTRACT it as a
     sub-flow") — say so explicitly; the duplication detector is the safety net, not the plan. **Do
