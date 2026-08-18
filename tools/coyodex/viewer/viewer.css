@@ -278,8 +278,8 @@ body.vresizing #stage { pointer-events: none; }
 /* Pinned section index — all sections at a glance + scroll-spy + click-to-jump. Shared by every
    card-list tab (System, Use Cases, Business logic), so it lives on `.usecases-wrap`, the wrapper all
    three use. Its height is measured into --tab-index-h (bindTabIndex) so anything that must sit BELOW
-   it — a jumped-to section's scroll-margin, the System tab's sticky headers — lines up even when the
-   bar wraps onto a second row.
+   it — a jumped-to section's scroll-margin, the System tab's sticky column headers — lines up even when
+   the bar wraps onto a second row, and collapses to 0 on a page that has no bar.
 
    IT MUST PIN TO THE WRAPPER'S TOP BORDER. `position: sticky; top: 0` inside a scrolling box resolves
    to the CONTENT edge, so the wrapper's 16px top padding stayed above the bar as a transparent strip
@@ -295,15 +295,19 @@ body.vresizing #stage { pointer-events: none; }
                                  cursor: pointer; white-space: nowrap; }
 .usecases-wrap .tab-index-chip:hover { background: #e2e8f0; }
 .usecases-wrap .tab-index-chip.active { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }
-/* A jumped-to card clears the pinned bar instead of hiding under it. */
-.usecases-wrap .uc-group { scroll-margin-top: calc(var(--tab-index-h) + 8px); }
-/* Sticky SECTION HEADERS stay a System-tab affordance: its sections are long reference tables where the
-   heading scrolls away in the first screenful. The card lists are short enough to keep their bearings. */
-.system-wrap .uc-actor { position: sticky; top: var(--tab-index-h); z-index: 3; background: #fff;
-                         margin-top: 0; }
-/* The table's own column headers stay sticky (they were, at top:0) — but now BELOW the pinned index and
-   the section header, so all three stack instead of hiding each other. */
-.system-wrap .glossary thead th { top: calc(var(--tab-index-h) + var(--sys-header-h, 30px)); z-index: 2; }
+/* A jumped-to card — or, on the entry-point page, a jumped-to KIND — clears the pinned bar instead
+   of hiding under it. */
+.usecases-wrap .uc-group,
+.usecases-wrap .sys-kindsec { scroll-margin-top: calc(var(--tab-index-h) + 8px); }
+/* The System section header is NOT sticky. It was, back when nine collections were stacked on one
+   scrolling page and the heading told you which one you had scrolled into. Each collection has its own
+   page now, its title sits at the top of that page, and the breadcrumb names it permanently — so a
+   sticky copy following you down repeated a label that was already on screen and stole a strip from
+   the rows. What is still worth pinning is the pinned index (which kind am I in) and the table's own
+   COLUMN headers (what is this cell), and those two stack directly. */
+.system-wrap .uc-actor { margin-top: 0; }
+/* Column headers pin BELOW the index bar when there is one, and to the top when there is not. */
+.system-wrap .glossary thead th { top: var(--tab-index-h); z-index: 2; }
 /* A soft shadow lifts the bottom-most sticky line off the scrolling rows: the column-header line in a
    table section, or the section-header itself in a prose section (extras) that has no column line.
    Chromium doesn't paint box-shadow on table cells under `border-collapse: collapse`, so the column
@@ -311,7 +315,6 @@ body.vresizing #stage { pointer-events: none; }
 .system-wrap .glossary thead th::after { content: ''; position: absolute; left: 0; right: 0; top: 100%;
                                          height: 6px; pointer-events: none;
                                          background: linear-gradient(rgba(15, 23, 42, .16), rgba(15, 23, 42, 0)); }
-.system-wrap .uc-group:not(:has(.glossary)) .uc-actor { box-shadow: 0 4px 6px -3px rgba(15, 23, 42, .18); }
 /* Tests tab: the honesty note reads as a callout above the gap table; the Tested? cell is a coloured pill. */
 .tests-note { max-width: 1100px; margin: 0 auto 14px; padding: 10px 14px; font-size: 13px;
               color: #713f12; background: #fef9c3; border: 1px solid #fde68a; border-radius: 8px; line-height: 1.5; }
@@ -323,7 +326,11 @@ body.vresizing #stage { pointer-events: none; }
    section header IS the Role; each row is a use case with its trigger→outcome and an optional HPn pill. */
 .usecases-wrap { height: 100%; overflow: auto; box-sizing: border-box; padding: 16px 20px 28px;
                  max-width: 1100px; margin: 0 auto; background: #f8fafc;
-                 --tab-index-h: 40px; }   /* measured for real by bindTabIndex */
+                 /* ZERO by default, and measured for real by bindTabIndex when a page HAS an index
+                    bar. A non-zero default was wrong on every page without one: the sticky column
+                    headers pinned 40px down from the top and floated over the rows with an empty
+                    strip above them, and a jumped-to section cleared a bar that was not there. */
+                 --tab-index-h: 0px; }
 .usecases-wrap .empty { color: #9ca3af; }
 /* Each actor is its own card — a bordered, padded block with a clear gap from the next, so the
    sections read as distinct groups instead of blurring together. */

@@ -5422,18 +5422,17 @@ function tabIndexHtml(secs) {
 }
 // Wire an index rendered by `tabIndexHtml`: click-to-jump + scroll-spy. `wrap` is the SCROLL container
 // (the bar is sticky inside it), and its height is measured into `--tab-index-h` so the sections'
-// `scroll-margin-top` — and the System tab's second sticky row, its table headers — line up under the
-// bar even when it wraps onto two rows on a narrow pane.
+// `scroll-margin-top` — and the System tab's sticky table headers — line up under the bar even when it
+// wraps onto two rows on a narrow pane. A wrap with no bar gets 0, not a leftover measurement.
 function bindTabIndex(wrap) {
-  const nav = wrap && wrap.querySelector('.tab-index');
-  if (!wrap || !nav) return;
+  if (!wrap) return;
+  const nav = wrap.querySelector('.tab-index');
+  // No bar means nothing to sit below one: say so explicitly rather than leaving whatever the last
+  // page measured, or the stylesheet's own default, holding the column headers off the top edge.
+  if (!nav) { wrap.style.setProperty('--tab-index-h', '0px'); return; }
   const chips = [...nav.querySelectorAll('.tab-index-chip')];
   const sections = chips.map((c) => wrap.querySelector(`[id="${c.dataset.target}"]`));
-  const header0 = wrap.querySelector('.uc-actor');
-  const setH = () => {
-    wrap.style.setProperty('--tab-index-h', nav.offsetHeight + 'px');
-    wrap.style.setProperty('--sys-header-h', (header0 ? header0.offsetHeight : 30) + 'px');
-  };
+  const setH = () => { wrap.style.setProperty('--tab-index-h', nav.offsetHeight + 'px'); };
   setH();
   if (window.ResizeObserver) new ResizeObserver(setH).observe(wrap);  // recompute when the pane resizes
   chips.forEach((chip, i) => chip.addEventListener('click', () => {
@@ -5509,13 +5508,14 @@ function systemSections() {
   const nodeName = (id) => (G.nodes && G.nodes[id] ? G.nodes[id].name : id);
   const out = [];
   const usedIds = new Set();
-  const sec = (band, title, inner, count, blurb) => {
+  const sec = (band, title, inner, count, blurb, index) => {
     if (!inner) return;
     let id = 'sys-' + String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     const base = id || 'sys-section';
     for (let n = 2; usedIds.has(id); n++) id = base + '-' + n;  // dedupe (e.g. a note named like a table)
     usedIds.add(id);
-    out.push({ id, title, band, count: count || '', blurb: blurb || SYS_BLURB[title] || '', html: inner });
+    out.push({ id, title, band, count: count || '', blurb: blurb || SYS_BLURB[title] || '',
+               html: inner, index: index || '' });
   };
   // Entry points — grouped by CANONICAL kind (the server folds alias spellings: `http` and
   // `http-route` rows land in one group, WS-A8); each kind heading carries a small self/external
@@ -5553,12 +5553,15 @@ function systemSections() {
       // could reach one without scrolling past the other eighteen.
       const kid = 'sysk-' + k.toLowerCase().replace(/[^a-z0-9]+/g, '-');
       kindSecs.push({ id: kid, title: `${k} (${byKind[k].length})` });
-      inner += `<section id="${kid}"><h4 class="sys-subhead">${esc(k)}${tag}</h4>`
+      // `sys-kindsec` earns the scroll-margin that clears the pinned bar: without it a chip jump
+      // lands the kind's heading UNDER the bar, which is what `.uc-group` gets on the card lists.
+      inner += `<section class="sys-kindsec" id="${kid}"><h4 class="sys-subhead">${esc(k)}${tag}</h4>`
         + '<table class="glossary"><thead><tr><th>Trigger</th><th>Component</th><th>Source</th></tr></thead>'
         + `<tbody>${rows}</tbody></table></section>`;
     }
-    sec('system', 'Entry points', tabIndexHtml(kindSecs) + inner,
-        `${eps.length} across ${order.length} kind${order.length > 1 ? 's' : ''}`);
+    sec('system', 'Entry points', inner,
+        `${eps.length} across ${order.length} kind${order.length > 1 ? 's' : ''}`, '',
+        tabIndexHtml(kindSecs));
   }
   const many = (rows, word) => ((rows || []).length ? `${rows.length} ${word}` : '');
   sec('system', 'Run commands', refTable(G.run_commands, [
@@ -5687,7 +5690,11 @@ function renderSystem() {
 function renderSystemSection(sysId) {
   const found = systemSections().find((s) => s.id === sysId);
   if (!found) { renderSystem(); return; }
-  diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
+  // The index bar is a DIRECT child of the scroll wrap, never nested in the section card. Its sticky
+  // full-bleed geometry (negative side margins, and the wrap dropping its own top padding) is written
+  // against the wrap: nested one level down, the wrap kept a 16px transparent strip above the bar and
+  // rows scrolled visibly through it — the same defect the bar's own comment records from last time.
+  diagram.innerHTML = '<div class="usecases-wrap system-wrap">' + found.index
     + `<section class="uc-group"><h3 class="uc-actor">${esc(found.title)}`
     + (found.count ? `<span class="uc-actor-wants">${esc(found.count)}</span>` : '') + '</h3>'
     + (found.blurb ? `<p class="uc-wants">${esc(found.blurb)}</p>` : '')

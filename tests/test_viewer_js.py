@@ -621,3 +621,42 @@ def test_the_system_tab_is_cards_over_one_builder() -> None:
     # The drill is a real level: keyed, titled, and reachable back up by breadcrumb.
     assert "if (s.kind === 'sysSection') return [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];" in js
     assert "'gid', 'sys'];" in js                        # …and its key survives a right-pane navigation
+
+
+def test_the_only_pinned_lines_are_the_ones_that_still_say_something() -> None:
+    """The System section header was sticky back when nine collections shared one scrolling page and it
+    told you which one you had scrolled into. Each collection has its own page now, its title sits at
+    the top of it, and the breadcrumb names it permanently — so a sticky copy repeated a label already
+    on screen and pushed the column headers further down. What still earns a pin is the index bar
+    (which kind am I in) and the table's own COLUMN headers (what is this cell)."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    title = css[css.index(".system-wrap .uc-actor {"): css.index("}", css.index(".system-wrap .uc-actor {"))]
+    assert "sticky" not in title
+    th = css[css.index(".system-wrap .glossary thead th {"): css.index("}", css.index(".system-wrap .glossary thead th {"))]
+    assert "top: var(--tab-index-h)" in th, "column headers pin directly under the bar, or to the top"
+    assert "--sys-header-h" not in css, "the second offset died with the sticky header it measured"
+
+
+def test_a_page_with_no_index_bar_reserves_no_room_for_one() -> None:
+    """`--tab-index-h` defaulted to 40px in the stylesheet and was only ever overwritten when a bar was
+    found. Seven of the System tab's ten collections have no bar, so their sticky column headers pinned
+    40px down from the top and floated over the rows with an empty strip above them."""
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert "--tab-index-h: 0px; }" in css
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    bind = js[js.index("function bindTabIndex(wrap) {"): js.index("\n}", js.index("function bindTabIndex(wrap) {"))]
+    assert "if (!nav) { wrap.style.setProperty('--tab-index-h', '0px'); return; }" in bind
+
+
+def test_the_index_bar_is_a_direct_child_of_the_scroll_wrapper() -> None:
+    """Its sticky geometry is written against the wrapper: negative side margins take it full-bleed, and
+    the wrapper drops its own top padding only when it HAS a bar (`:has(> .tab-index)`). Nested one level
+    down inside the section card, that selector missed and the wrapper kept a 16px transparent strip
+    above the bar that rows scrolled visibly through. So the System drill emits the bar beside the
+    section, not inside it, and the kinds it jumps to carry the scroll-margin that clears it."""
+    js = (VIEWER_DIR / "viewer.js").read_text()
+    assert "'<div class=\"usecases-wrap system-wrap\">' + found.index" in js
+    assert 'index: index || \'\'' in js
+    assert '<section class="sys-kindsec" id="${kid}">' in js
+    css = (VIEWER_DIR / "viewer.css").read_text()
+    assert ".usecases-wrap .sys-kindsec { scroll-margin-top: calc(var(--tab-index-h) + 8px); }" in css
