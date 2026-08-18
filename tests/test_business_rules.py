@@ -1919,13 +1919,23 @@ def test_an_enforced_at_pill_selects_and_frames_the_step_in_the_flow() -> None:
 
 
 def test_the_readme_lists_the_business_rules_tab_in_tab_order() -> None:
-    """The tab list is the product's advertised surface — a tab missing from it does not exist for
-    a reader, and one listed out of order contradicts the bar they are looking at. The README lists
-    the views under their group headings, so it must also agree with the group they sit in."""
-    lines = [l for l in (REPO / "README.md").read_text(encoding="utf-8").splitlines()
-             if l.startswith("- **")]
-    labels = [l.split("**")[1] for l in lines]
-    assert labels[:3] == ["Happy Path", "Features", "Rules"], labels
+    """The tab list is the product's advertised surface — a view missing from it does not exist for a
+    reader, and one listed out of order contradicts the bar they are looking at. The README names the
+    five GROUPS, each bullet naming its own views, so it has to agree on both: the group row's order,
+    and the view order inside each group."""
+    readme = (REPO / "README.md").read_text(encoding="utf-8")
+    body = readme[readme.index("The viewer presents its views in five groups"):
+                  readme.index("## Why not just ask my agent")]
+    groups = [l.split("**")[1] for l in body.splitlines() if l.startswith("- **")]
+    assert groups == ["Product", "Data", "Code", "Operations", "Glossary"], groups
+    # Each group's bullet names its views, in the order the sub-tab row draws them.
+    inside = {g: body.split(f"- **{g}**")[1].split("\n- **")[0] for g in groups}
+    for group, views in (("Product", ["Happy Path", "Features", "Rules"]),
+                         ("Data", ["Entities", "Storage"]),
+                         ("Code", ["Subsystems", "Dependencies", "Tests"]),
+                         ("Operations", ["Deployment", "System"])):
+        at = [inside[group].index(f"**{v}**") for v in views]   # raises if a view is unlisted
+        assert at == sorted(at), (group, views)
 
 
 def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
