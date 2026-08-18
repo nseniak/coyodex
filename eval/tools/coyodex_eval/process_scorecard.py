@@ -1465,6 +1465,35 @@ _GATE_SHAPE = re.compile(
     r"Shape:\s*(\d+) components in (\d+) subsystems, (\d+) entities in (\d+) subdomains, "
     r"(\d+) deps, (\d+) use cases, (\d+) edges, (\d+) flows/sub-flows")
 
+#: The path `finalize` was told to generate the commit-message gate block into.
+_EMIT_GATE_BLOCK = re.compile(r"--emit-gate-block[=\s]+(\S+)")
+
+#: The path `git commit` was told to take its message from.
+_COMMIT_MESSAGE_FILE = re.compile(r"(?:-F|--file)[=\s]+(\S+)")
+
+
+def _basename(path: str) -> str:
+    """The last path segment, with shell quoting stripped.
+
+    Compared on BASENAME because the emitting run and the commit run routinely spell one file
+    differently — `--emit-gate-block "$SC/gate-block.txt"` in one turn and `cat "$SC/gate-block.txt"`
+    in another, where `$SC` is re-exported per turn and never expands here. The basename is the part
+    that survives that, and a build writing two different `gate-block.txt` files in one session is
+    not a shape this has to separate.
+
+    Both ends are stripped of quoting AND shell punctuation, in one pass rather than a fixed order:
+    the live token was `"$SC/gate-block.txt";` — a closing quote INSIDE a trailing semicolon — and
+    stripping quotes then semicolons left `gate-block.txt"`, which matched nothing."""
+    return path.strip("\"' \t;)&|").rsplit("/", 1)[-1].strip("\"' \t;)&|")
+
+
+def _shell_tokens(command: str) -> list[str]:
+    """Whitespace-separated tokens of the command, heredoc bodies stripped.
+
+    `_shell_only` first for the reason `_redirect_targets` documents: a path inside a heredoc is
+    program text a build happens to be writing, not a file this command reads."""
+    return _shell_only(command).split()
+
 
 def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
     """A commit's shape numbers must match the map it describes.
@@ -1486,12 +1515,35 @@ def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
       in the same run are searched.
 
     Only numbers with a matching generated term are compared, so a commit quoting a different map's
-    figures cannot be scored — there is nothing to pair it with."""
+    figures cannot be scored — there is nothing to pair it with.
+
+    THE THIRD THING IT GOT WRONG, and the one that made it blind on the best-behaved builds: a
+    message ASSEMBLED from the emitted gate block carries no numbers in the command OR its result,
+    so both fixes above still missed it. A live build ran
+    `{ echo subject; echo; cat "$SC/gate-block.txt"; } > "$SC/commit-msg.txt"; git commit -F "$SC/commit-msg.txt"`.
+    The `Shape:` truth was captured (23 components, 5 subsystems, …) and every number in the shipped
+    commit was correct, and this assertion reported `n/a 0/0` — "no opportunity" — because
+    `_COMMIT_SHAPE` found nothing to pair. The more exactly a build followed the method, the less
+    this measured.
+
+    So a commit whose message is PROVABLY the generated block now scores as matching. That is not a
+    concession: what this assertion detects is a shape number diverging from the generated one, and
+    `truth` is itself read from that generated line. A message the tool wrote cannot diverge from
+    itself, and the failure mode — numbers retyped or carried over from an earlier state — is
+    structurally excluded. The proof required is a chain: `--emit-gate-block <p>` wrote `p`, and the
+    commit either names `p` to `-F` directly, or names it inside the same command that redirects
+    into the file it does pass to `-F`. Anything looser (a `-F` on a file nobody can show came from
+    the tool) still scores nothing, because then the numbers really are unchecked."""
     truth: dict[str, int] = {}
     hits: list[Evidence] = []
     good = 0
     results = results_by_tool_use_id(turns)
     seen_commit = False
+    #: Basenames of files the tool generated the gate block into, plus files provably built FROM
+    #: one. Basenames, not full paths: the emitting run writes `"$SC/gate-block.txt"` and the commit
+    #: turn may spell the same file through a differently-defined shell variable.
+    generated: set[str] = set()
+    proved_by = ""
     for turn in turns:
         for call in turn.tool_calls:
             blob = call.text() + "\n" + results.get(call.id, "")
@@ -1501,26 +1553,50 @@ def assert_18_commit_shape_matches_the_map(turns: Sequence[Turn]) -> Assertion:
                          "entities": int(g.group(3)), "subdomains": int(g.group(4)),
                          "deps": int(g.group(5)), "use cases": int(g.group(6)),
                          "edges": int(g.group(7)), "flows/sub-flows": int(g.group(8))}
+            if call.name == "Bash":
+                cmd = call.command
+                generated.update(_basename(p) for p in _EMIT_GATE_BLOCK.findall(cmd))
+                # A file built from a generated one inherits the proof. `cat gate-block.txt >
+                # commit-msg.txt` is the shape method.md's own worked example produces.
+                if generated and any(_basename(t) in generated for t in _shell_tokens(cmd)):
+                    generated.update(_basename(t) for t in _redirect_targets(cmd))
             is_commit = call.name == "Bash" and re.search(r"\bgit\s+commit\b", call.command)
             if not is_commit:
                 continue
             seen_commit = True
             if not truth:
                 continue
+            found = False
             for n, word in _COMMIT_SHAPE.findall(blob):
                 key = _SHAPE_WORD.get(word)
                 if key is None or key not in truth:
                     continue
+                found = True
                 if int(n) == truth[key]:
                     good += 1
                 else:
                     hits.append(Evidence(turn.index, {"claimed": f"{n} {key}",
                                                       "map holds": str(truth[key])}))
+            if found:
+                continue
+            # No numbers in the command or its result. If the message file is provably the emitted
+            # gate block, every count in it came from `finalize` reading the map — score them.
+            msg_files = [_basename(p) for p in _COMMIT_MESSAGE_FILE.findall(call.command)]
+            proof = next((p for p in msg_files if p in generated), "")
+            if not proof and generated and any(_basename(t) in generated
+                                               for t in _shell_tokens(call.command)):
+                proof = next(iter(sorted(generated)))
+            if proof:
+                good += len(truth)
+                proved_by = proof
     total = good + len(hits)
     note = ""
     if seen_commit and not truth:
         note = ("a commit was made but no generated `Shape:` line was seen — run "
                 "`coyodex finalize --emit-gate-block` and paste it, or the numbers are unchecked")
+    elif proved_by:
+        note = (f"the message was built from the generated gate block ({proved_by}), so its "
+                f"{len(truth)} shape number(s) are the tool's own and cannot diverge")
     return Assertion(18, "commit shape numbers match the map", good, total, tuple(hits), note)
 
 

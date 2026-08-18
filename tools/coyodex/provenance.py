@@ -179,8 +179,20 @@ USAGE = """usage: coyodex provenance stamp [<repo>] [--mode build|accept|rebuild
 stamp   Record this session's id + minute-precise build time in <repo>/.coyodex/provenance.json —
         the file `finalize` requires before a map is committed. <repo> defaults to the current
         directory. The session id comes from $CLAUDE_CODE_SESSION_ID unless --session-id overrides
-        it. Prints `built_at=...` on stdout so the build can copy that exact minute into the map
-        header's "Built:" cell, keeping header and provenance in lock-step.
+        it.
+
+        --update-header <header-fragment.json>
+                WRITE the stamped minute straight into that fragment's `built`, so the header and
+                provenance cannot disagree. USE THIS. Without it the only way to close the loop is
+                to read `built_at=...` off stdout and hand-write it back, and hand-writing it is a
+                map write in the middle of the one closing sequence: builds did it with a
+                `python3 - <<'PY'` heredoc that json-loads the fragment, sets one string and dumps
+                it back. This flag exists because of that, and a build still hand-rolled it the day
+                after it shipped: this help told the reader to carry the minute across by hand and
+                named no alternative, so the alternative went unfound.
+
+        Prints `built_at=YYYY-MM-DD HH:MM` on stdout either way, so a caller that needs the value
+        for something else still has it.
         Re-stamping the SAME session updates its entry rather than appending a second one.
 
 show    Print the recorded sessions, newest last."""

@@ -199,6 +199,14 @@ def build_record(worklist_claims: list[str], grounding_rows: list[dict],
         # digest is what tells a gate whether anything moved.
         record["claims_superseded"] = len(pinned - live)
         record["claims_added_since"] = len(live - pinned)
+        # COVERAGE OF THE SHIPPED MAP, which none of the counts above states. Every one of them is
+        # pinned to the worklist the skeptics were given, so a build that rewords a claim after the
+        # vote keeps `claims_challenged == claims_total` while the map it ships carries claims
+        # nobody challenged. One did: 209 of 209 in the record, in the rendered view and in the
+        # commit message, against 199 live claims with a verdict. Measured against `votes`, not
+        # derived, because the derivation `total - superseded` only holds when every pinned claim
+        # was voted — which `--partial` exists to allow it not to be.
+        record["claims_live_challenged"] = sum(1 for c in live if c in votes)
         record["live_claims_digest"] = live_claims_digest(live)
     if note:
         record["note"] = note
@@ -634,6 +642,19 @@ def main(argv: list[str] | None = None) -> int:
               + (f" · vs the live map: {record['claims_superseded']} superseded, "
                  f"{record['claims_added_since']} added since the pin" if live_claims is not None
                  else " · no --map, so the record does not state how the live map differs"))
+        # SAY IT AT THE MOMENT IT HAPPENS. The line above is the pinned pass and reads as complete
+        # even when the shipped map is not; a build that saw only that line wrote "All 209 claims
+        # were challenged" into a permanent note. `anchor-drift` had already said 199 of 209 ten
+        # turns earlier, and nothing tied the two together.
+        live_done = record.get("claims_live_challenged")
+        if live_claims is not None and isinstance(live_done, int):
+            live_total = len(set(live_claims))
+            if live_done < live_total:
+                print(f"  NOTE: the SHIPPED map carries {live_total} claim(s), of which "
+                      f"{live_done} have a verdict — {live_total - live_done} do NOT. They were "
+                      f"minted after the worklist was pinned, so no skeptic saw them. Challenge "
+                      f"them, or say so in `--note`: `claims_challenged` counts the pinned "
+                      f"worklist and will keep reading as full coverage.")
     elif as_json:
         print(text)
     else:

@@ -2956,6 +2956,62 @@ def test_the_honest_version_of_the_same_counts_passes_and_reports_the_right_cove
     assert any("do not add up" in p for p in problems_of(m))
 
 
+def test_a_map_carrying_claims_nobody_challenged_says_so():
+    """The pinned counts read as full coverage and the shipped map is not fully covered.
+
+    A finished map recorded `claims_total 209, claims_challenged 209` under a note opening "All 209
+    claims were challenged", while ten of its own live claims had no verdict: the build reworded
+    three rule statements after the vote, retiring ten pinned claims and minting ten fresh ones.
+    Every pinned number stayed true. `anchor-drift` printed "challenged 199 of 209" in the same
+    build and nothing tied the two together."""
+    m = make_grounded_model(claims_total=209, claims_challenged=209, claims_confirmed=209,
+                            claims_superseded=10, claims_added_since=10,
+                            claims_live_challenged=199)
+    warns = warnings_of(m)
+    hit = [w for w in warns if "PINNED worklist, not the shipped map" in w]
+    assert len(hit) == 1, warns
+    assert "10 of the shipped map's 209 claim(s) have NO verdict" in hit[0]
+    assert "199 do" in hit[0]
+    # …and it is ADVISORY, never blocking: the record is arithmetically sound, and which claims to
+    # re-challenge is a judgement.
+    assert not any("shipped map" in p for p in problems_of(m))
+
+
+def test_full_live_coverage_is_silent():
+    """The ordinary build rewords nothing after the vote, and must hear nothing about it."""
+    m = make_grounded_model(claims_total=209, claims_challenged=209, claims_confirmed=209,
+                            claims_live_challenged=209)
+    assert not any("PINNED worklist, not the shipped map" in w for w in warnings_of(m))
+
+
+def test_a_record_predating_the_live_count_falls_back_to_a_LOWER_bound():
+    """Every map built before `claims_live_challenged` existed still carries `claims_added_since`,
+    and a claim minted after the pin cannot have a verdict. That makes it a lower bound rather than
+    the exact figure — a `--partial` pass can also leave a PINNED claim unvoted, which this cannot
+    see. The message must say which of the two it is reading, because "at least 10" and "exactly 10"
+    invite different next steps."""
+    m = make_grounded_model(claims_total=209, claims_challenged=209, claims_confirmed=209,
+                            claims_superseded=10, claims_added_since=10)
+    hit = [w for w in warnings_of(m) if "PINNED worklist, not the shipped map" in w]
+    assert len(hit) == 1
+    assert "at least 10" in hit[0] and "lower bound" in hit[0]
+
+
+def test_the_live_coverage_advisory_does_not_reuse_the_thin_coverage_threshold():
+    """One unchallenged live claim in a large map is still a claim the record says was challenged,
+    and an already-partial map is where a reader most needs to know which surface the number covers.
+    This map is thin AND reworded; both advisories must fire, not one masking the other."""
+    m = make_grounded_model(claims_total=1000, claims_challenged=100, claims_confirmed=100,
+                            claims_superseded=0, claims_added_since=1,
+                            claims_live_challenged=1000)
+    warns = warnings_of(m)
+    assert any("Grounding is partial" in w for w in warns), warns
+    m2 = make_grounded_model(claims_total=1000, claims_challenged=1000, claims_confirmed=1000,
+                             claims_superseded=0, claims_added_since=1,
+                             claims_live_challenged=1000)
+    assert any("PINNED worklist, not the shipped map" in w for w in warnings_of(m2))
+
+
 def test_an_unverifiable_verdict_is_a_first_class_outcome():
     """`method.md` allows three verdicts (`true|false|"unverifiable"`). A two-term check would force a
     build to fold the third into one of the others, which is what makes a grounding record lie.
@@ -3024,6 +3080,48 @@ def test_ignore_exceptions_re_reads_the_map_with_every_recorded_line_dropped():
         # and it is a READ: the file on disk is untouched
         assert "Balance exceptions" in p.read_text()
         assert "recorded line(s) were dropped" not in plain.stdout
+
+
+def test_ignore_exceptions_does_not_report_a_stale_view_on_a_current_one():
+    """The flag strips the recorded lines from the IN-MEMORY model, and the view-freshness check
+    re-renders that model and compares it to `project-map.md` on disk. So the one command
+    `method.md` prescribes for re-reading exceptions told the operator their view was stale — on
+    every map carrying any recorded exception, and on a view byte-identical to a fresh `render`.
+
+    The A/B is the whole test: the same map, the same `.md`, with and without the flag."""
+    import subprocess
+    import sys
+    from coyodex.views import model_to_markdown
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "project-map.json"
+        doc = {"format": FORMAT, "title": "T", "goal": "g",
+               "extras": [{"heading": "Balance exceptions", "body": "UC1: granularity — a why.\n"}]}
+        p.write_text(json.dumps(doc), encoding="utf-8")
+        # A view that IS current, written the way `coyodex render` writes it.
+        (Path(tmp) / "project-map.md").write_text(
+            model_to_markdown(load_model(p.read_text(encoding="utf-8"))), encoding="utf-8")
+        plain = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p)],
+                               capture_output=True, text=True)
+        rescan = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p),
+                                 "--ignore-exceptions"], capture_output=True, text=True)
+        assert "differs from the view generated" not in plain.stdout, plain.stdout
+        assert "differs from the view generated" not in rescan.stdout, rescan.stdout
+        # …and the flag still did its job, so the silence is not the flag having become a no-op.
+        assert "1 recorded line(s) were dropped" in rescan.stdout
+
+
+def test_a_genuinely_stale_view_is_still_caught_without_the_flag():
+    """The suppression above is scoped to the edited-model run. A plain `validate` must still say
+    so, or the fix would have traded a false report for a missed one."""
+    import subprocess
+    import sys
+    with tempfile.TemporaryDirectory() as tmp:
+        p = Path(tmp) / "project-map.json"
+        p.write_text(json.dumps({"format": FORMAT, "title": "T", "goal": "g"}), encoding="utf-8")
+        (Path(tmp) / "project-map.md").write_text("hand-edited\n", encoding="utf-8")
+        plain = subprocess.run([sys.executable, "-m", "coyodex.validate_model", str(p)],
+                               capture_output=True, text=True)
+        assert "differs from the view generated" in plain.stdout, plain.stdout
 
 
 def test_one_scoped_runs_in_record_does_not_silence_a_sibling_group():

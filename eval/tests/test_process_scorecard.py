@@ -1004,6 +1004,73 @@ def test_a18_says_so_when_a_commit_had_no_generated_line_to_check_against():
     turns = [make_turn(1, make_bash("git commit -m 'map: 416 backbone edges'"))]
     a = P.assert_18_commit_shape_matches_the_map(turns)
     assert a.of == 0 and "no generated" in (a.note or ""), a
+GATE_8 = ("Shape: 66 components in 14 subsystems, 55 entities in 8 subdomains, 40 deps, "
+          "26 use cases, 365 edges, 36 flows/sub-flows, 281 entry points, 26 security rows.")
+
+
+def make_emit_then_commit(commit_cmd: str) -> list:
+    """`finalize` emits the gate block, a later turn cats it, then `commit_cmd` commits.
+
+    The `cat` turn is what puts the Shape line in reach at all — `--emit-gate-block` prints only
+    "wrote the commit-message gate block to <path>", never the numbers."""
+    return [make_turn(1, make_bash('coyodex finalize m.json --emit-gate-block "$SC/gate-block.txt"',
+                                   uid="f"),
+                      results=(("f", "finalize: wrote the commit-message gate block to gate-block.txt"),)),
+            make_turn(2, make_bash('cat "$SC/gate-block.txt"', uid="c"), results=(("c", GATE_8),)),
+            make_turn(3, make_bash(commit_cmd))]
+
+
+def test_a18_scores_a_message_assembled_from_the_generated_gate_block():
+    """The blindest case, and it needed the build to behave WELL to reach it.
+
+    A live build ran `{ echo subject; echo; cat "$SC/gate-block.txt"; } > "$SC/commit-msg.txt"` and
+    then `git commit -F "$SC/commit-msg.txt"`. Both halves are what the tooling and the method ask
+    for, so no number appears in the command or its result, and this assertion reported `n/a 0/0`
+    on a commit whose every figure was correct."""
+    turns = make_emit_then_commit(
+        '{ echo "docs: the map"; echo; cat "$SC/gate-block.txt"; } > "$SC/commit-msg.txt"; '
+        'git commit -F "$SC/commit-msg.txt"')
+    a = P.assert_18_commit_shape_matches_the_map(turns)
+    assert (a.observed, a.of) == (8, 8), a
+    assert "gate-block.txt" in (a.note or ""), a.note
+
+
+def test_a18_scores_a_commit_that_passes_the_generated_file_straight_to_dash_F():
+    """The shorter form of the same chain, with no intermediate file to prove."""
+    turns = make_emit_then_commit('git commit -F "$SC/gate-block.txt"')
+    a = P.assert_18_commit_shape_matches_the_map(turns)
+    assert (a.observed, a.of) == (8, 8), a
+
+
+def test_a18_still_scores_nothing_for_a_message_file_nobody_can_show_came_from_the_tool():
+    """The proof is a chain, not a guess. A `-F` on a file with no link to `--emit-gate-block` is
+    exactly the case where the numbers really ARE unchecked, and inflating it to a pass would make
+    this assertion a liar about the thing it exists to catch."""
+    turns = make_emit_then_commit('git commit -F /tmp/msg.txt')
+    a = P.assert_18_commit_shape_matches_the_map(turns)
+    assert a.of == 0, a
+    assert "gate-block" not in (a.note or ""), a.note
+
+
+def test_a18_still_catches_a_number_that_drifted_even_when_the_file_is_provable():
+    """The chain must not become a blanket pass. Numbers present in the commit are compared as
+    before; the file-provenance path is the FALLBACK for when there are none."""
+    turns = make_emit_then_commit(
+        'cat "$SC/gate-block.txt" > "$SC/msg.txt"; git commit -F "$SC/msg.txt" '
+        '# 66 components, 416 edges')
+    a = P.assert_18_commit_shape_matches_the_map(turns)
+    assert (a.observed, a.of) == (1, 2), a
+    assert any("416" in str(e.detail) for e in a.evidence), a.evidence
+
+
+def test_a18_matches_a_path_spelled_differently_in_the_two_turns():
+    """`--emit-gate-block "$SC/gate-block.txt"` and a commit naming `./gate-block.txt` are one file.
+    The shell variable never expands here, so the basename is the only part that survives."""
+    turns = make_emit_then_commit('git commit -F ./gate-block.txt')
+    a = P.assert_18_commit_shape_matches_the_map(turns)
+    assert (a.observed, a.of) == (8, 8), a
+
+
 def test_a21_reads_only_the_final_assemble():
     """An unhealed count mid-build is expected and drains as the trace lands; only the last one
     means anything. A live build was told UNHEALED 4 at four successive assembles and shipped."""

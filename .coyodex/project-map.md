@@ -1316,7 +1316,7 @@ Derived from the business rules marked `access` (T7) — the decision IS the sur
 
 ## Grounding — how much of this map was challenged
 
-**185 of 185 claim(s) challenged** by fresh-context skeptics — 182 confirmed, 3 refuted, 0 unverifiable.
+**185 of 185 claim(s) challenged** by fresh-context skeptics — 182 confirmed, 3 refuted, 0 unverifiable. That is the PINNED worklist: the claim surface the skeptics were handed.
 
 > No `live_claims_digest`: nothing can confirm this record describes the map as it now stands.
 

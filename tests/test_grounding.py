@@ -250,8 +250,58 @@ def test_without_the_live_map_the_record_is_exactly_as_before():
     rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
     rec, errors = build_record(pinned, rows)
     assert not errors
-    for field in ("claims_superseded", "claims_added_since", "live_claims_digest"):
+    for field in ("claims_superseded", "claims_added_since", "live_claims_digest",
+                  "claims_live_challenged"):
         assert field not in rec, field
+
+
+def make_reworded_pass() -> dict:
+    """A COMPLETE pass whose map was then reworded — the shape that shipped 209 of 209 over 199.
+
+    Three claims pinned and all three voted; the build then rewords `c` into `c-narrowed`, so the
+    shipped map carries a claim no skeptic saw while every pinned count stays true."""
+    from coyodex.grounding import build_record
+    pinned = ["a", "b", "c"]
+    rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
+    rec, errors = build_record(pinned, rows, live_claims=["a", "b", "c-narrowed"])
+    assert not errors
+    return rec
+
+
+def test_the_record_states_how_much_of_the_SHIPPED_map_was_challenged():
+    """The pinned counts cannot say it, and a build read them as if they could.
+
+    `claims_challenged == claims_total` here and is RIGHT: all three pinned claims were voted. The
+    shipped map still carries one claim with no verdict, and nothing recorded that."""
+    rec = make_reworded_pass()
+    assert rec["claims_total"] == 3 and rec["claims_challenged"] == 3
+    assert rec["claims_live_challenged"] == 2
+
+
+def test_live_challenged_is_measured_not_derived_from_the_pinned_counts():
+    """`claims_total - claims_superseded` is the tempting derivation, and it is wrong under
+    `--partial`: there the unvoted and the superseded claims overlap by an amount no pinned count
+    records. `c` is both superseded and unvoted; `b` is live and unvoted."""
+    from coyodex.grounding import build_record
+    pinned = ["a", "b", "c"]
+    rows = [{"claim": "a", "grounded": True, "evidence": "f.py:1"}]
+    rec, errors = build_record(pinned, rows, live_claims=["a", "b"], partial=True,
+                               note="only the top of the ranked worklist")
+    assert not errors
+    assert rec["claims_live_challenged"] == 1                    # only `a` has a verdict
+    # …while the tempting derivation says 2. `build_record` returns `dict[str, object]`, so the
+    # subtraction is spelled through `int()` rather than on the raw values.
+    assert int(str(rec["claims_total"])) - int(str(rec["claims_superseded"])) == 2
+
+
+def test_a_complete_pass_over_an_unchanged_map_reports_full_live_coverage():
+    """It must not cry wolf on the ordinary case, which is every build that rewords nothing."""
+    from coyodex.grounding import build_record
+    pinned = ["a", "b"]
+    rows = [{"claim": c, "grounded": True, "evidence": "f.py:1"} for c in pinned]
+    rec, errors = build_record(pinned, rows, live_claims=["a", "b"])
+    assert not errors
+    assert rec["claims_live_challenged"] == 2 == rec["claims_total"]
 
 
 def test_the_digest_ignores_order_and_duplication():

@@ -371,7 +371,7 @@ Legacy `security[]` rows: this map predates the fold and has not been rebuilt.
 
 ## Grounding — how much of this map was challenged
 
-**42 of 42 claim(s) challenged** by fresh-context skeptics — 42 confirmed, 0 refuted, 0 unverifiable.
+**42 of 42 claim(s) challenged** by fresh-context skeptics — 42 confirmed, 0 refuted, 0 unverifiable. That is the PINNED worklist: the claim surface the skeptics were handed.
 
 > No `live_claims_digest`: nothing can confirm this record describes the map as it now stands.
 

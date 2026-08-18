@@ -73,6 +73,12 @@ COMMAND_MODULE: dict[str, str] = {
     "balance": "balance",
     "finalize": "finalize", "grounding": "grounding", "record": "record",
     "scope": "scope",
+    # `provenance` was missing, and an unlisted command does not merely go unchecked: attribution
+    # runs from one recognised command to the NEXT one, so every flag the method passes to an
+    # unlisted command is charged to whichever listed command preceded it. The moment
+    # `provenance stamp` was given `--mode` / `--update-header` in the closing-sequence block, both
+    # were reported against `assemble` — a failure naming the wrong command and the wrong module.
+    "provenance": "provenance",
 }
 
 #: The extras headings some tool actually READS (the escape tokens that silence an advisory).

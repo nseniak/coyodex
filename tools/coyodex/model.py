@@ -554,6 +554,24 @@ class Grounding:
     claims_added_since: int = 0
     live_claims_digest: str = ""
 
+    #: `claims_live_challenged` — how many of the SHIPPED map's claims carry a verdict. The five
+    #: pinned counts above describe the worklist the skeptics were GIVEN, which is right, and is
+    #: also how a finished map came to record `claims_total 209, claims_challenged 209` while ten of
+    #: its own live claims had never been challenged: the build reworded three rule statements and
+    #: one site note AFTER the vote, retiring ten pinned claims and minting ten fresh ones. Every
+    #: pinned number stayed true, `claims_added_since` said 10, and the headline still read as full
+    #: coverage — in the map, in the rendered view, and in the commit message.
+    #:
+    #: It is NOT derivable from the pinned counts in general. On a COMPLETE pass it equals
+    #: `claims_total - claims_superseded`, because every pinned claim was voted; under `--partial`
+    #: the unvoted and the superseded claims overlap by an unknown amount and that identity stops
+    #: holding. So it is measured against the live set and recorded, never inferred.
+    #:
+    #: Zero on a record written before this field existed, and on one written without `--map` (there
+    #: is no live set to measure). Both cases fall back to `claims_added_since`, which is a LOWER
+    #: bound on the live claims with no verdict rather than the exact figure.
+    claims_live_challenged: int = 0
+
     note: str = ""                   # how claims were triaged when coverage is partial
 
 

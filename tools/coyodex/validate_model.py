@@ -2287,7 +2287,54 @@ def _grounding_warnings(m: ProjectModel) -> list[str]:
                        f"{g.claims_total - grounded} remaining claims are good leads, not facts — say "
                        "which claims were prioritized in `grounding.note`"
                        + ("" if g.note else " (currently empty)"))
+    out.extend(_grounding_live_coverage_findings(g))
     return out
+
+
+def _grounding_live_coverage_findings(g: Grounding) -> list[str]:
+    """ADVISORY: the SHIPPED map carries claims that no skeptic ever saw.
+
+    Every count in `_check_grounding_arithmetic` is pinned to the worklist the skeptics were given,
+    and that pin is deliberate (see `Grounding`). The consequence nobody was watching: a build that
+    rewords a claim AFTER the vote retires a pinned claim and mints a live one, and the pinned
+    counts go on reading as full coverage. A shipped map recorded `claims_total 209,
+    claims_challenged 209` with the note "All 209 claims were challenged", while 10 of its own live
+    claims had no verdict. `anchor-drift --verdicts` had printed "challenged 199 of 209" during that
+    same build, and `finalize` printed it again into the commit message beside the 209 — two numbers
+    for one map, four lines apart, with nothing saying they measure different sets.
+
+    THE SHARE IS NOT THE POINT, so this does not reuse `_GROUNDING_THIN`. One unchallenged live
+    claim in a map of a thousand is still a claim the record says was challenged, and the
+    already-partial map is the one whose reader most needs to know which surface the number covers.
+
+    `claims_live_challenged` is exact and is preferred. When it is absent — a record written before
+    the field existed, or written without `--map` — `claims_added_since` is the fallback and is a
+    LOWER bound: it counts claims minted after the pin, and misses a pinned claim left unvoted by a
+    `--partial` pass. The message says which of the two it is reading, because "at least 10" and
+    "exactly 10" invite different next steps."""
+    if g is None or not _any_grounding_count(g):
+        return []
+    if g.claims_live_challenged > 0:
+        live_total = g.claims_total - g.claims_superseded + g.claims_added_since
+        gap = live_total - g.claims_live_challenged
+        exact = True
+    else:
+        live_total, gap, exact = 0, g.claims_added_since, False
+    if gap <= 0:
+        return []
+    if exact:
+        head = (f"{gap} of the shipped map's {live_total} claim(s) have NO verdict "
+                f"({g.claims_live_challenged} do)")
+    else:
+        head = (f"at least {gap} of the shipped map's claim(s) have NO verdict — the record predates "
+                f"`claims_live_challenged`, so this is `claims_added_since` and is a lower bound")
+    return [f"Grounding covers the PINNED worklist, not the shipped map: {head}. "
+            f"`claims_challenged` ({g.claims_challenged} of {g.claims_total}) counts the worklist "
+            f"the skeptics were given, and a claim reworded after the vote leaves that number "
+            f"untouched while the map carries a claim nobody challenged. Challenge them and re-run "
+            f"`coyodex grounding write`, or say in `grounding.note` which claims were minted after "
+            f"the pin and why they were not re-challenged — a note that says 'all N claims were "
+            f"challenged' is reporting the pin, not the map."]
 
 
 def _grounding_split_findings(g: Grounding) -> list[str]:
@@ -3966,10 +4013,18 @@ def _check_view_fresh(m: ProjectModel, model_path: Path) -> list[str]:
 
 def validate_model(m: ProjectModel, model_path: Path | None = None, *,
                    check_sources: bool = False, check_coverage: bool = False,
-                   repo_root: Path | None = None,
+                   repo_root: Path | None = None, model_is_edited: bool = False,
                    stats: dict[str, int] | None = None) -> tuple[list[str], list[str]]:
     """Every semantic check over a structurally-valid model; returns (problems, warnings) exactly
     like the v1 validator did, so the profiler and the CLI share one orchestration.
+
+    `model_is_edited` says the caller handed in a model it has DELIBERATELY changed from the file at
+    `model_path` — today only `--ignore-exceptions`, which strips the recorded lines to show what
+    they silence. It suppresses the view-freshness check and nothing else. That check re-renders the
+    in-memory model and compares it to `project-map.md` on disk, so an edited model makes it report
+    a stale view on a map whose view is byte-identical to a fresh `render`. It fired on every map
+    carrying any recorded exception, under the one flag `method.md` prescribes for re-reading
+    exceptions, telling the operator to regenerate a file that was already correct.
 
     `stats` is an optional out-param (same shape as `assemble`'s reconcile stats) recording HOW MUCH
     the repo-reading flags actually read. It exists because `validate` and `validate --check-sources`
@@ -4202,7 +4257,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
                             f"(they have a real call site — drop the marker, or drop the edge if it "
                             f"is `no_call_site`): {shown}")
 
-    if model_path is not None:
+    if model_path is not None and not model_is_edited:
         warnings.extend(_check_view_fresh(m, model_path))
     return problems, warnings
 
@@ -4400,7 +4455,7 @@ def _run(argv: list[str] | None = None) -> int:
     vstats: dict[str, int] = {}
     problems, warnings = validate_model(m, path, check_sources=check_sources,
                                         check_coverage=check_coverage, repo_root=repo_root,
-                                        stats=vstats)
+                                        model_is_edited=ignore_exceptions, stats=vstats)
     # What the repo-reading flags actually read. Without this, `validate` and
     # `validate --check-sources` print byte-identical output on a clean map, so passing the flag is
     # indistinguishable from forgetting it — and a lead cannot tell a silent pass from a no-op.

@@ -661,10 +661,19 @@ def model_to_markdown(m: ProjectModel) -> str:
         g = m.grounding
         body = [f"**{g.claims_challenged} of {g.claims_total} claim(s) challenged** by "
                 f"fresh-context skeptics — {g.claims_confirmed} confirmed, {g.claims_refuted} "
-                f"refuted, {g.claims_unverifiable} unverifiable.", ""]
+                f"refuted, {g.claims_unverifiable} unverifiable. That is the PINNED worklist: the "
+                f"claim surface the skeptics were handed.", ""]
         if g.claims_total and g.claims_challenged < g.claims_total:
             body += [f"> Coverage is PARTIAL: {g.claims_total - g.claims_challenged} claim(s) were "
                      f"never challenged. Those are good leads, not facts.", ""]
+        # THE SHIPPED MAP'S OWN COVERAGE, which the headline above does not state. A reader who
+        # stopped at the first line read "209 of 209" on a map carrying ten claims no skeptic saw.
+        _live_total = g.claims_total - g.claims_superseded + g.claims_added_since
+        if g.claims_live_challenged and g.claims_live_challenged < _live_total:
+            body += [f"> Of the claims THIS map carries, **{g.claims_live_challenged} of "
+                     f"{_live_total} have a verdict**. The other "
+                     f"{_live_total - g.claims_live_challenged} were minted after the worklist was "
+                     f"pinned, so no skeptic saw them.", ""]
         if g.claims_superseded or g.claims_added_since:
             body += [f"Against the shipped map: **{g.claims_superseded} superseded** (pinned claims "
                      f"the reconcile rewrote or removed) and **{g.claims_added_since} added** since "

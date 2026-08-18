@@ -1236,6 +1236,9 @@
         "live_claims_digest": {
           "type": "string"
         },
+        "claims_live_challenged": {
+          "type": "integer"
+        },
         "note": {
           "type": "string"
         }

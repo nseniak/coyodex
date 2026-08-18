@@ -159,3 +159,37 @@ def test_update_header_on_a_missing_file_is_an_error_not_a_silent_skip():
         (repo / ".coyodex").mkdir()
         assert _main(["stamp", str(repo), "--session-id", "s1",
                       "--update-header", str(repo / "nope.json")]) == 2
+
+
+def test_the_stamp_help_names_update_header_in_its_PROSE():
+    """A flag named only in a usage grammar line is a flag no build finds.
+
+    `--update-header` shipped, and the very next build hand-wrote `built` with a
+    `python3 - <<'PY'` heredoc anyway — because the prose here said "copy that exact minute into the
+    map header's Built cell" and named no alternative, and `method.md` said the same in two places.
+    The grammar line had carried the flag the whole time. So this pins the PROSE, not the grammar:
+    the sentence a reader acts on is the one in the body."""
+    from coyodex.provenance import USAGE
+    # The PROSE block, not the grammar: split on the "stamp   " heading that opens the description,
+    # never on the first "stamp" — that one is inside the usage grammar this test exists to look
+    # past, and splitting there passed while the body still said nothing.
+    body = USAGE.split("\nstamp   ", 1)[1].split("\nshow ", 1)[0]
+    assert "--update-header" in body
+    # …and the sentence that sent builds to a heredoc must not come back.
+    assert "copy that exact minute" not in USAGE
+
+
+def test_the_method_prescribes_the_flag_rather_than_a_hand_write():
+    """The other half of the same failure: the closing-sequence block told the build to carry the
+    stamped minute into `header.json` itself, which is an instruction to hand-write a map file in
+    the middle of the one sequence. A build followed it literally, placing that write AFTER
+    `grounding write` — so the last write of the whole build was a hand-script.
+
+    The banned strings are checked against the WHOLE file, so this test's own prose must paraphrase
+    them rather than quote them."""
+    from pathlib import Path as _Path
+    method = (_Path(__file__).resolve().parents[1] / "method.md").read_text(encoding="utf-8")
+    assert "--update-header" in method
+    for banned in ("put that exact minute in header.json",
+                   "put THAT string in header.json"):
+        assert banned not in method, banned

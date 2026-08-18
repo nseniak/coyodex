@@ -1699,8 +1699,10 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     7. coyodex assemble … --reconcile <file>                # carries the RECORD in; idempotent, and
                                                             #   not optional — skip it and the
                                                             #   grounding record never reaches the map
-    8. coyodex provenance stamp <repo>                      # prints built_at=…
-    9. put that exact minute in header.json's `built`, then assemble + render again
+    8. coyodex provenance stamp <repo> --mode build \
+         --update-header .coyodex/build-fragments/header.json   # STAMPS and fills `built` in one
+                                                            #   run. Never hand-write that minute
+    9. assemble + render again, so the filled header reaches the map
    10. coyodex lint-fragment … header.json                  # the one hand-authored fragment
    11. coyodex validate --check-sources → coyodex audit → coyodex render
    12. coyodex finalize … --verdicts <v> … --emit-gate-block <file>   # ONE run, both flags
@@ -1718,6 +1720,15 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
     `--verdicts`, once with `--emit-gate-block` — where the second run overwrote the report and
     dropped its verdict-based anchor-drift leg, including the "challenged N of M" coverage line. The
     flags combine; run it once.
+
+    **Step 8 carries `--update-header` because the step it replaces was an instruction to
+    hand-write a map file** — copy the stamped minute across into `header.json` yourself. It read as
+    a two-line edit and it is one, which is exactly why no build treated it as a defect: one wrote
+    the `built` string with a
+    `python3 - <<'PY'` heredoc AFTER `grounding write`, making that heredoc the last fragment write
+    of the build and scoring L3 assertion 13 zero. The flag that does it had shipped the day before
+    and was named nowhere a build reads — not here, not in `provenance stamp --help`'s prose, only
+    in a usage grammar line. Do not hand-write `built`; there is no case left for it.
 
     Steps 3 and 4 are the change. `fix` edits the ASSEMBLED map, and the source of truth is the
     fragments, so a later `assemble` silently discards every `fix` edit. `--to-reconcile` makes the
@@ -1885,10 +1896,16 @@ So: write `header.json` with `built` **empty**, and fill it from the stamp at th
 conversation built it — run (paths under the coyodex clone, like `.venv/bin/coyodex`):
 
 ```
-.venv/bin/coyodex provenance stamp <repo> --mode build      # NO --built-at: let it take the real clock
-# it prints `built_at=YYYY-MM-DD HH:MM` — put THAT string in header.json's `built`, then
-# re-run `assemble` and `render` so the header and provenance agree.
+.venv/bin/coyodex provenance stamp <repo> --mode build \
+    --update-header <repo>/.coyodex/build-fragments/header.json   # NO --built-at: real clock
+# --update-header writes the stamped minute into `built` for you. Then re-run `assemble` and
+# `render` so the filled header reaches the map.
 ```
+
+**Do not hand-write that minute.** The flag above is the whole step. Without it a build reads
+`built_at=…` off stdout and edits `header.json` by hand, which is a map write in the middle of the
+closing sequence — one build did it with a `python3` heredoc placed after `grounding write`, so the
+last write of the whole build was a hand-script.
 
 Pass `--built-at` only when you are deliberately restating a time you did not just measure (an
 `accept` pass re-stamping an earlier build). On a build it is the flag that makes the map lie.

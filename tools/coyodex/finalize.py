@@ -450,7 +450,14 @@ def _grounding_line(map_path: Path) -> str:
 
     A live commit said "all 446 L2 claims challenged" while the gate block it was pasted beside
     said `challenged 440 of 444`. Both came out of the same build minutes apart; the one a reader
-    sees forever was the flattering one. Emitting it here removes the choice."""
+    sees forever was the flattering one. Emitting it here removes the choice.
+
+    NAMING THE SURFACE is the second half of that, and it was missing. This line used to say "from
+    the map" and quote the PINNED counts, so one commit carries "209 of 209 claim(s) challenged"
+    four lines below this same report's "challenged 199 of 209 worklist claim(s)". Both were true —
+    209 counts the worklist the skeptics were given, 199 counts the claims the shipped map actually
+    carries — and nothing said they measure different sets. The pinned figure stays first, because
+    it is what the skeptics did; the live figure follows whenever it disagrees."""
     try:
         from coyodex.model import load_model
         g = load_model(map_path.read_text(encoding="utf-8")).grounding
@@ -458,9 +465,19 @@ def _grounding_line(map_path: Path) -> str:
         return f"Grounding: UNAVAILABLE — could not re-read {map_path}: {e}"
     if g is None:
         return "Grounding: NO RECORD — nothing in this map says what was challenged."
-    return (f"Grounding (from the map): {g.claims_challenged} of {g.claims_total} claim(s) "
+    line = (f"Grounding (pinned worklist): {g.claims_challenged} of {g.claims_total} claim(s) "
             f"challenged — {g.claims_confirmed} confirmed, {g.claims_refuted} refuted, "
             f"{g.claims_unverifiable} unverifiable.")
+    live_total = g.claims_total - g.claims_superseded + g.claims_added_since
+    if g.claims_live_challenged and g.claims_live_challenged < live_total:
+        line += (f"\nGrounding (shipped map): {g.claims_live_challenged} of {live_total} claim(s) "
+                 f"have a verdict — {live_total - g.claims_live_challenged} were minted after the "
+                 f"worklist was pinned, so no skeptic saw them.")
+    elif not g.claims_live_challenged and g.claims_added_since:
+        line += (f"\nGrounding (shipped map): at least {g.claims_added_since} claim(s) have NO "
+                 f"verdict — minted after the worklist was pinned. This record predates "
+                 f"`claims_live_challenged`, so that is a lower bound.")
+    return line
 
 
 #: Ids an advisory names, for matching against what the map recorded.
