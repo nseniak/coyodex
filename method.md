@@ -1228,9 +1228,10 @@ synthesis → parallel trace.**
   sub-flow between them).
   **The copyable contract is
   [method/templates/trace-contract.md](method/templates/trace-contract.md)** — hand every trace agent
-  that file's contents, changing only the «angle-bracket» slots. **Copy it with a command:**
-  `cp COYODEX_HOME/method/templates/trace-contract.md <scratch>/trace-contract.md`, then fill them in
-  place; a `Read` followed by a `Write` is one keystroke from a rewrite. This was the largest fan-out
+  that file's contents, changing only the «angle-bracket» slots. **Get it with the verb:**
+  `coyodex contract trace > <scratch>/trace-contract.md`, then fill them in
+  place; a `Read` followed by a `Write` is one keystroke from a rewrite, and the verb prints only
+  the agent's half, so the lead-facing header cannot travel with it. This was the largest fan-out
   with no contract of its own, and the rules fan-out shows what that costs: composed from memory, it
   told eleven agents to author a field they must never author, which lint treats as blocking.
   Trace-prompt discipline — what the contract carries, here so you can see what you hand over:
@@ -1469,10 +1470,12 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   one fresh-context skeptic per batch — hand each one
   [method/templates/skeptic-contract.md](method/templates/skeptic-contract.md), the copyable
   contract, rather than composing one from this section. **Copy it with a command, not by reading
-  and retyping** — `cp COYODEX_HOME/method/templates/skeptic-contract.md
+  and retyping** — `coyodex contract skeptic >
   <scratch>/skeptic-contract.md`, then fill the «angle-bracket» slots. The instruction on its own
-  does not stop this: a `Read` followed by a `Write` is one keystroke away from a rewrite, and `cp`
-  is not. For the riskiest claims run **N skeptics + majority vote — with N ODD, and N ≥ 3.**
+  does not stop this: a `Read` followed by a `Write` is one keystroke away from a rewrite, and a
+  verb is not. The verb also prints only the agent's half: a build once filled this template with
+  one text replacement and sent the WHOLE file, so all ten skeptics read the lead's instructions as
+  their own and four were told to open a claims file that does not exist. For the riskiest claims run **N skeptics + majority vote — with N ODD, and N ≥ 3.**
   **Where the cut falls: the WHOLE `security` theme, every batch of it.** "the riskiest claims
   (auth, scoping, encryption)" and "the `security` theme" were both written here and they are not
   the same instruction, so a build had to guess: one triple-voted 80 of the security theme's 123
@@ -1773,28 +1776,20 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 
 **Harvest-prompt template (Phase 1).** The copyable contract is
 [method/templates/harvest-contract.md](method/templates/harvest-contract.md) — hand every harvest
-agent that file's contents, changing only the file list and the background blurb. **Copy it with a
-command, and append the writing rules in the same command:** `{ cat
-COYODEX_HOME/method/templates/harvest-contract.md; sed 's/^/> /'
-COYODEX_HOME/method/templates/writing-rules.md; } > <scratch>/harvest-contract.md`, then fill the
-«angle-bracket» slots in place. **The `sed` is what makes the append work here:** this contract's
-agent-facing half is the `>`-quoted block, and the lead hands over that block with the `> `
-stripped, so writing rules appended unquoted would sit outside the block and never reach an agent.
-The append is not optional: a harvest agent authors every component `purpose` in the map, which is
-the largest block of reader-facing prose there is, and the rules live in one file precisely so two
-contracts cannot drift apart (see *Writing the text a person reads*). Do not `Read` it and `Write` your own — that is one
+agent that file's contents, changing only the file list and the background blurb. **Get it with the verb, never by copying the file:** `coyodex
+contract harvest > <scratch>/harvest-contract.md`, then fill the «angle-bracket» slots in place.
+The verb prints the agent's half and appends the writing rules, so you never handle the template
+and the lead-facing header at its top cannot reach an agent. A harvest agent authors every
+component `purpose` in the map, the largest block of reader-facing prose there is. Do not `Read` it and `Write` your own — that is one
 keystroke from a rewrite, and a retyped contract drifts from the tool it describes, silently
 dropping rules (the anchor rules for `edges[].where`, `subsystems[].source` and `tests[].file` are
 the ones that have gone missing) from the contract every agent is handed.
 
 **Business-rule contract (Phase 3).** The copyable contract is
-[method/templates/rules-contract.md](method/templates/rules-contract.md). Copy it with the same
-append, but WITHOUT the `sed` — `cat COYODEX_HOME/method/templates/rules-contract.md
-COYODEX_HOME/method/templates/writing-rules.md > <scratch>/rules-contract.md` — then fill the
-«angle-bracket» slots, and for the same reason. This contract's agent-facing half is plain text
-below the `---`, not a quoted block, so quoting the appended rules would put a literal `> ` in front
-of every line an agent reads. A rule agent authors every `statement` and every `risk`, the two
-fields a reader meets when asking what the product decides. This template exists because one build had none:
+[method/templates/rules-contract.md](method/templates/rules-contract.md). Get it the same way —
+`coyodex contract rules > <scratch>/rules-contract.md` — then fill the «angle-bracket» slots, and
+for the same reason. A rule agent authors every `statement` and every `risk`, the two fields a
+reader meets when asking what the product decides. This template exists because one build had none:
 the lead composed the rules contract from prose and told all eleven rule agents to put a `block`
 field on every rule, which `lint-fragment` treats as BLOCKING. The failure fired in 13 of that
 build's 71 agent transcripts and every one of the eleven fragments had to be repaired. `block` is

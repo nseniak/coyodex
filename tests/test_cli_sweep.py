@@ -102,6 +102,8 @@ def _with_coyodex_dir(tmp: Path) -> Path:
 RECIPES: dict[str, tuple] = {
     "validate":      (lambda t, m: ["validate", str(m), "--check-sources", "--check-coverage"], OK),
     "audit":         (lambda t, m: ["audit", str(m), "--json"], OK),
+    # Takes a contract NAME, never a map: it prints the text one fan-out agent receives.
+    "contract":      (lambda t, m: ["contract", "harvest"], OK),
     "balance":       (lambda t, m: ["balance", str(m)], OK),
     "render":        (lambda t, m: ["render", str(m), str(t / "out.md")], OK),
     "assemble":      (lambda t, m: ["assemble", *[str(p) for p in FRAGMENTS],

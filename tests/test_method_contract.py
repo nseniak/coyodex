@@ -66,6 +66,7 @@ METHOD_DOCS: tuple[Path, ...] = (
 #: command name -> the module implementing it, as `cli.py` dispatches.
 COMMAND_MODULE: dict[str, str] = {
     "preindex": "preindex", "validate": "validate_model", "audit": "audit_model",
+    "contract": "contract",
     "render": "viewer/render", "serve": "viewer/serve", "assemble": "assemble",
     "lint-fragment": "lint_fragment", "anchor-drift": "anchor_drift", "fix": "fix",
     "dump": "dump", "diff": "mapdiff", "reconcile": "reconcile_build",
@@ -1072,40 +1073,27 @@ def test_the_writing_rules_file_exists_and_carries_all_six_rules():
         assert f"{n}. **" in text, f"rule {n} is not a numbered item — the contract quotes them by number"
 
 
-def test_every_authoring_contract_is_assembled_with_the_writing_rules_appended():
-    """The method tells the lead to build each contract with one command. If that command still says
-    a bare `cp`, the agents that write every purpose in the map never see a writing rule — the exact
-    shape of the missing-rules-contract failure this template family already paid for once.
+def test_the_method_hands_every_contract_over_with_the_verb_not_a_copy():
+    """The lead must never handle a template. A `cp` or a `cat` puts the file in the lead's hands,
+    and that is how a build sent the WHOLE skeptic template to ten skeptics: they read the lead's
+    instructions as their own, and four were told to open a claims file that does not exist.
 
-    Read the sentence that names the contract, not the whole document: method.md mentions
-    writing-rules.md elsewhere, and a document-wide search would pass while a command still said
-    `cp` (the weaker version of this test did exactly that)."""
+    Read the sentence that names the scratch file, not the whole document: method.md mentions the
+    verb elsewhere, and a document-wide search would pass while one command still said `cp`."""
     flat = " ".join((REPO_ROOT / "method.md").read_text(encoding="utf-8").split())
-    for name, authored in _AUTHORING_CONTRACTS:
-        at = flat.find(f"<scratch>/{name}`")
-        assert at != -1, f"method.md no longer shows a command writing <scratch>/{name}"
-        command = flat[max(0, at - 400):at]
-        assert "method/templates/writing-rules.md" in command, (
-            f"the command that builds <scratch>/{name} does not append writing-rules.md — its "
-            f"agents author {authored} with no writing rule in the prompt")
+    for name in ("harvest", "trace", "rules", "skeptic"):
+        at = flat.find(f"<scratch>/{name}-contract.md`")
+        assert at != -1, f"method.md no longer shows a command writing <scratch>/{name}-contract.md"
+        command = flat[max(0, at - 200):at]
+        assert f"coyodex contract {name} >" in command, (
+            f"the command that builds <scratch>/{name}-contract.md does not use the verb: {command[-120:]!r}")
 
 
-def test_the_harvest_append_is_quoted_and_the_rules_append_is_not():
-    """The two contracts hand over their agent-facing half differently: harvest strips `> ` from a
-    quoted block, the rules contract takes plain text below a `---`. Append the rules the wrong way
-    round and they either fall outside the block an agent is given, or arrive with a literal `> ` on
-    every line. This is the half of the seam a path-only check cannot see."""
-    flat = " ".join((REPO_ROOT / "method.md").read_text(encoding="utf-8").split())
-    harvest = flat[max(0, flat.find("<scratch>/harvest-contract.md`") - 400):
-                   flat.find("<scratch>/harvest-contract.md`")]
-    assert "sed 's/^/> /'" in harvest, (
-        "the harvest append does not quote writing-rules.md — unquoted lines sit outside the "
-        "`>`-block the lead hands to an agent, so no harvest agent ever reads them")
-    rules = flat[max(0, flat.find("<scratch>/rules-contract.md`") - 400):
-                 flat.find("<scratch>/rules-contract.md`")]
-    assert "sed 's/^/> /'" not in rules, (
-        "the rules append quotes writing-rules.md — that contract's agent half is plain text, so "
-        "every appended line would reach the agent with a literal '> ' in front of it")
+def test_the_method_no_longer_teaches_copying_a_template_by_hand():
+    """Both shapes of the old instruction, so neither can come back quietly."""
+    prose = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
+    for dead in ("cp COYODEX_HOME/method/templates", "cat COYODEX_HOME/method/templates"):
+        assert dead not in prose, f"method.md still teaches `{dead}`"
 
 
 def test_the_six_rules_are_stated_in_exactly_one_place():

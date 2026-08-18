@@ -30,7 +30,7 @@ COMMAND_MODULE: dict[str, str] = {
     "dump": "dump", "diff": "mapdiff", "reconcile": "reconcile_build",
     "balance": "balance", "finalize": "finalize",
     "grounding": "grounding", "record": "record", "scope": "scope",
-    "provenance": "provenance",
+    "provenance": "provenance", "contract": "contract",
 }
 
 

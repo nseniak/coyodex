@@ -309,7 +309,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R57 — Three builds retyped the skeptic contract
 - **Where**: `method.md`
-- **Anchor**: `is one keystroke away from a rewrite, and `cp` is not.`
+- **Anchor**: `is one keystroke away from a rewrite, and a`
 - **Evidence**: Three builds in a row composed the skeptic contract from prose while the template's own header told them not to.
 
 ### R58 — The two-skeptic split the lead broke by hand

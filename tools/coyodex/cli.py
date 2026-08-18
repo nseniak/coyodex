@@ -20,6 +20,10 @@ Commands:
   validate   Validate a map (schema + semantic checks — is it WELL-FORMED?).
   audit      Adversarial pass over a built map (is it SELF-CONTRADICTORY?): L1
              deterministic contradiction checks + an L2 grounding worklist.
+  contract   Print exactly the text one fan-out agent should receive (harvest, trace,
+             rules, skeptic) — the contract's agent half, with the writing rules
+             appended for the phases whose agents author map prose. The lead never
+             handles the template, so its lead-facing header cannot reach an agent.
   render     Render a map's committed markdown view (model → project-map.md). The
              interactive diagram is served by `serve`, not written to a file.
   serve      Serve the interactive viewer + file browser + code viewer over a local
@@ -111,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
     if cmd == "audit":
         from coyodex import audit_model  # stdlib-only
         return audit_model.main(_default_map(rest))
+    if cmd == "contract":
+        from coyodex import contract  # stdlib-only; reads the templates, calls no model
+        return contract.main(rest)
     if cmd == "render":
         from coyodex.viewer import render  # stdlib-only
         return render.main(rest)
