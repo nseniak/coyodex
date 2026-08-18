@@ -1936,10 +1936,12 @@ def test_the_business_logic_tab_is_wired_at_every_registration_point() -> None:
     assert "HAS_RULES = !!b.hasBusinessRules" in VIEWER_JS               # applyBundle
     assert "'tests', 'rules'" in VIEWER_JS                              # TEXT_VIEWS
     assert "kind === 'rules'" in VIEWER_JS                              # topView
-    assert "if (s.kind === 'rules') return 'Rules'" in VIEWER_JS  # stateTitle
-    assert "if (s.kind === 'rules') return [{ kind: 'rules' }]" in VIEWER_JS  # VIEW_Q trail
+    assert "if (!s.blk) return 'Rules';" in VIEWER_JS                  # stateTitle, the tab itself
+    assert "const g = ruleBlockGroups().find((x) => x.id === s.blk);" in VIEWER_JS  # …and one area
+    assert "return s.blk ? [{ kind: 'rules' }, { kind: 'rules', blk: s.blk }] : [{ kind: 'rules' }];" \
+        in VIEWER_JS  # the trail: the tab, then the decision area it drilled into
     assert "rules: 'What does this product DECIDE" in VIEWER_JS         # the view's question
-    assert "if (s.kind === 'rules') {\n    const jumped = renderRules(s);" in VIEWER_JS   # render
+    assert "if (s.kind === 'rules') {\n    renderRules(s);" in VIEWER_JS   # render
     assert "b.dataset.view === 'rules' && !HAS_RULES" in VIEWER_JS      # the tab gate
 
 
@@ -2107,7 +2109,9 @@ def test_a_rules_crumb_walks_back_to_its_own_decision_area() -> None:
     # …through the SAME re-keying the list uses. Reading the raw `r.block` asked the list to scroll
     # to `#blk-BLK9` for a rule whose `BLK9` the map never declared — no card, so the crumb dumped
     # the reader at the top instead of on the group holding the rule they just left.
-    assert "{ kind: 'rules', blk: ruleGroupKeyFor(r && r.block) }" in trail[:400]
+    assert "{ kind: 'rules', blk: ruleGroupKeyFor(r && r.block) }" in trail[:800]
+    # Three crumbs now the tab lands on area CARDS: Rules > the area > the rule.
+    assert "return [{ kind: 'rules' }, { kind: 'rules', blk: ruleGroupKeyFor(r && r.block) }," in trail[:800]
     assert "ruleBlockGroups().some((g) => g.id === bid)" in _js_function("ruleGroupKeyFor")
     # …and the area chip on the page itself makes the same move.
     assert "go({ kind: 'rules', blk: b.getAttribute('data-blk') })" in _js_function("renderRule")

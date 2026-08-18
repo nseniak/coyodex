@@ -346,16 +346,14 @@ def test_the_section_index_is_ONE_component_used_by_every_card_list_tab() -> Non
     js = (VIEWER_DIR / "viewer.js").read_text()
     assert "function tabIndexHtml(secs)" in js and "function bindTabIndex(wrap)" in js
     assert "function bindSysIndex" not in js and "sys-index" not in js   # the private copy is gone
-    for fn in ("renderUseCases", "renderRules"):
-        body = js[js.index(f"function {fn}("):js.index("\nfunction ", js.index(f"function {fn}(") + 10)]
-        assert "tabIndexHtml(" in body and "bindTabIndex(" in body, fn
-    # The System tab splits the pair across its two levels: the entry-point page indexes its KINDS
-    # (built with the collection, in systemSections) and the page that renders it binds the bar. Its
-    # cards need no index — they ARE the index of that tab.
-    built = js[js.index("function systemSections() {"): js.index("\nfunction firstSentence(")]
-    assert "tabIndexHtml(kindSecs)" in built
-    shown = js[js.index("function renderSystemSection(sysId) {"):]
-    assert "bindTabIndex(" in shown[: shown.index("\n}")]
+    # ONE page still stacks several groups on one scroll and therefore still needs an index: the
+    # use-case list. System and Rules stopped stacking when they became cards, so they index nothing —
+    # a card grid IS the index of what is behind it. The component stays shared, not re-privatised.
+    body = js[js.index("function renderUseCases("):js.index("\nfunction ", js.index("function renderUseCases(") + 10)]
+    assert "tabIndexHtml(" in body and "bindTabIndex(" in body
+    for fn in ("renderRules", "renderSystem"):
+        gone = js[js.index(f"function {fn}("):js.index("\nfunction ", js.index(f"function {fn}(") + 10)]
+        assert "tabIndexHtml(" not in gone, fn
     # One section indexes nothing — no bar rather than a bar with one chip.
     assert "if (!secs || secs.length < 2) return '';" in js
 
@@ -412,15 +410,17 @@ def test_a_text_tab_remembers_where_it_was_scrolled_to() -> None:
 
 
 def test_an_explicit_jump_beats_a_remembered_scroll_position() -> None:
-    """A cross-link naming a decision area, or the crumb walking back out of a rule, asks for a
-    SPECIFIC place. Restoring the last scroll offset on top of that would undo the navigation the
-    reader just made."""
+    """A cross-link naming a decision area, or the crumb walking back out of a rule, asks for a SPECIFIC
+    place, and a remembered scroll offset must not undo it. That used to need an escape hatch, because
+    the list stacked every area on one page and the link had to scroll to a section of it. An area is
+    its own page now: there is nothing to scroll to, nothing to override, and the state's own offset is
+    simply correct. The hatch goes with its only producer rather than sitting there unreachable."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    restore = js[js.index("function restoreTextScroll(s, jumped)"):]
-    assert "if (jumped) return;" in restore[:200]
+    assert "function restoreTextScroll(s) {" in js
+    assert "restoreTextScroll(s, " not in js, "the escape hatch outlived its only producer"
+    assert "const jumped = " not in js
     rules = js[js.index("function renderRules(s)"):js.index("\nfunction ", js.index("function renderRules(s)") + 10)]
-    assert "card.scrollIntoView({ block: 'start' }); return true;" in rules
-    assert "const jumped = renderRules(s);" in js
+    assert "scrollIntoView" not in rules
 
 
 def test_no_tab_row_can_ever_clip_a_tab_out_of_reach() -> None:
@@ -621,8 +621,9 @@ def test_the_system_tab_is_cards_over_one_builder() -> None:
     assert "go({ kind: 'sysSection', sys:" in js
     assert "const head = live.length > 1 ?" in js       # one band draws no label
     # The drill is a real level: keyed, titled, and reachable back up by breadcrumb.
-    assert "if (s.kind === 'sysSection') return [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];" in js
-    assert "'gid', 'sys'];" in js                        # …and its key survives a right-pane navigation
+    assert "const base = [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];" in js
+    assert "return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;" in js
+    assert "'gid', 'sys', 'epk'];" in js                 # …and its keys survive a right-pane navigation
 
 
 def test_the_only_pinned_lines_are_the_ones_that_still_say_something() -> None:
@@ -657,11 +658,13 @@ def test_the_index_bar_is_a_direct_child_of_the_scroll_wrapper() -> None:
     above the bar that rows scrolled visibly through. So the System drill emits the bar beside the
     section, not inside it, and the kinds it jumps to carry the scroll-margin that clears it."""
     js = (VIEWER_DIR / "viewer.js").read_text()
-    assert "'<div class=\"usecases-wrap system-wrap\">' + found.index" in js
-    assert 'index: index || \'\'' in js
-    assert '<section class="sys-kindsec" id="${kid}">' in js
-    css = (VIEWER_DIR / "viewer.css").read_text()
-    assert ".usecases-wrap .sys-kindsec { scroll-margin-top: calc(var(--tab-index-h) + 8px); }" in css
+    # The Entry points collection went one level deeper for the same reason the tab did: 311 rows under
+    # a chip bar wrapping onto three lines is a flat list with pills. It carries its KINDS as data and
+    # the page draws cards from them, so the cards and the table cannot disagree about a count.
+    assert "kinds.push({ key: k, count: byKind[k].length" in js
+    assert "if (found.kinds && !epk) {" in js
+    assert "go({ kind: 'sysSection', sys: sysId, epk: b.getAttribute('data-epk') })" in js
+    assert "'gid', 'sys', 'epk'];" in js
 
 
 def test_no_scroll_wrapper_holds_a_sticky_line_below_its_own_top_padding() -> None:

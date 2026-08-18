@@ -144,6 +144,10 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   **Group by Capability / Actor** switch: actors do not partition the catalog (a use case may name two)
   and they divide it very unevenly, so they re-group a list rather than heading an overview. A map that
   records no capabilities skips level 1 and keeps the flat catalog it always had.
+- **Rules** *(when the map states any business rule)* — the decisions this product makes, on the same
+  cards: one card per **decision area**, with what that area covers and how many rules sit in it.
+  Clicking a card opens that area's rules; clicking a rule opens its own page. It was every area
+  stacked on one scroll under a chip bar, which put the rules the tab exists to show below the fold.
 - **Entities** *(when the map has T5 domain cards)* — the C4 Code altitude: the domain model as a
   Mermaid `classDiagram`, each entity a class box holding its attributes, joined by typed, cardinal
   relations (composition/aggregation/inheritance/association). Click a class for its fields +
@@ -172,7 +176,8 @@ Clicking still opens the fuller side panel; the tooltip never changes the select
   security, observability, the deliberately-unmodelled types), **notes about the code** (each authored
   section, previewed by its own opening line), and **about this map** (map completeness, and the
   maintenance records answering this tool's own checks). The entry-point page carries its own pinned
-  index, one chip per kind. The collections behind the cards are: **entry points** (grouped by kind, each linking to its owning
+  **Entry points** goes one level deeper for the same reason, with a card per KIND. The collections
+  behind the cards are: **entry points** (grouped by kind, each linking to its owning
   component), **run commands**, **deployment**, **observability**, **security**, **config**, the
   deliberately-**unmodelled types**, and any freeform **extras**. Every `path:line` cell opens in the
   code viewer, like a glossary source link.

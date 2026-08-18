@@ -3399,7 +3399,7 @@ const tabLast = {};
 // pushContentPoint, which is the ONLY other place a state is rebuilt field by field — and which has
 // silently dropped a field every time the two lists were maintained by hand.
 const STATE_FIELDS = ['sid', 'a', 'b', 'hp', 'uc', 'sd', 'unit', 'store', 'entity', 'blk', 'br',
-                      'bkid', 'cap', 'act', 'gid', 'sys'];
+                      'bkid', 'cap', 'act', 'gid', 'sys', 'epk'];
 function stateKey(s) {
   return s.kind + (s.sid ? ':' + s.sid : '') + (s.a ? ':' + s.a + '>' + s.b : '')
     + (s.hp ? ':' + s.hp : '') + (s.uc ? ':' + s.uc : '') + (s.sd ? ':' + s.sd : '')
@@ -3412,6 +3412,7 @@ function stateKey(s) {
     + (s.act ? ':' + s.act : '')   // …or one ACTOR's, the overview's other axis
     + (s.bkid ? ':' + s.bkid : '')  // bucketfold drills are keyed by their BKF id
     + (s.gid ? ':' + s.gid : '')   // …and a deployment container card by its group id
+    + (s.epk ? ':' + s.epk : '')   // …and one entry-point KIND inside the Entry points collection
     + (s.sys ? ':' + s.sys : '');  // one System collection, the drill out of its cards
 }
 // The RIGHT-PANE state a history point remembers, on top of the diagram + selection: a file open at a
@@ -4887,11 +4888,18 @@ function stateTitle(s) {
   if (s.kind === 'container') return 'Subsystems';
   if (s.kind === 'component') return 'Components';
   if (s.kind === 'domain') return 'Entities';  // user-facing label for the `domain` view (the tab)
-  if (s.kind === 'rules') return 'Rules';  // the view lists RULES; "business logic" named a code layer, not the content
+  if (s.kind === 'rules') {  // the view lists RULES; "business logic" named a code layer, not the content
+    if (!s.blk) return 'Rules';
+    const g = ruleBlockGroups().find((x) => x.id === s.blk);
+    return g ? g.name : 'Rules';
+  }
   if (s.kind === 'rule') return ruleCrumbTitle(s.br);
   if (s.kind === 'glossary') return 'Glossary';
   if (s.kind === 'system') return 'System';
-  if (s.kind === 'sysSection') { const f = systemSections().find((x) => x.id === s.sys); return f ? f.title : 'System'; }
+  if (s.kind === 'sysSection') {
+    if (s.epk) return s.epk;   // one entry-point kind, named by the kind itself
+    const f = systemSections().find((x) => x.id === s.sys); return f ? f.title : 'System';
+  }
   if (s.kind === 'data') return 'Storage';  // user-facing label; internal kind stays `data`
   if (s.kind === 'tests') return 'Tests';
   if (s.kind === 'usecases') return 'Features';  // user-facing label; internal kind stays `usecases`
@@ -4932,7 +4940,10 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
   if (s.kind === 'domedge') return [{ kind: 'domain' }, { kind: 'domedge', a: s.a, b: s.b }];  // subdomain pair beside them
   if (s.kind === 'bridge') return [{ kind: 'container' }, { kind: 'bridge', sid: s.sid, sd: s.sd }];  // S×SD bridge under Subsystems
   if (s.kind === 'hp') return [{ kind: 'hp' }];
-  if (s.kind === 'sysSection') return [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];
+  if (s.kind === 'sysSection') {
+    const base = [{ kind: 'system' }, { kind: 'sysSection', sys: s.sys }];
+    return s.epk ? base.concat([{ kind: 'sysSection', sys: s.sys, epk: s.epk }]) : base;
+  }
   if (s.kind === 'usecases') return [{ kind: 'usecases' }];
   if (s.kind === 'capability') return [{ kind: 'usecases' }, { kind: 'capability', cap: s.cap }];  // one feature's use cases
   if (s.kind === 'actor') return [{ kind: 'usecases' }, { kind: 'actor', act: s.act }];        // …or one actor's
@@ -4970,12 +4981,18 @@ function ancestors(s) {  // structural nesting path (top → s), independent of 
     : [{ kind: 'context' }, { kind: 'bucketfold', bkid: s.bkid }];          // external bucket: Context › <bucket>
   if (s.kind === 'context') return [{ kind: 'context' }];
   if (s.kind === 'component') return [{ kind: 'component' }];
-  if (s.kind === 'rules') return [{ kind: 'rules' }];
+  if (s.kind === 'rules') {
+    return s.blk ? [{ kind: 'rules' }, { kind: 'rules', blk: s.blk }] : [{ kind: 'rules' }];
+  }
   // A rule's page under the list, whose crumb reopens it on the rule's OWN decision area — the same
   // shape as a use case's flow under the Use Cases catalog.
   if (s.kind === 'rule') {
+    // Three crumbs now that the tab lands on area CARDS: Rules › the area › the rule. The middle one
+    // was already this state; what changed is that it renders that area's rules instead of scrolling a
+    // stacked page to them, so the top crumb has somewhere of its own to go.
     const r = ruleById(s.br);
-    return [{ kind: 'rules', blk: ruleGroupKeyFor(r && r.block) }, { kind: 'rule', br: s.br }];
+    return [{ kind: 'rules' }, { kind: 'rules', blk: ruleGroupKeyFor(r && r.block) },
+            { kind: 'rule', br: s.br }];
   }
   if (s.kind === 'glossary') return [{ kind: 'glossary' }];
   if (s.kind === 'system') return [{ kind: 'system' }];
@@ -5510,14 +5527,14 @@ function systemSections() {
   const nodeName = (id) => (G.nodes && G.nodes[id] ? G.nodes[id].name : id);
   const out = [];
   const usedIds = new Set();
-  const sec = (band, title, inner, count, blurb, index) => {
+  const sec = (band, title, inner, count, blurb, kinds) => {
     if (!inner) return;
     let id = 'sys-' + String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     const base = id || 'sys-section';
     for (let n = 2; usedIds.has(id); n++) id = base + '-' + n;  // dedupe (e.g. a note named like a table)
     usedIds.add(id);
     out.push({ id, title, band, count: count || '', blurb: blurb || SYS_BLURB[title] || '',
-               html: inner, index: index || '' });
+               html: inner, kinds: kinds || null });
   };
   // Entry points — grouped by CANONICAL kind (the server folds alias spellings: `http` and
   // `http-route` rows land in one group, WS-A8); each kind heading carries a small self/external
@@ -5537,7 +5554,7 @@ function systemSections() {
     const kindAct = (k) => (byKind[k].some((e) => e.activation === 'self') ? 'self' : 'external');
     order.sort((a, b) => (kindAct(a) === 'self' ? 0 : 1) - (kindAct(b) === 'self' ? 0 : 1));
     let inner = '';
-    const kindSecs = [];
+    const kinds = [];
     for (const k of order) {
       const act = kindAct(k);
       const rows = byKind[k].map((e) => {
@@ -5550,20 +5567,15 @@ function systemSections() {
         return `<tr><td>${mdInline(e.trigger || '')}${cad}</td><td>${comp}</td><td>${srcCell(e.source || '')}</td></tr>`;
       }).join('');
       const tag = act === 'self' ? '<span class="sys-kind-tag sys-kind-tag--self">auto-run</span>' : '';
-      // One KIND is a section of this page, so the pinned index indexes kinds here. On the old stacked
-      // page the index had to spend its chips on the collections themselves, and no map with 19 kinds
-      // could reach one without scrolling past the other eighteen.
-      const kid = 'sysk-' + k.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-      kindSecs.push({ id: kid, title: `${k} (${byKind[k].length})` });
-      // `sys-kindsec` earns the scroll-margin that clears the pinned bar: without it a chip jump
-      // lands the kind's heading UNDER the bar, which is what `.uc-group` gets on the card lists.
-      inner += `<section class="sys-kindsec" id="${kid}"><h4 class="sys-subhead">${esc(k)}${tag}</h4>`
-        + '<table class="glossary"><thead><tr><th>Trigger</th><th>Component</th><th>Source</th></tr></thead>'
-        + `<tbody>${rows}</tbody></table></section>`;
+      // The collection carries its KINDS, not one pre-joined page. 311 rows under a chip bar wrapping
+      // onto three lines was the flat-list-with-pills shape again: the bar named the kinds, every
+      // heading named them a second time, and the rows the page exists to show started below the fold.
+      const table = '<table class="glossary"><thead><tr><th>Trigger</th><th>Component</th>'
+        + `<th>Source</th></tr></thead><tbody>${rows}</tbody></table>`;
+      kinds.push({ key: k, count: byKind[k].length, self: act === 'self', tag, html: table });
     }
-    sec('system', 'Entry points', inner,
-        `${eps.length} across ${order.length} kind${order.length > 1 ? 's' : ''}`, '',
-        tabIndexHtml(kindSecs));
+    sec('system', 'Entry points', '  ',   // non-empty: this collection renders from `kinds`, not `html`
+        `${eps.length} across ${order.length} kind${order.length > 1 ? 's' : ''}`, '', kinds);
   }
   const many = (rows, word) => ((rows || []).length ? `${rows.length} ${word}` : '');
   sec('system', 'Run commands', refTable(G.run_commands, [
@@ -5689,18 +5701,32 @@ function renderSystem() {
     b.addEventListener('click', () => go({ kind: 'sysSection', sys: b.getAttribute('data-sys') })));
 }
 // Level 2 — one collection. Its own title heads it, since the crumb is the only other thing naming it.
-function renderSystemSection(sysId) {
+function renderSystemSection(sysId, epk) {
   const found = systemSections().find((s) => s.id === sysId);
   if (!found) { renderSystem(); return; }
-  // The index bar is a DIRECT child of the scroll wrap, never nested in the section card. Its sticky
-  // full-bleed geometry (negative side margins, and the wrap dropping its own top padding) is written
-  // against the wrap: nested one level down, the wrap kept a 16px transparent strip above the bar and
-  // rows scrolled visibly through it — the same defect the bar's own comment records from last time.
-  diagram.innerHTML = '<div class="usecases-wrap system-wrap">' + found.index
-    + `<section class="uc-group"><h3 class="uc-actor">${esc(found.title)}`
-    + (found.count ? `<span class="uc-actor-wants">${esc(found.count)}</span>` : '') + '</h3>'
-    + (found.blurb ? `<p class="uc-wants">${esc(found.blurb)}</p>` : '')
-    + found.html + '</section></div>';
+  // A collection that carries KINDS gets the card treatment one level deeper: its cards first, then
+  // one kind's table. Every other collection is a single page.
+  if (found.kinds && !epk) {
+    const cards = found.kinds.map((k) => `<button type="button" class="feat-card" data-epk="${esc(k.key)}">`
+      + `<span class="feat-head"><span class="feat-name">${esc(k.key)}</span>${k.tag}</span>`
+      + `<span class="feat-count">${k.count} entry point${k.count === 1 ? '' : 's'}</span></button>`).join('');
+    diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
+      + `<h3 class="uc-actor">${esc(found.title)}<span class="uc-actor-wants">${esc(found.count)}</span></h3>`
+      + (found.blurb ? `<p class="uc-wants">${esc(found.blurb)}</p>` : '')
+      + `<div class="feat-grid">${cards}</div></div>`;
+    diagram.querySelectorAll('.feat-card').forEach((b) => b.addEventListener('click',
+      () => go({ kind: 'sysSection', sys: sysId, epk: b.getAttribute('data-epk') })));
+    return;
+  }
+  const one = found.kinds ? found.kinds.find((k) => k.key === epk) : null;
+  const title = one ? one.key : found.title;
+  const count = one ? `${one.count} entry point${one.count === 1 ? '' : 's'}` : found.count;
+  const body = one ? one.html : found.html;
+  diagram.innerHTML = '<div class="usecases-wrap system-wrap">'
+    + `<section class="uc-group"><h3 class="uc-actor">${esc(title)}${one ? one.tag : ''}`
+    + (count ? `<span class="uc-actor-wants">${esc(count)}</span>` : '') + '</h3>'
+    + (!one && found.blurb ? `<p class="uc-wants">${esc(found.blurb)}</p>` : '')
+    + body + '</section></div>';
   // A System entry-point Component link navigates to that component AND selects the exact entry
   // point in its "Triggered by" pane list (same as a search hit).
   diagram.querySelectorAll('.sys-node').forEach((btn) => {
@@ -6127,8 +6153,27 @@ function ruleStepChip(l) {
 // the decision, its state chips, and where it lives; the anchors are one click away.
 function renderRules(s) {
   const groups = ruleBlockGroups();
-  const secs = groups.map((g) => ({ id: blockSectionId(g.id), title: g.name }));
-  const sections = groups.map((g) => {
+  // Level 1 — one CARD per decision area, the same component the Features and System tabs use. It was
+  // every area stacked on one scroll under a chip bar, which is the shape the "all use cases" page had
+  // and the same complaint: the chip bar named the areas, then every heading named them again, and the
+  // rules the page exists to show started below the fold. `s.blk` picks the area; no `blk` is the cards.
+  if (!s || !s.blk) {
+    const cards = groups.map((g) => {
+      const parent = g.parentName ? `<span class="uc-caplabel">in ${esc(g.parentName)}</span>` : '';
+      return `<button type="button" class="feat-card" data-blk="${esc(g.id)}">`
+        + `<span class="feat-head"><span class="feat-name">${esc(g.name)}</span>${parent}</span>`
+        + (g.purpose ? `<span class="feat-purpose">${mdInline(g.purpose)}</span>` : '')
+        + `<span class="feat-count">${g.rules.length} rule${g.rules.length === 1 ? '' : 's'}</span>`
+        + '</button>';
+    }).join('');
+    diagram.innerHTML = '<div class="usecases-wrap"><div class="feat-grid">'
+      + (cards || '<p class="empty">No business rules recorded.</p>') + '</div></div>';
+    diagram.querySelectorAll('.feat-card').forEach((b) =>
+      b.addEventListener('click', () => go({ kind: 'rules', blk: b.getAttribute('data-blk') })));
+    return;
+  }
+  const secs = [];
+  const sections = groups.filter((g) => g.id === s.blk).map((g) => {
     const rows = g.rules.map((r) => {
       // WHERE, in one line — the components the SERVER resolved for this rule's sites, de-duplicated
       // because one component can own several of them. Each of the three empty answers reads as what
@@ -6166,24 +6211,16 @@ function renderRules(s) {
                         : '<p class="empty">No rules assigned to this area yet.</p>')
       + '</section>';
   }).join('');
-  diagram.innerHTML = '<div class="usecases-wrap">' + tabIndexHtml(secs)
-    + (sections || '<p class="empty">No business rules recorded.</p>') + '</div>';
-  bindTabIndex(diagram.querySelector('.usecases-wrap'));
+  diagram.innerHTML = '<div class="usecases-wrap">'
+    + (sections || '<p class="empty">This decision area is not in the map.</p>') + '</div>';
   // A row opens the rule's own page — the SAME detail every cross-link into a rule lands on (one home).
   const open = (li) => go({ kind: 'rule', br: li.getAttribute('data-br') });
   diagram.querySelectorAll('.uc-row').forEach((li) => {
     li.addEventListener('click', () => open(li));
     li.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') open(li); });
   });
-  // Arriving focused on an AREA (a search hit on a block, the crumb back out of a rule) scrolls that
-  // area's card into view — the list is one scroll, so there is no pane to open.
-  if (s && s.blk) {
-    // An ATTRIBUTE selector, not `#` + the id: `querySelector('#blk-BLK 1')` is a syntax error, so an
-    // id the map should never carry would THROW inside render() instead of simply finding nothing.
-    const card = diagram.querySelector(`[id="${esc(blockSectionId(s.blk))}"]`);
-    if (card) { card.scrollIntoView({ block: 'start' }); return true; }  // an explicit jump beats a
-  }                                                                      // remembered scroll position
-  return false;
+  // An area is now its own page rather than one section of a long scroll, so arriving focused on one
+  // needs no scroll-into-view: the page IS that area, from its first line.
 }
 // Level 2 — ONE rule's page: the decision, then the three answers the map holds about it (where the
 // code enforces it, which traced steps it governs, which entities it speaks about). Each section
@@ -6249,8 +6286,11 @@ function renderRule(s) {
 // back/forward lands exactly), else the last offset for this view (so a tab switch does too).
 // `jumped` = the renderer already scrolled somewhere ON PURPOSE — a cross-link naming a decision area,
 // a crumb walking back to one — and an explicit target always beats a remembered position.
-function restoreTextScroll(s, jumped) {
-  if (jumped) return;
+// No `jumped` escape hatch any more. It existed for ONE producer: the Business rules list stacked every
+// decision area on one page, so a cross-link naming an area had to scroll to its section and then block
+// the remembered offset from undoing that. An area is its own page now, so there is nothing to scroll to
+// and nothing to override — the state's own remembered offset is simply correct, as it is everywhere else.
+function restoreTextScroll(s) {
   const sc = textScroller();
   if (!sc) return;
   const top = (s.scroll != null) ? s.scroll : scrollByView[stateKey(s)];
@@ -6295,7 +6335,7 @@ async function render(sArg, transient) {
   // rule's page does: the collection's own name and blurb head the page itself.
   if (s.kind === 'system') { renderSystem(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   if (s.kind === 'sysSection') {
-    renderSystemSection(s.sys); mainScene = null; showViewIntro({ kind: 'system' }); renderChrome(s);
+    renderSystemSection(s.sys, s.epk); mainScene = null; showViewIntro({ kind: 'system' }); renderChrome(s);
     restoreTextScroll(s); return;
   }
   // The Data tab is the store-centric rail+panes view (HTML + lazily-rendered broker diagrams) — same shape.
@@ -6304,8 +6344,8 @@ async function render(sArg, transient) {
   if (s.kind === 'tests') { renderTests(); mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return; }
   // The Business rules tab is the block rail + rule panes (HTML) — the same shape as Data.
   if (s.kind === 'rules') {
-    const jumped = renderRules(s);   // true when it scrolled to a named decision area
-    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s, jumped); return;
+    renderRules(s);   // the area cards, or one area's rules when `s.blk` names it
+    mainScene = null; showViewIntro(s); renderChrome(s); restoreTextScroll(s); return;
   }
   // One rule's page — the drill out of that list. The right pane keeps the TAB's question: everything
   // the map holds about this rule is on the page itself, and repeating it beside itself said nothing.

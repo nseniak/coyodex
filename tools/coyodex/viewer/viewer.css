@@ -300,6 +300,12 @@ body.vresizing #stage { pointer-events: none; }
 .usecases-wrap:has(> .tab-index), .usecases-wrap.system-wrap, .glossary-wrap { padding-top: 0; }
 .system-wrap > :first-child, .glossary-wrap > :first-child { margin-top: 16px; }
 .system-wrap > .tab-index:first-child { margin-top: 0; }
+/* …and no margin either when the first child IS the table whose header is sticky. A 16px gap above a
+   header that snaps flush the moment you scroll is a jump, not breathing room — the Glossary tab opens
+   with the gap and loses it on the first wheel click. What you see at rest must be what you see once
+   the page moves. */
+.system-wrap > .glossary:first-child,
+.glossary-wrap > .glossary:first-child { margin-top: 0; }
 .usecases-wrap .tab-index { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap;
                             gap: 6px; margin: 0 -20px 12px; padding: 12px 20px 10px;
                             background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
@@ -308,10 +314,8 @@ body.vresizing #stage { pointer-events: none; }
                                  cursor: pointer; white-space: nowrap; }
 .usecases-wrap .tab-index-chip:hover { background: #e2e8f0; }
 .usecases-wrap .tab-index-chip.active { color: #4338ca; background: #e0e7ff; border-color: #c7d2fe; }
-/* A jumped-to card — or, on the entry-point page, a jumped-to KIND — clears the pinned bar instead
-   of hiding under it. */
-.usecases-wrap .uc-group,
-.usecases-wrap .sys-kindsec { scroll-margin-top: calc(var(--tab-index-h) + 8px); }
+/* A jumped-to card clears the pinned bar instead of hiding under it. */
+.usecases-wrap .uc-group { scroll-margin-top: calc(var(--tab-index-h) + 8px); }
 /* The System section header is NOT sticky. It was, back when nine collections were stacked on one
    scrolling page and the heading told you which one you had scrolled into. Each collection has its own
    page now, its title sits at the top of that page, and the breadcrumb names it permanently — so a
