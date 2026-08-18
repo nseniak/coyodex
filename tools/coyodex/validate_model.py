@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
-from coyodex import balance_lib, records, grammar
+from coyodex import balance_lib, prose, records, grammar
 from coyodex.audit_model import l2_worklist_model
 from coyodex.reporting import clip as _clip, reset_full_lists, set_full_lists, shown as _shown
 from coyodex.anchors import (
@@ -3514,6 +3514,26 @@ _DEPLOYMENT_FLAVORED_EXTRA_KEYS = {
 }
 
 
+def _check_prose(m: ProjectModel) -> list[str]:
+    """ADVISORY: readability of the map's plain-language fields, counted rather than judged.
+
+    Every other check here asks whether the map is TRUE. This one asks whether a person can read it.
+    The map's purposes, statements, risks and glossary meanings are read one box at a time, with no
+    paragraph around them, by someone who does not read code — so a 40-word sentence, an em dash
+    standing in for a missing "because", a file path where a product noun belongs, and an opening
+    "It" with nothing to point at are all defects of the map, not of the code it describes.
+
+    Only the countable half lives here. Jargon, metaphor and whether a sentence is actually clear
+    are judgements, and they stay in the method prompt where a model can weigh them; a regex that
+    guessed at them would be the noisy check nobody leaves switched on.
+
+    ADVISORY on purpose, and it should stay that way until a real build shows the noise is low: a
+    map is not WRONG for holding a long sentence, and a gate that fires on every build teaches the
+    lead to ignore the gate. Findings are grouped and counted by `prose.summarize`, so a map with
+    two hundred long sentences produces one line, not two hundred."""
+    return prose.summarize(prose.scan(prose.iter_prose_fields(m)))
+
+
 def _check_extra_conventions(m: ProjectModel) -> tuple[list[str], list[str]]:
     """`extra` may only hold what the method has no opinion about — see the module constants above
     for the promoted/forbidden/advisory key lists."""
@@ -4026,6 +4046,7 @@ def validate_model(m: ProjectModel, model_path: Path | None = None, *,
     extra_problems, extra_warnings = _check_extra_conventions(m)
     problems.extend(extra_problems)
     warnings.extend(extra_warnings)
+    warnings.extend(_check_prose(m))
 
     roots = _source_roots(model_path, repo_root) if model_path is not None else (
         [repo_root.resolve()] if repo_root is not None else [])

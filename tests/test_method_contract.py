@@ -1041,3 +1041,87 @@ def test_the_method_no_longer_teaches_the_bare_runs_in_escape():
                       for rel in ("method.md", "method/model.md"))
     for dead in ("the literal **`runs-in`** silences", "the literal `runs-in` silences"):
         assert dead not in prose, dead
+
+
+# --- (e) the writing rules reach the agents that write the text -------------------------------
+#
+# The six rules govern the prose a READER meets in the viewer. The agents that author it are
+# fan-out workers, and a worker reads its contract, never method.md — so a rule that lives only in
+# method.md reaches the lead and nobody else. These four tests pin the seam: the rules exist in one
+# file, that file is appended to every contract whose agents author reader-facing prose, and no
+# second copy exists to drift out of step.
+
+WRITING_RULES = REPO_ROOT / "method" / "templates" / "writing-rules.md"
+
+# Contracts whose agents author a reader-facing prose field, and the field that makes it so.
+_AUTHORING_CONTRACTS = (("harvest-contract.md", "components[].purpose"),
+                        ("rules-contract.md", "rules[].statement and rules[].risk"))
+
+_WRITING_RULE_HEADS = ("One idea per sentence", "No em dash", "No code in plain text",
+                       "Never open with", "Use a glossary word", "Plain words at the SAME precision")
+
+
+def test_the_writing_rules_file_exists_and_carries_all_six_rules():
+    """One file is the whole point of the extraction. If a rule is missing here it is missing from
+    every contract at once, which is the failure mode worth having: loud, not silent-per-slice."""
+    assert WRITING_RULES.exists(), f"{WRITING_RULES} is the single source of the writing rules"
+    text = WRITING_RULES.read_text(encoding="utf-8")
+    missing = [head for head in _WRITING_RULE_HEADS if head not in text]
+    assert not missing, f"writing rule(s) absent from the shared file: {missing}"
+    for n in range(1, 7):
+        assert f"{n}. **" in text, f"rule {n} is not a numbered item — the contract quotes them by number"
+
+
+def test_every_authoring_contract_is_assembled_with_the_writing_rules_appended():
+    """The method tells the lead to build each contract with one command. If that command still says
+    a bare `cp`, the agents that write every purpose in the map never see a writing rule — the exact
+    shape of the missing-rules-contract failure this template family already paid for once.
+
+    Read the sentence that names the contract, not the whole document: method.md mentions
+    writing-rules.md elsewhere, and a document-wide search would pass while a command still said
+    `cp` (the weaker version of this test did exactly that)."""
+    flat = " ".join((REPO_ROOT / "method.md").read_text(encoding="utf-8").split())
+    for name, authored in _AUTHORING_CONTRACTS:
+        at = flat.find(f"<scratch>/{name}`")
+        assert at != -1, f"method.md no longer shows a command writing <scratch>/{name}"
+        command = flat[max(0, at - 400):at]
+        assert "method/templates/writing-rules.md" in command, (
+            f"the command that builds <scratch>/{name} does not append writing-rules.md — its "
+            f"agents author {authored} with no writing rule in the prompt")
+
+
+def test_the_harvest_append_is_quoted_and_the_rules_append_is_not():
+    """The two contracts hand over their agent-facing half differently: harvest strips `> ` from a
+    quoted block, the rules contract takes plain text below a `---`. Append the rules the wrong way
+    round and they either fall outside the block an agent is given, or arrive with a literal `> ` on
+    every line. This is the half of the seam a path-only check cannot see."""
+    flat = " ".join((REPO_ROOT / "method.md").read_text(encoding="utf-8").split())
+    harvest = flat[max(0, flat.find("<scratch>/harvest-contract.md`") - 400):
+                   flat.find("<scratch>/harvest-contract.md`")]
+    assert "sed 's/^/> /'" in harvest, (
+        "the harvest append does not quote writing-rules.md — unquoted lines sit outside the "
+        "`>`-block the lead hands to an agent, so no harvest agent ever reads them")
+    rules = flat[max(0, flat.find("<scratch>/rules-contract.md`") - 400):
+                 flat.find("<scratch>/rules-contract.md`")]
+    assert "sed 's/^/> /'" not in rules, (
+        "the rules append quotes writing-rules.md — that contract's agent half is plain text, so "
+        "every appended line would reach the agent with a literal '> ' in front of it")
+
+
+def test_the_six_rules_are_stated_in_exactly_one_place():
+    """DRY, checked rather than intended. A contract that restates a rule is a second copy, and the
+    copy that drifts is always the one nobody re-read."""
+    others = [p for p in REPO_ROOT.glob("method/templates/*.md") if p != WRITING_RULES]
+    others.append(REPO_ROOT / "method.md")
+    for path in others:
+        text = path.read_text(encoding="utf-8")
+        restated = [head for head in _WRITING_RULE_HEADS if head in text]
+        assert not restated, (
+            f"{path.relative_to(REPO_ROOT)} restates writing rule(s) {restated} — append "
+            f"writing-rules.md instead, so there is one source to change")
+
+
+def test_the_method_points_the_lead_at_the_shared_writing_rules_file():
+    """The lead has to know the file exists to append it, and a pointer is not a restatement."""
+    prose = (REPO_ROOT / "method.md").read_text(encoding="utf-8")
+    assert "method/templates/writing-rules.md" in prose

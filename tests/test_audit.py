@@ -2018,3 +2018,35 @@ def test_a_flow_title_record_does_not_silence_a_different_check_on_the_same_use_
     pairs = audit_exceptions(m)
     assert ("actor-attribution", "UC1") in pairs
     assert ("flow-title", "UC1") not in pairs
+
+
+def make_prose_map() -> ProjectModel:
+    """A map with exactly three reader-facing prose fields, one of them blank."""
+    m = ProjectModel(title="Demo", goal="A demo.")
+    m.components = [Component(id="C1", name="Checkout", purpose="Books an order."),
+                    Component(id="C2", name="Ledger", purpose="")]
+    m.rules = [BusinessRule(id="BR1", name="Owner-only", statement="Only the owner may cancel.",
+                            risk="A stranger could cancel an order.")]
+    return m
+
+
+def test_prose_batches_carry_every_non_empty_field_and_the_rules() -> None:
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td)
+        written = audit_model.write_prose_batches(make_prose_map(), out, cap=10)
+        assert written == [("prose-1.json", 3)]     # C2's empty purpose is dropped
+        payload = json.loads((out / "prose-1.json").read_text())
+        assert payload["schema"] == audit_model.PROSE_BATCH_SCHEMA
+        assert [f["where"] for f in payload["fields"]] == ["C1 purpose", "BR1 statement", "BR1 risk"]
+        assert "UNKNOWN WORD" in payload["instructions"]
+
+
+def test_a_second_run_at_a_smaller_cap_leaves_no_stale_prose_batch() -> None:
+    """The claim batches paid for this once: two runs at different caps left the smaller run's extra
+    files behind and a glob dispatched 23 duplicates while the tool printed the honest total."""
+    with tempfile.TemporaryDirectory() as td:
+        out = Path(td)
+        audit_model.write_prose_batches(make_prose_map(), out, cap=1)
+        assert len(list(out.glob("prose-*.json"))) == 3
+        audit_model.write_prose_batches(make_prose_map(), out, cap=10)
+        assert [p.name for p in sorted(out.glob("prose-*.json"))] == ["prose-1.json"]

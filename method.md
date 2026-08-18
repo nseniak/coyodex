@@ -632,6 +632,17 @@ T8 Component internals · T9 Config/env vars · T10 Data schema. Nothing in the 
 
 ## Cross-cutting rules
 
+**Write every reader-facing field to be read ALONE.** The six rules live in ONE file,
+[method/templates/writing-rules.md](method/templates/writing-rules.md), because the agents who
+author that prose are fan-out workers who never read this document: they get a contract, so the
+rules have to travel inside the contract. Every authoring contract is assembled by appending that
+one file, never by restating it — a second copy is a second thing to keep in step, and the copy
+that drifts is always the one nobody re-read.
+
+`validate` counts four of the six and reports them as advisories. Jargon, metaphor and whether a
+sentence actually reads clearly are judgements that stay in the prompt: a regex guessing at them
+would be the noisy check nobody leaves switched on.
+
 **A blocked command is a STOP, not a puzzle.** When a shell or safety guard refuses a command, say
 so and ask — never rewrite the command so the guard stops matching: not by assembling a blocked
 filename out of string literals, not by splitting a blocked path across a `+`. A bypass may well be
@@ -1420,6 +1431,16 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
   OAuth provider; the Happy Path starts after sign-in`. A recorded line silences exactly one
   `(check, id)` pair — never a family — and `audit` REPORTS what it silenced, plus any line that
   matched nothing), take the audit's **L2 grounding worklist** and disprove it against the code.
+  **The same command also cuts the READ fan-out.** Beside the claims files it writes `prose-N.json`,
+  every reader-facing prose field in the map, each batch carrying the instructions with it. Dispatch
+  those to a CHEAP model (Haiku is enough; the whole map is roughly 35k tokens, about eight cents)
+  and fold what comes back into the audit report as advice. That fan-out judges exactly two of the
+  six writing rules — is there a word the reader will not know, and did a short sentence buy its
+  shortness by dropping the specific — because the other four are already counted by `validate` and
+  the lead has those numbers. **It never gates anything, and two runs may differ**: a model reading
+  prose is not the deterministic check the rest of this step is, and a finding that says "this box
+  is hard to read" is worth having without being worth blocking on.
+
   **Write the per-theme batches with the tool, not a hand script:** `coyodex audit <map> --batches
   .coyodex/verify --cap 40` emits one claims file per theme, most-dangerous-first, each claim
   carrying its `anchor` and `detail`. A hand-rolled batcher drops the anchor, and the claims then
@@ -1753,16 +1774,27 @@ changes how many agents do the work (a serial build still FANS OUT for the T7 ru
 **Harvest-prompt template (Phase 1).** The copyable contract is
 [method/templates/harvest-contract.md](method/templates/harvest-contract.md) — hand every harvest
 agent that file's contents, changing only the file list and the background blurb. **Copy it with a
-command:** `cp COYODEX_HOME/method/templates/harvest-contract.md <scratch>/harvest-contract.md`,
-then fill the «angle-bracket» slots in place. Do not `Read` it and `Write` your own — that is one
+command, and append the writing rules in the same command:** `{ cat
+COYODEX_HOME/method/templates/harvest-contract.md; sed 's/^/> /'
+COYODEX_HOME/method/templates/writing-rules.md; } > <scratch>/harvest-contract.md`, then fill the
+«angle-bracket» slots in place. **The `sed` is what makes the append work here:** this contract's
+agent-facing half is the `>`-quoted block, and the lead hands over that block with the `> `
+stripped, so writing rules appended unquoted would sit outside the block and never reach an agent.
+The append is not optional: a harvest agent authors every component `purpose` in the map, which is
+the largest block of reader-facing prose there is, and the rules live in one file precisely so two
+contracts cannot drift apart (see *Writing the text a person reads*). Do not `Read` it and `Write` your own — that is one
 keystroke from a rewrite, and a retyped contract drifts from the tool it describes, silently
 dropping rules (the anchor rules for `edges[].where`, `subsystems[].source` and `tests[].file` are
 the ones that have gone missing) from the contract every agent is handed.
 
 **Business-rule contract (Phase 3).** The copyable contract is
-[method/templates/rules-contract.md](method/templates/rules-contract.md). Copy it the same way —
-`cp COYODEX_HOME/method/templates/rules-contract.md <scratch>/rules-contract.md`, then fill the
-«angle-bracket» slots — and for the same reason. This template exists because one build had none:
+[method/templates/rules-contract.md](method/templates/rules-contract.md). Copy it with the same
+append, but WITHOUT the `sed` — `cat COYODEX_HOME/method/templates/rules-contract.md
+COYODEX_HOME/method/templates/writing-rules.md > <scratch>/rules-contract.md` — then fill the
+«angle-bracket» slots, and for the same reason. This contract's agent-facing half is plain text
+below the `---`, not a quoted block, so quoting the appended rules would put a literal `> ` in front
+of every line an agent reads. A rule agent authors every `statement` and every `risk`, the two
+fields a reader meets when asking what the product decides. This template exists because one build had none:
 the lead composed the rules contract from prose and told all eleven rule agents to put a `block`
 field on every rule, which `lint-fragment` treats as BLOCKING. The failure fired in 13 of that
 build's 71 agent transcripts and every one of the eleven fragments had to be repaired. `block` is

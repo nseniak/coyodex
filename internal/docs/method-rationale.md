@@ -414,7 +414,7 @@ and code docstrings under `tools/coyodex/` — so this file is not the only copy
 
 ### R76 — The retyped harvest contract that dropped three rules
 - **Where**: `method.md`
-- **Anchor**: `**Copy it with a command:** `cp COYODEX_HOME/method/templates/harvest-contract.md`
+- **Anchor**: `Do not `Read` it and `Write` your own`
 - **Evidence**: One build retyped 5.6 KB into a scratchpad and the copy drifted from the tool it described; the next produced 11 KB against a 5.6 KB body, silently dropping the template's anchor rules for `edges[].where`, `subsystems[].source` and `tests[].file` from the contract all twelve agents were handed.
 
 ### R77 — Two hours lost to a stray scratch comment

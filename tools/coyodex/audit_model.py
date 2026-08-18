@@ -26,7 +26,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
-from coyodex import balance_lib, records, grammar
+from coyodex import balance_lib, prose, records, grammar
 from coyodex.anchors import FILEREF as _FILEREF
 from coyodex.model import (
     ProjectModel,
@@ -1068,6 +1068,37 @@ def write_theme_batches(worklist: list[WorkItem], out_dir: Path, cap: int) -> li
     return written
 
 
+PROSE_BATCH_SCHEMA = "coyodex/prose-batch/v1"
+
+
+def write_prose_batches(m: ProjectModel, out_dir: Path, cap: int) -> list[tuple[str, int]]:
+    """One batch file per `cap` reader-facing prose fields, for the cheap read fan-out.
+
+    Sits beside `write_theme_batches` because it is the same move: the tool cuts the work and states
+    the rules, an agent judges, and nothing in `audit` itself calls a model — so two runs of `audit`
+    on one map still print the same thing.
+
+    Its own stale files are cleared for the same reason the claim batches clear theirs: two runs at
+    different caps once left the smaller run's extra files behind and a glob dispatched 23 duplicate
+    claims while the tool printed the honest total."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for stale in out_dir.glob("prose-*.json"):
+        stale.unlink()
+    written: list[tuple[str, int]] = []
+    for n, chunk in enumerate(prose.batch_fields(prose.iter_prose_fields(m), cap), 1):
+        name = f"prose-{n}.json"
+        payload = {
+            "schema": PROSE_BATCH_SCHEMA,
+            "prompt_version": prose.READ_PROMPT_VERSION,
+            "instructions": prose.build_read_prompt(),
+            "fields": [{"where": where, "text": text} for where, text in chunk],
+        }
+        (out_dir / name).write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n",
+                                    encoding="utf-8")
+        written.append((name, len(chunk)))
+    return written
+
+
 def _run(argv: list[str] | None = None) -> int:
     argv = list(sys.argv[1:] if argv is None else argv)
     if "-h" in argv or "--help" in argv:
@@ -1162,6 +1193,15 @@ def _run(argv: list[str] | None = None) -> int:
             print(f"{name}: {n} claim(s)")
         print(f"wrote {len(written)} theme batch(es) to {out_dir} — {len(worklist)} claim(s) total, "
               f"each carrying its anchor and detail")
+        # The read fan-out rides the same flag: one command cuts both kinds of work, so a lead
+        # cannot dispatch the skeptics and silently skip the read. Its findings are ADVICE about how
+        # the map READS, never about whether it is true, so they never gate anything.
+        prose_written = write_prose_batches(m, out_dir, cap)
+        for name, n in prose_written:
+            print(f"{name}: {n} prose field(s)")
+        n_fields = sum(n for _name, n in prose_written)
+        print(f"wrote {len(prose_written)} prose batch(es) to {out_dir} — {n_fields} field(s) "
+              f"total, each carrying the two rules a counter cannot judge")
         return 0
     if as_json:
         print(json.dumps({
